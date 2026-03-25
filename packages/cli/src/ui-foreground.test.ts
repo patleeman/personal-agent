@@ -173,6 +173,7 @@ describe('ui foreground launch', () => {
         stdio: 'inherit',
         env: expect.objectContaining({
           PA_WEB_PORT: String(port),
+          PA_WEB_COMPANION_PORT: '3742',
           PERSONAL_AGENT_REPO_ROOT: repoRoot,
         }),
       }),
@@ -204,6 +205,7 @@ describe('ui foreground launch', () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({
       port: 4810,
+      companionPort: 3742,
       useTailscaleServe: false,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
       webOnlySetting: {

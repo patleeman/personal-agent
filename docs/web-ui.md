@@ -57,10 +57,21 @@ This means:
 
 - web UI launch and managed service actions read the preference consistently,
 - the Web UI page shows and toggles the setting,
-- enabling it in the UI or via `--tailscale-serve` runs `tailscale serve --bg localhost:<port>` for you,
-- disabling it via `--no-tailscale-serve` runs `tailscale serve --bg localhost:<port> off`.
+- enabling it in the UI or via `--tailscale-serve` exposes the full desktop UI at the Tailnet root (`/`) and the mobile companion at `/app`,
+- disabling it via `--no-tailscale-serve` removes both the desktop root mapping and the `/app` companion mapping.
 
 If the `tailscale` CLI is unavailable (or the node is not authenticated), the toggle/flag returns an error so the mismatch is visible immediately.
+
+In practice:
+
+- `https://<tailnet-host>/` → full desktop web UI
+- `https://<tailnet-host>/app` → paired mobile companion
+
+For app-level access control on remote devices:
+
+- generate a short-lived pairing code from the local web UI or `pa ui pairing-code`
+- enter it once on the remote desktop browser or companion app
+- the browser stays signed in until you revoke that paired session
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
 

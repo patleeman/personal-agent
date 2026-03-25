@@ -380,6 +380,7 @@ const COMPANION_PORT = COMPANION_DISABLED
   ? 0
   : parseInt(process.env.PA_WEB_COMPANION_PORT ?? String(readWebUiConfig().companionPort), 10);
 const LOOPBACK_HOST = '127.0.0.1';
+const DESKTOP_SESSION_COOKIE = 'pa_web';
 const COMPANION_SESSION_COOKIE = 'pa_companion';
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
@@ -2631,7 +2632,7 @@ function readCookieValue(req: Request, cookieName: string): string {
   return '';
 }
 
-function shouldUseSecureCompanionCookie(req: Request): boolean {
+function shouldUseSecureAuthCookie(req: Request): boolean {
   const origin = resolveRequestOrigin({
     host: req.get('host'),
     forwardedHost: req.get('x-forwarded-host'),
@@ -2642,11 +2643,74 @@ function shouldUseSecureCompanionCookie(req: Request): boolean {
   return origin?.startsWith('https://') === true;
 }
 
+function normalizeAuthHost(value: string | null | undefined): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return '';
+  }
+
+  const token = value.split(',')[0]?.trim().toLowerCase() ?? '';
+  return token.replace(/^\[/, '').replace(/\]$/, '').replace(/:\d+$/, '');
+}
+
+function isTailnetDesktopRequest(req: Request): boolean {
+  const host = normalizeAuthHost(req.get('x-forwarded-host') ?? req.get('host') ?? null);
+  if (host.endsWith('.ts.net')) {
+    return true;
+  }
+
+  return ['tailscale-user-login', 'tailscale-user-name', 'tailscale-user-profile-pic', 'tailscale-app-capabilities']
+    .some((headerName) => typeof req.get(headerName) === 'string' && req.get(headerName)!.trim().length > 0);
+}
+
+function setDesktopSessionCookie(req: Request, res: Response, token: string): void {
+  res.cookie(DESKTOP_SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: shouldUseSecureAuthCookie(req),
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearDesktopSessionCookie(req: Request, res: Response): void {
+  res.clearCookie(DESKTOP_SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: shouldUseSecureAuthCookie(req),
+    path: '/',
+  });
+}
+
+function readDesktopSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
+  const sessionToken = readCookieValue(req, DESKTOP_SESSION_COOKIE);
+  const session = readCompanionSession(sessionToken, { surface: 'desktop' });
+  if (!session) {
+    clearDesktopSessionCookie(req, res);
+    return null;
+  }
+
+  return session;
+}
+
+function ensureDesktopSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
+  const session = readDesktopSession(req, res);
+  if (!session) {
+    res.status(401).json({ error: 'Desktop sign-in required.' });
+    return null;
+  }
+
+  return session;
+}
+
+function shouldRequireDesktopSession(req: Request): boolean {
+  return isTailnetDesktopRequest(req);
+}
+
 function setCompanionSessionCookie(req: Request, res: Response, token: string): void {
   res.cookie(COMPANION_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'strict',
-    secure: shouldUseSecureCompanionCookie(req),
+    secure: shouldUseSecureAuthCookie(req),
     path: '/',
     maxAge: 30 * 24 * 60 * 60 * 1000,
   });
@@ -2656,14 +2720,14 @@ function clearCompanionSessionCookie(req: Request, res: Response): void {
   res.clearCookie(COMPANION_SESSION_COOKIE, {
     httpOnly: true,
     sameSite: 'strict',
-    secure: shouldUseSecureCompanionCookie(req),
+    secure: shouldUseSecureAuthCookie(req),
     path: '/',
   });
 }
 
 function ensureCompanionSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
   const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
-  const session = readCompanionSession(sessionToken);
+  const session = readCompanionSession(sessionToken, { surface: 'companion' });
   if (!session) {
     clearCompanionSessionCookie(req, res);
     res.status(401).json({ error: 'Companion sign-in required.' });
@@ -2729,6 +2793,61 @@ createServiceAttentionMonitor({
     warn: (message, fields) => logWarn(message, fields),
   },
 }).start();
+
+app.get('/api/desktop-auth/session', (req, res) => {
+  const required = shouldRequireDesktopSession(req);
+  if (!required) {
+    res.json({ required: false, session: null });
+    return;
+  }
+
+  const session = readDesktopSession(req, res);
+  res.json({ required: true, session });
+});
+
+app.post('/api/desktop-auth/exchange', companionAuthExchangeRateLimit, (req, res) => {
+  try {
+    const { code, deviceLabel } = req.body as { code?: unknown; deviceLabel?: unknown };
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      res.status(400).json({ error: 'Pairing code required.' });
+      return;
+    }
+
+    const exchanged = exchangeCompanionPairingCode(code, {
+      ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
+      surface: 'desktop',
+    });
+    setDesktopSessionCookie(req, res, exchanged.sessionToken);
+    res.status(201).json({ required: true, session: exchanged.session });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.includes('invalid or expired') ? 400 : 500).json({ error: message });
+  }
+});
+
+app.post('/api/desktop-auth/logout', (req, res) => {
+  revokeCompanionSessionByToken(readCookieValue(req, DESKTOP_SESSION_COOKIE));
+  clearDesktopSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+app.use('/api', (req, res, next) => {
+  if (req.path === '/desktop-auth/session' || req.path === '/desktop-auth/exchange' || req.path === '/desktop-auth/logout') {
+    next();
+    return;
+  }
+
+  if (!shouldRequireDesktopSession(req)) {
+    next();
+    return;
+  }
+
+  if (!ensureDesktopSession(req, res)) {
+    return;
+  }
+
+  next();
+});
 
 app.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -9576,6 +9695,7 @@ companionApp.post('/api/companion-auth/exchange', companionAuthExchangeRateLimit
 
     const exchanged = exchangeCompanionPairingCode(code, {
       ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
+      surface: 'companion',
     });
     setCompanionSessionCookie(req, res, exchanged.sessionToken);
     res.status(201).json({ session: exchanged.session });
@@ -9660,7 +9780,7 @@ companionApp.get('/api/events', (req, res) => {
       return;
     }
 
-    if (!readCompanionSession(sessionToken, { touch: false })) {
+    if (!readCompanionSession(sessionToken, { touch: false, surface: 'companion' })) {
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
@@ -9903,7 +10023,7 @@ companionApp.get('/api/live-sessions/:id/events', (req, res) => {
 
   const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
   const heartbeat = setInterval(() => {
-    if (!readCompanionSession(sessionToken, { touch: false })) {
+    if (!readCompanionSession(sessionToken, { touch: false, surface: 'companion' })) {
       clearInterval(heartbeat);
       unsubscribe?.();
       res.end();

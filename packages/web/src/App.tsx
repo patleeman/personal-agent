@@ -19,6 +19,7 @@ import type {
   AppEvent,
   AppEventTopic,
   DaemonState,
+  DesktopAuthSessionState,
   DurableRunListResult,
   GatewayState,
   ProjectRecord,
@@ -91,7 +92,91 @@ function suspendRoute(element: React.ReactNode) {
   );
 }
 
+function defaultDesktopDeviceLabel(): string {
+  if (typeof navigator === 'undefined') {
+    return 'Remote desktop';
+  }
+
+  const navigatorWithUserAgentData = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = navigatorWithUserAgentData.userAgentData?.platform ?? navigator.platform ?? '';
+  return platform.trim().length > 0 ? `${platform} desktop` : 'Remote desktop';
+}
+
+function DesktopPairingScreen() {
+  const [pairingCode, setPairingCode] = useState('');
+  const [deviceLabel, setDeviceLabel] = useState(() => defaultDesktopDeviceLabel());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePair = useCallback(async () => {
+    if (busy || pairingCode.trim().length === 0) {
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      await api.exchangeDesktopPairingCode(pairingCode, deviceLabel);
+      window.location.reload();
+    } catch (pairError) {
+      setError(pairError instanceof Error ? pairError.message : String(pairError));
+      setBusy(false);
+    }
+  }, [busy, deviceLabel, pairingCode]);
+
+  return (
+    <ThemeProvider>
+      <div className="flex min-h-screen items-center justify-center bg-base px-5 py-8 text-primary">
+        <div className="w-full max-w-md rounded-[28px] border border-border-subtle bg-surface/80 px-5 py-6 shadow-[0_18px_80px_rgba(15,23,42,0.18)]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Desktop</p>
+          <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this browser</h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-secondary">
+            Enter a short-lived pairing code from the machine hosting Pi to unlock the full desktop web UI over your tailnet.
+          </p>
+          <p className="mt-2 text-[12px] leading-relaxed text-secondary">
+            Generate a code from the local web UI or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>. Once paired, this browser stays signed in until you revoke it.
+          </p>
+          <label className="mt-5 block">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Pairing code</span>
+            <input
+              value={pairingCode}
+              onChange={(event) => setPairingCode(event.target.value.toUpperCase())}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="ABCD-EFGH-IJKL"
+              className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 font-mono text-[16px] tracking-[0.18em] text-primary outline-none transition focus:border-accent"
+            />
+          </label>
+          <label className="mt-4 block">
+            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Device label</span>
+            <input
+              value={deviceLabel}
+              onChange={(event) => setDeviceLabel(event.target.value)}
+              autoCorrect="off"
+              spellCheck={false}
+              className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 text-[14px] text-primary outline-none transition focus:border-accent"
+            />
+          </label>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { void handlePair(); }}
+              disabled={busy || pairingCode.trim().length === 0}
+              className="ui-toolbar-button"
+            >
+              {busy ? 'Signing in…' : 'Pair browser'}
+            </button>
+          </div>
+          {error ? <p className="mt-4 text-[12px] text-danger">{error}</p> : null}
+        </div>
+      </div>
+    </ThemeProvider>
+  );
+}
+
 export function App() {
+  const [desktopAuth, setDesktopAuth] = useState<DesktopAuthSessionState | null>(null);
   const [titleMap, setTitleMap] = useState<Map<string, string>>(new Map());
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
@@ -205,6 +290,32 @@ export function App() {
   }, [setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    api.desktopAuthSession()
+      .then((state) => {
+        if (!cancelled) {
+          setDesktopAuth(state);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDesktopAuth({ required: false, session: null });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const desktopAccessGranted = desktopAuth !== null && (!desktopAuth.required || desktopAuth.session !== null);
+
+  useEffect(() => {
+    if (!desktopAccessGranted) {
+      return;
+    }
+
     const es = new EventSource('/api/events');
     const bootstrapTimer = window.setTimeout(() => {
       if (!openedOnceRef.current) {
@@ -285,7 +396,19 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+
+  if (desktopAuth === null) {
+    return (
+      <ThemeProvider>
+        <div className="flex min-h-screen items-center justify-center bg-base px-6 text-[12px] text-dim">Checking desktop access…</div>
+      </ThemeProvider>
+    );
+  }
+
+  if (desktopAuth.required && !desktopAuth.session) {
+    return <DesktopPairingScreen />;
+  }
 
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions }}>

@@ -3,6 +3,7 @@ import { spawnSync, type SpawnSyncReturns } from 'child_process';
 export interface SyncWebUiTailscaleServeInput {
   enabled: boolean;
   port: number;
+  companionPort?: number;
 }
 
 interface TailscaleStatusPayload {
@@ -62,12 +63,19 @@ function normalizeDnsSuffix(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function buildTailscaleServeArgs(input: SyncWebUiTailscaleServeInput & { port: number }): string[] {
-  if (input.enabled) {
-    return ['serve', '--bg', `localhost:${input.port}`];
+function buildTailscaleServeArgs(input: { enabled: boolean; port: number; path?: string }): string[] {
+  const args = ['serve', '--bg'];
+
+  if (input.path) {
+    args.push(`--set-path=${input.path}`);
   }
 
-  return ['serve', '--bg', `localhost:${input.port}`, 'off'];
+  args.push(`localhost:${input.port}`);
+  if (!input.enabled) {
+    args.push('off');
+  }
+
+  return args;
 }
 
 function formatCommand(command: string, args: string[]): string {
@@ -133,19 +141,30 @@ function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | und
 }
 
 export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
-  const normalizedInput = {
-    ...input,
-    port: normalizePort(input.port),
-  };
-  const args = buildTailscaleServeArgs(normalizedInput);
-  const execution = runTailscaleCommand(args);
+  const normalizedPort = normalizePort(input.port);
+  const normalizedCompanionPort = input.companionPort === undefined ? undefined : normalizePort(input.companionPort);
+  const mappings = [
+    { port: normalizedPort, label: '/', path: undefined as string | undefined },
+    ...(normalizedCompanionPort === undefined
+      ? []
+      : [{ port: normalizedCompanionPort, label: '/app', path: '/app' }]),
+  ];
 
-  const status = execution.result.status ?? 1;
-  if (status !== 0) {
-    const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
-    throw new Error(
-      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for localhost:${normalizedInput.port}: ${detail}`,
-    );
+  for (const mapping of mappings) {
+    const args = buildTailscaleServeArgs({
+      enabled: input.enabled,
+      port: mapping.port,
+      ...(mapping.path ? { path: mapping.path } : {}),
+    });
+    const execution = runTailscaleCommand(args);
+    const status = execution.result.status ?? 1;
+
+    if (status !== 0) {
+      const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
+      throw new Error(
+        `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${mapping.label} -> localhost:${mapping.port}: ${detail}`,
+      );
+    }
   }
 }
 

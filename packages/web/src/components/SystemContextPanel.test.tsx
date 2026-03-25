@@ -44,7 +44,8 @@ describe('SystemContextPanel', () => {
       </SystemStatusContext.Provider>,
     );
 
-    expect(html).toContain('Companion pairing');
+    expect(html).toContain('Remote pairing');
+    expect(html).toContain('Open tailnet desktop');
     expect(html).toContain('Open local companion');
     expect(html).toContain('Open tailnet companion');
     expect(html).toContain('https-ready');

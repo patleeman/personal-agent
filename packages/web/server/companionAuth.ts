@@ -15,9 +15,12 @@ interface StoredPairingCode {
   expiresAt: string;
 }
 
+export type PairedSurface = 'companion' | 'desktop';
+
 interface StoredSession {
   id: string;
   deviceLabel: string;
+  surface: PairedSurface;
   tokenHash: string;
   createdAt: string;
   lastUsedAt: string;
@@ -40,6 +43,7 @@ export interface CompanionPairingCode {
 export interface CompanionAuthSessionSummary {
   id: string;
   deviceLabel: string;
+  surface: PairedSurface;
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
@@ -151,6 +155,7 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
       return [{
         id: candidate.id,
         deviceLabel: candidate.deviceLabel,
+        surface: candidate.surface === 'desktop' ? 'desktop' : 'companion',
         tokenHash: candidate.tokenHash,
         createdAt: candidate.createdAt,
         lastUsedAt: candidate.lastUsedAt,
@@ -204,6 +209,7 @@ function toSessionSummary(session: StoredSession): CompanionAuthSessionSummary {
   return {
     id: session.id,
     deviceLabel: session.deviceLabel,
+    surface: session.surface,
     createdAt: session.createdAt,
     lastUsedAt: session.lastUsedAt,
     expiresAt: session.expiresAt,
@@ -252,7 +258,7 @@ export function createCompanionPairingCode(options?: { now?: Date }): CompanionP
 
 export function exchangeCompanionPairingCode(
   codeInput: string,
-  options?: { deviceLabel?: string; now?: Date },
+  options?: { deviceLabel?: string; surface?: PairedSurface; now?: Date },
 ): { sessionToken: string; session: CompanionAuthSessionSummary } {
   return updateStore((store, now) => {
     const normalizedCode = normalizePairingCodeInput(codeInput);
@@ -274,6 +280,7 @@ export function exchangeCompanionPairingCode(
     const session: StoredSession = {
       id: generateId('session'),
       deviceLabel: normalizeDeviceLabel(options?.deviceLabel),
+      surface: options?.surface === 'desktop' ? 'desktop' : 'companion',
       tokenHash: hashSecret(sessionToken),
       createdAt,
       lastUsedAt: createdAt,
@@ -290,7 +297,7 @@ export function exchangeCompanionPairingCode(
 
 export function readCompanionSession(
   tokenInput: string,
-  options?: { now?: Date; touch?: boolean },
+  options?: { now?: Date; touch?: boolean; surface?: PairedSurface },
 ): CompanionAuthSessionSummary | null {
   const normalizedToken = tokenInput.trim();
   if (!normalizedToken) {
@@ -299,7 +306,7 @@ export function readCompanionSession(
 
   return updateStore((store, now) => {
     const tokenHash = hashSecret(normalizedToken);
-    const session = store.sessions.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt);
+    const session = store.sessions.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt && (!options?.surface || entry.surface === options.surface));
     if (!session) {
       return null;
     }
