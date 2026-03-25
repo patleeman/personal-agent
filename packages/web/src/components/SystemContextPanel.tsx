@@ -113,7 +113,7 @@ function buildPanel(selected: SystemPanelData) {
           { label: 'Desktop URL', value: data.service.url },
           { label: 'Companion service', value: `${companion.statusLabel} · ${companion.localUrl}` },
           { label: 'Companion port', value: String(data.service.companionPort) },
-          { label: 'Tailnet URL', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
+          { label: 'Tailnet desktop', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
           { label: 'Tailnet companion', value: companion.tailnetUrl ?? 'Enable Tailscale Serve to expose /app over HTTPS.' },
           { label: 'Release', value: release },
         ],
@@ -258,8 +258,8 @@ function CompanionPairingSection({ data }: { data: WebUiState }) {
   return (
     <div className="space-y-3 border-t border-border-subtle pt-4">
       <div className="space-y-1">
-        <p className="ui-section-label">Companion pairing</p>
-        <p className="text-[12px] text-secondary leading-relaxed">Generate a short-lived pairing code here, then enter it on the phone companion to mint a revocable session.</p>
+        <p className="ui-section-label">Remote pairing</p>
+        <p className="text-[12px] text-secondary leading-relaxed">Generate a short-lived pairing code here, or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>, then enter it on a remote desktop browser or the phone companion to mint a revocable session.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <ToolbarButton onClick={() => { void createPairingCode(); }} disabled={pairingBusy}>
@@ -291,7 +291,7 @@ function CompanionPairingSection({ data }: { data: WebUiState }) {
               <div key={session.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-primary">{session.deviceLabel}</p>
-                  <p className="mt-1 text-[11px] text-secondary">Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
+                  <p className="mt-1 text-[11px] text-secondary">{session.surface === 'desktop' ? 'Desktop' : 'Companion'} · Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
                 </div>
                 <button
                   type="button"
@@ -435,8 +435,8 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
       const nextState = await api.setWebUiConfig({ useTailscaleServe: !selected.data.service.tailscaleServe });
       setWebUi(nextState);
       setMessage(nextState.service.tailscaleServe
-        ? 'Enabled Tailscale Serve for the web UI. Use the Tailnet companion URL to validate secure-origin mobile installability.'
-        : 'Disabled Tailscale Serve for the web UI. The companion app is back to local-only mode.');
+        ? 'Enabled Tailscale Serve for the web UI. Use the Tailnet desktop URL for the full remote UI and the Tailnet companion URL for /app.'
+        : 'Disabled Tailscale Serve for the web UI. Desktop and companion access are back to local-only mode.');
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : String(actionError));
     } finally {
@@ -514,6 +514,11 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
                 <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
                   {selected.data.service.tailscaleServe ? 'Disable Tailnet HTTPS' : 'Enable Tailnet HTTPS'}
                 </ToolbarButton>
+                {selected.data.service.tailscaleUrl && (
+                  <a href={selected.data.service.tailscaleUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                    Open tailnet desktop
+                  </a>
+                )}
               </div>
             </div>
             <CompanionPairingSection data={selected.data} />

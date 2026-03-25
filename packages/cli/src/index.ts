@@ -74,6 +74,7 @@ import {
   registerGatewayCliCommands,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  resolveWebUiTailscaleUrl,
   restartWebUiService,
   restartWebUiServiceIfInstalled,
   rollbackWebUiDeployment,
@@ -155,6 +156,7 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
 const DEFAULT_WEB_UI_PORT = 3741;
+const DEFAULT_WEB_UI_COMPANION_PORT = 3742;
 const INSTALL_COMMAND_USAGE = 'pa install <source> [--profile <name> | -l | --local]';
 const INSTALL_COMMAND_HELP_TEXT = `Default target: active mutable profile settings.json.
 
@@ -171,6 +173,7 @@ Examples:
 
 interface WebUiConfig {
   port: number;
+  companionPort: number;
   useTailscaleServe: boolean;
 }
 
@@ -196,6 +199,10 @@ function normalizeWebUiPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): num
   return parsed > 0 && parsed <= 65535 ? parsed : fallback;
 }
 
+function normalizeWebUiCompanionPort(value: unknown, fallback = DEFAULT_WEB_UI_COMPANION_PORT): number {
+  return normalizeWebUiPort(value, fallback);
+}
+
 function normalizeWebUiBool(value: unknown, fallback = false): boolean {
   return value === true || value === 'true' ? true : value === false ? false : fallback;
 }
@@ -219,24 +226,37 @@ function readRawWebUiConfig(): Record<string, unknown> {
   }
 }
 
+function finalizeWebUiConfig(config: WebUiConfig): WebUiConfig {
+  if (config.companionPort !== config.port) {
+    return config;
+  }
+
+  return {
+    ...config,
+    companionPort: config.port === DEFAULT_WEB_UI_COMPANION_PORT ? DEFAULT_WEB_UI_COMPANION_PORT + 1 : config.port + 1,
+  };
+}
+
 function readWebUiConfig(): WebUiConfig {
   const envOverride = parseWebUiEnvBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
   const parsed = readRawWebUiConfig();
 
-  return {
+  return finalizeWebUiConfig({
     port: normalizeWebUiPort(parsed.port),
+    companionPort: normalizeWebUiCompanionPort(parsed.companionPort),
     useTailscaleServe: envOverride ?? normalizeWebUiBool(parsed.useTailscaleServe),
-  };
+  });
 }
 
 function writeWebUiConfig(config: WebUiConfig): void {
   const filePath = getWebUiConfigFilePath();
   const raw = readRawWebUiConfig();
   const current = readWebUiConfig();
-  const next = {
+  const next = finalizeWebUiConfig({
     port: normalizeWebUiPort(config.port),
+    companionPort: normalizeWebUiCompanionPort(config.companionPort),
     useTailscaleServe: normalizeWebUiBool(config.useTailscaleServe),
-  };
+  });
 
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(
@@ -1887,7 +1907,15 @@ async function restartBackgroundServices(options: {
         if (!currentStatus.installed) {
           webUiSpinner.succeed('Managed web UI service not installed (skipped)');
         } else {
-          const swapSummary = await deployManagedWebUiBlueGreen(webUiOptions.repoRoot, webUiOptions.port);
+          const webUiConfig = finalizeWebUiConfig({
+            ...readWebUiConfig(),
+            port: webUiOptions.port,
+          });
+          const swapSummary = await deployManagedWebUiBlueGreen(
+            webUiOptions.repoRoot,
+            webUiOptions.port,
+            webUiConfig.companionPort,
+          );
           webUiSpinner.succeed(`Deployed managed web UI (${swapSummary})`);
           webUiStatus = `blue/green ${swapSummary}`;
         }
@@ -4147,6 +4175,34 @@ function resolveWebUiCandidateLogFile(slot: WebUiReleaseSummary['slot']): string
   return join(resolveStatePaths().root, 'web', 'logs', `candidate-${slot}.log`);
 }
 
+function resolveWebUiCandidatePort(stablePort: number, slot: WebUiReleaseSummary['slot'], companionPort: number): number {
+  let candidate = getWebUiSlotHealthPort(stablePort, slot);
+  if (candidate !== stablePort && candidate !== companionPort) {
+    return candidate;
+  }
+
+  const step = 2;
+  const maxPort = 65535;
+  while (candidate <= maxPort && (candidate === stablePort || candidate === companionPort)) {
+    candidate += step;
+  }
+
+  if (candidate <= maxPort) {
+    return candidate;
+  }
+
+  candidate = getWebUiSlotHealthPort(stablePort, slot);
+  while (candidate > 0 && (candidate === stablePort || candidate === companionPort)) {
+    candidate -= step;
+  }
+
+  if (candidate > 0) {
+    return candidate;
+  }
+
+  throw new Error(`Could not find an available candidate port for web UI slot ${slot}.`);
+}
+
 function startWebUiCandidateProcess(release: WebUiReleaseSummary, port: number): WebUiCandidateHandle {
   const logFile = resolveWebUiCandidateLogFile(release.slot);
   mkdirSync(dirname(logFile), { recursive: true });
@@ -4201,8 +4257,12 @@ async function stopWebUiCandidateProcess(handle: WebUiCandidateHandle): Promise<
   }
 }
 
-async function validateWebUiReleaseCandidate(release: WebUiReleaseSummary, stablePort: number): Promise<{ port: number; logFile: string }> {
-  const port = getWebUiSlotHealthPort(stablePort, release.slot);
+async function validateWebUiReleaseCandidate(
+  release: WebUiReleaseSummary,
+  stablePort: number,
+  companionPort: number,
+): Promise<{ port: number; logFile: string }> {
+  const port = resolveWebUiCandidatePort(stablePort, release.slot, companionPort);
   const handle = startWebUiCandidateProcess(release, port);
 
   try {
@@ -4231,12 +4291,12 @@ async function validateWebUiReleaseCandidate(release: WebUiReleaseSummary, stabl
   }
 }
 
-async function deployManagedWebUiBlueGreen(repoRoot: string, port: number): Promise<string> {
+async function deployManagedWebUiBlueGreen(repoRoot: string, port: number, companionPort: number): Promise<string> {
   const deployment = getWebUiDeploymentSummary({ stablePort: port });
   const nextSlot = getInactiveWebUiSlot(deployment.activeSlot);
   const release = stageWebUiRelease({ repoRoot, slot: nextSlot, stablePort: port });
 
-  await validateWebUiReleaseCandidate(release, port);
+  await validateWebUiReleaseCandidate(release, port, companionPort);
   activateWebUiSlot({ slot: nextSlot, stablePort: port });
   installWebUiService({ repoRoot, port });
   await waitForWebUiHealthy(port, 30_000, {
@@ -4256,6 +4316,7 @@ function printWebUiHelp(): void {
   console.log('  pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Start the web UI in the foreground');
   console.log('  pa ui logs [--tail <count>]                   Show recent managed web UI logs');
+  console.log('  pa ui pairing-code [--port <port>]            Create a pairing code for remote desktop or companion access');
   console.log('  pa ui service help                            Show web UI service help');
   console.log('  pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Install and start managed web UI service');
@@ -4385,15 +4446,71 @@ function showWebUiLogs(args: string[]): void {
   console.log(tail);
 }
 
+async function createWebUiPairingCode(port: number): Promise<{ id: string; code: string; createdAt: string; expiresAt: string }> {
+  const url = `http://127.0.0.1:${port}/api/companion-auth/pairing-code`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Origin: `http://127.0.0.1:${port}`,
+      },
+    });
+  } catch (error) {
+    throw new Error(`Could not reach the web UI on ${url}. Start it first with \`pa ui\` or \`pa ui service start\`.`);
+  }
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const parsed = await response.json() as { error?: string };
+      if (typeof parsed.error === 'string' && parsed.error.trim().length > 0) {
+        detail = parsed.error;
+      }
+    } catch {
+      // Ignore non-JSON error bodies.
+    }
+
+    throw new Error(`Could not create a pairing code: ${detail}`);
+  }
+
+  return response.json() as Promise<{ id: string; code: string; createdAt: string; expiresAt: string }>;
+}
+
+async function showWebUiPairingCode(args: string[]): Promise<void> {
+  const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, 'pa ui pairing-code [--port <port>]');
+  ensureNoExtraCommandArgs(parsed.rest, 'pa ui pairing-code [--port <port>]');
+
+  const config = readWebUiConfig();
+  const created = await createWebUiPairingCode(parsed.value);
+  const tailscaleUrl = config.useTailscaleServe ? resolveWebUiTailscaleUrl() : undefined;
+
+  console.log(section('Web UI pairing code'));
+  console.log(keyValue('Code', created.code));
+  console.log(keyValue('Expires', new Date(created.expiresAt).toLocaleString()));
+  console.log(keyValue('Port', String(parsed.value)));
+  if (tailscaleUrl) {
+    console.log(keyValue('Desktop URL', tailscaleUrl));
+    console.log(keyValue('Companion URL', `${tailscaleUrl.replace(/\/+$/, '')}/app`));
+  }
+  console.log(dim('Use this one-time code to pair a remote desktop browser or the companion app. Once paired, the browser stays signed in until you revoke it.'));
+}
+
 function syncWebUiTailscaleServeFromCli(input: {
   enabled: boolean;
   port: number;
+  companionPort: number;
   strict: boolean;
   context: string;
 }): void {
   try {
-    syncWebUiTailscaleServe({ enabled: input.enabled, port: input.port });
-    console.log(keyValue('Tailscale Serve', `${input.enabled ? 'enabled' : 'disabled'} · localhost:${input.port}`));
+    syncWebUiTailscaleServe({
+      enabled: input.enabled,
+      port: input.port,
+      companionPort: input.companionPort,
+    });
+    console.log(keyValue('Tailscale Serve', `${input.enabled ? 'enabled' : 'disabled'} · / → localhost:${input.port}, /app → localhost:${input.companionPort}`));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     if (input.strict) {
@@ -4442,6 +4559,11 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   const desiredUseTailscaleServe = parsedTailscaleServe.explicit
     ? parsedTailscaleServe.value
     : currentConfig.useTailscaleServe;
+  const desiredConfig = finalizeWebUiConfig({
+    ...currentConfig,
+    port: options.port,
+    useTailscaleServe: desiredUseTailscaleServe,
+  });
   const autoEnableTailscaleAfterServiceStart = !parsedTailscaleServe.explicit
     && desiredUseTailscaleServe
     && ['install', 'start', 'restart'].includes(action);
@@ -4449,30 +4571,24 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   if (parsedTailscaleServe.explicit) {
     syncWebUiTailscaleServeFromCli({
       enabled: parsedTailscaleServe.value,
-      port: options.port,
+      port: desiredConfig.port,
+      companionPort: desiredConfig.companionPort,
       strict: true,
       context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
     });
-    writeWebUiConfig({
-      ...currentConfig,
-      port: options.port,
-      useTailscaleServe: parsedTailscaleServe.value,
-    });
+    writeWebUiConfig(desiredConfig);
   }
 
   if (action === 'install') {
-    writeWebUiConfig({
-      ...currentConfig,
-      port: options.port,
-      useTailscaleServe: desiredUseTailscaleServe,
-    });
+    writeWebUiConfig(desiredConfig);
     const service = installWebUiService(options);
     await waitForWebUiHealthy(service.port);
 
     if (autoEnableTailscaleAfterServiceStart) {
       syncWebUiTailscaleServeFromCli({
         enabled: true,
-        port: service.port,
+        port: desiredConfig.port,
+        companionPort: desiredConfig.companionPort,
         strict: false,
         context: 'Could not re-apply configured Tailscale Serve setting',
       });
@@ -4501,7 +4617,8 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
     if (autoEnableTailscaleAfterServiceStart) {
       syncWebUiTailscaleServeFromCli({
         enabled: true,
-        port: service.port,
+        port: desiredConfig.port,
+        companionPort: desiredConfig.companionPort,
         strict: false,
         context: 'Could not re-apply configured Tailscale Serve setting',
       });
@@ -4525,7 +4642,8 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
       if (autoEnableTailscaleAfterServiceStart) {
         syncWebUiTailscaleServeFromCli({
           enabled: true,
-          port: service.port,
+          port: desiredConfig.port,
+          companionPort: desiredConfig.companionPort,
           strict: false,
           context: 'Could not re-apply configured Tailscale Serve setting',
         });
@@ -4557,7 +4675,8 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
     if (!parsedTailscaleServe.explicit && desiredUseTailscaleServe) {
       syncWebUiTailscaleServeFromCli({
         enabled: true,
-        port: service.port,
+        port: desiredConfig.port,
+        companionPort: desiredConfig.companionPort,
         strict: false,
         context: 'Could not re-apply configured Tailscale Serve setting',
       });
@@ -4648,24 +4767,27 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
   const desiredUseTailscaleServe = parsedTailscaleServe.explicit
     ? parsedTailscaleServe.value
     : currentConfig.useTailscaleServe;
+  const desiredConfig = finalizeWebUiConfig({
+    ...currentConfig,
+    port: portParse.value,
+    useTailscaleServe: desiredUseTailscaleServe,
+  });
 
   if (parsedTailscaleServe.explicit) {
     syncWebUiTailscaleServeFromCli({
       enabled: parsedTailscaleServe.value,
-      port: portParse.value,
+      port: desiredConfig.port,
+      companionPort: desiredConfig.companionPort,
       strict: true,
       context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
     });
 
-    writeWebUiConfig({
-      ...currentConfig,
-      port: portParse.value,
-      useTailscaleServe: parsedTailscaleServe.value,
-    });
+    writeWebUiConfig(desiredConfig);
   } else if (desiredUseTailscaleServe) {
     syncWebUiTailscaleServeFromCli({
       enabled: true,
-      port: portParse.value,
+      port: desiredConfig.port,
+      companionPort: desiredConfig.companionPort,
       strict: false,
       context: 'Could not re-apply configured Tailscale Serve setting',
     });
@@ -4715,6 +4837,7 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
     env: {
       ...process.env,
       PA_WEB_PORT: String(portParse.value),
+      PA_WEB_COMPANION_PORT: String(desiredConfig.companionPort),
       PA_WEB_DIST: distPath,
       PERSONAL_AGENT_REPO_ROOT: repoRoot,
       PERSONAL_AGENT_WEB_TAILSCALE_SERVE: String(desiredUseTailscaleServe),
@@ -4739,6 +4862,11 @@ async function uiCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'logs') {
     showWebUiLogs(rest);
+    return 0;
+  }
+
+  if (subcommand === 'pairing-code') {
+    await showWebUiPairingCode(rest);
     return 0;
   }
 

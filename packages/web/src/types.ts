@@ -890,6 +890,7 @@ export interface LiveSessionMeta {
 export interface CompanionAuthSessionSummary {
   id: string;
   deviceLabel: string;
+  surface: 'companion' | 'desktop';
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
@@ -914,6 +915,11 @@ export interface CompanionPairingCodeResult {
 
 export interface CompanionAuthSessionState {
   session: CompanionAuthSessionSummary;
+}
+
+export interface DesktopAuthSessionState {
+  required: boolean;
+  session: CompanionAuthSessionSummary | null;
 }
 
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';

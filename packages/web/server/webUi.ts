@@ -219,7 +219,8 @@ export function syncConfiguredWebUiTailscaleServe(enabled: boolean): void {
   const config = readWebUiConfig();
   syncWebUiTailscaleServe({
     enabled,
-    port: config.companionPort,
+    port: config.port,
+    companionPort: config.companionPort,
   });
 }
 

@@ -86,7 +86,12 @@ describe('CompanionConversationsPage', () => {
         return {
           data: {
             session: {
+              id: 'session-1',
               deviceLabel: 'Test companion',
+              surface: 'companion',
+              createdAt: '2026-03-25T00:00:00.000Z',
+              lastUsedAt: '2026-03-25T00:00:00.000Z',
+              expiresAt: '2026-04-25T00:00:00.000Z',
             },
           },
           loading: false,

@@ -309,7 +309,7 @@ export function CompanionLayout() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Companion</p>
                 <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this device</h1>
                 <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                  Generate a pairing code from the local desktop web UI, then enter it here to unlock the restricted companion service.
+                  Generate a pairing code from the local desktop web UI, or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>, then enter it here to unlock the restricted companion service.
                 </p>
                 <label className="mt-5 block">
                   <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Pairing code</span>
