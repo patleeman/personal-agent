@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Outlet, useOutletContext } from 'react-router-dom';
+import { useAppData } from '../contexts';
+import { useCompanionNotifications } from './useCompanionNotifications';
 import {
   canPromptCompanionInstall,
   COMPANION_SCOPE_PATH,
@@ -15,6 +17,9 @@ export interface CompanionLayoutContextValue {
   installAvailable: boolean;
   installBusy: boolean;
   promptInstall: () => Promise<void>;
+  notificationsSupported: boolean;
+  notificationPermission: NotificationPermission | 'unsupported';
+  requestNotificationPermission: () => Promise<void>;
 }
 
 function readDisplayModeStandalone(): boolean {
@@ -42,8 +47,12 @@ export function useCompanionLayoutContext() {
 }
 
 export function CompanionLayout() {
+  const { activity, sessions } = useAppData();
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  );
   const [standalone, setStandalone] = useState(() => isCompanionStandalone(
     readDisplayModeStandalone(),
     readNavigatorStandalone(),
@@ -63,6 +72,9 @@ export function CompanionLayout() {
     }
 
     let mediaQuery: MediaQueryList | null = null;
+    const syncNotificationPermission = () => {
+      setNotificationPermission(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+    };
     const syncStandaloneState = () => {
       setStandalone(isCompanionStandalone(readDisplayModeStandalone(), readNavigatorStandalone()));
     };
@@ -84,10 +96,15 @@ export function CompanionLayout() {
       setDeferredPrompt(null);
     };
 
+    syncNotificationPermission();
     window.addEventListener('appinstalled', handleAppInstalled);
+    window.addEventListener('focus', syncNotificationPermission);
+    document.addEventListener('visibilitychange', syncNotificationPermission);
 
     return () => {
       window.removeEventListener('appinstalled', handleAppInstalled);
+      window.removeEventListener('focus', syncNotificationPermission);
+      document.removeEventListener('visibilitychange', syncNotificationPermission);
       if (!mediaQuery) {
         return;
       }
@@ -144,6 +161,21 @@ export function CompanionLayout() {
     }
   }, [deferredPrompt, installBusy]);
 
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined' || notificationPermission !== 'default') {
+      return;
+    }
+
+    const nextPermission = await Notification.requestPermission();
+    setNotificationPermission(nextPermission);
+  }, [notificationPermission]);
+
+  useCompanionNotifications({
+    activity,
+    sessions,
+    enabled: secureContext && notificationPermission === 'granted',
+  });
+
   const contextValue = useMemo<CompanionLayoutContextValue>(() => ({
     secureContext,
     standalone,
@@ -154,7 +186,10 @@ export function CompanionLayout() {
     }),
     installBusy,
     promptInstall,
-  }), [deferredPrompt, installBusy, promptInstall, secureContext, standalone]);
+    notificationsSupported: typeof Notification !== 'undefined',
+    notificationPermission,
+    requestNotificationPermission,
+  }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
 
   return (
     <div className="flex h-screen flex-col bg-base text-primary">

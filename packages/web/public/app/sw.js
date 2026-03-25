@@ -46,6 +46,11 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(focusNotificationConversation(event.notification.data));
+});
+
 async function handleCompanionNavigation(request) {
   const cache = await caches.open(SHELL_CACHE);
 
@@ -79,4 +84,32 @@ async function handleStaticAsset(request) {
 
   const response = await networkRequest;
   return response ?? Response.error();
+}
+
+async function focusNotificationConversation(data) {
+  const path = typeof data?.url === 'string' && data.url.startsWith('/app/')
+    ? data.url
+    : '/app/conversations';
+  const targetUrl = new URL(path, self.location.origin).href;
+  const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+  for (const client of clientsList) {
+    if (!('focus' in client)) {
+      continue;
+    }
+
+    try {
+      if ('navigate' in client && typeof client.url === 'string' && client.url !== targetUrl) {
+        await client.navigate(targetUrl);
+      }
+      await client.focus();
+      return;
+    } catch {
+      // Try the next client or fall back to opening a fresh one.
+    }
+  }
+
+  if ('openWindow' in self.clients) {
+    await self.clients.openWindow(targetUrl);
+  }
 }
