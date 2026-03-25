@@ -23,6 +23,7 @@ import {
 } from '../systemSelection';
 import type { DaemonState, DurableRunRecord, GatewayState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
+import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
 type SystemRowState = 'loading' | 'healthy' | 'issue' | 'offline' | 'disabled' | 'unavailable';
@@ -82,6 +83,7 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
   const release = data.service.deployment?.activeRelease?.revision
     ?? data.service.deployment?.activeSlot
     ?? 'no active release';
+  const companion = buildWebUiCompanionAccessSummary(data.service);
   const warningCount = data.warnings.length;
   const summary = data.service.running
     ? `Listening on ${data.service.url}`
@@ -97,7 +99,11 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
     summary,
     meta: [
       `release ${release}`,
-      data.service.tailscaleServe ? 'tailnet enabled' : 'local only',
+      companion.statusLabel === 'secure-ready'
+        ? 'companion secure-ready'
+        : companion.statusLabel === 'resolving'
+          ? 'companion resolving'
+          : 'companion local-only',
       warningCount > 0 ? pluralize(warningCount, 'warning') : '',
     ].filter(Boolean).join(' · '),
     attention: data.warnings[0] ?? (data.service.running ? null : summary),
