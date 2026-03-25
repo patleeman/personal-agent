@@ -25,21 +25,23 @@ describe('web UI config', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it('uses the default resume fallback prompt when no config file exists', () => {
+  it('uses the default companion port and resume fallback prompt when no config file exists', () => {
     const configDir = createTempDir('pa-web-ui-config-');
     process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = join(configDir, 'web.json');
 
     const config = readWebUiConfig();
+    expect(config.companionPort).toBe(3742);
     expect(config.resumeFallbackPrompt).toBe(DEFAULT_RESUME_FALLBACK_PROMPT);
   });
 
-  it('persists a custom resume fallback prompt', () => {
+  it('persists a custom companion port and resume fallback prompt', () => {
     const configDir = createTempDir('pa-web-ui-config-');
     process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = join(configDir, 'web.json');
 
-    writeWebUiConfig({ resumeFallbackPrompt: '  Pick up from the last successful step.  ' });
+    writeWebUiConfig({ companionPort: 4800, resumeFallbackPrompt: '  Pick up from the last successful step.  ' });
 
     const config = readWebUiConfig();
+    expect(config.companionPort).toBe(4800);
     expect(config.resumeFallbackPrompt).toBe('Pick up from the last successful step.');
   });
 

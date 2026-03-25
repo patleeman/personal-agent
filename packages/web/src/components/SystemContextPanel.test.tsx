@@ -23,7 +23,9 @@ describe('SystemContextPanel', () => {
             running: true,
             repoRoot: '/repo',
             port: 3741,
-            url: 'http://localhost:3741',
+            url: 'http://127.0.0.1:3741',
+            companionPort: 3742,
+            companionUrl: 'http://127.0.0.1:3742',
             tailscaleServe: true,
             tailscaleUrl: 'https://agent.tail.ts.net',
             resumeFallbackPrompt: 'Continue from where you left off.',
@@ -42,9 +44,9 @@ describe('SystemContextPanel', () => {
       </SystemStatusContext.Provider>,
     );
 
-    expect(html).toContain('Companion access');
+    expect(html).toContain('Companion pairing');
     expect(html).toContain('Open local companion');
     expect(html).toContain('Open tailnet companion');
-    expect(html).toContain('secure-ready');
+    expect(html).toContain('https-ready');
   });
 });

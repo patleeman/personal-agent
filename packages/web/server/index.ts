@@ -3,12 +3,11 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
-import { resolveSpaIndexRelativePath } from './spaIndex.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
@@ -80,6 +79,20 @@ import {
 } from './providerAuth.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
+import {
+  createCompanionPairingCode,
+  exchangeCompanionPairingCode,
+  readCompanionAuthAdminState,
+  readCompanionSession,
+  revokeCompanionSession,
+  revokeCompanionSessionByToken,
+} from './companionAuth.js';
+import {
+  applyWebSecurityHeaders,
+  createInMemoryRateLimit,
+  enforceSameOriginUnsafeRequests,
+  resolveRequestOrigin,
+} from './webSecurity.js';
 import {
   createServiceAttentionMonitor,
   suppressMonitoredServiceAttention,
@@ -362,6 +375,9 @@ import {
 } from './deferredResumes.js';
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
+const COMPANION_PORT = parseInt(process.env.PA_WEB_COMPANION_PORT ?? String(readWebUiConfig().companionPort), 10);
+const LOOPBACK_HOST = '127.0.0.1';
+const COMPANION_SESSION_COOKIE = 'pa_companion';
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const PROCESS_CWD = process.cwd();
@@ -2579,14 +2595,112 @@ async function buildSnapshotEvents(topics: AppEventTopic[]) {
   return events;
 }
 
+const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(['activity', 'projects', 'sessions']);
+
+async function buildCompanionSnapshotEvents(topics: AppEventTopic[]) {
+  return buildSnapshotEvents(topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic)));
+}
+
+function writeSseHeaders(res: Response): void {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+}
+
+function readCookieValue(req: Request, cookieName: string): string {
+  const cookieHeader = req.headers.cookie;
+  if (typeof cookieHeader !== 'string' || cookieHeader.trim().length === 0) {
+    return '';
+  }
+
+  const pairs = cookieHeader.split(';');
+  for (const pair of pairs) {
+    const [rawName, ...valueParts] = pair.split('=');
+    if (rawName?.trim() !== cookieName) {
+      continue;
+    }
+
+    return decodeURIComponent(valueParts.join('=').trim());
+  }
+
+  return '';
+}
+
+function shouldUseSecureCompanionCookie(req: Request): boolean {
+  const origin = resolveRequestOrigin({
+    host: req.get('host'),
+    forwardedHost: req.get('x-forwarded-host'),
+    protocol: req.protocol,
+    forwardedProto: req.get('x-forwarded-proto'),
+  });
+
+  return origin?.startsWith('https://') === true;
+}
+
+function setCompanionSessionCookie(req: Request, res: Response, token: string): void {
+  res.cookie(COMPANION_SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: shouldUseSecureCompanionCookie(req),
+    path: '/',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function clearCompanionSessionCookie(req: Request, res: Response): void {
+  res.clearCookie(COMPANION_SESSION_COOKIE, {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: shouldUseSecureCompanionCookie(req),
+    path: '/',
+  });
+}
+
+function ensureCompanionSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
+  const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
+  const session = readCompanionSession(sessionToken);
+  if (!session) {
+    clearCompanionSessionCookie(req, res);
+    res.status(401).json({ error: 'Companion sign-in required.' });
+    return null;
+  }
+
+  return session;
+}
+
+function listCompanionReadableMarkdownPaths(profile: string): Set<string> {
+  return new Set([
+    ...listSkillsForProfile(profile).map((entry) => normalize(entry.path)),
+    ...listMemoryDocs().map((entry) => normalize(entry.path)),
+  ]);
+}
+
 const DIST_DIR =
   process.env.PA_WEB_DIST ??
   join(dirname(fileURLToPath(import.meta.url)), '../dist');
+const COMPANION_DIST_DIR = join(DIST_DIR, 'app');
+const DIST_ASSETS_DIR = join(DIST_DIR, 'assets');
 
 const app = express();
-app.set('etag', false);
-app.use(express.json({ limit: '25mb' }));
-app.use(webRequestLoggingMiddleware);
+const companionApp = express();
+
+for (const serverApp of [app, companionApp]) {
+  serverApp.set('etag', false);
+  serverApp.set('trust proxy', true);
+  serverApp.use(applyWebSecurityHeaders);
+  serverApp.use(express.json({ limit: '25mb' }));
+  serverApp.use(webRequestLoggingMiddleware);
+  serverApp.use(enforceSameOriginUnsafeRequests);
+}
+
+const companionAuthExchangeRateLimit = createInMemoryRateLimit({
+  windowMs: 60_000,
+  maxRequests: 10,
+  key: (req) => req.ip || req.socket.remoteAddress || 'unknown',
+  message: 'Too many pairing attempts. Try again in a minute.',
+});
 
 startAppEventMonitor({
   repoRoot: REPO_ROOT,
@@ -4236,13 +4350,19 @@ app.patch('/api/web-ui/open-conversations', (req, res) => {
 
 app.patch('/api/web-ui/config', (req, res) => {
   try {
-    const { useTailscaleServe, resumeFallbackPrompt } = req.body as {
+    const { companionPort, useTailscaleServe, resumeFallbackPrompt } = req.body as {
+      companionPort?: unknown;
       useTailscaleServe?: unknown;
       resumeFallbackPrompt?: unknown;
     };
 
-    if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
-      res.status(400).json({ error: 'Provide useTailscaleServe and/or resumeFallbackPrompt.' });
+    if (companionPort === undefined && useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
+      res.status(400).json({ error: 'Provide companionPort, useTailscaleServe, and/or resumeFallbackPrompt.' });
+      return;
+    }
+
+    if (companionPort !== undefined && (!Number.isInteger(companionPort) || Number(companionPort) <= 0 || Number(companionPort) > 65535)) {
+      res.status(400).json({ error: 'companionPort must be a valid port when provided.' });
       return;
     }
 
@@ -4256,14 +4376,15 @@ app.patch('/api/web-ui/config', (req, res) => {
       return;
     }
 
-    if (useTailscaleServe !== undefined) {
-      syncConfiguredWebUiTailscaleServe(useTailscaleServe);
-    }
-
     const savedConfig = writeWebUiConfig({
+      ...(companionPort !== undefined ? { companionPort: Number(companionPort) } : {}),
       ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
       ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
     });
+
+    if (useTailscaleServe !== undefined || companionPort !== undefined) {
+      syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
+    }
     const state = readWebUiState();
     invalidateAppTopics('webUi');
 
@@ -4271,10 +4392,49 @@ app.patch('/api/web-ui/config', (req, res) => {
       ...state,
       service: {
         ...state.service,
+        companionPort: savedConfig.companionPort,
+        companionUrl: `http://127.0.0.1:${savedConfig.companionPort}`,
         tailscaleServe: savedConfig.useTailscaleServe,
         resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
       },
     });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/companion-auth', (_req, res) => {
+  try {
+    res.json(readCompanionAuthAdminState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/companion-auth/pairing-code', (_req, res) => {
+  try {
+    res.status(201).json(createCompanionPairingCode());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/companion-auth/sessions/:sessionId', (req, res) => {
+  try {
+    revokeCompanionSession(req.params.sessionId);
+    res.json({ ok: true, state: readCompanionAuthAdminState() });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -9401,14 +9561,880 @@ app.post('/api/memory/file', (req, res) => {
   }
 });
 
+// ── Companion auth + restricted companion service ────────────────────────────
+
+companionApp.post('/api/companion-auth/exchange', companionAuthExchangeRateLimit, (req, res) => {
+  try {
+    const { code, deviceLabel } = req.body as { code?: unknown; deviceLabel?: unknown };
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      res.status(400).json({ error: 'Pairing code required.' });
+      return;
+    }
+
+    const exchanged = exchangeCompanionPairingCode(code, {
+      ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
+    });
+    setCompanionSessionCookie(req, res, exchanged.sessionToken);
+    res.status(201).json({ session: exchanged.session });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.includes('invalid or expired') ? 400 : 500).json({ error: message });
+  }
+});
+
+companionApp.get('/api/companion-auth/session', (req, res) => {
+  const session = ensureCompanionSession(req, res);
+  if (!session) {
+    return;
+  }
+
+  res.json({ session });
+});
+
+companionApp.post('/api/companion-auth/logout', (req, res) => {
+  revokeCompanionSessionByToken(readCookieValue(req, COMPANION_SESSION_COOKIE));
+  clearCompanionSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+companionApp.use('/api', (req, res, next) => {
+  if (req.path === '/companion-auth/session' || req.path === '/companion-auth/exchange' || req.path === '/companion-auth/logout') {
+    next();
+    return;
+  }
+
+  if (!ensureCompanionSession(req, res)) {
+    return;
+  }
+
+  next();
+});
+
+companionApp.get('/api/events', (req, res) => {
+  writeSseHeaders(res);
+
+  let closed = false;
+  let writeQueue = Promise.resolve();
+
+  const writeEvent = (event: unknown) => {
+    if (closed) {
+      return;
+    }
+
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  const enqueueWrite = (task: () => Promise<void> | void) => {
+    writeQueue = writeQueue
+      .then(async () => {
+        if (closed) {
+          return;
+        }
+
+        await task();
+      })
+      .catch((error) => {
+        logWarn('companion event stream write failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  };
+
+  const writeSnapshotEvents = async (topics: AppEventTopic[]) => {
+    for (const event of await buildCompanionSnapshotEvents(topics)) {
+      writeEvent(event);
+    }
+  };
+
+  writeEvent({ type: 'connected' });
+  enqueueWrite(async () => {
+    await writeSnapshotEvents(['activity', 'projects', 'sessions']);
+  });
+
+  const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
+  const heartbeat = setInterval(() => {
+    if (closed) {
+      return;
+    }
+
+    if (!readCompanionSession(sessionToken, { touch: false })) {
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+      res.end();
+      return;
+    }
+
+    res.write(': heartbeat\n\n');
+  }, 15_000);
+  const unsubscribe = subscribeAppEvents((event) => {
+    if (event.type === 'invalidate') {
+      const topics = event.topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic));
+      if (topics.length === 0) {
+        return;
+      }
+
+      enqueueWrite(async () => {
+        await writeSnapshotEvents(topics);
+        writeEvent({ type: 'invalidate', topics });
+      });
+      return;
+    }
+
+    if (event.type === 'live_title') {
+      writeEvent(event);
+    }
+  });
+
+  req.on('close', () => {
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
+});
+
+companionApp.get('/api/activity', (_req, res) => {
+  try {
+    res.json(listActivityForCurrentProfile());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/projects', (_req, res) => {
+  try {
+    res.json(listProjectsForCurrentProfile());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/projects/:id', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    res.json(readProjectDetailForProfile(req.params.id, profile));
+  } catch (error) {
+    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+companionApp.get('/api/sessions', (_req, res) => {
+  try {
+    res.json(decorateSessionsWithAttention(getCurrentProfile(), listSessions()));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/sessions/:id', async (req, res) => {
+  const startedAt = process.hrtime.bigint();
+
+  try {
+    const remoteMirror = await syncRemoteConversationMirror({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    }).catch(() => ({ status: 'not-remote' as const, durationMs: 0 } satisfies RemoteConversationMirrorSyncTelemetry));
+
+    const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
+    const parsedTailBlocks = typeof rawTailBlocks === 'string'
+      ? Number.parseInt(rawTailBlocks, 10)
+      : typeof rawTailBlocks === 'number'
+        ? rawTailBlocks
+        : undefined;
+    const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
+      ? parsedTailBlocks as number
+      : undefined;
+
+    const sessionRead = readSessionBlocksWithTelemetry(req.params.id, tailBlocks ? { tailBlocks } : undefined);
+    if (!sessionRead.detail) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    setServerTimingHeaders(res, [
+      { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
+      { name: 'session_read', durationMs: sessionRead.telemetry?.durationMs ?? 0, description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown' },
+      { name: 'total', durationMs },
+    ], {
+      route: 'companion-session-detail',
+      conversationId: req.params.id,
+      ...(tailBlocks ? { tailBlocks } : {}),
+      remoteMirror,
+      sessionRead: sessionRead.telemetry,
+      durationMs,
+    });
+
+    res.json(sessionRead.detail);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/live-sessions', (_req, res) => {
+  res.json(listAllLiveSessions());
+});
+
+companionApp.post('/api/live-sessions', async (req, res) => {
+  try {
+    const body = req.body as { referencedProjectIds?: string[]; text?: string };
+    const profile = getCurrentProfile();
+    const availableProjectIds = listReferenceableProjectIds();
+    const inferredReferencedProjectIds = body.text
+      ? resolvePromptReferences({
+        text: body.text,
+        availableProjectIds,
+        tasks: [],
+        memoryDocs: [],
+        skills: [],
+        profiles: [],
+      }).projectIds
+      : [];
+    const referencedProjectIds = body.referencedProjectIds && body.referencedProjectIds.length > 0
+      ? body.referencedProjectIds.filter((projectId) => availableProjectIds.includes(projectId))
+      : inferredReferencedProjectIds;
+    const cwd = resolveConversationCwd({
+      repoRoot: REPO_ROOT,
+      profile,
+      explicitCwd: undefined,
+      defaultCwd: getDefaultWebCwd(),
+      referencedProjectIds,
+    });
+
+    const result = await createLocalSession(cwd, {
+      ...buildLiveSessionResourceOptions(),
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    });
+    if (referencedProjectIds.length > 0) {
+      setConversationProjectLinks({
+        profile,
+        conversationId: result.id,
+        relatedProjectIds: referencedProjectIds,
+      });
+      invalidateAppTopics('projects', 'sessions');
+    }
+    migrateDraftConversationPlan(profile, result.id);
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/live-sessions/:id', (req, res) => {
+  const live = isLiveSession(req.params.id);
+  if (!live) {
+    res.status(404).json({ live: false });
+    return;
+  }
+
+  const entry = listAllLiveSessions().find((session) => session.id === req.params.id);
+  res.json({ live: true, ...entry });
+});
+
+companionApp.post('/api/live-sessions/:id/takeover', (req, res) => {
+  try {
+    const { id } = req.params;
+    const surfaceId = typeof req.body?.surfaceId === 'string' ? req.body.surfaceId.trim() : '';
+    if (!surfaceId) {
+      res.status(400).json({ error: 'surfaceId is required' });
+      return;
+    }
+    if (!isLocalLive(id)) {
+      res.status(400).json({ error: 'Takeover is only available for local live conversations right now.' });
+      return;
+    }
+
+    res.json(takeOverSessionControl(id, surfaceId));
+  } catch (error) {
+    if (error instanceof LiveSessionControlError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+companionApp.get('/api/live-sessions/:id/events', (req, res) => {
+  const { id } = req.params;
+  if (!isLiveSession(id)) {
+    res.status(404).json({ error: 'Not a live session' });
+    return;
+  }
+
+  const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
+  const parsedTailBlocks = typeof rawTailBlocks === 'string'
+    ? Number.parseInt(rawTailBlocks, 10)
+    : typeof rawTailBlocks === 'number'
+      ? rawTailBlocks
+      : undefined;
+  const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
+    ? parsedTailBlocks as number
+    : undefined;
+  const rawSurfaceId = Array.isArray(req.query.surfaceId) ? req.query.surfaceId[0] : req.query.surfaceId;
+  const surfaceId = typeof rawSurfaceId === 'string' ? rawSurfaceId.trim() : '';
+  const rawSurfaceType = Array.isArray(req.query.surfaceType) ? req.query.surfaceType[0] : req.query.surfaceType;
+  const surfaceType = rawSurfaceType === 'mobile_web' ? 'mobile_web' : 'desktop_web';
+
+  writeSseHeaders(res);
+
+  const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
+  const heartbeat = setInterval(() => {
+    if (!readCompanionSession(sessionToken, { touch: false })) {
+      clearInterval(heartbeat);
+      unsubscribe?.();
+      res.end();
+      return;
+    }
+
+    res.write(': heartbeat\n\n');
+  }, 15_000);
+  const unsubscribe = subscribeLiveSession(id, (event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }, {
+    ...(tailBlocks ? { tailBlocks } : {}),
+    ...(surfaceId ? { surface: { surfaceId, surfaceType } } : {}),
+  });
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe?.();
+  });
+});
+
+companionApp.post('/api/live-sessions/:id/prompt', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text = '', behavior, images, attachmentRefs } = req.body as {
+      text?: string;
+      behavior?: 'steer' | 'followUp';
+      images?: Array<{ type?: 'image'; data: string; mimeType: string; name?: string }>;
+      attachmentRefs?: unknown;
+      surfaceId?: string;
+    };
+    const normalizedAttachmentRefs = normalizePromptAttachmentRefs(attachmentRefs);
+    if (!text && (!images || images.length === 0) && normalizedAttachmentRefs.length === 0) {
+      res.status(400).json({ error: 'text, images, or attachmentRefs required' });
+      return;
+    }
+
+    const surfaceId = ensureRequestControlsLocalLiveConversation(id, req.body);
+    const isRemoteLive = isRemoteLiveSession(id);
+
+    const currentProfile = getCurrentProfile();
+    const tasks = listTasksForCurrentProfile();
+    const memoryDocs = listMemoryDocs();
+    const skills = listSkillsForCurrentProfile();
+    const profileAgents = listProfileAgentItems().map((item) => ({
+      id: item.source,
+      source: item.source,
+      path: item.path,
+    }));
+    const promptReferences = resolvePromptReferences({
+      text,
+      availableProjectIds: listReferenceableProjectIds(),
+      tasks,
+      memoryDocs,
+      skills,
+      profiles: profileAgents,
+    });
+
+    const relatedProjectIds = syncConversationProjectReferences(id, promptReferences.projectIds);
+    const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
+    const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
+    const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
+    const referencedProfiles = pickPromptReferencesInOrder(promptReferences.profileIds, profileAgents);
+
+    let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
+    if (normalizedAttachmentRefs.length > 0) {
+      try {
+        referencedAttachments = resolveConversationAttachmentPromptFiles({
+          profile: currentProfile,
+          conversationId: id,
+          refs: normalizedAttachmentRefs,
+        });
+      } catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+    }
+
+    const liveEntry = !isRemoteLive ? liveRegistry.get(id) : undefined;
+    const remoteLive = isRemoteLive ? getRemoteLiveSessionMeta(id) : null;
+    const sessionFile = liveEntry?.session.sessionFile ?? remoteLive?.sessionFile;
+    const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
+    const backgroundRunContextEntries = sessionFile
+      ? listPendingBackgroundRunResults({
+        runsRoot: daemonRunsRoot,
+        sessionFile,
+      })
+      : [];
+    const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
+
+    const automationBeforePrompt = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: id,
+      settingsFile: SETTINGS_FILE,
+    }).document;
+    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
+      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
+    }
+
+    const queuedContextBlocks = [
+      relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
+      referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
+      referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
+      referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, REPO_ROOT) : '',
+      referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, REPO_ROOT) : '',
+      referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, REPO_ROOT) : '',
+      backgroundRunHiddenContext,
+    ].filter(Boolean);
+
+    const hiddenContext = queuedContextBlocks.join('\n\n');
+
+    if (!isRemoteLive && queuedContextBlocks.length > 0) {
+      await queuePromptContext(id, 'referenced_context', hiddenContext);
+    }
+
+    if (!isRemoteLive && liveEntry?.session.sessionFile) {
+      await syncWebLiveConversationRun({
+        conversationId: id,
+        sessionFile: liveEntry.session.sessionFile,
+        cwd: liveEntry.cwd,
+        title: liveEntry.title,
+        profile: currentProfile,
+        state: 'running',
+        pendingOperation: {
+          type: 'prompt',
+          text,
+          ...(behavior ? { behavior } : {}),
+          ...(images && images.length > 0
+            ? {
+              images: images.map((image) => ({
+                type: 'image' as const,
+                data: image.data,
+                mimeType: image.mimeType,
+                ...(image.name ? { name: image.name } : {}),
+              })),
+            }
+            : {}),
+          ...(queuedContextBlocks.length > 0
+            ? {
+              contextMessages: [{
+                customType: 'referenced_context',
+                content: hiddenContext,
+              }],
+            }
+            : {}),
+          enqueuedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (isRemoteLive && referencedAttachments.length > 0) {
+      res.status(400).json({ error: 'Remote conversations do not support local attachment references yet.' });
+      return;
+    }
+
+    const promptImages = images?.map((image) => ({
+      type: 'image' as const,
+      data: image.data,
+      mimeType: image.mimeType,
+      ...(image.name ? { name: image.name } : {}),
+    }));
+    const submittedPrompt = isRemoteLive
+      ? await submitRemoteLiveSessionPrompt({
+        conversationId: id,
+        text,
+        behavior,
+        images: promptImages,
+        ...(hiddenContext ? { hiddenContext } : {}),
+      })
+      : await submitLocalPromptSession(id, text, behavior, promptImages, surfaceId);
+    const promptPromise = submittedPrompt.completion;
+
+    void promptPromise.then(async () => {
+      if (!sessionFile || backgroundRunContextEntries.length === 0) {
+        return;
+      }
+
+      try {
+        const deliveredIds = markBackgroundRunResultsDelivered({
+          runsRoot: daemonRunsRoot,
+          sessionFile,
+          resultIds: backgroundRunContextEntries.map((entry) => entry.id),
+        });
+        if (deliveredIds.length > 0) {
+          invalidateAppTopics('runs');
+        }
+      } catch (error) {
+        logError('background run context completion error', {
+          sessionId: id,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    }).catch(async (err) => {
+      if (!isRemoteLive && liveEntry?.session.sessionFile) {
+        await syncWebLiveConversationRun({
+          conversationId: id,
+          sessionFile: liveEntry.session.sessionFile,
+          cwd: liveEntry.cwd,
+          title: liveEntry.title,
+          profile: currentProfile,
+          state: 'failed',
+          lastError: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      logError('live prompt error', {
+        sessionId: id,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+    });
+    res.json({
+      ok: true,
+      accepted: true,
+      delivery: submittedPrompt.acceptedAs,
+      relatedProjectIds,
+      referencedTaskIds: promptReferences.taskIds,
+      referencedMemoryDocIds: promptReferences.memoryDocIds,
+      referencedSkillNames: promptReferences.skillNames,
+      referencedProfileIds: promptReferences.profileIds,
+      referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/live-sessions/:id/abort', async (req, res) => {
+  try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    await abortLiveSession(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/conversations/:id/plan', async (req, res) => {
+  try {
+    res.json(await buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.patch('/api/conversations/:id/plan', async (req, res) => {
+  try {
+    const body = req.body as { enabled?: boolean; items?: unknown };
+    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.items)) {
+      res.status(400).json({ error: 'enabled or items required' });
+      return;
+    }
+
+    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
+    if (Array.isArray(body.items)) {
+      validateConversationAutomationTemplateItems(body.items, skillNames);
+    }
+
+    let document = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+      settingsFile: SETTINGS_FILE,
+    }).document;
+    const updatedAt = new Date().toISOString();
+
+    if (Array.isArray(body.items)) {
+      document = replaceConversationAutomationItems(document, body.items, updatedAt);
+    }
+
+    if (typeof body.enabled === 'boolean') {
+      document = updateConversationAutomationEnabled(document, body.enabled, updatedAt);
+    }
+
+    saveConversationAutomationDocument(document);
+
+    if (document.enabled) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(await buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Unknown skill:')
+      || message.includes('items must be an array')
+      || message.includes('Each item')
+      || message.includes('Each skill item')
+      || message.includes('Each instruction item')
+      ? 400
+      : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+companionApp.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) => {
+  try {
+    const { checked } = req.body as { checked?: unknown };
+    if (typeof checked !== 'boolean') {
+      res.status(400).json({ error: 'checked must be a boolean' });
+      return;
+    }
+
+    const loaded = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+      settingsFile: SETTINGS_FILE,
+    });
+    const document = loaded.document;
+    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
+    if (!item) {
+      res.status(404).json({ error: 'Automation item not found' });
+      return;
+    }
+    if (document.activeItemId === item.id || item.status === 'running') {
+      res.status(409).json({ error: 'Running automation items cannot be edited from the checklist.' });
+      return;
+    }
+
+    const nextDocument = checked
+      ? updateConversationAutomationItemStatus(document, req.params.itemId, 'completed', { resultReason: 'Completed from the checklist UI.' })
+      : setConversationAutomationItemPending(document, req.params.itemId, { enabled: document.enabled });
+    saveConversationAutomationDocument(nextDocument);
+
+    res.json(await buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
+});
+
+companionApp.get('/api/conversations/:id/execution', async (req, res) => {
+  try {
+    res.json(await readConversationExecutionState(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Invalid') ? 400 : 500).json({ error: message });
+  }
+});
+
+companionApp.get('/api/conversations/:id/artifacts', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const artifacts = listConversationArtifacts({ profile, conversationId: req.params.id });
+    res.json({ conversationId: req.params.id, artifacts });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const artifact = getConversationArtifact({
+      profile,
+      conversationId: req.params.id,
+      artifactId: req.params.artifactId,
+    });
+
+    if (!artifact) {
+      res.status(404).json({ error: 'Artifact not found' });
+      return;
+    }
+
+    res.json({ conversationId: req.params.id, artifact });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/web-ui/open-conversations', (_req, res) => {
+  try {
+    const saved = readSavedWebUiPreferences(SETTINGS_FILE);
+    res.json({
+      sessionIds: saved.openConversationIds,
+      pinnedSessionIds: saved.pinnedConversationIds,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/memory', (_req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const skills = listSkillsForProfile(profile);
+    const memoryDocs = listMemoryDocs();
+    const usageByPath = buildRecentReadUsage([
+      ...skills.map((item) => item.path),
+      ...memoryDocs.map((item) => item.path),
+    ]);
+
+    for (const skill of skills) {
+      const usage = usageByPath.get(normalize(skill.path));
+      if (usage) {
+        skill.recentSessionCount = usage.recentSessionCount;
+        skill.lastUsedAt = usage.lastUsedAt;
+        skill.usedInLastSession = usage.usedInLastSession;
+      }
+    }
+
+    for (const doc of memoryDocs) {
+      const usage = usageByPath.get(normalize(doc.path));
+      if (usage) {
+        doc.recentSessionCount = usage.recentSessionCount;
+        doc.lastUsedAt = usage.lastUsedAt;
+        doc.usedInLastSession = usage.usedInLastSession;
+      }
+    }
+
+    res.json({ profile, agentsMd: [], skills, memoryDocs });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
+  }
+});
+
+companionApp.get('/api/memory/file', (req, res) => {
+  try {
+    const filePath = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!filePath) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const allowed = listCompanionReadableMarkdownPaths(getCurrentProfile());
+    if (!allowed.has(normalize(filePath))) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    if (!existsSync(filePath)) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+
+    res.json({ content: readFileSync(filePath, 'utf-8'), path: filePath });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+companionApp.get('/api/memories/:memoryId', (req, res) => {
+  try {
+    const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
+    if (!memory) {
+      res.status(404).json({ error: 'Memory not found.' });
+      return;
+    }
+
+    if (!existsSync(memory.path)) {
+      res.status(404).json({ error: 'Memory file not found.' });
+      return;
+    }
+
+    const references = loadMemoryPackageReferences(dirname(memory.path)).map((reference) => ({
+      title: reference.title,
+      summary: reference.summary,
+      tags: reference.tags,
+      path: reference.filePath,
+      relativePath: reference.relativePath,
+      updated: reference.updated || undefined,
+    } satisfies MemoryReferenceItem));
+
+    res.json({
+      memory,
+      content: readFileSync(memory.path, 'utf-8'),
+      references,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+if (existsSync(DIST_DIR)) {
+  companionApp.use('/assets', express.static(DIST_ASSETS_DIR));
+  companionApp.use('/app', express.static(COMPANION_DIST_DIR));
+  companionApp.get('/', (_req, res) => {
+    res.redirect('/app/conversations');
+  });
+  companionApp.get('/app*', (_req, res) => {
+    res.sendFile(join(COMPANION_DIST_DIR, 'index.html'));
+  });
+} else {
+  companionApp.get('*', (_req, res) => {
+    res.send(
+      '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">' +
+        'personal-agent companion\n\n' +
+        'SPA not built yet.\n' +
+        'Run: npm run build in packages/web\n' +
+        '</pre>',
+    );
+  });
+}
+
 // ── Static + SPA fallback ─────────────────────────────────────────────────────
 
 if (existsSync(DIST_DIR)) {
+  app.get('/app*', (req, res) => {
+    const search = typeof req.url === 'string' && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    res.redirect(`http://${LOOPBACK_HOST}:${COMPANION_PORT}${req.path}${search}`);
+  });
   app.use(express.static(DIST_DIR));
-  app.get('*', (req, res) => {
-    const requestedIndexPath = join(DIST_DIR, resolveSpaIndexRelativePath(req.path));
-    const fallbackIndexPath = join(DIST_DIR, 'index.html');
-    res.sendFile(existsSync(requestedIndexPath) ? requestedIndexPath : fallbackIndexPath);
+  app.get('*', (_req, res) => {
+    res.sendFile(join(DIST_DIR, 'index.html'));
   });
 } else {
   app.get('/', (_req, res) => {
@@ -9422,12 +10448,21 @@ if (existsSync(DIST_DIR)) {
   });
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, LOOPBACK_HOST, () => {
   logInfo('web ui started', {
-    url: `http://localhost:${PORT}`,
+    url: `http://${LOOPBACK_HOST}:${PORT}`,
     profile: getCurrentProfile(),
     repoRoot: REPO_ROOT,
     cwd: getDefaultWebCwd(),
     dist: DIST_DIR,
+  });
+});
+
+companionApp.listen(COMPANION_PORT, LOOPBACK_HOST, () => {
+  logInfo('companion service started', {
+    url: `http://${LOOPBACK_HOST}:${COMPANION_PORT}`,
+    profile: getCurrentProfile(),
+    repoRoot: REPO_ROOT,
+    dist: COMPANION_DIST_DIR,
   });
 });

@@ -585,6 +585,8 @@ export interface WebUiServiceSummary {
   repoRoot: string;
   port: number;
   url: string;
+  companionPort: number;
+  companionUrl: string;
   tailscaleServe: boolean;
   tailscaleUrl?: string;
   resumeFallbackPrompt: string;
@@ -883,6 +885,35 @@ export interface LiveSessionMeta {
   title?:               string;
   isStreaming:          boolean;
   hasPendingHiddenTurn?: boolean;
+}
+
+export interface CompanionAuthSessionSummary {
+  id: string;
+  deviceLabel: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+}
+
+export interface CompanionAuthAdminState {
+  pendingPairings: Array<{
+    id: string;
+    createdAt: string;
+    expiresAt: string;
+  }>;
+  sessions: CompanionAuthSessionSummary[];
+}
+
+export interface CompanionPairingCodeResult {
+  id: string;
+  code: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface CompanionAuthSessionState {
+  session: CompanionAuthSessionSummary;
 }
 
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
