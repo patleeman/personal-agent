@@ -352,7 +352,8 @@
   }
 
   .ui-markdown :not(pre) > code {
-    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent;
+    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent whitespace-pre-wrap break-words;
+    overflow-wrap: anywhere;
   }
 
   .ui-markdown table {

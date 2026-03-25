@@ -27,6 +27,16 @@ describe('renderFilePathTextFragments', () => {
     expect(html).toContain('aria-label="Open packages/web/src/App.tsx"');
     expect(html).toContain('Touch ');
   });
+
+  it('uses wrap-friendly inline code styling for clickable file paths', () => {
+    const html = renderToStaticMarkup(
+      <span>{renderFilePathTextFragments('Touch packages/web/src/App.tsx next.', { onOpenFilePath: () => undefined, variant: 'code' })}</span>,
+    );
+
+    expect(html).toContain('break-words');
+    expect(html).toContain('[overflow-wrap:anywhere]');
+    expect(html).toContain('whitespace-pre-wrap');
+  });
 });
 
 describe('FilePathPreformattedText', () => {
