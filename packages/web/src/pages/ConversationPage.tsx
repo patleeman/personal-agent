@@ -5,7 +5,7 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, LiveSessionSurfaceType, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -137,10 +137,6 @@ export function shouldShowConversationTakeoverBanner(input: {
   conversationNeedsTakeover: boolean;
 }): boolean {
   return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
-}
-
-function formatConversationSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | undefined): string {
-  return surfaceType === 'mobile_web' ? 'mobile companion' : 'desktop web';
 }
 
 function findConversationSurface(
@@ -3811,15 +3807,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : remoteConversationRequiresConnect
         ? 'Remote workspace disconnected. Click connect to resume.'
         : null);
-  const controllerLabel = stream.presence.controllerSurfaceType
-    ? formatConversationSurfaceTypeLabel(stream.presence.controllerSurfaceType)
-    : null;
-  const takeoverBannerTitle = stream.presence.controllerSurfaceId
-    ? `Mirroring live while ${controllerLabel ?? 'another surface'} controls.`
-    : 'This surface is read-only right now.';
-  const takeoverBannerDetail = stream.presence.controllerSurfaceId
-    ? 'Take over to continue sending messages from this surface.'
-    : 'Take over to make this surface the active controller.';
   const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
   const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
     draft,
@@ -4154,29 +4141,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             />
             {!draft && remoteConnectionStatusMessage && selectedExecutionTargetId && !isLiveSession && (
               <p className="mt-2 text-[11px] text-secondary">{remoteConnectionStatusMessage}</p>
-            )}
-            {showConversationTakeoverBanner && (
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-[12px] font-medium text-primary">{takeoverBannerTitle}</p>
-                  <p className="mt-0.5 text-[11px] text-secondary">{takeoverBannerDetail}</p>
-                </div>
-                <button
-                  type="button"
-                  className="ui-toolbar-button shrink-0"
-                  onClick={() => {
-                    void streamTakeover()
-                      .then(() => {
-                        showNotice('accent', 'This surface now controls the conversation.');
-                      })
-                      .catch((error) => {
-                        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-                      });
-                  }}
-                >
-                  Take over
-                </button>
-              </div>
             )}
             {headerPreference && (
               <HeaderPreferencesMenu
@@ -4576,88 +4540,112 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 }}
               />
 
-              <IconButton
-                className="shrink-0 mb-0.5"
-                title="Attach image or Excalidraw file"
-                aria-label="Attach image or Excalidraw file"
-                onClick={openFilePicker}
-                disabled={composerDisabled}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                </svg>
-              </IconButton>
-
-              <IconButton
-                className="shrink-0 mb-0.5"
-                title="Create drawing"
-                aria-label="Create drawing"
-                onClick={openDrawingEditor}
-                disabled={composerDisabled}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                </svg>
-              </IconButton>
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => { setInput(e.target.value); setSlashIdx(0); setMentionIdx(0); }}
-                onKeyDown={handleKeyDown}
-                onPaste={handlePaste}
-                rows={1}
-                disabled={composerDisabled}
-                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
-                placeholder={remoteConversationRequiresConnect
-                  ? 'Connect to the remote workspace to continue…'
-                  : conversationNeedsTakeover
-                    ? 'Take over this conversation to continue…'
-                    : pendingAskUserQuestion
-                      ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                      : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
-                title={pendingAskUserQuestion
-                  ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                  : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                style={{ minHeight: '24px', maxHeight: '160px' }}
-              />
-
-              {(stream.isStreaming || composerHasContent) && (
-                <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
-                  {stream.isStreaming && (
-                    <button
-                      type="button"
-                      onClick={() => { void stream.abort(); }}
-                      disabled={conversationNeedsTakeover}
-                      className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
-                      title={conversationNeedsTakeover ? 'Take over this conversation before stopping the current response' : 'Stop current response'}
-                      aria-label="Stop current response"
-                    >
-                      <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                        <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                      </svg>
-                      Stop
-                    </button>
-                  )}
-                  {composerHasContent && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        const behavior = resolveConversationComposerSubmitState(
-                          stream.isStreaming,
-                          composerAltHeld || event.altKey,
-                          liveSessionHasPendingHiddenTurn,
-                        ).behavior;
-                        void submitComposer(behavior);
-                      }}
-                      disabled={composerDisabled}
-                      className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
-                    >
-                      {composerSubmit.label}
-                    </button>
-                  )}
+              {showConversationTakeoverBanner ? (
+                <div className="flex w-full items-center px-1 py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void streamTakeover()
+                        .then(() => {
+                          showNotice('accent', 'This surface now controls the conversation.');
+                        })
+                        .catch((error) => {
+                          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+                        });
+                    }}
+                    className="ui-pill ui-pill-solid-accent flex w-full items-center justify-center gap-2 px-4 py-3"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 8h10" />
+                      <path d="m9 4 4 4-4 4" />
+                    </svg>
+                    Take over to reply
+                  </button>
                 </div>
+              ) : (
+                <>
+                  <IconButton
+                    className="shrink-0 mb-0.5"
+                    title="Attach image or Excalidraw file"
+                    aria-label="Attach image or Excalidraw file"
+                    onClick={openFilePicker}
+                    disabled={composerDisabled}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                  </IconButton>
+
+                  <IconButton
+                    className="shrink-0 mb-0.5"
+                    title="Create drawing"
+                    aria-label="Create drawing"
+                    onClick={openDrawingEditor}
+                    disabled={composerDisabled}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                    </svg>
+                  </IconButton>
+
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={e => { setInput(e.target.value); setSlashIdx(0); setMentionIdx(0); }}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
+                    rows={1}
+                    disabled={composerDisabled}
+                    className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
+                    placeholder={remoteConversationRequiresConnect
+                      ? 'Connect to the remote workspace to continue…'
+                      : pendingAskUserQuestion
+                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                        : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
+                    title={pendingAskUserQuestion
+                      ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                      : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                    style={{ minHeight: '24px', maxHeight: '160px' }}
+                  />
+
+                  {(stream.isStreaming || composerHasContent) && (
+                    <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
+                      {stream.isStreaming && (
+                        <button
+                          type="button"
+                          onClick={() => { void stream.abort(); }}
+                          disabled={conversationNeedsTakeover}
+                          className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
+                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping the current response' : 'Stop current response'}
+                          aria-label="Stop current response"
+                        >
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
+                          </svg>
+                          Stop
+                        </button>
+                      )}
+                      {composerHasContent && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            const behavior = resolveConversationComposerSubmitState(
+                              stream.isStreaming,
+                              composerAltHeld || event.altKey,
+                              liveSessionHasPendingHiddenTurn,
+                            ).behavior;
+                            void submitComposer(behavior);
+                          }}
+                          disabled={composerDisabled}
+                          className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
+                        >
+                          {composerSubmit.label}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

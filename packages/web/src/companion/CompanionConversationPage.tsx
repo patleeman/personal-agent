@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
+import { cx } from '../components/ui';
+import { useApi } from '../hooks';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
+import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import type {
   ConversationExecutionState,
   LiveSessionPresenceState,
@@ -63,9 +66,8 @@ export function resolveCompanionControlState({
 
 export function shouldShowCompanionConversationStatusBanner(input: {
   isLiveSession: boolean;
-  needsTakeover: boolean;
 }): boolean {
-  return !input.isLiveSession || input.needsTakeover;
+  return !input.isLiveSession;
 }
 
 function formatConnectionStatus(status: SseConnectionStatus): string {
@@ -164,6 +166,72 @@ function buildBannerDetail(input: {
   return 'Waiting for controller state…';
 }
 
+type CompanionConversationPanel = 'todos' | 'artifacts';
+
+function getCompanionConversationPanel(search: string): CompanionConversationPanel | null {
+  const value = new URLSearchParams(search).get('panel');
+  return value === 'todos' || value === 'artifacts' ? value : null;
+}
+
+function setCompanionConversationPanel(search: string, panel: CompanionConversationPanel | null): string {
+  const params = new URLSearchParams(search);
+  if (panel) {
+    params.set('panel', panel);
+  } else {
+    params.delete('panel');
+  }
+
+  const next = params.toString();
+  return next ? `?${next}` : '';
+}
+
+function CompanionSlashMenu({
+  items,
+  index,
+  onSelect,
+}: {
+  items: SlashMenuItem[];
+  index: number;
+  onSelect: (item: SlashMenuItem) => void;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="ui-menu-shell absolute inset-x-0 bottom-full z-10 mb-2 max-h-[18rem] overflow-y-auto py-1.5">
+      {items.map((item, itemIndex) => {
+        const active = itemIndex === index % items.length;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              onSelect(item);
+            }}
+            className={cx(
+              'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
+              active ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50',
+            )}
+          >
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border-subtle text-[10px] text-dim/80" aria-hidden="true">
+              {item.icon}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-mono text-[12px] text-accent">{item.displayCmd}</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/60">{item.section}</span>
+              </div>
+              <p className="mt-0.5 truncate text-[12px] text-dim/90">{item.desc}</p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CompanionConversationPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -183,7 +251,11 @@ export function CompanionConversationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [takeoverBusy, setTakeoverBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [slashIdx, setSlashIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const selectedPanel = getCompanionConversationPanel(location.search);
+  const { data: memoryData } = useApi(api.memory, 'companion-conversation-memory');
 
   const shouldSubscribeToLiveStream = Boolean(id) && confirmedLive !== false;
   const stream = useSessionStream(id ?? null, {
@@ -275,6 +347,18 @@ export function CompanionConversationPage() {
     : stream.isStreaming
       ? 'Wait for the current turn to finish before editing the todo list.'
       : null;
+  const trimmedDraft = draft.trim();
+  const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
+  const slashItems = useMemo(
+    () => buildSlashMenuItems(draft, memoryData?.skills ?? [])
+      .filter((item) => item.kind === 'skill'),
+    [draft, memoryData?.skills],
+  );
+  const showSlash = !controlState.needsTakeover
+    && !stream.isStreaming
+    && Boolean(slashInput)
+    && draft === slashInput?.command
+    && slashItems.length > 0;
   const title = getConversationDisplayTitle(
     stream.title,
     titles.get(id ?? ''),
@@ -300,10 +384,7 @@ export function CompanionConversationPage() {
     mirroredViewerCount,
     presence: stream.presence,
   });
-  const showStatusBanner = shouldShowCompanionConversationStatusBanner({
-    isLiveSession,
-    needsTakeover: controlState.needsTakeover,
-  });
+  const showStatusBanner = shouldShowCompanionConversationStatusBanner({ isLiveSession });
 
   useEffect(() => {
     const scrollElement = scrollRef.current;
@@ -313,6 +394,28 @@ export function CompanionConversationPage() {
 
     scrollElement.scrollTop = scrollElement.scrollHeight;
   }, [id, messages, stream.isStreaming]);
+
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
+  }, [draft]);
+
+  useEffect(() => {
+    if (!selectedPanel || typeof document === 'undefined') {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedPanel]);
 
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
@@ -324,6 +427,26 @@ export function CompanionConversationPage() {
       search: setConversationArtifactIdInSearch(location.search, artifactId),
     });
   }, [location.pathname, location.search, navigate, selectedArtifactId]);
+
+  const openPanel = useCallback((panel: CompanionConversationPanel) => {
+    navigate({
+      pathname: location.pathname,
+      search: setCompanionConversationPanel(location.search, panel),
+    });
+  }, [location.pathname, location.search, navigate]);
+
+  const closePanel = useCallback(() => {
+    navigate({
+      pathname: location.pathname,
+      search: setCompanionConversationPanel(location.search, null),
+    });
+  }, [location.pathname, location.search, navigate]);
+
+  const applySlashItem = useCallback((item: SlashMenuItem) => {
+    setDraft(item.insertText);
+    setSlashIdx(0);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
   const handleTakeover = useCallback(async () => {
     if (!id || takeoverBusy) {
@@ -427,16 +550,43 @@ export function CompanionConversationPage() {
                 {executionLabel} · {isLiveSession ? 'live conversation' : 'saved transcript'}
               </p>
             </div>
-            {isLiveSession && controlState.needsTakeover ? (
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={() => { void handleTakeover(); }}
-                disabled={takeoverBusy}
-                className="shrink-0 rounded-xl border border-border-default bg-surface px-3 py-2 text-[12px] font-medium text-primary transition-colors hover:border-accent/40 disabled:cursor-default disabled:opacity-50"
+                onClick={() => openPanel('todos')}
+                aria-label="Open todo panel"
+                title="Open todo panel"
+                className={cx(
+                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
+                  selectedPanel === 'todos' ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border-default bg-surface text-secondary hover:text-primary',
+                )}
               >
-                {takeoverBusy ? 'Taking over…' : 'Take over'}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 6h11" />
+                  <path d="M9 12h11" />
+                  <path d="M9 18h11" />
+                  <path d="m4 6 1.5 1.5L7.5 5" />
+                  <path d="m4 12 1.5 1.5L7.5 11" />
+                  <path d="m4 18 1.5 1.5L7.5 17" />
+                </svg>
               </button>
-            ) : null}
+              <button
+                type="button"
+                onClick={() => openPanel('artifacts')}
+                aria-label="Open artifact panel"
+                title="Open artifact panel"
+                className={cx(
+                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
+                  selectedPanel === 'artifacts' ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border-default bg-surface text-secondary hover:text-primary',
+                )}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+                  <path d="m4 12 8 4 8-4" />
+                  <path d="m4 17 8 4 8-4" />
+                </svg>
+              </button>
+            </div>
           </div>
           {showStatusBanner ? (
             <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
@@ -451,13 +601,7 @@ export function CompanionConversationPage() {
       </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-          <CompanionConversationTodos
-            conversationId={id}
-            readOnly={Boolean(todoReadOnlyReason)}
-            readOnlyReason={todoReadOnlyReason}
-          />
-          <CompanionConversationArtifacts conversationId={id} />
+        <div className="mx-auto w-full max-w-3xl">
           {messages.length === 0 && (sessionLoading || confirmedLive === null) ? (
             <p className="text-[13px] text-dim">Loading conversation…</p>
           ) : messages.length === 0 ? (
@@ -476,56 +620,181 @@ export function CompanionConversationPage() {
         </div>
       </div>
 
-      <footer className="border-t border-border-subtle bg-base/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
-          {isLiveSession ? (
-            <>
-              <textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                    event.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                placeholder={controlState.needsTakeover
-                  ? 'Take over to reply from this device.'
-                  : stream.isStreaming
-                    ? 'Stop the current turn or wait before sending.'
-                    : 'Reply from the companion app…'}
-                disabled={composerDisabled}
-                rows={3}
-                className="w-full resize-none rounded-2xl border border-border-default bg-surface px-4 py-3 text-[15px] leading-relaxed text-primary placeholder:text-dim focus:border-accent/60 focus:outline-none disabled:cursor-default disabled:text-dim"
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-dim">
-                  {controlState.needsTakeover
-                    ? 'Take over to reply from this device.'
-                    : stream.isStreaming
-                      ? 'The agent is responding right now.'
-                      : 'Send from here when you want this device to steer the conversation.'}
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { void handleStop(); }}
-                    disabled={!stream.isStreaming || controlState.needsTakeover || submitting}
-                    className="ui-action-button"
-                  >
-                    Stop
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { void handleSend(); }}
-                    disabled={!draft.trim() || composerDisabled}
-                    className="ui-action-button"
-                  >
-                    {submitting ? 'Sending…' : 'Send'}
-                  </button>
-                </div>
+      {selectedPanel ? (
+        <div className="fixed inset-0 z-30">
+          <button
+            type="button"
+            aria-label="Close side panel"
+            onClick={closePanel}
+            className="absolute inset-0 bg-black/35"
+          />
+          <aside className="absolute inset-y-0 right-0 flex w-[min(28rem,92vw)] max-w-full flex-col border-l border-border-subtle bg-base shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-[calc(env(safe-area-inset-top)+0.75rem)]">
+              <div className="flex min-w-0 items-center gap-1 rounded-full bg-surface p-1">
+                <button
+                  type="button"
+                  onClick={() => openPanel('todos')}
+                  className={cx(
+                    'rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors',
+                    selectedPanel === 'todos' ? 'bg-accent text-white' : 'text-secondary hover:text-primary',
+                  )}
+                >
+                  Todo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPanel('artifacts')}
+                  className={cx(
+                    'rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors',
+                    selectedPanel === 'artifacts' ? 'bg-accent text-white' : 'text-secondary hover:text-primary',
+                  )}
+                >
+                  Artifacts
+                </button>
               </div>
-            </>
+              <button
+                type="button"
+                onClick={closePanel}
+                aria-label="Close side panel"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-colors hover:text-primary"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" style={{ overscrollBehavior: 'contain' }}>
+              {selectedPanel === 'todos' ? (
+                <CompanionConversationTodos
+                  conversationId={id}
+                  readOnly={Boolean(todoReadOnlyReason)}
+                  readOnlyReason={todoReadOnlyReason}
+                />
+              ) : (
+                <CompanionConversationArtifacts conversationId={id} />
+              )}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+
+      <footer className="border-t border-border-subtle bg-base/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur">
+        <div className="mx-auto w-full max-w-3xl">
+          {isLiveSession ? (
+            <div className="relative">
+              {showSlash ? (
+                <CompanionSlashMenu items={slashItems} index={slashIdx} onSelect={applySlashItem} />
+              ) : null}
+              <div className={cx(
+                'ui-input-shell overflow-hidden',
+                showSlash ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle',
+              )}>
+                {controlState.needsTakeover ? (
+                  <div className="px-3 py-3">
+                    <button
+                      type="button"
+                      onClick={() => { void handleTakeover(); }}
+                      disabled={takeoverBusy}
+                      className="ui-pill ui-pill-solid-accent flex w-full items-center justify-center gap-2 px-4 py-3 text-[13px] disabled:cursor-default disabled:opacity-60"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M3 8h10" />
+                        <path d="m9 4 4 4-4 4" />
+                      </svg>
+                      {takeoverBusy ? 'Taking over…' : 'Take over to reply'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-end gap-2 px-3 py-2.5">
+                    <textarea
+                      ref={textareaRef}
+                      value={draft}
+                      onChange={(event) => {
+                        setDraft(event.target.value);
+                        setSlashIdx(0);
+                      }}
+                      onKeyDown={(event) => {
+                        if (showSlash) {
+                          if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            setSlashIdx((current) => current + 1);
+                            return;
+                          }
+
+                          if (event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            setSlashIdx((current) => Math.max(0, current - 1));
+                            return;
+                          }
+
+                          if ((event.key === 'Tab' || event.key === 'Enter') && !event.shiftKey) {
+                            const selected = slashItems[slashIdx % slashItems.length];
+                            if (selected) {
+                              event.preventDefault();
+                              applySlashItem(selected);
+                              return;
+                            }
+                          }
+                        }
+
+                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleSend();
+                          return;
+                        }
+
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void handleSend();
+                        }
+                      }}
+                      placeholder={stream.isStreaming
+                        ? 'Stop the current turn or wait before sending.'
+                        : 'Message… (/ for skills)'}
+                      disabled={composerDisabled}
+                      rows={1}
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="flex-1 bg-transparent text-sm leading-relaxed text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim"
+                      style={{ minHeight: '24px', maxHeight: '160px' }}
+                    />
+                    {(stream.isStreaming || trimmedDraft.length > 0) && (
+                      <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
+                        {stream.isStreaming ? (
+                          <button
+                            type="button"
+                            onClick={() => { void handleStop(); }}
+                            disabled={submitting}
+                            className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                              <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
+                            </svg>
+                            Stop
+                          </button>
+                        ) : null}
+                        {trimmedDraft.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => { void handleSend(); }}
+                            disabled={composerDisabled}
+                            className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
+                          >
+                            {submitting ? 'Sending…' : 'Send'}
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {!controlState.needsTakeover ? (
+                <p className="mt-1.5 text-[11px] text-dim">
+                  {stream.isStreaming ? 'Agent responding…' : 'Use / to insert a skill command.'}
+                </p>
+              ) : null}
+            </div>
           ) : (
             <p className="text-[12px] leading-relaxed text-secondary">
               This transcript is read-only right now. <Link to={COMPANION_CONVERSATIONS_PATH} className="text-accent">Start a new live conversation</Link> from the companion list when you want to continue.
