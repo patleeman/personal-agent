@@ -119,7 +119,8 @@ export interface WorkspaceGitDraftSource {
 }
 
 const MAX_TEXT_FILE_BYTES = 512 * 1024;
-const MAX_FALLBACK_FILE_COUNT = 3_000;
+const MAX_GIT_COMMAND_OUTPUT_BYTES = 64 * 1024 * 1024;
+const MAX_WORKSPACE_TREE_FILE_COUNT = 3_000;
 const WORKSPACE_PREVIEW_MIME_TYPES = new Map<string, string>([
   ['.png', 'image/png'],
   ['.jpg', 'image/jpeg'],
@@ -399,6 +400,7 @@ function runGitCommand(args: string[], cwd: string): string {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'ignore'],
     timeout: 5000,
+    maxBuffer: MAX_GIT_COMMAND_OUTPUT_BYTES,
   });
 }
 
@@ -679,7 +681,7 @@ function walkFilesystemTree(root: string): { tree: WorkspaceTreeNode[]; fileCoun
       }
 
       fileCount += 1;
-      if (fileCount > MAX_FALLBACK_FILE_COUNT) {
+      if (fileCount > MAX_WORKSPACE_TREE_FILE_COUNT) {
         truncated = true;
         break;
       }
@@ -1089,6 +1091,10 @@ export function readWorkspaceSnapshot(cwd: string): WorkspaceSnapshot {
 
   if (workspace.repoRoot) {
     const relativePaths = readGitWorkspaceFiles(workspace.repoRoot);
+    const truncated = relativePaths.length > MAX_WORKSPACE_TREE_FILE_COUNT;
+    const visibleRelativePaths = truncated
+      ? relativePaths.slice(0, MAX_WORKSPACE_TREE_FILE_COUNT)
+      : relativePaths;
     const changes = [...changeMap.entries()]
       .sort((left, right) => left[0].localeCompare(right[0]))
       .map(([relativePath, change]) => ({
@@ -1106,8 +1112,8 @@ export function readWorkspaceSnapshot(cwd: string): WorkspaceSnapshot {
       focusPath: workspace.focusPath,
       fileCount: relativePaths.length,
       changedCount: changes.length,
-      truncated: false,
-      tree: buildTreeFromRelativePaths(workspace.root, relativePaths, changeMap),
+      truncated,
+      tree: buildTreeFromRelativePaths(workspace.root, visibleRelativePaths, changeMap),
       changes,
     };
   }

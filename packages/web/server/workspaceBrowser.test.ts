@@ -35,6 +35,17 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
+type TestTreeNode = {
+  kind: 'directory' | 'file';
+  children?: TestTreeNode[];
+};
+
+function countTreeFiles(nodes: TestTreeNode[]): number {
+  return nodes.reduce((count, node) => count + (node.kind === 'file'
+    ? 1
+    : countTreeFiles(node.children ?? [])), 0);
+}
+
 describe('readWorkspaceSnapshot', () => {
   it('roots repo workspaces at the git root and includes changed files', () => {
     const dir = createTempDir('pa-web-workspace-');
@@ -73,6 +84,24 @@ describe('readWorkspaceSnapshot', () => {
         ]),
       }),
     ]));
+  });
+
+  it('truncates large git-backed trees to keep workspace snapshots loadable', () => {
+    const dir = createTempDir('pa-web-workspace-large-');
+    runGit(['init'], dir);
+
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    for (let index = 0; index < 3_005; index += 1) {
+      writeFileSync(join(dir, 'src', `file-${String(index).padStart(4, '0')}.ts`), `export const value${index} = ${index};\n`);
+    }
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+
+    const snapshot = readWorkspaceSnapshot(dir);
+
+    expect(snapshot.fileCount).toBe(3_005);
+    expect(snapshot.truncated).toBe(true);
+    expect(countTreeFiles(snapshot.tree)).toBe(3_000);
   });
 });
 
