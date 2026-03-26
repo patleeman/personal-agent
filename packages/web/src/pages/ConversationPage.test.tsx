@@ -6,7 +6,9 @@ import type { ExecutionTargetSummary } from '../types.js';
 import {
   ConversationPage,
   DraftExecutionTargetSelector,
+  replaceConversationTitleInSessionList,
   resolveConversationLiveSession,
+  resolveConversationPageTitle,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
@@ -60,6 +62,47 @@ describe('conversation live state helpers', () => {
       hasPendingInitialPrompt: false,
       hasExecutionTarget: false,
     })).toBe(true);
+  });
+
+  it('prefers the freshest available conversation title source', () => {
+    expect(resolveConversationPageTitle({
+      draft: false,
+      titleOverride: 'Manual override',
+      streamTitle: 'Live stream title',
+      liveTitle: 'Sidebar title',
+      detailTitle: 'Stored detail title',
+      sessionTitle: 'Session snapshot title',
+    })).toBe('Manual override');
+
+    expect(resolveConversationPageTitle({
+      draft: false,
+      streamTitle: null,
+      liveTitle: 'Sidebar title',
+      detailTitle: 'Stored detail title',
+      sessionTitle: 'Session snapshot title',
+    })).toBe('Sidebar title');
+
+    expect(resolveConversationPageTitle({
+      draft: false,
+      streamTitle: null,
+      liveTitle: null,
+      detailTitle: 'Stored detail title',
+      sessionTitle: 'Session snapshot title',
+    })).toBe('Stored detail title');
+  });
+
+  it('syncs a refreshed conversation title back into the session list', () => {
+    const sessions = [
+      { id: 'conv-123', title: 'Old title' },
+      { id: 'conv-456', title: 'Other title' },
+    ];
+
+    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '  Better title  ')).toEqual([
+      { id: 'conv-123', title: 'Better title' },
+      { id: 'conv-456', title: 'Other title' },
+    ]);
+    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', 'Old title')).toBe(sessions);
+    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '')).toBe(sessions);
   });
 });
 

@@ -22,7 +22,7 @@ import {
   getConversationTailBlockKey,
   shouldShowScrollToBottomControl,
 } from '../conversationScroll';
-import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
+import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
@@ -138,6 +138,54 @@ export function shouldShowConversationTakeoverBanner(input: {
   conversationNeedsTakeover: boolean;
 }): boolean {
   return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
+}
+
+export function resolveConversationPageTitle(input: {
+  draft: boolean;
+  titleOverride?: string | null;
+  streamTitle?: string | null;
+  liveTitle?: string | null;
+  detailTitle?: string | null;
+  sessionTitle?: string | null;
+}): string {
+  if (input.draft) {
+    return NEW_CONVERSATION_TITLE;
+  }
+
+  return getConversationDisplayTitle(
+    input.titleOverride,
+    input.streamTitle,
+    input.liveTitle,
+    input.detailTitle,
+    input.sessionTitle,
+  );
+}
+
+export function replaceConversationTitleInSessionList<T extends { id: string; title: string }>(
+  sessions: T[] | null,
+  conversationId: string | null | undefined,
+  nextTitle: string | null | undefined,
+): T[] | null {
+  if (!sessions || !conversationId) {
+    return sessions;
+  }
+
+  const normalizedTitle = normalizeConversationTitle(nextTitle);
+  if (!normalizedTitle) {
+    return sessions;
+  }
+
+  let changed = false;
+  const updatedSessions = sessions.map((session) => {
+    if (session.id !== conversationId || session.title === normalizedTitle) {
+      return session;
+    }
+
+    changed = true;
+    return { ...session, title: normalizedTitle };
+  });
+
+  return changed ? updatedSessions : sessions;
 }
 
 function findConversationSurface(
@@ -1215,7 +1263,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [openArtifact, realMessages]);
 
-  const { setTitle: pushTitle } = useLiveTitles();
+  const { titles, setTitle: pushTitle } = useLiveTitles();
   useEffect(() => {
     if (id && stream.title) pushTitle(id, stream.title);
   }, [id, stream.title, pushTitle]);
@@ -1241,9 +1289,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [id]);
 
-  const title = draft
-    ? NEW_CONVERSATION_TITLE
-    : getConversationDisplayTitle(titleOverride, stream.title, visibleSessionDetail?.meta.title);
+  const title = resolveConversationPageTitle({
+    draft,
+    titleOverride,
+    streamTitle: stream.title,
+    liveTitle: id ? titles.get(id) : undefined,
+    detailTitle: visibleSessionDetail?.meta.title,
+    sessionTitle: id ? sessions?.find((session) => session.id === id)?.title : undefined,
+  });
   const model = visibleSessionDetail?.meta.model;
 
   // Model
@@ -1624,6 +1677,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ?? sessions?.find((session) => session.id === id)
       ?? null;
   }, [id, sessions, visibleSessionDetail]);
+
+  useEffect(() => {
+    const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
+    if (nextSessions && nextSessions !== sessions) {
+      setSessions(nextSessions);
+    }
+  }, [id, sessions, setSessions, visibleSessionDetail?.meta.title]);
+
   const savedConversationSessionFile = currentSessionMeta?.file ?? null;
   const activeConversationAlerts = useMemo(
     () => (alerts?.entries ?? []).filter((entry) => entry.status === 'active' && entry.conversationId === id),
@@ -3176,10 +3237,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (isLiveSession) {
         pushTitle(id, result.title);
       }
-      if (sessions) {
-        setSessions(sessions.map((session) => (
-          session.id === id ? { ...session, title: result.title } : session
-        )));
+      const nextSessions = replaceConversationTitleInSessionList(sessions, id, result.title);
+      if (nextSessions && nextSessions !== sessions) {
+        setSessions(nextSessions);
       }
       setIsEditingTitle(false);
       showNotice('accent', 'Conversation renamed.');
