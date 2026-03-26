@@ -1068,8 +1068,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, versions.sessions);
-  }, [bootstrapSessionDetail, historicalTailBlocks, id, versions.sessions]);
+    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, versions.sessionFiles);
+  }, [bootstrapSessionDetail, historicalTailBlocks, id, versions.sessionFiles]);
 
   const bootstrapPendingInitialSessionDetail = Boolean(id)
     && conversationBootstrapLoading
@@ -1925,7 +1925,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [conversationRunId, draft, versions.sessions]);
+  }, [conversationRunId, draft, versions.runs]);
 
   useInvalidateOnTopics(['executionTargets'], executionTargetsState.refetch);
 

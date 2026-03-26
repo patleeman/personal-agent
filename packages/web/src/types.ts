@@ -619,6 +619,7 @@ export type AppEventTopic =
   | 'alerts'
   | 'projects'
   | 'sessions'
+  | 'sessionFiles'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -632,6 +633,7 @@ export type AppEvent =
   | { type: 'connected' }
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
+  | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
   | { type: 'alerts_snapshot'; entries: AlertEntry[]; activeCount: number }
   | { type: 'projects_snapshot'; projects: ProjectRecord[] }

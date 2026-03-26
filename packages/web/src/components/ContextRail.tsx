@@ -1406,7 +1406,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   );
   const runsLoading = runs === null;
   const runsError = null;
-  const liveContextVersionKey = `${versions.sessions}:${versions.workspace}`;
+  const liveContextVersionKey = `${versions.sessionFiles}:${versions.workspace}`;
   const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
 
   const load = useCallback(() => {
@@ -1526,7 +1526,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     runMentionsLastFetchedAtRef.current = now;
     let cancelled = false;
 
-    fetchSessionDetailCached(id, { tailBlocks: 400 }, versions.sessions)
+    fetchSessionDetailCached(id, { tailBlocks: 400 }, versions.sessionFiles)
       .then((detail) => {
         if (cancelled) {
           return;
@@ -1543,7 +1543,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id, versions.sessions, isSessionRunning]);
+  }, [id, versions.sessionFiles, isSessionRunning]);
 
   useEffect(() => {
     setChangingCwd(false);

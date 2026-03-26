@@ -1695,6 +1695,10 @@ export function listSessions(): SessionMeta[] {
   return scanSessionMetas();
 }
 
+export function readSessionMeta(sessionId: string): SessionMeta | null {
+  return resolveSessionMeta(sessionId);
+}
+
 export function readSessionSearchText(sessionId: string, maxCharacters = 12_000): string | null {
   const meta = resolveSessionMeta(sessionId);
   if (!meta) {

@@ -23,6 +23,7 @@ export type AppEventTopic =
   | 'alerts'
   | 'projects'
   | 'sessions'
+  | 'sessionFiles'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -35,7 +36,8 @@ export type AppEventTopic =
 export type AppEvent =
   | { type: 'connected' }
   | { type: 'invalidate'; topics: AppEventTopic[] }
-  | { type: 'live_title'; sessionId: string; title: string };
+  | { type: 'live_title'; sessionId: string; title: string }
+  | { type: 'session_meta_changed'; sessionId: string };
 
 export interface AppEventMonitorOptions {
   repoRoot: string;
@@ -46,9 +48,12 @@ export interface AppEventMonitorOptions {
   intervalMs?: number;
 }
 
+type AppEventWatchKind = 'change' | 'rename';
+
 interface AppEventWatchSource {
   path: string;
   kind: 'file' | 'directory';
+  eventKinds?: readonly AppEventWatchKind[];
 }
 
 type TopicSources = Record<AppEventTopic, AppEventWatchSource[]>;
@@ -61,6 +66,7 @@ interface AppEventWatchTarget {
   recursive: boolean;
   rebuildOnEvent: boolean;
   filterName?: string;
+  eventKinds?: readonly AppEventWatchKind[];
 }
 
 const ALL_TOPICS: AppEventTopic[] = [
@@ -68,6 +74,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'alerts',
   'projects',
   'sessions',
+  'sessionFiles',
   'tasks',
   'runs',
   'automation',
@@ -202,13 +209,15 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: conversationLinksDir, kind: 'directory' },
     ],
     sessions: [
-      { path: options.sessionsDir, kind: 'directory' },
       { path: conversationArtifactsDir, kind: 'directory' },
       { path: conversationAttentionStateFile, kind: 'file' },
       { path: deferredResumeStateFile, kind: 'file' },
       { path: alertsStateFile, kind: 'file' },
       { path: conversationLinksDir, kind: 'directory' },
       ...activitySources,
+    ],
+    sessionFiles: [
+      { path: options.sessionsDir, kind: 'directory', eventKinds: ['change', 'rename'] },
     ],
     tasks: [
       { path: tasksDir, kind: 'directory' },
@@ -245,6 +254,7 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
       target.recursive ? 'recursive' : 'basic',
       target.rebuildOnEvent ? 'rebuild' : 'steady',
       target.filterName ?? '*',
+      target.eventKinds?.join(',') ?? '*',
     ].join('|');
 
     const existing = targets.get(key);
@@ -269,6 +279,7 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
             recursive: false,
             rebuildOnEvent: false,
             filterName: basename(source.path),
+            eventKinds: source.eventKinds,
           }, topic);
           continue;
         }
@@ -277,6 +288,8 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
           path: findNearestExistingDirectory(parent),
           recursive: true,
           rebuildOnEvent: true,
+          filterName: basename(source.path),
+          eventKinds: source.eventKinds,
         }, topic);
         continue;
       }
@@ -286,6 +299,7 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
           path: source.path,
           recursive: true,
           rebuildOnEvent: false,
+          eventKinds: source.eventKinds,
         }, topic);
 
         const parent = dirname(source.path);
@@ -295,6 +309,7 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
             recursive: false,
             rebuildOnEvent: true,
             filterName: basename(source.path),
+            eventKinds: source.eventKinds,
           }, topic);
         }
         continue;
@@ -307,6 +322,7 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
           recursive: false,
           rebuildOnEvent: true,
           filterName: basename(source.path),
+          eventKinds: source.eventKinds,
         }, topic);
         continue;
       }
@@ -315,6 +331,8 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
         path: findNearestExistingDirectory(parent),
         recursive: true,
         rebuildOnEvent: true,
+        filterName: basename(source.path),
+        eventKinds: source.eventKinds,
       }, topic);
     }
   }
@@ -322,15 +340,15 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
   return [...targets.values()];
 }
 
-function startBasicWatch(path: string, onEvent: (filename?: string | Buffer | null) => void): WatchStop {
-  const watcher = watch(path, { persistent: false }, (_eventType, filename) => {
-    onEvent(filename);
+function startBasicWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
+  const watcher = watch(path, { persistent: false }, (eventType, filename) => {
+    onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
   });
 
   return () => watcher.close();
 }
 
-function startManualDirectoryTreeWatch(path: string, onEvent: (filename?: string | Buffer | null) => void): WatchStop {
+function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
   const watchers = new Map<string, FSWatcher>();
   let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -352,8 +370,8 @@ function startManualDirectoryTreeWatch(path: string, onEvent: (filename?: string
       }
 
       try {
-        const watcher = watch(directory, { persistent: false }, (_eventType, filename) => {
-          onEvent(filename);
+        const watcher = watch(directory, { persistent: false }, (eventType, filename) => {
+          onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
           scheduleSync();
         });
         watchers.set(directory, watcher);
@@ -392,10 +410,10 @@ function startManualDirectoryTreeWatch(path: string, onEvent: (filename?: string
   };
 }
 
-function startDirectoryTreeWatch(path: string, onEvent: (filename?: string | Buffer | null) => void): WatchStop {
+function startDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
   try {
-    const watcher = watch(path, { persistent: false, recursive: true }, (_eventType, filename) => {
-      onEvent(filename);
+    const watcher = watch(path, { persistent: false, recursive: true }, (eventType, filename) => {
+      onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
     });
 
     return () => watcher.close();
@@ -416,8 +434,12 @@ function startWatchTarget(
   onTopics: (topics: Iterable<AppEventTopic>) => void,
   scheduleRebuild: () => void,
 ): WatchStop {
-  const handleEvent = (filename?: string | Buffer | null) => {
+  const handleEvent = (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => {
     if (!matchesWatchFilename(filename, target.filterName)) {
+      return;
+    }
+
+    if (target.eventKinds && !target.eventKinds.includes(eventKind)) {
       return;
     }
 
@@ -444,7 +466,7 @@ function startWatchTarget(
 function startProfileConfigWatch(profileConfigFile: string, onChange: () => void): WatchStop {
   const parent = dirname(profileConfigFile);
   if (isDirectory(parent)) {
-    return startBasicWatch(parent, (filename) => {
+    return startBasicWatch(parent, (_eventKind, filename) => {
       if (!matchesWatchFilename(filename, basename(profileConfigFile))) {
         return;
       }

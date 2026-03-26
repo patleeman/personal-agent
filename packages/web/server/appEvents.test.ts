@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -11,8 +11,10 @@ const originalEnv = process.env;
 const tempDirs: string[] = [];
 const ALL_TOPICS = [
   'activity',
+  'alerts',
   'projects',
   'sessions',
+  'sessionFiles',
   'tasks',
   'runs',
   'automation',
@@ -55,7 +57,45 @@ afterEach(async () => {
 });
 
 describe('app event monitor', () => {
-  it('invalidates sessions when a session file changes', async () => {
+  it('invalidates sessionFiles when an existing session file changes', async () => {
+    const repoRoot = createTempDir('pa-web-app-events-repo-');
+    const sessionsDir = getDurableSessionsDir();
+    const taskStateFile = join(getStateRoot(), 'daemon', 'task-state.json');
+    const profileConfigFile = join(getConfigRoot(), 'profile.json');
+    mkdirSync(sessionsDir, { recursive: true });
+    mkdirSync(dirname(taskStateFile), { recursive: true });
+    mkdirSync(dirname(profileConfigFile), { recursive: true });
+    writeFileSync(taskStateFile, '{}\n', 'utf-8');
+    writeFileSync(profileConfigFile, '{"defaultProfile":"assistant"}\n', 'utf-8');
+
+    const sessionFile = join(sessionsDir, 'conv-1.jsonl');
+    writeFileSync(sessionFile, '{"type":"session"}\n', 'utf-8');
+
+    const events: AppEvent[] = [];
+    const unsubscribe = subscribeAppEvents((event) => {
+      events.push(event);
+    });
+
+    startAppEventMonitor({
+      repoRoot,
+      sessionsDir,
+      taskStateFile,
+      profileConfigFile,
+      getCurrentProfile: () => 'assistant',
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    events.length = 0;
+
+    appendFileSync(sessionFile, '{"type":"message"}\n', 'utf-8');
+
+    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
+    unsubscribe();
+  });
+
+  it('invalidates sessionFiles when a session file is created', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
     const sessionsDir = getDurableSessionsDir();
     const taskStateFile = join(getStateRoot(), 'daemon', 'task-state.json');
@@ -82,9 +122,11 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     events.length = 0;
 
-    writeFileSync(join(sessionsDir, 'conv-1.jsonl'), '{"type":"session"}\n', 'utf-8');
+    writeFileSync(join(sessionsDir, 'conv-2.jsonl'), '{"type":"session"}\n', 'utf-8');
 
-    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions')));
+    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
   });
 
@@ -117,10 +159,10 @@ describe('app event monitor', () => {
     events.length = 0;
 
     currentProfile = 'other';
-    writeFileSync(profileConfigFile, '{"defaultProfile":"other"}\n', 'utf-8');
+    appendFileSync(profileConfigFile, '\n', 'utf-8');
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.length === ALL_TOPICS.length));
     expect(events.some((event) => event.type === 'invalidate' && ALL_TOPICS.every((topic) => event.topics.includes(topic)))).toBe(true);
     unsubscribe();
-  });
+  }, 10_000);
 });

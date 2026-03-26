@@ -144,6 +144,7 @@ export const api = {
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
+  sessionMeta:  (id: string) => get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`),
   companionConversationList: (options?: { archivedOffset?: number; archivedLimit?: number }) => {
     const params = new URLSearchParams();
     if (typeof options?.archivedOffset === 'number' && Number.isInteger(options.archivedOffset) && options.archivedOffset >= 0) {

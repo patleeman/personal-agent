@@ -20,7 +20,7 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
-import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
+import { publishAppEvent } from './appEvents.js';
 import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 import {
   generateConversationTitle,
@@ -897,6 +897,10 @@ function broadcastSnapshot(entry: LiveEntry): void {
   }
 }
 
+function publishSessionMetaChanged(sessionId: string): void {
+  publishAppEvent({ type: 'session_meta_changed', sessionId });
+}
+
 function broadcastTitle(entry: LiveEntry): void {
   const title = resolveEntryTitle(entry);
   if (!title) {
@@ -906,7 +910,7 @@ function broadcastTitle(entry: LiveEntry): void {
   entry.title = title;
   broadcast(entry, { type: 'title_update', title });
   publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title });
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(entry.sessionId);
 }
 
 function applySessionTitle(entry: LiveEntry, title: string): void {
@@ -1707,7 +1711,7 @@ function wireSession(
     controllerAcquiredAt: null,
   };
   registry.set(id, entry);
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(id);
   void syncDurableConversationRun(entry, session.isStreaming ? 'running' : 'waiting', { force: true });
   maybeAutoTitleConversation(entry);
 
@@ -1733,6 +1737,7 @@ function wireSession(
 
     if (event.type === 'agent_start') {
       entry.currentTurnError = null;
+      publishSessionMetaChanged(entry.sessionId);
       void syncDurableConversationRun(entry, 'running');
     }
 
@@ -1775,14 +1780,14 @@ function wireSession(
     if (event.type === 'turn_end') {
       clearContextUsageTimer(entry);
       broadcastContextUsage(entry, true);
-      invalidateAppTopics('sessions');
+      publishSessionMetaChanged(entry.sessionId);
     }
 
     if (event.type === 'auto_compaction_end' && !event.aborted && event.result) {
       broadcastSnapshot(entry);
       clearContextUsageTimer(entry);
       broadcastContextUsage(entry, true);
-      invalidateAppTopics('sessions');
+      publishSessionMetaChanged(entry.sessionId);
       notifyLiveSessionLifecycleHandlers(entry, 'auto_compaction_end');
     }
 
@@ -2294,7 +2299,7 @@ export async function appendDetachedUserMessage(
     }
   }
 
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(sessionId);
 }
 
 export async function appendVisibleCustomMessage(
@@ -2320,7 +2325,7 @@ export async function appendVisibleCustomMessage(
     display: true,
     details,
   });
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(sessionId);
 }
 
 function resolvePromptBehavior(
@@ -2505,7 +2510,7 @@ export async function compactSession(sessionId: string, customInstructions?: str
   broadcastSnapshot(entry);
   clearContextUsageTimer(entry);
   broadcastContextUsage(entry, true);
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(sessionId);
   return result;
 }
 
@@ -2591,7 +2596,8 @@ export async function forkSession(
     entry.sessionId = newId;
     entry.lastDurableRunState = undefined;
     registry.set(newId, entry);
-    invalidateAppTopics('sessions');
+    publishSessionMetaChanged(sessionId);
+    publishSessionMetaChanged(newId);
     void syncDurableConversationRun(entry, entry.session.isStreaming ? 'running' : 'waiting', { force: true });
 
     return { newSessionId: newId, sessionFile: newFile };
@@ -2648,5 +2654,5 @@ export function destroySession(sessionId: string): void {
   });
   entry.session.dispose();
   registry.delete(sessionId);
-  invalidateAppTopics('sessions');
+  publishSessionMetaChanged(sessionId);
 }
