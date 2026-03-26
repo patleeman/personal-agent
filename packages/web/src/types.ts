@@ -108,6 +108,30 @@ export interface ActivitySnapshot {
   unreadCount: number;
 }
 
+export interface AlertEntry {
+  id: string;
+  profile: string;
+  kind: string;
+  severity: 'passive' | 'disruptive';
+  status: 'active' | 'acknowledged' | 'dismissed';
+  title: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+  conversationId?: string;
+  activityId?: string;
+  sourceKind: string;
+  sourceId: string;
+  requiresAck: boolean;
+  acknowledgedAt?: string;
+  dismissedAt?: string;
+}
+
+export interface AlertSnapshot {
+  entries: AlertEntry[];
+  activeCount: number;
+}
+
 export interface ProjectMilestone {
   id: string;
   title: string;
@@ -591,6 +615,7 @@ export interface ConversationTreeSnapshot {
 
 export type AppEventTopic =
   | 'activity'
+  | 'alerts'
   | 'projects'
   | 'sessions'
   | 'tasks'
@@ -607,6 +632,7 @@ export type AppEvent =
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
+  | { type: 'alerts_snapshot'; entries: AlertEntry[]; activeCount: number }
   | { type: 'projects_snapshot'; projects: ProjectRecord[] }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
@@ -651,6 +677,13 @@ export interface DeferredResumeSummary {
   attempts: number;
   status: 'scheduled' | 'ready';
   readyAt?: string;
+  kind?: 'continue' | 'reminder' | 'task-callback';
+  title?: string;
+  delivery?: {
+    alertLevel: 'none' | 'passive' | 'disruptive';
+    autoResumeIfOpen: boolean;
+    requireAck: boolean;
+  };
 }
 
 export interface ConversationCwdChangeResult {

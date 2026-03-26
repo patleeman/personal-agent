@@ -4,6 +4,7 @@
 import { createContext, useContext } from 'react';
 import type {
   ActivitySnapshot,
+  AlertSnapshot,
   AppEventTopic,
   DaemonState,
   DurableRunListResult,
@@ -35,6 +36,7 @@ export type AppEventVersions = Record<AppEventTopic, number>;
 
 export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   activity: 0,
+  alerts: 0,
   projects: 0,
   sessions: 0,
   tasks: 0,
@@ -75,11 +77,13 @@ export function useSseConnection() {
 
 export interface AppDataContextValue {
   activity: ActivitySnapshot | null;
+  alerts?: AlertSnapshot | null;
   projects: ProjectRecord[] | null;
   sessions: SessionMeta[] | null;
   tasks: ScheduledTaskSummary[] | null;
   runs: DurableRunListResult | null;
   setActivity: (snapshot: ActivitySnapshot) => void;
+  setAlerts?: (snapshot: AlertSnapshot) => void;
   setProjects: (projects: ProjectRecord[]) => void;
   setSessions: (sessions: SessionMeta[]) => void;
   setTasks: (tasks: ScheduledTaskSummary[]) => void;
@@ -88,11 +92,13 @@ export interface AppDataContextValue {
 
 export const AppDataContext = createContext<AppDataContextValue>({
   activity: null,
+  alerts: null,
   projects: null,
   sessions: null,
   tasks: null,
   runs: null,
   setActivity: () => {},
+  setAlerts: () => {},
   setProjects: () => {},
   setSessions: () => {},
   setTasks: () => {},

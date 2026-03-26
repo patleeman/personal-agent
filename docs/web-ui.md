@@ -116,6 +116,21 @@ Use the UI when you want:
 
 ## Main sections
 
+### Alerts
+
+The Alerts page shows the sparse, interrupting async items that still need acknowledgement.
+
+Typical examples:
+
+- reminders
+- approval-needed wakeups
+- scheduled-task callbacks linked back to a conversation
+- high-signal blocked or failed async work
+
+The UI also shows active disruptive alerts as floating in-app cards so they are harder to miss than inbox items.
+
+See [Alerts and Reminders](./alerts.md).
+
 ### Inbox
 
 The Inbox page shows:
@@ -156,9 +171,9 @@ A new draft conversation becomes a live session when you send the first prompt.
 
 If execution targets are configured, the draft conversation empty state lets you choose where the first turn runs before you send it. Once the conversation starts, that execution choice is shown in the header and treated as locked for that conversation.
 
-If a deferred resume becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click.
+If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
-From the deferred details row, you can also fire a scheduled resume immediately or cancel it.
+From the wakeup details row, you can also fire a scheduled resume immediately or cancel it.
 
 Conversations can also carry lightweight automation.
 That automation is an ordered todo list of skill steps for that conversation.
@@ -212,6 +227,8 @@ See [Projects](./projects.md).
 ### Scheduled
 
 The Scheduled page is the UI for daemon tasks.
+
+Tasks are still passive by default. If a task is explicitly bound back to a conversation, the result can also surface later as an alert and conversation wakeup.
 
 You can:
 

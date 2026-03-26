@@ -217,7 +217,7 @@ export function useCompanionLayoutContext() {
 
 export function CompanionLayout() {
   const location = useLocation();
-  const { activity, sessions, tasks, runs } = useAppData();
+  const { activity, alerts, sessions, tasks, runs } = useAppData();
   const { daemon, sync, webUi } = useSystemStatus();
   const { data: companionSession, loading: companionSessionLoading } = useApi(api.companionSession, 'companion-auth-session');
   const [pairingCode, setPairingCode] = useState('');
@@ -393,7 +393,7 @@ export function CompanionLayout() {
   }, [logoutBusy]);
 
   useCompanionNotifications({
-    activity,
+    alerts: alerts ?? null,
     sessions,
     enabled: companionSession !== null && secureContext && notificationPermission === 'granted',
   });

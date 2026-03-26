@@ -133,8 +133,8 @@ Examples:
 
 - morning reports
 - recurring checks
-- reminders surfaced in the inbox
 - background prompts that create inbox activity
+- scheduled callbacks that later wake a conversation back up
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 
@@ -167,7 +167,8 @@ See [Sync Guide](./sync.md).
 | Work with the agent right now | conversation | best place for active interaction |
 | Track a real piece of ongoing work | project | durable plan, brief, notes, files, blockers, status, and linked conversations |
 | Save something the agent should know later | note node / skill node / AGENTS | reusable durable knowledge |
-| Notice async outcomes later | inbox/activity | attention surface, not a transcript |
+| Interrupt yourself later for a reminder or callback | reminder / alert | conversation-bound wakeup plus a disruptive attention surface |
+| Notice async outcomes later without interrupting yourself | inbox/activity | passive attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
 | Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
 
@@ -179,7 +180,8 @@ Think about the system this way:
 - **project** = durable work plan
 - **notes + skills** = durable knowledge and reusable procedures
 - **project nodes** = durable tracked work
-- **inbox** = durable attention for async events
+- **alerts** = interrupting reminders and callbacks that need acknowledgement
+- **inbox** = durable passive attention for async events
 - **scheduled task** = durable automation definition
 - **sync** = cross-machine durable-state replication
 - **daemon** = background runner
@@ -214,7 +216,7 @@ A common workflow looks like this:
 2. Create or reference a project if the work is ongoing.
 3. Use the active profile's AGENTS, skill nodes, and shared note nodes to guide behavior and bring in durable knowledge.
 4. If the work should happen later, put it into a scheduled task.
-5. When asynchronous work finishes, the result shows up in the inbox.
+5. When asynchronous work finishes, the result shows up in the inbox or, for higher-signal reminders/callbacks, as an alert tied back to the originating conversation.
 
 That is the intended shape of the product.
 

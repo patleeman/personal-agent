@@ -3,11 +3,22 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
+  createReadyDeferredResume,
   getDurableSessionsDir,
+  getTaskCallbackBinding,
+  loadDeferredResumeState,
+  resolveDeferredResumeStateFile,
+  saveDeferredResumeState,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
+import {
+  surfaceReadyDeferredResume,
+} from '../conversation-wakeups.js';
+import {
+  markDeferredResumeConversationRunReady,
+} from '../runs/deferred-resume-conversations.js';
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
@@ -429,6 +440,115 @@ export function createTasksModule(
     });
   };
 
+  const formatTaskCallbackPrompt = (
+    task: ParsedTaskDefinition,
+    status: TaskRunOutcomeStatus,
+    details: {
+      outputText?: string;
+      error?: string;
+      logPath?: string;
+      finishedAt: string;
+    },
+  ): string => {
+    const lines = [
+      status === 'success'
+        ? `Scheduled task @${task.id} completed at ${details.finishedAt}.`
+        : `Scheduled task @${task.id} failed at ${details.finishedAt}.`,
+    ];
+
+    if (details.error) {
+      lines.push('', `Error: ${details.error}`);
+    }
+
+    if (details.outputText && details.outputText.trim().length > 0) {
+      lines.push('', 'Task output:', details.outputText.trim());
+    }
+
+    if (details.logPath) {
+      lines.push('', `Log: ${details.logPath}`);
+    }
+
+    lines.push('', 'Review this result, surface the important outcome to Patrick, and decide whether any follow-up is needed.');
+    return lines.join('\n');
+  };
+
+  const deliverTaskCallbackWakeup = async (
+    task: ParsedTaskDefinition,
+    status: TaskRunOutcomeStatus,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
+    details: {
+      finishedAt: string;
+      outputText?: string;
+      error?: string;
+      logPath?: string;
+    },
+  ): Promise<string[] | undefined> => {
+    const binding = getTaskCallbackBinding({ stateRoot: context.paths.stateRoot, profile: task.profile, taskId: task.id });
+    if (!binding) {
+      return undefined;
+    }
+
+    const shouldDeliver = status === 'success' ? binding.deliverOnSuccess : binding.deliverOnFailure;
+    if (!shouldDeliver) {
+      return [binding.conversationId];
+    }
+
+    const wakeupId = [
+      'task-callback',
+      sanitizeActivityIdSegment(task.id),
+      sanitizeActivityIdSegment(details.finishedAt.replace(/[.:]/g, '-')),
+      status,
+    ].join('-');
+    const notifyLevel = status === 'success' ? binding.notifyOnSuccess : binding.notifyOnFailure;
+    const title = status === 'success'
+      ? `Scheduled task @${task.id} completed`
+      : `Scheduled task @${task.id} failed`;
+    const deferredResumeStateFile = resolveDeferredResumeStateFile(context.paths.stateRoot);
+    const deferredState = loadDeferredResumeState(deferredResumeStateFile);
+    const entry = createReadyDeferredResume(deferredState, {
+      id: wakeupId,
+      sessionFile: binding.sessionFile,
+      prompt: formatTaskCallbackPrompt(task, status, details),
+      dueAt: details.finishedAt,
+      createdAt: details.finishedAt,
+      readyAt: details.finishedAt,
+      attempts: 0,
+      kind: 'task-callback',
+      title,
+      source: {
+        kind: 'scheduled-task',
+        id: task.id,
+      },
+      delivery: {
+        alertLevel: notifyLevel,
+        autoResumeIfOpen: binding.autoResumeIfOpen,
+        requireAck: binding.requireAck,
+      },
+    });
+    saveDeferredResumeState(deferredState, deferredResumeStateFile);
+
+    await markDeferredResumeConversationRunReady({
+      daemonRoot: context.paths.root,
+      deferredResumeId: entry.id,
+      sessionFile: entry.sessionFile,
+      prompt: entry.prompt,
+      dueAt: entry.dueAt,
+      createdAt: entry.createdAt,
+      readyAt: entry.readyAt ?? details.finishedAt,
+      profile: task.profile,
+      conversationId: binding.conversationId,
+    });
+
+    surfaceReadyDeferredResume({
+      entry,
+      profile: task.profile,
+      stateRoot: context.paths.stateRoot,
+      conversationId: binding.conversationId,
+    });
+
+    return [binding.conversationId];
+  };
+
   const writeTaskActivity = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
@@ -439,6 +559,7 @@ export function createTasksModule(
       outputText?: string;
       error?: string;
       logPath?: string;
+      relatedConversationIdsOverride?: string[];
     },
   ): void => {
     try {
@@ -450,9 +571,10 @@ export function createTasksModule(
       ].join('-');
 
       // Find Pi sessions created during this task run for local attention linking.
-      const relatedConversationIds = details.startedAt
-        ? findRelatedSessionIds(context.paths.stateRoot, details.startedAt, details.finishedAt)
-        : [];
+      const relatedConversationIds = details.relatedConversationIdsOverride
+        ?? (details.startedAt
+          ? findRelatedSessionIds(context.paths.stateRoot, details.startedAt, details.finishedAt)
+          : []);
 
       writeScheduledTaskActivityEntry(task, context, {
         activityId,
@@ -724,11 +846,18 @@ export function createTasksModule(
       });
       context.logger.info(`task completed id=${task.id} run=${durableRun.runId} log=${finalResult.logPath}`);
 
+      const callbackConversationIds = await deliverTaskCallbackWakeup(task, 'success', context, {
+        finishedAt,
+        outputText: finalResult.outputText,
+        logPath: finalResult.logPath,
+      });
+
       writeTaskActivity(task, 'success', context, {
         startedAt: finalResult.startedAt,
         finishedAt,
         outputText: finalResult.outputText,
         logPath: finalResult.logPath,
+        relatedConversationIdsOverride: callbackConversationIds,
       });
     } else if (finalResult?.cancelled) {
       record.lastStatus = 'skipped';
@@ -789,12 +918,20 @@ export function createTasksModule(
       });
       context.logger.warn(`task failed id=${task.id} run=${durableRun.runId} error=${record.lastError}`);
 
+      const callbackConversationIds = await deliverTaskCallbackWakeup(task, 'failed', context, {
+        finishedAt,
+        outputText: finalResult?.outputText,
+        error: record.lastError,
+        logPath: finalResult?.logPath,
+      });
+
       writeTaskActivity(task, 'failed', context, {
         startedAt: finalResult?.startedAt,
         finishedAt,
         outputText: finalResult?.outputText,
         error: record.lastError,
         logPath: finalResult?.logPath,
+        relatedConversationIdsOverride: callbackConversationIds,
       });
     }
 

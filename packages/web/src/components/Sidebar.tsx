@@ -43,6 +43,7 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 }
 
 const PATH = {
+  alerts:   'M14.857 17.082A23.848 23.848 0 0 0 18 18.75a8.967 8.967 0 0 1-6 2.292A8.967 8.967 0 0 1 6 18.75c1.09-.36 2.14-.92 3.143-1.668M14.857 17.082a23.848 23.848 0 0 1-5.714 0M14.857 17.082A5.98 5.98 0 0 0 18 11.25V9.75a6 6 0 1 0-12 0v1.5a5.98 5.98 0 0 0 3.143 5.832M12 3v1.5',
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
   automation: 'M6 6h5v5H6zM13 13h5v5h-5zM11 8.5h2M12 9.5v5M8.5 11v2M15.5 11v2',
   system:   'M4.5 7.5h15m-15 4.5h15m-15 4.5h15M6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 17.25V6.75A2.25 2.25 0 0 1 6.75 4.5Z',
@@ -422,7 +423,7 @@ function ShelfDropZone({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, runs, sessions, tasks } = useAppData();
+  const { activity, alerts, runs, sessions, tasks } = useAppData();
   const { data: status } = useApi(api.status);
   const {
     pinnedSessions,
@@ -485,6 +486,7 @@ export function Sidebar() {
     () => new Set(archivedConversationIds),
     [archivedConversationIds],
   );
+  const activeAlertCount = alerts?.activeCount ?? 0;
   const standaloneUnreadCount = useMemo(() => {
     const knownConversationIds = new Set(allSessions.map((session) => session.id));
     return (activity?.entries ?? []).filter((entry) => {
@@ -866,6 +868,7 @@ export function Sidebar() {
       </div>
 
       <div className="pb-1 space-y-0.5">
+        <TopNavItem to="/alerts" icon={PATH.alerts} label="Alerts" badge={activeAlertCount} title="Interrupting reminders and callbacks that need acknowledgement." />
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <SidebarNavGroup
           icon={PATH.web}

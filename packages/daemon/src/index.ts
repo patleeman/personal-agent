@@ -96,6 +96,11 @@ export type {
   ScannedDurableRunsSummary,
 } from './runs/store.js';
 export { parseTaskDefinition } from './modules/tasks-parser.js';
+export {
+  surfaceReadyDeferredResume,
+  buildDeferredResumeActivityId,
+  buildDeferredResumeAlertId,
+} from './conversation-wakeups.js';
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type {
   DaemonEvent,

@@ -23,6 +23,7 @@ These docs intentionally focus on product behavior and daily use. They are not p
 
 ## Durable features
 
+- [Alerts and Reminders](./alerts.md)
 - [Inbox and Activity](./inbox.md)
 - [Nodes](./nodes.md)
 - [Projects](./projects.md)
@@ -43,7 +44,8 @@ These docs intentionally focus on product behavior and daily use. They are not p
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state (optionally replicated via sync) |
-| Notice something that happened asynchronously later | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
+| Interrupt yourself later for a reminder or callback | alert + conversation wakeup | local runtime alert state + local deferred-resume state |
+| Notice something that happened asynchronously later without interrupting yourself | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
 | Track long-running work, briefs, notes, files, blockers, and next steps across conversations | project node | `~/.local/state/personal-agent/sync/projects/<projectId>/{INDEX.md,state.yaml}` + sibling project resources |
 | Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, note nodes, skill nodes | shared repo defaults + synced durable resources under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,notes}/**` |
 | Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/tasks/*.task.md` + local daemon state |
