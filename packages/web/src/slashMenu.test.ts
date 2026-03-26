@@ -7,13 +7,13 @@ const SKILLS: MemorySkillItem[] = [
     source: 'shared',
     name: 'react',
     description: 'React and Next.js performance optimization guidelines.',
-    path: '/tmp/react/SKILL.md',
+    path: '/tmp/react/INDEX.md',
   },
   {
     source: 'shared',
     name: 'frontend-design',
     description: 'Create distinctive, production-grade frontend interfaces.',
-    path: '/tmp/frontend/SKILL.md',
+    path: '/tmp/frontend/INDEX.md',
   },
 ];
 
@@ -76,7 +76,7 @@ describe('buildSlashMenuItems', () => {
         source: 'shared',
         name: 'project-planning',
         description: 'Structure milestones, scope, and delivery plans for a project.',
-        path: '/tmp/project/SKILL.md',
+        path: '/tmp/project/INDEX.md',
       },
     ]);
 

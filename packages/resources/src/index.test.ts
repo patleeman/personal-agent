@@ -66,8 +66,8 @@ describe('resources profile loader', () => {
     writeFile(join(syncRoot, 'agents', 'datadog.md'), '# Durable datadog\n');
     writeFile(join(syncRoot, 'settings', 'global.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
-    writeFile(join(syncRoot, 'skills', 'shared-skill', 'SKILL.md'), '---\nname: shared-skill\ndescription: Shared\n---\n');
-    writeFile(join(syncRoot, 'skills', 'datadog-skill', 'SKILL.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
+    writeFile(join(syncRoot, 'skills', 'shared-skill', 'INDEX.md'), '---\nname: shared-skill\ndescription: Shared\n---\n');
+    writeFile(join(syncRoot, 'skills', 'datadog-skill', 'INDEX.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
@@ -212,7 +212,7 @@ describe('resources profile loader', () => {
     const syncRoot = join(profilesRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(syncRoot, 'skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n');
+    writeFile(join(syncRoot, 'skills', 'test', 'INDEX.md'), '---\nname: test\ndescription: Skill\n---\n');
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'role\n');
     writeFile(join(repo, 'themes/theme.json'), '{}\n');
 

@@ -546,7 +546,7 @@ export function CompanionLayout() {
 
               <DrawerSection title="Browse">
                 <DrawerLink to={COMPANION_PROJECTS_PATH} label="Projects" detail="Read current focus, blockers, notes, and linked conversations." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_MEMORIES_PATH} label="Memories" detail="Browse distilled knowledge packages and references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_MEMORIES_PATH} label="Notes" detail="Browse durable note nodes and references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows and invoke them from chats." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 

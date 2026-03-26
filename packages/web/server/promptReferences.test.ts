@@ -39,7 +39,7 @@ const MEMORY_DOCS: PromptReferenceMemoryDoc[] = [
     title: 'Project State Model',
     summary: 'How projects are represented in durable artifacts.',
     tags: ['architecture', 'projects'],
-    path: '/state/profiles/_memory/project-state-model/MEMORY.md',
+    path: '/state/sync/notes/project-state-model/INDEX.md',
     updated: '2026-03-11',
   },
 ];
@@ -49,7 +49,7 @@ const SKILLS: PromptReferenceSkill[] = [
     name: 'dd-pup-cli',
     source: 'datadog',
     description: 'Query Datadog platform data.',
-    path: '/repo/profiles/datadog/agent/skills/dd-pup-cli/SKILL.md',
+    path: '/repo/profiles/datadog/agent/skills/dd-pup-cli/INDEX.md',
   },
 ];
 
@@ -79,7 +79,7 @@ describe('promptReferences', () => {
     ]);
   });
 
-  it('resolves project, task, memory package, skill, and profile mentions independently', () => {
+  it('resolves project, task, note node, skill, and profile mentions independently', () => {
     expect(resolvePromptReferences({
       text: 'Use @web-ui with @memory-maintenance @project-state-model @dd-pup-cli and @datadog.',
       availableProjectIds: ['web-ui', 'artifact-model'],
@@ -117,7 +117,7 @@ describe('promptReferences', () => {
 
   it('builds knowledge doc context with title, summary, and tags', () => {
     const context = buildReferencedMemoryDocsContext(MEMORY_DOCS, '/repo');
-    expect(context).toContain('Referenced memories:');
+    expect(context).toContain('Referenced note nodes:');
     expect(context).toContain('@project-state-model: Project State Model');
     expect(context).toContain('summary: How projects are represented in durable artifacts.');
     expect(context).toContain('tags: architecture, projects');

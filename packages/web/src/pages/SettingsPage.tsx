@@ -1048,7 +1048,7 @@ export function SettingsPage() {
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Reset saved UI preferences</h2>
               <p className="ui-card-meta max-w-3xl">
-                These actions clear saved UI state. They do not delete conversations, projects, memory packages, or agent data.
+                These actions clear saved UI state. They do not delete conversations, project nodes, note nodes, skill nodes, or agent data.
               </p>
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
             </div>

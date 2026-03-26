@@ -202,15 +202,15 @@ See [Web UI Guide](./web-ui.md).
 
 ### `pa memory [list|find|show|new|lint]`
 
-Work with the shared global memory packages store.
+Work with the shared global note-node store under `sync/notes/`.
 
 Examples:
 
 ```bash
 pa memory list
-pa memory find --tag notes --area personal-agent --role canonical
+pa memory find --tag structure --area personal-agent
 pa memory show quick-note
-pa memory new memory-index --title "Memory index" --summary "Top-level memory table of contents" --tags memory,index --type index --area memory --role hub
+pa memory new note-index --title "Note index" --summary "Top-level note table of contents" --tags notes,index,structure --type index --area notes
 pa memory lint
 ```
 
@@ -323,7 +323,7 @@ Synced roots include:
 - `settings/**`
 - `models/**`
 - `skills/**`
-- `memory/**`
+- `notes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
@@ -360,7 +360,7 @@ pa runs list
 pa inbox list --unread
 ```
 
-### Create and validate a memory package
+### Create and validate a note node
 
 ```bash
 pa memory new repo-notes \

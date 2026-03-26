@@ -900,7 +900,7 @@ export function Sidebar() {
           onToggle={() => setKnowledgeExpanded((current) => !current)}
         >
           <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
-          <SidebarSubNavItem to="/memories" label="Memories" active={knowledgeMemoriesActive} />
+          <SidebarSubNavItem to="/memories" label="Notes" active={knowledgeMemoriesActive} />
           <SidebarSubNavItem to="/skills" label="Skills" active={knowledgeSkillsActive} />
           <SidebarSubNavItem to="/instructions" label="Instructions" active={knowledgeInstructionsActive} />
         </SidebarNavGroup>

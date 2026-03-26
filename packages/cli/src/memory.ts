@@ -46,21 +46,21 @@ function isMemoryHelpToken(value: string | undefined): boolean {
 }
 
 function printMemoryHelp(): void {
-  console.log(section('Memory commands'));
+  console.log(section('Note node commands'));
   console.log('');
   console.log(`Usage: pa memory [list|find|show|new|lint|help]
 
 Commands:
   list [--json]
-                           List parsed shared memory packages
+                           List parsed shared note nodes
   find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]
-                           Filter shared memory packages by metadata fields
+                           Filter shared note nodes by metadata fields
   show <id> [--json]
-                           Show one memory package and metadata
+                           Show one note node and metadata
   new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]
-                           Create a new shared memory package scaffold with MEMORY.md frontmatter
+                           Create a new shared note node scaffold with INDEX.md frontmatter
   lint [--json]
-                           Validate shared memory package frontmatter, duplicate ids, and broken memory references
+                           Validate shared note node frontmatter, duplicate ids, and broken note links
   help                     Show memory help
 `);
 }
@@ -107,11 +107,11 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Memory packages'));
-    console.log(keyValue('Memory dir', loaded.memoryDir));
+    console.log(section('Note nodes'));
+    console.log(keyValue('Notes dir', loaded.memoryDir));
 
     if (loaded.docs.length === 0) {
-      console.log(dim('No memory packages found.'));
+      console.log(dim('No note nodes found.'));
     }
 
     for (const doc of loaded.docs) {
@@ -131,7 +131,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -321,8 +321,8 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Memory package search'));
-    console.log(keyValue('Memory dir', loaded.memoryDir));
+    console.log(section('Note node search'));
+    console.log(keyValue('Notes dir', loaded.memoryDir));
     console.log(keyValue('Tag filters', tagFilters.length > 0 ? tagFilters.join(', ') : 'none'));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
     console.log(keyValue('Status filter', statusFilter ?? 'none'));
@@ -332,7 +332,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Text filter', textFilter ?? 'none'));
 
     if (filteredDocs.length === 0) {
-      console.log(dim('No memory packages matched the supplied filters.'));
+      console.log(dim('No note nodes matched the supplied filters.'));
     }
 
     for (const doc of filteredDocs) {
@@ -352,7 +352,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -398,7 +398,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section(`Memory package: ${doc.id}`));
+    console.log(section(`Note node: ${doc.id}`));
     console.log(keyValue('Title', doc.title));
     console.log(keyValue('Type', doc.type));
     console.log(keyValue('Status', doc.status));
@@ -417,7 +417,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -672,7 +672,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Memory package ${payload.overwritten ? 'updated' : 'created'}`));
+    console.log(section(`Note node ${payload.overwritten ? 'updated' : 'created'}`));
     console.log(keyValue('ID', payload.id));
     console.log(keyValue('File', payload.filePath));
     console.log(keyValue('Type', payload.type));
@@ -685,7 +685,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Updated', payload.updated));
 
     console.log('');
-    console.log(success(`Memory package ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
+    console.log(success(`Note node ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
     console.log(`  ${formatHint(`Edit ${payload.filePath} to add details`)}`);
     return 0;
   }
@@ -711,8 +711,8 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return hasIssues ? 1 : 0;
     }
 
-    console.log(section('Memory validation'));
-    console.log(keyValue('Memory dir', payload.memoryDir));
+    console.log(section('Note node validation'));
+    console.log(keyValue('Notes dir', payload.memoryDir));
     console.log(keyValue('Docs parsed', payload.validDocs));
     console.log(keyValue('Parse errors', payload.parseErrors.length));
     console.log(keyValue('Duplicate ids', payload.duplicateIds.length));
@@ -720,7 +720,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (!hasIssues) {
       console.log('');
-      console.log(success('All memory packages are valid'));
+      console.log(success('All note nodes are valid'));
       return 0;
     }
 

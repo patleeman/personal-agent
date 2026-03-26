@@ -1,7 +1,17 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getDurableMemoryDir, getDurableProfilesDir } from './runtime/paths.js';
+import { getDurableNotesDir, getDurableProfilesDir } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {
   profilesRoot?: string;
@@ -17,27 +27,266 @@ export interface LegacyMemoryMigrationResult {
   migratedFiles: LegacyMemoryMigrationRecord[];
 }
 
+interface ParsedFrontmatter {
+  attributes: Record<string, unknown>;
+  body: string;
+}
+
 function resolveProfilesRootForMemory(options: ResolveMemoryDocsOptions = {}): string {
   return resolve(options.profilesRoot ?? getDurableProfilesDir());
 }
 
 export function getMemoryDocsDir(options: ResolveMemoryDocsOptions = {}): string {
-  return getDurableMemoryDir(dirname(resolveProfilesRootForMemory(options)));
+  return getDurableNotesDir(dirname(resolveProfilesRootForMemory(options)));
 }
 
-function listLegacyProfileMemoryDirs(profilesRoot: string): string[] {
+function resolveLegacyMemoryDir(options: ResolveMemoryDocsOptions = {}): string {
+  return join(dirname(resolveProfilesRootForMemory(options)), 'memory');
+}
+
+function parseFrontmatter(rawContent: string): ParsedFrontmatter | null {
+  const normalized = rawContent.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    return null;
+  }
+
+  const document = parseDocument(match[1] ?? '', {
+    prettyErrors: true,
+    uniqueKeys: true,
+  });
+
+  if (document.errors.length > 0) {
+    return null;
+  }
+
+  const parsed = document.toJS({ mapAsMap: false }) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return null;
+  }
+
+  return {
+    attributes: parsed as Record<string, unknown>,
+    body: (match[2] ?? '').replace(/^\n+/, ''),
+  };
+}
+
+function stringifyMarkdown(frontmatter: Record<string, unknown>, body: string): string {
+  const frontmatterText = stringify(frontmatter, {
+    lineWidth: 0,
+    indent: 2,
+    minContentWidth: 0,
+  }).trimEnd();
+  const normalizedBody = body.replace(/\r\n/g, '\n').trim();
+  return `---\n${frontmatterText}\n---\n\n${normalizedBody.length > 0 ? `${normalizedBody}\n` : ''}`;
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value
+    .map((entry) => readOptionalString(entry))
+    .filter((entry): entry is string => Boolean(entry)))];
+}
+
+function extractMarkdownTitle(body: string): string | undefined {
+  const match = body.match(/^#\s+(.+)$/m);
+  const title = match?.[1]?.trim();
+  return title && title.length > 0 ? title : undefined;
+}
+
+function extractFirstParagraph(body: string): string | undefined {
+  const paragraphs = body
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .filter((paragraph) => !paragraph.startsWith('#'));
+
+  const first = paragraphs[0];
+  if (!first) {
+    return undefined;
+  }
+
+  return first.replace(/\s+/g, ' ').trim() || undefined;
+}
+
+function humanizeId(value: string): string {
+  return value
+    .split('-')
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id: string; content: string } {
+  const parsed = parseFrontmatter(rawContent);
+  if (!parsed) {
+    const title = humanizeId(fallbackId);
+    const summary = extractFirstParagraph(rawContent) ?? `Durable note for ${title}.`;
+    return {
+      id: fallbackId,
+      content: stringifyMarkdown({
+        id: fallbackId,
+        kind: 'note',
+        title,
+        summary,
+        status: 'active',
+      }, rawContent.trim().length > 0 ? rawContent : `# ${title}\n\n${summary}`),
+    };
+  }
+
+  const attributes = parsed.attributes;
+  const metadataValue = attributes.metadata;
+  const metadata = metadataValue && typeof metadataValue === 'object' && !Array.isArray(metadataValue)
+    ? { ...(metadataValue as Record<string, unknown>) }
+    : {};
+
+  if (readOptionalString(attributes.kind) === 'note') {
+    const id = readOptionalString(attributes.id) ?? fallbackId;
+    const title = readOptionalString(attributes.title) ?? extractMarkdownTitle(parsed.body) ?? humanizeId(id);
+    const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(parsed.body) ?? `Durable note for ${title}.`;
+    const status = readOptionalString(attributes.status) ?? 'active';
+    const tags = readStringArray(attributes.tags);
+    const related = readStringArray((attributes.links as Record<string, unknown> | undefined)?.related);
+    const parent = readOptionalString((attributes.links as Record<string, unknown> | undefined)?.parent);
+    const updatedAt = readOptionalString(attributes.updatedAt);
+    const frontmatter: Record<string, unknown> = {
+      ...attributes,
+      id,
+      kind: 'note',
+      title,
+      summary,
+      status,
+      ...(tags.length > 0 ? { tags } : {}),
+      ...((parent || related.length > 0)
+        ? {
+            links: {
+              ...(parent ? { parent } : {}),
+              ...(related.length > 0 ? { related } : {}),
+            },
+          }
+        : {}),
+      ...(updatedAt ? { updatedAt } : {}),
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    };
+    return {
+      id,
+      content: stringifyMarkdown(frontmatter, parsed.body.trim().length > 0 ? parsed.body : `# ${title}\n\n${summary}`),
+    };
+  }
+
+  const legacyId = readOptionalString(attributes.name)
+    ?? readOptionalString(attributes.id)
+    ?? fallbackId;
+  const legacySummary = readOptionalString(attributes.description)
+    ?? readOptionalString(attributes.summary)
+    ?? extractFirstParagraph(parsed.body)
+    ?? `Durable note for ${humanizeId(legacyId)}.`;
+  const legacyTitle = readOptionalString(metadata.title)
+    ?? readOptionalString(attributes.title)
+    ?? extractMarkdownTitle(parsed.body)
+    ?? humanizeId(legacyId);
+  const legacyStatus = readOptionalString(metadata.status)
+    ?? readOptionalString(attributes.status)
+    ?? 'active';
+  const legacyType = readOptionalString(metadata.type)
+    ?? readOptionalString(attributes.type);
+  const legacyArea = readOptionalString(metadata.area)
+    ?? readOptionalString(attributes.area);
+  const legacyRole = readOptionalString(metadata.role)
+    ?? readOptionalString(attributes.role);
+  const legacyParent = readOptionalString(metadata.parent)
+    ?? readOptionalString(attributes.parent);
+  const legacyRelated = [
+    ...readStringArray(metadata.related),
+    ...readStringArray(attributes.related),
+  ];
+  const legacyTags = [
+    ...readStringArray(metadata.tags),
+    ...readStringArray(attributes.tags),
+  ];
+  const updatedAt = readOptionalString(metadata.updated)
+    ?? readOptionalString(attributes.updatedAt)
+    ?? readOptionalString(attributes.updated);
+
+  const extraMetadata = { ...metadata };
+  delete extraMetadata.title;
+  delete extraMetadata.status;
+  delete extraMetadata.type;
+  delete extraMetadata.area;
+  delete extraMetadata.role;
+  delete extraMetadata.parent;
+  delete extraMetadata.related;
+  delete extraMetadata.tags;
+  delete extraMetadata.updated;
+
+  const tags = [...new Set([
+    ...legacyTags,
+    ...(legacyRole === 'hub' || legacyRole === 'structure' ? ['structure'] : []),
+  ])];
+
+  const nextMetadata: Record<string, unknown> = {
+    ...(legacyType ? { type: legacyType } : {}),
+    ...(legacyArea ? { area: legacyArea } : {}),
+    ...extraMetadata,
+  };
+
+  return {
+    id: legacyId,
+    content: stringifyMarkdown({
+      id: legacyId,
+      kind: 'note',
+      title: legacyTitle,
+      summary: legacySummary,
+      status: legacyStatus,
+      ...(tags.length > 0 ? { tags } : {}),
+      ...((legacyParent || legacyRelated.length > 0)
+        ? {
+            links: {
+              ...(legacyParent ? { parent: legacyParent } : {}),
+              ...(legacyRelated.length > 0 ? { related: legacyRelated } : {}),
+            },
+          }
+        : {}),
+      ...(updatedAt ? { updatedAt } : {}),
+      ...(Object.keys(nextMetadata).length > 0 ? { metadata: nextMetadata } : {}),
+    }, parsed.body.trim().length > 0 ? parsed.body : `# ${legacyTitle}\n\n${legacySummary}`),
+  };
+}
+
+function listLegacyProfileMemoryFiles(profilesRoot: string): string[] {
   if (!existsSync(profilesRoot)) {
     return [];
   }
 
   return readdirSync(profilesRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== '_memory')
-    .map((entry) => join(profilesRoot, entry.name, 'agent', 'memory'))
-    .filter((dirPath) => existsSync(dirPath))
+    .flatMap((entry) => {
+      const memoryDir = join(profilesRoot, entry.name, 'agent', 'memory');
+      if (!existsSync(memoryDir)) {
+        return [];
+      }
+
+      return readdirSync(memoryDir, { withFileTypes: true })
+        .filter((file) => file.isFile() && file.name.endsWith('.md'))
+        .map((file) => join(memoryDir, file.name));
+    })
     .sort();
 }
 
-function listFlatGlobalMemoryFiles(memoryDir: string): string[] {
+function listFlatLegacySharedMemoryFiles(memoryDir: string): string[] {
   if (!existsSync(memoryDir)) {
     return [];
   }
@@ -49,284 +298,106 @@ function listFlatGlobalMemoryFiles(memoryDir: string): string[] {
 }
 
 function removeDirIfEmpty(path: string): void {
-  if (!existsSync(path)) {
+  if (!existsSync(path) || !statSync(path).isDirectory()) {
     return;
   }
 
-  if (readdirSync(path).length > 0) {
-    return;
+  if (readdirSync(path).length === 0) {
+    rmSync(path, { recursive: true, force: true });
   }
-
-  rmSync(path, { recursive: true, force: true });
 }
 
-function resolveMigrationConflictBackupPath(filePath: string): string {
-  let candidate = `${filePath}.migration-conflict.bak`;
-  let suffix = 2;
-
-  while (existsSync(candidate)) {
-    candidate = `${filePath}.migration-conflict.${suffix}.bak`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function splitFrontmatter(rawContent: string): { frontmatter?: string; body: string } {
-  const normalized = rawContent.replace(/\r\n/g, '\n');
-  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) {
-    return { body: normalized };
-  }
-
-  return {
-    frontmatter: match[1] ?? '',
-    body: match[2] ?? '',
-  };
-}
-
-function parseFrontmatterObject(rawContent: string): Record<string, unknown> | null {
-  const split = splitFrontmatter(rawContent);
-  if (!split.frontmatter) {
-    return null;
-  }
-
-  const document = parseDocument(split.frontmatter, {
-    prettyErrors: true,
-    uniqueKeys: true,
-  });
-
-  if (document.errors.length > 0) {
-    return null;
-  }
-
-  const parsed = document.toJS({ mapAsMap: false }) as unknown;
-  return isRecord(parsed) ? parsed : null;
-}
-
-function trimOptionalString(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function stringifyMemoryMarkdown(frontmatter: Record<string, unknown>, body: string): string {
-  const frontmatterText = stringify(frontmatter).trimEnd();
-  const normalizedBody = body.replace(/^\n+/, '');
-  return `---\n${frontmatterText}\n---\n\n${normalizedBody.replace(/\s*$/, '\n')}`;
-}
-
-function normalizeLegacyMemoryMarkdown(rawContent: string, fallbackName: string): { packageName: string; content: string } {
-  const frontmatter = parseFrontmatterObject(rawContent);
-  if (!frontmatter) {
-    return {
-      packageName: fallbackName,
-      content: rawContent,
-    };
-  }
-
-  const newName = trimOptionalString(frontmatter.name);
-  const newDescription = trimOptionalString(frontmatter.description);
-  if (newName && newDescription) {
-    return {
-      packageName: newName,
-      content: rawContent,
-    };
-  }
-
-  const legacyId = trimOptionalString(frontmatter.id);
-  const legacySummary = trimOptionalString(frontmatter.summary);
-  if (!legacyId || !legacySummary) {
-    return {
-      packageName: fallbackName,
-      content: rawContent,
-    };
-  }
-
-  const legacyTitle = trimOptionalString(frontmatter.title);
-  const split = splitFrontmatter(rawContent);
-  const metadata: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(frontmatter)) {
-    if (key === 'id' || key === 'summary') {
-      continue;
-    }
-
-    if (key === 'title') {
-      if (legacyTitle) {
-        metadata.title = legacyTitle;
-      }
-      continue;
-    }
-
-    metadata[key] = value;
-  }
-
-  const nextFrontmatter: Record<string, unknown> = {
-    name: legacyId,
-    description: legacySummary,
-  };
-
-  if (Object.keys(metadata).length > 0) {
-    nextFrontmatter.metadata = metadata;
-  }
-
-  const body = split.body.trim().length > 0
-    ? split.body.replace(/^\n+/, '')
-    : `# ${legacyTitle ?? legacyId}\n\n${legacySummary}\n`;
-
-  return {
-    packageName: legacyId,
-    content: stringifyMemoryMarkdown(nextFrontmatter, body),
-  };
-}
-
-function collectLegacyMemoryFiles(profilesRoot: string): Array<{ filePath: string; sourceDir?: string }> {
-  const memoryDir = getMemoryDocsDir({ profilesRoot });
-  const files: Array<{ filePath: string; sourceDir?: string }> = [];
-
-  for (const legacyDir of listLegacyProfileMemoryDirs(profilesRoot)) {
-    const entries = readdirSync(legacyDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-      .map((entry) => ({ filePath: join(legacyDir, entry.name), sourceDir: legacyDir }));
-    files.push(...entries);
-  }
-
-  files.push(...listFlatGlobalMemoryFiles(memoryDir).map((filePath) => ({ filePath })));
-
-  return files.sort((left, right) => left.filePath.localeCompare(right.filePath));
-}
-
-function readMemoryPackageInfo(memoryFile: string): { name: string; role?: string; parent?: string } | null {
+function migrateLegacyMemoryPackageDir(sourceDir: string, notesDir: string): LegacyMemoryMigrationRecord | null {
+  const memoryFile = join(sourceDir, 'MEMORY.md');
   if (!existsSync(memoryFile)) {
     return null;
   }
 
-  const frontmatter = parseFrontmatterObject(readFileSync(memoryFile, 'utf-8'));
-  if (!frontmatter) {
-    return null;
+  const normalized = normalizeNoteNodeMarkdown(readFileSync(memoryFile, 'utf-8'), basename(sourceDir));
+  const targetDir = join(notesDir, normalized.id);
+  const targetIndex = join(targetDir, 'INDEX.md');
+
+  if (!existsSync(targetDir)) {
+    mkdirSync(dirname(targetDir), { recursive: true });
+    renameSync(sourceDir, targetDir);
+  } else {
+    mkdirSync(targetDir, { recursive: true });
+    for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
+      if (entry.name === 'MEMORY.md') {
+        continue;
+      }
+
+      const sourcePath = join(sourceDir, entry.name);
+      const targetPath = join(targetDir, entry.name);
+      if (existsSync(targetPath)) {
+        continue;
+      }
+
+      cpSync(sourcePath, targetPath, { recursive: true });
+    }
+    rmSync(sourceDir, { recursive: true, force: true });
   }
 
-  const metadata = isRecord(frontmatter.metadata) ? frontmatter.metadata : frontmatter;
-  const name = trimOptionalString(frontmatter.name) ?? basename(dirname(memoryFile));
-  if (!name) {
-    return null;
+  const migratedLegacyIndex = join(targetDir, 'MEMORY.md');
+  if (existsSync(migratedLegacyIndex)) {
+    rmSync(migratedLegacyIndex, { force: true });
   }
 
-  return {
-    name,
-    role: trimOptionalString((metadata as Record<string, unknown>).role),
-    parent: trimOptionalString((metadata as Record<string, unknown>).parent),
-  };
+  writeFileSync(targetIndex, normalized.content, 'utf-8');
+  return { from: memoryFile, to: targetIndex };
 }
 
-function relocateNestedMemoryPackages(memoryDir: string): LegacyMemoryMigrationRecord[] {
-  if (!existsSync(memoryDir)) {
-    return [];
-  }
-
-  const packageDirs = readdirSync(memoryDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join(memoryDir, entry.name))
-    .sort();
-  const migratedFiles: LegacyMemoryMigrationRecord[] = [];
-
-  for (const packageDir of packageDirs) {
-    const memoryFile = join(packageDir, 'MEMORY.md');
-    const info = readMemoryPackageInfo(memoryFile);
-    if (!info || (info.role !== 'canonical' && info.role !== 'capture') || !info.parent) {
-      continue;
-    }
-
-    const parentMemoryFile = join(memoryDir, info.parent, 'MEMORY.md');
-    if (!existsSync(parentMemoryFile)) {
-      continue;
-    }
-
-    const targetPath = join(memoryDir, info.parent, 'references', `${info.name}.md`);
-    const sourceContent = readFileSync(memoryFile, 'utf-8');
-
-    if (existsSync(targetPath)) {
-      const targetContent = readFileSync(targetPath, 'utf-8');
-      if (targetContent !== sourceContent) {
-        writeFileSync(resolveMigrationConflictBackupPath(memoryFile), sourceContent, 'utf-8');
-      }
-      rmSync(packageDir, { recursive: true, force: true });
-      migratedFiles.push({ from: memoryFile, to: targetPath });
-      continue;
-    }
-
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, sourceContent, 'utf-8');
-    rmSync(packageDir, { recursive: true, force: true });
-    migratedFiles.push({ from: memoryFile, to: targetPath });
-  }
-
-  return migratedFiles;
+function migrateLooseLegacyMemoryFile(sourcePath: string, notesDir: string): LegacyMemoryMigrationRecord | null {
+  const normalized = normalizeNoteNodeMarkdown(readFileSync(sourcePath, 'utf-8'), basename(sourcePath, '.md'));
+  const targetDir = join(notesDir, normalized.id);
+  const targetIndex = join(targetDir, 'INDEX.md');
+  mkdirSync(targetDir, { recursive: true });
+  writeFileSync(targetIndex, normalized.content, 'utf-8');
+  rmSync(sourcePath, { force: true });
+  removeDirIfEmpty(dirname(sourcePath));
+  return { from: sourcePath, to: targetIndex };
 }
 
 export function migrateLegacyProfileMemoryDirs(options: ResolveMemoryDocsOptions = {}): LegacyMemoryMigrationResult {
   const profilesRoot = resolveProfilesRootForMemory(options);
-  const memoryDir = getMemoryDocsDir({ profilesRoot });
+  const notesDir = getMemoryDocsDir({ profilesRoot });
+  const legacySyncMemoryDir = resolveLegacyMemoryDir({ profilesRoot });
   const migratedFiles: LegacyMemoryMigrationRecord[] = [];
-  const legacyFiles = collectLegacyMemoryFiles(profilesRoot);
 
-  mkdirSync(memoryDir, { recursive: true });
+  mkdirSync(notesDir, { recursive: true });
 
-  for (const { filePath, sourceDir } of legacyFiles) {
-    const rawContent = readFileSync(filePath, 'utf-8');
-    const normalized = normalizeLegacyMemoryMarkdown(rawContent, basename(filePath, '.md'));
-    const packageDir = join(memoryDir, normalized.packageName);
-    const targetPath = join(packageDir, 'MEMORY.md');
+  if (existsSync(legacySyncMemoryDir) && resolve(legacySyncMemoryDir) !== resolve(notesDir)) {
+    const legacyPackages = readdirSync(legacySyncMemoryDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => join(legacySyncMemoryDir, entry.name))
+      .sort();
 
-    if (resolve(filePath) === resolve(targetPath)) {
-      if (normalized.content !== rawContent) {
-        writeFileSync(targetPath, normalized.content, 'utf-8');
+    for (const packageDir of legacyPackages) {
+      const migrated = migrateLegacyMemoryPackageDir(packageDir, notesDir);
+      if (migrated) {
+        migratedFiles.push(migrated);
       }
-      continue;
     }
 
-    if (existsSync(targetPath)) {
-      const targetContent = readFileSync(targetPath, 'utf-8');
-
-      if (targetContent === normalized.content) {
-        rmSync(filePath, { force: true });
-        if (sourceDir) {
-          removeDirIfEmpty(sourceDir);
-        }
-        continue;
+    for (const filePath of listFlatLegacySharedMemoryFiles(legacySyncMemoryDir)) {
+      const migrated = migrateLooseLegacyMemoryFile(filePath, notesDir);
+      if (migrated) {
+        migratedFiles.push(migrated);
       }
-
-      const backupPath = resolveMigrationConflictBackupPath(filePath);
-      writeFileSync(backupPath, rawContent, 'utf-8');
-      rmSync(filePath, { force: true });
-      if (sourceDir) {
-        removeDirIfEmpty(sourceDir);
-      }
-      continue;
     }
 
-    mkdirSync(packageDir, { recursive: true });
-    writeFileSync(targetPath, normalized.content, 'utf-8');
-    rmSync(filePath, { force: true });
-    migratedFiles.push({ from: filePath, to: targetPath });
+    removeDirIfEmpty(legacySyncMemoryDir);
+  }
 
-    if (sourceDir) {
-      removeDirIfEmpty(sourceDir);
+  for (const filePath of listLegacyProfileMemoryFiles(profilesRoot)) {
+    const migrated = migrateLooseLegacyMemoryFile(filePath, notesDir);
+    if (migrated) {
+      migratedFiles.push(migrated);
     }
   }
 
-  migratedFiles.push(...relocateNestedMemoryPackages(memoryDir));
-
   return {
-    memoryDir,
+    memoryDir: notesDir,
     migratedFiles,
   };
 }

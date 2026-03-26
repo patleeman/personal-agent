@@ -39,7 +39,7 @@ export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, strin
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  memories: 'Memories',
+  memories: 'Notes',
   tasks: 'Scheduled tasks',
   projects: 'Projects',
 };
@@ -49,7 +49,7 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'memories', label: 'Memories' },
+  { value: 'memories', label: 'Notes' },
   { value: 'tasks', label: 'Scheduled' },
   { value: 'projects', label: 'Projects' },
 ];

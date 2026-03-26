@@ -20,7 +20,7 @@ Good fits:
 
 Do not confuse scheduled tasks with:
 
-- **project tasks** in `PROJECT.yaml` — those are planning/checklist items
+- **project tasks** in `state.yaml` — those are planning/checklist items
 - **durable background runs** — those are detached jobs launched on demand with `pa runs start`
 
 ## Where task files live

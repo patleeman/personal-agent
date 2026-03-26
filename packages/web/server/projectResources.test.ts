@@ -57,7 +57,7 @@ describe('projectResources', () => {
 
     const brief = readProjectBrief({ repoRoot, profile: 'datadog', projectId: 'briefs' });
     expect(brief?.content).toContain('A durable brief.');
-    expect(brief?.path).toContain('BRIEF.md');
+    expect(brief?.path).toContain('INDEX.md');
   });
 
   it('creates, updates, lists, and deletes project notes', () => {
@@ -76,7 +76,7 @@ describe('projectResources', () => {
       projectId: 'notes',
       title: 'Capture the decision',
       kind: 'decision',
-      body: 'Keep project briefs in BRIEF.md.',
+      body: 'Keep project briefs in INDEX.md.',
     });
 
     const updated = updateProjectNoteRecord({
@@ -84,7 +84,7 @@ describe('projectResources', () => {
       profile: 'datadog',
       projectId: 'notes',
       noteId: created.id,
-      body: 'Keep project briefs in BRIEF.md and regenerate them on demand.',
+      body: 'Keep project briefs in INDEX.md and regenerate them on demand.',
     });
 
     expect(updated.body).toContain('regenerate them on demand');

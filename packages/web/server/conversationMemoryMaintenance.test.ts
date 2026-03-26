@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationMemoryWorkItemsFromStates,
+  isConversationMemoryDistillRecoveryTitle,
   markConversationMemoryMaintenanceRunCompleted,
   markConversationMemoryMaintenanceRunStarted,
   prepareConversationMemoryMaintenance,
@@ -32,6 +33,12 @@ afterEach(() => {
 });
 
 describe('conversationMemoryMaintenance', () => {
+  it('recognizes memory distillation recovery branch titles', () => {
+    expect(isConversationMemoryDistillRecoveryTitle('Recover node distillation: Fix durable session path regression')).toBe(true);
+    expect(isConversationMemoryDistillRecoveryTitle('Fix durable session path regression')).toBe(false);
+    expect(isConversationMemoryDistillRecoveryTitle(undefined)).toBe(false);
+  });
+
   it('captures checkpoints for all conversations and records no-promotion when auto mode is not eligible', () => {
     const stateRoot = createTempStateRoot();
     const sessionFile = join(stateRoot, 'session.jsonl');

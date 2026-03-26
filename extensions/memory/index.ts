@@ -1,4 +1,4 @@
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
@@ -101,7 +101,7 @@ function resolveProfileDir(profilesRoot: string, profile: string): string {
 }
 
 function resolveMemoryDir(profilesRoot: string): string {
-  return join(profilesRoot, '_memory');
+  return join(dirname(profilesRoot), 'notes');
 }
 
 function toDisplayPath(cwd: string, path: string): string {
@@ -117,18 +117,6 @@ interface MemoryDefinition {
   name: string;
   description: string;
   path: string;
-  role?: string;
-}
-
-function extractMemoryRole(content: string): string | undefined {
-  const frontmatter = extractFrontmatterBlock(content);
-  if (!frontmatter) {
-    return undefined;
-  }
-
-  const match = frontmatter.match(/^\s*role:\s*["']?([^"'\n]+)["']?\s*$/m);
-  const role = match?.[1]?.trim().toLowerCase();
-  return role && role.length > 0 ? role : undefined;
 }
 
 function extractFrontmatterBlock(content: string): string | null {
@@ -180,7 +168,7 @@ function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[
       continue;
     }
 
-    const memoryFile = join(memoryDir, entry.name, 'MEMORY.md');
+    const memoryFile = join(memoryDir, entry.name, 'INDEX.md');
     if (!existsSync(memoryFile)) {
       continue;
     }
@@ -188,8 +176,13 @@ function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[
     try {
       const content = readFileSync(memoryFile, 'utf-8');
       const frontmatter = parseMarkdownFrontmatter(content);
-      const name = (frontmatter.name ?? basename(entry.name)).trim();
-      const description = (frontmatter.description ?? '').trim();
+      const kind = (frontmatter.kind ?? '').trim().toLowerCase();
+      if (kind !== 'note') {
+        continue;
+      }
+
+      const name = (frontmatter.id ?? basename(entry.name)).trim();
+      const description = (frontmatter.summary ?? frontmatter.description ?? '').trim();
       if (!name || !description) {
         continue;
       }
@@ -198,33 +191,30 @@ function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[
         name,
         description,
         path: memoryFile,
-        role: extractMemoryRole(content),
       });
     } catch {
-      // Ignore malformed memory packages in the prompt-time hint list.
+      // Ignore malformed note nodes in the prompt-time hint list.
     }
   }
 
-  const preferred = discovered.filter((memory) => !memory.role || memory.role === 'hub');
-  const visible = preferred.length > 0 ? preferred : discovered;
-  return visible.sort((left, right) => left.name.localeCompare(right.name));
+  return discovered.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function buildAvailableMemoriesSection(cwd: string, memoryDir: string | undefined): string {
   const memories = listAvailableMemories(memoryDir);
   if (memories.length === 0) {
-    return 'No shared memory packages found.';
+    return 'No shared note nodes found.';
   }
 
   return [
-    '<available_memories>',
+    '<available_notes>',
     ...memories.map((memory) => [
-      `  <memory name="${memory.name}" location="${toDisplayPath(cwd, memory.path)}">`,
+      `  <note id="${memory.name}" location="${toDisplayPath(cwd, memory.path)}">`,
       `    ${memory.description}`,
-      '  </memory>',
+      '  </note>',
     ].join('\n')),
-    '</available_memories>',
-    'Memories are durable knowledge hubs packaged like skills. Read the matching MEMORY.md when the user refers to that area, then follow relative references inside the memory directory.',
+    '</available_notes>',
+    'Notes are durable knowledge nodes. Read the matching INDEX.md when the user refers to that area, then follow relative references inside the note directory.',
   ].join('\n');
 }
 
@@ -294,12 +284,12 @@ function buildMemoryTemplateVariables(options: {
     : '';
 
   const memorySection = options.activeMemoryDir
-    ? `- Global memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory package template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<memory-name>', 'MEMORY.md'))}`
-    : '- Global memory dir: unavailable';
+    ? `- Shared notes dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Note node template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<note-id>', 'INDEX.md'))}`
+    : '- Shared notes dir: unavailable';
 
   const memoryRetrievalSection = options.activeMemoryDir
-    ? '- Load only the AGENTS, skills, and memory packages relevant to the request.\n- Retrieval order: AGENTS.md for durable policy, skills for reusable workflows, shared memory packages for durable knowledge.\n- Prefer targeted lookup over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint`.\n- Find/show before new; lint after creating or heavily editing memories.'
-    : '- Shared memory packages are unavailable; rely on AGENTS, skills, and repo docs instead.';
+    ? '- Load only the AGENTS, skills, and note nodes relevant to the request.\n- Retrieval order: AGENTS.md for durable policy, skills for reusable workflows, shared note nodes for durable knowledge.\n- Prefer targeted lookup over broad scans; do not read the whole notes directory unless the task genuinely requires it.\n- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint` to inspect note nodes.\n- Find/show before new; lint after creating or heavily editing note nodes.'
+    : '- Shared note nodes are unavailable; rely on AGENTS, skills, and repo docs instead.';
 
   const availableMemoriesSection = buildAvailableMemoriesSection(options.cwd, options.activeMemoryDir);
 

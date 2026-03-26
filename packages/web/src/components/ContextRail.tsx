@@ -397,7 +397,7 @@ function compactRunCardSummary(
     return null;
   }
 
-  if (/^(Live conversation|Conversation run|Background run|Deferred resume|Scheduled task|Shell run|Workflow|Conversation memory distillation)( · .+)?$/.test(trimmed)) {
+  if (/^(Live conversation|Conversation run|Background run|Deferred resume|Scheduled task|Shell run|Workflow|Conversation node distillation)( · .+)?$/.test(trimmed)) {
     return null;
   }
 
@@ -551,7 +551,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       const result = await api.retryMemoryDistillRun(run.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}${setConversationRunIdInSearch('', result.runId)}`);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not retry the memory distillation run.');
+      setActionError(error instanceof Error ? error.message : 'Could not retry the node distillation run.');
     } finally {
       setRetryingMemoryDistill(false);
     }
@@ -568,11 +568,11 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       const result = await api.recoverMemoryDistillRun(run.runId);
       persistForkPromptDraft(
         result.conversationId,
-        `Help me recover memory distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
+        `Help me recover node distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
       );
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this memory distillation run.');
+      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this node distillation run.');
     } finally {
       setOpeningMemoryRecovery(false);
     }
@@ -640,7 +640,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
         {recoverableMemoryDistill && (
           <div className="space-y-2 rounded-lg border border-border-subtle bg-surface px-3 py-3">
             <div className="space-y-1">
-              <p className="ui-section-label">Memory distillation recovery</p>
+              <p className="ui-section-label">Node distillation recovery</p>
               <p className="text-[12px] text-secondary">
                 Retry this failed distillation or open a recovery conversation with the source transcript and failure context loaded.
               </p>
@@ -2408,7 +2408,7 @@ function ProjectDetailContext({ id }: { id: string }) {
   );
 }
 
-// ── Managed memory packages ──────────────────────────────────────────────────
+// ── Managed note nodes ───────────────────────────────────────────────────────
 
 const MANAGED_MEMORY_ID_SEARCH_PARAM = 'memory';
 const MANAGED_MEMORY_FILE_SEARCH_PARAM = 'file';
@@ -2460,9 +2460,9 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
     [references, relativePath],
   );
   const selectedFilePath = selectedReference?.path ?? memory?.path ?? null;
-  const selectedFileLabel = selectedReference?.title ?? memory?.title ?? 'Memory';
+  const selectedFileLabel = selectedReference?.title ?? memory?.title ?? 'Note';
   const selectedFileSummary = selectedReference?.summary ?? memory?.summary ?? '';
-  const selectedFileRelativePath = selectedReference?.relativePath ?? 'MEMORY.md';
+  const selectedFileRelativePath = selectedReference?.relativePath ?? 'INDEX.md';
   const dirty = draft !== savedContent;
 
   useEffect(() => {
@@ -2567,7 +2567,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
       return;
     }
 
-    if (!window.confirm(`Delete memory package @${memory.id}? This removes the full package, including references and assets.`)) {
+    if (!window.confirm(`Delete note node @${memory.id}? This removes the full node, including references and assets.`)) {
       return;
     }
 
@@ -2603,15 +2603,15 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   }
 
   if (loading && !data) {
-    return <LoadingState label="Loading memory…" className="px-4 py-4" />;
+    return <LoadingState label="Loading note…" className="px-4 py-4" />;
   }
 
   if (error && !data) {
-    return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
+    return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
   }
 
   if (!memory) {
-    return <div className="px-4 py-4 text-[12px] text-dim">Memory not found.</div>;
+    return <div className="px-4 py-4 text-[12px] text-dim">Note not found.</div>;
   }
 
   return (
@@ -2717,14 +2717,14 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <div className="space-y-1">
             <p className="ui-section-label">Package files</p>
-            <p className="ui-card-meta">Browse `MEMORY.md` and package-local references. Assets remain on disk inside `assets/`.</p>
+            <p className="ui-card-meta">Browse `INDEX.md` and package-local references. Assets remain on disk inside `assets/`.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Link
               to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`}
               className={relativePath ? 'ui-toolbar-button' : 'ui-toolbar-button text-accent'}
             >
-              MEMORY.md
+              INDEX.md
             </Link>
             {references.map((reference) => (
               <Link
@@ -2910,8 +2910,8 @@ function MemoryFileContext({ path }: { path: string }) {
 function MemoryOverviewContext() {
   const { data, loading, error } = useApi(api.memory);
 
-  if (loading) return <LoadingState label="Loading memory…" className="px-4 py-4" />;
-  if (error) return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
+  if (loading) return <LoadingState label="Loading note…" className="px-4 py-4" />;
+  if (error) return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
   if (!data) return null;
 
   const summary = buildMemoryPageSummary(data);
@@ -2922,7 +2922,7 @@ function MemoryOverviewContext() {
   return (
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
-        <p className="ui-card-title">Agent memory</p>
+        <p className="ui-card-title">Agent nodes</p>
         <p className="ui-card-meta">Select an item on the left to inspect the raw markdown.</p>
       </div>
 
@@ -3153,8 +3153,8 @@ function KnowledgeOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Memories</p>
-          <p className="ui-card-meta">Select a memory package on the left to inspect its overview and package-local references.</p>
+          <p className="ui-card-title">Notes</p>
+          <p className="ui-card-meta">Select a note node on the left to inspect its overview and package-local references.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Packages" value={memories.length} />
@@ -3162,7 +3162,7 @@ function KnowledgeOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recent packages</p>
-          {memories.length === 0 ? <p className="ui-card-meta">No memory packages available.</p> : memories.slice(0, 5).map((memory) => (
+          {memories.length === 0 ? <p className="ui-card-meta">No note nodes available.</p> : memories.slice(0, 5).map((memory) => (
             <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'memories', memoryId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{memory.title}</p>
               <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
@@ -3178,7 +3178,7 @@ function KnowledgeOverviewContext({
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
           <p className="ui-card-title">Skills</p>
-          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its SKILL.md definition.</p>
+          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its INDEX.md definition.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Available" value={skills.length} />
@@ -3225,12 +3225,12 @@ function KnowledgeOverviewContext({
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Knowledge Base</p>
-        <p className="ui-card-meta">Durable context lives here: projects, memory packages, skills, and instruction sources.</p>
+        <p className="ui-card-meta">Durable context lives here: project nodes, note nodes, skill nodes, and instruction sources.</p>
       </div>
 
       <div className="space-y-2">
         <RailMetadataRow label="Projects" value={activeProjects.length} />
-        <RailMetadataRow label="Memories" value={memories.length} />
+        <RailMetadataRow label="Notes" value={memories.length} />
         <RailMetadataRow label="Skills" value={skills.length} />
         <RailMetadataRow label="Instructions" value={instructions.length} />
       </div>
@@ -3294,9 +3294,9 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
 function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
   const { data, loading, error, refreshing, refetch } = useApi(() => api.memoryDoc(memoryId), `knowledge-memory-rail:${memoryId}`);
 
-  if (loading && !data) return <LoadingState label="Loading memory…" className="px-4 py-4" />;
-  if (error && !data) return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
-  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Memory not found.</div>;
+  if (loading && !data) return <LoadingState label="Loading note…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
+  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Note not found.</div>;
 
   return (
     <div className="flex h-full flex-col">
@@ -3916,7 +3916,7 @@ export function ContextRail() {
     if (memoryId) {
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Memory" sub={relativePath ? `@${memoryId} · ${relativePath}` : `@${memoryId}`} />
+          <RailHeader label="Notes" sub={relativePath ? `@${memoryId} · ${relativePath}` : `@${memoryId}`} />
           <div className="flex-1 overflow-y-auto">
             <MemoryDocContext memoryId={memoryId} relativePath={relativePath} />
           </div>
@@ -3926,8 +3926,8 @@ export function ContextRail() {
 
     return (
       <div className="flex-1 flex flex-col">
-        <RailHeader label="Memory" />
-        <EmptyPrompt text="Select a memory package to inspect its MEMORY.md, relationships, and package-local references." />
+        <RailHeader label="Notes" />
+        <EmptyPrompt text="Select a note node to inspect its INDEX.md, relationships, and package-local references." />
       </div>
     );
   }
@@ -3976,7 +3976,7 @@ export function ContextRail() {
       const fileName = itemPath.split('/').pop() ?? itemPath;
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Memory" sub={fileName} />
+          <RailHeader label="Notes" sub={fileName} />
           <div className="flex-1 overflow-y-auto">
             <MemoryFileContext path={itemPath} />
           </div>
@@ -3985,7 +3985,7 @@ export function ContextRail() {
     }
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Memory" />
+        <RailHeader label="Notes" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
         </div>

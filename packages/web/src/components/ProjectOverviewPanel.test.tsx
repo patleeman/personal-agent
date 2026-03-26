@@ -60,7 +60,7 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
       },
     ],
     brief: {
-      path: '/tmp/sidebar-refresh/BRIEF.md',
+      path: '/tmp/sidebar-refresh/INDEX.md',
       updatedAt: '2026-03-16T09:30:00.000Z',
       content: `# Sidebar refresh
 
@@ -137,7 +137,7 @@ describe('ProjectOverviewPanel', () => {
         <ProjectOverviewPanel
           project={createProjectDetail({
             brief: {
-              path: '/tmp/sidebar-refresh/BRIEF.md',
+              path: '/tmp/sidebar-refresh/INDEX.md',
               updatedAt: '2026-03-16T09:30:00.000Z',
               content: '# Sidebar refresh\n\n## Requirements\n\nUse `/Users/patrick/sidebar-refresh/notes.md` when reviewing copy.',
             },
@@ -158,7 +158,7 @@ describe('ProjectOverviewPanel', () => {
         <ProjectOverviewPanel
           project={createProjectDetail({
             brief: {
-              path: '/tmp/sidebar-refresh/BRIEF.md',
+              path: '/tmp/sidebar-refresh/INDEX.md',
               updatedAt: '2026-03-16T09:30:00.000Z',
               content: `# Sidebar refresh
 

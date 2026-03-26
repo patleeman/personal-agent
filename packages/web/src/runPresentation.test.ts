@@ -430,8 +430,8 @@ describe('runPresentation', () => {
     });
 
     expect(getRunHeadline(run, { sessions })).toEqual({
-      title: 'Distill memory: Memory pipeline cleanup',
-      summary: 'Conversation memory distillation',
+      title: 'Distill node: Memory pipeline cleanup',
+      summary: 'Conversation node distillation',
     });
   });
 

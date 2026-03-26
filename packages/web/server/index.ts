@@ -130,6 +130,8 @@ import {
 } from './conversationMemoryActivity.js';
 import {
   buildConversationMemoryWorkItemsFromStates,
+  CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX,
+  isConversationMemoryDistillRecoveryTitle,
   listConversationMemoryMaintenanceStates,
   markConversationMemoryMaintenanceRunCompleted,
   markConversationMemoryMaintenanceRunFailed,
@@ -1270,7 +1272,7 @@ function buildConversationMemoryDistillRecoveryVisibleMessage(input: {
   error?: string;
 }): string {
   return [
-    `Run ${input.runId} did not finish its memory distillation.`,
+    `Run ${input.runId} did not finish its node distillation.`,
     `Status: ${input.status}`,
     `Source conversation: ${input.sourceConversationTitle ?? input.sourceConversationId}`,
     `Checkpoint: ${input.checkpointId}`,
@@ -1294,7 +1296,7 @@ function buildConversationMemoryDistillRecoveryHiddenContext(input: {
   error?: string;
 }): string {
   return [
-    'You are helping recover a conversation memory distillation that did not complete cleanly.',
+    'You are helping recover a conversation node distillation that did not complete cleanly.',
     '',
     'This conversation is a fork of the source conversation, so the relevant transcript history is already available above.',
     '',
@@ -1309,7 +1311,7 @@ function buildConversationMemoryDistillRecoveryHiddenContext(input: {
     input.tags && input.tags.length > 0 ? `- requested tags: ${input.tags.join(', ')}` : undefined,
     input.error ? `- last error: ${input.error}` : undefined,
     '',
-    'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable memory update.',
+    'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable note-node update.',
     `If you need the raw log, inspect durable run ${input.runId}.`,
     'Prefer targeted fixes over broad rewrites.',
   ].filter((line): line is string => Boolean(line)).join('\n');
@@ -1378,6 +1380,10 @@ async function maybeStartAutomaticConversationMemoryDistill(input: {
   cwd?: string;
   trigger: Exclude<ConversationMemoryMaintenanceTrigger, 'manual'>;
 }): Promise<void> {
+  if (isConversationMemoryDistillRecoveryTitle(input.title)) {
+    return;
+  }
+
   const profile = getCurrentProfile();
   const relatedProjectIds = getConversationMemoryRelatedProjectIds(profile, input.conversationId);
   const prepared = prepareConversationMemoryMaintenance({
@@ -1410,7 +1416,7 @@ async function maybeStartAutomaticConversationMemoryDistill(input: {
   });
 
   if (!result.accepted || !result.runId) {
-    const error = result.reason ?? 'Could not start conversation memory distillation.';
+    const error = result.reason ?? 'Could not start conversation node distillation.';
     markConversationMemoryMaintenanceRunFailed({
       profile,
       conversationId: input.conversationId,
@@ -1440,6 +1446,10 @@ async function maybeKickConversationMemoryFollowUp(profile: string, conversation
     return;
   }
 
+  if (isConversationMemoryDistillRecoveryTitle(state.latestConversationTitle)) {
+    return;
+  }
+
   const existing = await readConversationMemoryDistillRunState(conversationId);
   if (existing.running) {
     return;
@@ -1455,7 +1465,7 @@ async function maybeKickConversationMemoryFollowUp(profile: string, conversation
   });
 
   if (!result.accepted || !result.runId) {
-    const error = result.reason ?? 'Could not start conversation memory distillation.';
+    const error = result.reason ?? 'Could not start conversation node distillation.';
     markConversationMemoryMaintenanceRunFailed({
       profile,
       conversationId,
@@ -1480,6 +1490,8 @@ async function maybeKickConversationMemoryFollowUp(profile: string, conversation
 
 async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   const sessionsById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
+  const maintenanceStates = listConversationMemoryMaintenanceStates({ profile: getCurrentProfile() });
+  const maintenanceStateByConversationId = new Map(maintenanceStates.map((state) => [state.conversationId, state]));
   const runs = (await listDurableRuns()).runs
     .filter((run) => run.manifest?.kind === 'background-run' && run.manifest.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE)
     .sort((left, right) => {
@@ -1489,12 +1501,22 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
     });
 
   const visibleStatuses = new Set([...CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES, 'failed', 'interrupted']);
-  const items: MemoryWorkItem[] = [];
-  const seenConversationIds = new Set<string>();
-
+  const latestRunByConversationId = new Map<string, (typeof runs)[number]>();
   for (const run of runs) {
     const conversationId = typeof run.manifest?.source?.id === 'string' ? run.manifest.source.id.trim() : '';
-    if (!conversationId || seenConversationIds.has(conversationId)) {
+    if (!conversationId || latestRunByConversationId.has(conversationId)) {
+      continue;
+    }
+
+    latestRunByConversationId.set(conversationId, run);
+  }
+
+  const items: MemoryWorkItem[] = [];
+  for (const [conversationId, run] of latestRunByConversationId) {
+    const session = sessionsById.get(conversationId);
+    const maintenanceState = maintenanceStateByConversationId.get(conversationId);
+    const conversationTitle = session?.title ?? maintenanceState?.latestConversationTitle ?? conversationId;
+    if (isConversationMemoryDistillRecoveryTitle(conversationTitle)) {
       continue;
     }
 
@@ -1503,14 +1525,12 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
       continue;
     }
 
-    seenConversationIds.add(conversationId);
-    const session = sessionsById.get(conversationId);
     const createdAt = run.manifest?.createdAt ?? run.status?.createdAt ?? new Date().toISOString();
     const updatedAt = run.status?.updatedAt ?? createdAt;
 
     items.push({
       conversationId,
-      conversationTitle: session?.title ?? conversationId,
+      conversationTitle,
       runId: run.runId,
       status,
       createdAt,
@@ -1520,8 +1540,24 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   }
 
   const pendingStates = buildConversationMemoryWorkItemsFromStates(
-    listConversationMemoryMaintenanceStates({ profile: getCurrentProfile() })
-      .filter((state) => !seenConversationIds.has(state.conversationId)),
+    maintenanceStates
+      .filter((state) => {
+        const latestRun = latestRunByConversationId.get(state.conversationId);
+        if (!latestRun) {
+          return true;
+        }
+
+        const latestRunStatus = latestRun.status?.status ?? '';
+        if (visibleStatuses.has(latestRunStatus)) {
+          return false;
+        }
+
+        const latestRunUpdatedAt = latestRun.status?.updatedAt ?? latestRun.manifest?.createdAt ?? '';
+        return state.updatedAt >= latestRunUpdatedAt;
+      })
+      .filter((state) => !isConversationMemoryDistillRecoveryTitle(
+        sessionsById.get(state.conversationId)?.title ?? state.latestConversationTitle,
+      )),
   ).map((item) => ({
     ...item,
     conversationTitle: sessionsById.get(item.conversationId)?.title ?? item.conversationTitle,
@@ -5157,18 +5193,18 @@ app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
     const run = detail.run;
     const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
     if (!distillInput) {
-      res.status(409).json({ error: 'This run is not a memory distillation run.' });
+      res.status(409).json({ error: 'This run is not a node distillation run.' });
       return;
     }
 
     if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') {
-      res.status(409).json({ error: 'Only failed or interrupted memory distillation runs can be retried.' });
+      res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be retried.' });
       return;
     }
 
     const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
     if (existing.running) {
-      res.status(409).json({ error: 'A memory distillation is already running for this conversation.' });
+      res.status(409).json({ error: 'A node distillation is already running for this conversation.' });
       return;
     }
 
@@ -5185,7 +5221,7 @@ app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
     });
 
     if (!result.accepted || !result.runId) {
-      const error = result.reason ?? 'Could not retry conversation memory distillation.';
+      const error = result.reason ?? 'Could not retry conversation node distillation.';
       markConversationMemoryMaintenanceRunFailed({
         profile,
         conversationId: distillInput.conversationId,
@@ -5221,7 +5257,7 @@ app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes('not found')
       ? 404
-      : message.includes('already running') || message.includes('not a memory distillation run') || message.includes('Only failed or interrupted')
+      : message.includes('already running') || message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
         ? 409
         : 500;
     res.status(status).json({ error: message });
@@ -5240,12 +5276,12 @@ app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
     const run = detail.run;
     const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
     if (!distillInput) {
-      res.status(409).json({ error: 'This run is not a memory distillation run.' });
+      res.status(409).json({ error: 'This run is not a node distillation run.' });
       return;
     }
 
     if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') {
-      res.status(409).json({ error: 'Only failed or interrupted memory distillation runs can be recovered in a conversation.' });
+      res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered in a conversation.' });
       return;
     }
 
@@ -5258,7 +5294,7 @@ app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
       ?? run.manifest?.source?.filePath;
 
     if (!sessionFile || !existsSync(sessionFile)) {
-      res.status(404).json({ error: 'Conversation not found for this memory distillation run.' });
+      res.status(404).json({ error: 'Conversation not found for this node distillation run.' });
       return;
     }
 
@@ -5272,7 +5308,7 @@ app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
     });
 
     const sourceLabel = sourceSession?.title ?? maintenanceState?.latestConversationTitle ?? distillInput.conversationId;
-    renameSession(created.id, `Recover memory distillation: ${sourceLabel}`);
+    renameSession(created.id, `${CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX} ${sourceLabel}`);
 
     const relatedProjectIds = getConversationProjectLink({
       profile,
@@ -5348,7 +5384,7 @@ app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes('not found')
       ? 404
-      : message.includes('not a memory distillation run') || message.includes('Only failed or interrupted')
+      : message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
         ? 409
         : 500;
     res.status(status).json({ error: message });
@@ -5576,7 +5612,7 @@ app.get('/api/memories/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
     if (!memory) {
-      res.status(404).json({ error: 'Memory not found.' });
+      res.status(404).json({ error: 'Note not found.' });
       return;
     }
 
@@ -5612,7 +5648,7 @@ app.post('/api/memories/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
-      res.status(404).json({ error: 'Memory not found.' });
+      res.status(404).json({ error: 'Note not found.' });
       return;
     }
 
@@ -5651,7 +5687,7 @@ app.delete('/api/memories/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
-      res.status(404).json({ error: 'Memory not found.' });
+      res.status(404).json({ error: 'Note not found.' });
       return;
     }
 
@@ -5706,7 +5742,7 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
     const existing = await readConversationMemoryDistillRunState(conversationId);
     if (existing.running) {
       res.status(409).json({
-        error: 'A memory distillation is already running for this conversation.',
+        error: 'A node distillation is already running for this conversation.',
         ...existing,
       });
       return;
@@ -5745,7 +5781,7 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
     });
 
     if (!result.accepted || !result.runId) {
-      const error = result.reason ?? 'Could not start conversation memory distillation.';
+      const error = result.reason ?? 'Could not start conversation node distillation.';
       markConversationMemoryMaintenanceRunFailed({
         profile,
         conversationId,
@@ -5867,8 +5903,8 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
       : `Created memory reference in @${memory.id}`;
     const activityDetails = [
       memory.disposition === 'updated-existing'
-        ? `Updated an existing reference inside durable memory hub @${memory.id} from this conversation.`
-        : `Created a new reference inside durable memory hub @${memory.id} from this conversation.`,
+        ? `Updated an existing reference inside durable note node @${memory.id} from this conversation.`
+        : `Created a new reference inside durable note node @${memory.id} from this conversation.`,
       `Hub title: ${memory.title}`,
       memory.summary ? `Hub summary: ${memory.summary}` : undefined,
       `Reference: ${memory.reference.title}`,
@@ -5957,7 +5993,7 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
     const loadedMemory = loadMemoryDocs({ profilesRoot: getProfilesRoot() }).docs.find((entry) => entry.id === memoryId);
 
     if (!memory || !loadedMemory) {
-      res.status(404).json({ error: 'Memory not found.' });
+      res.status(404).json({ error: 'Note not found.' });
       return;
     }
 
@@ -9411,6 +9447,25 @@ function inferSkillSource(skillPath: string, profile: string): string {
   return 'shared';
 }
 
+function isSkillDefinitionFile(filePath: string): boolean {
+  const fileName = basename(filePath);
+  if (fileName === 'SKILL.md') {
+    return true;
+  }
+
+  if (fileName !== 'INDEX.md') {
+    return false;
+  }
+
+  const frontmatter = parseFrontmatter(filePath);
+  const kind = typeof frontmatter.kind === 'string' ? frontmatter.kind.trim().toLowerCase() : '';
+  if (kind === 'skill') {
+    return true;
+  }
+
+  return typeof frontmatter.name === 'string' && typeof frontmatter.description === 'string';
+}
+
 function listSkillDefinitionFiles(skillDir: string): string[] {
   if (!existsSync(skillDir)) {
     return [];
@@ -9428,7 +9483,7 @@ function listSkillDefinitionFiles(skillDir: string): string[] {
         continue;
       }
 
-      if (entry.isFile() && entry.name === 'SKILL.md') {
+      if (entry.isFile() && isSkillDefinitionFile(fullPath)) {
         output.push(fullPath);
       }
     }
@@ -10958,7 +11013,7 @@ companionApp.get('/api/memories/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
     if (!memory) {
-      res.status(404).json({ error: 'Memory not found.' });
+      res.status(404).json({ error: 'Note not found.' });
       return;
     }
 

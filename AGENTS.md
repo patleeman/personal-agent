@@ -11,18 +11,19 @@
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
-## Global memory convention
+## Global node convention
 
-- Durable memories live in the shared global store at `~/.local/state/personal-agent/profiles/_memory/`.
-- There is never a shared-profile memory dir (`~/.local/state/personal-agent/profiles/shared/agent/memory` should not exist).
-- A memory is a directory containing `MEMORY.md`, plus optional `references/` and `assets/`.
-- Memory packages are available via the memory tool when present and via normal file tools (`read`, `edit`, `write`) when needed.
-- Use memory packages for durable briefs, runbooks, specs, and notes that should be reusable across profile contexts.
-- Keep top-level memories as curated hubs under `profiles/_memory/<memory-name>/MEMORY.md`; break down detailed material inside each package instead of flattening the root.
-- Every `MEMORY.md` must include YAML frontmatter with at least: `name`, `description`, and optional `metadata`.
-- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
-- Keep non-markdown automation state outside memory packages.
-- Keep reusable cross-project workflows in profile `skills/` dirs under the state root; keep durable behavior/preferences in profile `AGENTS.md` files.
+- Durable note nodes live in the shared synced store at `~/.local/state/personal-agent/sync/notes/`.
+- There is never a profile-local synced memory dir (`~/.local/state/personal-agent/profiles/shared/agent/memory` should not exist).
+- A node is a directory containing `INDEX.md`, plus optional `state.yaml` and supporting directories such as `references/`, `assets/`, or `scripts/`.
+- Note nodes are available via the memory tool when present and via normal file tools (`read`, `edit`, `write`) when needed.
+- Use note nodes for durable briefs, runbooks, specs, and notes that should be reusable across profile contexts.
+- Structure notes are ordinary note nodes with links and, when helpful, a `structure` tag.
+- Every node `INDEX.md` must include YAML frontmatter with at least: `id`, `kind`, `title`, and `summary`.
+- Skill nodes must also keep Pi-compatible `name` and `description` frontmatter.
+- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint` for note-node discovery and validation.
+- Keep non-markdown automation state outside note nodes.
+- Keep reusable cross-project workflows in synced `skills/` node dirs under the state root; keep durable behavior/preferences in profile `AGENTS.md` files.
 
 ## Conversation locality boundary
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import {
@@ -102,18 +102,29 @@ export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRoo
 
   for (const projectId of options.projectIds) {
     try {
-      const project = readProject(resolveDurableProjectPaths(options.repoRoot, projectId).projectFile);
-      const projectRepoRoot = resolveProjectRepoRoot({
+      const projectFile = resolveDurableProjectPaths(options.repoRoot, projectId).projectFile;
+      let projectRepoRoot = '';
+
+      try {
+        const project = readProject(projectFile);
+        projectRepoRoot = project.repoRoot ?? '';
+      } catch {
+        const raw = existsSync(projectFile) ? readFileSync(projectFile, 'utf-8') : '';
+        const match = raw.match(/^repoRoot:\s*(.+)$/m);
+        projectRepoRoot = match?.[1]?.trim() ?? '';
+      }
+
+      const resolvedProjectRepoRoot = resolveProjectRepoRoot({
         repoRoot: options.repoRoot,
-        projectRepoRoot: project.repoRoot,
+        projectRepoRoot,
       });
 
-      if (!projectRepoRoot || seen.has(projectRepoRoot)) {
+      if (!resolvedProjectRepoRoot || seen.has(resolvedProjectRepoRoot)) {
         continue;
       }
 
-      seen.add(projectRepoRoot);
-      resolvedRepoRoots.push(projectRepoRoot);
+      seen.add(resolvedProjectRepoRoot);
+      resolvedRepoRoots.push(resolvedProjectRepoRoot);
     } catch {
       // Ignore missing or invalid referenced projects when deriving cwd.
     }
@@ -168,8 +179,8 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     repoRoot: normalizedRepoRoot,
     projectsDir,
     projectDir,
-    projectFile: join(projectDir, 'PROJECT.yaml'),
-    briefFile: join(projectDir, 'BRIEF.md'),
+    projectFile: join(projectDir, 'state.yaml'),
+    briefFile: join(projectDir, 'INDEX.md'),
     tasksDir: join(projectDir, 'tasks'),
     notesDir: join(projectDir, 'notes'),
     attachmentsDir: join(projectDir, 'attachments'),

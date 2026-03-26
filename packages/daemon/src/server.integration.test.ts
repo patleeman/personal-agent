@@ -322,7 +322,10 @@ describe('daemon IPC integration', () => {
     const runId = (response.result as { runId: string }).runId;
     const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
 
-    await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'completed');
+    await waitFor(() => {
+      const run = scanDurableRun(runsRoot, runId);
+      return run?.status?.status === 'completed' && existsSync(run.paths.resultPath);
+    });
 
     const run = scanDurableRun(runsRoot, runId);
     expect(run?.manifest?.kind).toBe('background-run');

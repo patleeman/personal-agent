@@ -1,8 +1,7 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import {
   createProjectScaffold,
   createProjectTask,
-  formatProject,
   listProjectIds,
   parseProject,
   readProject,
@@ -287,7 +286,7 @@ export function listProjectIndex(options: {
       invalidProjects.push({
         projectId,
         path: paths.projectFile,
-        error: 'PROJECT.yaml not found.',
+        error: 'state.yaml not found.',
       });
       continue;
     }
@@ -794,13 +793,13 @@ export function readProjectSource(options: {
 }
 
 export function saveProjectSource(input: SaveProjectSourceInput): ProjectDetail {
-  const { paths } = readProjectRecord(input);
-  const parsedProject = parseProject(input.content);
+  const { paths, project } = readProjectRecord(input);
+  const parsedProject = parseProject(input.content, project);
 
   if (parsedProject.id !== input.projectId) {
-    throw new Error(`Project YAML id must match route id ${input.projectId}.`);
+    throw new Error(`Project state id must match route id ${input.projectId}.`);
   }
 
-  writeFileSync(paths.projectFile, formatProject(parsedProject));
+  writeProject(paths.projectFile, parsedProject);
   return readProjectDetailFromProject(input);
 }

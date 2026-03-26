@@ -164,7 +164,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
     {
       id: 'nav:memories',
       section: 'nav',
-      title: 'Memories',
+      title: 'Notes',
       subtitle: 'Browse durable knowledge packages',
       keywords: ['memory', 'knowledge', 'distilled', 'references'],
       order: 5,
@@ -1111,7 +1111,7 @@ export function CommandPalette() {
           {memoriesError && (scope === 'all' || scope === 'memories') && (
             <section className="py-1">
               <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">Memories</p>
+                <p className="ui-section-label">Notes</p>
               </div>
               <p className="px-5 py-3 text-[12px] text-danger">Failed to load memories: {memoriesError}</p>
             </section>

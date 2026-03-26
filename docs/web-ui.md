@@ -109,9 +109,9 @@ Use the UI when you want:
 - a persistent inbox
 - easy conversation browsing and branching
 - a repo-aware workspace browser and editor
-- project management backed by `PROJECT.yaml`
+- project management backed by `state.yaml`
 - visibility into daemon and sync state
-- a visual memory browser
+- a visual notes browser
 - live updates without polling
 
 ## Main sections
@@ -199,8 +199,8 @@ From the Projects page you can:
 
 - create a project from a short title plus a longer description
 - inspect current status, blockers, optional milestones, and tasks
-- edit the canonical `PROJECT.yaml`
-- edit or regenerate `BRIEF.md`
+- edit the canonical `state.yaml`
+- edit or regenerate `INDEX.md`
 - append project notes
 - upload attachments and project artifacts
 - see linked conversations for the project
@@ -246,20 +246,17 @@ The advanced pages still exist for subsystem-specific setup and controls:
 
 See [Daemon and Background Automation](./daemon.md) and [Sync Guide](./sync.md).
 
-### Memory
+### Notes
 
-The Memory page is a user-facing browser for:
+The Notes page is a user-facing browser for:
 
-- profile `AGENTS.md`
-- skills
-- shared global memory packages
-- memory distillation work that is still running or needs attention
+- shared global note nodes
+- node distillation work that is still running or needs attention
 
 It is meant to answer:
 
-- who is this profile supposed to be?
-- what reusable workflows does it have?
-- what durable notes and references does it know?
+- what durable notes and references does this profile know?
+- which note nodes were recently updated or used?
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
@@ -292,7 +289,7 @@ Switching the active profile affects:
 
 - inbox
 - projects
-- the AGENTS/skills lens used around memory
+- the AGENTS/skills lens used around note nodes
 - new live sessions
 
 ## Prompt references in conversations
@@ -303,7 +300,7 @@ You can reference:
 
 - projects
 - scheduled tasks
-- memory packages
+- note nodes
 - skills
 - profiles
 

@@ -28,15 +28,15 @@ Projects are selected for the active profile by `ownerProfile` metadata.
 
 Canonical durable files live under:
 
-- `~/.local/state/personal-agent/sync/projects/<projectId>/PROJECT.yaml`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/BRIEF.md`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/state.yaml`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/INDEX.md`
 - `~/.local/state/personal-agent/sync/projects/<projectId>/notes/`
 - `~/.local/state/personal-agent/sync/projects/<projectId>/attachments/`
 - `~/.local/state/personal-agent/sync/projects/<projectId>/artifacts/`
 
-`PROJECT.yaml` remains the canonical structured project record.
+`state.yaml` remains the canonical structured project record.
 
-`BRIEF.md` is the durable human/agent handoff document for the project.
+`INDEX.md` is the durable human/agent handoff document for the project.
 
 Notes, attachments, and project artifacts live alongside that record.
 
@@ -44,7 +44,7 @@ Notes, attachments, and project artifacts live alongside that record.
 
 A project page can show conversations that reference the project.
 
-That link state is stored in **local runtime state**, not in `PROJECT.yaml`.
+That link state is stored in **local runtime state**, not in `state.yaml`.
 
 This matters because portable repo-managed files should not store:
 
@@ -54,7 +54,7 @@ This matters because portable repo-managed files should not store:
 
 So the project is the durable hub, while conversation ↔ project bindings stay local.
 
-## What `PROJECT.yaml` contains
+## What `state.yaml` contains
 
 A project can store:
 
@@ -113,7 +113,7 @@ plan:
       status: in_progress
   tasks:
     - id: add-project-brief
-      title: Add BRIEF.md support
+      title: Add INDEX.md support
       status: completed
       milestoneId: ship-ui
     - id: tighten-copy
@@ -183,9 +183,9 @@ Use them for:
 
 ## Project brief / handoff document
 
-Each project can have a canonical `BRIEF.md`.
+Each project can have a canonical `INDEX.md`.
 
-The structured source of truth now lives primarily in `PROJECT.yaml`:
+The structured source of truth now lives primarily in `state.yaml`:
 
 - `requirements.goal`
 - `requirements.acceptanceCriteria[]`
@@ -193,7 +193,7 @@ The structured source of truth now lives primarily in `PROJECT.yaml`:
 - `completionSummary`
 - milestones/tasks/current focus/blockers/recent progress
 
-`BRIEF.md` is best treated as the human-readable handoff layer when the structured fields are not enough.
+`INDEX.md` is best treated as the human-readable handoff layer when the structured fields are not enough.
 
 In the web UI you can:
 
@@ -229,7 +229,7 @@ This distinction still matters.
 
 ### Project tasks
 
-Project tasks are checklist items inside `PROJECT.yaml`.
+Project tasks are checklist items inside `state.yaml`.
 
 They represent work inside a project plan.
 
@@ -250,7 +250,7 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 From the Projects page you can:
 
 - create a project from a short title plus a longer description
-- inspect and edit `PROJECT.yaml`
+- inspect and edit `state.yaml`
 - archive or restore finished projects without deleting their history
 - see linked conversations
 - start a new conversation from the project
@@ -266,8 +266,8 @@ From the project detail page in the web UI, click **Export package**.
 
 That downloads a single `*.pa-project.json` file containing:
 
-- the structured project record from `PROJECT.yaml`
-- `BRIEF.md`
+- the structured project record from `state.yaml`
+- `INDEX.md`
 - notes
 - attachments and project artifacts (base64-encoded)
 - related inbox activity for the project
@@ -298,7 +298,7 @@ A good pattern is:
 
 1. create the project once the work spans more than one turn
 2. keep `summary`, `requirements`, `planSummary`, `completionSummary`, `currentFocus`, `blockers`, and `recentProgress` current
-3. keep `BRIEF.md` useful as the handoff layer for future restarts
+3. keep `INDEX.md` useful as the handoff layer for future restarts
 4. append notes when decisions or context accumulate
 5. upload files that belong with the work
 6. use milestones only when the work genuinely benefits from phases

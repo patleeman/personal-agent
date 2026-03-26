@@ -3013,9 +3013,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       });
 
       if (result.accepted) {
-        showNotice('accent', `Queued memory distillation from conversation up to message ${messageIndex + 1}.`);
+        showNotice('accent', `Queued node distillation from conversation up to message ${messageIndex + 1}.`);
       } else {
-        showNotice('danger', 'Unable to queue memory distillation right now.', 4000);
+        showNotice('danger', 'Unable to queue node distillation right now.', 4000);
       }
 
       await refetchMemoryData({ resetLoading: false });

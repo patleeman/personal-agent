@@ -71,7 +71,7 @@ plan:
     expect(index.invalidProjects[0]?.error).toContain('must be a string');
   });
 
-  it('reports project directories that are missing PROJECT.yaml', () => {
+  it('reports project directories that are missing state.yaml', () => {
     const repoRoot = createTempRepo();
     const missingPaths = resolveProjectPaths({
       repoRoot,
@@ -88,7 +88,7 @@ plan:
       {
         projectId: 'missing-project',
         path: missingPaths.projectFile,
-        error: 'PROJECT.yaml not found.',
+        error: 'state.yaml not found.',
       },
     ]);
   });
