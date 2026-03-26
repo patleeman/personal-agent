@@ -30,7 +30,7 @@ describe('MemoriesPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders note nodes with the shared list layout and selected row styling', () => {
+  it('renders notes with clearer overview copy and selected note context', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [
@@ -38,11 +38,11 @@ describe('MemoriesPage', () => {
             id: 'memory-index',
             title: 'Memory index',
             summary: 'Top-level knowledge hub.',
-            tags: ['notes', 'index'],
+            tags: ['notes', 'index', 'structure'],
             path: '/tmp/memory-index/INDEX.md',
-            type: 'index',
+            type: 'structure',
             status: 'active',
-            role: 'hub',
+            role: 'structure',
             area: 'notes',
             related: ['personal-agent'],
             referenceCount: 2,
@@ -54,7 +54,6 @@ describe('MemoriesPage', () => {
             summary: 'Keep responses concise and direct.',
             tags: ['communication'],
             path: '/tmp/writing-style/INDEX.md',
-            role: 'hub',
             area: 'communication',
             parent: 'memory-index',
             referenceCount: 1,
@@ -67,6 +66,7 @@ describe('MemoriesPage', () => {
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
@@ -77,14 +77,16 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Note nodes');
-    expect(html).toContain('Search notes');
-    expect(html).toContain('Selected note node');
+    expect(html).toContain('What notes are');
+    expect(html).toContain('+ New note');
+    expect(html).toContain('Browse notes');
+    expect(html).toContain('About this note');
     expect(html).toContain('Memory index');
     expect(html).toContain('Writing style');
+    expect(html).toContain('Structure note');
+    expect(html).toContain('child of @memory-index');
     expect(html).toContain('2 references');
     expect(html).toContain('1 related node');
-    expect(html).toContain('parent');
     expect(html).toContain('href="/notes?note=memory-index"');
     expect(html).toContain('ui-list-row-selected');
     expect(html).not.toContain('Browse memories');
@@ -107,6 +109,7 @@ describe('MemoriesPage', () => {
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
@@ -142,6 +145,7 @@ describe('MemoriesPage', () => {
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
@@ -175,6 +179,7 @@ describe('MemoriesPage', () => {
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
@@ -201,6 +206,7 @@ describe('MemoriesPage', () => {
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
@@ -212,6 +218,7 @@ describe('MemoriesPage', () => {
     );
 
     expect(html).toContain('No notes yet.');
-    expect(html).toContain('Distill a conversation message to create or update a durable note node.');
+    expect(html).toContain('Create one yourself or distill a conversation into a durable note.');
+    expect(html).toContain('Create note');
   });
 });

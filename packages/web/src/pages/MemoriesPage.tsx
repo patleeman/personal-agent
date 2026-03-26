@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { persistForkPromptDraft } from '../forking';
 import { useApi } from '../hooks';
-import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
+import { emitMemoriesChanged, MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import type { MemoryDocItem, MemoryWorkItem } from '../types';
 import { timeAgo } from '../utils';
 import {
@@ -15,9 +15,11 @@ import {
   PageHeading,
   ToolbarButton,
 } from '../components/ui';
+import { MentionTextarea } from '../components/MentionTextarea';
 
 const NOTE_ID_SEARCH_PARAM = 'note';
-const INPUT_CLASS = 'w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const INPUT_CLASS = 'w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:border-accent/60 focus:outline-none';
+const TEXTAREA_CLASS = `${INPUT_CLASS} max-w-3xl min-h-[104px] resize-y leading-relaxed`;
 
 function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem[] {
   const normalized = query.trim().toLowerCase();
@@ -135,6 +137,77 @@ function formatRelatedCount(related: string[] | undefined): string | null {
   return `${normalized} related ${normalized === 1 ? 'node' : 'nodes'}`;
 }
 
+function parseCreateNoteTags(value: string): string[] {
+  return [...new Set(value
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0))];
+}
+
+function noteKindLabel(memory: MemoryDocItem): string {
+  const tags = new Set(memory.tags.map((tag) => tag.trim().toLowerCase()));
+  const type = memory.type?.trim().toLowerCase();
+  const role = memory.role?.trim().toLowerCase();
+
+  if (role === 'structure' || type === 'structure' || tags.has('structure')) {
+    return 'Structure note';
+  }
+
+  if (type === 'reference' || tags.has('reference')) {
+    return 'Reference note';
+  }
+
+  if (type === 'project' || tags.has('project')) {
+    return 'Project note';
+  }
+
+  return 'Note';
+}
+
+function buildNoteShapeSummary(memory: MemoryDocItem): string {
+  const parts = [noteKindLabel(memory)];
+  const relatedCount = formatRelatedCount(memory.related);
+  const referenceSummary = (memory.referenceCount ?? 0) > 0 ? formatReferenceCount(memory.referenceCount) : null;
+
+  if (memory.parent) {
+    parts.push(`child of @${memory.parent}`);
+  }
+
+  if (relatedCount) {
+    parts.push(relatedCount);
+  }
+
+  if (referenceSummary) {
+    parts.push(referenceSummary);
+  }
+
+  return parts.join(' · ');
+}
+
+function buildNoteMetaSummary(memory: MemoryDocItem): string {
+  const parts: string[] = [];
+
+  if (memory.area) {
+    parts.push(memory.area);
+  }
+
+  if (memory.status) {
+    parts.push(memory.status);
+  }
+
+  if (memory.updated) {
+    parts.push(`updated ${timeAgo(memory.updated)}`);
+  }
+
+  parts.push(`@${memory.id}`);
+  return parts.join(' · ');
+}
+
+function formatTagSummary(tags: string[]): string | null {
+  const visible = tags.slice(0, 4);
+  return visible.length > 0 ? visible.join(' · ') : null;
+}
+
 function MemoryWorkQueueRow({
   item,
   activeAction,
@@ -212,9 +285,16 @@ export function MemoriesPage() {
     refreshing,
     error,
     refetch,
+    replaceData,
   } = useApi(api.notes);
 
   const [query, setQuery] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createSummary, setCreateSummary] = useState('');
+  const [createTags, setCreateTags] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' | 'recover' } | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const memories = data?.memories ?? [];
@@ -294,21 +374,66 @@ export function MemoriesPage() {
     }
   }, [navigate, pendingQueueAction, refetch]);
 
+  async function handleCreateNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (creating || createTitle.trim().length === 0) {
+      return;
+    }
+
+    setCreating(true);
+    setCreateError(null);
+
+    try {
+      const created = await api.createNoteDoc({
+        title: createTitle.trim(),
+        summary: createSummary.trim() || undefined,
+        tags: parseCreateNoteTags(createTags),
+      });
+
+      replaceData({
+        memories: [created.memory, ...memories.filter((memory) => memory.id !== created.memory.id)],
+        memoryQueue,
+      });
+      emitMemoriesChanged();
+      void refetch({ resetLoading: false });
+      setCreateTitle('');
+      setCreateSummary('');
+      setCreateTags('');
+      setQuery('');
+      setCreateOpen(false);
+      setSelectedMemory(created.memory.id);
+    } catch (createNoteError) {
+      setCreateError(createNoteError instanceof Error ? createNoteError.message : String(createNoteError));
+      setCreating(false);
+      return;
+    }
+
+    setCreating(false);
+  }
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={(
-          <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </ToolbarButton>
+          <>
+            <ToolbarButton onClick={() => {
+              setCreateError(null);
+              setCreateOpen((current) => !current);
+            }} className={createOpen ? 'text-accent' : undefined}>
+              {createOpen ? 'Close new note' : '+ New note'}
+            </ToolbarButton>
+            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
+              {refreshing ? 'Refreshing…' : '↻ Refresh'}
+            </ToolbarButton>
+          </>
         )}
       >
         <PageHeading
           title="Notes"
           meta={(
             <>
-              {memories.length} note {memories.length === 1 ? 'node' : 'nodes'}
+              {memories.length} {memories.length === 1 ? 'note' : 'notes'}
               {memoryQueue.length > 0 && <span className="ml-2 text-secondary">· {memoryQueue.length} in queue</span>}
               {selectedMemoryId && <span className="ml-2 text-secondary">· @{selectedMemoryId}</span>}
             </>
@@ -320,17 +445,94 @@ export function MemoriesPage() {
         {loading && <LoadingState label="Loading notes…" />}
         {error && <ErrorState message={`Unable to load notes: ${error}`} />}
 
-        {!loading && !error && memories.length === 0 && memoryQueue.length === 0 && (
+        {!loading && !error && !createOpen && memories.length === 0 && memoryQueue.length === 0 && (
           <EmptyState
             title="No notes yet."
-            body="Distill a conversation message to create or update a durable note node."
+            body="Create one yourself or distill a conversation into a durable note."
+            action={<ToolbarButton onClick={() => setCreateOpen(true)}>Create note</ToolbarButton>}
           />
         )}
 
-        {!loading && !error && (memories.length > 0 || memoryQueue.length > 0) && (
+        {!loading && !error && (memories.length > 0 || memoryQueue.length > 0 || createOpen) && (
           <div className="space-y-6 pb-5">
+            <div className="space-y-2">
+              <p className="ui-section-label">What notes are</p>
+              <p className="ui-card-meta max-w-3xl">
+                Notes are durable markdown pages you can maintain yourself or ask the agent to update.
+                Use them for facts, decisions, working context, and structure pages that organize a topic.
+                Select a note to preview or edit it in the right panel.
+              </p>
+            </div>
+
+            {createOpen && (
+              <div className="space-y-5 border-t border-border-subtle pt-5">
+                <div className="space-y-1">
+                  <h2 className="text-[15px] font-medium text-primary">New note</h2>
+                  <p className="ui-card-meta max-w-2xl">
+                    Start with a title and a short summary. We&apos;ll scaffold the note and open it so you can keep writing.
+                  </p>
+                </div>
+
+                <form onSubmit={handleCreateNote} className="max-w-3xl space-y-5">
+                  <div className="space-y-1.5">
+                    <label className="ui-card-meta" htmlFor="create-note-title">Title</label>
+                    <input
+                      id="create-note-title"
+                      value={createTitle}
+                      onChange={(event) => setCreateTitle(event.target.value)}
+                      className={INPUT_CLASS}
+                      placeholder="What is this note about?"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="ui-card-meta" htmlFor="create-note-summary">Summary</label>
+                    <MentionTextarea
+                      id="create-note-summary"
+                      value={createSummary}
+                      onValueChange={setCreateSummary}
+                      className={TEXTAREA_CLASS}
+                      placeholder="A short explanation that will make this note obvious when you see it later."
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="ui-card-meta" htmlFor="create-note-tags">Tags</label>
+                    <input
+                      id="create-note-tags"
+                      value={createTags}
+                      onChange={(event) => setCreateTags(event.target.value)}
+                      className={INPUT_CLASS}
+                      placeholder="Optional. Comma-separated tags like writing, ideas, reference"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+
+                  {createError && <p className="text-[12px] text-danger">{createError}</p>}
+
+                  <div className="flex items-center gap-3">
+                    <ToolbarButton type="submit" disabled={creating || createTitle.trim().length === 0}>
+                      {creating ? 'Creating…' : 'Create note'}
+                    </ToolbarButton>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setCreateError(null);
+                      }}
+                      className="text-[13px] text-secondary transition-colors hover:text-primary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {memoryQueue.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-2 border-t border-border-subtle pt-5">
                 <p className="ui-section-label">Node work queue</p>
                 <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
                 {queueError && <p className="text-[12px] text-danger">{queueError}</p>}
@@ -351,43 +553,76 @@ export function MemoriesPage() {
 
             {memories.length > 0 && (
               <>
-                <div className="space-y-2">
-                  <p className="ui-section-label">Note nodes</p>
+                <div className="space-y-2 border-t border-border-subtle pt-5">
+                  <p className="ui-section-label">Browse notes</p>
                   <p className="ui-card-meta max-w-3xl">
-                    Note nodes use an `INDEX.md` overview plus package-local `references/` and `assets/`.
-                    Search note metadata and reference content below, then inspect the selected note in the right panel.
+                    Search titles, summaries, tags, linked notes, and reference content.
+                    Structure notes organize a topic; regular notes capture facts and decisions.
                   </p>
                 </div>
 
-                <div className="space-y-2 border-t border-border-subtle pt-5">
+                <div className="space-y-2">
                   <label htmlFor="memories-search" className="ui-section-label">Search notes</label>
                   <input
                     id="memories-search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search notes, summaries, tags, metadata, or reference content"
+                    placeholder="Search titles, summaries, tags, linked notes, or reference content"
                     className={INPUT_CLASS}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <p className="ui-card-meta">
                     {query.trim()
-                      ? `Showing ${filteredMemories.length} of ${memories.length} note nodes.`
-                      : `Showing ${memories.length} note nodes.`}
-                    {' '}Select a note node to browse its `INDEX.md`, relationships, and package-local references in the right panel.
+                      ? `Showing ${filteredMemories.length} of ${memories.length} notes.`
+                      : `Showing ${memories.length} notes.`}
+                    {' '}Select one to preview or edit it in the right panel.
                   </p>
                 </div>
 
                 {selectedMemory && (
-                  <div className="space-y-1 border-t border-border-subtle pt-5">
-                    <p className="ui-section-label">Selected note node</p>
+                  <div className="space-y-2 border-t border-border-subtle pt-5">
+                    <p className="ui-section-label">About this note</p>
                     <p className="text-[15px] font-medium text-primary">{selectedMemory.title}</p>
-                    <p className="ui-card-meta">
-                      {formatReferenceCount(selectedMemory.referenceCount)}
-                      {selectedMemory.role && <span> · {selectedMemory.role}</span>}
-                      {selectedMemory.area && <span> · {selectedMemory.area}</span>}
-                      {formatRelatedCount(selectedMemory.related) && <span> · {formatRelatedCount(selectedMemory.related)}</span>}
-                      {selectedMemory.updated && <span> · updated {timeAgo(selectedMemory.updated)}</span>}
+                    <p className="max-w-3xl text-[14px] leading-relaxed text-secondary">
+                      {selectedMemory.summary || 'No summary yet. Open the note and add a short explanation so it is easier to recognize later.'}
+                    </p>
+                    <p className="ui-card-meta">{buildNoteShapeSummary(selectedMemory)}</p>
+                    <p className="ui-card-meta">{buildNoteMetaSummary(selectedMemory)}</p>
+                    {(selectedMemory.parent || (selectedMemory.related?.length ?? 0) > 0 || selectedMemory.tags.length > 0) && (
+                      <div className="ui-card-meta flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {selectedMemory.parent && (
+                          <>
+                            <span>Parent</span>
+                            <Link to={`/notes${buildNoteSearch(location.search, selectedMemory.parent)}`} className="text-accent hover:underline">
+                              @{selectedMemory.parent}
+                            </Link>
+                          </>
+                        )}
+                        {selectedMemory.parent && (selectedMemory.related?.length ?? 0) > 0 && <span className="opacity-40">·</span>}
+                        {(selectedMemory.related?.length ?? 0) > 0 && (
+                          <>
+                            <span>Related</span>
+                            <span className="flex flex-wrap gap-x-2 gap-y-1">
+                              {selectedMemory.related?.map((relatedId) => (
+                                <Link key={relatedId} to={`/notes${buildNoteSearch(location.search, relatedId)}`} className="text-accent hover:underline">
+                                  @{relatedId}
+                                </Link>
+                              ))}
+                            </span>
+                          </>
+                        )}
+                        {(selectedMemory.parent || (selectedMemory.related?.length ?? 0) > 0) && selectedMemory.tags.length > 0 && <span className="opacity-40">·</span>}
+                        {selectedMemory.tags.length > 0 && (
+                          <>
+                            <span>Tags</span>
+                            <span>{selectedMemory.tags.join(' · ')}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    <p className="ui-card-meta max-w-3xl">
+                      The right panel shows a rendered preview and lets you edit the raw markdown behind this note.
                     </p>
                   </div>
                 )}
@@ -397,7 +632,7 @@ export function MemoriesPage() {
                     {filteredMemories.map((memory) => {
                       const isSelected = memory.id === selectedMemoryId;
                       const href = `/notes${buildNoteSearch(location.search, memory.id)}`;
-                      const tagsSummary = memory.tags.slice(0, 3).join(' · ');
+                      const tagSummary = formatTagSummary(memory.tags);
                       const relatedSummary = memory.related?.slice(0, 3).map((item) => `@${item}`).join(' · ') ?? '';
 
                       return (
@@ -408,45 +643,16 @@ export function MemoriesPage() {
                           leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryDotClass(memory)}`} />}
                         >
                           <p className="ui-row-title">{memory.title}</p>
-                          <p className="ui-row-summary">{memory.summary || '(no summary)'}</p>
+                          <p className="ui-row-summary">{memory.summary || 'No summary yet. Open the note to describe what it is for.'}</p>
                           <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                            <span>{formatReferenceCount(memory.referenceCount)}</span>
-                            {memory.role && (
+                            <span>{buildNoteShapeSummary(memory)}</span>
+                          </div>
+                          <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
+                            <span>{buildNoteMetaSummary(memory)}</span>
+                            {tagSummary && (
                               <>
                                 <span className="opacity-40">·</span>
-                                <span>{memory.role}</span>
-                              </>
-                            )}
-                            {memory.area && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>{memory.area}</span>
-                              </>
-                            )}
-                            {memory.type && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>{memory.type}</span>
-                              </>
-                            )}
-                            {memory.status && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>{memory.status}</span>
-                              </>
-                            )}
-                            <span className="opacity-40">·</span>
-                            <span className="max-w-[18rem] truncate font-mono" title={`@${memory.id}`}>@{memory.id}</span>
-                            {memory.updated && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>{timeAgo(memory.updated)}</span>
-                              </>
-                            )}
-                            {tagsSummary && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span className="max-w-[20rem] truncate" title={memory.tags.join(', ')}>{tagsSummary}</span>
+                                <span className="max-w-[20rem] truncate" title={memory.tags.join(', ')}>{tagSummary}</span>
                               </>
                             )}
                           </div>
@@ -474,7 +680,7 @@ export function MemoriesPage() {
                 ) : (
                   <EmptyState
                     title="No matches"
-                    body="Try a broader search across note titles, summaries, tags, metadata, and package-local reference content."
+                    body="Try a broader search across note titles, summaries, tags, linked notes, and reference content."
                     action={<ToolbarButton onClick={() => setQuery('')}>Clear search</ToolbarButton>}
                   />
                 )}

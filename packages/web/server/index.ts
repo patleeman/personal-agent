@@ -261,6 +261,7 @@ import {
   getSyncRoot,
   getProfilesRoot,
   getStateRoot,
+  createMemoryDoc,
   loadMemoryDocs,
   loadMemoryPackageReferences,
   listConversationProjectLinks,
@@ -5605,11 +5606,113 @@ app.post('/api/sessions/search-index', (req, res) => {
 
 // ── Conversation notes ───────────────────────────────────────────────────────
 
+const MAX_CREATED_NOTE_ID_LENGTH = 52;
+
+function normalizeCreatedNoteTitle(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeCreatedNoteSummary(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeCreatedNoteTags(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .flatMap((entry) => entry.split(','))
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0))];
+}
+
+function slugifyCreatedNoteId(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-+/g, '-');
+
+  if (!slug) {
+    return 'note';
+  }
+
+  return slug.slice(0, MAX_CREATED_NOTE_ID_LENGTH).replace(/-+$/g, '') || 'note';
+}
+
+function generateCreatedNoteId(title: string): string {
+  const existingIds = new Set(listMemoryDocs().map((entry) => entry.id));
+  const base = slugifyCreatedNoteId(title);
+
+  if (!existingIds.has(base)) {
+    return base;
+  }
+
+  for (let index = 2; index < Number.MAX_SAFE_INTEGER; index += 1) {
+    const suffix = `-${index}`;
+    const trimmedBase = base.slice(0, MAX_CREATED_NOTE_ID_LENGTH - suffix.length).replace(/-+$/g, '') || 'note';
+    const candidate = `${trimmedBase}${suffix}`;
+    if (!existingIds.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return `${base}-${Date.now()}`;
+}
+
 app.get('/api/notes', async (_req, res) => {
   try {
     res.json({
       memories: listMemoryDocs({ includeSearchText: true }),
       memoryQueue: await listMemoryWorkItems(),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/notes', (req, res) => {
+  try {
+    const title = normalizeCreatedNoteTitle(req.body?.title);
+    if (title.length === 0) {
+      res.status(400).json({ error: 'title required' });
+      return;
+    }
+
+    const summary = normalizeCreatedNoteSummary(req.body?.summary) || `Personal note about ${title}.`;
+    const tags = normalizeCreatedNoteTags(req.body?.tags);
+    const created = createMemoryDoc({
+      id: generateCreatedNoteId(title),
+      title,
+      summary,
+      tags,
+      status: 'active',
+    });
+    const memory = findMemoryDocById(created.id, { includeSearchText: true });
+
+    if (!memory) {
+      res.status(500).json({ error: 'Created note could not be loaded.' });
+      return;
+    }
+
+    res.status(201).json({
+      memory,
+      content: readFileSync(created.filePath, 'utf-8'),
+      references: [],
     });
   } catch (err) {
     logError('request handler error', {
