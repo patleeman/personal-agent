@@ -7459,99 +7459,104 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 /** Get token usage stats for a live session */
 app.get('/api/live-sessions/:id/context', (req, res) => {
   const startedAt = process.hrtime.bigint();
-  const { id } = req.params;
 
-  // cwd: local live registry first, then remote live registry, then session list.
-  const liveEntry = liveRegistry.get(id);
-  const remoteLive = getRemoteLiveSessionMeta(id);
-  const allSessions = listSessions();
-  const sessionMeta = allSessions.find((session) => session.id === id);
-  const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? sessionMeta?.cwd;
-  if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
+  try {
+    const { id } = req.params;
+    const liveEntry = liveRegistry.get(id);
+    const remoteLive = getRemoteLiveSessionMeta(id);
+    const initialArchivedTail = liveEntry ? null : readSessionBlocksWithTelemetry(id, { tailBlocks: 120 });
+    const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? initialArchivedTail?.detail?.meta.cwd;
+    if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
-  const gitSummaryRead = remoteLive
-    ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false } satisfies GitStatusReadTelemetry }
-    : readGitStatusSummaryWithTelemetry(cwd);
-  const gitSummary = gitSummaryRead.summary;
+    const gitSummaryRead = remoteLive
+      ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false } satisfies GitStatusReadTelemetry }
+      : readGitStatusSummaryWithTelemetry(cwd);
+    const gitSummary = gitSummaryRead.summary;
 
-  // User messages: prefer local live in-memory messages (most up-to-date), otherwise use a small persisted tail.
-  let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
-  let userMessageSource: 'live' | 'tail-120' | 'tail-400' | 'none' = liveEntry ? 'live' : 'none';
-  let userMessageReadTelemetry: SessionDetailReadTelemetry | null = null;
-  if (liveEntry) {
-    userMessages = liveEntry.session.agent.state.messages
-      .filter((message) => message.role === 'user')
-      .slice(-5)
-      .map((message, index) => {
-        const { text, imageCount } = summarizeUserMessageContent(message.content);
-        return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
-      });
-  } else {
-    const recentTail = readSessionBlocksWithTelemetry(id, { tailBlocks: 120 });
-    const recentTailUserMessages = (recentTail.detail?.blocks ?? []).filter((block) => block.type === 'user');
-    const expandedTail = recentTail.detail && recentTailUserMessages.length < 5 && recentTail.detail.blockOffset > 0
-      ? readSessionBlocksWithTelemetry(id, { tailBlocks: 400 })
-      : recentTail;
-    userMessageSource = expandedTail === recentTail ? 'tail-120' : 'tail-400';
-    userMessageReadTelemetry = expandedTail.telemetry;
-    userMessages = (expandedTail.detail?.blocks ?? [])
-      .filter((block) => block.type === 'user')
-      .slice(-5)
-      .map((block) => ({
-        id: block.id,
-        ts: block.ts,
-        text: 'text' in block ? block.text : '',
-        imageCount: 'images' in block && Array.isArray(block.images) ? block.images.length : 0,
-      }));
+    // User messages: prefer local live in-memory messages (most up-to-date), otherwise use a small persisted tail.
+    let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
+    let userMessageSource: 'live' | 'tail-120' | 'tail-400' | 'none' = liveEntry ? 'live' : 'none';
+    let userMessageReadTelemetry: SessionDetailReadTelemetry | null = null;
+    if (liveEntry) {
+      userMessages = liveEntry.session.messages
+        .filter((message) => message.role === 'user')
+        .slice(-5)
+        .map((message, index) => {
+          const { text, imageCount } = summarizeUserMessageContent(message.content);
+          return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
+        });
+    } else if (initialArchivedTail) {
+      const recentTailUserMessages = (initialArchivedTail.detail?.blocks ?? []).filter((block) => block.type === 'user');
+      const expandedTail = initialArchivedTail.detail && recentTailUserMessages.length < 5 && initialArchivedTail.detail.blockOffset > 0
+        ? readSessionBlocksWithTelemetry(id, { tailBlocks: 400 })
+        : initialArchivedTail;
+      userMessageSource = expandedTail === initialArchivedTail ? 'tail-120' : 'tail-400';
+      userMessageReadTelemetry = expandedTail.telemetry;
+      userMessages = (expandedTail.detail?.blocks ?? [])
+        .filter((block) => block.type === 'user')
+        .slice(-5)
+        .map((block) => ({
+          id: block.id,
+          ts: block.ts,
+          text: 'text' in block ? block.text : '',
+          imageCount: 'images' in block && Array.isArray(block.images) ? block.images.length : 0,
+        }));
+    }
+
+    const relatedProjectIds = getConversationProjectLink({
+      profile: getCurrentProfile(),
+      conversationId: id,
+    })?.relatedProjectIds ?? [];
+
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    setServerTimingHeaders(res, [
+      { name: 'git', durationMs: gitSummaryRead.telemetry.durationMs, description: remoteLive ? 'remote-skip' : gitSummaryRead.telemetry.cache },
+      { name: 'user_msgs', durationMs: userMessageReadTelemetry?.durationMs ?? 0, description: userMessageSource },
+      { name: 'total', durationMs },
+    ], {
+      route: 'live-session-context',
+      conversationId: id,
+      git: gitSummaryRead.telemetry,
+      userMessages: {
+        source: userMessageSource,
+        telemetry: userMessageReadTelemetry,
+        count: userMessages.length,
+      },
+      durationMs,
+    });
+    logSlowConversationPerf('live session context request', {
+      conversationId: id,
+      durationMs,
+      gitCache: gitSummaryRead.telemetry.cache,
+      userMessageSource,
+      userMessageReadDurationMs: userMessageReadTelemetry?.durationMs,
+      userMessageReadLoader: userMessageReadTelemetry?.loader,
+    });
+
+    res.json({
+      cwd,
+      branch: gitSummary?.branch ?? null,
+      git: gitSummary
+        ? {
+            changeCount: gitSummary.changeCount,
+            linesAdded: gitSummary.linesAdded,
+            linesDeleted: gitSummary.linesDeleted,
+            changes: gitSummary.changes.map((change) => ({
+              relativePath: change.relativePath,
+              change: change.change,
+            })),
+          }
+        : null,
+      userMessages,
+      relatedProjectIds,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
   }
-
-  const relatedProjectIds = getConversationProjectLink({
-    profile: getCurrentProfile(),
-    conversationId: id,
-  })?.relatedProjectIds ?? [];
-
-  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-  setServerTimingHeaders(res, [
-    { name: 'git', durationMs: gitSummaryRead.telemetry.durationMs, description: remoteLive ? 'remote-skip' : gitSummaryRead.telemetry.cache },
-    { name: 'user_msgs', durationMs: userMessageReadTelemetry?.durationMs ?? 0, description: userMessageSource },
-    { name: 'total', durationMs },
-  ], {
-    route: 'live-session-context',
-    conversationId: id,
-    git: gitSummaryRead.telemetry,
-    userMessages: {
-      source: userMessageSource,
-      telemetry: userMessageReadTelemetry,
-      count: userMessages.length,
-    },
-    durationMs,
-  });
-  logSlowConversationPerf('live session context request', {
-    conversationId: id,
-    durationMs,
-    gitCache: gitSummaryRead.telemetry.cache,
-    userMessageSource,
-    userMessageReadDurationMs: userMessageReadTelemetry?.durationMs,
-    userMessageReadLoader: userMessageReadTelemetry?.loader,
-  });
-
-  res.json({
-    cwd,
-    branch: gitSummary?.branch ?? null,
-    git: gitSummary
-      ? {
-          changeCount: gitSummary.changeCount,
-          linesAdded: gitSummary.linesAdded,
-          linesDeleted: gitSummary.linesDeleted,
-          changes: gitSummary.changes.map((change) => ({
-            relativePath: change.relativePath,
-            change: change.change,
-          })),
-        }
-      : null,
-    userMessages,
-    relatedProjectIds,
-  });
 });
 
 app.get('/api/conversations/:id/plan/events', (req, res) => {

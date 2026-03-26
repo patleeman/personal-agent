@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { validateProjectId } from './projects.js';
 import { getStateRoot } from './runtime/paths.js';
@@ -103,7 +103,14 @@ export function listConversationProjectLinks(options: ResolveConversationLinkOpt
 
   return readdirSync(dir)
     .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => readConversationProjectLink(join(dir, entry)))
+    .map((entry) => {
+      try {
+        return readConversationProjectLink(join(dir, entry));
+      } catch {
+        return null;
+      }
+    })
+    .filter((document): document is ConversationProjectLinkDocument => document !== null)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
@@ -121,7 +128,11 @@ export function getConversationProjectLink(options: ResolveConversationLinkPathO
     return null;
   }
 
-  return readConversationProjectLink(path);
+  try {
+    return readConversationProjectLink(path);
+  } catch {
+    return null;
+  }
 }
 
 export function writeConversationProjectLink(options: {
@@ -144,8 +155,22 @@ export function writeConversationProjectLink(options: {
     relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
   };
 
-  mkdirSync(resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile }), { recursive: true });
-  writeFileSync(path, JSON.stringify(normalized, null, 2) + '\n');
+  const dir = resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile });
+  const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+
+  mkdirSync(dir, { recursive: true });
+  try {
+    writeFileSync(tempPath, JSON.stringify(normalized, null, 2) + '\n');
+    renameSync(tempPath, path);
+  } catch (error) {
+    try {
+      unlinkSync(tempPath);
+    } catch {
+      // Ignore temp cleanup errors.
+    }
+    throw error;
+  }
+
   return path;
 }
 
