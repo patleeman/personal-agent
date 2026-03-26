@@ -28,7 +28,6 @@ export function getRailPageKey(pathname: string): string {
     case 'conversations':
     case 'inbox':
     case 'system':
-    case 'memories':
     case 'skills':
     case 'instructions':
     case 'plans':
@@ -38,6 +37,9 @@ export function getRailPageKey(pathname: string): string {
     case 'knowledge':
     case 'capabilities':
       return section;
+    case 'notes':
+    case 'memories':
+      return 'notes';
     case 'automations':
     case 'tasks':
       return 'scheduled';
@@ -94,7 +96,7 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
       };
-    case 'memories':
+    case 'notes':
     case 'tools':
     case 'plans':
       return {

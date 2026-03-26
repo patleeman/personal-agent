@@ -35,7 +35,7 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
   },
   {
     id: 'memory:ship',
-    section: 'memories',
+    section: 'notes',
     title: 'Ship candidate',
     subtitle: 'ready to branch',
     keywords: ['memory-123', 'release'],
@@ -75,7 +75,7 @@ describe('command palette search', () => {
     const results = searchCommandPaletteItems(ITEMS, { query: 'ship release', scope: 'all' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('memories');
+    expect(results[0]?.section).toBe('notes');
     expect(results[0]?.items[0]?.id).toBe('memory:ship');
   });
 
@@ -94,7 +94,7 @@ describe('command palette search', () => {
       'nav',
       'open',
       'archived',
-      'memories',
+      'notes',
       'tasks',
       'projects',
     ]);

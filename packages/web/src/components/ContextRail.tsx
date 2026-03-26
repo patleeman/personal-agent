@@ -20,7 +20,7 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
-import { buildKnowledgeSearch, getKnowledgeInstructionPath, getKnowledgeMemoryId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
+import { buildKnowledgeSearch, getKnowledgeInstructionPath, getKnowledgeNoteId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
 import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
@@ -404,7 +404,12 @@ function compactRunCardSummary(
   return trimmed;
 }
 
-const MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+const NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
+const LEGACY_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+
+function isNodeDistillRunSourceType(value: string | undefined): boolean {
+  return value === NODE_DISTILL_RUN_SOURCE_TYPE || value === LEGACY_MEMORY_DISTILL_RUN_SOURCE_TYPE;
+}
 
 function formatRecoveryAction(action: string): string {
   switch (action) {
@@ -418,7 +423,7 @@ function formatRecoveryAction(action: string): string {
 }
 
 function isRecoverableMemoryDistillRun(detail: DurableRunDetailResult['run']): boolean {
-  return detail.manifest?.source?.type === MEMORY_DISTILL_RUN_SOURCE_TYPE
+  return isNodeDistillRunSourceType(detail.manifest?.source?.type)
     && (detail.status?.status === 'failed' || detail.status?.status === 'interrupted');
 }
 
@@ -548,7 +553,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
     setActionError(null);
     setRetryingMemoryDistill(true);
     try {
-      const result = await api.retryMemoryDistillRun(run.runId);
+      const result = await api.retryNodeDistillRun(run.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}${setConversationRunIdInSearch('', result.runId)}`);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Could not retry the node distillation run.');
@@ -565,7 +570,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
     setActionError(null);
     setOpeningMemoryRecovery(true);
     try {
-      const result = await api.recoverMemoryDistillRun(run.runId);
+      const result = await api.recoverNodeDistillRun(run.runId);
       persistForkPromptDraft(
         result.conversationId,
         `Help me recover node distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
@@ -2410,16 +2415,17 @@ function ProjectDetailContext({ id }: { id: string }) {
 
 // ── Managed note nodes ───────────────────────────────────────────────────────
 
-const MANAGED_MEMORY_ID_SEARCH_PARAM = 'memory';
+const MANAGED_NOTE_ID_SEARCH_PARAM = 'note';
 const MANAGED_MEMORY_FILE_SEARCH_PARAM = 'file';
 
-function buildManagedMemorySearch(locationSearch: string, memoryId: string | null, relativePath: string | null = null): string {
+function buildManagedNoteSearch(locationSearch: string, memoryId: string | null, relativePath: string | null = null): string {
   const params = new URLSearchParams(locationSearch);
 
   if (memoryId) {
-    params.set(MANAGED_MEMORY_ID_SEARCH_PARAM, memoryId);
+    params.set(MANAGED_NOTE_ID_SEARCH_PARAM, memoryId);
   } else {
-    params.delete(MANAGED_MEMORY_ID_SEARCH_PARAM);
+    params.delete(MANAGED_NOTE_ID_SEARCH_PARAM);
+    params.delete('memory');
   }
 
   if (relativePath) {
@@ -2436,7 +2442,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   const location = useLocation();
   const navigate = useNavigate();
   const { openSession } = useConversations();
-  const fetcher = useCallback(() => api.memoryDoc(memoryId), [memoryId]);
+  const fetcher = useCallback(() => api.noteDoc(memoryId), [memoryId]);
   const { data, loading, refreshing, error, refetch } = useApi(fetcher, memoryId);
   const [draft, setDraft] = useState('');
   const [savedContent, setSavedContent] = useState('');
@@ -2449,8 +2455,8 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
 
   const setSelectedMemory = useCallback((nextMemoryId: string | null, nextRelativePath: string | null = null, replace = false) => {
-    const nextSearch = buildManagedMemorySearch(location.search, nextMemoryId, nextRelativePath);
-    navigate(`/memories${nextSearch}`, { replace });
+    const nextSearch = buildManagedNoteSearch(location.search, nextMemoryId, nextRelativePath);
+    navigate(`/notes${nextSearch}`, { replace });
   }, [location.search, navigate]);
 
   const memory = data?.memory ?? null;
@@ -2540,7 +2546,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
         await refetch({ resetLoading: false });
         setNotice({ tone: 'accent', text: `Saved ${selectedReference.relativePath}.` });
       } else {
-        const result = await api.saveMemoryDoc(memory.id, draft);
+        const result = await api.saveNoteDoc(memory.id, draft);
         setSelectedContent(result.content);
         setDraft(result.content);
         setSavedContent(result.content);
@@ -2575,7 +2581,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
     setNotice(null);
 
     try {
-      await api.deleteMemoryDoc(memory.id);
+      await api.deleteNoteDoc(memory.id);
       emitMemoriesChanged();
       setSelectedMemory(null, null, true);
     } catch (deleteError) {
@@ -2593,7 +2599,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
     setNotice(null);
 
     try {
-      const result = await api.startMemoryConversation(memory.id);
+      const result = await api.startNoteConversation(memory.id);
       openSession(result.id);
       navigate(`/conversations/${encodeURIComponent(result.id)}`);
     } catch (startError) {
@@ -2634,8 +2640,8 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
 
         <div className="space-y-2">
           <div className="ui-detail-row">
-            <span className="ui-detail-label">Package</span>
-            <Link to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
+            <span className="ui-detail-label">Note node</span>
+            <Link to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
               @{memory.id}
             </Link>
           </div>
@@ -2651,7 +2657,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
           )}
           {memory.updated && (
             <div className="ui-detail-row">
-              <span className="ui-detail-label">Package updated</span>
+              <span className="ui-detail-label">Updated</span>
               <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
             </div>
           )}
@@ -2683,7 +2689,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
             <div className="ui-detail-row">
               <span className="ui-detail-label">Parent</span>
               <Link
-                to={`/memories${buildManagedMemorySearch(location.search, memory.parent)}`}
+                to={`/notes${buildManagedNoteSearch(location.search, memory.parent)}`}
                 className="ui-detail-value text-accent hover:underline"
               >
                 @{memory.parent}
@@ -2697,7 +2703,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
                 {memory.related.map((relatedId) => (
                   <Link
                     key={relatedId}
-                    to={`/memories${buildManagedMemorySearch(location.search, relatedId)}`}
+                    to={`/notes${buildManagedNoteSearch(location.search, relatedId)}`}
                     className="text-accent hover:underline"
                   >
                     @{relatedId}
@@ -2716,12 +2722,12 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
 
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <div className="space-y-1">
-            <p className="ui-section-label">Package files</p>
+            <p className="ui-section-label">Node files</p>
             <p className="ui-card-meta">Browse `INDEX.md` and package-local references. Assets remain on disk inside `assets/`.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Link
-              to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`}
+              to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`}
               className={relativePath ? 'ui-toolbar-button' : 'ui-toolbar-button text-accent'}
             >
               INDEX.md
@@ -2729,7 +2735,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
             {references.map((reference) => (
               <Link
                 key={reference.path}
-                to={`/memories${buildManagedMemorySearch(location.search, memory.id, reference.relativePath)}`}
+                to={`/notes${buildManagedNoteSearch(location.search, memory.id, reference.relativePath)}`}
                 className={reference.relativePath === relativePath ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
               >
                 <span className="truncate">{reference.title}</span>
@@ -3149,7 +3155,7 @@ function KnowledgeOverviewContext({
     );
   }
 
-  if (section === 'memories') {
+  if (section === 'notes') {
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
@@ -3157,13 +3163,13 @@ function KnowledgeOverviewContext({
           <p className="ui-card-meta">Select a note node on the left to inspect its overview and package-local references.</p>
         </div>
         <div className="space-y-2">
-          <RailMetadataRow label="Packages" value={memories.length} />
+          <RailMetadataRow label="Note nodes" value={memories.length} />
           <RailMetadataRow label="Recently used" value={memories.filter((item) => item.usedInLastSession).length} />
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recent packages</p>
+          <p className="ui-section-label">Recent notes</p>
           {memories.length === 0 ? <p className="ui-card-meta">No note nodes available.</p> : memories.slice(0, 5).map((memory) => (
-            <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'memories', memoryId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{memory.title}</p>
               <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
             </Link>
@@ -3247,7 +3253,7 @@ function KnowledgeOverviewContext({
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recent knowledge</p>
           {knowledge.recent.length === 0 ? <p className="ui-card-meta">No recent durable knowledge usage yet.</p> : knowledge.recent.slice(0, 4).map((item) => (
-            <Link key={item.item.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'memories', memoryId: item.item.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <Link key={item.item.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: item.item.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{item.title}</p>
               <p className="ui-card-meta mt-1">{item.usageLabel}</p>
             </Link>
@@ -3292,7 +3298,7 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
 }
 
 function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
-  const { data, loading, error, refreshing, refetch } = useApi(() => api.memoryDoc(memoryId), `knowledge-memory-rail:${memoryId}`);
+  const { data, loading, error, refreshing, refetch } = useApi(() => api.noteDoc(memoryId), `knowledge-note-rail:${memoryId}`);
 
   if (loading && !data) return <LoadingState label="Loading note…" className="px-4 py-4" />;
   if (error && !data) return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
@@ -3316,7 +3322,7 @@ function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
           <RailMetadataRow label="Updated" value={data.memory.updated ? timeAgo(data.memory.updated) : 'unknown'} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to={`/memories?memory=${encodeURIComponent(data.memory.id)}`} className="ui-toolbar-button">Open memory browser</Link>
+          <Link to={`/notes?note=${encodeURIComponent(data.memory.id)}`} className="ui-toolbar-button">Open notes browser</Link>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -3463,7 +3469,7 @@ function KnowledgeContextPanel() {
   const location = useLocation();
   const section = getKnowledgeSection(location.search);
   const selectedProjectId = getKnowledgeProjectId(location.search);
-  const selectedMemoryId = getKnowledgeMemoryId(location.search);
+  const selectedMemoryId = getKnowledgeNoteId(location.search);
   const selectedSkillName = getKnowledgeSkillName(location.search);
   const selectedInstructionPath = getKnowledgeInstructionPath(location.search);
   const memoryResult = useApi(api.memory, 'knowledge-rail-memory');
@@ -3907,10 +3913,10 @@ export function ContextRail() {
     </div>
   );
 
-  // Managed memories
-  if (section === 'memories') {
+  // Managed note nodes
+  if (section === 'notes' || section === 'memories') {
     const params = new URLSearchParams(location.search);
-    const memoryId = params.get(MANAGED_MEMORY_ID_SEARCH_PARAM)?.trim() || null;
+    const memoryId = params.get(MANAGED_NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
     const relativePath = params.get(MANAGED_MEMORY_FILE_SEARCH_PARAM)?.trim() || null;
 
     if (memoryId) {
@@ -4010,7 +4016,7 @@ export function ContextRail() {
   if (section === 'knowledge') {
     const knowledgeSection = getKnowledgeSection(location.search);
     const projectId = getKnowledgeProjectId(location.search);
-    const memoryId = getKnowledgeMemoryId(location.search);
+    const memoryId = getKnowledgeNoteId(location.search);
     const skillName = getKnowledgeSkillName(location.search);
     const instructionPath = getKnowledgeInstructionPath(location.search);
     const knowledgeSub = projectId

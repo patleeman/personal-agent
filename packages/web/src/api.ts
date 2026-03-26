@@ -328,8 +328,8 @@ export const api = {
   markDurableRunAttentionRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
-  retryMemoryDistillRun: (id: string) => post<{ accepted: true; conversationId: string; runId: string; status: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/retry`),
-  recoverMemoryDistillRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; sessionFile: string; cwd: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/recover`),
+  retryNodeDistillRun: (id: string) => post<{ accepted: true; conversationId: string; runId: string; status: string }>(`/runs/${encodeURIComponent(id)}/node-distill/retry`),
+  recoverNodeDistillRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; sessionFile: string; cwd: string }>(`/runs/${encodeURIComponent(id)}/node-distill/recover`),
   importRemoteRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; summary: string; importedAt: string }>(`/runs/${encodeURIComponent(id)}/import`),
   remoteRunTranscriptUrl: (id: string) => buildApiPath(`/runs/${encodeURIComponent(id)}/remote-transcript`),
 
@@ -529,22 +529,22 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  memories: () => get<{ memories: MemoryDocItem[]; memoryQueue: MemoryWorkItem[] }>('/memories'),
-  memoryDoc: (memoryId: string) =>
-    get<MemoryDocDetail>(`/memories/${encodeURIComponent(memoryId)}`),
-  saveMemoryDoc: (memoryId: string, content: string) =>
-    post<MemoryDocDetail>(`/memories/${encodeURIComponent(memoryId)}`, { content }),
-  deleteMemoryDoc: (memoryId: string) =>
-    del<{ deleted: boolean; memoryId: string }>(`/memories/${encodeURIComponent(memoryId)}`),
-  conversationMemoryDistillStatus: (id: string) =>
-    get<{ conversationId: string; running: boolean; runId: string | null; status: string | null }>(`/conversations/${encodeURIComponent(id)}/memories/status`),
-  createConversationMemory: (
+  notes: () => get<{ memories: MemoryDocItem[]; memoryQueue: MemoryWorkItem[] }>('/notes'),
+  noteDoc: (memoryId: string) =>
+    get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
+  saveNoteDoc: (memoryId: string, content: string) =>
+    post<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`, { content }),
+  deleteNoteDoc: (memoryId: string) =>
+    del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),
+  conversationNodeDistillStatus: (id: string) =>
+    get<{ conversationId: string; running: boolean; runId: string | null; status: string | null }>(`/conversations/${encodeURIComponent(id)}/notes/status`),
+  createConversationNote: (
     id: string,
     input: { title?: string; summary?: string; anchorMessageId?: string; tags?: string[] },
   ) =>
-    post<{ conversationId: string; accepted: boolean; runId: string; running: boolean; status: string }>(`/conversations/${encodeURIComponent(id)}/memories`, input),
-  startMemoryConversation: (memoryId: string, input?: { cwd?: string }) =>
-    post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/memories/${encodeURIComponent(memoryId)}/start`, input ?? {}),
+    post<{ conversationId: string; accepted: boolean; runId: string; running: boolean; status: string }>(`/conversations/${encodeURIComponent(id)}/notes`, input),
+  startNoteConversation: (memoryId: string, input?: { cwd?: string }) =>
+    post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/notes/${encodeURIComponent(memoryId)}/start`, input ?? {}),
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>

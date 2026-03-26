@@ -283,7 +283,7 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('Full page');
   });
 
-  it('shows package-local references in the memories rail', () => {
+  it('shows package-local references in the notes rail', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memory: {
@@ -316,7 +316,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories?memory=personal-agent']}>
+      <MemoryRouter initialEntries={['/notes?note=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -334,10 +334,10 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Package');
+    expect(html).toContain('Note node');
     expect(html).toContain('Role');
-    expect(html).toContain('href="/memories?memory=personal-agent-web-ui-preferences"');
-    expect(html).toContain('Package files');
+    expect(html).toContain('href="/notes?note=personal-agent-web-ui-preferences"');
+    expect(html).toContain('Node files');
     expect(html).toContain('INDEX.md');
     expect(html).toContain('Web UI preferences');
     expect(html).toContain('references/personal-agent-web-ui-preferences.md');
@@ -508,7 +508,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories?memory=personal-agent']}>
+      <MemoryRouter initialEntries={['/notes?note=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,

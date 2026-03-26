@@ -30,8 +30,8 @@ describe('layout sizing helpers', () => {
       initialWidth: 380,
     });
 
-    expect(getRailLayoutPrefs('/memories')).toEqual({
-      storageKey: 'pa:rail-width:memories',
+    expect(getRailLayoutPrefs('/notes')).toEqual({
+      storageKey: 'pa:rail-width:notes',
       initialMainWidthRatio: 0.7,
     });
 
@@ -71,7 +71,7 @@ describe('layout sizing helpers', () => {
     });
   });
 
-  it('derives 70% initial rails for tools and managed memories', () => {
+  it('derives 70% initial rails for tools and managed notes', () => {
     expect(getRailInitialWidth({
       pathname: '/tools',
       viewportWidth: 1600,
@@ -81,7 +81,7 @@ describe('layout sizing helpers', () => {
     })).toBe(956);
 
     expect(getRailInitialWidth({
-      pathname: '/memories',
+      pathname: '/notes',
       viewportWidth: 700,
       sidebarWidth: 224,
       railMinWidth: 160,

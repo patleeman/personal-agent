@@ -237,7 +237,7 @@ function stringifyMemoryMarkdown(frontmatter: Record<string, unknown>, body: str
 
 function readParsedReferenceMarkdown(filePath: string): { frontmatter: Record<string, unknown> | null; body: string } {
   if (!existsSync(filePath)) {
-    throw new Error(`Memory file not found: ${filePath}`);
+    throw new Error(`Note file not found: ${filePath}`);
   }
 
   const raw = readFileSync(filePath, 'utf-8');

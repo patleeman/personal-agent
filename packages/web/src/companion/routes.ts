@@ -4,8 +4,9 @@ export const COMPANION_CONVERSATIONS_PATH = '/app/conversations';
 export const COMPANION_TASKS_PATH = '/app/tasks';
 export const COMPANION_SYSTEM_PATH = '/app/system';
 export const COMPANION_PROJECTS_PATH = '/app/projects';
-export const COMPANION_MEMORIES_PATH = '/app/memories';
+export const COMPANION_NOTES_PATH = '/app/notes';
 export const COMPANION_SKILLS_PATH = '/app/skills';
+const LEGACY_COMPANION_NOTES_PATH = '/app/memories';
 
 const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_APP_PATH,
@@ -14,7 +15,7 @@ const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_TASKS_PATH,
   COMPANION_SYSTEM_PATH,
   COMPANION_PROJECTS_PATH,
-  COMPANION_MEMORIES_PATH,
+  COMPANION_NOTES_PATH,
   COMPANION_SKILLS_PATH,
 ]);
 
@@ -34,8 +35,8 @@ export function buildCompanionProjectPath(id: string): string {
   return buildCompanionDetailPath(COMPANION_PROJECTS_PATH, id);
 }
 
-export function buildCompanionMemoryPath(id: string): string {
-  return buildCompanionDetailPath(COMPANION_MEMORIES_PATH, id);
+export function buildCompanionNotePath(id: string): string {
+  return buildCompanionDetailPath(COMPANION_NOTES_PATH, id);
 }
 
 export function buildCompanionSkillPath(name: string): string {
@@ -71,6 +72,14 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
     return pathname === COMPANION_APP_PATH ? null : COMPANION_INBOX_PATH;
   }
 
+  if (normalizedPath === LEGACY_COMPANION_NOTES_PATH) {
+    return COMPANION_NOTES_PATH;
+  }
+
+  if (normalizedPath.startsWith(`${LEGACY_COMPANION_NOTES_PATH}/`)) {
+    return normalizedPath.replace(LEGACY_COMPANION_NOTES_PATH, COMPANION_NOTES_PATH);
+  }
+
   if (COMPANION_TOP_LEVEL_PATHS.has(normalizedPath)) {
     return pathname === normalizedPath ? null : normalizedPath;
   }
@@ -79,7 +88,7 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
     isSupportedCompanionDetailPath(normalizedPath, COMPANION_CONVERSATIONS_PATH)
     || isSupportedCompanionDetailPath(normalizedPath, COMPANION_TASKS_PATH)
     || isSupportedCompanionDetailPath(normalizedPath, COMPANION_PROJECTS_PATH)
-    || isSupportedCompanionDetailPath(normalizedPath, COMPANION_MEMORIES_PATH)
+    || isSupportedCompanionDetailPath(normalizedPath, COMPANION_NOTES_PATH)
     || isSupportedCompanionDetailPath(normalizedPath, COMPANION_SKILLS_PATH)
   ) {
     return pathname === normalizedPath ? null : normalizedPath;

@@ -132,9 +132,9 @@ describe('companion resource detail pages', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/app/memories/memory-index']}>
+      <MemoryRouter initialEntries={['/app/notes/memory-index']}>
         <Routes>
-          <Route path="/app/memories/:id" element={<CompanionMemoryDetailPage />} />
+          <Route path="/app/notes/:id" element={<CompanionMemoryDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );

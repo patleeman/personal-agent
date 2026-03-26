@@ -1,6 +1,7 @@
 const COMPANION_ROOT_FALLBACK_PREFIXES = [
   '/conversations',
   '/projects',
+  '/notes',
   '/memories',
   '/skills',
 ] as const;

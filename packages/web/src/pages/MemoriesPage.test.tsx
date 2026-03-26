@@ -70,9 +70,9 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories?memory=memory-index']}>
+      <MemoryRouter initialEntries={['/notes?note=memory-index']}>
         <Routes>
-          <Route path="/memories" element={<MemoriesPage />} />
+          <Route path="/notes" element={<MemoriesPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -85,7 +85,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('2 references');
     expect(html).toContain('1 related node');
     expect(html).toContain('parent');
-    expect(html).toContain('href="/memories?memory=memory-index"');
+    expect(html).toContain('href="/notes?note=memory-index"');
     expect(html).toContain('ui-list-row-selected');
     expect(html).not.toContain('Browse memories');
   });
@@ -110,9 +110,9 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories']}>
+      <MemoryRouter initialEntries={['/notes']}>
         <Routes>
-          <Route path="/memories" element={<MemoriesPage />} />
+          <Route path="/notes" element={<MemoriesPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -145,9 +145,9 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories']}>
+      <MemoryRouter initialEntries={['/notes']}>
         <Routes>
-          <Route path="/memories" element={<MemoriesPage />} />
+          <Route path="/notes" element={<MemoriesPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -178,9 +178,9 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories']}>
+      <MemoryRouter initialEntries={['/notes']}>
         <Routes>
-          <Route path="/memories" element={<MemoriesPage />} />
+          <Route path="/notes" element={<MemoriesPage />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -204,9 +204,9 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories']}>
+      <MemoryRouter initialEntries={['/notes']}>
         <Routes>
-          <Route path="/memories" element={<MemoriesPage />} />
+          <Route path="/notes" element={<MemoriesPage />} />
         </Routes>
       </MemoryRouter>,
     );

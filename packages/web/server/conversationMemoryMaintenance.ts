@@ -12,6 +12,7 @@ const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const DOCUMENT_VERSION = 1 as const;
 
 export const CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX = 'Recover node distillation:';
+export const LEGACY_CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX = 'Recover memory distillation:';
 
 export type ConversationMemoryMaintenanceTrigger = 'manual' | 'turn_end' | 'auto_compaction_end';
 export type ConversationMemoryMaintenanceMode = 'manual' | 'auto';
@@ -98,8 +99,26 @@ interface SessionJsonMessageLine {
 }
 
 export function isConversationMemoryDistillRecoveryTitle(title: string | undefined | null): boolean {
-  return typeof title === 'string'
-    && title.trim().startsWith(CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX);
+  if (typeof title !== 'string') {
+    return false;
+  }
+
+  const normalized = title.trim();
+  return normalized.startsWith(CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX)
+    || normalized.startsWith(LEGACY_CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX);
+}
+
+export function normalizeConversationMemoryDistillRecoveryTitle(title: string | undefined | null): string | undefined {
+  if (typeof title !== 'string') {
+    return undefined;
+  }
+
+  const normalized = title.trim();
+  if (normalized.startsWith(LEGACY_CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX)) {
+    return `${CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX} ${normalized.slice(LEGACY_CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX.length).trim()}`.trim();
+  }
+
+  return normalized || undefined;
 }
 
 function validateProfileName(profile: string): void {

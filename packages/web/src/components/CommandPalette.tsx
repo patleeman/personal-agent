@@ -162,13 +162,13 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/projects' },
     },
     {
-      id: 'nav:memories',
+      id: 'nav:notes',
       section: 'nav',
       title: 'Notes',
-      subtitle: 'Browse durable knowledge packages',
+      subtitle: 'Browse durable note nodes',
       keywords: ['memory', 'knowledge', 'distilled', 'references'],
       order: 5,
-      action: { kind: 'navigate', to: '/memories' },
+      action: { kind: 'navigate', to: '/notes' },
     },
     {
       id: 'nav:skills',
@@ -216,13 +216,13 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/tools' },
     },
     {
-      id: 'nav:search-memories',
+      id: 'nav:search-notes',
       section: 'nav',
-      title: 'Search memories',
-      subtitle: 'Fuzzy search memory summaries and full memory content',
-      keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
+      title: 'Search notes',
+      subtitle: 'Fuzzy search note summaries and full note content',
+      keywords: ['note', 'knowledge', 'distilled', 'content', 'fuzzy'],
       order: 11,
-      action: { kind: 'setScope', scope: 'memories' },
+      action: { kind: 'setScope', scope: 'notes' },
     },
     {
       id: 'nav:archived',
@@ -326,7 +326,7 @@ function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<Command
 
     return {
       id: `memory:${memory.id}`,
-      section: 'memories',
+      section: 'notes',
       title: memory.title,
       subtitle: excerpt(memory.summary, 120),
       meta: metaParts.join(' · '),
@@ -449,8 +449,8 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
         return `No open conversations match “${query}”.`;
       case 'archived':
         return `No archived conversations match “${query}”.`;
-      case 'memories':
-        return `No memories match “${query}”.`;
+      case 'notes':
+        return `No notes match “${query}”.`;
       case 'tasks':
         return `No scheduled tasks match “${query}”.`;
       case 'projects':
@@ -465,8 +465,8 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
       return 'No open conversations yet.';
     case 'archived':
       return 'No archived conversations yet.';
-    case 'memories':
-      return 'No memories yet.';
+    case 'notes':
+      return 'No notes yet.';
     case 'tasks':
       return 'No scheduled tasks yet.';
     case 'projects':
@@ -563,7 +563,7 @@ export function CommandPalette() {
   }, [openPalette]);
 
   const openMemoryEditor = useCallback((memoryId: string) => {
-    navigate(`/memories?memory=${encodeURIComponent(memoryId)}`);
+    navigate(`/notes?note=${encodeURIComponent(memoryId)}`);
     closePalette();
   }, [closePalette, navigate]);
 
@@ -594,7 +594,7 @@ export function CommandPalette() {
           window.requestAnimationFrame(() => inputRef.current?.focus());
           return;
         case 'startMemory': {
-          const result = await api.startMemoryConversation(item.action.memoryId);
+          const result = await api.startNoteConversation(item.action.memoryId);
           openSession(result.id);
           navigate(`/conversations/${encodeURIComponent(result.id)}`);
           closePalette();
@@ -657,7 +657,7 @@ export function CommandPalette() {
     setMemoriesError(null);
     let cancelled = false;
 
-    api.memories()
+    api.notes()
       .then((result) => {
         if (cancelled) {
           return;
@@ -857,8 +857,8 @@ export function CommandPalette() {
     if ((scope === 'all' || scope === 'archived') && archivedSearchLoading) {
       sections.add('archived');
     }
-    if ((scope === 'all' || scope === 'memories') && memoriesLoading) {
-      sections.add('memories');
+    if ((scope === 'all' || scope === 'notes') && memoriesLoading) {
+      sections.add('notes');
     }
     if ((scope === 'all' || scope === 'tasks') && tasks === null) {
       sections.add('tasks');
@@ -898,7 +898,7 @@ export function CommandPalette() {
             <div>
               <p className="ui-section-label text-[11px]">Command palette</p>
               <p className="text-[12px] text-secondary mt-1">
-                Unified search for open chats, archived message history, memories, tasks, and projects.
+                Unified search for open chats, archived message history, notes, tasks, and projects.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
@@ -974,7 +974,7 @@ export function CommandPalette() {
                 const isSelected = itemIndex === cursor;
                 const isBusy = busyItemId === item.id;
                 const action = item.action;
-                const isMemoryRow = group.section === 'memories' && action.kind === 'startMemory';
+                const isMemoryRow = group.section === 'notes' && action.kind === 'startMemory';
 
                 if (isMemoryRow) {
                   const memoryId = action.memoryId;
@@ -1108,18 +1108,18 @@ export function CommandPalette() {
             </section>
           )}
 
-          {memoriesError && (scope === 'all' || scope === 'memories') && (
+          {memoriesError && (scope === 'all' || scope === 'notes') && (
             <section className="py-1">
               <div className="px-5 pb-1 flex items-center gap-2">
                 <p className="ui-section-label">Notes</p>
               </div>
-              <p className="px-5 py-3 text-[12px] text-danger">Failed to load memories: {memoriesError}</p>
+              <p className="px-5 py-3 text-[12px] text-danger">Failed to load notes: {memoriesError}</p>
             </section>
           )}
 
           {visibleCount === 0 && loadingSections.length === 0
             && !(archivedSearchError && (scope === 'all' || scope === 'archived'))
-            && !(memoriesError && (scope === 'all' || scope === 'memories')) && (
+            && !(memoriesError && (scope === 'all' || scope === 'notes')) && (
             <p className="px-6 py-10 text-[12px] text-dim text-center font-mono">{emptyStateCopy(scope, query)}</p>
           )}
         </div>
@@ -1127,7 +1127,7 @@ export function CommandPalette() {
         <div className="px-5 py-2.5 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono gap-3">
           <Pill tone="muted" mono>{visibleCount > 0 ? `${cursor + 1} / ${visibleCount}` : '0 / 0'}</Pill>
           <span>
-            Memory rows include start + edit actions · tab/shift+tab to change scope · esc to close
+            Note rows include start + edit actions · tab/shift+tab to change scope · esc to close
           </span>
         </div>
       </div>

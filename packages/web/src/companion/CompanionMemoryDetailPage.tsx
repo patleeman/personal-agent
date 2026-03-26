@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { COMPANION_MEMORIES_PATH } from './routes';
+import { COMPANION_NOTES_PATH } from './routes';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -22,7 +22,7 @@ export function CompanionMemoryDetailPage() {
       throw new Error('Missing memory id.');
     }
 
-    return api.memoryDoc(id);
+    return api.noteDoc(id);
   }, [id]);
   const { data, loading, refreshing, error, refetch } = useApi(fetchMemory, `companion-memory:${id ?? ''}`);
 
@@ -43,7 +43,7 @@ export function CompanionMemoryDetailPage() {
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
           <div className="flex items-center justify-between gap-3">
-            <Link to={COMPANION_MEMORIES_PATH} className="text-[12px] font-medium text-accent">← Notes</Link>
+            <Link to={COMPANION_NOTES_PATH} className="text-[12px] font-medium text-accent">← Notes</Link>
             <button
               type="button"
               onClick={() => { void refetch({ resetLoading: false }); }}

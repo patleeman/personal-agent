@@ -5,7 +5,7 @@ import {
 } from '@personal-agent/core';
 import { invalidateAppTopics } from './appEvents.js';
 
-export type ConversationMemoryDistillActivityKind = 'conversation-memory-distilled' | 'conversation-memory-distill-failed';
+export type ConversationMemoryDistillActivityKind = 'conversation-node-distilled' | 'conversation-node-distill-failed';
 
 interface WriteConversationMemoryDistillActivityOptions {
   stateRoot?: string;
@@ -18,7 +18,7 @@ interface WriteConversationMemoryDistillActivityOptions {
 }
 
 function createConversationMemoryActivityId(kind: ConversationMemoryDistillActivityKind): string {
-  const prefix = kind === 'conversation-memory-distilled' ? 'memory-distill' : 'memory-distill-fail';
+  const prefix = kind === 'conversation-node-distilled' ? 'node-distill' : 'node-distill-fail';
   const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   const suffix = Math.random().toString(36).slice(2, 8);
   return `${prefix}-${timestamp}-${suffix}`;
@@ -70,7 +70,7 @@ export function writeConversationMemoryDistillFailureActivity(options: {
     stateRoot: options.stateRoot,
     profile: options.profile,
     conversationId: options.conversationId,
-    kind: 'conversation-memory-distill-failed',
+    kind: 'conversation-node-distill-failed',
     summary: 'Conversation node distillation failed',
     details: buildConversationMemoryDistillFailureDetails(options.error),
     relatedProjectIds: options.relatedProjectIds,

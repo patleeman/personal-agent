@@ -34,7 +34,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   const payloadBase64 = readArgValue(argv, '--payload');
 
   if (!portRaw || !profile || !payloadBase64) {
-    throw new Error('Usage: distillConversationMemoryRun --port <port> --profile <profile> --payload <base64url-json>');
+    throw new Error('Usage: distillConversationNodeRun --port <port> --profile <profile> --payload <base64url-json>');
   }
 
   const port = Number.parseInt(portRaw, 10);
@@ -77,7 +77,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 async function runDistillation(args: ParsedArgs): Promise<void> {
   const origin = `http://127.0.0.1:${args.port}`;
-  const response = await fetch(`${origin}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/memories/distill-now`, {
+  const response = await fetch(`${origin}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/notes/distill-now`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -110,9 +110,9 @@ async function runDistillation(args: ParsedArgs): Promise<void> {
   }
 
   const disposition = parsed?.disposition ?? 'unknown';
-  const memoryId = parsed?.memory?.id ?? '(unknown)';
-  const memoryTitle = parsed?.memory?.title ?? '(untitled)';
-  console.log(`distill completed disposition=${disposition} memoryId=${memoryId} title=${memoryTitle}`);
+  const noteId = parsed?.memory?.id ?? '(unknown)';
+  const noteTitle = parsed?.memory?.title ?? '(untitled)';
+  console.log(`distill completed disposition=${disposition} noteId=${noteId} title=${noteTitle}`);
 }
 
 export async function runDistillConversationMemoryCli(argv: string[] = process.argv.slice(2)): Promise<number> {
