@@ -5226,6 +5226,51 @@ async function readConversationExecutionState(conversationId: string) {
   return (await readConversationExecutionStateWithTelemetry(conversationId)).state;
 }
 
+async function readConversationBootstrapState(input: {
+  conversationId: string;
+  profile: string;
+  tailBlocks?: number;
+}) {
+  const [sessionResult, execution] = await Promise.all([
+    readSessionDetailForRoute({
+      conversationId: input.conversationId,
+      profile: input.profile,
+      tailBlocks: input.tailBlocks,
+    }),
+    readConversationExecutionStateWithTelemetry(input.conversationId),
+  ]);
+
+  const relatedProjectIds = getConversationProjectLink({
+    profile: input.profile,
+    conversationId: input.conversationId,
+  })?.relatedProjectIds ?? [];
+  const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
+
+  return {
+    state: {
+      conversationId: input.conversationId,
+      sessionDetail: sessionResult.sessionRead.detail,
+      projects: {
+        conversationId: input.conversationId,
+        relatedProjectIds,
+      },
+      execution: execution.state,
+      remoteConnection: getRemoteConversationConnectionState({
+        profile: input.profile,
+        conversationId: input.conversationId,
+      }),
+      liveSession: liveSession
+        ? { live: true as const, ...liveSession }
+        : { live: false as const },
+    },
+    telemetry: {
+      sessionRead: sessionResult.sessionRead.telemetry,
+      remoteMirror: sessionResult.remoteMirror,
+      execution: execution.telemetry,
+    },
+  };
+}
+
 app.get('/api/execution-targets', async (_req, res) => {
   try {
     res.json(await readExecutionTargetsState());
@@ -7839,6 +7884,55 @@ app.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) =>
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/conversations/:id/bootstrap', async (req, res) => {
+  const startedAt = process.hrtime.bigint();
+
+  try {
+    const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
+    const bootstrap = await readConversationBootstrapState({
+      conversationId: req.params.id,
+      profile: getCurrentProfile(),
+      tailBlocks,
+    });
+    if (!bootstrap.state.sessionDetail && !bootstrap.state.liveSession.live) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    setServerTimingHeaders(res, [
+      { name: 'remote_sync', durationMs: bootstrap.telemetry.remoteMirror.durationMs, description: bootstrap.telemetry.remoteMirror.status },
+      { name: 'session_read', durationMs: bootstrap.telemetry.sessionRead?.durationMs ?? 0, description: bootstrap.telemetry.sessionRead ? `${bootstrap.telemetry.sessionRead.cache}/${bootstrap.telemetry.sessionRead.loader}` : 'missing' },
+      { name: 'runs', durationMs: bootstrap.telemetry.execution.durationMs, description: `${bootstrap.telemetry.execution.cache}/${bootstrap.telemetry.execution.source}` },
+      { name: 'total', durationMs },
+    ], {
+      route: 'conversation-bootstrap',
+      conversationId: req.params.id,
+      ...(tailBlocks ? { tailBlocks } : {}),
+      remoteMirror: bootstrap.telemetry.remoteMirror,
+      sessionRead: bootstrap.telemetry.sessionRead,
+      execution: bootstrap.telemetry.execution,
+      durationMs,
+    });
+    logSlowConversationPerf('conversation bootstrap request', {
+      conversationId: req.params.id,
+      durationMs,
+      ...(tailBlocks ? { tailBlocks } : {}),
+      remoteMirrorStatus: bootstrap.telemetry.remoteMirror.status,
+      sessionReadCache: bootstrap.telemetry.sessionRead?.cache,
+      sessionReadLoader: bootstrap.telemetry.sessionRead?.loader,
+      sessionReadDurationMs: bootstrap.telemetry.sessionRead?.durationMs,
+      executionRunsCache: bootstrap.telemetry.execution.cache,
+      executionRunsSource: bootstrap.telemetry.execution.source,
+      executionRunsDurationMs: bootstrap.telemetry.execution.durationMs,
+    });
+
+    res.json(bootstrap.state);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
 

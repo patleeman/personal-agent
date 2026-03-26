@@ -669,6 +669,17 @@ export interface ConversationProjectLinks {
   relatedProjectIds: string[];
 }
 
+export type ConversationBootstrapLiveState = { live: false } | ({ live: true } & LiveSessionMeta);
+
+export interface ConversationBootstrapState {
+  conversationId: string;
+  sessionDetail: SessionDetail | null;
+  projects: ConversationProjectLinks;
+  execution: ConversationExecutionState;
+  remoteConnection: RemoteConversationConnectionState;
+  liveSession: ConversationBootstrapLiveState;
+}
+
 export interface DeferredResumeSummary {
   id: string;
   sessionFile: string;

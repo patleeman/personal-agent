@@ -37,6 +37,17 @@ function trimSessionDetailCache(): void {
   }
 }
 
+export function primeSessionDetailCache(
+  sessionId: string,
+  detail: SessionDetail,
+  options?: { tailBlocks?: number },
+  version = 0,
+): void {
+  const cacheKey = buildSessionDetailCacheKey(sessionId, options);
+  sessionDetailCache.set(cacheKey, { detail, version });
+  trimSessionDetailCache();
+}
+
 export function fetchSessionDetailCached(
   sessionId: string,
   options?: { tailBlocks?: number },

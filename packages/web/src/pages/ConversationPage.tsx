@@ -9,7 +9,8 @@ import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationPr
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
-import { useSessionDetail } from '../hooks/useSessions';
+import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
+import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
@@ -963,6 +964,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+  const {
+    data: conversationBootstrap,
+    loading: conversationBootstrapLoading,
+  } = useConversationBootstrap(id, { tailBlocks: historicalTailBlocks });
+  const bootstrapSessionDetail = conversationBootstrap?.sessionDetail?.meta.id === id
+    ? conversationBootstrap.sessionDetail
+    : null;
   const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);
 
   // ── Pi SDK stream — stay subscribed until we know the conversation is not live ─
@@ -984,7 +992,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ensureConversationOpenStart(id, 'route');
   }, [draft, id]);
 
-  // Confirm live status via the session snapshot and probe for live-only queue state.
+  // Confirm live status via bootstrap/session snapshots and probe live-only queue state only when needed.
   useEffect(() => {
     if (!id) {
       setConfirmedLive(false);
@@ -992,7 +1000,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (sessionSnapshot?.isLive === false) {
+    if (conversationBootstrap?.liveSession.live) {
+      setConfirmedLive(true);
+      setLiveSessionHasPendingHiddenTurn(conversationBootstrap.liveSession.hasPendingHiddenTurn === true);
+      return;
+    }
+
+    if (conversationBootstrap?.liveSession.live === false || sessionSnapshot?.isLive === false) {
       setConfirmedLive(false);
       setLiveSessionHasPendingHiddenTurn(false);
       return;
@@ -1024,7 +1038,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [id, sessionSnapshot, sessionsLoaded]);
+  }, [conversationBootstrap?.liveSession, id, sessionSnapshot, sessionsLoaded]);
 
   const isLiveSession = resolveConversationLiveSession({
     streamBlockCount: stream.blocks.length,
@@ -1049,8 +1063,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
-  const { detail: sessionDetail, loading: sessionLoading, error: sessionError } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
-  const visibleSessionDetail = sessionDetail?.meta.id === id ? sessionDetail : null;
+  useEffect(() => {
+    if (!id || !bootstrapSessionDetail) {
+      return;
+    }
+
+    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, versions.sessions);
+  }, [bootstrapSessionDetail, historicalTailBlocks, id, versions.sessions]);
+
+  const bootstrapPendingInitialSessionDetail = Boolean(id)
+    && conversationBootstrapLoading
+    && !bootstrapSessionDetail;
+  const { detail: sessionDetail, loading: sessionLoading, error: sessionError } = useSessionDetail(
+    bootstrapPendingInitialSessionDetail ? undefined : id,
+    { tailBlocks: historicalTailBlocks },
+  );
+  const visibleSessionDetail = sessionDetail?.meta.id === id
+    ? sessionDetail
+    : bootstrapSessionDetail;
   const [hydratedHistoricalBlocks, setHydratedHistoricalBlocks] = useState<Record<string, MessageBlock>>({});
   const [hydratingHistoricalBlockIds, setHydratingHistoricalBlockIds] = useState<string[]>([]);
   const hydratingHistoricalBlockIdSet = useMemo(
@@ -1596,6 +1626,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
+  const conversationBootstrapPendingContext = Boolean(id)
+    && conversationBootstrapLoading
+    && !conversationBootstrap;
 
   useEffect(() => {
     setPendingAssistantStatusLabel(null);
@@ -1614,54 +1647,90 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { data: profileState } = useApi(api.profiles);
   const executionTargetsState = useApi(api.executionTargets);
   const conversationExecutionState = useApi(
-    async () => (id
-      ? api.conversationExecution(id)
-      : {
+    async () => {
+      if (!id) {
+        return {
           conversationId: 'draft',
           targetId: null,
           location: 'local' as const,
           target: null,
-        }),
-    id ?? 'draft-conversation-execution',
+        };
+      }
+
+      if (conversationBootstrapPendingContext) {
+        return {
+          conversationId: '',
+          targetId: null,
+          location: 'local' as const,
+          target: null,
+        };
+      }
+
+      return api.conversationExecution(id);
+    },
+    id
+      ? `conversation-execution:${id}:${conversationBootstrapPendingContext ? 'bootstrap-pending' : 'ready'}`
+      : 'draft-conversation-execution',
   );
   const remoteConversationConnectionState = useApi(
-    async () => (id
-      ? api.remoteConversationConnection(id)
-      : {
+    async () => {
+      if (!id) {
+        return {
           conversationId: 'draft',
           targetId: null,
           connected: false,
           state: 'local' as const,
           message: null,
           updatedAt: null,
-        }),
-    id ?? 'draft-remote-connection',
+        };
+      }
+
+      if (conversationBootstrapPendingContext) {
+        return {
+          conversationId: '',
+          targetId: null,
+          connected: false,
+          state: 'local' as const,
+          message: null,
+          updatedAt: null,
+        };
+      }
+
+      return api.remoteConversationConnection(id);
+    },
+    id
+      ? `conversation-remote-connection:${id}:${conversationBootstrapPendingContext ? 'bootstrap-pending' : 'ready'}`
+      : 'draft-remote-connection',
   );
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
   const [remoteConnectBusy, setRemoteConnectBusy] = useState(false);
   const conversationProjectsFetcher = useCallback(async () => {
-    if (!id) {
+    if (!id || conversationBootstrapPendingContext) {
       return { conversationId: '', relatedProjectIds: [] };
     }
 
     return api.conversationProjects(id);
-  }, [id]);
+  }, [conversationBootstrapPendingContext, id]);
   const {
     data: conversationProjectsData,
     refetch: refetchConversationProjects,
   } = useApi(conversationProjectsFetcher, id ?? 'no-conversation');
-  const conversationProjects = conversationProjectsData ?? (id ? conversationProjectsCache.get(id) ?? null : null);
+  const conversationProjects = (conversationProjectsData?.conversationId === id
+    ? conversationProjectsData
+    : null)
+    ?? conversationBootstrap?.projects
+    ?? (id ? conversationProjectsCache.get(id) ?? null : null);
   const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
 
   useEffect(() => {
-    if (!id || !conversationProjectsData) {
+    if (!id || !conversationProjects) {
       return;
     }
 
-    conversationProjectsCache.set(id, conversationProjectsData);
-  }, [conversationProjectsData, id]);
+    conversationProjectsCache.set(id, conversationProjects);
+  }, [conversationProjects, id]);
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
@@ -1871,9 +1940,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [conversationExecutionState.refetch, executionTargetsState.refetch, id, versions.runs]);
 
+  const conversationExecutionData = draft
+    ? null
+    : (conversationExecutionState.data?.conversationId === id
+        ? conversationExecutionState.data
+        : (conversationBootstrap?.execution ?? null));
+  const remoteConversationConnection = draft
+    ? null
+    : (remoteConversationConnectionState.data?.conversationId === id
+        ? remoteConversationConnectionState.data
+        : (conversationBootstrap?.remoteConnection ?? null));
+
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId
-    : (conversationExecutionState.data?.targetId ?? null);
+    : (conversationExecutionData?.targetId ?? null);
   const selectedExecutionTarget = useMemo<ExecutionTargetSummary | null>(() => {
     if (!selectedExecutionTargetId) {
       return null;
@@ -4054,7 +4134,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && (remoteConnectBusy
       || Boolean(pendingInitialPrompt)
       || pendingInitialPromptSessionIdRef.current === id);
-  const remoteConnectionStatusMessage = remoteConversationConnectionState.data?.message
+  const remoteConnectionStatusMessage = remoteConversationConnection?.message
     ?? (remoteConnectionPending
       ? 'Connecting to the remote workspace…'
       : remoteConversationRequiresConnect
