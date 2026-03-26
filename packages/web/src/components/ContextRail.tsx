@@ -1213,7 +1213,7 @@ function DraftConversationContextPanel() {
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
           <div className="space-y-2">
             {hasExplicitCwd ? (
-              <p className="ui-card-body min-w-0 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
+              <p className="ui-card-body min-w-0 break-all pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
             ) : (
               <p className="ui-card-body min-w-0 text-dim">No working directory set.</p>
             )}
@@ -1908,7 +1908,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
           <div className="flex items-start gap-2">
-            <p className="ui-card-body min-w-0 flex-1 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
+            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
             <div className="flex shrink-0 items-center gap-0.5">
               <IconButton
                 compact
