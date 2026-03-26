@@ -116,7 +116,7 @@ export function createArtifactAgentExtension(options: {
               });
               const openRequested = params.open ?? true;
 
-              invalidateAppTopics('sessions');
+              invalidateAppTopics('artifacts');
               return {
                 content: [{
                   type: 'text' as const,
@@ -188,7 +188,7 @@ export function createArtifactAgentExtension(options: {
                 artifactId,
               });
 
-              invalidateAppTopics('sessions');
+              invalidateAppTopics('artifacts');
               return {
                 content: [{
                   type: 'text' as const,

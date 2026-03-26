@@ -54,6 +54,7 @@ import type {
   AgentToolInfo,
   ConversationAutomationWorkflowPreset,
   ConversationExecutionState,
+  ConversationProjectLinks,
   DurableRunDetailResult,
   LiveSessionContext,
   MemoryAgentsItem,
@@ -108,6 +109,8 @@ type ConversationRailCacheEntry<T> = {
 
 const liveSessionContextCache = new Map<string, ConversationRailCacheEntry<LiveSessionContext>>();
 const liveSessionContextInflight = new Map<string, Promise<LiveSessionContext>>();
+const conversationProjectsCache = new Map<string, ConversationRailCacheEntry<ConversationProjectLinks>>();
+const conversationProjectsInflight = new Map<string, Promise<ConversationProjectLinks>>();
 const conversationExecutionCache = new Map<string, ConversationRailCacheEntry<ConversationExecutionState>>();
 const conversationExecutionInflight = new Map<string, Promise<ConversationExecutionState>>();
 
@@ -153,14 +156,16 @@ function fetchConversationRailCacheEntry<T>(input: {
 
 export function prefetchConversationRailData(input: {
   conversationId: string;
-  sessionsVersion: number;
   workspaceVersion: number;
+  projectsVersion: number;
   runsVersion: number;
   executionTargetsVersion: number;
 }): Promise<void> {
-  const liveContextVersionKey = `${input.sessionsVersion}:${input.workspaceVersion}`;
+  const liveContextVersionKey = `${input.workspaceVersion}`;
+  const projectsVersionKey = `${input.projectsVersion}`;
   const executionVersionKey = `${input.executionTargetsVersion}:${input.runsVersion}`;
   const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
+  const cachedProjects = conversationProjectsCache.get(input.conversationId) ?? null;
   const cachedExecution = conversationExecutionCache.get(input.conversationId) ?? null;
 
   const requests: Promise<unknown>[] = [];
@@ -171,6 +176,16 @@ export function prefetchConversationRailData(input: {
       key: input.conversationId,
       versionKey: liveContextVersionKey,
       fetcher: () => api.liveSessionContext(input.conversationId),
+    }));
+  }
+
+  if (!isConversationRailCacheFresh(cachedProjects, projectsVersionKey)) {
+    requests.push(fetchConversationRailCacheEntry({
+      cache: conversationProjectsCache,
+      inflight: conversationProjectsInflight,
+      key: input.conversationId,
+      versionKey: projectsVersionKey,
+      fetcher: () => api.conversationProjects(input.conversationId),
     }));
   }
 
@@ -1376,6 +1391,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, projects: projectSnapshot } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
+  const [conversationProjects, setConversationProjects] = useState<ConversationProjectLinks | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
   const [referenceableProjects, setReferenceableProjects] = useState<ProjectRecord[] | null>(projectSnapshot);
   const [focusedProjectId, setFocusedProjectId] = useState('');
@@ -1406,19 +1422,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   );
   const runsLoading = runs === null;
   const runsError = null;
-  const liveContextVersionKey = `${versions.sessionFiles}:${versions.workspace}`;
+  const liveContextVersionKey = `${versions.workspace}`;
+  const projectsVersionKey = `${versions.projects}`;
   const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
 
-  const load = useCallback(() => {
+  const load = useCallback((options: {
+    forceContext?: boolean;
+    forceProjects?: boolean;
+    forceExecution?: boolean;
+  } = {}) => {
     let cancelled = false;
     const cachedContext = liveSessionContextCache.get(id) ?? null;
+    const cachedProjects = conversationProjectsCache.get(id) ?? null;
     const cachedExecution = conversationExecutionCache.get(id) ?? null;
-    const hasFreshContext = isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
-    const hasFreshExecution = isConversationRailCacheFresh(cachedExecution, executionVersionKey);
+    const hasFreshContext = !options.forceContext && isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
+    const hasFreshProjects = !options.forceProjects && isConversationRailCacheFresh(cachedProjects, projectsVersionKey);
+    const hasFreshExecution = !options.forceExecution && isConversationRailCacheFresh(cachedExecution, executionVersionKey);
 
     setData(cachedContext?.data ?? null);
+    setConversationProjects(cachedProjects?.data ?? null);
     setExecution(cachedExecution?.data ?? null);
-    setLoading(!cachedContext);
+    setLoading(!cachedContext && !cachedProjects && !cachedExecution);
     setError(false);
 
     const contextPromise = hasFreshContext && cachedContext
@@ -1430,6 +1454,15 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: liveContextVersionKey,
           fetcher: () => api.liveSessionContext(id),
         });
+    const projectsPromise = hasFreshProjects && cachedProjects
+      ? Promise.resolve(cachedProjects.data)
+      : fetchConversationRailCacheEntry({
+          cache: conversationProjectsCache,
+          inflight: conversationProjectsInflight,
+          key: id,
+          versionKey: projectsVersionKey,
+          fetcher: () => api.conversationProjects(id),
+        });
     const executionPromise = hasFreshExecution && cachedExecution
       ? Promise.resolve(cachedExecution.data)
       : fetchConversationRailCacheEntry({
@@ -1439,13 +1472,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: executionVersionKey,
           fetcher: () => api.conversationExecution(id),
         });
-    Promise.all([contextPromise, executionPromise])
-      .then(([context, nextExecution]) => {
+    Promise.all([contextPromise, projectsPromise, executionPromise])
+      .then(([context, nextProjects, nextExecution]) => {
         if (cancelled) {
           return;
         }
 
         setData(context);
+        setConversationProjects(nextProjects);
         setExecution(nextExecution);
         setLoading(false);
       })
@@ -1458,7 +1492,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [executionVersionKey, id, liveContextVersionKey]);
+  }, [executionVersionKey, id, liveContextVersionKey, projectsVersionKey]);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
@@ -1503,12 +1537,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         state: error ? 'error' : 'loaded',
         hasContext: Boolean(data),
         hasExecution: Boolean(execution),
-        userMessageCount: data?.userMessages.length ?? 0,
+        relatedProjectCount: conversationProjects?.relatedProjectIds.length ?? 0,
       });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [data, error, execution, id, loading]);
+  }, [conversationProjects, data, error, execution, id, loading]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
@@ -1573,14 +1607,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         return;
       }
 
-      load();
+      load({ forceProjects: true });
     }
 
     window.addEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
     return () => window.removeEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
   }, [id, load]);
 
-  const relatedProjectIds = data?.relatedProjectIds ?? [];
+  const relatedProjectIds = conversationProjects?.relatedProjectIds ?? [];
   const remoteTargetId = execution?.location === 'remote' ? execution.targetId : null;
   const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
   const availableProjectIds = allProjects
@@ -1769,7 +1803,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     try {
       await api.addConversationProject(id, attachProjectId);
       emitConversationProjectsChanged(id);
-      load();
+      load({ forceProjects: true });
     } finally {
       setLinkBusy(false);
     }
@@ -1781,7 +1815,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     try {
       await api.removeConversationProject(id, projectId);
       emitConversationProjectsChanged(id);
-      load();
+      load({ forceProjects: true });
     } finally {
       setLinkBusy(false);
     }
@@ -1886,7 +1920,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       setRequestedCwd(result.cwd);
 
       if (!result.changed || result.id === id) {
-        load();
+        load({ forceContext: true, forceExecution: true });
         return;
       }
 

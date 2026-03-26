@@ -42,7 +42,7 @@ export function ConversationArtifactPanel({
   useEffect(() => {
     void refetch({ resetLoading: false });
     void refetchList({ resetLoading: false });
-  }, [refetch, refetchList, versions.sessions]);
+  }, [refetch, refetchList, versions.artifacts]);
 
   const artifact = artifactData?.artifact ?? null;
   const artifacts = artifactListData?.artifacts ?? [];

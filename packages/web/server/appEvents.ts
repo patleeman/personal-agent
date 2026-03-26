@@ -24,6 +24,7 @@ export type AppEventTopic =
   | 'projects'
   | 'sessions'
   | 'sessionFiles'
+  | 'artifacts'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -75,6 +76,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'projects',
   'sessions',
   'sessionFiles',
+  'artifacts',
   'tasks',
   'runs',
   'automation',
@@ -209,7 +211,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: conversationLinksDir, kind: 'directory' },
     ],
     sessions: [
-      { path: conversationArtifactsDir, kind: 'directory' },
       { path: conversationAttentionStateFile, kind: 'file' },
       { path: deferredResumeStateFile, kind: 'file' },
       { path: alertsStateFile, kind: 'file' },
@@ -218,6 +219,9 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     ],
     sessionFiles: [
       { path: options.sessionsDir, kind: 'directory', eventKinds: ['change', 'rename'] },
+    ],
+    artifacts: [
+      { path: conversationArtifactsDir, kind: 'directory' },
     ],
     tasks: [
       { path: tasksDir, kind: 'directory' },

@@ -5,7 +5,7 @@ import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
-import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { streamSnapshotEvents } from './snapshotEventStreaming.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
@@ -942,23 +942,6 @@ function logSlowConversationPerf(label: string, fields: Record<string, unknown>)
   }
 
   logInfo(label, fields);
-}
-
-function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
-  const blocks = Array.isArray(content)
-    ? content as Array<{ type?: string; text?: string }>
-    : typeof content === 'string'
-      ? [{ type: 'text', text: content }]
-      : [];
-
-  const text = blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text ?? '')
-    .join('\n')
-    .trim();
-  const imageCount = blocks.filter((block) => block.type === 'image').length;
-
-  return { text, imageCount };
 }
 
 type ActivityEntryWithConversationLinks = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
@@ -7622,7 +7605,7 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
   }
 });
 
-/** Get token usage stats for a live session */
+/** Get workspace context for a conversation */
 app.get('/api/live-sessions/:id/context', (req, res) => {
   const startedAt = process.hrtime.bigint();
 
@@ -7630,8 +7613,8 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
     const { id } = req.params;
     const liveEntry = liveRegistry.get(id);
     const remoteLive = getRemoteLiveSessionMeta(id);
-    const initialArchivedTail = liveEntry ? null : readSessionBlocksWithTelemetry(id, { tailBlocks: 120 });
-    const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? initialArchivedTail?.detail?.meta.cwd;
+    const storedSession = !liveEntry && !remoteLive ? readSessionMeta(id) : null;
+    const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? storedSession?.cwd;
     if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
     const gitSummaryRead = remoteLive
@@ -7639,64 +7622,20 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
       : readGitStatusSummaryWithTelemetry(cwd);
     const gitSummary = gitSummaryRead.summary;
 
-    // User messages: prefer local live in-memory messages (most up-to-date), otherwise use a small persisted tail.
-    let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
-    let userMessageSource: 'live' | 'tail-120' | 'tail-400' | 'none' = liveEntry ? 'live' : 'none';
-    let userMessageReadTelemetry: SessionDetailReadTelemetry | null = null;
-    if (liveEntry) {
-      userMessages = liveEntry.session.messages
-        .filter((message) => message.role === 'user')
-        .slice(-5)
-        .map((message, index) => {
-          const { text, imageCount } = summarizeUserMessageContent(message.content);
-          return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
-        });
-    } else if (initialArchivedTail) {
-      const recentTailUserMessages = (initialArchivedTail.detail?.blocks ?? []).filter((block) => block.type === 'user');
-      const expandedTail = initialArchivedTail.detail && recentTailUserMessages.length < 5 && initialArchivedTail.detail.blockOffset > 0
-        ? readSessionBlocksWithTelemetry(id, { tailBlocks: 400 })
-        : initialArchivedTail;
-      userMessageSource = expandedTail === initialArchivedTail ? 'tail-120' : 'tail-400';
-      userMessageReadTelemetry = expandedTail.telemetry;
-      userMessages = (expandedTail.detail?.blocks ?? [])
-        .filter((block) => block.type === 'user')
-        .slice(-5)
-        .map((block) => ({
-          id: block.id,
-          ts: block.ts,
-          text: 'text' in block ? block.text : '',
-          imageCount: 'images' in block && Array.isArray(block.images) ? block.images.length : 0,
-        }));
-    }
-
-    const relatedProjectIds = getConversationProjectLink({
-      profile: getCurrentProfile(),
-      conversationId: id,
-    })?.relatedProjectIds ?? [];
-
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     setServerTimingHeaders(res, [
       { name: 'git', durationMs: gitSummaryRead.telemetry.durationMs, description: remoteLive ? 'remote-skip' : gitSummaryRead.telemetry.cache },
-      { name: 'user_msgs', durationMs: userMessageReadTelemetry?.durationMs ?? 0, description: userMessageSource },
       { name: 'total', durationMs },
     ], {
       route: 'live-session-context',
       conversationId: id,
       git: gitSummaryRead.telemetry,
-      userMessages: {
-        source: userMessageSource,
-        telemetry: userMessageReadTelemetry,
-        count: userMessages.length,
-      },
       durationMs,
     });
     logSlowConversationPerf('live session context request', {
       conversationId: id,
       durationMs,
       gitCache: gitSummaryRead.telemetry.cache,
-      userMessageSource,
-      userMessageReadDurationMs: userMessageReadTelemetry?.durationMs,
-      userMessageReadLoader: userMessageReadTelemetry?.loader,
     });
 
     res.json({
@@ -7713,8 +7652,6 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
             })),
           }
         : null,
-      userMessages,
-      relatedProjectIds,
     });
   } catch (err) {
     logError('request handler error', {
@@ -8336,7 +8273,7 @@ app.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
       artifactId: req.params.artifactId,
     });
 
-    invalidateAppTopics('sessions');
+    invalidateAppTopics('artifacts');
     res.json({
       conversationId: req.params.id,
       deleted,
