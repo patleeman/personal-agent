@@ -39,6 +39,7 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   alerts: 0,
   projects: 0,
   sessions: 0,
+  sessionFiles: 0,
   tasks: 0,
   runs: 0,
   automation: 0,

@@ -5,7 +5,7 @@ import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
-import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { streamSnapshotEvents } from './snapshotEventStreaming.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
@@ -123,6 +123,7 @@ import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js'
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
+import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import {
   saveCuratedDistilledConversationMemory,
   type DistilledConversationMemoryDraft,
@@ -1348,6 +1349,8 @@ function resolveConversationMemoryDistillBatchRecoveryRunnerPath(): string {
 }
 
 async function startConversationMemoryDistillRun(input: ConversationMemoryDistillRunInput) {
+  await ensureDaemonAvailable();
+
   const runnerPath = resolveConversationMemoryDistillRunnerPath();
   if (!existsSync(runnerPath)) {
     return {
@@ -1846,6 +1849,51 @@ function decorateSessionsWithAttention<T extends {
   });
 }
 
+function buildSyntheticLiveSessionSnapshot(
+  liveEntry: ReturnType<typeof listAllLiveSessions>[number],
+  deferredResumesBySessionFile: ReturnType<typeof listDeferredResumeSummariesBySessionFile>,
+) {
+  return {
+    id: liveEntry.id,
+    file: liveEntry.sessionFile,
+    timestamp: new Date().toISOString(),
+    cwd: liveEntry.cwd,
+    cwdSlug: liveEntry.cwd.replace(/\//g, '-'),
+    model: '',
+    title: liveEntry.title || 'New Conversation',
+    messageCount: 0,
+    isRunning: liveEntry.isStreaming,
+    isLive: true,
+    lastActivityAt: new Date().toISOString(),
+    needsAttention: false,
+    attentionUnreadMessageCount: 0,
+    attentionUnreadActivityCount: 0,
+    attentionActivityIds: [],
+    deferredResumes: deferredResumesBySessionFile.get(liveEntry.sessionFile) ?? [],
+  };
+}
+
+function readConversationSessionMeta(conversationId: string) {
+  const profile = getCurrentProfile();
+  const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
+  const storedSession = readSessionMeta(conversationId);
+  const decoratedSession = storedSession
+    ? decorateSessionsWithAttention(profile, [storedSession], deferredResumesBySessionFile)[0] ?? null
+    : null;
+  const liveEntry = listAllLiveSessions().find((session) => session.id === conversationId) ?? null;
+
+  if (!decoratedSession) {
+    return liveEntry ? buildSyntheticLiveSessionSnapshot(liveEntry, deferredResumesBySessionFile) : null;
+  }
+
+  return {
+    ...decoratedSession,
+    title: liveEntry?.title || decoratedSession.title,
+    isRunning: Boolean(liveEntry?.isStreaming),
+    isLive: Boolean(liveEntry),
+  };
+}
+
 function listConversationSessionsSnapshot() {
   const profile = getCurrentProfile();
   const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
@@ -1855,24 +1903,7 @@ function listConversationSessionsSnapshot() {
   const jsonlIds = new Set(jsonl.map((session) => session.id));
   const syntheticLive = live
     .filter((entry) => !jsonlIds.has(entry.id))
-    .map((entry) => ({
-      id: entry.id,
-      file: entry.sessionFile,
-      timestamp: new Date().toISOString(),
-      cwd: entry.cwd,
-      cwdSlug: entry.cwd.replace(/\//g, '-'),
-      model: '',
-      title: entry.title || 'New Conversation',
-      messageCount: 0,
-      isRunning: entry.isStreaming,
-      isLive: true,
-      lastActivityAt: new Date().toISOString(),
-      needsAttention: false,
-      attentionUnreadMessageCount: 0,
-      attentionUnreadActivityCount: 0,
-      attentionActivityIds: [],
-      deferredResumes: deferredResumesBySessionFile.get(entry.sessionFile) ?? [],
-    }));
+    .map((entry) => buildSyntheticLiveSessionSnapshot(entry, deferredResumesBySessionFile));
 
   return [
     ...syntheticLive,
@@ -5962,6 +5993,24 @@ app.get('/api/sessions', (_req, res) => {
 });
 
 app.get('/api/companion/conversations', handleCompanionConversationListRequest);
+
+app.get('/api/sessions/:id/meta', (req, res) => {
+  try {
+    const session = readConversationSessionMeta(req.params.id);
+    if (!session) {
+      res.status(404).json({ error: 'Session not found' });
+      return;
+    }
+
+    res.json(session);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 app.get('/api/sessions/:id', async (req, res) => {
   const startedAt = process.hrtime.bigint();
@@ -10597,7 +10646,7 @@ companionApp.get('/api/events', (req, res) => {
       return;
     }
 
-    if (event.type === 'live_title') {
+    if (event.type === 'live_title' || event.type === 'session_meta_changed') {
       writeEvent(event);
     }
   });

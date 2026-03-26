@@ -76,6 +76,29 @@ function isCompanionBrowserRoute(): boolean {
     || window.location.pathname.startsWith(`${COMPANION_APP_PATH}/`);
 }
 
+function parseSessionActivityAt(session: SessionMeta): number {
+  const parsed = Date.parse(session.lastActivityAt ?? session.timestamp);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortSessionMetas(items: SessionMeta[]): SessionMeta[] {
+  return [...items].sort((left, right) => {
+    if (Boolean(left.isLive) !== Boolean(right.isLive)) {
+      return left.isLive ? -1 : 1;
+    }
+
+    if (Boolean(left.needsAttention) !== Boolean(right.needsAttention)) {
+      return left.needsAttention ? -1 : 1;
+    }
+
+    if (Boolean(left.isRunning) !== Boolean(right.isRunning)) {
+      return left.isRunning ? -1 : 1;
+    }
+
+    return parseSessionActivityAt(right) - parseSessionActivityAt(left) || left.title.localeCompare(right.title);
+  });
+}
+
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
@@ -216,6 +239,7 @@ export function App() {
   const [sync, setSyncState] = useState<SyncState | null>(null);
   const [webUi, setWebUiState] = useState<WebUiState | null>(null);
   const openedOnceRef = useRef(false);
+  const inflightSessionMetaRefreshesRef = useRef(new Map<string, Promise<void>>());
 
   const setTitle = useCallback((id: string, title: string) => {
     setTitleMap((prev) => {
@@ -241,6 +265,46 @@ export function App() {
   const setSessions = useCallback((items: SessionMeta[]) => {
     setSessionsState(items);
   }, []);
+
+  const applySessionMetaUpdate = useCallback((sessionId: string, nextSession: SessionMeta | null) => {
+    setSessionsState((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      if (!nextSession) {
+        const filtered = previous.filter((session) => session.id !== sessionId);
+        return filtered.length === previous.length ? previous : filtered;
+      }
+
+      const withoutPrevious = previous.filter((session) => session.id !== sessionId);
+      return sortSessionMetas([...withoutPrevious, nextSession]);
+    });
+  }, []);
+
+  const refreshSessionMeta = useCallback((sessionId: string) => {
+    const inflight = inflightSessionMetaRefreshesRef.current.get(sessionId);
+    if (inflight) {
+      return inflight;
+    }
+
+    const request = api.sessionMeta(sessionId)
+      .then((session) => {
+        applySessionMetaUpdate(sessionId, session);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        if (/not found/i.test(message)) {
+          applySessionMetaUpdate(sessionId, null);
+        }
+      })
+      .finally(() => {
+        inflightSessionMetaRefreshesRef.current.delete(sessionId);
+      });
+
+    inflightSessionMetaRefreshesRef.current.set(sessionId, request);
+    return request;
+  }, [applySessionMetaUpdate]);
 
   const setTasks = useCallback((items: ScheduledTaskSummary[]) => {
     setTasksState(items);
@@ -396,6 +460,17 @@ export function App() {
         case 'live_title':
           setTitle(payload.sessionId, payload.title);
           return;
+        case 'session_meta_changed':
+          if (isCompanionBrowserRoute()) {
+            setEventVersions((prev) => ({
+              ...prev,
+              sessions: prev.sessions + 1,
+            }));
+            return;
+          }
+
+          void refreshSessionMeta(payload.sessionId);
+          return;
         case 'activity_snapshot':
           setActivity({ entries: payload.entries, unreadCount: payload.unreadCount });
           return;
@@ -458,7 +533,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (
