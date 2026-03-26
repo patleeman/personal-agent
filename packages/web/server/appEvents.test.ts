@@ -15,6 +15,7 @@ const ALL_TOPICS = [
   'projects',
   'sessions',
   'sessionFiles',
+  'artifacts',
   'tasks',
   'runs',
   'automation',

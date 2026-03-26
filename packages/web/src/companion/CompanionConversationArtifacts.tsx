@@ -114,12 +114,12 @@ function CompanionConversationArtifactOverlay({
   }, []);
 
   useEffect(() => {
-    if (versions.sessions === 0) {
+    if (versions.artifacts === 0) {
       return;
     }
 
     void refetch({ resetLoading: false });
-  }, [refetch, versions.sessions]);
+  }, [refetch, versions.artifacts]);
 
   const artifact = data?.artifact ?? null;
   const closeLocation = buildArtifactLocation(location.pathname, location.search, null);
@@ -258,12 +258,12 @@ export function CompanionConversationArtifacts({ conversationId }: { conversatio
   } = useApi(fetchArtifacts, `companion-conversation-artifacts:${conversationId}`);
 
   useEffect(() => {
-    if (versions.sessions === 0) {
+    if (versions.artifacts === 0) {
       return;
     }
 
     void refetch({ resetLoading: false });
-  }, [refetch, versions.sessions]);
+  }, [refetch, versions.artifacts]);
 
   const artifacts = useMemo(() => data?.artifacts ?? [], [data?.artifacts]);
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);

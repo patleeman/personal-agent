@@ -313,8 +313,8 @@ function useWarmOpenConversationTabs(pathname: string): void {
             ),
             prefetchConversationRailData({
               conversationId,
-              sessionsVersion: versions.sessions,
               workspaceVersion: versions.workspace,
+              projectsVersion: versions.projects,
               runsVersion: versions.runs,
               executionTargetsVersion: versions.executionTargets,
             }),
@@ -359,8 +359,8 @@ function useWarmOpenConversationTabs(pathname: string): void {
 
           await prefetchConversationRailData({
             conversationId,
-            sessionsVersion: versions.sessions,
             workspaceVersion: versions.workspace,
+            projectsVersion: versions.projects,
             runsVersion: versions.runs,
             executionTargetsVersion: versions.executionTargets,
           }).catch(() => undefined);
@@ -372,7 +372,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions, versions.workspace, warmingEnabled]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.projects, versions.runs, versions.workspace, warmingEnabled]);
 
   useEffect(() => {
     if (!warmingEnabled || versions.automation === 0) {

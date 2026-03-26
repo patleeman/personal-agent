@@ -620,6 +620,7 @@ export type AppEventTopic =
   | 'projects'
   | 'sessions'
   | 'sessionFiles'
+  | 'artifacts'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -662,8 +663,6 @@ export interface LiveSessionContext {
   cwd: string;
   branch: string | null;
   git: GitWorkingTreeSummary | null;
-  userMessages: Array<{ id: string; ts: string; text: string; imageCount: number }>;
-  relatedProjectIds: string[];
 }
 
 export interface ConversationProjectLinks {
