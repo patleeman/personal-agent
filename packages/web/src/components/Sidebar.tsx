@@ -458,7 +458,7 @@ export function Sidebar() {
   const workspaceChangesActive = location.pathname.startsWith('/workspace/changes');
   const workspaceGroupActive = workspaceFilesActive || workspaceChangesActive;
   const knowledgeProjectsActive = location.pathname.startsWith('/projects');
-  const knowledgeMemoriesActive = location.pathname.startsWith('/memories');
+  const knowledgeMemoriesActive = location.pathname.startsWith('/notes') || location.pathname.startsWith('/memories');
   const knowledgeSkillsActive = location.pathname.startsWith('/skills');
   const knowledgeInstructionsActive = location.pathname.startsWith('/instructions');
   const knowledgeGroupActive = knowledgeProjectsActive
@@ -900,7 +900,7 @@ export function Sidebar() {
           onToggle={() => setKnowledgeExpanded((current) => !current)}
         >
           <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
-          <SidebarSubNavItem to="/memories" label="Notes" active={knowledgeMemoriesActive} />
+          <SidebarSubNavItem to="/notes" label="Notes" active={knowledgeMemoriesActive} />
           <SidebarSubNavItem to="/skills" label="Skills" active={knowledgeSkillsActive} />
           <SidebarSubNavItem to="/instructions" label="Instructions" active={knowledgeInstructionsActive} />
         </SidebarNavGroup>

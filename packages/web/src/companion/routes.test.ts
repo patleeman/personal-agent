@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_INBOX_PATH,
-  COMPANION_MEMORIES_PATH,
+  COMPANION_NOTES_PATH,
   COMPANION_PROJECTS_PATH,
   COMPANION_SKILLS_PATH,
   COMPANION_SYSTEM_PATH,
   COMPANION_TASKS_PATH,
   buildCompanionConversationPath,
-  buildCompanionMemoryPath,
+  buildCompanionNotePath,
   buildCompanionProjectPath,
   buildCompanionSkillPath,
   buildCompanionTaskPath,
@@ -20,7 +20,7 @@ describe('companion route builders', () => {
     expect(buildCompanionConversationPath('conv/123')).toBe('/app/conversations/conv%2F123');
     expect(buildCompanionTaskPath('task/123')).toBe('/app/tasks/task%2F123');
     expect(buildCompanionProjectPath('continuous conversations')).toBe('/app/projects/continuous%20conversations');
-    expect(buildCompanionMemoryPath('memory/123')).toBe('/app/memories/memory%2F123');
+    expect(buildCompanionNotePath('memory/123')).toBe('/app/notes/memory%2F123');
     expect(buildCompanionSkillPath('tool-agent-browser')).toBe('/app/skills/tool-agent-browser');
   });
 });
@@ -33,12 +33,12 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect(COMPANION_TASKS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_SYSTEM_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_PROJECTS_PATH)).toBeNull();
-    expect(resolveCompanionRouteRedirect(COMPANION_MEMORIES_PATH)).toBeNull();
+    expect(resolveCompanionRouteRedirect(COMPANION_NOTES_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_SKILLS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123')).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123')).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations')).toBeNull();
-    expect(resolveCompanionRouteRedirect('/app/memories/memory-index')).toBeNull();
+    expect(resolveCompanionRouteRedirect('/app/notes/memory-index')).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser')).toBeNull();
   });
 
@@ -49,12 +49,12 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/tasks/')).toBe(COMPANION_TASKS_PATH);
     expect(resolveCompanionRouteRedirect('/app/system/')).toBe(COMPANION_SYSTEM_PATH);
     expect(resolveCompanionRouteRedirect('/app/projects/')).toBe(COMPANION_PROJECTS_PATH);
-    expect(resolveCompanionRouteRedirect('/app/memories/')).toBe(COMPANION_MEMORIES_PATH);
+    expect(resolveCompanionRouteRedirect('/app/notes/')).toBe(COMPANION_NOTES_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/')).toBe(COMPANION_SKILLS_PATH);
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123/')).toBe('/app/conversations/conv-123');
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123/')).toBe('/app/tasks/task-123');
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/')).toBe('/app/projects/continuous-conversations');
-    expect(resolveCompanionRouteRedirect('/app/memories/memory-index/')).toBe('/app/memories/memory-index');
+    expect(resolveCompanionRouteRedirect('/app/notes/memory-index/')).toBe('/app/notes/memory-index');
     expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/')).toBe('/app/skills/tool-agent-browser');
   });
 
@@ -63,8 +63,15 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/extra')).toBe(COMPANION_INBOX_PATH);
-    expect(resolveCompanionRouteRedirect('/app/memories/memory-index/extra')).toBe(COMPANION_INBOX_PATH);
+    expect(resolveCompanionRouteRedirect('/app/notes/memory-index/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/extra')).toBe(COMPANION_INBOX_PATH);
+  });
+
+  it('redirects legacy memories paths to the notes routes', () => {
+    expect(resolveCompanionRouteRedirect('/app/memories')).toBe(COMPANION_NOTES_PATH);
+    expect(resolveCompanionRouteRedirect('/app/memories/')).toBe(COMPANION_NOTES_PATH);
+    expect(resolveCompanionRouteRedirect('/app/memories/memory-index')).toBe('/app/notes/memory-index');
+    expect(resolveCompanionRouteRedirect('/app/memories/memory-index/')).toBe('/app/notes/memory-index');
   });
 
   it('ignores non-companion paths', () => {

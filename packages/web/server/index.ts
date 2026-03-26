@@ -132,6 +132,7 @@ import {
   buildConversationMemoryWorkItemsFromStates,
   CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX,
   isConversationMemoryDistillRecoveryTitle,
+  normalizeConversationMemoryDistillRecoveryTitle,
   listConversationMemoryMaintenanceStates,
   markConversationMemoryMaintenanceRunCompleted,
   markConversationMemoryMaintenanceRunFailed,
@@ -385,8 +386,14 @@ const TASK_STATE_FILE = getScheduledTaskStateFilePath();
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
-const CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+const CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
+const LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
 const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running', 'recovering', 'waiting']);
+
+function isConversationNodeDistillRunSourceType(value: string | undefined): boolean {
+  return value === CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE
+    || value === LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE;
+}
 
 function isLiveSession(sessionId: string): boolean {
   return isLocalLive(sessionId) || isRemoteLiveSession(sessionId);
@@ -1135,7 +1142,7 @@ interface ConversationMemoryDistillRunState {
 
 function isConversationMemoryDistillRun(run: Awaited<ReturnType<typeof listDurableRuns>>['runs'][number], conversationId: string): boolean {
   return run.manifest?.kind === 'background-run'
-    && run.manifest.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE
+    && isConversationNodeDistillRunSourceType(run.manifest.source?.type)
     && run.manifest.source?.id === conversationId;
 }
 
@@ -1212,11 +1219,12 @@ function readConversationMemoryDistillRunInputFromRun(
   run: Awaited<ReturnType<typeof listDurableRuns>>['runs'][number],
   profile: string,
 ): ResolvedConversationMemoryDistillRunInput | null {
-  if (run.manifest?.kind !== 'background-run' || run.manifest.source?.type !== CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE) {
+  const source = run.manifest?.source;
+  if (run.manifest?.kind !== 'background-run' || !isConversationNodeDistillRunSourceType(source?.type)) {
     return null;
   }
 
-  const conversationId = typeof run.manifest.source.id === 'string' ? run.manifest.source.id.trim() : '';
+  const conversationId = typeof source?.id === 'string' ? source.id.trim() : '';
   if (!conversationId) {
     return null;
   }
@@ -1344,7 +1352,7 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
   }), 'utf-8').toString('base64url');
 
   return startBackgroundRun({
-    taskSlug: `distill-memory-${input.conversationId}`,
+    taskSlug: `distill-node-${input.conversationId}`,
     cwd: REPO_ROOT,
     argv: [
       process.execPath,
@@ -1357,7 +1365,7 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
       payload,
     ],
     source: {
-      type: CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE,
+      type: CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE,
       id: input.conversationId,
     },
     checkpointPayload: {
@@ -1493,7 +1501,7 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   const maintenanceStates = listConversationMemoryMaintenanceStates({ profile: getCurrentProfile() });
   const maintenanceStateByConversationId = new Map(maintenanceStates.map((state) => [state.conversationId, state]));
   const runs = (await listDurableRuns()).runs
-    .filter((run) => run.manifest?.kind === 'background-run' && run.manifest.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE)
+    .filter((run) => run.manifest?.kind === 'background-run' && isConversationNodeDistillRunSourceType(run.manifest.source?.type))
     .sort((left, right) => {
       const leftCreatedAt = left.manifest?.createdAt ?? '';
       const rightCreatedAt = right.manifest?.createdAt ?? '';
@@ -1515,7 +1523,9 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   for (const [conversationId, run] of latestRunByConversationId) {
     const session = sessionsById.get(conversationId);
     const maintenanceState = maintenanceStateByConversationId.get(conversationId);
-    const conversationTitle = session?.title ?? maintenanceState?.latestConversationTitle ?? conversationId;
+    const conversationTitle = normalizeConversationMemoryDistillRecoveryTitle(
+      session?.title ?? maintenanceState?.latestConversationTitle ?? conversationId,
+    ) ?? conversationId;
     if (isConversationMemoryDistillRecoveryTitle(conversationTitle)) {
       continue;
     }
@@ -1560,7 +1570,9 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
       )),
   ).map((item) => ({
     ...item,
-    conversationTitle: sessionsById.get(item.conversationId)?.title ?? item.conversationTitle,
+    conversationTitle: normalizeConversationMemoryDistillRecoveryTitle(
+      sessionsById.get(item.conversationId)?.title ?? item.conversationTitle,
+    ) ?? item.conversationTitle,
   }));
 
   return [...items, ...pendingStates].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -5181,7 +5193,7 @@ app.post('/api/runs/:id/import', async (req, res) => {
   }
 });
 
-app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
+app.post('/api/runs/:id/node-distill/retry', async (req, res) => {
   try {
     const profile = getCurrentProfile();
     const detail = await getDurableRun(req.params.id);
@@ -5264,7 +5276,7 @@ app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
   }
 });
 
-app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
+app.post('/api/runs/:id/node-distill/recover', async (req, res) => {
   try {
     const profile = getCurrentProfile();
     const detail = await getDurableRun(req.params.id);
@@ -5591,9 +5603,9 @@ app.post('/api/sessions/search-index', (req, res) => {
   }
 });
 
-// ── Conversation memories ────────────────────────────────────────────────────
+// ── Conversation notes ───────────────────────────────────────────────────────
 
-app.get('/api/memories', async (_req, res) => {
+app.get('/api/notes', async (_req, res) => {
   try {
     res.json({
       memories: listMemoryDocs({ includeSearchText: true }),
@@ -5608,7 +5620,7 @@ app.get('/api/memories', async (_req, res) => {
   }
 });
 
-app.get('/api/memories/:memoryId', (req, res) => {
+app.get('/api/notes/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
     if (!memory) {
@@ -5617,7 +5629,7 @@ app.get('/api/memories/:memoryId', (req, res) => {
     }
 
     if (!existsSync(memory.path)) {
-      res.status(404).json({ error: 'Memory file not found.' });
+      res.status(404).json({ error: 'Note file not found.' });
       return;
     }
 
@@ -5644,7 +5656,7 @@ app.get('/api/memories/:memoryId', (req, res) => {
   }
 });
 
-app.post('/api/memories/:memoryId', (req, res) => {
+app.post('/api/notes/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
@@ -5683,7 +5695,7 @@ app.post('/api/memories/:memoryId', (req, res) => {
   }
 });
 
-app.delete('/api/memories/:memoryId', (req, res) => {
+app.delete('/api/notes/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
@@ -5692,7 +5704,7 @@ app.delete('/api/memories/:memoryId', (req, res) => {
     }
 
     if (!existsSync(memory.path)) {
-      res.status(404).json({ error: 'Memory file not found.' });
+      res.status(404).json({ error: 'Note file not found.' });
       return;
     }
 
@@ -5707,7 +5719,7 @@ app.delete('/api/memories/:memoryId', (req, res) => {
   }
 });
 
-app.get('/api/conversations/:id/memories/status', async (req, res) => {
+app.get('/api/conversations/:id/notes/status', async (req, res) => {
   try {
     const conversationId = req.params.id;
     const runState = await readConversationMemoryDistillRunState(conversationId);
@@ -5729,7 +5741,7 @@ app.get('/api/conversations/:id/memories/status', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:id/memories', async (req, res) => {
+app.post('/api/conversations/:id/notes', async (req, res) => {
   try {
     const profile = getCurrentProfile();
     const conversationId = req.params.id;
@@ -5826,7 +5838,7 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
+app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
   const currentProfile = getCurrentProfile();
   const conversationId = req.params.id;
   const {
@@ -5864,7 +5876,7 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
 
   try {
     if (liveRegistry.get(conversationId)?.session.isStreaming) {
-      res.status(409).json({ error: 'Stop the current response before distilling memory.' });
+      res.status(409).json({ error: 'Stop the current response before distilling a note node.' });
       return;
     }
 
@@ -5899,8 +5911,8 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
     });
 
     const activitySummary = memory.disposition === 'updated-existing'
-      ? `Updated memory reference in @${memory.id}`
-      : `Created memory reference in @${memory.id}`;
+      ? `Updated note reference in @${memory.id}`
+      : `Created note reference in @${memory.id}`;
     const activityDetails = [
       memory.disposition === 'updated-existing'
         ? `Updated an existing reference inside durable note node @${memory.id} from this conversation.`
@@ -5915,7 +5927,7 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
       ? writeConversationMemoryDistillActivity({
           profile,
           conversationId,
-          kind: 'conversation-memory-distilled',
+          kind: 'conversation-node-distilled',
           summary: activitySummary,
           details: activityDetails,
           relatedProjectIds,
@@ -5985,7 +5997,7 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
   }
 });
 
-app.post('/api/memories/:memoryId/start', async (req, res) => {
+app.post('/api/notes/:memoryId/start', async (req, res) => {
   try {
     const profile = getCurrentProfile();
     const memoryId = req.params.memoryId;
@@ -11009,7 +11021,7 @@ companionApp.get('/api/memory/file', (req, res) => {
   }
 });
 
-companionApp.get('/api/memories/:memoryId', (req, res) => {
+companionApp.get('/api/notes/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
     if (!memory) {
@@ -11018,7 +11030,7 @@ companionApp.get('/api/memories/:memoryId', (req, res) => {
     }
 
     if (!existsSync(memory.path)) {
-      res.status(404).json({ error: 'Memory file not found.' });
+      res.status(404).json({ error: 'Note file not found.' });
       return;
     }
 

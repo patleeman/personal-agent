@@ -35,6 +35,7 @@ afterEach(() => {
 describe('conversationMemoryMaintenance', () => {
   it('recognizes memory distillation recovery branch titles', () => {
     expect(isConversationMemoryDistillRecoveryTitle('Recover node distillation: Fix durable session path regression')).toBe(true);
+    expect(isConversationMemoryDistillRecoveryTitle('Recover memory distillation: Fix durable session path regression')).toBe(true);
     expect(isConversationMemoryDistillRecoveryTitle('Fix durable session path regression')).toBe(false);
     expect(isConversationMemoryDistillRecoveryTitle(undefined)).toBe(false);
   });

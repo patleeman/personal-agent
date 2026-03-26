@@ -1,7 +1,13 @@
 import type { DurableRunListResult, DurableRunRecord, RemoteExecutionRunSummary, ScheduledTaskSummary, SessionMeta } from './types';
 
 const REMOTE_EXECUTION_RUN_SOURCE_TYPE = 'conversation-remote-run';
-const CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+const CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
+const LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+
+function isConversationNodeDistillRunSourceType(value: string | undefined): boolean {
+  return value === CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE
+    || value === LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE;
+}
 
 export interface RunPresentationLookups {
   tasks?: ScheduledTaskSummary[] | null;
@@ -180,12 +186,12 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
     || sourceType === 'web-live-session'
     || sourceType === 'deferred-resume'
     || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
-    || sourceType === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE;
+    || isConversationNodeDistillRunSourceType(sourceType);
 
   if (isConversationRun) {
     const conversationId = sourceType === 'web-live-session'
       || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
-      || sourceType === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE
+      || isConversationNodeDistillRunSourceType(sourceType)
       ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
       : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
     const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
@@ -324,7 +330,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     return { title: headline, summary };
   }
 
-  if (run.manifest?.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE) {
+  if (isConversationNodeDistillRunSourceType(run.manifest?.source?.type)) {
     const { title, conversationId } = conversationLabel(run, lookups);
     const requestedTitle = excerpt(readCheckpoint(run, 'title') ?? readSpec(run, 'title'));
     const sourceLabel = title ?? conversationId;

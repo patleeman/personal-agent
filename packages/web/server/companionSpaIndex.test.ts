@@ -15,6 +15,7 @@ describe('shouldServeCompanionIndex', () => {
     expect(shouldServeCompanionIndex('/conversations')).toBe(true);
     expect(shouldServeCompanionIndex('/conversations/conv-123')).toBe(true);
     expect(shouldServeCompanionIndex('/projects')).toBe(true);
+    expect(shouldServeCompanionIndex('/notes/memory-index')).toBe(true);
     expect(shouldServeCompanionIndex('/memories/memory-index')).toBe(true);
     expect(shouldServeCompanionIndex('/skills/tool-agent-browser')).toBe(true);
   });

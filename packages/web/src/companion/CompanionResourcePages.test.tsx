@@ -87,7 +87,7 @@ describe('companion resource pages', () => {
     expect(html).toContain('/app/projects/active-project');
   });
 
-  it('renders linked active and archived note nodes in the companion memory browser', () => {
+  it('renders linked active and archived note nodes in the companion notes browser', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         profile: 'assistant',
@@ -135,7 +135,7 @@ describe('companion resource pages', () => {
     expect(html).toContain('2 references');
     expect(html).toContain('@memory-index');
     expect(html).toContain('Archived');
-    expect(html).toContain('/app/memories/memory-index');
+    expect(html).toContain('/app/notes/memory-index');
   });
 
   it('renders linked humanized skills with recent-usage labels in the companion skill browser', () => {

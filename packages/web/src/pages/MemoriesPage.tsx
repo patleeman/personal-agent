@@ -16,7 +16,7 @@ import {
   ToolbarButton,
 } from '../components/ui';
 
-const MEMORY_ID_SEARCH_PARAM = 'memory';
+const NOTE_ID_SEARCH_PARAM = 'note';
 const INPUT_CLASS = 'w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
 function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem[] {
@@ -47,13 +47,14 @@ function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem
   });
 }
 
-function buildMemorySearch(locationSearch: string, memoryId: string | null): string {
+function buildNoteSearch(locationSearch: string, memoryId: string | null): string {
   const params = new URLSearchParams(locationSearch);
 
   if (memoryId) {
-    params.set(MEMORY_ID_SEARCH_PARAM, memoryId);
+    params.set(NOTE_ID_SEARCH_PARAM, memoryId);
   } else {
-    params.delete(MEMORY_ID_SEARCH_PARAM);
+    params.delete(NOTE_ID_SEARCH_PARAM);
+    params.delete('memory');
   }
 
   const next = params.toString();
@@ -211,7 +212,7 @@ export function MemoriesPage() {
     refreshing,
     error,
     refetch,
-  } = useApi(api.memories);
+  } = useApi(api.notes);
 
   const [query, setQuery] = useState('');
   const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' | 'recover' } | null>(null);
@@ -220,7 +221,8 @@ export function MemoriesPage() {
   const memoryQueue = data?.memoryQueue ?? [];
   const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
   const selectedMemoryId = useMemo(() => {
-    const value = new URLSearchParams(location.search).get(MEMORY_ID_SEARCH_PARAM);
+    const params = new URLSearchParams(location.search);
+    const value = params.get(NOTE_ID_SEARCH_PARAM) ?? params.get('memory');
     return value?.trim() || null;
   }, [location.search]);
   const selectedMemory = useMemo(
@@ -229,8 +231,8 @@ export function MemoriesPage() {
   );
 
   const setSelectedMemory = useCallback((memoryId: string | null, replace = false) => {
-    const nextSearch = buildMemorySearch(location.search, memoryId);
-    navigate(`/memories${nextSearch}`, { replace });
+    const nextSearch = buildNoteSearch(location.search, memoryId);
+    navigate(`/notes${nextSearch}`, { replace });
   }, [location.search, navigate]);
 
   useEffect(() => {
@@ -262,7 +264,7 @@ export function MemoriesPage() {
     setQueueError(null);
     setPendingQueueAction({ runId: item.runId, kind: 'retry' });
     try {
-      const result = await api.retryMemoryDistillRun(item.runId);
+      const result = await api.retryNodeDistillRun(item.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not retry node distillation.');
@@ -279,7 +281,7 @@ export function MemoriesPage() {
     setQueueError(null);
     setPendingQueueAction({ runId: item.runId, kind: 'recover' });
     try {
-      const result = await api.recoverMemoryDistillRun(item.runId);
+      const result = await api.recoverNodeDistillRun(item.runId);
       persistForkPromptDraft(
         result.conversationId,
         `Help me recover node distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
@@ -394,7 +396,7 @@ export function MemoriesPage() {
                   <div className="space-y-px border-t border-border-subtle pt-5">
                     {filteredMemories.map((memory) => {
                       const isSelected = memory.id === selectedMemoryId;
-                      const href = `/memories${buildMemorySearch(location.search, memory.id)}`;
+                      const href = `/notes${buildNoteSearch(location.search, memory.id)}`;
                       const tagsSummary = memory.tags.slice(0, 3).join(' · ');
                       const relatedSummary = memory.related?.slice(0, 3).map((item) => `@${item}`).join(' · ') ?? '';
 

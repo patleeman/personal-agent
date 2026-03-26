@@ -44,6 +44,17 @@ function WorkspaceRouteRedirect() {
   return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
 }
 
+function LegacyNotesRouteRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: '/notes', search: location.search }} replace />;
+}
+
+function LegacyCompanionNotesRouteRedirect() {
+  const { id } = useParams<{ id?: string }>();
+  const location = useLocation();
+  return <Navigate to={{ pathname: id ? `/app/notes/${encodeURIComponent(id)}` : '/app/notes', search: location.search }} replace />;
+}
+
 function CompanionRouteValidationBoundary() {
   const location = useLocation();
   const redirectPath = resolveCompanionRouteRedirect(location.pathname);
@@ -438,8 +449,10 @@ export function App() {
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
                       <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
-                      <Route path="memories" element={suspendRoute(<CompanionMemoriesPage />)} />
-                      <Route path="memories/:id" element={suspendRoute(<CompanionMemoryDetailPage />)} />
+                      <Route path="notes" element={suspendRoute(<CompanionMemoriesPage />)} />
+                      <Route path="notes/:id" element={suspendRoute(<CompanionMemoryDetailPage />)} />
+                      <Route path="memories" element={<LegacyCompanionNotesRouteRedirect />} />
+                      <Route path="memories/:id" element={<LegacyCompanionNotesRouteRedirect />} />
                       <Route path="skills" element={suspendRoute(<CompanionSkillsPage />)} />
                       <Route path="skills/:name" element={suspendRoute(<CompanionSkillDetailPage />)} />
                     </Route>
@@ -456,7 +469,8 @@ export function App() {
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
-                      <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
+                      <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
+                      <Route path="memories" element={<LegacyNotesRouteRedirect />} />
                       <Route path="skills" element={suspendRoute(<SkillsPage />)} />
                       <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
                       <Route path="plans" element={suspendRoute(<AutomationPage />)} />

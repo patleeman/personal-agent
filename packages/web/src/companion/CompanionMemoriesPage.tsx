@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import type { MemoryDocItem } from '../types';
 import { timeAgo } from '../utils';
-import { buildCompanionMemoryPath } from './routes';
+import { buildCompanionNotePath } from './routes';
 
 function sortCompanionMemories(memories: MemoryDocItem[]): MemoryDocItem[] {
   return [...memories].sort((left, right) => {
@@ -55,7 +55,7 @@ function MemoriesSection({
           return (
             <Link
               key={memory.id}
-              to={buildCompanionMemoryPath(memory.id)}
+              to={buildCompanionNotePath(memory.id)}
               className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
             >
               <div className="flex items-start gap-3">

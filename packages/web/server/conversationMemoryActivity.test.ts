@@ -29,9 +29,9 @@ describe('conversation memory activity', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      kind: 'conversation-memory-distilled',
-      summary: 'Created memory reference in @team-preferences',
-      details: 'Created a new memory reference from this conversation.',
+      kind: 'conversation-node-distilled',
+      summary: 'Created note reference in @team-preferences',
+      details: 'Created a new note reference from this conversation.',
       relatedProjectIds: ['project-alpha'],
     });
 
@@ -39,9 +39,9 @@ describe('conversation memory activity', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]?.entry).toMatchObject({
       id: activityId,
-      kind: 'conversation-memory-distilled',
-      summary: 'Created memory reference in @team-preferences',
-      details: 'Created a new memory reference from this conversation.',
+      kind: 'conversation-node-distilled',
+      summary: 'Created note reference in @team-preferences',
+      details: 'Created a new note reference from this conversation.',
       relatedProjectIds: ['project-alpha'],
       profile: 'assistant',
     });
@@ -63,7 +63,7 @@ describe('conversation memory activity', () => {
     const entries = listProfileActivityEntries({ stateRoot, profile: 'assistant' });
     expect(entries[0]?.entry).toMatchObject({
       id: activityId,
-      kind: 'conversation-memory-distill-failed',
+      kind: 'conversation-node-distill-failed',
       summary: 'Conversation node distillation failed',
       details: 'Distillation failed for this conversation.\nError: runner missing',
       relatedProjectIds: ['project-beta'],

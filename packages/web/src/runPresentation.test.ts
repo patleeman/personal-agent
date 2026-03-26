@@ -393,7 +393,7 @@ describe('runPresentation', () => {
     expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
   });
 
-  it('shows conversation memory distillation runs with a dedicated headline', () => {
+  it('shows conversation node distillation runs with a dedicated headline', () => {
     const sessions: SessionMeta[] = [{
       id: 'conv-123',
       file: '/tmp/sessions/conv-123.jsonl',
@@ -401,28 +401,28 @@ describe('runPresentation', () => {
       cwd: '/repo',
       cwdSlug: 'repo',
       model: 'openai/gpt-5',
-      title: 'Memory pipeline cleanup',
+      title: 'Notes pipeline cleanup',
       messageCount: 12,
     }];
 
     const run = createRun({
       manifest: {
         version: 1,
-        id: 'run-distill-memory-2026-03-12T20-30-00-000Z-abcd1234',
+        id: 'run-distill-node-2026-03-12T20-30-00-000Z-abcd1234',
         kind: 'background-run',
         resumePolicy: 'manual',
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
-          taskSlug: 'distill-memory-conv-123',
+          taskSlug: 'distill-node-conv-123',
         },
         source: {
-          type: 'conversation-memory-distill',
+          type: 'conversation-node-distill',
           id: 'conv-123',
         },
       },
       checkpoint: {
         version: 1,
-        runId: 'run-distill-memory-2026-03-12T20-30-00-000Z-abcd1234',
+        runId: 'run-distill-node-2026-03-12T20-30-00-000Z-abcd1234',
         updatedAt: '2026-03-12T20:35:00.000Z',
         step: 'completed',
         payload: {},
@@ -430,7 +430,7 @@ describe('runPresentation', () => {
     });
 
     expect(getRunHeadline(run, { sessions })).toEqual({
-      title: 'Distill node: Memory pipeline cleanup',
+      title: 'Distill node: Notes pipeline cleanup',
       summary: 'Conversation node distillation',
     });
   });

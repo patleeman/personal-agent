@@ -3007,7 +3007,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const result = await api.createConversationMemory(id, {
+      const result = await api.createConversationNote(id, {
         title: buildDistilledMemoryTitleFromBlock(block),
         anchorMessageId,
       });
