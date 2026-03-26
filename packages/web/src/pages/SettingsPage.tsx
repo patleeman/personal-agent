@@ -5,7 +5,8 @@ import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
-import type { ModelState, ProviderAuthSummary, ProviderOAuthLoginState, ProviderOAuthLoginStreamEvent } from '../types';
+import type { CodexPlanUsageState, ModelState, ProviderAuthSummary, ProviderOAuthLoginState, ProviderOAuthLoginStreamEvent } from '../types';
+import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
@@ -13,6 +14,16 @@ const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-b
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 
 type ModelOption = ModelState['models'][number];
+
+const EMPTY_CODEX_PLAN_USAGE: CodexPlanUsageState = {
+  available: false,
+  planType: null,
+  fiveHour: null,
+  weekly: null,
+  credits: null,
+  updatedAt: null,
+  error: null,
+};
 
 function splitModelRef(modelRef: string): { provider: string; model: string } {
   const slashIndex = modelRef.indexOf('/');
@@ -140,6 +151,16 @@ export function SettingsPage() {
     error: providerAuthError,
     refetch: refetchProviderAuth,
   } = useApi(api.providerAuth);
+  const codexUsageEnabled = providerAuthState?.providers.some((provider) => provider.id === 'openai-codex' && provider.authType === 'oauth') ?? false;
+  const {
+    data: codexPlanUsage,
+    loading: codexPlanUsageLoading,
+    refreshing: codexPlanUsageRefreshing,
+    refetch: refetchCodexPlanUsage,
+  } = useApi(
+    () => codexUsageEnabled ? api.codexPlanUsage() : Promise.resolve(EMPTY_CODEX_PLAN_USAGE),
+    `codex-plan-usage:${codexUsageEnabled ? 'enabled' : 'disabled'}`,
+  );
   const [switchingProfile, setSwitchingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
@@ -568,8 +589,8 @@ export function SettingsPage() {
           refetchModels({ resetLoading: false }),
           refetchDefaultCwd({ resetLoading: false }),
           refetchConversationTitleSettings({ resetLoading: false }),
-          refetchConversationAutomationDefaults({ resetLoading: false }),
           refetchProviderAuth({ resetLoading: false }),
+          refetchCodexPlanUsage({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
           oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
         ]);
@@ -1040,6 +1061,12 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
+
+            <CodexPlanUsageSummary
+              usage={codexPlanUsage}
+              loading={codexUsageEnabled && codexPlanUsageLoading}
+              refreshing={codexPlanUsageRefreshing}
+            />
           </section>
 
           <section className="space-y-5 border-t border-border-subtle pt-6">

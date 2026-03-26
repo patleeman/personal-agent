@@ -1055,6 +1055,29 @@ export interface ProviderAuthState {
   providers: ProviderAuthSummary[];
 }
 
+export interface CodexPlanUsageWindow {
+  remainingPercent: number;
+  usedPercent: number;
+  windowMinutes: number | null;
+  resetsAt: string | null;
+}
+
+export interface CodexPlanCredits {
+  hasCredits: boolean;
+  unlimited: boolean;
+  balance: string | null;
+}
+
+export interface CodexPlanUsageState {
+  available: boolean;
+  planType: string | null;
+  fiveHour: CodexPlanUsageWindow | null;
+  weekly: CodexPlanUsageWindow | null;
+  credits: CodexPlanCredits | null;
+  updatedAt: string | null;
+  error: string | null;
+}
+
 export type ProviderOAuthLoginStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface ProviderOAuthPromptState {
