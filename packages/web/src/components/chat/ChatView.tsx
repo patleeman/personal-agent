@@ -5,6 +5,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
 import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
+import { normalizeReplyQuoteSelection } from '../../conversationReplyQuote';
 import {
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
@@ -160,7 +161,7 @@ function renderChildrenWithMentions(children: ReactNode, onOpenFilePath?: (path:
 }
 
 function MarkdownCodeBlock({ children, onOpenFilePath }: { children: ReactNode; onOpenFilePath?: (path: string) => void }) {
-  const { className, content } = extractMarkdownCodeBlock(children);
+  const { content } = extractMarkdownCodeBlock(children);
 
   return (
     <div className="ui-markdown-code-block">
@@ -294,6 +295,46 @@ function renderSkillAwareText(text: string, onOpenFilePath?: (path: string) => v
 
 export function renderText(text: string, options?: { onOpenFilePath?: (path: string) => void }) {
   return renderSkillAwareText(text, options?.onOpenFilePath);
+}
+
+function isNodeWithinElement(element: HTMLElement, node: Node | null): boolean {
+  if (!node) {
+    return false;
+  }
+
+  const elementNode = node.nodeType === Node.TEXT_NODE
+    ? node.parentElement
+    : node instanceof HTMLElement
+      ? node
+      : node.parentElement;
+  return Boolean(elementNode && element.contains(elementNode));
+}
+
+function readSelectedTextWithinElement(element: HTMLElement | null): string {
+  if (!element || typeof window === 'undefined') {
+    return '';
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return '';
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!isNodeWithinElement(element, range.startContainer) || !isNodeWithinElement(element, range.endContainer)) {
+    return '';
+  }
+
+  return normalizeReplyQuoteSelection(selection.toString());
+}
+
+function formatReplySelectionPreview(text: string): string {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  if (singleLine.length <= 140) {
+    return singleLine;
+  }
+
+  return `${singleLine.slice(0, 137).trimEnd()}…`;
 }
 
 function formatSummaryPreviewLine(line: string) {
@@ -1682,6 +1723,61 @@ function ErrorBlock({
 
 // ── Message actions ───────────────────────────────────────────────────────────
 
+interface ReplySelectionMenuState {
+  text: string;
+  messageIndex: number;
+  blockId?: string;
+  x: number;
+  y: number;
+}
+
+function ReplySelectionContextMenu({
+  state,
+  menuRef,
+  onReply,
+  onCopy,
+}: {
+  state: ReplySelectionMenuState;
+  menuRef: RefObject<HTMLDivElement>;
+  onReply: () => void;
+  onCopy: () => void;
+}) {
+  return (
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label="Selection actions"
+      className="fixed z-[70] min-w-[15rem] max-w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-border-default bg-surface shadow-2xl"
+      style={{ left: state.x, top: state.y }}
+    >
+      <div className="border-b border-border-subtle px-3 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Selected text</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-secondary">{formatReplySelectionPreview(state.text)}</p>
+      </div>
+      <div className="p-1.5">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onReply}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] text-primary transition-colors hover:bg-elevated"
+        >
+          <span className="text-[12px] text-accent">↩</span>
+          <span>Reply to selection</span>
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={onCopy}
+          className="mt-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] text-secondary transition-colors hover:bg-elevated hover:text-primary"
+        >
+          <span className="text-[12px]">⎘</span>
+          <span>Copy selection</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function MsgActions({
   isUser,
   copyText,
@@ -1898,22 +1994,48 @@ function UserMessage({
 
 function AssistantMessage({
   block,
+  messageIndex,
   onFork,
   onRewind,
   onCheckpoint,
+  onReplyToSelection,
   onOpenFilePath,
   showCursor = false,
   layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
+  messageIndex?: number;
   onFork?: () => Promise<void> | void;
   onRewind?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
+  onReplyToSelection?: (selection: ReplySelectionMenuState) => void;
   onOpenFilePath?: (path: string) => void;
   showCursor?: boolean;
   layout?: ChatViewLayout;
 }) {
   const shouldShowCursor = showCursor || !!block.streaming;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onReplyToSelection || typeof messageIndex !== 'number' || typeof window === 'undefined') {
+      return;
+    }
+
+    const text = readSelectedTextWithinElement(contentRef.current);
+    if (!text) {
+      return;
+    }
+
+    event.preventDefault();
+    const maxX = Math.max(12, window.innerWidth - 260);
+    const maxY = Math.max(12, window.innerHeight - 148);
+    onReplyToSelection({
+      text,
+      messageIndex,
+      blockId: block.id?.trim() || undefined,
+      x: Math.max(12, Math.min(event.clientX, maxX)),
+      y: Math.max(12, Math.min(event.clientY, maxY)),
+    });
+  }, [block.id, messageIndex, onReplyToSelection]);
 
   return (
     <div className={cx('group flex items-start', layout === 'companion' ? 'gap-2.5' : 'gap-3')}>
@@ -1921,7 +2043,11 @@ function AssistantMessage({
         <span className="ui-chat-avatar-mark">pa</span>
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="ui-message-card-assistant text-primary space-y-1">
+        <div
+          ref={contentRef}
+          onContextMenu={handleContextMenu}
+          className="ui-message-card-assistant text-primary space-y-1"
+        >
           {renderText(block.text, { onOpenFilePath })}
           {shouldShowCursor && (
             <span
@@ -2204,6 +2330,7 @@ interface ChatViewProps {
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
+  onReplyToSelection?: (selection: { text: string; messageIndex: number; blockId?: string }) => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenArtifact?: (artifactId: string) => void;
@@ -2230,6 +2357,7 @@ export const ChatView = memo(function ChatView({
   onForkMessage,
   onRewindMessage,
   onCheckpointMessage,
+  onReplyToSelection,
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenArtifact,
@@ -2281,6 +2409,8 @@ export const ChatView = memo(function ChatView({
   );
   const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
+  const [replyMenu, setReplyMenu] = useState<ReplySelectionMenuState | null>(null);
+  const replyMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -2361,6 +2491,67 @@ export const ChatView = memo(function ChatView({
     setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
   }, []);
 
+  useEffect(() => {
+    if (!replyMenu || typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && replyMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setReplyMenu(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setReplyMenu(null);
+      }
+    };
+    const handleClose = () => {
+      setReplyMenu(null);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+    };
+  }, [replyMenu]);
+
+  const handleReplySelection = useCallback(async () => {
+    if (!replyMenu || !onReplyToSelection) {
+      return;
+    }
+
+    setReplyMenu(null);
+    await onReplyToSelection({
+      text: replyMenu.text,
+      messageIndex: replyMenu.messageIndex,
+      blockId: replyMenu.blockId,
+    });
+  }, [onReplyToSelection, replyMenu]);
+
+  const handleCopyReplySelection = useCallback(async () => {
+    if (!replyMenu || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      setReplyMenu(null);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(replyMenu.text);
+    } finally {
+      setReplyMenu(null);
+    }
+  }, [replyMenu]);
+
   const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
     const isTailItem = itemIndex === renderItems.length - 1;
 
@@ -2419,10 +2610,12 @@ export const ChatView = memo(function ChatView({
           return (
             <AssistantMessage
               block={block}
+              messageIndex={absoluteIndex}
               showCursor={showStreamingCursor}
               onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
+              onReplyToSelection={onReplyToSelection ? (selection) => setReplyMenu(selection) : undefined}
               onOpenFilePath={onOpenFilePath}
               layout={layout}
             />
@@ -2482,7 +2675,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {
@@ -2579,6 +2772,14 @@ export const ChatView = memo(function ChatView({
           </div>
         )}
       </div>
+      {replyMenu && (
+        <ReplySelectionContextMenu
+          state={replyMenu}
+          menuRef={replyMenuRef}
+          onReply={() => { void handleReplySelection(); }}
+          onCopy={() => { void handleCopyReplySelection(); }}
+        />
+      )}
     </>
   );
 });
