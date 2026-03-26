@@ -4,15 +4,16 @@ import { mkdir, rm } from 'fs/promises';
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'fs';
 import { basename, dirname, extname, join, resolve } from 'path';
 import { tmpdir } from 'os';
-import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
@@ -3140,7 +3141,21 @@ function writeGatewaySessionSnapshot(sessionManager: SessionManager, snapshotFil
 
   const entries = sessionManager.getEntries() as unknown as GatewaySessionSnapshotEntry[];
   const lines = [header, ...entries].map((entry) => JSON.stringify(entry));
-  writeFileSync(snapshotFile, `${lines.join('\n')}\n`);
+  writeFileSync(snapshotFile, `${lines.join('\n')}\n`, {
+    encoding: 'utf-8',
+    mode: 0o600,
+    flag: 'wx',
+  });
+}
+
+export function createGatewayDetachedForkSnapshot(sessionManager: SessionManager): {
+  snapshotDir: string;
+  snapshotFile: string;
+} {
+  const snapshotDir = mkdtempSync(join(tmpdir(), 'personal-agent-gateway-fork-'));
+  const snapshotFile = join(snapshotDir, 'snapshot.jsonl');
+  writeGatewaySessionSnapshot(sessionManager, snapshotFile);
+  return { snapshotDir, snapshotFile };
 }
 
 function patchGatewaySessionParentSession(sessionManager: SessionManager, parentSession: string): void {
@@ -3339,7 +3354,7 @@ async function listPiModels(options: {
 
 function ensureExtensionDependencies(profile: ResolvedProfile): void {
   const dependencyDirs = getExtensionDependencyDirs(profile);
-  const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
+  const missingDirs = dependencyDirs.filter((dir: string) => !existsSync(join(dir, 'node_modules')));
 
   for (const dir of missingDirs) {
     const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
@@ -3685,13 +3700,11 @@ class PersistentConversationController implements GatewayConversationController 
     const sourceSession = await this.getSession();
     const sourceSessionFile = sourceSession.sessionFile ?? this.initialSessionFile;
     const sourceSessionManager = sourceSession.sessionManager;
-    const snapshotFile = join(tmpdir(), `personal-agent-gateway-fork-${randomUUID()}.jsonl`);
+    const { snapshotDir, snapshotFile } = createGatewayDetachedForkSnapshot(sourceSessionManager);
 
     let detachedSession: PiAgentSession | undefined;
 
     try {
-      writeGatewaySessionSnapshot(sourceSessionManager, snapshotFile);
-
       const snapshotSessionManager = SessionManager.open(snapshotFile, sourceSessionManager.getSessionDir());
       detachedSession = await createGatewayAgentSessionWithSessionManager({
         profile: this.profile,
@@ -3746,7 +3759,7 @@ class PersistentConversationController implements GatewayConversationController 
       }
 
       try {
-        unlinkSync(snapshotFile);
+        rmSync(snapshotDir, { recursive: true, force: true });
       } catch {
         // best-effort cleanup
       }

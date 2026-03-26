@@ -1,8 +1,10 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
+  createGatewayDetachedForkSnapshot,
   createQueuedDiscordMessageHandler,
   createQueuedTelegramMessageHandler,
   flushGatewayNotifications,
@@ -36,6 +38,29 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
+
+describe('createGatewayDetachedForkSnapshot', () => {
+  it('writes snapshots inside a private temp directory with owner-only file permissions', () => {
+    const root = createTempDir('gateway-detached-fork-snapshot-');
+    const sessionDir = join(root, 'sessions');
+    const manager = SessionManager.create(root, sessionDir);
+    const sessionFile = join(sessionDir, 'source.jsonl');
+    manager.setSessionFile(sessionFile);
+
+    const { snapshotDir, snapshotFile } = createGatewayDetachedForkSnapshot(manager);
+
+    try {
+      const dirMode = statSync(snapshotDir).mode & 0o777;
+      const fileMode = statSync(snapshotFile).mode & 0o777;
+      expect(dirMode).toBe(0o700);
+      expect(fileMode).toBe(0o600);
+      expect(readFileSync(snapshotFile, 'utf-8')).toContain('"type":"session"');
+    } finally {
+      rmSync(snapshotDir, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
 
 interface TestRunPromptInput {
   prompt: string;
