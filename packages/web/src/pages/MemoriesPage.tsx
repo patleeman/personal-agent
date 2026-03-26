@@ -90,17 +90,17 @@ function memoryWorkItemDotClass(item: MemoryWorkItem): string {
 function memoryWorkItemLabel(item: MemoryWorkItem): string {
   switch (item.status) {
     case 'failed':
-      return 'Distillation failed';
+      return 'Node distillation failed';
     case 'interrupted':
-      return 'Distillation interrupted';
+      return 'Node distillation interrupted';
     case 'queued':
-      return 'Queued for distillation';
+      return 'Queued for node distillation';
     case 'waiting':
-      return 'Waiting to resume distillation';
+      return 'Waiting to resume node distillation';
     case 'recovering':
-      return 'Recovering distillation';
+      return 'Recovering node distillation';
     default:
-      return 'Distilling into memory';
+      return 'Distilling into a note node';
   }
 }
 
@@ -131,7 +131,7 @@ function formatRelatedCount(related: string[] | undefined): string | null {
     return null;
   }
 
-  return `${normalized} related ${normalized === 1 ? 'package' : 'packages'}`;
+  return `${normalized} related ${normalized === 1 ? 'node' : 'nodes'}`;
 }
 
 function MemoryWorkQueueRow({
@@ -150,7 +150,7 @@ function MemoryWorkQueueRow({
   const retryable = canRetryMemoryWorkItem(item);
   const recoverable = canRecoverMemoryWorkItem(item);
   const summary = activeAction === 'retry'
-    ? 'Queueing memory distillation…'
+    ? 'Queueing node distillation…'
     : activeAction === 'recover'
       ? 'Opening recovery conversation…'
       : item.lastError || memoryWorkItemLabel(item);
@@ -181,7 +181,7 @@ function MemoryWorkQueueRow({
               className="shrink-0"
               onClick={() => onRetry(item)}
               disabled={actionDisabled}
-              title="Retry this memory distillation"
+              title="Retry this node distillation"
             >
               {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
             </ToolbarButton>
@@ -191,7 +191,7 @@ function MemoryWorkQueueRow({
               className="shrink-0"
               onClick={() => onRecover(item)}
               disabled={actionDisabled}
-              title="Open a recovery conversation for this memory distillation"
+              title="Open a recovery conversation for this node distillation"
             >
               {activeAction === 'recover' ? 'Opening…' : 'Recover'}
             </ToolbarButton>
@@ -265,7 +265,7 @@ export function MemoriesPage() {
       const result = await api.retryMemoryDistillRun(item.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not retry memory distillation.');
+      setQueueError(error instanceof Error ? error.message : 'Could not retry node distillation.');
       setPendingQueueAction(null);
       await refetch({ resetLoading: false });
     }
@@ -282,11 +282,11 @@ export function MemoriesPage() {
       const result = await api.recoverMemoryDistillRun(item.runId);
       persistForkPromptDraft(
         result.conversationId,
-        `Help me recover memory distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
+        `Help me recover node distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
       );
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this memory distillation run.');
+      setQueueError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this node distillation run.');
       setPendingQueueAction(null);
       await refetch({ resetLoading: false });
     }
@@ -303,10 +303,10 @@ export function MemoriesPage() {
         )}
       >
         <PageHeading
-          title="Memories"
+          title="Notes"
           meta={(
             <>
-              {memories.length} memory {memories.length === 1 ? 'package' : 'packages'}
+              {memories.length} note {memories.length === 1 ? 'node' : 'nodes'}
               {memoryQueue.length > 0 && <span className="ml-2 text-secondary">· {memoryQueue.length} in queue</span>}
               {selectedMemoryId && <span className="ml-2 text-secondary">· @{selectedMemoryId}</span>}
             </>
@@ -315,13 +315,13 @@ export function MemoriesPage() {
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && <LoadingState label="Loading memories…" />}
-        {error && <ErrorState message={`Unable to load memories: ${error}`} />}
+        {loading && <LoadingState label="Loading notes…" />}
+        {error && <ErrorState message={`Unable to load notes: ${error}`} />}
 
         {!loading && !error && memories.length === 0 && memoryQueue.length === 0 && (
           <EmptyState
-            title="No memories yet."
-            body="Distill a conversation message to create or update a durable memory package."
+            title="No notes yet."
+            body="Distill a conversation message to create or update a durable note node."
           />
         )}
 
@@ -329,8 +329,8 @@ export function MemoriesPage() {
           <div className="space-y-6 pb-5">
             {memoryQueue.length > 0 && (
               <div className="space-y-2">
-                <p className="ui-section-label">Memory work queue</p>
-                <p className="ui-card-meta">Memory distillation runs that are still active or did not finish cleanly.</p>
+                <p className="ui-section-label">Node work queue</p>
+                <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
                 {queueError && <p className="text-[12px] text-danger">{queueError}</p>}
                 <div className="space-y-px">
                   {memoryQueue.map((item) => (
@@ -350,35 +350,35 @@ export function MemoriesPage() {
             {memories.length > 0 && (
               <>
                 <div className="space-y-2">
-                  <p className="ui-section-label">Memory packages</p>
+                  <p className="ui-section-label">Note nodes</p>
                   <p className="ui-card-meta max-w-3xl">
-                    Memory packages mirror skills: each package has a `MEMORY.md` overview plus package-local `references/` and `assets/`.
-                    Search package metadata and reference content below, then inspect the selected package in the right panel.
+                    Note nodes use an `INDEX.md` overview plus package-local `references/` and `assets/`.
+                    Search note metadata and reference content below, then inspect the selected note in the right panel.
                   </p>
                 </div>
 
                 <div className="space-y-2 border-t border-border-subtle pt-5">
-                  <label htmlFor="memories-search" className="ui-section-label">Search packages</label>
+                  <label htmlFor="memories-search" className="ui-section-label">Search notes</label>
                   <input
                     id="memories-search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search packages, summaries, tags, metadata, or reference content"
+                    placeholder="Search notes, summaries, tags, metadata, or reference content"
                     className={INPUT_CLASS}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <p className="ui-card-meta">
                     {query.trim()
-                      ? `Showing ${filteredMemories.length} of ${memories.length} packages.`
-                      : `Showing ${memories.length} packages.`}
-                    {' '}Select a package to browse its `MEMORY.md`, relationships, and package-local references in the right panel.
+                      ? `Showing ${filteredMemories.length} of ${memories.length} note nodes.`
+                      : `Showing ${memories.length} note nodes.`}
+                    {' '}Select a note node to browse its `INDEX.md`, relationships, and package-local references in the right panel.
                   </p>
                 </div>
 
                 {selectedMemory && (
                   <div className="space-y-1 border-t border-border-subtle pt-5">
-                    <p className="ui-section-label">Selected package</p>
+                    <p className="ui-section-label">Selected note node</p>
                     <p className="text-[15px] font-medium text-primary">{selectedMemory.title}</p>
                     <p className="ui-card-meta">
                       {formatReferenceCount(selectedMemory.referenceCount)}
@@ -472,7 +472,7 @@ export function MemoriesPage() {
                 ) : (
                   <EmptyState
                     title="No matches"
-                    body="Try a broader search across package titles, summaries, tags, metadata, and package-local reference content."
+                    body="Try a broader search across note titles, summaries, tags, metadata, and package-local reference content."
                     action={<ToolbarButton onClick={() => setQuery('')}>Clear search</ToolbarButton>}
                   />
                 )}

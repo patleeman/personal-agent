@@ -94,7 +94,7 @@ Common durable roots:
 - `settings/**`
 - `models/**`
 - `skills/**`
-- `memory/**`
+- `notes/**`
 - `tasks/`
 - `projects/`
 
@@ -183,7 +183,7 @@ By default, sync tracks:
 - `settings/**`
 - `models/**`
 - `skills/**`
-- `memory/**`
+- `notes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`

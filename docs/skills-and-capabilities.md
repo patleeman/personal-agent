@@ -1,28 +1,30 @@
 # Skills and Runtime Capabilities
 
-This page explains the user-facing difference between **skills** and **extensions**.
+This page explains the user-facing difference between **skill nodes** and **extensions**.
 
 Most users and agents should think about them this way:
 
-- **skills** are reusable workflows
+- **skill nodes** are reusable workflows
 - **extensions** are runtime behaviors that change what the agent can do
+
+See [Nodes](./nodes.md) for the canonical node model.
 
 ## Skills vs extensions
 
 | Feature | What it is | How to think about it |
 | --- | --- | --- |
-| Skill | named workflow with instructions and supporting files | reusable capability the agent can call on |
+| Skill node | named workflow with instructions and supporting files | reusable capability the agent can call on |
 | Extension | code that changes runtime behavior | a built-in or profile-provided feature of the agent runtime |
 
-## Skills
+## Skill nodes
 
-Skills live in layered durable resource directories such as:
+Skill nodes live in layered durable resource directories such as:
 
 - `~/.local/state/personal-agent/sync/skills/`
 - local overlay skill dirs
 - repo defaults and built-in runtime capabilities
 
-A skill is the right place for:
+A skill node is the right place for:
 
 - repeatable workflows
 - domain-specific procedures
@@ -35,9 +37,9 @@ Examples include:
 - repo and coding best-practice workflows
 - deep research and code review workflows
 
-Skills are surfaced in user-facing places like:
+Skill nodes are surfaced in user-facing places like:
 
-- the Memory page in the web UI
+- the Notes / knowledge surfaces in the web UI
 - the agent's normal resource loading when a profile is active
 
 ## Extensions
@@ -48,19 +50,19 @@ Most of the time, you use them indirectly rather than thinking about their sourc
 
 Examples of user-visible extension behavior in this repo:
 
-- **memory** — keeps AGENTS, skills, and memory rules visible to the agent
+- **memory** — keeps AGENTS, skills, and note-node rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
 - **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
-- **project agent extension** — manages durable projects and current conversation ↔ project references
+- **project agent extension** — manages durable project nodes and current conversation ↔ project references
 
 ## What to edit when you want to change behavior
 
 Use this rule:
 
 - change `AGENTS.md` when you want to change durable behavior or policy
-- add or update a **skill** when you want a reusable workflow
-- add a **memory package** when you want durable knowledge or reference material
-- create or update a **project** when you want tracked work state
+- add or update a **skill node** when you want a reusable workflow
+- add or update a **note node** when you want durable knowledge or reference material
+- create or update a **project node** when you want tracked work state
 - create a **scheduled task** when you want unattended automation
 
 Only reach for extensions when you need to change runtime behavior itself.
@@ -80,17 +82,18 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 
 ### Web UI
 
-- Memory page shows skills and durable knowledge
+- note and project surfaces show durable node content
 - conversations can reference skills with `@`
 - live sessions use the active profile's runtime behavior
 
 ### CLI / TUI
 
 - `pa tui` launches Pi with the resolved layered resources
-- the active profile controls which skills and extensions are available
+- the active profile controls which skill nodes and extensions are available
 
 ## Related docs
 
+- [Nodes](./nodes.md)
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [How personal-agent works](./how-it-works.md)
 - [Web UI Guide](./web-ui.md)

@@ -55,7 +55,7 @@ function createProjectDetail(): ProjectDetail {
       },
     ],
     brief: {
-      path: '/tmp/bloodhound-prototype/BRIEF.md',
+      path: '/tmp/bloodhound-prototype/INDEX.md',
       updatedAt: '2026-03-24T09:30:00.000Z',
       content: `# Bloodhound prototype
 

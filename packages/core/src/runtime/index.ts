@@ -26,6 +26,7 @@ export {
   getDurableSettingsDir,
   getDurableModelsDir,
   getDurableSkillsDir,
+  getDurableNotesDir,
   getDurableMemoryDir,
   getDurableTasksDir,
   getDurableProjectsDir,

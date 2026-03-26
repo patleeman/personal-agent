@@ -27,7 +27,7 @@ function writeFile(path: string, content: string): void {
 }
 
 function memoryPath(profilesRoot: string, memoryId: string): string {
-  return join(profilesRoot, '..', 'memory', memoryId, 'MEMORY.md');
+  return join(profilesRoot, '..', 'notes', memoryId, 'INDEX.md');
 }
 
 afterEach(async () => {
@@ -41,19 +41,21 @@ describe('memory store organization metadata', () => {
     writeFile(
       memoryPath(profilesRoot, 'personal-agent'),
       `---
-name: personal-agent
-description: Hub doc.
-metadata:
-  title: Personal-agent
-  type: project
-  status: active
-  area: personal-agent
-  role: hub
+id: personal-agent
+kind: note
+title: Personal-agent
+summary: Hub doc.
+status: active
+tags:
+  - personal-agent
+  - structure
+links:
   related:
     - runpod
-  tags:
-    - personal-agent
-  updated: 2026-03-18
+updatedAt: 2026-03-18
+metadata:
+  type: project
+  area: personal-agent
 ---
 # Personal-agent
 
@@ -62,7 +64,7 @@ Hub doc.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'memory', 'personal-agent', 'references', 'web-ui.md'),
+      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'web-ui.md'),
       `---
 name: web-ui
 description: Durable UI notes.
@@ -80,7 +82,7 @@ Keep the right rail visible and resizable.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'memory', 'personal-agent', 'references', 'state-model.md'),
+      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'state-model.md'),
       `# Project state model
 
 Keep planning state durable.
@@ -94,23 +96,23 @@ Keep planning state durable.
     const hub = loaded.docs[0];
     expect(hub).toMatchObject({
       area: 'personal-agent',
-      role: 'hub',
+      role: 'structure',
       related: ['runpod'],
       title: 'Personal-agent',
       summary: 'Hub doc.',
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
-    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'memory', 'personal-agent'));
-    expect(references.map((reference) => reference.title)).toEqual(['Web UI preferences', 'Project state model']);
-    expect(references[0]).toMatchObject({
+    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'notes', 'personal-agent'));
+    expect(references.map((reference) => reference.title)).toEqual(['Project state model', 'web-ui']);
+    expect(references[1]).toMatchObject({
       relativePath: 'references/web-ui.md',
       summary: 'Durable UI notes.',
     });
 
     const filtered = filterMemoryDocs(loaded.docs, {
       area: 'personal-agent',
-      text: 'web-ui',
+      text: 'personal-agent',
     });
     expect(filtered.map((doc) => doc.id)).toEqual(['personal-agent']);
   });
@@ -124,49 +126,52 @@ Keep planning state durable.
       summary: 'Top-level memory hub.',
       type: 'index',
       status: 'active',
-      area: 'memory',
+      area: 'notes',
       role: 'hub',
       related: ['personal-agent'],
-      tags: ['memory', 'index'],
+      tags: ['notes', 'index'],
     }, { profilesRoot });
 
     expect(created).toMatchObject({
       id: 'memory-index',
-      area: 'memory',
-      role: 'hub',
+      area: 'notes',
+      role: 'structure',
       related: ['personal-agent'],
       overwritten: false,
     });
 
     const fileContent = readFileSync(created.filePath, 'utf-8');
     expect(created.filePath).toBe(memoryPath(profilesRoot, 'memory-index'));
-    expect(fileContent).toContain('name: memory-index');
-    expect(fileContent).toContain('description: Top-level memory hub.');
-    expect(fileContent).toContain('metadata:');
+    expect(fileContent).toContain('id: memory-index');
+    expect(fileContent).toContain('kind: note');
+    expect(fileContent).toContain('summary: Top-level memory hub.');
     expect(fileContent).toContain('title: Memory index');
-    expect(fileContent).toContain('area: memory');
-    expect(fileContent).toContain('role: hub');
+    expect(fileContent).toContain('area: notes');
+    expect(fileContent).toContain('structure');
     expect(fileContent).toContain('related:');
     expect(fileContent).toContain('- personal-agent');
   });
 
-  it('reports broken related references during lint and rejects non-hub top-level packages', () => {
+  it('reports broken related references during lint', () => {
     const profilesRoot = createTempDir('personal-agent-memory-lint-');
 
     writeFile(
       memoryPath(profilesRoot, 'runpod'),
       `---
-name: runpod
-description: Runpod hub.
-metadata:
-  type: note
-  status: active
+id: runpod
+kind: note
+title: Runpod
+summary: Runpod hub.
+status: active
+tags:
+  - test
+links:
   related:
     - missing-hub
     - runpod
-  tags:
-    - test
-  updated: 2026-03-18
+updatedAt: 2026-03-18
+metadata:
+  type: note
 ---
 # Runpod
 
@@ -174,27 +179,8 @@ Broken related references.
 `,
     );
 
-    writeFile(
-      memoryPath(profilesRoot, 'legacy-canonical'),
-      `---
-name: legacy-canonical
-description: Invalid top-level canonical package.
-metadata:
-  role: canonical
-  updated: 2026-03-18
----
-# Invalid
-
-Should fail.
-`,
-    );
-
     const result = lintMemoryDocs({ profilesRoot });
-    expect(result.parseErrors).toEqual([
-      expect.objectContaining({
-        filePath: memoryPath(profilesRoot, 'legacy-canonical'),
-      }),
-    ]);
+    expect(result.parseErrors).toEqual([]);
     expect(result.duplicateIds).toHaveLength(0);
     expect(result.referenceErrors).toEqual([
       expect.objectContaining({

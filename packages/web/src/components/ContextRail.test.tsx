@@ -291,7 +291,7 @@ describe('ContextRail run detail', () => {
           title: 'Personal-agent knowledge hub',
           summary: 'Durable knowledge hub for personal-agent.',
           tags: ['personal-agent', 'web-ui'],
-          path: '/tmp/personal-agent/MEMORY.md',
+          path: '/tmp/personal-agent/INDEX.md',
           type: 'project',
           status: 'active',
           area: 'personal-agent',
@@ -338,7 +338,7 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Role');
     expect(html).toContain('href="/memories?memory=personal-agent-web-ui-preferences"');
     expect(html).toContain('Package files');
-    expect(html).toContain('MEMORY.md');
+    expect(html).toContain('INDEX.md');
     expect(html).toContain('Web UI preferences');
     expect(html).toContain('references/personal-agent-web-ui-preferences.md');
   });
@@ -477,7 +477,7 @@ describe('ContextRail run detail', () => {
               title: 'Personal-agent knowledge hub',
               summary: 'Durable knowledge hub for personal-agent.',
               tags: ['personal-agent'],
-              path: '/tmp/personal-agent/MEMORY.md',
+              path: '/tmp/personal-agent/INDEX.md',
               type: 'project',
               status: 'active',
               updated: '2026-03-18T12:00:00.000Z',
@@ -527,7 +527,7 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('MEMORY.md');
+    expect(html).toContain('INDEX.md');
     expect(html).toContain('references/prefs.md');
   });
 
@@ -543,7 +543,7 @@ describe('ContextRail run detail', () => {
               name: 'tdd-feature',
               description: 'Build a feature with test-driven development.',
               source: 'shared',
-              path: '/tmp/tdd-feature/SKILL.md',
+              path: '/tmp/tdd-feature/INDEX.md',
               recentSessionCount: 2,
               lastUsedAt: '2026-03-18T12:00:00.000Z',
               usedInLastSession: true,
@@ -555,7 +555,7 @@ describe('ContextRail run detail', () => {
           refetch: vi.fn(),
         };
       }
-      if (key === 'knowledge-skill-rail:/tmp/tdd-feature/SKILL.md') {
+      if (key === 'knowledge-skill-rail:/tmp/tdd-feature/INDEX.md') {
         return {
           data: { content: '# TDD feature' },
           loading: false,
@@ -595,7 +595,7 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('TDD Feature');
     expect(html).toContain('Build a feature with test-driven development.');
-    expect(html).toContain('/tmp/tdd-feature/SKILL.md');
+    expect(html).toContain('/tmp/tdd-feature/INDEX.md');
   });
 
   it('renders selected instruction details in the rail', () => {

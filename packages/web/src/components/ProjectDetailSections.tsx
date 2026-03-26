@@ -404,7 +404,7 @@ export function ProjectRecordViewer({
 
       {rawProjectOpen && (
         <form onSubmit={onRawProjectSubmit} className="max-w-5xl space-y-4 border-t border-border-subtle pt-6">
-          <p className="ui-card-meta">PROJECT.yaml</p>
+          <p className="ui-card-meta">state.yaml</p>
           <textarea
             value={rawProjectContent}
             onChange={(event) => onRawProjectContentChange(event.target.value)}
@@ -413,7 +413,7 @@ export function ProjectRecordViewer({
           />
           {rawProjectError && <p className="text-[12px] text-danger">{rawProjectError}</p>}
           <div className="flex items-center gap-3">
-            <ToolbarButton type="submit" disabled={rawProjectBusy}>{rawProjectBusy ? 'Saving…' : 'Save YAML'}</ToolbarButton>
+            <ToolbarButton type="submit" disabled={rawProjectBusy}>{rawProjectBusy ? 'Saving…' : 'Save state'}</ToolbarButton>
           </div>
         </form>
       )}

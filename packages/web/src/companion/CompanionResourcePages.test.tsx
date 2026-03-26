@@ -87,7 +87,7 @@ describe('companion resource pages', () => {
     expect(html).toContain('/app/projects/active-project');
   });
 
-  it('renders linked active and archived memory packages in the companion memory browser', () => {
+  it('renders linked active and archived note nodes in the companion memory browser', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         profile: 'assistant',
@@ -98,12 +98,12 @@ describe('companion resource pages', () => {
             id: 'memory-index',
             title: 'Memory index',
             summary: 'Top-level knowledge hub.',
-            tags: ['memory', 'index'],
-            path: '/tmp/memory-index/MEMORY.md',
+            tags: ['notes', 'index'],
+            path: '/tmp/memory-index/INDEX.md',
             type: 'index',
             status: 'active',
             role: 'hub',
-            area: 'memory',
+            area: 'notes',
             related: ['personal-agent'],
             referenceCount: 2,
             updated: '2026-03-17T12:00:00.000Z',
@@ -113,7 +113,7 @@ describe('companion resource pages', () => {
             title: 'Old memory',
             summary: 'Deprecated but kept for reference.',
             tags: ['archive'],
-            path: '/tmp/old-memory/MEMORY.md',
+            path: '/tmp/old-memory/INDEX.md',
             status: 'archived',
             referenceCount: 1,
             updated: '2026-03-15T08:00:00.000Z',
@@ -129,7 +129,7 @@ describe('companion resource pages', () => {
 
     const html = renderWithRouter(<CompanionMemoriesPage />);
 
-    expect(html).toContain('Memories');
+    expect(html).toContain('Notes');
     expect(html).toContain('Memory index');
     expect(html).toContain('Old memory');
     expect(html).toContain('2 references');
@@ -149,7 +149,7 @@ describe('companion resource pages', () => {
             name: 'tool-agent-browser',
             description: 'Automate browsers and Electron apps with agent-browser.',
             source: 'shared',
-            path: '/tmp/tool-agent-browser/SKILL.md',
+            path: '/tmp/tool-agent-browser/INDEX.md',
             recentSessionCount: 1,
             lastUsedAt: '2026-03-17T12:00:00.000Z',
             usedInLastSession: true,

@@ -638,6 +638,25 @@ function collectScopedFiles(root: string, extensions: string[], profileName: str
   return dedupe(output);
 }
 
+function isSkillDefinitionFile(skillFile: string): boolean {
+  const name = basename(skillFile);
+  if (name === 'SKILL.md') {
+    return true;
+  }
+
+  if (name !== 'INDEX.md') {
+    return false;
+  }
+
+  const frontmatter = parseSimpleFrontmatter(readFileSync(skillFile, 'utf-8'));
+  const kind = typeof frontmatter.kind === 'string' ? frontmatter.kind.trim().toLowerCase() : undefined;
+  if (kind === 'skill') {
+    return true;
+  }
+
+  return typeof frontmatter.name === 'string' && typeof frontmatter.description === 'string';
+}
+
 function skillDefinitionAppliesToProfile(skillFile: string, root: string, profileName: string, knownProfiles: Set<string>): boolean {
   const frontmatter = parseSimpleFrontmatter(readFileSync(skillFile, 'utf-8'));
   const selector = normalizeProfilesSelector(frontmatter.profiles);
@@ -650,7 +669,7 @@ function skillDefinitionAppliesToProfile(skillFile: string, root: string, profil
 
 function collectScopedSkillDirs(root: string, profileName: string, knownProfiles: Set<string>): string[] {
   const skillFiles = collectScopedFiles(root, ['.md'], profileName, knownProfiles)
-    .filter((filePath) => basename(filePath) === 'SKILL.md');
+    .filter((filePath) => isSkillDefinitionFile(filePath));
 
   return dedupe(skillFiles.filter((filePath) => skillDefinitionAppliesToProfile(filePath, root, profileName, knownProfiles)).map((filePath) => dirname(filePath)));
 }

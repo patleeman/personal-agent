@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { loadMemoryDocs, loadMemoryPackageReferences, type ParsedMemoryDoc, type ParsedMemoryReference } from '@personal-agent/core';
 
@@ -202,42 +202,6 @@ function readLooseString(value: unknown): string | undefined {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function readLooseStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return [...new Set(value
-    .map((item) => readLooseString(item))
-    .filter((item): item is string => Boolean(item)))];
-}
-
-function extractMarkdownTitle(body: string): string | undefined {
-  const match = body.match(/^#\s+(.+)$/m);
-  const title = match?.[1]?.trim();
-  return title && title.length > 0 ? title : undefined;
-}
-
-function extractFirstParagraph(body: string): string | undefined {
-  const paragraphs = body
-    .replace(/\r\n/g, '\n')
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph.length > 0)
-    .filter((paragraph) => !paragraph.startsWith('#'));
-
-  const first = paragraphs[0];
-  if (!first) {
-    return undefined;
-  }
-
-  const cleaned = first
-    .replace(/\s+/g, ' ')
-    .replace(/^[-*]\s+/, '')
-    .trim();
-  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 function humanizeMemoryTitle(value: string): string {
@@ -487,43 +451,51 @@ function deriveNewHubId(existingDocs: ParsedMemoryDoc[], draft: DistilledConvers
 function readHubDoc(memoryDir: string, id: string): ParsedMemoryDoc {
   const refreshed = loadMemoryDocs({ profilesRoot: join(dirname(memoryDir), 'profiles') }).docs.find((doc) => doc.id === id);
   if (!refreshed) {
-    throw new Error(`Failed to load memory hub @${id}.`);
+    throw new Error(`Failed to load note node @${id}.`);
   }
 
   return refreshed;
 }
 
+function normalizeHubMemoryDir(memoryDir: string): string {
+  return basename(memoryDir) === 'memory' ? join(dirname(memoryDir), 'notes') : memoryDir;
+}
+
 function createHubMemoryDoc(options: SaveCuratedDistilledConversationMemoryOptions, existingDocs: ParsedMemoryDoc[]): ParsedMemoryDoc {
   const id = deriveNewHubId(existingDocs, options.draft, options.area);
-  const packagePath = join(options.memoryDir, id);
-  const filePath = join(packagePath, 'MEMORY.md');
+  const packagePath = join(normalizeHubMemoryDir(options.memoryDir), id);
+  const filePath = join(packagePath, 'INDEX.md');
   const hubTitle = options.area ? humanizeMemoryTitle(options.area) : options.draft.title;
   const hubSummary = options.area
-    ? `Durable knowledge hub for ${humanizeMemoryTitle(options.area)}.`
+    ? `Durable note node for ${humanizeMemoryTitle(options.area)}.`
     : options.draft.summary;
+  const tags = [...new Set([
+    ...options.draft.tags.filter((tag) => tag !== 'conversation' && tag !== 'checkpoint'),
+    'structure',
+  ])];
   const metadata: Record<string, unknown> = {
-    title: hubTitle,
     type: 'note',
-    status: 'active',
     area: options.area ?? id,
-    role: 'hub',
-    tags: [...new Set(options.draft.tags.filter((tag) => tag !== 'conversation' && tag !== 'checkpoint'))],
-    updated: options.updated,
   };
 
   mkdirSync(packagePath, { recursive: true });
-  writeFileSync(filePath, stringifyMemoryMarkdown(buildMemoryFrontmatter({
-    name: id,
-    description: hubSummary,
+  writeFileSync(filePath, stringifyMemoryMarkdown({
+    id,
+    kind: 'note',
+    title: hubTitle,
+    summary: hubSummary,
+    status: 'active',
+    ...(tags.length > 0 ? { tags } : {}),
+    updatedAt: options.updated,
     metadata,
-  }), [
+  }, [
     `# ${hubTitle}`,
     '',
     hubSummary,
     '',
     '## References',
     '',
-    'Use this hub to organize durable notes for this area. Detailed material lives in `references/`.',
+    'Use this node to organize durable notes for this area. Detailed material lives in `references/`.',
   ].join('\n')), 'utf-8');
 
   return readHubDoc(options.memoryDir, id);

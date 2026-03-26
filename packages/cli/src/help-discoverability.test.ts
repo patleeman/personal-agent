@@ -56,7 +56,7 @@ describe('subcommand help discoverability', () => {
     },
     {
       argv: ['memory', '--help'],
-      expected: ['Memory commands', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
+      expected: ['Note node commands', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
     },
     {
       argv: ['inbox', '--help'],

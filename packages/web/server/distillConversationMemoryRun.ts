@@ -76,10 +76,12 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 async function runDistillation(args: ParsedArgs): Promise<void> {
-  const response = await fetch(`http://127.0.0.1:${args.port}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/memories/distill-now`, {
+  const origin = `http://127.0.0.1:${args.port}`;
+  const response = await fetch(`${origin}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/memories/distill-now`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Origin: origin,
     },
     body: JSON.stringify({
       profile: args.profile,

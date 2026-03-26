@@ -43,7 +43,7 @@ export function CompanionMemoryDetailPage() {
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
           <div className="flex items-center justify-between gap-3">
-            <Link to={COMPANION_MEMORIES_PATH} className="text-[12px] font-medium text-accent">← Memories</Link>
+            <Link to={COMPANION_MEMORIES_PATH} className="text-[12px] font-medium text-accent">← Notes</Link>
             <button
               type="button"
               onClick={() => { void refetch({ resetLoading: false }); }}
@@ -54,7 +54,7 @@ export function CompanionMemoryDetailPage() {
             </button>
           </div>
           <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">assistant companion</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">{memory?.title ?? 'Memory'}</h1>
+          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">{memory?.title ?? 'Note'}</h1>
           {memory ? (
             <>
               <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-secondary">{memory.summary || 'No summary available.'}</p>
@@ -67,9 +67,9 @@ export function CompanionMemoryDetailPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-6">
-          {loading ? <p className="px-4 text-[13px] text-dim">Loading memory…</p> : null}
-          {!loading && error ? <p className="px-4 text-[13px] text-danger">Unable to load memory: {error}</p> : null}
-          {!loading && !error && !data ? <p className="px-4 text-[13px] text-dim">Memory not found.</p> : null}
+          {loading ? <p className="px-4 text-[13px] text-dim">Loading note…</p> : null}
+          {!loading && error ? <p className="px-4 text-[13px] text-danger">Unable to load note: {error}</p> : null}
+          {!loading && !error && !data ? <p className="px-4 text-[13px] text-dim">Note not found.</p> : null}
 
           {data && memory ? (
             <div className="overflow-hidden border-y border-border-subtle bg-surface/70">
@@ -92,7 +92,7 @@ export function CompanionMemoryDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[13px] text-dim">No references attached to this memory package.</p>
+                  <p className="text-[13px] text-dim">No references attached to this note node.</p>
                 )}
               </Section>
             </div>

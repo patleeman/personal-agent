@@ -857,7 +857,8 @@ function doctorOk(label: string, value?: string | number | boolean): void {
   console.log(success(label, value));
 }
 
-function countFilesNamed(directories: string[], fileName: string): number {
+function countFilesNamed(directories: string[], fileNames: string | string[]): number {
+  const allowed = new Set(Array.isArray(fileNames) ? fileNames : [fileNames]);
   const stack = [...directories];
   let count = 0;
 
@@ -870,7 +871,7 @@ function countFilesNamed(directories: string[], fileName: string): number {
     const entries = readdirSync(current, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isFile() && entry.name === fileName) {
+      if (entry.isFile() && allowed.has(entry.name)) {
         count += 1;
         continue;
       }
@@ -1016,7 +1017,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     extensionDirs: resolvedProfile.extensionDirs.length,
     extensionEntries: resolvedProfile.extensionEntries.length,
     skillDirs: resolvedProfile.skillDirs.length,
-    skillDefinitions: countFilesNamed(resolvedProfile.skillDirs, 'SKILL.md'),
+    skillDefinitions: countFilesNamed(resolvedProfile.skillDirs, ['INDEX.md', 'SKILL.md']),
     promptDirs: resolvedProfile.promptDirs.length,
     promptTemplates: resolvedProfile.promptEntries.length,
     themeDirs: resolvedProfile.themeDirs.length,
@@ -4892,7 +4893,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'memory',
       usage: 'memory [list|find|show|new|lint|help] [args...]',
-      description: 'Inspect global memory packages',
+      description: 'Inspect shared note nodes',
       disableBuiltInHelp: true,
       run: memoryCommand,
     },

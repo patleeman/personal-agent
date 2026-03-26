@@ -73,7 +73,7 @@ describe('ProjectsPage', () => {
           invalidProjects: [
             {
               projectId: 'broken-project',
-              path: '/tmp/broken-project/PROJECT.yaml',
+              path: '/tmp/broken-project/state.yaml',
               error: 'Project.recentProgress[0] must be a string.',
             },
           ],

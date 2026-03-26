@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { resolveProjectPaths } from '@personal-agent/core';
+import { readProject, resolveProjectPaths, writeProjectIndexBody } from '@personal-agent/core';
 
 export type ProjectNoteKind = 'note' | 'decision' | 'question' | 'meeting' | 'checkpoint';
 export type ProjectFileKind = 'attachment' | 'artifact';
@@ -214,6 +214,12 @@ function listEntryDirectories(dir: string): string[] {
     .sort((left, right) => basename(left).localeCompare(basename(right)));
 }
 
+function stripNodeFrontmatter(markdown: string): string {
+  const normalized = markdown.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+  return (match?.[1] ?? normalized).trim();
+}
+
 export function readProjectBrief(options: ResolveProjectResourceOptions): ProjectBriefRecord | null {
   const { briefFile } = resolveProjectPaths(options);
   if (!existsSync(briefFile)) {
@@ -223,15 +229,15 @@ export function readProjectBrief(options: ResolveProjectResourceOptions): Projec
   const stats = statSync(briefFile);
   return {
     path: briefFile,
-    content: readFileSync(briefFile, 'utf-8'),
+    content: stripNodeFrontmatter(readFileSync(briefFile, 'utf-8')),
     updatedAt: stats.mtime.toISOString(),
   };
 }
 
 export function saveProjectBrief(options: ResolveProjectResourceOptions & { content: string }): ProjectBriefRecord {
-  const { briefFile } = resolveProjectPaths(options);
-  mkdirSync(dirname(briefFile), { recursive: true });
-  writeFileSync(briefFile, options.content.replace(/\r\n/g, '\n').trimEnd() + '\n');
+  const paths = resolveProjectPaths(options);
+  const project = readProject(paths.projectFile);
+  writeProjectIndexBody(paths.projectFile, project, options.content.replace(/\r\n/g, '\n').trim());
   return readProjectBrief(options) as ProjectBriefRecord;
 }
 

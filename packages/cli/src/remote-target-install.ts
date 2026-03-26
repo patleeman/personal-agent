@@ -350,7 +350,14 @@ export async function createRemoteRuntimeBundle(options: { repoRoot?: string } =
 
 function computeRemoteStateHash(stateRoot: string): string {
   return computePathSetHash([
-    { sourcePath: join(stateRoot, 'profiles'), relativePath: 'profiles', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'profiles'), relativePath: 'profiles', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'agents'), relativePath: 'agents', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'settings'), relativePath: 'settings', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'models'), relativePath: 'models', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'skills'), relativePath: 'skills', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'notes'), relativePath: 'notes', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'tasks'), relativePath: 'tasks', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'sync', 'projects'), relativePath: 'projects', dereferenceSymlinks: true },
     { sourcePath: join(stateRoot, 'config', 'local'), relativePath: 'config/local', dereferenceSymlinks: true },
     { sourcePath: join(stateRoot, 'config', 'config.json'), relativePath: 'config/config.json', dereferenceSymlinks: true },
     { sourcePath: join(stateRoot, 'pi-agent-runtime', 'auth.json'), relativePath: 'pi-agent-runtime/auth.json', dereferenceSymlinks: true },
@@ -364,7 +371,14 @@ export async function createRemoteStateBundle(options: { stateRoot?: string } = 
   const tarPath = join(workspaceRoot, 'state.tgz');
 
   mkdirSync(stageRoot, { recursive: true });
-  copyDirIfExists(join(stateRoot, 'profiles'), join(stageRoot, 'profiles'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'profiles'), join(stageRoot, 'profiles'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'agents'), join(stageRoot, 'agents'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'settings'), join(stageRoot, 'settings'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'models'), join(stageRoot, 'models'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'skills'), join(stageRoot, 'skills'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'notes'), join(stageRoot, 'notes'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'tasks'), join(stageRoot, 'tasks'), { dereference: true });
+  copyDirIfExists(join(stateRoot, 'sync', 'projects'), join(stageRoot, 'projects'), { dereference: true });
   copyDirIfExists(join(stateRoot, 'config', 'local'), join(stageRoot, 'config', 'local'), { dereference: true });
   copyFileIfExists(join(stateRoot, 'config', 'config.json'), join(stageRoot, 'config', 'config.json'), { dereference: true });
   copyFileIfExists(join(stateRoot, 'pi-agent-runtime', 'auth.json'), join(stageRoot, 'pi-agent-runtime', 'auth.json'), { dereference: true });

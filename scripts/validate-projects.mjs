@@ -15,13 +15,13 @@ function printUsage() {
   console.log(`Usage:
   node scripts/validate-projects.mjs --profile <profile> [--project <projectId>] [--json]
   node scripts/validate-projects.mjs --all-profiles [--json]
-  node scripts/validate-projects.mjs --path <path/to/PROJECT.yaml> [--json]
+  node scripts/validate-projects.mjs --path <path/to/state.yaml> [--json]
 
 Options:
   --profile <profile>   Validate all projects in one profile, or one project with --project
   --project <projectId> Validate one project within --profile
   --all-profiles        Validate every project in every profile under the runtime profiles root
-  --path <file>         Validate exactly one PROJECT.yaml file by path
+  --path <file>         Validate exactly one project state.yaml file by path
   --json                Print machine-readable JSON output
   --help                Show this help text
 `);
@@ -167,7 +167,7 @@ function validateTarget(target) {
       path: target.path,
       profile: target.profile,
       projectId: target.expectedProjectId,
-      error: 'PROJECT.yaml not found.',
+      error: 'state.yaml not found.',
     };
   }
 
@@ -200,7 +200,7 @@ function validateTarget(target) {
 
 function printTextReport(results) {
   if (results.length === 0) {
-    console.log('No project files matched the requested scope.');
+    console.log('No project state files matched the requested scope.');
     return;
   }
 
@@ -217,7 +217,7 @@ function printTextReport(results) {
 
   const failures = results.filter((result) => !result.ok).length;
   const successes = results.length - failures;
-  console.log(`\nChecked ${results.length} project file(s): ${successes} passed, ${failures} failed.`);
+  console.log(`\nChecked ${results.length} project state file(s): ${successes} passed, ${failures} failed.`);
 }
 
 const options = parseArgs(process.argv.slice(2));

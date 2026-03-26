@@ -201,6 +201,19 @@ Recover me after daemon restart
 
     await waitForCondition(() => taskRunnerMock.mock.calls.length === 1);
 
+    await waitForCondition(() => {
+      const runIds = readdirSync(runsRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .sort();
+      const recoveredRunId = runIds.find((runId) => runId !== firstRun.runId);
+      if (!recoveredRunId) {
+        return false;
+      }
+
+      return scanDurableRun(runsRoot, recoveredRunId)?.status?.status === 'completed';
+    });
+
     const runIds = readdirSync(runsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
@@ -219,6 +232,21 @@ Recover me after daemon restart
       status: expect.objectContaining({
         status: 'completed',
       }),
+    });
+
+    await waitForCondition(() => {
+      const recoveredTaskState = JSON.parse(readFileSync(join(daemonPaths.root, 'task-state.json'), 'utf-8')) as {
+        tasks: Record<string, {
+          activeRunId?: string;
+          lastRunId?: string;
+          oneTimeResolvedStatus?: string;
+          lastStatus?: string;
+        }>;
+      };
+      return recoveredTaskState.tasks[taskPath]?.activeRunId === undefined
+        && recoveredTaskState.tasks[taskPath]?.lastRunId === recoveredRunId
+        && recoveredTaskState.tasks[taskPath]?.oneTimeResolvedStatus === 'success'
+        && recoveredTaskState.tasks[taskPath]?.lastStatus === 'success';
     });
 
     const recoveredTaskState = JSON.parse(readFileSync(join(daemonPaths.root, 'task-state.json'), 'utf-8')) as {

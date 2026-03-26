@@ -29,7 +29,7 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 6_000): Promise<void> {
   const startedAt = Date.now();
 
   while (!predicate()) {

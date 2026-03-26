@@ -246,7 +246,7 @@ export function ProjectDetailPanel({
   const handoffPreview = project.brief
     ? 'Narrative brief with requirements, plan, and completion notes.'
     : 'No handoff doc yet.';
-  const projectRecordPreview = record.summary.trim() || record.repoRoot?.trim() || 'Structured metadata and raw PROJECT.yaml.';
+  const projectRecordPreview = record.summary.trim() || record.repoRoot?.trim() || 'Structured metadata and raw state.yaml.';
   const notesPreview = project.noteCount > 0
     ? `${project.noteCount} durable ${project.noteCount === 1 ? 'note' : 'notes'} across decisions, questions, and checkpoints.`
     : 'No notes yet.';
@@ -587,7 +587,7 @@ export function ProjectDetailPanel({
   }
 
   async function deleteProject() {
-    if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml, notes, attachments, and artifacts.`)) {
+    if (!window.confirm(`Delete project ${record.id}? This removes state.yaml, INDEX.md, notes, attachments, and artifacts.`)) {
       return;
     }
 

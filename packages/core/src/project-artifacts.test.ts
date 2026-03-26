@@ -109,7 +109,7 @@ describe('project artifacts', () => {
     };
 
     const yaml = formatProject(document);
-    expect(yaml).toContain('title: Durable artifact model');
+    expect(yaml).not.toContain('title: Durable artifact model');
     expect(yaml).toContain('description: Create a durable artifact model.');
     expect(yaml).toContain('archivedAt: 2026-03-10T14:00:00.000Z');
     expect(yaml).toContain('repoRoot: /Users/patrick/workingdir/personal-agent');
@@ -119,7 +119,7 @@ describe('project artifacts', () => {
     expect(yaml).toContain('completionSummary: Not complete yet. The schema is stable and the CLI work is next.');
     expect(yaml).toContain('currentMilestoneId: cli-inbox');
 
-    expect(parseProject(yaml)).toEqual(document);
+    expect(parseProject(yaml, document)).toEqual(document);
   });
 
   it('rejects project yaml with a missing required plan block', () => {
@@ -202,7 +202,7 @@ plan:
 
   it('writes and reads project files', () => {
     const dir = createTempDir();
-    const path = join(dir, 'PROJECT.yaml');
+    const path = join(dir, 'state.yaml');
     const document = createInitialProject({
       id: 'artifact-model',
       ownerProfile: 'assistant',
@@ -215,6 +215,7 @@ plan:
 
     expect(readFileSync(path, 'utf-8')).toContain('plan:');
     expect(readFileSync(path, 'utf-8')).toContain('requirements:');
+    expect(readFileSync(join(dir, 'INDEX.md'), 'utf-8')).toContain('kind: project');
     expect(readProject(path)).toEqual(document);
   });
 });

@@ -40,7 +40,7 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     subtitle: 'ready to branch',
     keywords: ['memory-123', 'release'],
     order: 1,
-    action: { kind: 'memory' },
+    action: { kind: 'notes' },
   },
   {
     id: 'task:nightly',

@@ -38,7 +38,7 @@ function createTempRepo(): string {
 }
 
 describe('sortProjectTasks', () => {
-  it('preserves task order from PROJECT.yaml', () => {
+  it('preserves task order from state.yaml', () => {
     const sorted = sortProjectTasks([
       {
         id: 'task-b',
@@ -151,7 +151,7 @@ describe('project editing helpers', () => {
       planSummary: 'Define the schema first, then expose it cleanly in the web UI.',
       completionSummary: 'Not complete yet.',
       status: 'in_progress',
-      currentFocus: 'Define PROJECT.yaml.',
+      currentFocus: 'Define state.yaml.',
       blockers: ['Need to settle task shape'],
       recentProgress: ['Created the scaffold'],
     });
@@ -168,7 +168,7 @@ describe('project editing helpers', () => {
     expect(detail.project.planSummary).toBe('Define the schema first, then expose it cleanly in the web UI.');
     expect(detail.project.completionSummary).toBe('Not complete yet.');
     expect(detail.project.status).toBe('in_progress');
-    expect(detail.project.currentFocus).toBe('Define PROJECT.yaml.');
+    expect(detail.project.currentFocus).toBe('Define state.yaml.');
     expect(detail.project.blockers).toEqual(['Need to settle task shape']);
     expect(detail.project.recentProgress).toEqual(['Created the scaffold']);
   });
@@ -257,9 +257,9 @@ describe('project editing helpers', () => {
       projectId: 'artifact-model',
       title: 'Durable artifact model',
       description: 'Build the durable artifact model',
-      summary: 'PROJECT.yaml is now canonical.',
+      summary: 'state.yaml is now canonical.',
       goal: 'Keep the project structure durable and easy to resume.',
-      acceptanceCriteria: ['Structured requirements live in PROJECT.yaml.', 'The current milestone is explicit.'],
+      acceptanceCriteria: ['Structured requirements live in state.yaml.', 'The current milestone is explicit.'],
       planSummary: 'Finish the schema migration, then update the UI around it.',
       completionSummary: 'Migration in progress.',
       currentMilestoneId: 'execute-work',
@@ -269,10 +269,10 @@ describe('project editing helpers', () => {
 
     expect(detail.project.title).toBe('Durable artifact model');
     expect(detail.project.description).toBe('Build the durable artifact model');
-    expect(detail.project.summary).toBe('PROJECT.yaml is now canonical.');
+    expect(detail.project.summary).toBe('state.yaml is now canonical.');
     expect(detail.project.requirements.goal).toBe('Keep the project structure durable and easy to resume.');
     expect(detail.project.requirements.acceptanceCriteria).toEqual([
-      'Structured requirements live in PROJECT.yaml.',
+      'Structured requirements live in state.yaml.',
       'The current milestone is explicit.',
     ]);
     expect(detail.project.planSummary).toBe('Finish the schema migration, then update the UI around it.');
@@ -616,14 +616,14 @@ describe('project editing helpers', () => {
     });
 
     const projectSource = readProjectSource({ repoRoot, profile: 'datadog', projectId: 'web-ui' });
-    expect(projectSource.path).toContain('PROJECT.yaml');
+    expect(projectSource.path).toContain('state.yaml');
 
     const savedProject = saveProjectSource({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      content: projectSource.content.replace('status: created', 'status: blocked'),
+      content: projectSource.content.replace('description: Ship the web UI', 'description: Ship the web UI carefully'),
     });
-    expect(savedProject.project.status).toBe('blocked');
+    expect(savedProject.project.description).toBe('Ship the web UI carefully');
   });
 });

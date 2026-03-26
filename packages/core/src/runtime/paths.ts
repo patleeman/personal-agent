@@ -133,8 +133,12 @@ export function getDurableSkillsDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'skills');
 }
 
+export function getDurableNotesDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'notes');
+}
+
 export function getDurableMemoryDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'memory');
+  return getDurableNotesDir(syncRoot);
 }
 
 export function getDurableTasksDir(syncRoot: string = getSyncRoot()): string {

@@ -1784,7 +1784,7 @@ function MsgActions({
           type="button"
           onClick={() => { void handleCheckpoint(); }}
           className={cx('ui-action-button', isSavingCheckpoint && 'text-accent')}
-          title="Distill conversation up to this point into durable memory"
+          title="Distill conversation up to this point into durable note node"
           disabled={isSavingCheckpoint}
         >
           {isSavingCheckpoint ? '⟡ distilling…' : '⟡ distill'}

@@ -15,14 +15,14 @@ type MemoryAction = (typeof MEMORY_ACTION_VALUES)[number];
 
 const MemoryToolParams = Type.Object({
   action: Type.Union(MEMORY_ACTION_VALUES.map((value) => Type.Literal(value))),
-  memoryId: Type.Optional(Type.String({ description: 'Memory package id for show/new actions.' })),
-  title: Type.Optional(Type.String({ description: 'Display title stored in memory metadata for new.' })),
-  summary: Type.Optional(Type.String({ description: 'Memory description for new.' })),
+  memoryId: Type.Optional(Type.String({ description: 'Note node id for show/new actions.' })),
+  title: Type.Optional(Type.String({ description: 'Display title stored in note frontmatter for new.' })),
+  summary: Type.Optional(Type.String({ description: 'Note node summary for new.' })),
   tags: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { description: 'Tags for find/new. For find, all supplied tags must match.' })),
-  type: Type.Optional(Type.String({ description: 'Type filter for find or memory package type for new.' })),
-  status: Type.Optional(Type.String({ description: 'Status filter for find or memory package status for new.' })),
+  type: Type.Optional(Type.String({ description: 'Type filter for find or note metadata type for new.' })),
+  status: Type.Optional(Type.String({ description: 'Status filter for find or note status for new.' })),
   text: Type.Optional(Type.String({ description: 'Metadata text query for find. Matches id, title, summary, and tags.' })),
-  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing memory package when action=new.' })),
+  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing note node when action=new.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -83,7 +83,7 @@ function formatMemoryPackage(doc: {
   body: string;
 }): string {
   return [
-    `Memory package @${doc.id}`,
+    `Note node @${doc.id}`,
     `title: ${doc.title}`,
     `type: ${doc.type}`,
     `status: ${doc.status}`,
@@ -101,12 +101,12 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
     pi.registerTool({
       name: 'memory',
       label: 'Memory',
-      description: 'Inspect, search, create, and validate shared memory packages.',
-      promptSnippet: 'Use the memory tool when you need to inspect or update durable shared memory packages instead of shelling out to pa memory.',
+      description: 'Inspect, search, create, and validate shared note nodes.',
+      promptSnippet: 'Use the memory tool when you need to inspect or update durable shared note nodes instead of shelling out to pa memory.',
       promptGuidelines: [
-        'Use this tool for shared memory package discovery and validation instead of running pa memory through bash.',
-        'Prefer find/show before creating a new memory package so you do not duplicate durable knowledge.',
-        'Use new to scaffold a valid memory package with MEMORY.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
+        'Use this tool for shared note-node discovery and validation instead of running pa memory through bash.',
+        'Prefer find/show before creating a new note node so you do not duplicate durable knowledge.',
+        'Use new to scaffold a valid note node with INDEX.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
       ],
       parameters: MemoryToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -115,8 +115,8 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
             case 'list': {
               const loaded = loadMemoryDocs();
               const lines = loaded.docs.length > 0
-                ? ['Memory packages:', ...formatMemorySummaryList(loaded.docs)]
-                : ['No memory packages found.'];
+                ? ['Note nodes:', ...formatMemorySummaryList(loaded.docs)]
+                : ['No note nodes found.'];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
                 lines.push('', ...parseErrorLines);
@@ -145,7 +145,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
               });
 
               const lines = [
-                'Memory package search:',
+                'Note node search:',
                 `tags: ${tags.length > 0 ? tags.join(', ') : 'none'}`,
                 `type: ${params.type?.trim() || 'none'}`,
                 `status: ${params.status?.trim() || 'none'}`,
@@ -153,7 +153,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                 '',
                 ...(filteredDocs.length > 0
                   ? formatMemorySummaryList(filteredDocs)
-                  : ['No memory packages matched the supplied filters.']),
+                  : ['No note nodes matched the supplied filters.']),
               ];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
@@ -223,7 +223,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                 content: [{
                   type: 'text' as const,
                   text: [
-                    `${result.overwritten ? 'Updated' : 'Created'} memory package @${result.id}.`,
+                    `${result.overwritten ? 'Updated' : 'Created'} note node @${result.id}.`,
                     `file: ${result.filePath}`,
                     `type: ${result.type}`,
                     `status: ${result.status}`,
@@ -247,17 +247,18 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
 
             case 'lint': {
               const result = lintMemoryDocs();
-              const hasIssues = result.parseErrors.length > 0 || result.duplicateIds.length > 0;
+              const hasIssues = result.parseErrors.length > 0 || result.duplicateIds.length > 0 || result.referenceErrors.length > 0;
               const lines = [
-                'Memory validation',
+                'Note node validation',
                 `memoryDir: ${result.memoryDir}`,
                 `docsParsed: ${result.validDocs}`,
                 `parseErrors: ${result.parseErrors.length}`,
                 `duplicateIds: ${result.duplicateIds.length}`,
+                `referenceErrors: ${result.referenceErrors.length}`,
               ];
 
               if (!hasIssues) {
-                lines.push('', 'All memory packages are valid.');
+                lines.push('', 'All note nodes are valid.');
               }
 
               if (result.parseErrors.length > 0) {
@@ -274,6 +275,13 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                 }
               }
 
+              if (result.referenceErrors.length > 0) {
+                lines.push('', 'Reference errors:');
+                for (const issue of result.referenceErrors) {
+                  lines.push(`- ${issue.id}.${issue.field} -> ${issue.targetId}: ${issue.error}`);
+                }
+              }
+
               return {
                 content: [{ type: 'text' as const, text: lines.join('\n') }],
                 details: {
@@ -283,6 +291,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                   validDocs: result.validDocs,
                   parseErrorCount: result.parseErrors.length,
                   duplicateCount: result.duplicateIds.length,
+                  referenceErrorCount: result.referenceErrors.length,
                   hasIssues,
                 },
               };

@@ -328,10 +328,10 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const { title, conversationId } = conversationLabel(run, lookups);
     const requestedTitle = excerpt(readCheckpoint(run, 'title') ?? readSpec(run, 'title'));
     const sourceLabel = title ?? conversationId;
-    const headline = requestedTitle ?? (sourceLabel ? `Distill memory: ${sourceLabel}` : 'Distill durable memory');
+    const headline = requestedTitle ?? (sourceLabel ? `Distill node: ${sourceLabel}` : 'Distill durable node');
     return {
       title: headline,
-      summary: 'Conversation memory distillation',
+      summary: 'Conversation node distillation',
     };
   }
 

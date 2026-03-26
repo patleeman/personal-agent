@@ -26,15 +26,15 @@ afterEach(async () => {
 });
 
 function memoryPath(profilesRoot: string, memoryName: string): string {
-  return join(profilesRoot, '..', 'memory', memoryName, 'MEMORY.md');
+  return join(profilesRoot, '..', 'notes', memoryName, 'INDEX.md');
 }
 
 function referencePath(profilesRoot: string, memoryName: string, referenceName: string): string {
-  return join(profilesRoot, '..', 'memory', memoryName, 'references', `${referenceName}.md`);
+  return join(profilesRoot, '..', 'notes', memoryName, 'references', `${referenceName}.md`);
 }
 
 function memoryDir(profilesRoot: string): string {
-  return join(profilesRoot, '..', 'memory');
+  return join(profilesRoot, '..', 'notes');
 }
 
 function buildDraft(overrides: Partial<DistilledConversationMemoryDraft> = {}): DistilledConversationMemoryDraft {
@@ -61,17 +61,18 @@ describe('conversation memory curation', () => {
     writeFile(
       memoryPath(profilesRoot, 'personal-agent'),
       `---
-name: personal-agent
-description: Hub doc.
+id: personal-agent
+kind: note
+title: Personal-agent knowledge hub
+summary: Hub doc.
+status: active
+tags:
+  - personal-agent
+  - structure
+updatedAt: 2026-03-18
 metadata:
-  title: Personal-agent knowledge hub
   type: project
-  status: active
   area: personal-agent
-  role: hub
-  tags:
-    - personal-agent
-  updated: 2026-03-18
 ---
 
 # Personal-agent knowledge hub
@@ -141,17 +142,18 @@ metadata:
     writeFile(
       memoryPath(profilesRoot, 'personal-agent'),
       `---
-name: personal-agent
-description: Hub doc.
+id: personal-agent
+kind: note
+title: Personal-agent knowledge hub
+summary: Hub doc.
+status: active
+tags:
+  - personal-agent
+  - structure
+updatedAt: 2026-03-18
 metadata:
-  title: Personal-agent knowledge hub
   type: project
-  status: active
   area: personal-agent
-  role: hub
-  tags:
-    - personal-agent
-  updated: 2026-03-18
 ---
 
 # Personal-agent knowledge hub
@@ -226,7 +228,7 @@ Track deployment timings and release checks.
 
     expect(result.disposition).toBe('created-reference');
     expect(result.memory.id).toBe('runpod');
-    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('role: hub');
+    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('structure');
     expect(result.reference.relativePath).toBe('references/runpod-provisioning-notes.md');
   });
 });

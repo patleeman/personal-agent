@@ -30,7 +30,7 @@ describe('MemoriesPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders memory packages with the shared list layout and selected row styling', () => {
+  it('renders note nodes with the shared list layout and selected row styling', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [
@@ -38,12 +38,12 @@ describe('MemoriesPage', () => {
             id: 'memory-index',
             title: 'Memory index',
             summary: 'Top-level knowledge hub.',
-            tags: ['memory', 'index'],
-            path: '/tmp/memory-index/MEMORY.md',
+            tags: ['notes', 'index'],
+            path: '/tmp/memory-index/INDEX.md',
             type: 'index',
             status: 'active',
             role: 'hub',
-            area: 'memory',
+            area: 'notes',
             related: ['personal-agent'],
             referenceCount: 2,
             updated: '2026-03-17T12:00:00.000Z',
@@ -53,7 +53,7 @@ describe('MemoriesPage', () => {
             title: 'Writing style',
             summary: 'Keep responses concise and direct.',
             tags: ['communication'],
-            path: '/tmp/writing-style/MEMORY.md',
+            path: '/tmp/writing-style/INDEX.md',
             role: 'hub',
             area: 'communication',
             parent: 'memory-index',
@@ -77,13 +77,13 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Memory packages');
-    expect(html).toContain('Search packages');
-    expect(html).toContain('Selected package');
+    expect(html).toContain('Note nodes');
+    expect(html).toContain('Search notes');
+    expect(html).toContain('Selected note node');
     expect(html).toContain('Memory index');
     expect(html).toContain('Writing style');
     expect(html).toContain('2 references');
-    expect(html).toContain('1 related package');
+    expect(html).toContain('1 related node');
     expect(html).toContain('parent');
     expect(html).toContain('href="/memories?memory=memory-index"');
     expect(html).toContain('ui-list-row-selected');
@@ -117,7 +117,7 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Memory work queue');
+    expect(html).toContain('Node work queue');
     expect(html).toContain('Refactor memory pipeline');
     expect(html).toContain('run-123');
     expect(html).toContain('/conversations/conv-123?run=run-123');
@@ -153,9 +153,9 @@ describe('MemoriesPage', () => {
     );
 
     expect(html).toContain('Retry');
-    expect(html).toContain('Retry this memory distillation');
+    expect(html).toContain('Retry this node distillation');
     expect(html).toContain('Recover');
-    expect(html).toContain('Open a recovery conversation for this memory distillation');
+    expect(html).toContain('Open a recovery conversation for this node distillation');
   });
 
   it('keeps state-only queue items linked to the conversation when no durable run exists', () => {
@@ -191,7 +191,7 @@ describe('MemoriesPage', () => {
     expect(html).not.toContain('Recover');
   });
 
-  it('shows the empty state when there are no memory packages', () => {
+  it('shows the empty state when there are no note nodes', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -211,7 +211,7 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('No memories yet.');
-    expect(html).toContain('Distill a conversation message to create or update a durable memory package.');
+    expect(html).toContain('No notes yet.');
+    expect(html).toContain('Distill a conversation message to create or update a durable note node.');
   });
 });

@@ -85,8 +85,8 @@ describe('resolveProjectPaths', () => {
     });
 
     expect(paths.projectDir).toBe(join(repo, 'sync', 'projects', 'artifact-model'));
-    expect(paths.projectFile).toBe(join(paths.projectDir, 'PROJECT.yaml'));
-    expect(paths.briefFile).toBe(join(paths.projectDir, 'BRIEF.md'));
+    expect(paths.projectFile).toBe(join(paths.projectDir, 'state.yaml'));
+    expect(paths.briefFile).toBe(join(paths.projectDir, 'INDEX.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
     expect(paths.notesDir).toBe(join(paths.projectDir, 'notes'));
     expect(paths.attachmentsDir).toBe(join(paths.projectDir, 'attachments'));
@@ -136,12 +136,12 @@ describe('listResolvedProjectRepoRoots', () => {
     });
 
     writeFileSync(first.paths.projectFile, readFileSync(first.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'description: Alpha objective\n',
+      'description: Alpha objective\nrepoRoot: ../workspace/alpha\n',
     ));
     writeFileSync(second.paths.projectFile, readFileSync(second.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'description: Beta objective\n',
+      'description: Beta objective\nrepoRoot: ../workspace/alpha\n',
     ));
 
     expect(listResolvedProjectRepoRoots({
@@ -162,8 +162,8 @@ describe('listResolvedProjectRepoRoots', () => {
     });
 
     writeFileSync(project.paths.projectFile, readFileSync(project.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
-      'repoRoot: ../workspace/shared-objective\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'description: Shared objective\n',
+      'description: Shared objective\nrepoRoot: ../workspace/shared-objective\n',
     ));
 
     expect(listResolvedProjectRepoRoots({
@@ -187,7 +187,7 @@ describe('createProjectScaffold', () => {
     });
 
     expect(result.writtenFiles).toEqual([
-      join(repo, 'sync', 'projects', 'artifact-model', 'PROJECT.yaml'),
+      join(repo, 'sync', 'projects', 'artifact-model', 'state.yaml'),
     ]);
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
@@ -197,11 +197,13 @@ describe('createProjectScaffold', () => {
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
-    expect(projectFile).toContain('id: artifact-model');
-    expect(projectFile).toContain('ownerProfile: datadog');
-    expect(projectFile).toContain('title: Artifact model');
+    const indexFile = readFileSync(result.paths.briefFile, 'utf-8');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
     expect(projectFile).toContain('milestones: []');
+    expect(indexFile).toContain('id: artifact-model');
+    expect(indexFile).toContain('ownerProfile: datadog');
+    expect(indexFile).toContain('title: Artifact model');
+    expect(indexFile).toContain('summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.');
   });
 
   it('rejects empty titles', () => {
@@ -259,8 +261,9 @@ describe('createProjectScaffold', () => {
 
     expect(second.paths.projectDir).toBe(first.paths.projectDir);
     const projectFile = readFileSync(second.paths.projectFile, 'utf-8');
+    const indexFile = readFileSync(second.paths.briefFile, 'utf-8');
     expect(projectFile).toContain('description: Updated objective');
-    expect(projectFile).toContain('updatedAt: 2026-03-10T13:00:00.000Z');
+    expect(indexFile).toContain('updatedAt: 2026-03-10T13:00:00.000Z');
   });
 });
 

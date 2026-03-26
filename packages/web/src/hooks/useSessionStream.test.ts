@@ -173,7 +173,7 @@ describe('shouldReplaceOptimisticUserBlock', () => {
       type: 'user',
       ts: '2026-03-19T12:00:01.000Z',
       text: [
-        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/SKILL.md">',
+        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/INDEX.md">',
         'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
         '</skill>',
       ].join('\n'),
@@ -192,7 +192,7 @@ describe('shouldReplaceOptimisticUserBlock', () => {
       type: 'user',
       ts: '2026-03-19T12:00:01.000Z',
       text: [
-        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/SKILL.md">',
+        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/INDEX.md">',
         'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
         '</skill>',
       ].join('\n'),

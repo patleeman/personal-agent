@@ -13,16 +13,17 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function writeMemoryPackage(stateRoot: string, memoryName: string, description: string): void {
-  mkdirSync(join(stateRoot, 'profiles', '_memory', memoryName), { recursive: true });
-  writeFileSync(join(stateRoot, 'profiles', '_memory', memoryName, 'MEMORY.md'), `---
-name: ${memoryName}
-description: ${description}
-metadata:
-  updated: 2026-03-19
+function writeNoteNode(stateRoot: string, noteId: string, summary: string): void {
+  mkdirSync(join(stateRoot, 'notes', noteId), { recursive: true });
+  writeFileSync(join(stateRoot, 'notes', noteId, 'INDEX.md'), `---
+id: ${noteId}
+kind: note
+title: ${noteId}
+summary: ${summary}
+status: active
 ---
 
-# ${memoryName}
+# ${noteId}
 `);
 }
 
@@ -37,7 +38,7 @@ afterEach(async () => {
 });
 
 describe('memory extension', () => {
-  it('injects active profile path targets, memory policy instructions, and available memories', async () => {
+  it('injects active profile path targets, node policy instructions, and available notes', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
 
@@ -47,7 +48,7 @@ describe('memory extension', () => {
 
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
-    writeMemoryPackage(stateRoot, 'runpod', 'Provisioning notes for short-lived GPU pods.');
+    writeNoteNode(stateRoot, 'runpod', 'Provisioning notes for short-lived GPU pods.');
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -63,29 +64,18 @@ describe('memory extension', () => {
     expect(beforeAgentStartHandler).toBeDefined();
 
     const result = await beforeAgentStartHandler!(
-      {
-        prompt: 'please remember this setup',
-        systemPrompt: 'BASE_SYSTEM_PROMPT',
-      },
+      { prompt: 'please remember this setup', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
     ) as { systemPrompt?: string; message?: { customType?: string; content?: string; display?: boolean } } | undefined;
 
-    expect(result?.systemPrompt).toContain('MEMORY_POLICY');
+    expect(result?.systemPrompt).toContain('NODE_POLICY');
     expect(result?.systemPrompt).toContain('- active_profile: datadog');
-    expect(result?.systemPrompt).toContain('## Write targets');
-    expect(result?.systemPrompt).toContain('Edit these locations directly:');
-    expect(result?.systemPrompt).toContain(`- AGENTS.md edit target: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md')}`);
-    expect(result?.systemPrompt).toContain(`- Skills dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'skills')}`);
-    expect(result?.systemPrompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'tasks')}`);
-    expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
-    expect(result?.systemPrompt).toContain(`- Memory package template: ${join(stateRoot, 'profiles', '_memory', '<memory-name>', 'MEMORY.md')}`);
-    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills and the shared memory packages store as the durable memory system.');
-    expect(result?.systemPrompt).toContain('Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint`.');
-    expect(result?.systemPrompt).toContain('<available_memories>');
-    expect(result?.systemPrompt).toContain('<memory name="runpod"');
-    expect(result?.systemPrompt).toContain('Provisioning notes for short-lived GPU pods.');
-    expect(result?.systemPrompt).toContain(join(stateRoot, 'profiles', '_memory', 'runpod', 'MEMORY.md'));
-    expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
+    expect(result?.systemPrompt).toContain(`- Shared notes dir: ${join(stateRoot, 'notes')}`);
+    expect(result?.systemPrompt).toContain(`- Note node template: ${join(stateRoot, 'notes', '<note-id>', 'INDEX.md')}`);
+    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills + shared note nodes as the durable node system.');
+    expect(result?.systemPrompt).toContain('<available_notes>');
+    expect(result?.systemPrompt).toContain('<note id="runpod"');
+    expect(result?.systemPrompt).toContain(join(stateRoot, 'notes', 'runpod', 'INDEX.md'));
     expect(result?.message).toBeUndefined();
   });
 
@@ -111,10 +101,7 @@ describe('memory extension', () => {
     memoryExtension(pi as never);
 
     const result = await beforeAgentStartHandler!(
-      {
-        prompt: 'what should we retain?',
-        systemPrompt: 'BASE_SYSTEM_PROMPT',
-      },
+      { prompt: 'what should we retain?', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
     ) as { systemPrompt?: string; message?: { content?: string } } | undefined;
 
@@ -123,12 +110,11 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('requested profile was missing');
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
-    expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
-    expect(result?.systemPrompt).not.toContain('pa memory list --profile shared');
+    expect(result?.systemPrompt).toContain(`- Shared notes dir: ${join(stateRoot, 'notes')}`);
     expect(result?.message).toBeUndefined();
   });
 
-  it('does not inject memory policy for slash commands or empty prompts', async () => {
+  it('does not inject node policy for slash commands or empty prompts', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -149,18 +135,12 @@ describe('memory extension', () => {
     memoryExtension(pi as never);
 
     const slashResult = await beforeAgentStartHandler!(
-      {
-        prompt: '/model',
-        systemPrompt: 'BASE_SYSTEM_PROMPT',
-      },
+      { prompt: '/model', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
     );
 
     const emptyResult = await beforeAgentStartHandler!(
-      {
-        prompt: '   ',
-        systemPrompt: 'BASE_SYSTEM_PROMPT',
-      },
+      { prompt: '   ', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
     );
 
@@ -168,7 +148,7 @@ describe('memory extension', () => {
     expect(emptyResult).toBeUndefined();
   });
 
-  it('injects only the lean memory policy for generic prompts', async () => {
+  it('injects only the lean node policy for generic prompts', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -191,15 +171,11 @@ describe('memory extension', () => {
     memoryExtension(pi as never);
 
     const result = await beforeAgentStartHandler!(
-      {
-        prompt: 'inspect the sync prompt behavior',
-        systemPrompt: 'BASE_SYSTEM_PROMPT',
-      },
+      { prompt: 'inspect the sync prompt behavior', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
     ) as { systemPrompt?: string; message?: unknown } | undefined;
 
-    expect(result?.systemPrompt).toContain('MEMORY_POLICY');
-    expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
+    expect(result?.systemPrompt).toContain('NODE_POLICY');
     expect(result?.message).toBeUndefined();
   });
 
@@ -217,6 +193,6 @@ describe('memory extension', () => {
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(context.activeAgentsFile).toBe(join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md'));
-    expect(context.activeMemoryDir).toBe(join(stateRoot, 'profiles', '_memory'));
+    expect(context.activeMemoryDir).toBe(join(stateRoot, 'notes'));
   });
 });

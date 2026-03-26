@@ -1,8 +1,10 @@
-# Profiles, Memory, and Skills
+# Profiles, Notes, and Skills
 
 Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a synced durable resource store.
 
 A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based synced resources plus machine-local overlays.
+
+See [Nodes](./nodes.md) for the canonical on-disk node spec.
 
 ## The layer model
 
@@ -17,13 +19,6 @@ In addition, repo built-ins are always available from:
 - `extensions/`
 - `themes/`
 
-Think of it like this:
-
-- repo built-ins hold product-shipped runtime capabilities
-- synced durable roots hold shared and profile-targeted resources
-- the selected profile adds persona- or context-specific behavior through those resources
-- the local overlay is for machine-local additions
-
 ## What a profile can contain
 
 The synced durable store can contain:
@@ -33,9 +28,9 @@ The synced durable store can contain:
 - `settings/**`
 - `models/**`
 - `skills/**`
-- `memory/**`
+- `notes/**`
 - `tasks/*.task.md`
-- `projects/<projectId>/PROJECT.yaml`
+- `projects/<projectId>/{INDEX.md,state.yaml}`
 
 Repo built-ins still provide:
 
@@ -62,7 +57,7 @@ Repo built-ins still provide:
     ├── settings/
     ├── models/
     ├── skills/
-    ├── memory/
+    ├── notes/
     ├── tasks/
     └── projects/
 ```
@@ -72,10 +67,10 @@ Repo built-ins still provide:
 | Place | Use it for |
 | --- | --- |
 | `agents/**` | durable role, behavior rules, and operating policy fragments |
-| `skills/` | reusable workflows or domain-specific capabilities |
-| `memory/<memory-name>/MEMORY.md` | shared durable knowledge hubs |
-| `memory/<memory-name>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that hub |
-| `memory/<memory-name>/assets/**` | non-markdown assets used by that memory package |
+| `skills/<id>/INDEX.md` | reusable workflow skill nodes |
+| `notes/<id>/INDEX.md` | shared durable note nodes |
+| `notes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that note |
+| `notes/<id>/assets/**` | non-markdown assets used by that note node |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
 | `settings/**` | default model, thinking, theme, and other runtime defaults |
@@ -97,15 +92,15 @@ Do not use it for:
 - one-off reminders
 - conversation-local context
 
-## Skills: reusable workflows
+## Skill nodes: reusable workflows
 
-Skills are reusable, named workflows the agent can invoke when appropriate.
+Skills are reusable, named workflow nodes the agent can invoke when appropriate.
 
-Use a skill when you want something that is:
+Use a skill node when you want something that is:
 
 - reusable across conversations
 - broader than one project
-- more operational than a memory package
+- procedural rather than purely referential
 
 Examples:
 
@@ -114,88 +109,75 @@ Examples:
 - a Git or release workflow
 - a browser-automation workflow
 
-Skills show up in the system prompt as lightweight name + description hints. Keep descriptions short and trigger-focused; detailed guidance belongs in the skill body. The full `SKILL.md` loads on demand.
+Skill nodes live under `skills/<id>/INDEX.md` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
 
-## Memory packages: durable knowledge hubs
-
-Memories mirror the skill packaging model.
-
-A memory is a directory with a `MEMORY.md` file. Everything else is freeform.
-
-```text
-memory-name/
-├── MEMORY.md
-├── references/
-└── assets/
-```
-
-`MEMORY.md` uses skill-style frontmatter:
-
-```md
----
-name: personal-agent
-description: Durable knowledge hub for personal-agent architecture, UI decisions, and workflows.
-metadata:
-  title: Personal-agent knowledge hub
-  tags:
-    - personal-agent
-    - architecture
-    - ui
-  updated: 2026-03-19
-  status: active
----
-
-# Personal-agent knowledge hub
-
-Use this file as the hub overview. Link out to `references/` when the topic needs more structure.
-```
-
-Required frontmatter fields:
+For Pi compatibility, skill node frontmatter keeps:
 
 - `name`
 - `description`
 
-Optional frontmatter fields:
+Alongside node fields such as:
 
-- `metadata` — arbitrary structured metadata used for status, tags, relationships, timestamps, and workflow-specific fields
-
-Common metadata keys in this repo:
-
+- `id`
+- `kind: skill`
 - `title`
-- `tags`
-- `updated`
-- `type`
-- `status`
-- `area`
-- `role`
-- `parent`
-- `related`
+- `summary`
 
-Use memory packages for:
+## Note nodes: durable knowledge hubs
+
+Notes are durable knowledge nodes.
+
+Use them for:
 
 - runbooks
 - research notes
 - domain references
 - architecture notes
 - decision summaries
-- durable knowledge the agent should be able to discover from a short catalog
+- distilled conversation captures
+- structure notes / maps of content
 
-## Organizing memories
+A note node is a directory with an `INDEX.md` file. Supporting directories are freeform.
 
-Prefer a sparse top-level memory root.
+```text
+note-id/
+├── INDEX.md
+├── references/
+└── assets/
+```
 
-Good pattern:
+Typical note-node frontmatter:
 
-1. create one top-level memory package per durable topic area
-2. keep the hub overview in `MEMORY.md`
-3. move detailed material into `references/`
-4. keep supporting files in `assets/`
-5. update an existing memory package instead of creating near-duplicates
+```md
+---
+id: personal-agent
+kind: note
+title: Personal-agent knowledge hub
+summary: Durable knowledge hub for personal-agent architecture, UI decisions, and workflows.
+status: active
+tags:
+  - personal-agent
+  - architecture
+  - structure
+updatedAt: 2026-03-26
+metadata:
+  area: personal-agent
+  type: note
+---
+```
 
-The main idea is:
+Use tag `structure` when a note mostly organizes other notes.
+There is no separate hub kind.
 
-- **skills** are reusable workflows
-- **memories** are reusable knowledge hubs
+## Project nodes
+
+Projects are project nodes with:
+
+- `projects/<id>/INDEX.md` for the human handoff / overview
+- `projects/<id>/state.yaml` for structured state
+- `notes/`, `attachments/`, and `artifacts/` for supporting material
+
+See [Projects](./projects.md).
 
 ## Shared resources vs profile-targeted resources
 
@@ -203,27 +185,27 @@ Important convention:
 
 - shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
 - profile-targeted durable resources are selected by filename or metadata applicability
-- durable memories live in the synced shared memory store at `sync/memory/`
+- durable note nodes live in the synced shared notes store at `sync/notes/`
 
 In particular:
 
-- there is no profile-local `memory/` directory
+- there is no profile-local synced `memory/` directory
 - behavior targeting belongs in durable `agents/**`, `settings/**`, `models/**`, and `skills/**`
 
-## Memory vs project vs inbox
+## Notes vs projects vs inbox
 
-This distinction matters.
+This distinction still matters.
 
 Use:
 
-- **memory** for durable reusable knowledge
-- **project** for current tracked work state, project briefs, project notes, and project files tied to one piece of work
+- **note nodes** for reusable durable knowledge
+- **project nodes** for current tracked work state, handoff context, project notes, and project files
 - **inbox** for asynchronous outcomes that need attention later
 
 A good rule:
 
-- if it is reusable knowledge, store it in memory
-- if it is about one piece of ongoing work, store it in a project
+- if it is reusable knowledge, store it in a note node
+- if it is about one piece of ongoing work, store it in a project node
 - if it is an async event worth noticing, surface it in the inbox
 
 ## Commands you will use
@@ -236,7 +218,7 @@ pa profile show
 pa profile use <name>
 ```
 
-### Memory commands
+### Note-node commands
 
 ```bash
 pa memory list
@@ -246,7 +228,9 @@ pa memory new <id> --title "..." --summary "..." --tags tag1,tag2
 pa memory lint
 ```
 
-`pa memory new` creates a new memory package and scaffolds `<memory-name>/MEMORY.md`.
+The command name is still `pa memory`, but it now operates on shared note nodes under `sync/notes/`.
+
+`pa memory new` scaffolds `notes/<note-id>/INDEX.md`.
 
 ## Local overlay
 
@@ -270,8 +254,8 @@ Do not store conversation ids or session ids in portable durable files.
 
 That includes:
 
-- global memory package frontmatter/metadata
-- project files
+- note-node frontmatter/metadata
+- project node files
 - activity frontmatter
 - any profile-local schema meant to be portable
 
@@ -279,6 +263,7 @@ Conversation-local bindings belong in local runtime state.
 
 ## Related docs
 
+- [Nodes](./nodes.md)
 - [How personal-agent works](./how-it-works.md)
 - [Projects](./projects.md)
 - [Scheduled Tasks](./scheduled-tasks.md)

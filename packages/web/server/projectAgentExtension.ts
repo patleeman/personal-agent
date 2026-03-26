@@ -198,7 +198,7 @@ export function createProjectAgentExtension(options: {
       description: 'Inspect, manage, and reference durable projects for the active profile.',
       promptSnippet: 'Use the project tool for durable project CRUD, milestones, tasks, notes, briefs, and current-conversation references.',
       promptGuidelines: [
-        'Use this tool for structured project management instead of hand-editing PROJECT.yaml for normal cases.',
+        'Use this tool for structured project management instead of hand-editing project state.yaml for normal cases.',
         'Use reference and unreference to manage current conversation ↔ project links.',
         'Use create/update/get/list/archive/unarchive for project state, milestone/task actions for plan maintenance, and note/brief actions for durable narrative context.',
       ],

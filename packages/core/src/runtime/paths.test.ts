@@ -18,6 +18,7 @@ import {
   getDurableSettingsDir,
   getDurableModelsDir,
   getDurableSkillsDir,
+  getDurableNotesDir,
   getDurableMemoryDir,
   getDurableTasksDir,
   getDurableProjectsDir,
@@ -107,7 +108,8 @@ describe('profile and config path helpers', () => {
     expect(getDurableSettingsDir()).toBe('/runtime/state/sync/settings');
     expect(getDurableModelsDir()).toBe('/runtime/state/sync/models');
     expect(getDurableSkillsDir()).toBe('/runtime/state/sync/skills');
-    expect(getDurableMemoryDir()).toBe('/runtime/state/sync/memory');
+    expect(getDurableNotesDir()).toBe('/runtime/state/sync/notes');
+    expect(getDurableMemoryDir()).toBe('/runtime/state/sync/notes');
     expect(getDurableTasksDir()).toBe('/runtime/state/sync/tasks');
     expect(getDurableProjectsDir()).toBe('/runtime/state/sync/projects');
     expect(getLocalProfileDir()).toBe('/runtime/state/config/local');
