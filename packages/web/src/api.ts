@@ -530,6 +530,8 @@ export const api = {
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
   notes: () => get<{ memories: MemoryDocItem[]; memoryQueue: MemoryWorkItem[] }>('/notes'),
+  createNoteDoc: (input: { title: string; summary?: string; tags?: string[] }) =>
+    post<MemoryDocDetail>('/notes', input),
   noteDoc: (memoryId: string) =>
     get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
   saveNoteDoc: (memoryId: string, content: string) =>

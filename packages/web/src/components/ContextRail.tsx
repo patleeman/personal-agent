@@ -1,5 +1,8 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { buildConversationFileHref } from '../conversationFiles';
@@ -70,8 +73,10 @@ import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs'
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
+import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
+import { MentionTextarea } from './MentionTextarea';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -2449,6 +2454,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   const [selectedContent, setSelectedContent] = useState('');
   const [selectedContentLoading, setSelectedContentLoading] = useState(false);
   const [selectedContentError, setSelectedContentError] = useState<string | null>(null);
+  const [contentMode, setContentMode] = useState<'preview' | 'edit'>('preview');
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
@@ -2526,6 +2532,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   useEffect(() => {
     setDraft(selectedContent);
     setSavedContent(selectedContent);
+    setContentMode('preview');
   }, [selectedContent, selectedFilePath]);
 
   async function handleSave() {
@@ -2640,7 +2647,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
 
         <div className="space-y-2">
           <div className="ui-detail-row">
-            <span className="ui-detail-label">Note node</span>
+            <span className="ui-detail-label">Note</span>
             <Link to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
               @{memory.id}
             </Link>
@@ -2722,8 +2729,8 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
 
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <div className="space-y-1">
-            <p className="ui-section-label">Node files</p>
-            <p className="ui-card-meta">Browse `INDEX.md` and package-local references. Assets remain on disk inside `assets/`.</p>
+            <p className="ui-section-label">Files in this note</p>
+            <p className="ui-card-meta">`INDEX.md` is the main note. Reference files hold supporting material, and assets stay on disk inside `assets/`.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Link
@@ -2749,11 +2756,25 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
+            onClick={() => setContentMode('preview')}
+            className={contentMode === 'preview' ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
+          >
+            Preview
+          </button>
+          <button
+            type="button"
+            onClick={() => setContentMode('edit')}
+            className={contentMode === 'edit' ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
+          >
+            Edit markdown
+          </button>
+          <button
+            type="button"
             onClick={() => { void handleStartConversation(); }}
             disabled={startBusy || loading}
             className="ui-toolbar-button text-accent"
           >
-            {startBusy ? 'Starting…' : 'Start convo'}
+            {startBusy ? 'Starting…' : 'Chat about note'}
           </button>
           <button
             type="button"
@@ -2770,11 +2791,17 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
               disabled={deleteBusy || loading}
               className="ui-toolbar-button text-danger"
             >
-              {deleteBusy ? 'Deleting…' : 'Delete package'}
+              {deleteBusy ? 'Deleting…' : 'Delete note'}
             </button>
           )}
           {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
         </div>
+
+        <p className="ui-card-meta">
+          {contentMode === 'preview'
+            ? 'Preview mode hides YAML frontmatter so the note reads like a document.'
+            : 'Edit the raw markdown directly. Use Cmd/Ctrl+S to save.'}
+        </p>
 
         {notice && (
           <p className={notice.tone === 'danger' ? 'text-[12px] text-danger' : 'text-[12px] text-accent'}>
@@ -2788,10 +2815,14 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
           <ErrorState message={`Failed to load file: ${selectedContentError}`} className="px-0 py-0" />
         ) : selectedContentLoading ? (
           <LoadingState label="Loading file…" className="px-0 py-0" />
+        ) : contentMode === 'preview' ? (
+          <div className="h-full overflow-y-auto rounded-lg border border-border-default bg-base px-4 py-4">
+            <RailRenderedMarkdown content={draft} />
+          </div>
         ) : (
-          <textarea
+          <MentionTextarea
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onValueChange={setDraft}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
                 event.preventDefault();
@@ -2868,10 +2899,10 @@ function MemoryFileContext({ path }: { path: string }) {
       <p className="text-[12px] font-mono text-dim/60 truncate" title={path}>{fileName}</p>
       {editing ? (
         <div className="space-y-2">
-          <textarea
+          <MentionTextarea
             ref={textareaRef}
             value={draft}
-            onChange={e => setDraft(e.target.value)}
+            onValueChange={setDraft}
             className="w-full text-[13px] font-mono text-secondary leading-[1.75] bg-base border border-border-default rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-accent/60 min-h-[120px]"
             spellCheck={false}
           />
@@ -2985,6 +3016,36 @@ function RailMarkdownPreview({ content, className }: { content: string; classNam
     ].filter(Boolean).join(' ')}>
       {content}
     </pre>
+  );
+}
+
+function extractRailMarkdownPreviewBody(content: string): string {
+  const normalized = content.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+  return (match?.[1] ?? normalized).replace(/^\n+/, '');
+}
+
+function RailRenderedMarkdown({ content }: { content: string }) {
+  const footnoteId = useId();
+  const footnotePrefix = `rail-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
+  const body = extractRailMarkdownPreviewBody(content).trim();
+
+  if (body.length === 0) {
+    return <p className="ui-card-meta">This file has no rendered markdown yet.</p>;
+  }
+
+  return (
+    <div className="ui-markdown max-w-none text-[13px] leading-relaxed">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
+        components={{
+          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
+        }}
+      >
+        {body}
+      </ReactMarkdown>
+    </div>
   );
 }
 
