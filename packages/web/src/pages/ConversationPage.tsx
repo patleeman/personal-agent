@@ -1317,10 +1317,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const setInput = useCallback((next: string) => {
     if (draft) {
       persistDraftConversationComposer(next);
+    } else if (id) {
+      persistForkPromptDraft(id, next);
     }
 
     setInputState(next);
-  }, [draft, setInputState]);
+  }, [draft, id, setInputState]);
   const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
