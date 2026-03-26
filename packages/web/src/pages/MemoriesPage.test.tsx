@@ -121,6 +121,38 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Refactor memory pipeline');
     expect(html).toContain('run-123');
     expect(html).toContain('/conversations/conv-123?run=run-123');
+    expect(html).not.toContain('Retry');
+  });
+
+  it('shows a retry button for failed distillation runs with durable run ids', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [],
+        memoryQueue: [{
+          conversationId: 'conv-123',
+          conversationTitle: 'Refactor memory pipeline',
+          runId: 'run-123',
+          status: 'failed',
+          createdAt: '2026-03-17T12:00:00.000Z',
+          updatedAt: '2026-03-17T12:05:00.000Z',
+        }],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories']}>
+        <Routes>
+          <Route path="/memories" element={<MemoriesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Retry');
+    expect(html).toContain('Retry this memory distillation');
   });
 
   it('keeps state-only queue items linked to the conversation when no durable run exists', () => {
@@ -152,6 +184,7 @@ describe('MemoriesPage', () => {
 
     expect(html).toContain('/conversations/conv-123');
     expect(html).not.toContain('/conversations/conv-123?run=state%3Aconv-123');
+    expect(html).not.toContain('Retry');
   });
 
   it('shows the empty state when there are no memory packages', () => {
