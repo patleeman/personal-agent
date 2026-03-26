@@ -1,14 +1,15 @@
-const SHELL_CACHE = 'pi-companion-shell-v2';
-const STATIC_CACHE = 'pi-companion-static-v2';
+const BRAND_ASSET_VERSION = 'pa-brand-20260326';
+const SHELL_CACHE = 'pi-companion-shell-v3';
+const STATIC_CACHE = 'pi-companion-static-v3';
 const PRECACHE_URLS = [
   '/app/index.html',
-  '/app/manifest.webmanifest',
-  '/app/icon.svg',
+  `/app/manifest.webmanifest?v=${BRAND_ASSET_VERSION}`,
+  `/app/icon.svg?v=${BRAND_ASSET_VERSION}`,
   '/app/icon-maskable.svg',
-  '/app/icon-192.png',
-  '/app/icon-512.png',
-  '/app/icon-maskable-512.png',
-  '/app/apple-touch-icon.png',
+  `/app/icon-192.png?v=${BRAND_ASSET_VERSION}`,
+  `/app/icon-512.png?v=${BRAND_ASSET_VERSION}`,
+  `/app/icon-maskable-512.png?v=${BRAND_ASSET_VERSION}`,
+  `/app/apple-touch-icon.png?v=${BRAND_ASSET_VERSION}`,
 ];
 
 self.addEventListener('install', (event) => {

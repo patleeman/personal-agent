@@ -111,7 +111,7 @@ describe('collectCompanionActivityNotifications', () => {
     expect(notifications).toEqual([]);
   });
 
-  it('does not notify for generic completed activity updates', () => {
+  it('notifies for new unread completion activity linked to exactly one conversation', () => {
     const notifications = collectCompanionActivityNotifications(
       createActivitySnapshot([]),
       createActivitySnapshot([{
@@ -129,7 +129,15 @@ describe('collectCompanionActivityNotifications', () => {
       },
     );
 
-    expect(notifications).toEqual([]);
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-123',
+        kind: 'completed',
+        title: 'Completed: Build companion app',
+        body: 'Finished the requested refactor.',
+        path: '/app/conversations/conv-123',
+      }),
+    ]);
   });
 });
 

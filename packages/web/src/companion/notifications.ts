@@ -5,7 +5,7 @@ import { buildCompanionConversationPath } from './routes';
 export type CompanionNotificationKind = 'approval-needed' | 'blocked' | 'completed' | 'needs-review';
 
 function isActionableCompanionNotificationKind(kind: CompanionNotificationKind): boolean {
-  return kind === 'approval-needed' || kind === 'blocked';
+  return kind === 'approval-needed' || kind === 'blocked' || kind === 'completed';
 }
 
 export interface CompanionNotificationCandidate {
@@ -88,7 +88,7 @@ function buildActivityNotificationBody(entry: Pick<ActivityEntry, 'summary' | 'd
     case 'completed':
       return 'Conversation work completed and is ready for review.';
     default:
-      return 'Open the conversation in Pi Companion.';
+      return 'Open the conversation in Personal Agent.';
   }
 }
 
