@@ -14,13 +14,14 @@ Good fits:
 
 - morning reports
 - recurring reviews
-- one-time reminders or check-ins
 - unattended background prompts
 - automation that should surface attention in the inbox
+- task-style work that may optionally callback into a conversation later
 
 Do not confuse scheduled tasks with:
 
 - **project tasks** in `state.yaml` — those are planning/checklist items
+- **reminders** — those are conversation-bound wakeups with alert delivery
 - **durable background runs** — those are detached jobs launched on demand with `pa runs start`
 
 ## Where task files live
@@ -105,6 +106,7 @@ Important behavior to understand:
 - retries happen up to the configured retry limit
 - each run writes a log
 - successful and failed runs create local inbox activity by default when the task file lives under profile resources
+- tasks are still passive by default; they do not become interrupting reminders unless explicitly wired back to a conversation
 
 One-time tasks resolve once and do not run again.
 
@@ -113,6 +115,25 @@ One-time tasks resolve once and do not run again.
 Tasks run as direct daemon-managed subprocesses.
 
 Each run still writes a durable run record, log, and final result under the daemon state root.
+
+## Conversation callbacks
+
+A scheduled task can optionally callback into the conversation that created it.
+
+That callback path is intentionally separate from the synced `*.task.md` definition because conversation ids and session files are local runtime state.
+
+When enabled, a task completion or failure can create:
+
+- a conversation wakeup
+- an alert
+- the usual activity/log trail
+
+This is the right fit for:
+
+- "run this later and tell me what happened"
+- "watch for deployment gates and bring this thread back when it matters"
+
+It is **not** the same as a generic reminder. For direct human reminders, prefer the reminder/conversation-wakeup path.
 
 ## Managing tasks from the web UI
 

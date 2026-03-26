@@ -117,12 +117,21 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/conversations/new' },
     },
     {
+      id: 'nav:alerts',
+      section: 'nav',
+      title: 'Alerts',
+      subtitle: 'Interrupting reminders and callbacks that need acknowledgement',
+      keywords: ['alert', 'reminder', 'callback', 'notification'],
+      order: 1,
+      action: { kind: 'navigate', to: '/alerts' },
+    },
+    {
       id: 'nav:inbox',
       section: 'nav',
       title: 'Inbox',
       subtitle: 'Unread activity and follow-ups',
       keywords: ['activity', 'notifications'],
-      order: 1,
+      order: 2,
       action: { kind: 'navigate', to: '/inbox' },
     },
     {

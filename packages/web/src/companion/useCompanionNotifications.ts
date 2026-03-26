@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import type { ActivitySnapshot, SessionMeta } from '../types';
+import type { AlertSnapshot, SessionMeta } from '../types';
 import type { CompanionNotificationCandidate } from './notifications';
 import {
-  collectCompanionActivityNotifications,
+  collectCompanionAlertNotifications,
   collectCompanionSessionNotifications,
 } from './notifications';
 
@@ -41,11 +41,11 @@ async function showCompanionNotification(candidate: CompanionNotificationCandida
 }
 
 export function useCompanionNotifications(input: {
-  activity: ActivitySnapshot | null;
+  alerts: AlertSnapshot | null;
   sessions: SessionMeta[] | null;
   enabled: boolean;
 }) {
-  const previousActivityRef = useRef<ActivitySnapshot | null>(null);
+  const previousAlertsRef = useRef<AlertSnapshot | null>(null);
   const previousSessionsRef = useRef<SessionMeta[] | null>(null);
   const conversationTitleById = useMemo(() => new Map(
     (input.sessions ?? []).map((session) => [session.id, getConversationDisplayTitle(session.title)] as const),
@@ -53,30 +53,30 @@ export function useCompanionNotifications(input: {
 
   useEffect(() => {
     if (!input.enabled || typeof document === 'undefined') {
-      previousActivityRef.current = input.activity;
+      previousAlertsRef.current = input.alerts;
       previousSessionsRef.current = input.sessions;
       return;
     }
 
     if (document.visibilityState === 'visible') {
-      previousActivityRef.current = input.activity;
+      previousAlertsRef.current = input.alerts;
       previousSessionsRef.current = input.sessions;
       return;
     }
 
-    const activityNotifications = collectCompanionActivityNotifications(previousActivityRef.current, input.activity, {
+    const alertNotifications = collectCompanionAlertNotifications(previousAlertsRef.current, input.alerts, {
       conversationTitleById,
     });
-    const suppressedConversationIds = new Set(activityNotifications.map((notification) => notification.conversationId));
+    const suppressedConversationIds = new Set(alertNotifications.map((notification) => notification.conversationId));
     const sessionNotifications = collectCompanionSessionNotifications(previousSessionsRef.current, input.sessions, {
       suppressConversationIds: suppressedConversationIds,
     });
 
-    previousActivityRef.current = input.activity;
+    previousAlertsRef.current = input.alerts;
     previousSessionsRef.current = input.sessions;
 
-    for (const candidate of [...activityNotifications, ...sessionNotifications]) {
+    for (const candidate of [...alertNotifications, ...sessionNotifications]) {
       void showCompanionNotification(candidate);
     }
-  }, [conversationTitleById, input.activity, input.enabled, input.sessions]);
+  }, [conversationTitleById, input.alerts, input.enabled, input.sessions]);
 }

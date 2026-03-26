@@ -15,7 +15,7 @@ export function buildDeferredResumeAutoResumeKey(input: {
   }
 
   const readyIds = input.resumes
-    .filter((resume) => resume.status === 'ready')
+    .filter((resume) => resume.status === 'ready' && resume.delivery?.autoResumeIfOpen !== false)
     .map((resume) => resume.id)
     .sort();
 

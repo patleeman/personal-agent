@@ -1,6 +1,7 @@
 import {
   activateDeferredResume,
   activateDueDeferredResumes,
+  createReadyDeferredResume,
   getSessionDeferredResumeEntries,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
@@ -9,6 +10,8 @@ import {
   retryDeferredResume,
   saveDeferredResumeState,
   scheduleDeferredResume,
+  type DeferredResumeAlertLevel,
+  type DeferredResumeKind,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
 import {
@@ -25,6 +28,41 @@ function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
+function normalizeReminderAt(at: string, now: Date): string {
+  const timestamp = Date.parse(at);
+  if (!Number.isFinite(timestamp)) {
+    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+  }
+
+  const dueAt = new Date(timestamp);
+  if (dueAt.getTime() <= now.getTime()) {
+    throw new Error('Reminder time must be in the future.');
+  }
+
+  return dueAt.toISOString();
+}
+
+function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string {
+  if (input.delay && input.at) {
+    throw new Error('Specify only one of delay or at.');
+  }
+
+  if (!input.delay && !input.at) {
+    throw new Error('One of delay or at is required.');
+  }
+
+  if (input.delay) {
+    const delayMs = parseDeferredResumeDelayMs(input.delay);
+    if (!delayMs) {
+      throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    }
+
+    return new Date(input.now.getTime() + delayMs).toISOString();
+  }
+
+  return normalizeReminderAt(input.at as string, input.now);
+}
+
 export interface DeferredResumeSummary {
   id: string;
   sessionFile: string;
@@ -34,6 +72,13 @@ export interface DeferredResumeSummary {
   attempts: number;
   status: 'scheduled' | 'ready';
   readyAt?: string;
+  kind: DeferredResumeKind;
+  title?: string;
+  delivery: {
+    alertLevel: DeferredResumeAlertLevel;
+    autoResumeIfOpen: boolean;
+    requireAck: boolean;
+  };
 }
 
 function createDeferredResumeId(now: Date): string {
@@ -50,6 +95,9 @@ function toSummary(record: DeferredResumeRecord): DeferredResumeSummary {
     attempts: record.attempts,
     status: record.status,
     readyAt: record.readyAt,
+    kind: record.kind,
+    title: record.title,
+    delivery: record.delivery,
   };
 }
 
@@ -152,24 +200,36 @@ export async function fireDeferredResumeNowForSessionFile(input: {
 
 export async function scheduleDeferredResumeForSessionFile(input: {
   sessionFile: string;
-  delay: string;
+  delay?: string;
+  at?: string;
   prompt?: string;
+  title?: string;
+  kind?: DeferredResumeKind;
+  notify?: DeferredResumeAlertLevel;
+  requireAck?: boolean;
+  autoResumeIfOpen?: boolean;
+  source?: { kind: string; id?: string };
   now?: Date;
 }): Promise<DeferredResumeSummary> {
-  const delayMs = parseDeferredResumeDelayMs(input.delay);
-  if (!delayMs) {
-    throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
-  }
-
   const now = input.now ?? new Date();
+  const dueAt = resolveDueAt({ delay: input.delay, at: input.at, now });
   const state = loadDeferredResumeState();
+  const kind = input.kind ?? 'continue';
   const record = scheduleDeferredResume(state, {
     id: createDeferredResumeId(now),
     sessionFile: input.sessionFile,
     prompt: input.prompt?.trim() || DEFAULT_DEFERRED_RESUME_PROMPT,
-    dueAt: new Date(now.getTime() + delayMs).toISOString(),
+    dueAt,
     createdAt: now.toISOString(),
     attempts: 0,
+    kind,
+    ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+    ...(input.source ? { source: input.source } : {}),
+    delivery: {
+      alertLevel: input.notify,
+      autoResumeIfOpen: input.autoResumeIfOpen,
+      requireAck: input.requireAck,
+    },
   });
 
   saveDeferredResumeState(state);
@@ -182,6 +242,45 @@ export async function scheduleDeferredResumeForSessionFile(input: {
     createdAt: record.createdAt,
     conversationId: readSessionConversationId(record.sessionFile),
   });
+  return toSummary(record);
+}
+
+export function createReadyDeferredResumeForSessionFile(input: {
+  sessionFile: string;
+  prompt: string;
+  title?: string;
+  kind?: DeferredResumeKind;
+  notify?: DeferredResumeAlertLevel;
+  requireAck?: boolean;
+  autoResumeIfOpen?: boolean;
+  source?: { kind: string; id?: string };
+  dueAt?: string;
+  readyAt?: string;
+  createdAt?: string;
+}): DeferredResumeSummary {
+  const now = new Date();
+  const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : now.toISOString();
+  const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : dueAt;
+  const readyAt = input.readyAt ? new Date(input.readyAt).toISOString() : now.toISOString();
+  const state = loadDeferredResumeState();
+  const record = createReadyDeferredResume(state, {
+    id: createDeferredResumeId(now),
+    sessionFile: input.sessionFile,
+    prompt: input.prompt.trim(),
+    dueAt,
+    createdAt,
+    readyAt,
+    attempts: 0,
+    kind: input.kind,
+    ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+    ...(input.source ? { source: input.source } : {}),
+    delivery: {
+      alertLevel: input.notify,
+      autoResumeIfOpen: input.autoResumeIfOpen,
+      requireAck: input.requireAck,
+    },
+  });
+  saveDeferredResumeState(state);
   return toSummary(record);
 }
 

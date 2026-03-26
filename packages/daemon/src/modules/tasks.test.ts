@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFil
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { listProfileActivityEntries } from '@personal-agent/core';
+import { listProfileActivityEntries, loadDeferredResumeState, setTaskCallbackBinding } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import {
@@ -850,6 +850,73 @@ Run hourly task
       const status = module.getStatus?.() as { runningTasks?: number; totalRuns?: number };
       return (status.runningTasks ?? 0) === 0 && (status.totalRuns ?? 0) === 1;
     });
+
+    await module.stop?.(context);
+  });
+
+  it('creates a conversation callback wakeup for bound task completions', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'watch-prod.task.md');
+
+    writeFileSync(taskPath, `---\nid: watch-prod\nat: "2026-03-02T10:00:05.000Z"\nprofile: datadog\n---\nWatch the prod gates\n`);
+
+    setTaskCallbackBinding({
+      stateRoot,
+      profile: 'datadog',
+      taskId: 'watch-prod',
+      conversationId: 'conv-123',
+      sessionFile: '/tmp/conv-123.jsonl',
+      notifyOnSuccess: 'disruptive',
+      notifyOnFailure: 'disruptive',
+    });
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      true,
+      currentTime.toISOString(),
+      undefined,
+      'Confirm Kubernetes Mutations is waiting for approval.',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+      return Object.keys(state.resumes).length === 1;
+    });
+
+    const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(activityEntries[0]?.entry.summary).toContain('Scheduled task watch-prod completed.');
+
+    const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+    const callback = Object.values(deferredState.resumes)[0];
+    expect(callback).toEqual(expect.objectContaining({
+      kind: 'task-callback',
+      status: 'ready',
+      title: 'Scheduled task @watch-prod completed',
+    }));
 
     await module.stop?.(context);
   });

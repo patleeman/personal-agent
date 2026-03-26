@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ActivitySnapshot, SessionMeta } from '../types';
+import type { AlertSnapshot, SessionMeta } from '../types';
 import {
-  collectCompanionActivityNotifications,
+  collectCompanionAlertNotifications,
   collectCompanionSessionNotifications,
 } from './notifications';
 
@@ -20,26 +20,31 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   };
 }
 
-function createActivitySnapshot(entries: ActivitySnapshot['entries']): ActivitySnapshot {
+function createAlertSnapshot(entries: AlertSnapshot['entries']): AlertSnapshot {
   return {
     entries,
-    unreadCount: entries.filter((entry) => !entry.read).length,
+    activeCount: entries.filter((entry) => entry.status === 'active').length,
   };
 }
 
-describe('collectCompanionActivityNotifications', () => {
-  it('notifies for new unread approval activity linked to exactly one conversation', () => {
-    const notifications = collectCompanionActivityNotifications(
-      createActivitySnapshot([]),
-      createActivitySnapshot([{
-        id: 'activity-1',
-        createdAt: '2026-03-25T00:00:00.000Z',
+describe('collectCompanionAlertNotifications', () => {
+  it('notifies for new active reminders linked to a conversation', () => {
+    const notifications = collectCompanionAlertNotifications(
+      createAlertSnapshot([]),
+      createAlertSnapshot([{
+        id: 'alert-1',
         profile: 'assistant',
-        kind: 'note',
-        summary: 'Approval needed',
-        details: 'Pick a deployment target.',
-        read: false,
-        relatedConversationIds: ['conv-123'],
+        kind: 'reminder',
+        severity: 'disruptive',
+        status: 'active',
+        title: 'Watch the prod gates',
+        body: 'Approve the kube changes when the prompt appears.',
+        createdAt: '2026-03-25T00:00:00.000Z',
+        updatedAt: '2026-03-25T00:00:00.000Z',
+        conversationId: 'conv-123',
+        sourceKind: 'reminder-tool',
+        sourceId: 'resume-123',
+        requiresAck: true,
       }]),
       {
         conversationTitleById: new Map([['conv-123', 'Build companion app']]),
@@ -49,95 +54,50 @@ describe('collectCompanionActivityNotifications', () => {
     expect(notifications).toEqual([
       expect.objectContaining({
         conversationId: 'conv-123',
-        kind: 'approval-needed',
-        title: 'Approval needed: Build companion app',
-        body: 'Pick a deployment target.',
+        kind: 'reminder',
+        title: 'Watch the prod gates',
+        body: 'Approve the kube changes when the prompt appears.',
         path: '/app/conversations/conv-123',
       }),
     ]);
   });
 
-  it('classifies blocked activity notifications explicitly', () => {
-    const notifications = collectCompanionActivityNotifications(
-      createActivitySnapshot([]),
-      createActivitySnapshot([{
-        id: 'activity-1',
-        createdAt: '2026-03-25T00:00:00.000Z',
-        profile: 'assistant',
-        kind: 'service',
-        summary: 'Sync blocked by merge conflicts (2 files).',
-        read: false,
-        relatedConversationIds: ['conv-123'],
-      }]),
-      {
-        conversationTitleById: new Map([['conv-123', 'Sync repo']]),
-      },
-    );
-
-    expect(notifications).toEqual([
-      expect.objectContaining({
-        conversationId: 'conv-123',
-        kind: 'blocked',
-        title: 'Blocked: Sync repo',
-        body: 'Sync blocked by merge conflicts (2 files).',
-      }),
-    ]);
-  });
-
-  it('ignores baseline unread activity and multi-conversation activity', () => {
-    const previous = createActivitySnapshot([{
-      id: 'activity-1',
-      createdAt: '2026-03-25T00:00:00.000Z',
+  it('ignores existing active alerts and alerts without a conversation', () => {
+    const previous = createAlertSnapshot([{
+      id: 'alert-1',
       profile: 'assistant',
-      kind: 'note',
-      summary: 'Already there',
-      read: false,
-      relatedConversationIds: ['conv-123'],
+      kind: 'reminder',
+      severity: 'disruptive',
+      status: 'active',
+      title: 'Already active',
+      body: 'Existing alert',
+      createdAt: '2026-03-25T00:00:00.000Z',
+      updatedAt: '2026-03-25T00:00:00.000Z',
+      conversationId: 'conv-123',
+      sourceKind: 'reminder-tool',
+      sourceId: 'resume-123',
+      requiresAck: true,
     }]);
 
-    const notifications = collectCompanionActivityNotifications(previous, createActivitySnapshot([
+    const notifications = collectCompanionAlertNotifications(previous, createAlertSnapshot([
       previous.entries[0]!,
       {
-        id: 'activity-2',
-        createdAt: '2026-03-25T00:01:00.000Z',
+        id: 'alert-2',
         profile: 'assistant',
-        kind: 'note',
-        summary: 'Too many conversations',
-        read: false,
-        relatedConversationIds: ['conv-123', 'conv-456'],
+        kind: 'task-completed',
+        severity: 'disruptive',
+        status: 'active',
+        title: 'Done',
+        body: 'But not linked to a conversation',
+        createdAt: '2026-03-25T00:01:00.000Z',
+        updatedAt: '2026-03-25T00:01:00.000Z',
+        sourceKind: 'scheduled-task',
+        sourceId: 'task-1',
+        requiresAck: false,
       },
     ]));
 
     expect(notifications).toEqual([]);
-  });
-
-  it('notifies for new unread completion activity linked to exactly one conversation', () => {
-    const notifications = collectCompanionActivityNotifications(
-      createActivitySnapshot([]),
-      createActivitySnapshot([{
-        id: 'activity-1',
-        createdAt: '2026-03-25T00:00:00.000Z',
-        profile: 'assistant',
-        kind: 'note',
-        summary: 'Completed',
-        details: 'Finished the requested refactor.',
-        read: false,
-        relatedConversationIds: ['conv-123'],
-      }]),
-      {
-        conversationTitleById: new Map([['conv-123', 'Build companion app']]),
-      },
-    );
-
-    expect(notifications).toEqual([
-      expect.objectContaining({
-        conversationId: 'conv-123',
-        kind: 'completed',
-        title: 'Completed: Build companion app',
-        body: 'Finished the requested refactor.',
-        path: '/app/conversations/conv-123',
-      }),
-    ]);
   });
 });
 

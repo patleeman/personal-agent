@@ -17,6 +17,7 @@ import {
 import { ThemeProvider } from './theme';
 import type {
   ActivitySnapshot,
+  AlertSnapshot,
   AppEvent,
   AppEventTopic,
   DaemonState,
@@ -78,6 +79,7 @@ function isCompanionBrowserRoute(): boolean {
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
+const AlertsPage = lazy(() => import('./pages/AlertsPage').then((module) => ({ default: module.AlertsPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
@@ -205,6 +207,7 @@ export function App() {
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
   const [activity, setActivityState] = useState<ActivitySnapshot | null>(null);
+  const [alerts, setAlertsState] = useState<AlertSnapshot | null>(null);
   const [projects, setProjectsState] = useState<ProjectRecord[] | null>(null);
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
@@ -225,6 +228,10 @@ export function App() {
 
   const setActivity = useCallback((snapshot: ActivitySnapshot) => {
     setActivityState(snapshot);
+  }, []);
+
+  const setAlerts = useCallback((snapshot: AlertSnapshot) => {
+    setAlertsState(snapshot);
   }, []);
 
   const setProjects = useCallback((items: ProjectRecord[]) => {
@@ -257,8 +264,9 @@ export function App() {
 
   const bootstrapSnapshots = useCallback(async () => {
     const companionRoute = isCompanionBrowserRoute();
-    const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, syncState, webUiState] = await Promise.allSettled([
+    const [activityEntries, alertSnapshot, projectItems, sessionItems, taskItems, runResult, daemonState, syncState, webUiState] = await Promise.allSettled([
       api.activity(),
+      api.alerts(),
       api.projects(),
       companionRoute ? Promise.resolve<SessionMeta[] | null>(null) : fetchSessionsSnapshot(),
       api.tasks(),
@@ -273,6 +281,10 @@ export function App() {
         entries: activityEntries.value,
         unreadCount: activityEntries.value.filter((entry) => !entry.read).length,
       });
+    }
+
+    if (alertSnapshot.status === 'fulfilled') {
+      setAlerts(alertSnapshot.value);
     }
 
     if (projectItems.status === 'fulfilled') {
@@ -302,7 +314,7 @@ export function App() {
     if (webUiState.status === 'fulfilled') {
       setWebUi(webUiState.value);
     }
-  }, [setActivity, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
+  }, [setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -360,6 +372,9 @@ export function App() {
         case 'activity_snapshot':
           setActivity({ entries: payload.entries, unreadCount: payload.unreadCount });
           return;
+        case 'alerts_snapshot':
+          setAlerts({ entries: payload.entries, activeCount: payload.activeCount });
+          return;
         case 'projects_snapshot':
           setProjects(payload.projects);
           return;
@@ -416,7 +431,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (
@@ -433,7 +448,7 @@ export function App() {
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
-        <AppDataContext.Provider value={{ activity, projects, sessions, tasks, runs, setActivity, setProjects, setSessions, setTasks, setRuns }}>
+        <AppDataContext.Provider value={{ activity, alerts, projects, sessions, tasks, runs, setActivity, setAlerts, setProjects, setSessions, setTasks, setRuns }}>
           <SystemStatusContext.Provider value={{ daemon, sync, webUi, setDaemon, setSync, setWebUi }}>
             <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
               <ThemeProvider>
@@ -464,6 +479,7 @@ export function App() {
                       <Route path="workspace" element={<WorkspaceRouteRedirect />} />
                       <Route path="workspace/files" element={suspendRoute(<WorkspacePage />)} />
                       <Route path="workspace/changes" element={suspendRoute(<WorkspaceChangesPage />)} />
+                      <Route path="alerts" element={suspendRoute(<AlertsPage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />

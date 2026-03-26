@@ -2,6 +2,12 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import {
+  clearTaskCallbackBinding,
+  getTaskCallbackBinding,
+  readSessionConversationId,
+  setTaskCallbackBinding,
+} from '@personal-agent/core';
 import { startScheduledTaskRun, type ParsedTaskDefinition } from '@personal-agent/daemon';
 import { invalidateAppTopics } from './appEvents.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
@@ -30,6 +36,11 @@ const ScheduledTaskToolParams = Type.Object({
   cwd: Type.Optional(Type.String({ description: 'Working directory for the task.' })),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Per-run timeout in seconds.' })),
   prompt: Type.Optional(Type.String({ description: 'Task prompt body.' })),
+  deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether task completions should wake the current conversation later.' })),
+  notifyOnSuccess: Type.Optional(Type.Boolean({ description: 'Whether successful task completions should create an in-app alert for the current conversation callback.' })),
+  notifyOnFailure: Type.Optional(Type.Boolean({ description: 'Whether failed task completions should create an in-app alert for the current conversation callback.' })),
+  requireAck: Type.Optional(Type.Boolean({ description: 'Whether callback alerts should stay active until acknowledged.' })),
+  autoResumeIfOpen: Type.Optional(Type.Boolean({ description: 'Whether an open saved conversation should auto-resume when the callback becomes ready.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -74,7 +85,11 @@ function formatTaskList(loaded: LoadedScheduledTasksForProfile): string {
   return ['Scheduled tasks:', ...lines].join('\n');
 }
 
-function formatTaskDetail(task: ParsedTaskDefinition, runtime: TaskRuntimeEntry | undefined): string {
+function formatTaskDetail(
+  task: ParsedTaskDefinition,
+  runtime: TaskRuntimeEntry | undefined,
+  callbackBinding?: ReturnType<typeof getTaskCallbackBinding>,
+): string {
   const lines = [
     `Task @${task.id}`,
     `schedule: ${formatSchedule(task)}`,
@@ -104,6 +119,12 @@ function formatTaskDetail(task: ParsedTaskDefinition, runtime: TaskRuntimeEntry 
     lines.push(`lastLogPath: ${runtime.lastLogPath}`);
   }
 
+  if (callbackBinding) {
+    lines.push(`callbackConversationId: ${callbackBinding.conversationId}`);
+    lines.push(`callbackOnSuccess: ${callbackBinding.deliverOnSuccess ? callbackBinding.notifyOnSuccess : 'none'}`);
+    lines.push(`callbackOnFailure: ${callbackBinding.deliverOnFailure ? callbackBinding.notifyOnFailure : 'none'}`);
+  }
+
   lines.push('', task.prompt);
   return lines.join('\n');
 }
@@ -127,7 +148,7 @@ export function createScheduledTaskAgentExtension(options: {
         'Keep tasks high-signal: clear schedule, explicit profile, and a concise prompt body.',
       ],
       parameters: ScheduledTaskToolParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         try {
           const profile = readOptionalString(params.profile) ?? options.getCurrentProfile();
 
@@ -149,8 +170,9 @@ export function createScheduledTaskAgentExtension(options: {
             case 'get': {
               const taskId = readRequiredString(params.taskId, 'taskId');
               const { task, runtime } = resolveScheduledTaskForProfile(profile, taskId);
+              const callbackBinding = getTaskCallbackBinding({ profile, taskId });
               return {
-                content: [{ type: 'text' as const, text: formatTaskDetail(task, runtime) }],
+                content: [{ type: 'text' as const, text: formatTaskDetail(task, runtime, callbackBinding) }],
                 details: {
                   action: 'get',
                   profile,
@@ -181,6 +203,30 @@ export function createScheduledTaskAgentExtension(options: {
 
               mkdirSync(dirname(filePath), { recursive: true });
               writeFileSync(filePath, content);
+
+              if (params.deliverResultToConversation === true) {
+                const sessionFile = ctx.sessionManager.getSessionFile();
+                const conversationId = sessionFile ? readSessionConversationId(sessionFile) : undefined;
+                if (!sessionFile || !conversationId) {
+                  throw new Error('deliverResultToConversation requires an active persisted conversation.');
+                }
+
+                setTaskCallbackBinding({
+                  profile,
+                  taskId,
+                  conversationId,
+                  sessionFile,
+                  deliverOnSuccess: params.notifyOnSuccess ?? true,
+                  deliverOnFailure: params.notifyOnFailure ?? true,
+                  notifyOnSuccess: params.notifyOnSuccess === false ? 'none' : 'disruptive',
+                  notifyOnFailure: params.notifyOnFailure === false ? 'none' : 'disruptive',
+                  requireAck: params.requireAck ?? true,
+                  autoResumeIfOpen: params.autoResumeIfOpen ?? true,
+                });
+              } else if (params.deliverResultToConversation === false) {
+                clearTaskCallbackBinding({ profile, taskId });
+              }
+
               invalidateAppTopics('tasks');
 
               return {
@@ -198,6 +244,7 @@ export function createScheduledTaskAgentExtension(options: {
               const taskId = readRequiredString(params.taskId, 'taskId');
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
               rmSync(task.filePath, { force: true });
+              clearTaskCallbackBinding({ profile, taskId });
               invalidateAppTopics('tasks');
 
               return {

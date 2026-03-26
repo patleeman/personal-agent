@@ -29,6 +29,12 @@ export * from './durable-run-attention.js';
 // Deferred resume state exports
 export * from './deferred-resume.js';
 
+// Alert exports
+export * from './alerts.js';
+
+// Scheduled task callback binding exports
+export * from './task-callback-bindings.js';
+
 // Conversation ↔ project link exports
 export * from './conversation-project-links.js';
 

@@ -1,8 +1,8 @@
 # Inbox and Activity
 
-The inbox is personal-agent's **durable attention surface** for asynchronous things.
+The inbox is personal-agent's **durable passive attention surface** for asynchronous things.
 
-It is not a second transcript and it is not a copy of every assistant reply.
+It is not a second transcript, it is not a copy of every assistant reply, and it is not the interrupting reminder surface.
 
 The inbox exists to answer:
 
@@ -38,11 +38,13 @@ The inbox is a surfacing layer over:
 
 The inbox is therefore an attention queue, not a storage system of its own.
 
-### Notification
+### Notification / alert
 
-A notification is an optional interrupt layered on top of inbox/conversation surfacing.
+A notification or alert is an optional interrupt layered on top of inbox/conversation surfacing.
 
-Notifications are not the durable record. The durable record is the conversation, activity item, project, artifact, or log.
+Alerts are intentionally sparser and more disruptive than inbox items.
+
+Notifications are not the durable record. The durable record is the conversation, activity item, alert state, project, artifact, or log.
 
 ---
 
@@ -99,6 +101,7 @@ Good inbox material is:
 - asynchronous
 - not already obvious in the active foreground UI context
 - worth noticing later
+- important enough to keep, but not so urgent that it needs an alert
 
 Typical examples:
 
@@ -355,11 +358,11 @@ Practical rule:
 
 ## Summary
 
-The inbox is the durable attention layer for asynchronous things.
+The inbox is the durable passive attention layer for asynchronous things.
 
 In practice, that means:
 
 - **foreground work stays in the conversation**
 - **standalone async work becomes activity**
 - **async work tied to a dormant conversation surfaces the conversation**
-- **notifications are optional interrupts, not the durable record**
+- **alerts/notifications are the interrupt layer, not the durable record itself**

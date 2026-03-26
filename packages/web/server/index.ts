@@ -113,6 +113,7 @@ import {
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
+import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createConversationTodoAgentExtension } from './conversationTodoAgentExtension.js';
@@ -311,6 +312,7 @@ import {
   listPendingBackgroundRunResults,
   loadDaemonConfig,
   markBackgroundRunResultsDelivered,
+  surfaceReadyDeferredResume,
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
   parsePendingOperation,
@@ -358,6 +360,12 @@ import {
 import { readNodeLinks, type NodeLinkKind } from './nodeLinks.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import {
+  acknowledgeAlertForProfile,
+  dismissAlertForProfile,
+  getAlertForProfile,
+  getAlertSnapshotForProfile,
+} from './alerts.js';
+import {
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
@@ -388,6 +396,7 @@ const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
 const CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
 const LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+const CONVERSATION_NODE_DISTILL_BATCH_RECOVERY_RUN_SOURCE_TYPE = 'conversation-node-distill-recovery-batch';
 const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running', 'recovering', 'waiting']);
 
 function isConversationNodeDistillRunSourceType(value: string | undefined): boolean {
@@ -647,6 +656,7 @@ async function setCurrentProfile(profile: string): Promise<string> {
   await syncDaemonTaskScopeForProfile(profile);
   invalidateAppTopics(
     'activity',
+    'alerts',
     'projects',
     'sessions',
     'tasks',
@@ -695,6 +705,7 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createDeferredResumeAgentExtension(),
+    createReminderAgentExtension(),
   ];
 }
 
@@ -1330,6 +1341,10 @@ function resolveConversationMemoryDistillRunnerPath(): string {
   return join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
 }
 
+function resolveConversationMemoryDistillBatchRecoveryRunnerPath(): string {
+  return join(REPO_ROOT, 'packages/web/dist-server/recoverConversationMemoryDistillRuns.js');
+}
+
 async function startConversationMemoryDistillRun(input: ConversationMemoryDistillRunInput) {
   const runnerPath = resolveConversationMemoryDistillRunnerPath();
   if (!existsSync(runnerPath)) {
@@ -1378,6 +1393,51 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
       ...(input.summary ? { summary: input.summary } : {}),
       ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
       emitActivity: input.emitActivity ?? false,
+    },
+  });
+}
+
+async function startConversationMemoryDistillBatchRecoveryRun(input: { profile: string; runIds: string[] }) {
+  const runnerPath = resolveConversationMemoryDistillBatchRecoveryRunnerPath();
+  if (!existsSync(runnerPath)) {
+    return {
+      accepted: false,
+      reason: `Distillation recovery runner not found: ${runnerPath}`,
+      runId: undefined,
+      logPath: undefined,
+    };
+  }
+
+  const runIds = [...new Set(input.runIds.map((runId) => runId.trim()).filter((runId) => runId.length > 0))];
+  if (runIds.length === 0) {
+    return {
+      accepted: false,
+      reason: 'At least one failed distillation run is required for batch recovery.',
+      runId: undefined,
+      logPath: undefined,
+    };
+  }
+
+  return startBackgroundRun({
+    taskSlug: `recover-node-distills-${input.profile}`,
+    cwd: REPO_ROOT,
+    argv: [
+      process.execPath,
+      runnerPath,
+      '--port',
+      String(PORT),
+      '--profile',
+      input.profile,
+      ...runIds.flatMap((runId) => ['--run-id', runId]),
+    ],
+    source: {
+      type: CONVERSATION_NODE_DISTILL_BATCH_RECOVERY_RUN_SOURCE_TYPE,
+      id: input.profile,
+    },
+    checkpointPayload: {
+      profile: input.profile,
+      runIds,
+      totalRuns: runIds.length,
     },
   });
 }
@@ -1677,6 +1737,9 @@ function toDeferredResumeSummary(record: {
   attempts: number;
   status: 'scheduled' | 'ready';
   readyAt?: string;
+  kind: DeferredResumeSummary['kind'];
+  title?: string;
+  delivery: DeferredResumeSummary['delivery'];
 }): DeferredResumeSummary {
   return {
     id: record.id,
@@ -1687,6 +1750,9 @@ function toDeferredResumeSummary(record: {
     attempts: record.attempts,
     status: record.status,
     readyAt: record.readyAt,
+    kind: record.kind,
+    title: record.title,
+    delivery: record.delivery,
   };
 }
 
@@ -2361,6 +2427,119 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
   };
 }
 
+type SavedConversationMemoryRecord = ReturnType<typeof saveDistilledConversationMemory>;
+
+interface DistillConversationMemoryNowInput {
+  conversationId: string;
+  profile: string;
+  title?: string;
+  summary?: string;
+  anchorMessageId?: string;
+  checkpointId?: string;
+  tags?: string[];
+  mode: ConversationMemoryMaintenanceMode;
+  trigger: ConversationMemoryMaintenanceTrigger;
+  emitActivity: boolean;
+}
+
+interface DistillConversationMemoryNowResult {
+  conversationId: string;
+  memory: SavedConversationMemoryRecord;
+  disposition: SavedConversationMemoryRecord['disposition'];
+  reference: SavedConversationMemoryRecord['reference'];
+  activityId?: string;
+}
+
+async function distillConversationMemoryNow(input: DistillConversationMemoryNowInput): Promise<DistillConversationMemoryNowResult> {
+  const normalizedCheckpointId = typeof input.checkpointId === 'string' && input.checkpointId.trim().length > 0
+    ? input.checkpointId.trim()
+    : undefined;
+
+  if (!normalizedCheckpointId && liveRegistry.get(input.conversationId)?.session.isStreaming) {
+    throw new Error('Stop the current response before distilling a note node.');
+  }
+
+  const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === input.conversationId);
+  const maintenanceState = readConversationMemoryMaintenanceState({
+    profile: input.profile,
+    conversationId: input.conversationId,
+  });
+  const relatedProjectIds = getConversationProjectLink({
+    profile: input.profile,
+    conversationId: input.conversationId,
+  })?.relatedProjectIds ?? [];
+
+  const snapshot = normalizedCheckpointId
+    ? readConversationCheckpointSnapshotFromState({
+        profile: input.profile,
+        conversationId: input.conversationId,
+        checkpointId: normalizedCheckpointId,
+      })
+    : (() => {
+        const sessionFile = resolveConversationSessionFile(input.conversationId);
+        if (!sessionFile || !existsSync(sessionFile)) {
+          throw new Error('Conversation not found.');
+        }
+        return buildCheckpointSnapshotFromSessionFile(sessionFile, input.anchorMessageId);
+      })();
+
+  const memory = saveDistilledConversationMemory({
+    title: input.title,
+    summary: input.summary,
+    tags: input.tags,
+    sourceConversationTitle: sourceSession?.title ?? maintenanceState?.latestConversationTitle,
+    sourceCwd: sourceSession?.cwd ?? maintenanceState?.latestCwd,
+    sourceProfile: input.profile,
+    relatedProjectIds,
+    snapshot,
+  });
+
+  const activitySummary = memory.disposition === 'updated-existing'
+    ? `Updated note reference in @${memory.id}`
+    : `Created note reference in @${memory.id}`;
+  const activityDetails = [
+    memory.disposition === 'updated-existing'
+      ? `Updated an existing reference inside durable note node @${memory.id} from this conversation.`
+      : `Created a new reference inside durable note node @${memory.id} from this conversation.`,
+    `Hub title: ${memory.title}`,
+    memory.summary ? `Hub summary: ${memory.summary}` : undefined,
+    `Reference: ${memory.reference.title}`,
+    `Reference path: ${memory.reference.relativePath}`,
+  ].filter((line): line is string => Boolean(line)).join('\n');
+
+  const activityId = input.emitActivity
+    ? writeConversationMemoryDistillActivity({
+        profile: input.profile,
+        conversationId: input.conversationId,
+        kind: 'conversation-node-distilled',
+        summary: activitySummary,
+        details: activityDetails,
+        relatedProjectIds,
+      })
+    : undefined;
+
+  if (normalizedCheckpointId) {
+    const state = markConversationMemoryMaintenanceRunCompleted({
+      profile: input.profile,
+      conversationId: input.conversationId,
+      checkpointId: normalizedCheckpointId,
+      memoryId: memory.id,
+      referencePath: memory.reference.relativePath,
+    });
+    if (input.mode === 'auto' && state.status === 'pending') {
+      await maybeKickConversationMemoryFollowUp(input.profile, input.conversationId);
+    }
+  }
+
+  return {
+    conversationId: input.conversationId,
+    memory,
+    disposition: memory.disposition,
+    reference: memory.reference,
+    ...(activityId ? { activityId } : {}),
+  };
+}
+
 function summarizeProjectConversationSnippet(conversationId: string): string | undefined {
   const detail = readSessionBlocks(conversationId);
   const blocks = detail?.blocks ?? [];
@@ -2555,6 +2734,14 @@ async function flushLiveDeferredResumes(): Promise<void> {
             readyAt: entry.readyAt ?? now.toISOString(),
             conversationId: session.id,
           });
+
+          surfaceReadyDeferredResume({
+            entry,
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            stateRoot: getStateRoot(),
+            conversationId: session.id,
+          });
         }
       }
 
@@ -2708,6 +2895,11 @@ async function buildSnapshotEvents(topics: AppEventTopic[]) {
         events.push({ type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount });
         break;
       }
+      case 'alerts': {
+        const snapshot = getAlertSnapshotForProfile(getCurrentProfile());
+        events.push({ type: 'alerts_snapshot' as const, entries: snapshot.entries, activeCount: snapshot.activeCount });
+        break;
+      }
       case 'projects':
         events.push({ type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfile() });
         break;
@@ -2737,7 +2929,7 @@ async function buildSnapshotEvents(topics: AppEventTopic[]) {
   return events;
 }
 
-const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(['activity', 'projects', 'sessions']);
+const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(['activity', 'alerts', 'projects', 'sessions']);
 
 async function buildCompanionSnapshotEvents(topics: AppEventTopic[]) {
   return buildSnapshotEvents(topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic)));
@@ -3440,7 +3632,75 @@ app.post('/api/web-ui/service/uninstall', (_req, res) => {
   }
 });
 
-// ── Activity / Inbox ─────────────────────────────────────────────────────────
+// ── Alerts / Activity / Inbox ───────────────────────────────────────────────
+
+app.get('/api/alerts', (_req, res) => {
+  try {
+    res.json(getAlertSnapshotForProfile(getCurrentProfile()));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/alerts/:id', (req, res) => {
+  try {
+    const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    res.json(alert);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/alerts/:id/ack', (req, res) => {
+  try {
+    const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts');
+    res.json({ ok: true, alert });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/alerts/:id/dismiss', (req, res) => {
+  try {
+    const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts');
+    res.json({ ok: true, alert });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 app.post('/api/inbox/clear', (_req, res) => {
   try {
@@ -5294,6 +5554,112 @@ app.post('/api/runs/:id/node-distill/retry', async (req, res) => {
   }
 });
 
+app.post('/api/runs/:id/node-distill/recover-now', async (req, res) => {
+  const requestedProfile = typeof req.body?.profile === 'string' && req.body.profile.trim().length > 0
+    ? req.body.profile.trim()
+    : getCurrentProfile();
+
+  try {
+    const profile = requestedProfile;
+    const detail = await getDurableRun(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const run = detail.run;
+    const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
+    if (!distillInput) {
+      res.status(409).json({ error: 'This run is not a node distillation run.' });
+      return;
+    }
+
+    const maintenanceState = readConversationMemoryMaintenanceState({
+      profile,
+      conversationId: distillInput.conversationId,
+    });
+    if (maintenanceState?.lastCompletedCheckpointId === distillInput.checkpointId && maintenanceState.status !== 'failed') {
+      res.json({
+        ok: true,
+        runId: run.runId,
+        conversationId: distillInput.conversationId,
+        resolved: 'already-completed',
+        ...(maintenanceState.promotedMemoryId ? { memoryId: maintenanceState.promotedMemoryId } : {}),
+        ...(maintenanceState.promotedReferencePath ? { referencePath: maintenanceState.promotedReferencePath } : {}),
+      });
+      return;
+    }
+
+    if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') {
+      res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered automatically.' });
+      return;
+    }
+
+    const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
+    if (existing.running) {
+      res.status(409).json({ error: 'A node distillation is already running for this conversation.' });
+      return;
+    }
+
+    const recovered = await distillConversationMemoryNow({
+      conversationId: distillInput.conversationId,
+      profile,
+      checkpointId: distillInput.checkpointId,
+      title: distillInput.title,
+      summary: distillInput.summary,
+      tags: distillInput.tags,
+      mode: distillInput.mode,
+      trigger: distillInput.trigger,
+      emitActivity: distillInput.emitActivity,
+    });
+
+    invalidateAppTopics('projects', 'sessions', 'runs');
+    res.json({
+      ok: true,
+      runId: run.runId,
+      conversationId: distillInput.conversationId,
+      resolved: 'recovered',
+      memoryId: recovered.memory.id,
+      referencePath: recovered.reference.relativePath,
+      disposition: recovered.disposition,
+      ...(recovered.activityId ? { activityId: recovered.activityId } : {}),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      const detail = await getDurableRun(req.params.id);
+      const run = detail?.run;
+      const distillInput = run ? readConversationMemoryDistillRunInputFromRun(run, requestedProfile) : null;
+      if (distillInput) {
+        markConversationMemoryMaintenanceRunFailed({
+          profile: requestedProfile,
+          conversationId: distillInput.conversationId,
+          checkpointId: distillInput.checkpointId,
+          error: message,
+        });
+        if (distillInput.emitActivity) {
+          tryWriteConversationMemoryDistillFailureActivity({
+            profile: requestedProfile,
+            conversationId: distillInput.conversationId,
+            error: message,
+          });
+        }
+      }
+    } catch {
+      // Ignore maintenance state write errors in failure path.
+    }
+
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('already running') || message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
+        ? 409
+        : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
+          ? 400
+          : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
 app.post('/api/runs/:id/node-distill/recover', async (req, res) => {
   try {
     const profile = getCurrentProfile();
@@ -5702,6 +6068,59 @@ app.get('/api/notes', async (_req, res) => {
   }
 });
 
+app.post('/api/notes/recover-failed-node-distills', async (_req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const activeBatchRun = (await listDurableRuns()).runs.find((run) => (
+      run.manifest?.kind === 'background-run'
+      && run.manifest?.source?.type === CONVERSATION_NODE_DISTILL_BATCH_RECOVERY_RUN_SOURCE_TYPE
+      && run.manifest?.source?.id === profile
+      && CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES.has(run.status?.status ?? '')
+    ));
+
+    if (activeBatchRun) {
+      res.status(409).json({
+        error: 'A failed note-extraction recovery run is already in progress.',
+        runId: activeBatchRun.runId,
+      });
+      return;
+    }
+
+    const recoverableRunIds = (await listMemoryWorkItems())
+      .filter((item) => (item.status === 'failed' || item.status === 'interrupted') && !item.runId.startsWith('state:'))
+      .map((item) => item.runId);
+
+    if (recoverableRunIds.length === 0) {
+      res.status(409).json({ error: 'No failed note extractions are ready for batch recovery.' });
+      return;
+    }
+
+    const result = await startConversationMemoryDistillBatchRecoveryRun({
+      profile,
+      runIds: recoverableRunIds,
+    });
+
+    if (!result.accepted || !result.runId) {
+      res.status(500).json({ error: result.reason ?? 'Could not start failed note-extraction recovery.' });
+      return;
+    }
+
+    invalidateAppTopics('runs');
+    res.status(202).json({
+      accepted: true,
+      runId: result.runId,
+      count: recoverableRunIds.length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
 app.post('/api/notes', (req, res) => {
   try {
     const title = normalizeCreatedNoteTitle(req.body?.title);
@@ -5965,85 +6384,20 @@ app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
     : undefined;
 
   try {
-    if (liveRegistry.get(conversationId)?.session.isStreaming) {
-      res.status(409).json({ error: 'Stop the current response before distilling a note node.' });
-      return;
-    }
-
-    const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
-    const relatedProjectIds = getConversationProjectLink({
-      profile,
+    const result = await distillConversationMemoryNow({
       conversationId,
-    })?.relatedProjectIds ?? [];
-    const snapshot = normalizedCheckpointId
-      ? readConversationCheckpointSnapshotFromState({
-          profile,
-          conversationId,
-          checkpointId: normalizedCheckpointId,
-        })
-      : (() => {
-          const sessionFile = resolveConversationSessionFile(conversationId);
-          if (!sessionFile || !existsSync(sessionFile)) {
-            throw new Error('Conversation not found.');
-          }
-          return buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
-        })();
-
-    const memory = saveDistilledConversationMemory({
+      profile,
       title,
       summary,
+      anchorMessageId,
+      checkpointId: normalizedCheckpointId,
       tags,
-      sourceConversationTitle: sourceSession?.title,
-      sourceCwd: sourceSession?.cwd,
-      sourceProfile: profile,
-      relatedProjectIds,
-      snapshot,
+      mode,
+      trigger,
+      emitActivity,
     });
 
-    const activitySummary = memory.disposition === 'updated-existing'
-      ? `Updated note reference in @${memory.id}`
-      : `Created note reference in @${memory.id}`;
-    const activityDetails = [
-      memory.disposition === 'updated-existing'
-        ? `Updated an existing reference inside durable note node @${memory.id} from this conversation.`
-        : `Created a new reference inside durable note node @${memory.id} from this conversation.`,
-      `Hub title: ${memory.title}`,
-      memory.summary ? `Hub summary: ${memory.summary}` : undefined,
-      `Reference: ${memory.reference.title}`,
-      `Reference path: ${memory.reference.relativePath}`,
-    ].filter((line): line is string => Boolean(line)).join('\n');
-
-    const activityId = emitActivity
-      ? writeConversationMemoryDistillActivity({
-          profile,
-          conversationId,
-          kind: 'conversation-node-distilled',
-          summary: activitySummary,
-          details: activityDetails,
-          relatedProjectIds,
-        })
-      : undefined;
-
-    if (normalizedCheckpointId) {
-      const state = markConversationMemoryMaintenanceRunCompleted({
-        profile,
-        conversationId,
-        checkpointId: normalizedCheckpointId,
-        memoryId: memory.id,
-        referencePath: memory.reference.relativePath,
-      });
-      if (mode === 'auto' && state.status === 'pending') {
-        await maybeKickConversationMemoryFollowUp(profile, conversationId);
-      }
-    }
-
-    res.json({
-      conversationId,
-      memory,
-      disposition: memory.disposition,
-      reference: memory.reference,
-      ...(activityId ? { activityId } : {}),
-    });
+    res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -6070,9 +6424,11 @@ app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
 
     const status = message.includes('not found')
       ? 404
-      : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
-        ? 400
-        : 500;
+      : message.includes('Stop the current response before distilling a note node.')
+        ? 409
+        : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
+          ? 400
+          : 500;
 
     logError('request handler error', {
       message,
@@ -10039,7 +10395,7 @@ companionApp.get('/api/events', (req, res) => {
 
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await writeSnapshotEvents(['activity', 'projects', 'sessions']);
+    await writeSnapshotEvents(['activity', 'alerts', 'projects', 'sessions']);
   });
 
   const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
@@ -10082,6 +10438,74 @@ companionApp.get('/api/events', (req, res) => {
     clearInterval(heartbeat);
     unsubscribe();
   });
+});
+
+companionApp.get('/api/alerts', (_req, res) => {
+  try {
+    res.json(getAlertSnapshotForProfile(getCurrentProfile()));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/alerts/:id', (req, res) => {
+  try {
+    const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    res.json(alert);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/alerts/:id/ack', (req, res) => {
+  try {
+    const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts');
+    res.json({ ok: true, alert });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/alerts/:id/dismiss', (req, res) => {
+  try {
+    const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts');
+    res.json({ ok: true, alert });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 companionApp.post('/api/inbox/clear', (_req, res) => {

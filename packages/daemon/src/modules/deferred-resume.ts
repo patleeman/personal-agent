@@ -1,15 +1,12 @@
 import { join, resolve, sep } from 'path';
 import {
   activateDueDeferredResumes,
-  createProjectActivityEntry,
-  getConversationProjectLink,
   loadDeferredResumeState,
   readSessionConversationId,
+  resolveDeferredResumeStateFile,
   saveDeferredResumeState,
-  setActivityConversationLinks,
-  writeProfileActivityEntry,
-  type DeferredResumeRecord,
 } from '@personal-agent/core';
+import { surfaceReadyDeferredResume } from '../conversation-wakeups.js';
 import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
 import type { DaemonModule } from './types.js';
 
@@ -60,15 +57,6 @@ function inferRepoRootFromTaskDir(taskDir: string, profile: string): string | un
   return repoRoot.length > 0 ? repoRoot : undefined;
 }
 
-function sanitizeActivityIdSegment(value: string): string {
-  const sanitized = value
-    .replace(/[^a-zA-Z0-9-_]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-
-  return sanitized.length > 0 ? sanitized : 'activity';
-}
-
 function resolveProfileContext(taskDir: string): { profile: string; repoRoot?: string } {
   const profile = inferProfileFromTaskDir(taskDir)
     ?? sanitizeProfileName(process.env.PERSONAL_AGENT_ACTIVE_PROFILE)
@@ -81,51 +69,6 @@ function resolveProfileContext(taskDir: string): { profile: string; repoRoot?: s
   };
 }
 
-function writeDeferredResumeFiredActivity(input: {
-  entry: DeferredResumeRecord;
-  repoRoot: string;
-  profile: string;
-  stateRoot: string;
-}): void {
-  const activityId = `deferred-resume-fired-${sanitizeActivityIdSegment(input.entry.id)}`;
-  const conversationId = readSessionConversationId(input.entry.sessionFile);
-  const relatedProjectIds = conversationId
-    ? (getConversationProjectLink({
-        stateRoot: input.stateRoot,
-        profile: input.profile,
-        conversationId,
-      })?.relatedProjectIds ?? [])
-    : [];
-
-  writeProfileActivityEntry({
-    stateRoot: input.stateRoot,
-    repoRoot: input.repoRoot,
-    profile: input.profile,
-    entry: createProjectActivityEntry({
-      id: activityId,
-      createdAt: input.entry.readyAt ?? input.entry.dueAt,
-      profile: input.profile,
-      kind: 'deferred-resume',
-      summary: 'Deferred resume fired. Open the conversation to continue.',
-      details: [
-        `Session file: ${input.entry.sessionFile}`,
-        `Due at: ${input.entry.dueAt}`,
-        ...(input.entry.readyAt ? [`Ready at: ${input.entry.readyAt}`] : []),
-        `Prompt: ${input.entry.prompt}`,
-      ].join('\n'),
-      relatedProjectIds: relatedProjectIds.length > 0 ? relatedProjectIds : undefined,
-      notificationState: 'none',
-    }),
-  });
-
-  setActivityConversationLinks({
-    stateRoot: input.stateRoot,
-    profile: input.profile,
-    activityId,
-    relatedConversationIds: conversationId ? [conversationId] : [],
-    updatedAt: input.entry.readyAt ?? input.entry.dueAt,
-  });
-}
 
 export function createDeferredResumeModule(
   dependencies: DeferredResumeModuleDependencies = {},
@@ -159,10 +102,12 @@ export function createDeferredResumeModule(
       updateCounts();
 
       const profileContext = resolveProfileContext(context.config.modules.tasks.taskDir);
-      const deferredState = loadDeferredResumeState();
+      const deferredResumeStateFile = resolveDeferredResumeStateFile(context.paths.stateRoot);
+      const deferredState = loadDeferredResumeState(deferredResumeStateFile);
       const readyEntries = Object.values(deferredState.resumes).filter((entry) => entry.status === 'ready');
 
       for (const entry of readyEntries) {
+        const conversationId = readSessionConversationId(entry.sessionFile);
         await markDeferredResumeConversationRunReady({
           daemonRoot: context.paths.root,
           deferredResumeId: entry.id,
@@ -172,8 +117,18 @@ export function createDeferredResumeModule(
           createdAt: entry.createdAt,
           readyAt: entry.readyAt ?? now().toISOString(),
           profile: profileContext.profile,
-          conversationId: readSessionConversationId(entry.sessionFile),
+          conversationId,
         });
+
+        if (profileContext.repoRoot) {
+          surfaceReadyDeferredResume({
+            entry,
+            repoRoot: profileContext.repoRoot,
+            profile: profileContext.profile,
+            stateRoot: context.paths.stateRoot,
+            conversationId,
+          });
+        }
       }
     },
     async handleEvent(event, context) {
@@ -184,14 +139,16 @@ export function createDeferredResumeModule(
       state.lastTickAt = now().toISOString();
 
       try {
-        const deferredState = loadDeferredResumeState();
+        const deferredResumeStateFile = resolveDeferredResumeStateFile(context.paths.stateRoot);
+        const deferredState = loadDeferredResumeState(deferredResumeStateFile);
         const activated = activateDueDeferredResumes(deferredState, { at: now() });
 
         if (activated.length > 0) {
-          saveDeferredResumeState(deferredState);
+          saveDeferredResumeState(deferredState, deferredResumeStateFile);
 
           const profileContext = resolveProfileContext(context.config.modules.tasks.taskDir);
           for (const entry of activated) {
+            const conversationId = readSessionConversationId(entry.sessionFile);
             await markDeferredResumeConversationRunReady({
               daemonRoot: context.paths.root,
               deferredResumeId: entry.id,
@@ -201,7 +158,7 @@ export function createDeferredResumeModule(
               createdAt: entry.createdAt,
               readyAt: entry.readyAt ?? state.lastTickAt ?? now().toISOString(),
               profile: profileContext.profile,
-              conversationId: readSessionConversationId(entry.sessionFile),
+              conversationId,
             });
 
             if (!profileContext.repoRoot) {
@@ -209,11 +166,12 @@ export function createDeferredResumeModule(
               continue;
             }
 
-            writeDeferredResumeFiredActivity({
+            surfaceReadyDeferredResume({
               entry,
               repoRoot: profileContext.repoRoot,
               profile: profileContext.profile,
               stateRoot: context.paths.stateRoot,
+              conversationId,
             });
           }
 

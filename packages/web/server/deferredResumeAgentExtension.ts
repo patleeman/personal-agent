@@ -10,6 +10,22 @@ const DeferredResumeToolParams = Type.Object({
   prompt: Type.Optional(Type.String({
     description: 'Optional prompt to inject when the deferred resume triggers. Defaults to continuing from the current point.',
   })),
+  title: Type.Optional(Type.String({
+    description: 'Optional short label for the wakeup.',
+  })),
+  notify: Type.Optional(Type.Union([
+    Type.Literal('none'),
+    Type.Literal('passive'),
+    Type.Literal('disruptive'),
+  ], {
+    description: 'Whether the wakeup should create an in-app alert.',
+  })),
+  requireAck: Type.Optional(Type.Boolean({
+    description: 'Whether the resulting alert should require acknowledgement.',
+  })),
+  autoResumeIfOpen: Type.Optional(Type.Boolean({
+    description: 'Whether an open saved conversation should auto-resume when this wakeup becomes ready.',
+  })),
 });
 
 export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void {
@@ -39,6 +55,10 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
             sessionFile,
             delay: params.delay,
             prompt: params.prompt,
+            title: params.title,
+            notify: params.notify,
+            requireAck: params.requireAck,
+            autoResumeIfOpen: params.autoResumeIfOpen,
           });
 
           invalidateAppTopics('sessions');

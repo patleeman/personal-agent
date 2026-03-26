@@ -6,6 +6,7 @@ import {
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
   resolveDeferredResumeStateFile,
+  resolveProfileAlertsStateFile,
   resolveExecutionTargetsFilePath,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
@@ -19,6 +20,7 @@ import { resolveWebUiConfigFilePath } from './webUi.js';
 
 export type AppEventTopic =
   | 'activity'
+  | 'alerts'
   | 'projects'
   | 'sessions'
   | 'tasks'
@@ -63,6 +65,7 @@ interface AppEventWatchTarget {
 
 const ALL_TOPICS: AppEventTopic[] = [
   'activity',
+  'alerts',
   'projects',
   'sessions',
   'tasks',
@@ -179,6 +182,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
+  const alertsStateFile = resolveProfileAlertsStateFile({ profile });
   const syncRepoDir = daemonConfig.modules.sync?.repoDir;
   const webStateDir = join(getStateRoot(), 'web');
 
@@ -190,6 +194,9 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
 
   return {
     activity: activitySources,
+    alerts: [
+      { path: alertsStateFile, kind: 'file' },
+    ],
     projects: [
       { path: projectsDir, kind: 'directory' },
       { path: conversationLinksDir, kind: 'directory' },
@@ -199,6 +206,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: conversationArtifactsDir, kind: 'directory' },
       { path: conversationAttentionStateFile, kind: 'file' },
       { path: deferredResumeStateFile, kind: 'file' },
+      { path: alertsStateFile, kind: 'file' },
       { path: conversationLinksDir, kind: 'directory' },
       ...activitySources,
     ],

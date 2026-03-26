@@ -5,6 +5,19 @@ import { getStateRoot } from './runtime/paths.js';
 export const DEFERRED_RESUME_STATE_FILE_NAME = 'deferred-resumes-state.json';
 
 export type DeferredResumeStatus = 'scheduled' | 'ready';
+export type DeferredResumeKind = 'continue' | 'reminder' | 'task-callback';
+export type DeferredResumeAlertLevel = 'none' | 'passive' | 'disruptive';
+
+export interface DeferredResumeDelivery {
+  alertLevel: DeferredResumeAlertLevel;
+  autoResumeIfOpen: boolean;
+  requireAck: boolean;
+}
+
+export interface DeferredResumeSource {
+  kind: string;
+  id?: string;
+}
 
 export interface DeferredResumeRecord {
   id: string;
@@ -14,11 +27,15 @@ export interface DeferredResumeRecord {
   createdAt: string;
   attempts: number;
   status: DeferredResumeStatus;
+  kind: DeferredResumeKind;
+  title?: string;
+  delivery: DeferredResumeDelivery;
+  source?: DeferredResumeSource;
   readyAt?: string;
 }
 
 export interface DeferredResumeStateFile {
-  version: 2;
+  version: 3;
   resumes: Record<string, DeferredResumeRecord>;
 }
 
@@ -58,6 +75,72 @@ function normalizeIsoTimestamp(value: string): string | undefined {
 
 function normalizeStatus(value: unknown): DeferredResumeStatus {
   return value === 'ready' ? 'ready' : 'scheduled';
+}
+
+function normalizeKind(value: unknown): DeferredResumeKind {
+  if (value === 'reminder' || value === 'task-callback') {
+    return value;
+  }
+
+  return 'continue';
+}
+
+function normalizeAlertLevel(value: unknown): DeferredResumeAlertLevel {
+  if (value === 'passive' || value === 'disruptive' || value === 'none') {
+    return value;
+  }
+
+  return 'none';
+}
+
+function parseDelivery(value: unknown, kind: DeferredResumeKind): DeferredResumeDelivery {
+  const defaultsByKind: Record<DeferredResumeKind, DeferredResumeDelivery> = {
+    continue: {
+      alertLevel: 'none',
+      autoResumeIfOpen: true,
+      requireAck: false,
+    },
+    reminder: {
+      alertLevel: 'disruptive',
+      autoResumeIfOpen: true,
+      requireAck: true,
+    },
+    'task-callback': {
+      alertLevel: 'disruptive',
+      autoResumeIfOpen: true,
+      requireAck: true,
+    },
+  };
+
+  const defaults = defaultsByKind[kind];
+  if (!isRecord(value)) {
+    return { ...defaults };
+  }
+
+  return {
+    alertLevel: normalizeAlertLevel(value.alertLevel),
+    autoResumeIfOpen: typeof value.autoResumeIfOpen === 'boolean' ? value.autoResumeIfOpen : defaults.autoResumeIfOpen,
+    requireAck: typeof value.requireAck === 'boolean' ? value.requireAck : defaults.requireAck,
+  };
+}
+
+function parseSource(value: unknown): DeferredResumeSource | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const kind = toString(value.kind);
+  if (!kind) {
+    return undefined;
+  }
+
+  const source: DeferredResumeSource = { kind };
+  const id = toString(value.id);
+  if (id) {
+    source.id = id;
+  }
+
+  return source;
 }
 
 export function parseDeferredResumeDelayMs(raw: string): number | undefined {
@@ -118,6 +201,7 @@ function parseRecord(value: unknown): DeferredResumeRecord | undefined {
 
   const createdAt = normalizeIsoTimestamp(toString(value.createdAt) ?? dueAt) ?? dueAt;
   const status = normalizeStatus(value.status);
+  const kind = normalizeKind(value.kind);
   const readyAt = status === 'ready'
     ? normalizeIsoTimestamp(toString(value.readyAt) ?? dueAt) ?? dueAt
     : undefined;
@@ -130,7 +214,19 @@ function parseRecord(value: unknown): DeferredResumeRecord | undefined {
     createdAt,
     attempts: toAttempts(value.attempts),
     status,
+    kind,
+    delivery: parseDelivery(value.delivery, kind),
   };
+
+  const title = toString(value.title);
+  if (title) {
+    record.title = title;
+  }
+
+  const source = parseSource(value.source);
+  if (source) {
+    record.source = source;
+  }
 
   if (readyAt) {
     record.readyAt = readyAt;
@@ -212,7 +308,7 @@ function normalizeDocument(value: unknown): DeferredResumeStateFile | null {
   }
 
   return {
-    version: 2,
+    version: 3,
     resumes: sortResumeIds(resumes),
   };
 }
@@ -245,20 +341,20 @@ export function mergeDeferredResumeStateDocuments(options: {
   }
 
   return {
-    version: 2,
+    version: 3,
     resumes: sortResumeIds(resumes),
   };
 }
 
 export function createEmptyDeferredResumeState(): DeferredResumeStateFile {
   return {
-    version: 2,
+    version: 3,
     resumes: {},
   };
 }
 
-export function resolveDeferredResumeStateFile(): string {
-  return join(getStateRoot(), 'pi-agent', DEFERRED_RESUME_STATE_FILE_NAME);
+export function resolveDeferredResumeStateFile(stateRoot = getStateRoot()): string {
+  return join(stateRoot, 'pi-agent', DEFERRED_RESUME_STATE_FILE_NAME);
 }
 
 export function loadDeferredResumeState(path = resolveDeferredResumeStateFile()): DeferredResumeStateFile {
@@ -292,7 +388,7 @@ export function loadDeferredResumeState(path = resolveDeferredResumeStateFile())
     }
 
     return {
-      version: 2,
+      version: 3,
       resumes: sortResumeIds(resumes),
     };
   } catch {
@@ -303,7 +399,7 @@ export function loadDeferredResumeState(path = resolveDeferredResumeStateFile())
 export function saveDeferredResumeState(state: DeferredResumeStateFile, path = resolveDeferredResumeStateFile()): void {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   writeFileSync(path, `${JSON.stringify({
-    version: 2,
+    version: 3,
     resumes: sortResumeIds(state.resumes),
   }, null, 2)}\n`);
 }
@@ -388,11 +484,49 @@ export function activateDueDeferredResumes(
 
 export function scheduleDeferredResume(
   state: DeferredResumeStateFile,
-  entry: Omit<DeferredResumeRecord, 'status' | 'readyAt'>,
+  entry: Omit<DeferredResumeRecord, 'status' | 'readyAt' | 'kind' | 'delivery'> & {
+    kind?: DeferredResumeKind;
+    delivery?: Partial<DeferredResumeDelivery>;
+  },
 ): DeferredResumeRecord {
+  const kind = entry.kind ?? 'continue';
+  const defaults = parseDelivery(undefined, kind);
   const record: DeferredResumeRecord = {
     ...entry,
+    kind,
+    delivery: {
+      alertLevel: entry.delivery?.alertLevel ?? defaults.alertLevel,
+      autoResumeIfOpen: entry.delivery?.autoResumeIfOpen ?? defaults.autoResumeIfOpen,
+      requireAck: entry.delivery?.requireAck ?? defaults.requireAck,
+    },
     status: 'scheduled',
+  };
+
+  state.resumes[record.id] = record;
+  return record;
+}
+
+export function createReadyDeferredResume(
+  state: DeferredResumeStateFile,
+  entry: Omit<DeferredResumeRecord, 'status' | 'readyAt' | 'kind' | 'delivery'> & {
+    readyAt?: string;
+    kind?: DeferredResumeKind;
+    delivery?: Partial<DeferredResumeDelivery>;
+  },
+): DeferredResumeRecord {
+  const kind = entry.kind ?? 'continue';
+  const defaults = parseDelivery(undefined, kind);
+  const readyAt = normalizeIsoTimestamp(entry.readyAt ?? entry.dueAt) ?? entry.dueAt;
+  const record: DeferredResumeRecord = {
+    ...entry,
+    kind,
+    delivery: {
+      alertLevel: entry.delivery?.alertLevel ?? defaults.alertLevel,
+      autoResumeIfOpen: entry.delivery?.autoResumeIfOpen ?? defaults.autoResumeIfOpen,
+      requireAck: entry.delivery?.requireAck ?? defaults.requireAck,
+    },
+    status: 'ready',
+    readyAt,
   };
 
   state.resumes[record.id] = record;
