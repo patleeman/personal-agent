@@ -11,7 +11,9 @@ import {
   type ConversationLayout,
 } from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { useLiveTitles } from '../contexts';
+import { buildDeferredResumeIndicatorText, compareDeferredResumes } from '../deferredResumeIndicator';
+import { useAppData, useLiveTitles } from '../contexts';
+import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -23,10 +25,12 @@ import type {
   MemoryData,
   MessageBlock,
   PromptImageInput,
+  ScheduledTaskSummary,
+  SessionDetail,
 } from '../types';
 import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
 import { CompanionConversationTodos } from './CompanionConversationTodos';
-import { COMPANION_CONVERSATIONS_PATH } from './routes';
+import { buildCompanionConversationPath, COMPANION_CONVERSATIONS_PATH, COMPANION_TASKS_PATH } from './routes';
 
 interface CompanionLiveStateInput {
   streamBlockCount: number;
@@ -89,6 +93,57 @@ const COMPANION_TOUCH_BUTTON_STYLE = {
   WebkitTapHighlightColor: COMPANION_TAP_HIGHLIGHT_COLOR,
   touchAction: 'manipulation',
 } as const;
+const INITIAL_COMPANION_HISTORICAL_TAIL_BLOCKS = 400;
+const COMPANION_HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const COMPANION_HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 900;
+
+type CompanionTaskIndicatorTone = 'accent' | 'warning' | 'dim';
+
+interface CompanionTaskSummaryState {
+  actionText: string;
+  indicatorText: string | null;
+  tone: CompanionTaskIndicatorTone;
+}
+
+function buildCompanionScheduledTaskSummary(tasks: ScheduledTaskSummary[] | null | undefined): CompanionTaskSummaryState {
+  if (tasks == null) {
+    return {
+      actionText: 'Loading scheduled tasks…',
+      indicatorText: null,
+      tone: 'dim',
+    };
+  }
+
+  const allTasks = tasks;
+  if (allTasks.length === 0) {
+    return {
+      actionText: 'No scheduled tasks configured.',
+      indicatorText: null,
+      tone: 'dim',
+    };
+  }
+
+  const runningCount = allTasks.filter((task) => task.running).length;
+  const failureCount = allTasks.filter((task) => task.lastStatus === 'failure').length;
+  const actionParts = [`${allTasks.length} total`];
+  const indicatorParts: string[] = [];
+
+  if (runningCount > 0) {
+    actionParts.push(`${runningCount} running`);
+    indicatorParts.push(`${runningCount} running`);
+  }
+
+  if (failureCount > 0) {
+    actionParts.push(`${failureCount} failed`);
+    indicatorParts.push(`${failureCount} failed`);
+  }
+
+  return {
+    actionText: actionParts.join(' · '),
+    indicatorText: indicatorParts.length > 0 ? indicatorParts.join(' · ') : null,
+    tone: failureCount > 0 ? 'warning' : runningCount > 0 ? 'accent' : 'dim',
+  };
+}
 
 function readCompanionFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -165,7 +220,7 @@ function buildBannerDetail(input: {
   presence: LiveSessionPresenceState;
 }): string {
   if (!input.isLiveSession) {
-    return 'Read-only here. Start a new live conversation from the list when you want to continue.';
+    return 'Resume this transcript to reply from this device, or start a new live conversation from the list.';
   }
 
   if (input.controllingThisSurface) {
@@ -260,10 +315,15 @@ export function CompanionConversationPage() {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const { titles } = useLiveTitles();
+  const { sessions, tasks } = useAppData();
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
+  const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_COMPANION_HISTORICAL_TAIL_BLOCKS);
+  const [retainedSessionDetail, setRetainedSessionDetail] = useState<SessionDetail | null>(null);
+  const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [resumeBusy, setResumeBusy] = useState(false);
   const [takeoverBusy, setTakeoverBusy] = useState(false);
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -274,14 +334,21 @@ export function CompanionConversationPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPanel = getCompanionConversationPanel(location.search);
   const { data: openTabs, replaceData: replaceOpenTabs } = useApi(api.openConversationTabs, 'companion-conversation-open-tabs');
+  const sessionSnapshot = useMemo(
+    () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
+    [id, sessions],
+  );
 
   const shouldSubscribeToLiveStream = Boolean(id) && confirmedLive !== false;
   const stream = useSessionStream(id ?? null, {
     enabled: shouldSubscribeToLiveStream,
-    tailBlocks: 200,
+    tailBlocks: historicalTailBlocks,
   });
 
-  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: 200 });
+  const { detail: fetchedSessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
+  const sessionDetail = (retainedSessionDetail?.meta.id === id ? retainedSessionDetail : null)
+    ?? (fetchedSessionDetail?.meta.id === id ? fetchedSessionDetail : null);
+  const savedConversationSessionFile = sessionDetail?.meta.file ?? sessionSnapshot?.file ?? null;
 
   useEffect(() => {
     if (!id) {
@@ -290,6 +357,26 @@ export function CompanionConversationPage() {
 
     replaceOpenTabs(syncCompanionConversationWorkspaceLayout(id));
   }, [id, replaceOpenTabs]);
+
+  useEffect(() => {
+    setHistoricalTailBlocks(INITIAL_COMPANION_HISTORICAL_TAIL_BLOCKS);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      setRetainedSessionDetail(null);
+      return;
+    }
+
+    if (fetchedSessionDetail?.meta.id === id) {
+      setRetainedSessionDetail(fetchedSessionDetail);
+      return;
+    }
+
+    if (!sessionLoading) {
+      setRetainedSessionDetail(null);
+    }
+  }, [fetchedSessionDetail, id, sessionLoading]);
 
   useEffect(() => {
     if (!id) {
@@ -339,11 +426,43 @@ export function CompanionConversationPage() {
   ), [sessionDetail]);
   const messages = stream.blocks.length > 0 ? stream.blocks : storedMessages;
   const messageIndexOffset = stream.blocks.length > 0 ? stream.blockOffset : sessionDetail?.blockOffset ?? 0;
-  const todoReadOnlyReason = controlState.needsTakeover
-    ? 'Take over to manage the todo list from this device.'
-    : stream.isStreaming
-      ? 'Wait for the current turn to finish before editing the todo list.'
-      : null;
+  const historicalTotalBlocks = stream.blocks.length > 0 ? stream.totalBlocks : sessionDetail?.totalBlocks ?? messages.length;
+  const historicalHasOlderBlocks = messageIndexOffset > 0;
+  const initialScrollKey = useMemo(
+    () => (id ? `${id}:${isLiveSession ? 'live' : 'saved'}` : null),
+    [id, isLiveSession],
+  );
+  const { syncScrollStateFromDom, capturePrependRestore } = useConversationScroll({
+    conversationId: id ?? null,
+    messages,
+    scrollRef,
+    sessionLoading,
+    isStreaming: stream.isStreaming,
+    initialScrollKey,
+    prependRestoreKey: messageIndexOffset,
+  });
+  const orderedDeferredResumes = useMemo(
+    () => [...(sessionSnapshot?.deferredResumes ?? [])].sort(compareDeferredResumes),
+    [sessionSnapshot?.deferredResumes],
+  );
+  const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
+  const deferredResumeIndicatorText = useMemo(
+    () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
+    [deferredResumeNowMs, orderedDeferredResumes],
+  );
+  const scheduledTaskSummary = useMemo(
+    () => buildCompanionScheduledTaskSummary(tasks),
+    [tasks],
+  );
+  const showStatusIndicators = orderedDeferredResumes.length > 0 || Boolean(scheduledTaskSummary.indicatorText);
+  const canResumeConversation = !isLiveSession && Boolean(savedConversationSessionFile);
+  const todoReadOnlyReason = !isLiveSession
+    ? 'Resume this conversation to edit the todo list from this device.'
+    : controlState.needsTakeover
+      ? 'Take over to manage the todo list from this device.'
+      : stream.isStreaming
+        ? 'Wait for the current turn to finish before editing the todo list.'
+        : null;
   const trimmedDraft = draft.trim();
   const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
@@ -374,13 +493,14 @@ export function CompanionConversationPage() {
   const title = getConversationDisplayTitle(
     stream.title,
     titles.get(id ?? ''),
-    sessionDetail?.meta.title,
+    sessionDetail?.meta.title ?? sessionSnapshot?.title,
   );
   const composerDisabled = !isLiveSession || controlState.needsTakeover || stream.isStreaming || submitting;
   const missingConversation = Boolean(id)
     && confirmedLive === false
     && !sessionLoading
-    && !sessionDetail;
+    && !fetchedSessionDetail
+    && !sessionSnapshot;
   const bannerTitle = buildBannerTitle({
     isLiveSession,
     controllingThisSurface: controlState.controllingThisSurface,
@@ -400,13 +520,48 @@ export function CompanionConversationPage() {
     : 'calc(env(safe-area-inset-bottom) + 0.75rem)';
 
   useEffect(() => {
-    const scrollElement = scrollRef.current;
-    if (!scrollElement) {
+    if (orderedDeferredResumes.length === 0) {
       return;
     }
 
-    scrollElement.scrollTop = scrollElement.scrollHeight;
-  }, [id, messages, stream.isStreaming]);
+    const intervalHandle = window.setInterval(() => {
+      setDeferredResumeNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalHandle);
+    };
+  }, [orderedDeferredResumes.length]);
+
+  const loadOlderMessages = useCallback(() => {
+    if (!id || sessionLoading || historicalTotalBlocks <= 0) {
+      return;
+    }
+
+    const nextTailBlocks = Math.min(
+      historicalTotalBlocks,
+      historicalTailBlocks + COMPANION_HISTORICAL_TAIL_BLOCKS_STEP,
+    );
+    if (nextTailBlocks <= historicalTailBlocks) {
+      return;
+    }
+
+    capturePrependRestore();
+    setHistoricalTailBlocks(nextTailBlocks);
+  }, [capturePrependRestore, historicalTailBlocks, historicalTotalBlocks, id, sessionLoading]);
+
+  const handleScroll = useCallback(() => {
+    syncScrollStateFromDom();
+
+    const el = scrollRef.current;
+    if (!el || sessionLoading || !historicalHasOlderBlocks) {
+      return;
+    }
+
+    if (el.scrollTop <= COMPANION_HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX) {
+      loadOlderMessages();
+    }
+  }, [historicalHasOlderBlocks, loadOlderMessages, sessionLoading, syncScrollStateFromDom]);
 
   useEffect(() => {
     const element = textareaRef.current;
@@ -584,6 +739,37 @@ export function CompanionConversationPage() {
     }
   }, [controlState.needsTakeover, isLiveSession, stream, submitting]);
 
+  const handleResumeConversation = useCallback(async () => {
+    if (!savedConversationSessionFile || resumeBusy) {
+      if (!savedConversationSessionFile) {
+        setActionError('This transcript cannot be resumed because its session file is unavailable.');
+      }
+      return;
+    }
+
+    setResumeBusy(true);
+    setActionError(null);
+
+    try {
+      const resumed = await api.resumeSession(savedConversationSessionFile);
+      setConfirmedLive(true);
+
+      if (resumed.id && resumed.id !== id) {
+        navigate(buildCompanionConversationPath(resumed.id));
+        return;
+      }
+
+      if (selectedPanel) {
+        closePanel();
+      }
+      stream.reconnect();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setResumeBusy(false);
+    }
+  }, [closePanel, id, navigate, resumeBusy, savedConversationSessionFile, selectedPanel, stream]);
+
   const handleSend = useCallback(async () => {
     const text = draft.trim();
     if (!id || (!text && attachments.length === 0) || composerDisabled) {
@@ -653,9 +839,18 @@ export function CompanionConversationPage() {
               type="button"
               onClick={() => openPanel('actions')}
               aria-label="Open conversation actions"
-              className="inline-flex h-10 w-10 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+              className="relative inline-flex h-10 w-10 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
               style={COMPANION_TOUCH_BUTTON_STYLE}
             >
+              {showStatusIndicators ? (
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'absolute right-2 top-2 h-2.5 w-2.5 rounded-full',
+                    hasReadyDeferredResumes || scheduledTaskSummary.tone === 'warning' ? 'bg-warning' : 'bg-accent',
+                  )}
+                />
+              ) : null}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M4 7h16" />
                 <path d="M4 12h16" />
@@ -672,11 +867,64 @@ export function CompanionConversationPage() {
           {actionError || stream.error ? (
             <p className="mt-2 text-[11px] text-danger">{actionError ?? stream.error}</p>
           ) : null}
+          {showStatusIndicators ? (
+            <div className="mt-3 overflow-hidden rounded-xl bg-surface">
+              {orderedDeferredResumes.length > 0 ? (
+                <div className="px-3 py-2.5">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Deferred</p>
+                  <p className={cx(
+                    'mt-1 text-[12px] leading-relaxed',
+                    hasReadyDeferredResumes ? 'text-warning' : 'text-secondary',
+                  )}>
+                    {deferredResumeIndicatorText}
+                  </p>
+                </div>
+              ) : null}
+              {orderedDeferredResumes.length > 0 && scheduledTaskSummary.indicatorText ? (
+                <div className="h-px bg-border-subtle" aria-hidden="true" />
+              ) : null}
+              {scheduledTaskSummary.indicatorText ? (
+                <Link
+                  to={COMPANION_TASKS_PATH}
+                  className="flex items-start justify-between gap-3 px-3 py-2.5 transition-colors hover:bg-elevated/40"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Tasks</p>
+                    <p className={cx(
+                      'mt-1 text-[12px] leading-relaxed',
+                      scheduledTaskSummary.tone === 'warning' ? 'text-warning' : 'text-secondary',
+                    )}>
+                      {scheduledTaskSummary.indicatorText}
+                    </p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto py-3 sm:py-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto py-3 sm:py-4">
         <div className="mx-auto w-full max-w-4xl">
+          {historicalHasOlderBlocks && messages.length > 0 ? (
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-base/95 px-3 py-2 backdrop-blur sm:px-4">
+              <div className="min-w-0 text-[11px] text-secondary">
+                Showing the latest <span className="font-medium text-primary">{messages.length}</span> of{' '}
+                <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
+              </div>
+              <button
+                type="button"
+                onClick={() => loadOlderMessages()}
+                disabled={sessionLoading}
+                className="ui-action-button shrink-0 px-2 py-1 text-[10px]"
+              >
+                {sessionLoading ? 'Loading older…' : `Load ${Math.min(COMPANION_HISTORICAL_TAIL_BLOCKS_STEP, messageIndexOffset)} older`}
+              </button>
+            </div>
+          ) : null}
           {messages.length === 0 && (sessionLoading || confirmedLive === null) ? (
             <p className="px-3 text-[13px] text-dim sm:px-4">Loading conversation…</p>
           ) : messages.length === 0 ? (
@@ -744,6 +992,26 @@ export function CompanionConversationPage() {
             <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.875rem)]">
               {selectedPanel === 'actions' ? (
                 <div className="-mx-1 divide-y divide-border-subtle">
+                  {canResumeConversation ? (
+                    <button
+                      type="button"
+                      onClick={() => { void handleResumeConversation(); }}
+                      disabled={resumeBusy}
+                      className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface disabled:cursor-default disabled:opacity-45"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[14px] font-medium text-accent">
+                          {resumeBusy ? 'Resuming…' : 'Resume conversation'}
+                        </p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-secondary">
+                          Bring this saved transcript back to life so you can reply from the companion.
+                        </p>
+                      </div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
+                        <path d="m9 6 6 6-6 6" />
+                      </svg>
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => handleConversationArchivedState(conversationInWorkspace)}
@@ -793,6 +1061,19 @@ export function CompanionConversationPage() {
                       <path d="m9 6 6 6-6 6" />
                     </svg>
                   </button>
+                  <Link
+                    to={COMPANION_TASKS_PATH}
+                    onClick={closePanel}
+                    className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-primary">Scheduled tasks</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">{scheduledTaskSummary.actionText}</p>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </Link>
                 </div>
               ) : selectedPanel === 'todos' ? (
                 <CompanionConversationTodos
@@ -962,6 +1243,24 @@ export function CompanionConversationPage() {
                   </div>
                 )}
               </div>
+            </div>
+          ) : canResumeConversation ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => { void handleResumeConversation(); }}
+                disabled={resumeBusy}
+                className="ui-pill ui-pill-solid-accent flex w-full items-center justify-center gap-2 px-4 py-3 text-[13px] disabled:cursor-default disabled:opacity-60"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 8h10" />
+                  <path d="m9 4 4 4-4 4" />
+                </svg>
+                {resumeBusy ? 'Resuming…' : 'Resume conversation'}
+              </button>
+              <p className="text-[12px] leading-relaxed text-secondary">
+                Resume this transcript to reply from this device, or <Link to={COMPANION_CONVERSATIONS_PATH} className="text-accent">start a new live conversation</Link> from the companion list.
+              </p>
             </div>
           ) : (
             <p className="text-[12px] leading-relaxed text-secondary">
