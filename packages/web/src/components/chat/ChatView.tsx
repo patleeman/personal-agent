@@ -2313,6 +2313,7 @@ interface ChatViewProps {
   scrollContainerRef?: RefObject<HTMLDivElement>;
   focusMessageIndex?: number | null;
   isStreaming?: boolean;
+  pendingStatusLabel?: string | null;
   performanceMode?: ChatViewPerformanceMode;
   layout?: ChatViewLayout;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
@@ -2340,6 +2341,7 @@ export const ChatView = memo(function ChatView({
   scrollContainerRef,
   focusMessageIndex = null,
   isStreaming = false,
+  pendingStatusLabel = null,
   performanceMode = 'default',
   layout = 'default',
   onForkMessage,
@@ -2361,10 +2363,10 @@ export const ChatView = memo(function ChatView({
   resumeConversationLabel = 'resume',
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
-  const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
+  const streamingStatusLabel = pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
   const renderingProfile = CHAT_VIEW_RENDERING_PROFILE[performanceMode];
   const lastBlock = messages[messages.length - 1];
-  const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
+  const showStreamingIndicator = !!streamingStatusLabel && (Boolean(pendingStatusLabel) || !lastBlock || lastBlock.type === 'user');
   const shouldUseContentVisibility = renderItems.length >= renderingProfile.contentVisibilityThreshold;
   const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
 

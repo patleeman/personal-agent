@@ -16,6 +16,7 @@ const LOCAL_PA_CLI_PATH = join(process.cwd(), 'packages', 'cli', 'dist', 'index.
 const REMOTE_BOOTSTRAP_FILE = 'bootstrap-session.jsonl';
 const REMOTE_IDLE_STOP_DELAY_MS = 60_000;
 const REMOTE_MIRROR_SYNC_TTL_MS = 5_000;
+const remoteMirrorSyncInflight = new Map<string, Promise<RemoteConversationMirrorSyncTelemetry>>();
 
 interface QueuedPromptPreview {
   id: string;
@@ -628,7 +629,7 @@ async function syncMirrorFromRemote(entry: RemoteLiveEntry): Promise<void> {
   remoteMirrorLastSyncedAt.set(entry.conversationId, Date.now());
 }
 
-export async function syncRemoteConversationMirror(options: { profile: string; conversationId: string; force?: boolean }): Promise<RemoteConversationMirrorSyncTelemetry> {
+async function syncRemoteConversationMirrorNow(options: { profile: string; conversationId: string; force?: boolean }): Promise<RemoteConversationMirrorSyncTelemetry> {
   const startedAt = process.hrtime.bigint();
   const liveEntry = remoteRegistry.get(options.conversationId);
   if (liveEntry) {
@@ -686,6 +687,21 @@ export async function syncRemoteConversationMirror(options: { profile: string; c
     status: 'synced-binding',
     durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
   };
+}
+
+export function syncRemoteConversationMirror(options: { profile: string; conversationId: string; force?: boolean }): Promise<RemoteConversationMirrorSyncTelemetry> {
+  const inflightKey = `${options.conversationId}::${options.force ? 'force' : 'default'}`;
+  const inflight = remoteMirrorSyncInflight.get(inflightKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = syncRemoteConversationMirrorNow(options)
+    .finally(() => {
+      remoteMirrorSyncInflight.delete(inflightKey);
+    });
+  remoteMirrorSyncInflight.set(inflightKey, request);
+  return request;
 }
 
 function scheduleIdleStop(entry: RemoteLiveEntry): void {

@@ -5,7 +5,7 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -94,6 +94,7 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const conversationProjectsCache = new Map<string, ConversationProjectLinks>();
 
 export function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
@@ -108,6 +109,26 @@ export function resolveConversationLiveSession(input: {
   confirmedLive: boolean | null;
 }): boolean {
   return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
+}
+
+export function resolveConversationPendingStatusLabel(input: {
+  isLiveSession: boolean;
+  hasExecutionTarget: boolean;
+  hasVisibleSessionDetail: boolean;
+}): string {
+  if (input.isLiveSession) {
+    return 'Working…';
+  }
+
+  if (input.hasExecutionTarget) {
+    return 'Connecting to remote workspace…';
+  }
+
+  if (input.hasVisibleSessionDetail) {
+    return 'Resuming…';
+  }
+
+  return 'Sending…';
 }
 
 export function shouldShowMissingConversationState(input: {
@@ -1117,7 +1138,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
-  const realMessages = useMemo<MessageBlock[] | undefined>(() => {
+  const computedMessages = useMemo<MessageBlock[] | undefined>(() => {
     if (isLiveSession) {
       const liveMessages = stream.hasSnapshot
         ? visibleStreamBlocks
@@ -1129,12 +1150,60 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     return visibleSessionDetail ? baseMessages : undefined;
   }, [baseMessages, isLiveSession, pendingInitialPrompt, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
-  const historicalBlockOffset = stream.hasSnapshot
+  const computedHistoricalBlockOffset = stream.hasSnapshot
     ? stream.blockOffset
     : (visibleSessionDetail?.blockOffset ?? 0);
-  const historicalTotalBlocks = stream.hasSnapshot
+  const computedHistoricalTotalBlocks = stream.hasSnapshot
     ? stream.totalBlocks
-    : (visibleSessionDetail?.totalBlocks ?? realMessages?.length ?? 0);
+    : (visibleSessionDetail?.totalBlocks ?? computedMessages?.length ?? 0);
+  const [stableTranscriptState, setStableTranscriptState] = useState<{
+    conversationId: string;
+    messages: MessageBlock[];
+    historicalBlockOffset: number;
+    historicalTotalBlocks: number;
+  } | null>(null);
+
+  useEffect(() => {
+    setStableTranscriptState(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || !computedMessages || computedMessages.length === 0) {
+      return;
+    }
+
+    setStableTranscriptState((current) => {
+      if (
+        current
+        && current.conversationId === id
+        && current.messages === computedMessages
+        && current.historicalBlockOffset === computedHistoricalBlockOffset
+        && current.historicalTotalBlocks === computedHistoricalTotalBlocks
+      ) {
+        return current;
+      }
+
+      return {
+        conversationId: id,
+        messages: computedMessages,
+        historicalBlockOffset: computedHistoricalBlockOffset,
+        historicalTotalBlocks: computedHistoricalTotalBlocks,
+      };
+    });
+  }, [computedHistoricalBlockOffset, computedHistoricalTotalBlocks, computedMessages, id]);
+
+  const preservedTranscriptState = id && stableTranscriptState?.conversationId === id
+    ? stableTranscriptState
+    : null;
+  const realMessages = computedMessages && computedMessages.length > 0
+    ? computedMessages
+    : preservedTranscriptState?.messages;
+  const historicalBlockOffset = computedMessages && computedMessages.length > 0
+    ? computedHistoricalBlockOffset
+    : (preservedTranscriptState?.historicalBlockOffset ?? computedHistoricalBlockOffset);
+  const historicalTotalBlocks = computedMessages && computedMessages.length > 0
+    ? computedHistoricalTotalBlocks
+    : (preservedTranscriptState?.historicalTotalBlocks ?? computedHistoricalTotalBlocks);
   const historicalHasOlderBlocks = historicalBlockOffset > 0;
   const showHistoricalLoadMore = historicalHasOlderBlocks;
   const messageIndexOffset = historicalBlockOffset;
@@ -1526,6 +1595,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pinnedInitialPromptTailKeyRef.current = null;
   }, [draft, id]);
 
+  const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingAssistantStatusLabel(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!stream.isStreaming) {
+      return;
+    }
+
+    setPendingAssistantStatusLabel(null);
+  }, [stream.isStreaming]);
+
   const prevStreamingRef = useRef(false);
   const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
@@ -1566,10 +1649,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return api.conversationProjects(id);
   }, [id]);
   const {
-    data: conversationProjects,
+    data: conversationProjectsData,
     refetch: refetchConversationProjects,
   } = useApi(conversationProjectsFetcher, id ?? 'no-conversation');
+  const conversationProjects = conversationProjectsData ?? (id ? conversationProjectsCache.get(id) ?? null : null);
   const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
+
+  useEffect(() => {
+    if (!id || !conversationProjectsData) {
+      return;
+    }
+
+    conversationProjectsCache.set(id, conversationProjectsData);
+  }, [conversationProjectsData, id]);
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
@@ -3657,6 +3749,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       if (isLiveSession) {
         rememberComposerInput(inputSnapshot);
+        setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
+          isLiveSession,
+          hasExecutionTarget: Boolean(remoteTargetId),
+          hasVisibleSessionDetail: Boolean(visibleSessionDetail),
+        }));
         await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
 
         await refetchConversationProjects({ resetLoading: false });
@@ -3669,9 +3766,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       } else if (visibleSessionDetail) {
         try {
           rememberComposerInput(inputSnapshot);
+          setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
+            isLiveSession: false,
+            hasExecutionTarget: Boolean(remoteTargetId),
+            hasVisibleSessionDetail: true,
+          }));
           await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
           stream.reconnect();
+          setPendingAssistantStatusLabel('Working…');
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
           await refetchConversationProjects({ resetLoading: false });
           emitConversationProjectsChanged(id);
@@ -3681,6 +3784,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           }, 50);
         } catch (error) {
           console.error('Auto-resume failed:', error);
+          setPendingAssistantStatusLabel(null);
           setInput(inputSnapshot);
           setAttachments(pendingImageAttachments);
           setDrawingAttachments(pendingDrawingAttachments);
@@ -3689,6 +3793,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
     } catch (error) {
       console.error('Failed to prepare attachments:', error);
+      setPendingAssistantStatusLabel(null);
       setInput(inputSnapshot);
       setAttachments(pendingImageAttachments);
       setDrawingAttachments(pendingDrawingAttachments);
@@ -4032,6 +4137,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               scrollContainerRef={scrollRef}
               focusMessageIndex={requestedFocusMessageIndex}
               isStreaming={stream.isStreaming}
+              pendingStatusLabel={pendingAssistantStatusLabel}
               onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
@@ -4139,6 +4245,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     openConversationFilePath,
+    pendingAssistantStatusLabel,
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,

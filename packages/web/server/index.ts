@@ -1894,6 +1894,75 @@ function parseSessionActivityAt(session: { lastActivityAt?: string; timestamp: s
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+type SessionDetailRouteRemoteMirrorTelemetry = RemoteConversationMirrorSyncTelemetry | { status: 'deferred'; durationMs: 0 };
+type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelemetry>;
+
+function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
+  const candidate = Array.isArray(rawTailBlocks) ? rawTailBlocks[0] : rawTailBlocks;
+  const parsed = typeof candidate === 'string'
+    ? Number.parseInt(candidate, 10)
+    : typeof candidate === 'number'
+      ? candidate
+      : undefined;
+  return Number.isInteger(parsed) && (parsed as number) > 0
+    ? parsed as number
+    : undefined;
+}
+
+function buildNoRemoteConversationMirrorTelemetry(): RemoteConversationMirrorSyncTelemetry {
+  return { status: 'not-remote', durationMs: 0 };
+}
+
+function invalidateSessionsAfterRemoteMirrorSync(remoteMirror: RemoteConversationMirrorSyncTelemetry): void {
+  if (remoteMirror.status === 'synced-live' || remoteMirror.status === 'synced-binding') {
+    invalidateAppTopics('sessions');
+  }
+}
+
+async function readSessionDetailForRoute(input: {
+  conversationId: string;
+  profile: string;
+  tailBlocks?: number;
+}): Promise<{
+  sessionRead: SessionDetailRouteReadResult;
+  remoteMirror: SessionDetailRouteRemoteMirrorTelemetry;
+}> {
+  const remoteMirrorPromise = syncRemoteConversationMirror({
+    profile: input.profile,
+    conversationId: input.conversationId,
+  }).catch((error) => {
+    logWarn('background remote conversation mirror sync failed', {
+      conversationId: input.conversationId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return buildNoRemoteConversationMirrorTelemetry();
+  });
+
+  let sessionRead = readSessionBlocksWithTelemetry(
+    input.conversationId,
+    input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
+  );
+
+  if (sessionRead.detail) {
+    void remoteMirrorPromise.then((remoteMirror) => {
+      invalidateSessionsAfterRemoteMirrorSync(remoteMirror);
+    });
+
+    return {
+      sessionRead,
+      remoteMirror: { status: 'deferred', durationMs: 0 },
+    };
+  }
+
+  const remoteMirror = await remoteMirrorPromise;
+  sessionRead = readSessionBlocksWithTelemetry(
+    input.conversationId,
+    input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
+  );
+
+  return { sessionRead, remoteMirror };
+}
+
 function sortSessionsForCompanionList<T extends {
   isLive?: boolean;
   needsAttention?: boolean;
@@ -5853,22 +5922,12 @@ app.get('/api/sessions/:id', async (req, res) => {
   const startedAt = process.hrtime.bigint();
 
   try {
-    const remoteMirror = await syncRemoteConversationMirror({
-      profile: getCurrentProfile(),
+    const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
+    const { sessionRead, remoteMirror } = await readSessionDetailForRoute({
       conversationId: req.params.id,
-    }).catch(() => ({ status: 'not-remote' as const, durationMs: 0 } satisfies RemoteConversationMirrorSyncTelemetry));
-
-    const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
-    const parsedTailBlocks = typeof rawTailBlocks === 'string'
-      ? Number.parseInt(rawTailBlocks, 10)
-      : typeof rawTailBlocks === 'number'
-        ? rawTailBlocks
-        : undefined;
-    const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
-      ? parsedTailBlocks as number
-      : undefined;
-
-    const sessionRead = readSessionBlocksWithTelemetry(req.params.id, tailBlocks ? { tailBlocks } : undefined);
+      profile: getCurrentProfile(),
+      tailBlocks,
+    });
     if (!sessionRead.detail) { res.status(404).json({ error: 'Session not found' }); return; }
 
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
@@ -11016,22 +11075,12 @@ companionApp.get('/api/sessions/:id', async (req, res) => {
   const startedAt = process.hrtime.bigint();
 
   try {
-    const remoteMirror = await syncRemoteConversationMirror({
-      profile: getCurrentProfile(),
+    const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
+    const { sessionRead, remoteMirror } = await readSessionDetailForRoute({
       conversationId: req.params.id,
-    }).catch(() => ({ status: 'not-remote' as const, durationMs: 0 } satisfies RemoteConversationMirrorSyncTelemetry));
-
-    const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
-    const parsedTailBlocks = typeof rawTailBlocks === 'string'
-      ? Number.parseInt(rawTailBlocks, 10)
-      : typeof rawTailBlocks === 'number'
-        ? rawTailBlocks
-        : undefined;
-    const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
-      ? parsedTailBlocks as number
-      : undefined;
-
-    const sessionRead = readSessionBlocksWithTelemetry(req.params.id, tailBlocks ? { tailBlocks } : undefined);
+      profile: getCurrentProfile(),
+      tailBlocks,
+    });
     if (!sessionRead.detail) {
       res.status(404).json({ error: 'Session not found' });
       return;
