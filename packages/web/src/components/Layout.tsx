@@ -9,7 +9,7 @@ import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRa
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { OPEN_SESSIONS_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
-import { fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
+import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -309,7 +309,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
             fetchConversationBootstrapCached(
               conversationId,
               { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-              `${versions.sessions}:${versions.projects}:${versions.runs}:${versions.executionTargets}`,
+              buildConversationBootstrapVersionKey({ sessionsVersion: versions.sessions }),
             ),
             prefetchConversationRailData({
               conversationId,

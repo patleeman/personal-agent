@@ -17,20 +17,20 @@ describe('streamSnapshotEvents', () => {
 
   it('writes earlier snapshot events before later slow topics finish', async () => {
     const writes: string[] = [];
-    let resolveSessions: (() => void) | null = null;
-    let resolveRuns: (() => void) | null = null;
+    let releaseSessions!: () => void;
+    let releaseRuns!: () => void;
 
     const streamPromise = streamSnapshotEvents(['sessions', 'runs'], {
       buildEvents: async (topic) => {
         if (topic === 'sessions') {
           await new Promise<void>((resolve) => {
-            resolveSessions = resolve;
+            releaseSessions = () => resolve();
           });
           return { topic };
         }
 
         await new Promise<void>((resolve) => {
-          resolveRuns = resolve;
+          releaseRuns = () => resolve();
         });
         return { topic };
       },
@@ -39,13 +39,13 @@ describe('streamSnapshotEvents', () => {
       },
     });
 
-    resolveSessions?.();
+    releaseSessions();
     await Promise.resolve();
     await Promise.resolve();
 
     expect(writes).toEqual(['sessions']);
 
-    resolveRuns?.();
+    releaseRuns();
     await streamPromise;
 
     expect(writes).toEqual(['sessions', 'runs']);

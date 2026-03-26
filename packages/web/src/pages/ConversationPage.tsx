@@ -132,6 +132,12 @@ export function resolveConversationPendingStatusLabel(input: {
   return 'Sending…';
 }
 
+export function shouldRefetchConversationExecutionOnRunsChange(
+  selectedExecutionTargetId: string | null | undefined,
+): boolean {
+  return typeof selectedExecutionTargetId === 'string' && selectedExecutionTargetId.trim().length > 0;
+}
+
 export function shouldShowMissingConversationState(input: {
   draft: boolean;
   conversationId: string | null | undefined;
@@ -1940,17 +1946,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [conversationRunId, draft, versions.runs]);
 
   useInvalidateOnTopics(['executionTargets'], executionTargetsState.refetch);
-
-  useEffect(() => {
-    if (versions.runs === 0) {
-      return;
-    }
-
-    void executionTargetsState.refetch({ resetLoading: false });
-    if (id) {
-      void conversationExecutionState.refetch({ resetLoading: false });
-    }
-  }, [conversationExecutionState.refetch, executionTargetsState.refetch, id, versions.runs]);
+  useInvalidateOnTopics(['executionTargets'], conversationExecutionState.refetch);
 
   const conversationExecutionData = draft
     ? null
@@ -1966,6 +1962,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId
     : (conversationExecutionData?.targetId ?? null);
+
+  useEffect(() => {
+    if (versions.runs === 0) {
+      return;
+    }
+
+    void executionTargetsState.refetch({ resetLoading: false });
+    if (id && shouldRefetchConversationExecutionOnRunsChange(selectedExecutionTargetId)) {
+      void conversationExecutionState.refetch({ resetLoading: false });
+    }
+  }, [conversationExecutionState.refetch, executionTargetsState.refetch, id, selectedExecutionTargetId, versions.runs]);
+
   const selectedExecutionTarget = useMemo<ExecutionTargetSummary | null>(() => {
     if (!selectedExecutionTargetId) {
       return null;
