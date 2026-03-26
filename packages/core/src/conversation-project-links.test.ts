@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from 'fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   addConversationProjectLink,
   getConversationProjectLink,
+  listConversationProjectLinks,
   removeConversationProjectLink,
   resolveConversationLinkPath,
   resolveProfileConversationLinksDir,
@@ -111,5 +112,48 @@ describe('conversation project links', () => {
     });
     expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
       .toEqual(updated);
+  });
+
+  it('returns null instead of throwing when a conversation link file is malformed', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+
+    setConversationProjectLinks({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      relatedProjectIds: ['web-ui'],
+      updatedAt: '2026-03-10T20:00:00.000Z',
+    });
+
+    writeFileSync(
+      resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }),
+      '{"conversationId":"conv-123"',
+    );
+
+    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' })).toBeNull();
+  });
+
+  it('skips malformed conversation link files when listing links', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+
+    setConversationProjectLinks({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-123',
+      relatedProjectIds: ['web-ui'],
+      updatedAt: '2026-03-10T20:00:00.000Z',
+    });
+    writeFileSync(
+      resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-456' }),
+      '{"conversationId":"conv-456"',
+    );
+
+    expect(listConversationProjectLinks({ stateRoot, profile: 'assistant' })).toEqual([
+      {
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-10T20:00:00.000Z',
+        relatedProjectIds: ['web-ui'],
+      },
+    ]);
   });
 });
