@@ -621,6 +621,7 @@ export type AppEventTopic =
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
+  | 'attachments'
   | 'tasks'
   | 'runs'
   | 'automation'

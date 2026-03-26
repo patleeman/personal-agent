@@ -370,7 +370,7 @@ export function createProjectAgentExtension(options: {
                 conversationId,
                 projectId,
               });
-              invalidateAppTopics('projects', 'sessions');
+              invalidateAppTopics('projects');
 
               return {
                 content: [{ type: 'text' as const, text: `Referenced @${projectId} in this conversation.\nCurrent referenced projects: ${formatConversationReferences(document.relatedProjectIds)}` }],
@@ -386,7 +386,7 @@ export function createProjectAgentExtension(options: {
                 conversationId,
                 projectId,
               });
-              invalidateAppTopics('projects', 'sessions');
+              invalidateAppTopics('projects');
 
               return {
                 content: [{ type: 'text' as const, text: `Stopped referencing @${projectId} in this conversation.\nCurrent referenced projects: ${formatConversationReferences(document.relatedProjectIds)}` }],

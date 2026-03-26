@@ -16,6 +16,7 @@ const ALL_TOPICS = [
   'sessions',
   'sessionFiles',
   'artifacts',
+  'attachments',
   'tasks',
   'runs',
   'automation',

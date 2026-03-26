@@ -7,6 +7,7 @@ import {
   resolveConversationAttentionStatePath,
   resolveDeferredResumeStateFile,
   resolveProfileAlertsStateFile,
+  resolveProfileConversationAttachmentsDir,
   resolveExecutionTargetsFilePath,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
@@ -25,6 +26,7 @@ export type AppEventTopic =
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
+  | 'attachments'
   | 'tasks'
   | 'runs'
   | 'automation'
@@ -77,6 +79,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'sessions',
   'sessionFiles',
   'artifacts',
+  'attachments',
   'tasks',
   'runs',
   'automation',
@@ -187,6 +190,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
   const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
+  const conversationAttachmentsDir = resolveProfileConversationAttachmentsDir({ profile });
   const tasksDir = getDurableTasksDir();
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
@@ -222,6 +226,9 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     ],
     artifacts: [
       { path: conversationArtifactsDir, kind: 'directory' },
+    ],
+    attachments: [
+      { path: conversationAttachmentsDir, kind: 'directory' },
     ],
     tasks: [
       { path: tasksDir, kind: 'directory' },
