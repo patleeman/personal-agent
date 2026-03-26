@@ -259,6 +259,86 @@ export function shouldRetrySessionStreamAfterError(status?: number): boolean {
   return status >= 500;
 }
 
+export function isLiveSessionSurfaceRegistered(presence: LiveSessionPresenceState, surfaceId: string): boolean {
+  const normalizedSurfaceId = surfaceId.trim();
+  if (!normalizedSurfaceId) {
+    return false;
+  }
+
+  return presence.surfaces.some((surface) => surface.surfaceId === normalizedSurfaceId);
+}
+
+export function isLiveSessionControlError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.trim().toLowerCase();
+
+  return normalized.includes('controlled by another surface')
+    || normalized.includes('surface id is required to control this conversation')
+    || normalized.includes('no surface is currently controlling this conversation')
+    || normalized.includes('open the conversation on this surface before taking control');
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+export async function waitForSurfaceRegistration(input: {
+  surfaceId: string;
+  hasSurface: () => boolean;
+  reconnect?: () => void;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<boolean> {
+  const normalizedSurfaceId = input.surfaceId.trim();
+  if (!normalizedSurfaceId) {
+    return false;
+  }
+
+  if (input.hasSurface()) {
+    return true;
+  }
+
+  input.reconnect?.();
+
+  const timeoutMs = Math.max(0, input.timeoutMs ?? 1_500);
+  const pollMs = Math.max(10, input.pollMs ?? 50);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await wait(pollMs);
+    if (input.hasSurface()) {
+      return true;
+    }
+  }
+
+  return input.hasSurface();
+}
+
+export async function submitLivePromptWithControlRetry(input: {
+  attemptPrompt: () => Promise<void>;
+  waitForSurfaceRegistration: () => Promise<boolean>;
+  takeOverSessionControl: () => Promise<unknown>;
+}): Promise<void> {
+  try {
+    await input.attemptPrompt();
+    return;
+  } catch (error) {
+    if (!isLiveSessionControlError(error)) {
+      throw error;
+    }
+
+    const surfaceReady = await input.waitForSurfaceRegistration();
+    if (!surfaceReady) {
+      throw error;
+    }
+  }
+
+  await input.takeOverSessionControl();
+  await input.attemptPrompt();
+}
+
 export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean }) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [connectVersion, setConnectVersion] = useState(0);
@@ -269,6 +349,22 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   const stateSessionIdRef = useRef<string | null>(requestedSessionId);
   const surfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const surfaceType = useMemo(() => detectConversationSurfaceType(), []);
+
+  const presenceRef = useRef<LiveSessionPresenceState>(createEmptyLiveSessionPresenceState());
+
+  useEffect(() => {
+    presenceRef.current = state.presence;
+  }, [state.presence]);
+
+  const waitForCurrentSurfaceRegistration = useCallback(() => waitForSurfaceRegistration({
+    surfaceId,
+    hasSurface: () => isLiveSessionSurfaceRegistered(presenceRef.current, surfaceId),
+    reconnect: sessionId
+      ? () => {
+          setConnectVersion((current) => current + 1);
+        }
+      : undefined,
+  }), [sessionId, surfaceId]);
 
   const send = useCallback(async (
     text: string,
@@ -306,7 +402,11 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     }
 
     try {
-      await api.promptSession(sessionId, text, behavior, images, attachmentRefs, surfaceId);
+      await submitLivePromptWithControlRetry({
+        attemptPrompt: () => api.promptSession(sessionId, text, behavior, images, attachmentRefs, surfaceId).then(() => undefined),
+        waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
+        takeOverSessionControl: () => api.takeoverLiveSession(sessionId, surfaceId),
+      });
     } catch (error) {
       if (behavior) {
         setState((s) => removePendingQueueItem(s, behavior, text));
@@ -319,7 +419,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       }
       throw error;
     }
-  }, [sessionId, surfaceId]);
+  }, [sessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
   const abort = useCallback(async () => {
     if (!sessionId) return;
@@ -331,8 +431,13 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       return;
     }
 
+    const surfaceReady = await waitForCurrentSurfaceRegistration();
+    if (!surfaceReady) {
+      throw new Error('Unable to confirm this surface is connected yet. Try again in a moment.');
+    }
+
     await api.takeoverLiveSession(sessionId, surfaceId);
-  }, [sessionId, surfaceId]);
+  }, [sessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
   const reconnect = useCallback(() => {
     if (!sessionId) {
