@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import remarkBreaks from 'remark-breaks';
@@ -2446,6 +2446,28 @@ function buildManagedNoteSearch(locationSearch: string, memoryId: string | null,
   return next ? `?${next}` : '';
 }
 
+function MemoryDocDisclosure({
+  title,
+  summary,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="ui-disclosure" {...(defaultOpen ? { open: true } : {})}>
+      <summary className="ui-disclosure-summary">
+        <span>{title}</span>
+        {summary ? <span className="ui-disclosure-meta">{summary}</span> : null}
+      </summary>
+      <div className="ui-disclosure-body">{children}</div>
+    </details>
+  );
+}
+
 function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relativePath: string | null }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -2479,6 +2501,18 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   const selectedFileSummary = selectedReference?.summary ?? memory?.summary ?? '';
   const selectedFileRelativePath = selectedReference?.relativePath ?? 'INDEX.md';
   const dirty = draft !== savedContent;
+  const linkedNodeCount = (data?.links?.incoming?.length ?? 0) + (data?.links?.outgoing?.length ?? 0);
+  const unresolvedLinkCount = data?.links?.unresolved?.length ?? 0;
+  const linkedSummary = [
+    linkedNodeCount > 0 ? `${linkedNodeCount} linked` : null,
+    unresolvedLinkCount > 0 ? `${unresolvedLinkCount} unresolved` : null,
+  ].filter(Boolean).join(' · ') || 'No links';
+  const fileSummary = `${1 + references.length} ${(1 + references.length) === 1 ? 'file' : 'files'}`;
+  const noteInfoSummary = [
+    memory?.type ?? null,
+    memory?.status ?? null,
+    memory?.updated ? `updated ${timeAgo(memory.updated)}` : null,
+  ].filter(Boolean).join(' · ');
 
   useEffect(() => {
     if (!memory || !relativePath) {
@@ -2631,12 +2665,16 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-border-subtle px-4 py-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="ui-card-title truncate">{selectedFileLabel}</p>
-            <p className="ui-card-meta mt-0.5 font-mono truncate" title={`@${memory.id}`}>@{memory.id} · {selectedFileRelativePath}</p>
+          <div className="min-w-0 space-y-1">
+            <p className="text-[18px] font-semibold tracking-tight text-primary">{selectedFileLabel}</p>
+            {selectedFileSummary && (
+              <p className="max-w-xl text-[13px] leading-relaxed text-secondary">{selectedFileSummary}</p>
+            )}
+            <p className="ui-card-meta font-mono" title={selectedFilePath ?? undefined}>@{memory.id} · {selectedFileRelativePath}</p>
+            {noteInfoSummary && <p className="ui-card-meta">{noteInfoSummary}</p>}
           </div>
           <button
             type="button"
@@ -2644,139 +2682,27 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
             disabled={refreshing || selectedContentLoading}
             className="ui-toolbar-button shrink-0"
           >
-            {refreshing || selectedContentLoading ? 'Refreshing…' : '↻ Refresh'}
+            {refreshing || selectedContentLoading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
 
-        <div className="space-y-2">
-          <div className="ui-detail-row">
-            <span className="ui-detail-label">Note</span>
-            <Link to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
-              @{memory.id}
-            </Link>
-          </div>
-          <div className="ui-detail-row">
-            <span className="ui-detail-label">File</span>
-            <span className="ui-detail-value break-all font-mono">{selectedFilePath}</span>
-          </div>
-          {selectedFileSummary && (
-            <div className="ui-detail-row items-start">
-              <span className="ui-detail-label">Summary</span>
-              <span className="ui-detail-value">{selectedFileSummary}</span>
-            </div>
-          )}
-          {memory.updated && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Updated</span>
-              <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
-            </div>
-          )}
-          {memory.role && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Role</span>
-              <span className="ui-detail-value">{memory.role}</span>
-            </div>
-          )}
-          {memory.type && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Type</span>
-              <span className="ui-detail-value">{memory.type}</span>
-            </div>
-          )}
-          {memory.status && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Status</span>
-              <span className="ui-detail-value">{memory.status}</span>
-            </div>
-          )}
-          {memory.area && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Area</span>
-              <span className="ui-detail-value">{memory.area}</span>
-            </div>
-          )}
-          {memory.parent && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Parent</span>
-              <Link
-                to={`/notes${buildManagedNoteSearch(location.search, memory.parent)}`}
-                className="ui-detail-value text-accent hover:underline"
-              >
-                @{memory.parent}
-              </Link>
-            </div>
-          )}
-          {memory.related && memory.related.length > 0 && (
-            <div className="ui-detail-row items-start">
-              <span className="ui-detail-label">Related</span>
-              <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
-                {memory.related.map((relatedId) => (
-                  <Link
-                    key={relatedId}
-                    to={`/notes${buildManagedNoteSearch(location.search, relatedId)}`}
-                    className="text-accent hover:underline"
-                  >
-                    @{relatedId}
-                  </Link>
-                ))}
-              </span>
-            </div>
-          )}
-          {memory.tags.length > 0 && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Tags</span>
-              <span className="ui-detail-value">{memory.tags.join(' · ')}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4 border-t border-border-subtle pt-4">
-          <NodeLinkList title="Links to" items={data?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-          <NodeLinkList title="Linked from" items={data?.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
-          <UnresolvedNodeLinks ids={data?.links?.unresolved} />
-        </div>
-
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <div className="space-y-1">
-            <p className="ui-section-label">Files in this note</p>
-            <p className="ui-card-meta">`INDEX.md` is the main note. Reference files hold supporting material, and assets stay on disk inside `assets/`.</p>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Link
-              to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`}
-              className={relativePath ? 'ui-toolbar-button' : 'ui-toolbar-button text-accent'}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="ui-segmented-control">
+            <button
+              type="button"
+              onClick={() => setContentMode('preview')}
+              className={contentMode === 'preview' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
             >
-              INDEX.md
-            </Link>
-            {references.map((reference) => (
-              <Link
-                key={reference.path}
-                to={`/notes${buildManagedNoteSearch(location.search, memory.id, reference.relativePath)}`}
-                className={reference.relativePath === relativePath ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
-              >
-                <span className="truncate">{reference.title}</span>
-                <span className="ml-1 truncate text-dim">· {reference.relativePath}</span>
-              </Link>
-            ))}
-            {references.length === 0 && <p className="ui-card-meta">No reference files yet.</p>}
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={() => setContentMode('edit')}
+              className={contentMode === 'edit' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+            >
+              Edit markdown
+            </button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setContentMode('preview')}
-            className={contentMode === 'preview' ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
-          >
-            Preview
-          </button>
-          <button
-            type="button"
-            onClick={() => setContentMode('edit')}
-            className={contentMode === 'edit' ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
-          >
-            Edit markdown
-          </button>
           <button
             type="button"
             onClick={() => { void handleStartConversation(); }}
@@ -2805,27 +2731,15 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
           )}
           {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
         </div>
-
-        <p className="ui-card-meta">
-          {contentMode === 'preview'
-            ? 'Preview mode hides YAML frontmatter so the note reads like a document.'
-            : 'Edit the raw markdown directly. Use Cmd/Ctrl+S to save.'}
-        </p>
-
-        {notice && (
-          <p className={notice.tone === 'danger' ? 'text-[12px] text-danger' : 'text-[12px] text-accent'}>
-            {notice.text}
-          </p>
-        )}
       </div>
 
-      <div className="min-h-0 flex-1 px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         {selectedContentError ? (
           <ErrorState message={`Failed to load file: ${selectedContentError}`} className="px-0 py-0" />
         ) : selectedContentLoading ? (
           <LoadingState label="Loading file…" className="px-0 py-0" />
         ) : contentMode === 'preview' ? (
-          <div className="h-full overflow-y-auto rounded-lg border border-border-default bg-base px-4 py-4">
+          <div className="ui-note-document min-h-[24rem]">
             <RailRenderedMarkdown content={draft} />
           </div>
         ) : (
@@ -2838,10 +2752,143 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
                 void handleSave();
               }
             }}
-            className="h-full min-h-[24rem] w-full resize-none rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60"
+            className="min-h-[28rem] w-full resize-none rounded-2xl border border-border-subtle bg-base px-4 py-4 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
             spellCheck={false}
           />
         )}
+
+        <div className="mt-4 space-y-1">
+          <p className="ui-card-meta">
+            {contentMode === 'preview'
+              ? 'Preview hides YAML frontmatter so the note reads like a document.'
+              : 'Edit the raw markdown directly. Use Cmd/Ctrl+S to save.'}
+          </p>
+          {notice && (
+            <p className={notice.tone === 'danger' ? 'text-[12px] text-danger' : 'text-[12px] text-accent'}>
+              {notice.text}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-5">
+          <MemoryDocDisclosure title="Note info" summary={noteInfoSummary || selectedFileRelativePath}>
+            <div className="ui-detail-list">
+              <div className="ui-detail-row">
+                <span className="ui-detail-label">Note</span>
+                <Link to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
+                  @{memory.id}
+                </Link>
+              </div>
+              {selectedFilePath && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">File</span>
+                  <span className="ui-detail-value break-all font-mono">{selectedFilePath}</span>
+                </div>
+              )}
+              {memory.updated && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Updated</span>
+                  <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
+                </div>
+              )}
+              {memory.role && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Role</span>
+                  <span className="ui-detail-value">{memory.role}</span>
+                </div>
+              )}
+              {memory.type && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Type</span>
+                  <span className="ui-detail-value">{memory.type}</span>
+                </div>
+              )}
+              {memory.status && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Status</span>
+                  <span className="ui-detail-value">{memory.status}</span>
+                </div>
+              )}
+              {memory.area && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Area</span>
+                  <span className="ui-detail-value">{memory.area}</span>
+                </div>
+              )}
+              {memory.parent && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Parent</span>
+                  <Link
+                    to={`/notes${buildManagedNoteSearch(location.search, memory.parent)}`}
+                    className="ui-detail-value text-accent hover:underline"
+                  >
+                    @{memory.parent}
+                  </Link>
+                </div>
+              )}
+              {memory.related && memory.related.length > 0 && (
+                <div className="ui-detail-row items-start">
+                  <span className="ui-detail-label">Related</span>
+                  <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
+                    {memory.related.map((relatedId) => (
+                      <Link
+                        key={relatedId}
+                        to={`/notes${buildManagedNoteSearch(location.search, relatedId)}`}
+                        className="text-accent hover:underline"
+                      >
+                        @{relatedId}
+                      </Link>
+                    ))}
+                  </span>
+                </div>
+              )}
+              {memory.tags.length > 0 && (
+                <div className="ui-detail-row">
+                  <span className="ui-detail-label">Tags</span>
+                  <span className="ui-detail-value">{memory.tags.join(' · ')}</span>
+                </div>
+              )}
+            </div>
+          </MemoryDocDisclosure>
+
+          <MemoryDocDisclosure title="Linked notes" summary={linkedSummary}>
+            <div className="space-y-4">
+              <NodeLinkList title="Links to" items={data?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+              <NodeLinkList title="Linked from" items={data?.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
+              <UnresolvedNodeLinks ids={data?.links?.unresolved} />
+            </div>
+          </MemoryDocDisclosure>
+
+          <MemoryDocDisclosure title="Files" summary={fileSummary} defaultOpen={Boolean(selectedReference)}>
+            <div className="space-y-2">
+              <p className="ui-card-meta">`INDEX.md` is the main note. Reference files hold supporting material, and assets stay on disk inside `assets/`.</p>
+              <div className="space-y-px">
+                <Link
+                  to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`}
+                  className={relativePath ? 'ui-list-row ui-list-row-hover -mx-2 px-3 py-2.5' : 'ui-list-row ui-list-row-selected -mx-2 px-3 py-2.5'}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="ui-row-title">INDEX.md</p>
+                    <p className="ui-row-meta">Main note</p>
+                  </div>
+                </Link>
+                {references.map((reference) => (
+                  <Link
+                    key={reference.path}
+                    to={`/notes${buildManagedNoteSearch(location.search, memory.id, reference.relativePath)}`}
+                    className={reference.relativePath === relativePath ? 'ui-list-row ui-list-row-selected -mx-2 px-3 py-2.5' : 'ui-list-row ui-list-row-hover -mx-2 px-3 py-2.5'}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="ui-row-title truncate">{reference.title}</p>
+                      <p className="ui-row-meta truncate">{reference.relativePath}</p>
+                    </div>
+                  </Link>
+                ))}
+                {references.length === 0 && <p className="ui-card-meta">No reference files yet.</p>}
+              </div>
+            </div>
+          </MemoryDocDisclosure>
+        </div>
       </div>
     </div>
   );
