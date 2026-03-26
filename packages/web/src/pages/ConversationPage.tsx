@@ -82,6 +82,7 @@ import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
 } from '../conversationComposerSubmit';
+import { prependReplyQuoteToPrompt } from '../conversationReplyQuote';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
@@ -840,7 +841,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
-  const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
+  const { alerts, projects, tasks, sessions, setProjects, setSessions, setAlerts = () => {} } = useAppData();
 
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
@@ -1320,6 +1321,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setInputState(next);
   }, [draft, setInputState]);
+  const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -1621,6 +1623,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ?? null;
   }, [id, sessions, visibleSessionDetail]);
   const savedConversationSessionFile = currentSessionMeta?.file ?? null;
+  const activeConversationAlerts = useMemo(
+    () => (alerts?.entries ?? []).filter((entry) => entry.status === 'active' && entry.conversationId === id),
+    [alerts?.entries, id],
+  );
   const orderedDeferredResumes = useMemo(
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
@@ -2309,6 +2315,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
 
+  useEffect(() => {
+    setReplyQuote(null);
+  }, [id]);
+
   // Refresh referenced projects when the agent finishes its run.
   useEffect(() => {
     if (prevStreamingRef.current && !stream.isStreaming) {
@@ -2927,6 +2937,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function acknowledgeConversationAlert(alertId: string) {
+    try {
+      await api.acknowledgeAlert(alertId);
+      const snapshot = await api.alerts();
+      setAlerts(snapshot);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
+  async function dismissConversationAlert(alertId: string) {
+    try {
+      await api.dismissAlert(alertId);
+      const snapshot = await api.alerts();
+      setAlerts(snapshot);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   async function continueDeferredResumesNow() {
     if (!id) {
       return;
@@ -3370,11 +3400,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  const handleReplyToSelection = useCallback((selection: { text: string }) => {
+    if (!selection.text) {
+      return;
+    }
+
+    setReplyQuote(selection.text);
+    setSlashIdx(0);
+    setMentionIdx(0);
+    window.requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el || el.disabled) {
+        return;
+      }
+
+      const end = el.value.length;
+      el.focus();
+      el.setSelectionRange(end, end);
+    });
+  }, []);
+
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
     const pendingImageAttachments = attachments;
     const pendingDrawingAttachments = drawingAttachments;
+    const activeReplyQuote = replyQuote;
     if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
       return;
     }
@@ -3430,7 +3481,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const filePromptImages = await buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
-      const textToSend = slashTextToSend ?? text;
+      const textToSend = prependReplyQuoteToPrompt(slashTextToSend ?? text, activeReplyQuote);
 
       setInput('');
       setAttachments([]);
@@ -3479,6 +3530,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             images: promptImages,
             attachmentRefs,
           });
+          setReplyQuote(null);
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
           clearDraftConversationExecutionTarget();
@@ -3511,6 +3563,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (isLiveSession) {
         rememberComposerInput(inputSnapshot);
         await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+        setReplyQuote(null);
 
         await refetchConversationProjects({ resetLoading: false });
         emitConversationProjectsChanged(id);
@@ -3526,6 +3579,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+          setReplyQuote(null);
           await refetchConversationProjects({ resetLoading: false });
           emitConversationProjectsChanged(id);
           await refetchConversationAttachments();
@@ -3617,11 +3671,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (input.trim().length > 0) {
         rememberComposerInput(input);
       }
-      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
+      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0 || replyQuote) {
         e.preventDefault();
         setInput('');
         setAttachments([]);
         setDrawingAttachments([]);
+        setReplyQuote(null);
       }
       return;
     }
@@ -3888,6 +3943,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
+              onReplyToSelection={handleReplyToSelection}
               onHydrateMessage={hydrateHistoricalBlock}
               hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
               onOpenArtifact={openArtifact}
@@ -4347,6 +4403,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
+            {!draft && activeConversationAlerts.length > 0 && (
+              <div className="border-b border-border-subtle px-3 py-2.5">
+                <div className="flex flex-col gap-2">
+                  {activeConversationAlerts.map((alert) => (
+                    <div key={alert.id} className="rounded-xl border border-warning/40 bg-warning/8 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-warning">Alert</p>
+                          <p className="mt-1 text-[13px] font-semibold text-primary">{alert.title}</p>
+                          <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{alert.body}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                          <button
+                            type="button"
+                            onClick={() => { void acknowledgeConversationAlert(alert.id); }}
+                            className="text-accent transition-colors hover:text-accent/80"
+                          >
+                            acknowledge
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { void dismissConversationAlert(alert.id); }}
+                            className="text-dim transition-colors hover:text-danger"
+                          >
+                            dismiss
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Deferred resume indicator */}
             {!draft && orderedDeferredResumes.length > 0 && (
               <>
@@ -4358,7 +4448,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     )}>
                       ⏰
                     </span>
-                    <span className="shrink-0 text-secondary">Deferred</span>
+                    <span className="shrink-0 text-secondary">Wakeups</span>
                     <span className="truncate text-dim">{deferredResumeIndicatorText}</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 text-[11px]">
@@ -4394,10 +4484,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             )}>
                               {describeDeferredResumeStatus(resume, deferredResumeNowMs)}
                             </span>
-                            <span className="truncate text-primary">{resume.prompt}</span>
+                            <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
                           </div>
                           <div className="mt-0.5 text-[11px] text-dim">
-                            {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
+                            {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Deferred resume'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
                             {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
                           </div>
                         </div>
@@ -4521,6 +4611,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 <p className="mt-1.5 text-[10px] text-dim">
                   Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
                 </p>
+              </div>
+            )}
+
+            {replyQuote && (
+              <div className="border-b border-border-subtle px-3 py-2.5">
+                <div className="flex items-start gap-3 rounded-xl border border-accent/20 bg-accent/8 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">Replying to selection</p>
+                    <p className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">{replyQuote}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setReplyQuote(null); textareaRef.current?.focus(); }}
+                    className="ui-action-button shrink-0 px-2 py-1 text-[11px]"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
             )}
 
