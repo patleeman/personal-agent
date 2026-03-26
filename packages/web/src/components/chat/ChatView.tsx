@@ -2399,6 +2399,7 @@ export const ChatView = memo(function ChatView({
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
   const [replyMenu, setReplyMenu] = useState<ReplySelectionMenuState | null>(null);
   const replyMenuRef = useRef<HTMLDivElement>(null);
+  const replyMenuSyncFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -2479,72 +2480,102 @@ export const ChatView = memo(function ChatView({
     setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
   }, []);
 
+  const syncReplyMenuFromSelection = useCallback(() => {
+    if (typeof window === 'undefined') {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const startScope = findSelectionReplyScopeElement(range.startContainer);
+    const endScope = findSelectionReplyScopeElement(range.endContainer);
+    if (!startScope || startScope !== endScope) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const text = readSelectedTextWithinElement(startScope);
+    if (!text) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const messageIndex = Number.parseInt(startScope.dataset.messageIndex ?? '', 10);
+    if (!Number.isFinite(messageIndex)) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const rect = readSelectionRect(range);
+    if (!rect) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    const x = Math.round(Math.max(28, Math.min(window.innerWidth - 28, rect.left + (rect.width / 2))));
+    const placement = rect.top < 72 ? 'below' : 'above';
+    const y = Math.round(placement === 'above' ? rect.top : rect.bottom);
+    const blockId = startScope.dataset.blockId?.trim() || undefined;
+
+    setReplyMenu((current) => {
+      if (
+        current
+        && current.text === text
+        && current.messageIndex === messageIndex
+        && current.blockId === blockId
+        && current.x === x
+        && current.y === y
+        && current.placement === placement
+      ) {
+        return current;
+      }
+
+      return { text, messageIndex, blockId, x, y, placement };
+    });
+  }, []);
+
+  const scheduleReplyMenuSync = useCallback(() => {
+    if (typeof window === 'undefined' || !onReplyToSelection) {
+      setReplyMenu((current) => (current ? null : current));
+      return;
+    }
+
+    if (replyMenuSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(replyMenuSyncFrameRef.current);
+    }
+
+    replyMenuSyncFrameRef.current = window.requestAnimationFrame(() => {
+      replyMenuSyncFrameRef.current = null;
+      syncReplyMenuFromSelection();
+    });
+  }, [onReplyToSelection, syncReplyMenuFromSelection]);
+
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
       setReplyMenu(null);
       return;
     }
 
-    const syncReplyMenuFromSelection = () => {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-        setReplyMenu((current) => (current ? null : current));
-        return;
-      }
+    document.addEventListener('selectionchange', scheduleReplyMenuSync);
+    window.addEventListener('mouseup', scheduleReplyMenuSync);
+    window.addEventListener('keyup', scheduleReplyMenuSync);
 
-      const range = selection.getRangeAt(0);
-      const startScope = findSelectionReplyScopeElement(range.startContainer);
-      const endScope = findSelectionReplyScopeElement(range.endContainer);
-      if (!startScope || startScope !== endScope) {
-        setReplyMenu((current) => (current ? null : current));
-        return;
-      }
-
-      const text = readSelectedTextWithinElement(startScope);
-      if (!text) {
-        setReplyMenu((current) => (current ? null : current));
-        return;
-      }
-
-      const messageIndex = Number.parseInt(startScope.dataset.messageIndex ?? '', 10);
-      if (!Number.isFinite(messageIndex)) {
-        setReplyMenu((current) => (current ? null : current));
-        return;
-      }
-
-      const rect = readSelectionRect(range);
-      if (!rect) {
-        setReplyMenu((current) => (current ? null : current));
-        return;
-      }
-
-      const x = Math.round(Math.max(28, Math.min(window.innerWidth - 28, rect.left + (rect.width / 2))));
-      const placement = rect.top < 72 ? 'below' : 'above';
-      const y = Math.round(placement === 'above' ? rect.top : rect.bottom);
-      const blockId = startScope.dataset.blockId?.trim() || undefined;
-
-      setReplyMenu((current) => {
-        if (
-          current
-          && current.text === text
-          && current.messageIndex === messageIndex
-          && current.blockId === blockId
-          && current.x === x
-          && current.y === y
-          && current.placement === placement
-        ) {
-          return current;
-        }
-
-        return { text, messageIndex, blockId, x, y, placement };
-      });
-    };
-
-    document.addEventListener('selectionchange', syncReplyMenuFromSelection);
     return () => {
-      document.removeEventListener('selectionchange', syncReplyMenuFromSelection);
+      document.removeEventListener('selectionchange', scheduleReplyMenuSync);
+      window.removeEventListener('mouseup', scheduleReplyMenuSync);
+      window.removeEventListener('keyup', scheduleReplyMenuSync);
+      if (replyMenuSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(replyMenuSyncFrameRef.current);
+        replyMenuSyncFrameRef.current = null;
+      }
     };
-  }, [onReplyToSelection]);
+  }, [onReplyToSelection, scheduleReplyMenuSync]);
 
   useEffect(() => {
     if (!replyMenu || typeof window === 'undefined' || typeof document === 'undefined') {
