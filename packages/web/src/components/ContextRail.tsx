@@ -39,6 +39,7 @@ import {
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
+import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
@@ -77,6 +78,8 @@ import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
 import { MentionTextarea } from './MentionTextarea';
+import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
+import { useNodeMentionItems } from '../useNodeMentionItems';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -2727,6 +2730,12 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
           )}
         </div>
 
+        <div className="space-y-4 border-t border-border-subtle pt-4">
+          <NodeLinkList title="Links to" items={data?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+          <NodeLinkList title="Linked from" items={data?.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
+          <UnresolvedNodeLinks ids={data?.links?.unresolved} />
+        </div>
+
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <div className="space-y-1">
             <p className="ui-section-label">Files in this note</p>
@@ -3029,6 +3038,8 @@ function RailRenderedMarkdown({ content }: { content: string }) {
   const footnoteId = useId();
   const footnotePrefix = `rail-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
   const body = extractRailMarkdownPreviewBody(content).trim();
+  const { data: mentionItems } = useNodeMentionItems();
+  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
 
   if (body.length === 0) {
     return <p className="ui-card-meta">This file has no rendered markdown yet.</p>;
@@ -3041,6 +3052,16 @@ function RailRenderedMarkdown({ content }: { content: string }) {
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
           code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</td>,
         }}
       >
         {body}
@@ -3405,13 +3426,18 @@ function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
             </div>
           ))}
         </div>
+        <div className="space-y-4 border-t border-border-subtle pt-4">
+          <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+          <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
+          <UnresolvedNodeLinks ids={data.links?.unresolved} />
+        </div>
       </div>
     </div>
   );
 }
 
 function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
-  const { data, loading, error, refreshing, refetch } = useApi(() => api.memoryFile(skill.path), `knowledge-skill-rail:${skill.path}`);
+  const { data, loading, error, refreshing, refetch } = useApi(() => api.skillDetail(skill.name), `knowledge-skill-rail:${skill.path}`);
 
   return (
     <div className="flex h-full flex-col">
@@ -3432,8 +3458,15 @@ function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
         </div>
         {skill.description && <p className="ui-card-body">{skill.description}</p>}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {loading && !data ? <LoadingState label="Loading skill…" className="px-0 py-0" /> : error && !data ? <ErrorState message={`Failed to load skill: ${error}`} className="px-0 py-0" /> : data?.content ? <RailMarkdownPreview content={data.content} /> : <p className="ui-card-meta">No skill definition content available.</p>}
+        {data && (
+          <>
+            <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
+            <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
+            <UnresolvedNodeLinks ids={data.links?.unresolved} />
+          </>
+        )}
       </div>
     </div>
   );

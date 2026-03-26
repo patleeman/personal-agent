@@ -1,4 +1,4 @@
-import { useId, type FormEventHandler, type ReactNode } from 'react';
+import { useId, useMemo, type FormEventHandler, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -9,12 +9,18 @@ import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { summarizeActivityPreview, type ProjectActivityItemShape } from './projectDetailState';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, Pill, ToolbarButton } from './ui';
+import { MentionTextarea } from './MentionTextarea';
+import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
+import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
+import { useNodeMentionItems } from '../useNodeMentionItems';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
   const footnoteId = useId();
   const footnotePrefix = `project-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
+  const { data: mentionItems } = useNodeMentionItems();
+  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
 
   return (
     <div className={className ?? 'ui-markdown max-w-none text-[14px]'}>
@@ -23,6 +29,16 @@ function ProjectMarkdown({ body, className }: { body: string; className?: string
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
           code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</td>,
         }}
       >
         {body}
@@ -337,9 +353,9 @@ export function ProjectHandoffDocContent({
     <div className="max-w-5xl space-y-4">
       {editing ? (
         <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">
-          <textarea
+          <MentionTextarea
             value={content}
-            onChange={(event) => onChange(event.target.value)}
+            onValueChange={onChange}
             className={`${INPUT_CLASS} min-h-[18rem] resize-y font-mono text-[13px] leading-[1.7]`}
             spellCheck={false}
           />
@@ -418,6 +434,30 @@ export function ProjectRecordViewer({
         </form>
       )}
     </>
+  );
+}
+
+export function ProjectNodeLinksContent({
+  links,
+}: {
+  links?: { outgoing: Array<{ kind: 'note' | 'project' | 'skill'; id: string; title: string; summary?: string }>; incoming: Array<{ kind: 'note' | 'project' | 'skill'; id: string; title: string; summary?: string }>; unresolved: string[] };
+}) {
+  return (
+    <div className="max-w-5xl space-y-5">
+      <NodeLinkList
+        title="Links to"
+        items={links?.outgoing}
+        surface="main"
+        emptyText="This project does not reference other nodes yet."
+      />
+      <NodeLinkList
+        title="Linked from"
+        items={links?.incoming}
+        surface="main"
+        emptyText="No other nodes link to this project yet."
+      />
+      <UnresolvedNodeLinks ids={links?.unresolved} />
+    </div>
   );
 }
 

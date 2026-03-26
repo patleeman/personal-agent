@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { CompanionMarkdown } from './CompanionMarkdown';
+import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { COMPANION_NOTES_PATH } from './routes';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -94,6 +95,22 @@ export function CompanionMemoryDetailPage() {
                 ) : (
                   <p className="text-[13px] text-dim">No references attached to this note node.</p>
                 )}
+              </Section>
+
+              <Section title="Relationships">
+                <NodeLinkList
+                  title="Links to"
+                  items={data.links?.outgoing}
+                  surface="companion"
+                  emptyText="This note does not reference other nodes yet."
+                />
+                <NodeLinkList
+                  title="Linked from"
+                  items={data.links?.incoming}
+                  surface="companion"
+                  emptyText="No other nodes link here yet."
+                />
+                <UnresolvedNodeLinks ids={data.links?.unresolved} />
               </Section>
             </div>
           ) : null}

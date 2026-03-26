@@ -12,6 +12,7 @@ import {
 } from './projectDetailState';
 import { timeAgo } from '../utils';
 import { Pill, ToolbarButton, cx, type PillTone } from './ui';
+import { MentionTextarea } from './MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
@@ -101,7 +102,7 @@ export function ProjectRecordEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Description</label>
-        <textarea value={value.description} onChange={(event) => onChange({ description: event.target.value })} className={TEXTAREA_CLASS} />
+        <MentionTextarea value={value.description} onValueChange={(description) => onChange({ description })} className={TEXTAREA_CLASS} />
       </div>
 
       <div className="space-y-1.5">
@@ -116,9 +117,9 @@ export function ProjectRecordEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">List summary</label>
-        <textarea
+        <MentionTextarea
           value={value.summary}
-          onChange={(event) => onChange({ summary: event.target.value })}
+          onValueChange={(summary) => onChange({ summary })}
           className={TEXTAREA_CLASS}
           placeholder="Used in project lists and compact previews."
         />
@@ -126,23 +127,23 @@ export function ProjectRecordEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Goal</label>
-        <textarea value={value.goal} onChange={(event) => onChange({ goal: event.target.value })} className={TEXTAREA_CLASS} />
+        <MentionTextarea value={value.goal} onValueChange={(goal) => onChange({ goal })} className={TEXTAREA_CLASS} />
       </div>
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Acceptance criteria (one per line)</label>
-        <textarea
+        <MentionTextarea
           value={value.acceptanceCriteria}
-          onChange={(event) => onChange({ acceptanceCriteria: event.target.value })}
+          onValueChange={(acceptanceCriteria) => onChange({ acceptanceCriteria })}
           className={TEXTAREA_CLASS}
         />
       </div>
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Plan summary</label>
-        <textarea
+        <MentionTextarea
           value={value.planSummary}
-          onChange={(event) => onChange({ planSummary: event.target.value })}
+          onValueChange={(planSummary) => onChange({ planSummary })}
           className={TEXTAREA_CLASS}
           placeholder="Optional narrative plan before or alongside milestones and tasks."
         />
@@ -150,9 +151,9 @@ export function ProjectRecordEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Completion summary</label>
-        <textarea
+        <MentionTextarea
           value={value.completionSummary}
-          onChange={(event) => onChange({ completionSummary: event.target.value })}
+          onValueChange={(completionSummary) => onChange({ completionSummary })}
           className={TEXTAREA_CLASS}
           placeholder="Optional until the project is complete."
         />
@@ -182,12 +183,12 @@ export function ProjectRecordEditorForm({
       <div className="grid gap-5 xl:grid-cols-2">
         <div className="space-y-1.5">
           <label className="ui-card-meta">Blockers (one per line)</label>
-          <textarea value={value.blockers} onChange={(event) => onChange({ blockers: event.target.value })} className={TEXTAREA_CLASS} />
+          <MentionTextarea value={value.blockers} onValueChange={(blockers) => onChange({ blockers })} className={TEXTAREA_CLASS} />
         </div>
 
         <div className="space-y-1.5">
           <label className="ui-card-meta">Recent progress (one per line)</label>
-          <textarea value={value.recentProgress} onChange={(event) => onChange({ recentProgress: event.target.value })} className={TEXTAREA_CLASS} />
+          <MentionTextarea value={value.recentProgress} onValueChange={(recentProgress) => onChange({ recentProgress })} className={TEXTAREA_CLASS} />
         </div>
       </div>
 
@@ -251,7 +252,7 @@ export function ProjectMilestoneEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Summary</label>
-        <textarea value={value.summary} onChange={(event) => onChange({ summary: event.target.value })} className={TEXTAREA_CLASS} />
+        <MentionTextarea value={value.summary} onValueChange={(summary) => onChange({ summary })} className={TEXTAREA_CLASS} />
       </div>
 
       <label className="flex items-center gap-2 text-[13px] text-secondary">
@@ -583,7 +584,7 @@ export function ProjectNoteEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Body</label>
-        <textarea value={value.body} onChange={(event) => onChange({ body: event.target.value })} className={TEXTAREA_CLASS} />
+        <MentionTextarea value={value.body} onValueChange={(body) => onChange({ body })} className={TEXTAREA_CLASS} />
       </div>
 
       {error && <p className="text-[12px] text-danger">{error}</p>}

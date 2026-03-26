@@ -13,6 +13,7 @@ import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { useReloadState } from '../reloadState';
 import { timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
+import { MentionTextarea } from '../components/MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
@@ -148,10 +149,10 @@ function CreateProjectPanel({
 
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-description">Description</label>
-          <textarea
+          <MentionTextarea
             id="project-description"
             value={description}
-            onChange={(event) => setDescription(event.target.value)}
+            onValueChange={setDescription}
             className={TEXTAREA_CLASS}
             placeholder="Describe the project at a high level."
           />
@@ -170,10 +171,10 @@ function CreateProjectPanel({
 
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-summary">List summary</label>
-          <textarea
+          <MentionTextarea
             id="project-summary"
             value={summary}
-            onChange={(event) => setSummary(event.target.value)}
+            onValueChange={setSummary}
             className={TEXTAREA_CLASS}
             placeholder="Optional. Used in project lists and compact previews."
           />
@@ -181,10 +182,10 @@ function CreateProjectPanel({
 
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-goal">Goal</label>
-          <textarea
+          <MentionTextarea
             id="project-goal"
             value={goal}
-            onChange={(event) => setGoal(event.target.value)}
+            onValueChange={setGoal}
             className={TEXTAREA_CLASS}
             placeholder="What should this project accomplish?"
           />
@@ -192,10 +193,10 @@ function CreateProjectPanel({
 
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-acceptance-criteria">Acceptance criteria (one per line)</label>
-          <textarea
+          <MentionTextarea
             id="project-acceptance-criteria"
             value={acceptanceCriteria}
-            onChange={(event) => setAcceptanceCriteria(event.target.value)}
+            onValueChange={setAcceptanceCriteria}
             className={TEXTAREA_CLASS}
             placeholder="How will you know the project is done?"
           />
@@ -203,10 +204,10 @@ function CreateProjectPanel({
 
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-plan-summary">Plan summary</label>
-          <textarea
+          <MentionTextarea
             id="project-plan-summary"
             value={planSummary}
-            onChange={(event) => setPlanSummary(event.target.value)}
+            onValueChange={setPlanSummary}
             className={TEXTAREA_CLASS}
             placeholder="Optional. Outline the intended approach before you create milestones and tasks."
           />
@@ -311,12 +312,11 @@ export function ProjectsPage() {
     () => api.projectDiagnostics(effectiveViewProfile ? { profile: effectiveViewProfile } : undefined),
     [effectiveViewProfile],
   );
-  const { data, loading, error, refetch } = useApi(projectsFetcher, effectiveViewProfile ? `projects:${effectiveViewProfile}` : 'projects');
+  const { data, loading, error } = useApi(projectsFetcher, effectiveViewProfile ? `projects:${effectiveViewProfile}` : 'projects');
   const {
     data: diagnostics,
     loading: diagnosticsLoading,
     error: diagnosticsError,
-    refetch: refetchDiagnostics,
   } = useApi(diagnosticsFetcher, effectiveViewProfile ? `project-diagnostics:${effectiveViewProfile}` : 'project-diagnostics');
   const { projects: projectSnapshot, setProjects } = useAppData();
 

@@ -20,6 +20,7 @@ import {
 import type { ScheduledTaskDetail, ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
+import { MentionTextarea } from './MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[18rem] resize-y`;
@@ -482,9 +483,9 @@ function TaskEditorForm({
 
       <div className="border-t border-border-subtle pt-4 space-y-1.5">
         <label className="ui-card-meta">Prompt</label>
-        <textarea
+        <MentionTextarea
           value={value.prompt}
-          onChange={(event) => onChange({ prompt: event.target.value })}
+          onValueChange={(prompt) => onChange({ prompt })}
           className={TEXTAREA_CLASS}
         />
       </div>

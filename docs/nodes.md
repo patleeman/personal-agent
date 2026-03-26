@@ -282,6 +282,10 @@ links:
 
 Use markdown links or plain `@id` references inside the body for narrative context.
 
+In the web UI, prose editors support `@` mention autocomplete for node cross-references. Use stable node ids such as `@node-format-migration`, `@tool-agent-browser`, or `@durable-state-model-v2` so references stay durable even if titles change.
+
+The UI also computes backlinks from these durable `@id` references, so note, project, and skill detail views can show both outgoing links and linked-from context.
+
 ## Terminology
 
 Use these terms consistently:

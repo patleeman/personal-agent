@@ -1605,6 +1605,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     projects: projects ?? [],
     tasks: tasks ?? [],
     memoryDocs: memoryData?.memoryDocs ?? [],
+    skills: memoryData?.skills ?? [],
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = draft

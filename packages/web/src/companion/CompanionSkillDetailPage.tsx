@@ -3,7 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
-import type { MemorySkillItem } from '../types';
+import type { SkillDetail } from '../types';
+import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
 import { COMPANION_SKILLS_PATH } from './routes';
 
@@ -16,29 +17,14 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-interface CompanionSkillDetailData {
-  skill: MemorySkillItem;
-  content: string;
-}
-
 export function CompanionSkillDetailPage() {
   const { name } = useParams<{ name: string }>();
-  const fetchSkill = useCallback(async (): Promise<CompanionSkillDetailData> => {
+  const fetchSkill = useCallback(async (): Promise<SkillDetail> => {
     if (!name) {
       throw new Error('Missing skill name.');
     }
 
-    const memory = await api.memory();
-    const skill = memory.skills.find((entry) => entry.name === name);
-    if (!skill) {
-      throw new Error(`Skill not found: ${name}`);
-    }
-
-    const file = await api.memoryFile(skill.path);
-    return {
-      skill,
-      content: file.content,
-    };
+    return api.skillDetail(name);
   }, [name]);
   const { data, loading, refreshing, error, refetch } = useApi(fetchSkill, `companion-skill:${name ?? ''}`);
 
@@ -93,6 +79,22 @@ export function CompanionSkillDetailPage() {
 
               <Section title="Definition">
                 <CompanionMarkdown content={data.content} />
+              </Section>
+
+              <Section title="Relationships">
+                <NodeLinkList
+                  title="Links to"
+                  items={data.links?.outgoing}
+                  surface="companion"
+                  emptyText="This skill does not reference other nodes yet."
+                />
+                <NodeLinkList
+                  title="Linked from"
+                  items={data.links?.incoming}
+                  surface="companion"
+                  emptyText="No other nodes link to this skill yet."
+                />
+                <UnresolvedNodeLinks ids={data.links?.unresolved} />
               </Section>
             </div>
           ) : null}

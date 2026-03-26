@@ -25,6 +25,7 @@ import {
   ProjectCompletionContent,
   ProjectFilesContent,
   ProjectHandoffDocContent,
+  ProjectNodeLinksContent,
   ProjectNotesContent,
   ProjectPlanOverview,
   ProjectRecordViewer,
@@ -247,6 +248,9 @@ export function ProjectDetailPanel({
     ? 'Narrative brief with requirements, plan, and completion notes.'
     : 'No handoff doc yet.';
   const projectRecordPreview = record.summary.trim() || record.repoRoot?.trim() || 'Structured metadata and raw state.yaml.';
+  const linksPreview = ((project.links?.incoming.length ?? 0) + (project.links?.outgoing.length ?? 0)) > 0
+    ? `${project.links?.outgoing.length ?? 0} outgoing · ${project.links?.incoming.length ?? 0} backlinks`
+    : 'No node relationships yet.';
   const notesPreview = project.noteCount > 0
     ? `${project.noteCount} durable ${project.noteCount === 1 ? 'note' : 'notes'} across decisions, questions, and checkpoints.`
     : 'No notes yet.';
@@ -1160,6 +1164,18 @@ export function ProjectDetailPanel({
           onRawProjectSubmit={saveRawProject}
           showSummary={false}
         />
+      </DetailSection>
+
+      <DetailSection
+        id="project-links"
+        title="Relationships"
+        meta={`${project.links?.outgoing.length ?? 0} outgoing · ${project.links?.incoming.length ?? 0} backlinks`}
+        collapsible
+        defaultOpen={false}
+        collapsedPreview={linksPreview}
+        resetKey={record.id}
+      >
+        <ProjectNodeLinksContent links={project.links} />
       </DetailSection>
 
       <DetailSection
