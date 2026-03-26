@@ -470,7 +470,7 @@ export function CompanionLayout() {
           ) : (
             <div className="flex h-full items-center justify-center px-5 py-8">
               <div className="w-full max-w-sm rounded-[28px] border border-border-subtle bg-surface/80 px-5 py-6 shadow-[0_18px_80px_rgba(15,23,42,0.18)]">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Companion</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Personal Agent</p>
                 <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this device</h1>
                 <p className="mt-2 text-[13px] leading-relaxed text-secondary">
                   Generate a pairing code from the local desktop web UI, or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>, then enter it here to unlock the restricted companion service.
@@ -518,7 +518,7 @@ export function CompanionLayout() {
             <div className="border-b border-border-subtle px-4 pb-4 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Companion</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Personal Agent</p>
                   <h2 className="mt-2 text-[22px] font-semibold tracking-tight text-primary">Menu</h2>
                 </div>
                 <button

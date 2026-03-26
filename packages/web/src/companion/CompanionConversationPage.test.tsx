@@ -166,6 +166,7 @@ describe('syncCompanionConversationWorkspaceLayout', () => {
     expect(syncCompanionConversationWorkspaceLayout(' conv-123 ')).toEqual({
       sessionIds: ['conv-123'],
       pinnedSessionIds: [],
+      archivedSessionIds: [],
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({
       method: 'PATCH',
@@ -173,6 +174,7 @@ describe('syncCompanionConversationWorkspaceLayout', () => {
       body: JSON.stringify({
         sessionIds: ['conv-123'],
         pinnedSessionIds: [],
+        archivedSessionIds: [],
       }),
     }));
   });
