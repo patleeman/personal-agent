@@ -9,7 +9,7 @@ import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRa
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { OPEN_SESSIONS_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
-import { fetchSessionDetailCached } from '../hooks/useSessions';
+import { fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -190,8 +190,10 @@ function useViewportWidth() {
 }
 
 const OPEN_TAB_WARM_TAIL_BLOCKS = 400;
-const OPEN_TAB_WARM_START_DELAY_MS = 150;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 30;
+const OPEN_TAB_WARM_BOOT_DELAY_MS = 2_500;
+const OPEN_TAB_WARM_START_DELAY_MS = 1_500;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 150;
+const OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS = 1;
 
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
@@ -222,8 +224,19 @@ function useWarmOpenConversationTabs(pathname: string): void {
   const { versions } = useAppEvents();
   const { sessions } = useAppData();
   const [layout, setLayout] = useState(() => readConversationLayout());
+  const [warmingEnabled, setWarmingEnabled] = useState(false);
   const activeConversationId = getActiveConversationId(pathname);
   const sessionSignaturesRef = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setWarmingEnabled(true);
+    }, OPEN_TAB_WARM_BOOT_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     function handleConversationLayoutChanged() {
@@ -277,9 +290,10 @@ function useWarmOpenConversationTabs(pathname: string): void {
 
         sessionSignaturesRef.current.set(conversationId, nextSignature);
         return true;
-      });
+      })
+      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
 
-    if (idsToWarm.length === 0) {
+    if (!warmingEnabled || idsToWarm.length === 0) {
       return;
     }
 
@@ -292,7 +306,11 @@ function useWarmOpenConversationTabs(pathname: string): void {
           }
 
           await Promise.allSettled([
-            fetchSessionDetailCached(conversationId, { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS }, versions.sessions),
+            fetchConversationBootstrapCached(
+              conversationId,
+              { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
+              `${versions.sessions}:${versions.projects}:${versions.runs}:${versions.executionTargets}`,
+            ),
             prefetchConversationRailData({
               conversationId,
               sessionsVersion: versions.sessions,
@@ -316,16 +334,17 @@ function useWarmOpenConversationTabs(pathname: string): void {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions, versions.workspace]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.projects, versions.runs, versions.sessions, versions.workspace, warmingEnabled]);
 
   useEffect(() => {
-    if (versions.executionTargets === 0 && versions.runs === 0) {
+    if (!warmingEnabled || (versions.executionTargets === 0 && versions.runs === 0)) {
       return;
     }
 
     const idsToWarm = openConversationIds
       .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
+      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
     if (idsToWarm.length === 0) {
       return;
     }
@@ -353,16 +372,17 @@ function useWarmOpenConversationTabs(pathname: string): void {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions, versions.workspace]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions, versions.workspace, warmingEnabled]);
 
   useEffect(() => {
-    if (versions.automation === 0) {
+    if (!warmingEnabled || versions.automation === 0) {
       return;
     }
 
     const idsToWarm = openConversationIds
       .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
+      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
     if (idsToWarm.length === 0) {
       return;
     }
@@ -384,7 +404,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.automation]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.automation, warmingEnabled]);
 }
 
 export function Layout() {
