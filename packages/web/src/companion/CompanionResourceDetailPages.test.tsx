@@ -75,6 +75,11 @@ describe('companion resource detail pages', () => {
           lastActivityAt: '2026-03-25T00:00:00.000Z',
         }],
         timeline: [],
+        links: {
+          outgoing: [{ kind: 'skill', id: 'tool-agent-browser', title: 'Tool Agent Browser', summary: 'Browser automation.' }],
+          incoming: [{ kind: 'note', id: 'companion-roadmap', title: 'Companion roadmap', summary: 'Related planning note.' }],
+          unresolved: ['missing-node'],
+        },
       },
       loading: false,
       refreshing: false,
@@ -96,6 +101,9 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('Validate the last mile on mobile.');
     expect(html).toContain('Companion todo session');
     expect(html).toContain('/app/conversations/conv-123');
+    expect(html).toContain('Linked from');
+    expect(html).toContain('/app/notes/companion-roadmap');
+    expect(html).toContain('@missing-node');
   });
 
   it('renders memory detail with markdown content and references', () => {
@@ -123,6 +131,11 @@ describe('companion resource detail pages', () => {
           relativePath: 'references/doc.md',
           updated: '2026-03-24T00:00:00.000Z',
         }],
+        links: {
+          outgoing: [{ kind: 'project', id: 'continuous-conversations', title: 'Continuous conversations', summary: 'Project node.' }],
+          incoming: [{ kind: 'note', id: 'notes-overview', title: 'Notes overview', summary: 'Structure note.' }],
+          unresolved: [],
+        },
       },
       loading: false,
       refreshing: false,
@@ -143,6 +156,8 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('Role');
     expect(html).toContain('Reference doc');
     expect(html).toContain('references/doc.md');
+    expect(html).toContain('Relationships');
+    expect(html).toContain('/app/projects/continuous-conversations');
   });
 
   it('renders skill detail with invocation guidance and markdown content', () => {
@@ -158,6 +173,11 @@ describe('companion resource detail pages', () => {
           usedInLastSession: true,
         },
         content: '# Agent Browser\n\nUse this skill for browser automation.',
+        links: {
+          outgoing: [{ kind: 'project', id: 'continuous-conversations', title: 'Continuous conversations', summary: 'Project node.' }],
+          incoming: [{ kind: 'note', id: 'memory-index', title: 'Memory index', summary: 'Top-level knowledge hub.' }],
+          unresolved: ['unknown-skill-ref'],
+        },
       },
       loading: false,
       refreshing: false,
@@ -178,5 +198,7 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('Use in conversation');
     expect(html).toContain('tool-agent-browser');
     expect(html).toContain('Use this skill for browser automation.');
+    expect(html).toContain('unknown-skill-ref');
+    expect(html).toContain('/app/notes/memory-index');
   });
 });

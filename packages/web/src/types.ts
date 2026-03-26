@@ -229,6 +229,7 @@ export interface ProjectDetail {
   artifacts: ProjectFile[];
   linkedConversations: ProjectLinkedConversation[];
   timeline: ProjectTimelineEntry[];
+  links?: NodeLinks;
 }
 
 export interface ScheduledTaskSummary {
@@ -889,6 +890,21 @@ export interface MemoryAgentsItem {
   content?: string;
 }
 
+export type NodeLinkKind = 'note' | 'project' | 'skill';
+
+export interface NodeLinkSummary {
+  kind: NodeLinkKind;
+  id: string;
+  title: string;
+  summary?: string;
+}
+
+export interface NodeLinks {
+  outgoing: NodeLinkSummary[];
+  incoming: NodeLinkSummary[];
+  unresolved: string[];
+}
+
 export interface MemorySkillItem {
   source: string;
   name: string;
@@ -932,6 +948,7 @@ export interface MemoryDocDetail {
   memory: MemoryDocItem;
   content: string;
   references: MemoryReferenceItem[];
+  links?: NodeLinks;
 }
 
 export interface MemoryWorkItem {
@@ -949,6 +966,12 @@ export interface MemoryData {
   agentsMd: MemoryAgentsItem[];
   skills: MemorySkillItem[];
   memoryDocs: MemoryDocItem[];
+}
+
+export interface SkillDetail {
+  skill: MemorySkillItem;
+  content: string;
+  links?: NodeLinks;
 }
 
 export interface ExecutionTargetPathMapping {

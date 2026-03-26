@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
-import { cx } from '../components/ui';
+import { Pill, cx } from '../components/ui';
 import { useApi } from '../hooks';
+import { filterMentionItems, type MentionItem } from '../conversationMentions';
+import { useNodeMentionItems } from '../useNodeMentionItems';
 import {
   ensureConversationTabOpen,
   readConversationLayout,
@@ -257,6 +259,56 @@ function setCompanionConversationPanel(search: string, panel: CompanionConversat
   return next ? `?${next}` : '';
 }
 
+function CompanionMentionMenu({
+  items,
+  query,
+  index,
+  onSelect,
+}: {
+  items: MentionItem[];
+  query: string;
+  index: number;
+  onSelect: (id: string) => void;
+}) {
+  const filtered = filterMentionItems(items, query);
+  if (filtered.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="ui-menu-shell absolute inset-x-0 bottom-full z-10 mb-2 max-h-[18rem] overflow-y-auto py-1.5">
+      <div className="px-3 pt-1 pb-1">
+        <p className="ui-section-label">Mention</p>
+      </div>
+      {filtered.map((item, itemIndex) => {
+        const active = itemIndex === index % filtered.length;
+        return (
+          <button
+            key={`${item.kind}:${item.id}`}
+            type="button"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              onSelect(item.id);
+            }}
+            className={cx(
+              'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
+              active ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50',
+            )}
+          >
+            <Pill tone="muted">{item.kind}</Pill>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-mono text-[12px] text-accent">{item.id}</p>
+              {(item.summary || (item.title && item.title !== item.label)) && (
+                <p className="mt-0.5 truncate text-[12px] text-dim/90">{item.summary || item.title}</p>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function CompanionSlashMenu({
   items,
   index,
@@ -328,6 +380,7 @@ export function CompanionConversationPage() {
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
+  const [mentionIdx, setMentionIdx] = useState(0);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -466,6 +519,7 @@ export function CompanionConversationPage() {
   const trimmedDraft = draft.trim();
   const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
+  const mentionMatch = draft.match(/(^|.*\s)(@[\w-]*)$/);
   const shouldLoadMemoryData = isLiveSession
     && !controlState.needsTakeover
     && draft.trimStart().startsWith('/');
@@ -477,11 +531,18 @@ export function CompanionConversationPage() {
     () => buildCompanionSkillMenuItems(draft, memoryData?.skills ?? []),
     [draft, memoryData?.skills],
   );
+  const { data: nodeMentionItems } = useNodeMentionItems();
+  const companionMentionItems = Array.isArray(nodeMentionItems) ? nodeMentionItems : [];
   const showSlash = !controlState.needsTakeover
     && !stream.isStreaming
     && Boolean(slashInput)
     && draft === slashInput?.command
     && (memoryLoading || slashItems.length > 0);
+  const showMention = !controlState.needsTakeover
+    && !stream.isStreaming
+    && Boolean(mentionMatch)
+    && !showSlash;
+  const mentionQuery = mentionMatch?.[2] ?? '';
   const workspaceSessionIds = useMemo(() => {
     if (!openTabs) {
       return null;
@@ -1117,9 +1178,21 @@ export function CompanionConversationPage() {
               {showSlash ? (
                 <CompanionSlashMenu items={slashItems} index={slashIdx} loading={memoryLoading} onSelect={applySlashItem} />
               ) : null}
+              {showMention ? (
+                <CompanionMentionMenu
+                  items={companionMentionItems}
+                  query={mentionQuery}
+                  index={mentionIdx}
+                  onSelect={(mentionId) => {
+                    setDraft(draft.replace(/@[\w-]*$/, `${mentionId} `));
+                    setMentionIdx(0);
+                    textareaRef.current?.focus();
+                  }}
+                />
+              ) : null}
               <div className={cx(
                 'ui-input-shell overflow-hidden',
-                showSlash ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle',
+                showSlash || showMention ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle',
               )}>
                 <input
                   ref={fileInputRef}
@@ -1171,6 +1244,7 @@ export function CompanionConversationPage() {
                       onChange={(event) => {
                         setDraft(event.target.value);
                         setSlashIdx(0);
+                        setMentionIdx(0);
                       }}
                       onPaste={handlePaste}
                       onKeyDown={(event) => {
@@ -1192,6 +1266,31 @@ export function CompanionConversationPage() {
                             if (selected) {
                               event.preventDefault();
                               applySlashItem(selected);
+                              return;
+                            }
+                          }
+                        }
+
+                        if (showMention) {
+                          const filteredMentions = filterMentionItems(companionMentionItems, mentionQuery);
+                          if (event.key === 'ArrowDown') {
+                            event.preventDefault();
+                            setMentionIdx((current) => current + 1);
+                            return;
+                          }
+
+                          if (event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            setMentionIdx((current) => Math.max(0, current - 1));
+                            return;
+                          }
+
+                          if ((event.key === 'Tab' || event.key === 'Enter') && !event.shiftKey) {
+                            const selected = filteredMentions[mentionIdx % (filteredMentions.length || 1)];
+                            if (selected) {
+                              event.preventDefault();
+                              setDraft(draft.replace(/@[\w-]*$/, `${selected.id} `));
+                              setMentionIdx(0);
                               return;
                             }
                           }

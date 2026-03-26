@@ -11,6 +11,7 @@ import {
 } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
+import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
 import { buildCompanionConversationPath, COMPANION_PROJECTS_PATH } from './routes';
 
@@ -165,6 +166,22 @@ export function CompanionProjectDetailPage() {
                   ))}
                 </Section>
               ) : null}
+
+              <Section title="Relationships">
+                <NodeLinkList
+                  title="Links to"
+                  items={data.links?.outgoing}
+                  surface="companion"
+                  emptyText="This project does not reference other nodes yet."
+                />
+                <NodeLinkList
+                  title="Linked from"
+                  items={data.links?.incoming}
+                  surface="companion"
+                  emptyText="No other nodes link to this project yet."
+                />
+                <UnresolvedNodeLinks ids={data.links?.unresolved} />
+              </Section>
 
               {data.linkedConversations.length > 0 ? (
                 <Section title="Linked conversations">

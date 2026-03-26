@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildMentionItems, filterMentionItems, resolveMentionItems } from './conversationMentions';
 
 describe('conversationMentions', () => {
-  it('builds project, task, knowledge, and per-profile mentions without view scaffolding', () => {
+  it('builds project, task, note, skill, and per-profile mentions without view scaffolding', () => {
     const items = buildMentionItems({
       projects: [{
         id: 'web-ui',
@@ -35,13 +35,20 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
+      skills: [{
+        name: 'tool-agent-browser',
+        description: 'Automate browser flows.',
+        source: 'shared',
+        path: '/tmp/tool-agent-browser/INDEX.md',
+      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
     expect(items.map((item) => `${item.kind}:${item.id}`)).toEqual([
       'project:@web-ui',
       'task:@daily-review',
-      'knowledge:@project-state-model',
+      'note:@project-state-model',
+      'skill:@tool-agent-browser',
       'profile:@assistant',
       'profile:@datadog',
       'profile:@shared',
@@ -66,6 +73,12 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
+      skills: [{
+        name: 'tool-agent-browser',
+        description: 'Automate browser flows.',
+        source: 'shared',
+        path: '/tmp/tool-agent-browser/INDEX.md',
+      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
@@ -73,6 +86,7 @@ describe('conversationMentions', () => {
     expect(filterMentionItems(items, '@state').map((item) => item.id)).toEqual(['@project-state-model']);
     expect(filterMentionItems(items, '@stored').map((item) => item.id)).toEqual(['@project-state-model']);
     expect(filterMentionItems(items, '@assist').map((item) => item.id)).toEqual(['@assistant']);
+    expect(filterMentionItems(items, '@browser').map((item) => item.id)).toEqual(['@tool-agent-browser']);
   });
 
   it('resolves mentioned items in encounter order', () => {
@@ -93,12 +107,19 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
+      skills: [{
+        name: 'tool-agent-browser',
+        description: 'Automate browser flows.',
+        source: 'shared',
+        path: '/tmp/tool-agent-browser/INDEX.md',
+      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
-    expect(resolveMentionItems('Use @assistant with @project-state-model.', items).map((item) => item.id)).toEqual([
+    expect(resolveMentionItems('Use @assistant with @project-state-model and @tool-agent-browser.', items).map((item) => item.id)).toEqual([
       '@assistant',
       '@project-state-model',
+      '@tool-agent-browser',
     ]);
   });
 });

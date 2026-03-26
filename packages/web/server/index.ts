@@ -257,8 +257,6 @@ import {
   getConversationExecutionTarget,
   getConversationProjectLink,
   getExecutionTarget,
-  getDurableAgentsDir,
-  getDurableProfilesDir,
   getSyncRoot,
   getProfilesRoot,
   getStateRoot,
@@ -301,7 +299,6 @@ import {
   deleteExecutionTarget,
 } from '@personal-agent/core';
 import {
-  getRepoDefaultsAgentDir,
   installPackageSource,
   listProfiles,
   materializeProfileToAgentDir,
@@ -358,6 +355,7 @@ import {
   buildProjectSharePackageFileName,
   exportProjectSharePackage,
 } from './projectPackages.js';
+import { readNodeLinks, type NodeLinkKind } from './nodeLinks.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import {
   activateDueDeferredResumesForSessionFile,
@@ -965,6 +963,7 @@ type ActivityListEntry = ActivityEntryWithConversationLinks & {
 
 type ProjectDetailWithProfile = ProjectDetail & {
   profile: string;
+  links: NodeLinks;
   project: ProjectDetail['project'] & {
     profile: string;
   };
@@ -2505,6 +2504,7 @@ function readProjectDetailForProfile(projectId: string, profile = getCurrentProf
   const enriched: ProjectDetailWithProfile = {
     ...detail,
     profile,
+    links: readNodeLinksForProfile('project', detail.project.id, profile),
     project: annotateProjectRecord(detail.project, profile),
     attachments: applyProjectProfile(detail.attachments, profile),
     artifacts: applyProjectProfile(detail.artifacts, profile),
@@ -2513,10 +2513,6 @@ function readProjectDetailForProfile(projectId: string, profile = getCurrentProf
   };
   enriched.timeline = buildProjectTimeline(enriched, profile);
   return enriched;
-}
-
-function readProjectDetailForCurrentProfile(projectId: string): ProjectDetailWithProfile {
-  return readProjectDetailForProfile(projectId, getCurrentProfile());
 }
 
 let processingDeferredResumes = false;
@@ -5734,6 +5730,7 @@ app.post('/api/notes', (req, res) => {
       memory,
       content: readFileSync(created.filePath, 'utf-8'),
       references: [],
+      links: readNodeLinksForCurrentProfile('note', memory.id),
     });
   } catch (err) {
     logError('request handler error', {
@@ -5746,37 +5743,14 @@ app.post('/api/notes', (req, res) => {
 
 app.get('/api/notes/:memoryId', (req, res) => {
   try {
-    const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
-    if (!memory) {
-      res.status(404).json({ error: 'Note not found.' });
-      return;
-    }
-
-    if (!existsSync(memory.path)) {
-      res.status(404).json({ error: 'Note file not found.' });
-      return;
-    }
-
-    const references = loadMemoryPackageReferences(dirname(memory.path)).map((reference) => ({
-      title: reference.title,
-      summary: reference.summary,
-      tags: reference.tags,
-      path: reference.filePath,
-      relativePath: reference.relativePath,
-      updated: reference.updated || undefined,
-    } satisfies MemoryReferenceItem));
-
-    res.json({
-      memory,
-      content: readFileSync(memory.path, 'utf-8'),
-      references,
-    });
+    res.json(readNoteDetail(req.params.memoryId));
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(message === 'Note not found.' || message === 'Note file not found.' ? 404 : 500).json({ error: message });
   }
 });
 
@@ -5796,19 +5770,11 @@ app.post('/api/notes/:memoryId', (req, res) => {
 
     writeFileSync(memory.path, content, 'utf-8');
     const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
-    const references = loadMemoryPackageReferences(dirname(refreshed.path)).map((reference) => ({
-      title: reference.title,
-      summary: reference.summary,
-      tags: reference.tags,
-      path: reference.filePath,
-      relativePath: reference.relativePath,
-      updated: reference.updated || undefined,
-    } satisfies MemoryReferenceItem));
-
     res.json({
       memory: refreshed,
       content,
-      references,
+      references: buildMemoryReferenceItems(refreshed.path),
+      links: readNodeLinksForCurrentProfile('note', refreshed.id),
     });
   } catch (err) {
     logError('request handler error', {
@@ -9417,6 +9383,32 @@ interface MemoryReferenceItem {
   updated?: string;
 }
 
+interface NodeLinkSummary {
+  kind: NodeLinkKind;
+  id: string;
+  title: string;
+  summary?: string;
+}
+
+interface NodeLinks {
+  outgoing: NodeLinkSummary[];
+  incoming: NodeLinkSummary[];
+  unresolved: string[];
+}
+
+interface MemoryDocDetail {
+  memory: MemoryDocItem;
+  content: string;
+  references: MemoryReferenceItem[];
+  links: NodeLinks;
+}
+
+interface SkillDetail {
+  skill: SkillItem;
+  content: string;
+  links: NodeLinks;
+}
+
 interface MemoryWorkItem {
   conversationId: string;
   conversationTitle: string;
@@ -9560,6 +9552,72 @@ function findMemoryDocById(memoryId: string, options: { includeSearchText?: bool
 
   const memoryDocs = listMemoryDocs(options);
   return memoryDocs.find((entry) => entry.id === normalizedId) ?? null;
+}
+
+function buildMemoryReferenceItems(memoryPath: string): MemoryReferenceItem[] {
+  return loadMemoryPackageReferences(dirname(memoryPath)).map((reference) => ({
+    title: reference.title,
+    summary: reference.summary,
+    tags: reference.tags,
+    path: reference.filePath,
+    relativePath: reference.relativePath,
+    updated: reference.updated || undefined,
+  } satisfies MemoryReferenceItem));
+}
+
+function readNodeLinksForCurrentProfile(kind: NodeLinkKind, id: string) {
+  return readNodeLinks({
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+    profile: getCurrentProfile(),
+    kind,
+    id,
+  });
+}
+
+function readNodeLinksForProfile(kind: NodeLinkKind, id: string, profile: string) {
+  return readNodeLinks({
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+    profile,
+    kind,
+    id,
+  });
+}
+
+function readNoteDetail(memoryId: string): MemoryDocDetail {
+  const memory = findMemoryDocById(memoryId, { includeSearchText: true });
+  if (!memory) {
+    throw new Error('Note not found.');
+  }
+
+  if (!existsSync(memory.path)) {
+    throw new Error('Note file not found.');
+  }
+
+  return {
+    memory,
+    content: readFileSync(memory.path, 'utf-8'),
+    references: buildMemoryReferenceItems(memory.path),
+    links: readNodeLinksForCurrentProfile('note', memory.id),
+  };
+}
+
+function readSkillDetailForProfile(skillName: string, profile = getCurrentProfile()): SkillDetail {
+  const skill = listSkillsForProfile(profile).find((entry) => entry.name === skillName);
+  if (!skill) {
+    throw new Error(`Skill not found: ${skillName}`);
+  }
+
+  if (!existsSync(skill.path)) {
+    throw new Error(`Skill file not found: ${skill.path}`);
+  }
+
+  return {
+    skill,
+    content: readFileSync(skill.path, 'utf-8'),
+    links: readNodeLinksForProfile('skill', skill.name, profile),
+  };
 }
 
 function pathIsWithin(pathValue: string, dirValue: string): boolean {
@@ -9855,6 +9913,16 @@ app.get('/api/memory/file', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/skills/:name', (req, res) => {
+  try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
+    res.json(readSkillDetailForProfile(req.params.name, profile));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Skill not found:') || message.startsWith('Skill file not found:') ? 404 : 500).json({ error: message });
   }
 });
 
@@ -11145,35 +11213,21 @@ companionApp.get('/api/memory/file', (req, res) => {
   }
 });
 
+companionApp.get('/api/skills/:name', (req, res) => {
+  try {
+    res.json(readSkillDetailForProfile(req.params.name));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Skill not found:') || message.startsWith('Skill file not found:') ? 404 : 500).json({ error: message });
+  }
+});
+
 companionApp.get('/api/notes/:memoryId', (req, res) => {
   try {
-    const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
-    if (!memory) {
-      res.status(404).json({ error: 'Note not found.' });
-      return;
-    }
-
-    if (!existsSync(memory.path)) {
-      res.status(404).json({ error: 'Note file not found.' });
-      return;
-    }
-
-    const references = loadMemoryPackageReferences(dirname(memory.path)).map((reference) => ({
-      title: reference.title,
-      summary: reference.summary,
-      tags: reference.tags,
-      path: reference.filePath,
-      relativePath: reference.relativePath,
-      updated: reference.updated || undefined,
-    } satisfies MemoryReferenceItem));
-
-    res.json({
-      memory,
-      content: readFileSync(memory.path, 'utf-8'),
-      references,
-    });
+    res.json(readNoteDetail(req.params.memoryId));
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message === 'Note not found.' || message === 'Note file not found.' ? 404 : 500).json({ error: message });
   }
 });
 

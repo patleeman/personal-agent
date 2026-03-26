@@ -99,6 +99,11 @@ Handoff-only completion notes.`,
     ],
     artifacts: [],
     linkedConversations: [],
+    links: {
+      outgoing: [{ kind: 'skill', id: 'tool-agent-browser', title: 'Tool Agent Browser', summary: 'Browser automation.' }],
+      incoming: [{ kind: 'note', id: 'bloodhound-roadmap', title: 'Bloodhound roadmap', summary: 'Related note.' }],
+      unresolved: ['missing-link'],
+    },
     timeline: [
       {
         id: 'timeline-1',
@@ -147,6 +152,9 @@ describe('ProjectDetailPanel', () => {
 
     expect(html).toContain('1 durable note across decisions, questions, and checkpoints.');
     expect(html).not.toContain('Hidden note body that should not render until Notes is expanded.');
+
+    expect(html).toContain('1 outgoing · 1 backlinks');
+    expect(html).not.toContain('Tool Agent Browser');
 
     expect(html).toContain('1 attachment · 0 artifacts');
     expect(html).not.toContain('Dense design notes');
