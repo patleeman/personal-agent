@@ -58,6 +58,16 @@ describe('chat view streaming disclosure', () => {
     ], true)).toBe('Responding…');
   });
 
+  it('renders a pending status indicator immediately even before live streaming starts', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
+      pendingStatusLabel: 'Resuming…',
+      isStreaming: false,
+    }));
+
+    expect(html).toContain('Resuming…');
+  });
+
   it('collapses auto-opened blocks once live streaming ends unless manually overridden', () => {
     expect(resolveDisclosureOpen(true, 'auto')).toBe(true);
     expect(resolveDisclosureOpen(false, 'auto')).toBe(false);

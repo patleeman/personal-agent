@@ -9,6 +9,7 @@ import {
   replaceConversationTitleInSessionList,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
+  resolveConversationPendingStatusLabel,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
@@ -62,6 +63,26 @@ describe('conversation live state helpers', () => {
       hasPendingInitialPrompt: false,
       hasExecutionTarget: false,
     })).toBe(true);
+  });
+
+  it('chooses an immediate pending status label for outbound prompts', () => {
+    expect(resolveConversationPendingStatusLabel({
+      isLiveSession: true,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: true,
+    })).toBe('Working…');
+
+    expect(resolveConversationPendingStatusLabel({
+      isLiveSession: false,
+      hasExecutionTarget: true,
+      hasVisibleSessionDetail: true,
+    })).toBe('Connecting to remote workspace…');
+
+    expect(resolveConversationPendingStatusLabel({
+      isLiveSession: false,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: true,
+    })).toBe('Resuming…');
   });
 
   it('prefers the freshest available conversation title source', () => {
