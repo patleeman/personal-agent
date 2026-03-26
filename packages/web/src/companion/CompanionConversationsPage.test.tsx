@@ -117,7 +117,20 @@ describe('CompanionConversationsPage', () => {
         const data: CompanionConversationListResult = {
           live: [createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' })],
           needsReview: [createSession({ id: 'review-1', title: 'Review me', needsAttention: true, timestamp: '2026-03-24T14:00:00.000Z' })],
-          active: [createSession({ id: 'active-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' })],
+          active: [createSession({
+            id: 'active-1',
+            title: 'Stored transcript',
+            timestamp: '2026-03-24T12:00:00.000Z',
+            deferredResumes: [{
+              id: 'resume-1',
+              sessionFile: '/tmp/active-1.jsonl',
+              prompt: 'Continue later.',
+              dueAt: '2026-03-24T12:30:00.000Z',
+              createdAt: '2026-03-24T12:00:00.000Z',
+              attempts: 0,
+              status: 'ready',
+            }],
+          })],
           archived: [createSession({ id: 'archived-1', title: 'Archived transcript', timestamp: '2026-03-22T12:00:00.000Z' })],
           archivedTotal: 3,
           archivedOffset: 0,
@@ -201,11 +214,14 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Live title from stream');
     expect(html).not.toContain('Review me');
     expect(html).toContain('Stored transcript');
+    expect(html).toContain('Deferred');
+    expect(html).toContain('1 ready now');
     expect(html).not.toContain('Archived transcript');
     expect(html).toContain('Show 3 archived chats');
     expect(html).not.toContain('Load more');
     expect(html).not.toContain('Signed in on Test companion');
     expect(html).toContain('aria-label="Archive conversation"');
+    expect(html).toContain('aria-label="Resume Stored transcript"');
     expect(html).toContain('aria-label="Open conversation"');
     expect(html).toContain('aria-label="Show actions for Stored transcript"');
     expect(html).not.toContain('--Users-patrick-workingdir-personal-agent--');

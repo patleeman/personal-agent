@@ -292,9 +292,11 @@ describe('CompanionConversationPage', () => {
     );
 
     expect(html).toContain('Actions');
+    expect(html).not.toContain('Resume conversation');
     expect(html).toContain('Open conversation');
     expect(html).toContain('Todo list');
     expect(html).toContain('Artifacts');
+    expect(html).toContain('Scheduled tasks');
     expect(html).not.toContain('todos:');
   });
 
@@ -327,5 +329,95 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('todos:');
     expect(html).toContain('read-only');
     expect(html).not.toContain('artifacts: conv-123');
+  });
+
+  it('shows deferred resume and scheduled task indicators and lets the user load older transcript blocks', () => {
+    vi.mocked(useSessionStream).mockReturnValue({
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      hasSnapshot: false,
+      isStreaming: false,
+      error: null,
+      title: null,
+      tokens: null,
+      cost: null,
+      contextUsage: null,
+      pendingQueue: { steering: [], followUp: [] },
+      presence: createPresence({
+        surfaces: [],
+        controllerSurfaceId: null,
+        controllerSurfaceType: null,
+        controllerAcquiredAt: null,
+      }),
+      surfaceId: 'surface-1',
+      takeover: vi.fn(),
+      send: vi.fn(),
+      abort: vi.fn(),
+      reconnect: vi.fn(),
+    });
+    vi.mocked(useSessionDetail).mockReturnValue({
+      detail: createSessionDetail({
+        meta: createSession({ id: 'conv-123', title: 'Saved transcript' }),
+        blocks: [{ id: 'block-1', type: 'text', ts: '2026-03-25T00:00:00.000Z', text: 'saved output' }],
+        blockOffset: 250,
+        totalBlocks: 650,
+      }),
+      loading: false,
+      error: null,
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/app/conversations/conv-123']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: vi.fn() }}>
+            <AppDataContext.Provider value={{
+              activity: null,
+              projects: null,
+              sessions: [createSession({
+                id: 'conv-123',
+                title: 'Saved transcript',
+                deferredResumes: [{
+                  id: 'resume-1',
+                  sessionFile: '/tmp/conv-123.jsonl',
+                  prompt: 'Continue the work later.',
+                  dueAt: '2026-03-25T01:00:00.000Z',
+                  createdAt: '2026-03-25T00:30:00.000Z',
+                  attempts: 0,
+                  status: 'ready',
+                }],
+              })],
+              tasks: [{
+                id: 'morning-brief',
+                filePath: '/tmp/morning-brief.task.md',
+                scheduleType: 'cron',
+                running: true,
+                enabled: true,
+                cron: '0 8 * * *',
+                prompt: 'Summarize the day ahead.',
+              }],
+              runs: null,
+              setActivity: vi.fn(),
+              setProjects: vi.fn(),
+              setSessions: vi.fn(),
+              setTasks: vi.fn(),
+              setRuns: vi.fn(),
+            }}>
+              <Routes>
+                <Route path="/app/conversations/:id" element={<CompanionConversationPage />} />
+              </Routes>
+            </AppDataContext.Provider>
+          </LiveTitlesContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Deferred');
+    expect(html).toContain('1 ready now');
+    expect(html).toContain('Resume conversation');
+    expect(html).toContain('Tasks');
+    expect(html).toContain('1 running');
+    expect(html).toContain('Showing the latest');
+    expect(html).toContain('Load 250 older');
   });
 });

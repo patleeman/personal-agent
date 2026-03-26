@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
+import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { type SseConnectionStatus, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { setConversationArchivedState } from '../sessionTabs';
@@ -29,6 +30,10 @@ function formatSessionActivityAt(session: SessionMeta): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function canResumeCompanionSession(session: SessionMeta): boolean {
+  return !session.isLive && session.file.trim().length > 0;
 }
 
 function formatConnectionStatus(status: SseConnectionStatus): string {
@@ -394,15 +399,19 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   session,
   inWorkspace,
   actionBusy,
+  busyAction,
   actionsRevealed,
   onSetArchived,
+  onResume,
   onRevealActions,
 }: {
   session: SessionMeta;
   inWorkspace: boolean;
   actionBusy: boolean;
+  busyAction: 'archive' | 'resume' | null;
   actionsRevealed: boolean;
   onSetArchived: (sessionId: string, archived: boolean) => void;
+  onResume: (session: SessionMeta) => void;
   onRevealActions: (sessionId: string | null) => void;
 }) {
   const gestureRef = useRef<
@@ -412,8 +421,14 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   >(null);
   const suppressClickRef = useRef(false);
   const flags = buildSessionFlags(session);
+  const deferredResumes = session.deferredResumes ?? [];
+  const deferredResumeText = deferredResumes.length > 0
+    ? buildDeferredResumeIndicatorText(deferredResumes, Date.now())
+    : null;
+  const hasReadyDeferredResumes = deferredResumes.some((resume) => resume.status === 'ready');
   const titleText = getConversationDisplayTitle(session.title);
   const archiveActionLabel = inWorkspace ? 'Archive' : 'Open';
+  const canResume = canResumeCompanionSession(session);
   const formattedMessageCount = SESSION_MESSAGE_COUNT_FORMATTER.format(session.messageCount);
   const messageCountLabel = `${formattedMessageCount} ${session.messageCount === 1 ? 'message' : 'messages'}`;
   const actionsId = `companion-conversation-actions-${session.id}`;
@@ -627,6 +642,15 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
                   ))}
                 </div>
               ) : null}
+              {deferredResumeText ? (
+                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
+                  <span className={cx('shrink-0', hasReadyDeferredResumes ? 'text-warning' : 'text-accent')} aria-hidden="true">⏰</span>
+                  <span className="min-w-0 truncate">
+                    <span className="text-dim">Deferred </span>
+                    <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-secondary'}>{deferredResumeText}</span>
+                  </span>
+                </p>
+              ) : null}
             </div>
 
             <div className="shrink-0 text-right text-[10.5px] text-dim tabular-nums">
@@ -640,6 +664,20 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
             </div>
           </div>
         </Link>
+
+        {canResume ? (
+          <button
+            type="button"
+            onClick={() => onResume(session)}
+            disabled={actionBusy}
+            aria-label={`Resume ${titleText}`}
+            title={`Resume ${titleText}`}
+            className="mt-0.5 inline-flex h-9 shrink-0 select-none items-center justify-center rounded-full border border-accent/25 bg-accent/10 px-3 text-[11px] font-medium text-accent transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:bg-accent/14 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+            style={COMPANION_TOUCH_BUTTON_STYLE}
+          >
+            {busyAction === 'resume' ? 'Resuming…' : 'Resume'}
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -674,8 +712,10 @@ function SessionSection({
   sessions,
   workspaceSessionIds,
   actionBusyId,
+  actionBusyKind,
   revealedActionId,
   onSetArchived,
+  onResume,
   onRevealActions,
   footer,
 }: {
@@ -683,8 +723,10 @@ function SessionSection({
   sessions: SessionMeta[];
   workspaceSessionIds: ReadonlySet<string>;
   actionBusyId: string | null;
+  actionBusyKind: 'archive' | 'resume' | null;
   revealedActionId: string | null;
   onSetArchived: (sessionId: string, archived: boolean) => void;
+  onResume: (session: SessionMeta) => void;
   onRevealActions: (sessionId: string | null) => void;
   footer?: ReactNode;
 }) {
@@ -702,8 +744,10 @@ function SessionSection({
             session={session}
             inWorkspace={workspaceSessionIds.has(session.id)}
             actionBusy={actionBusyId === session.id}
+            busyAction={actionBusyId === session.id ? actionBusyKind : null}
             actionsRevealed={revealedActionId === session.id}
             onSetArchived={onSetArchived}
+            onResume={onResume}
             onRevealActions={onRevealActions}
           />
         ))}
@@ -729,6 +773,7 @@ export function CompanionConversationsPage() {
   } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [actionBusyKind, setActionBusyKind] = useState<'archive' | 'resume' | null>(null);
   const [revealedActionId, setRevealedActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -826,6 +871,7 @@ export function CompanionConversationsPage() {
 
     setRevealedActionId((current) => (current === sessionId ? null : current));
     setActionBusyId(sessionId);
+    setActionBusyKind('archive');
     setError(null);
     try {
       setConversationArchivedState(sessionId, archived);
@@ -846,8 +892,33 @@ export function CompanionConversationsPage() {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setActionBusyId(null);
+      setActionBusyKind(null);
     }
   }, [actionBusyId, refreshSections, sections?.archived.length]);
+
+  const handleResumeConversation = useCallback(async (session: SessionMeta) => {
+    if (actionBusyId) {
+      return;
+    }
+
+    if (!canResumeCompanionSession(session)) {
+      setError('This transcript cannot be resumed because its session file is unavailable.');
+      return;
+    }
+
+    setActionBusyId(session.id);
+    setActionBusyKind('resume');
+    setError(null);
+    try {
+      const resumed = await api.resumeSession(session.file);
+      navigate(buildCompanionConversationPath(resumed.id));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setActionBusyId(null);
+      setActionBusyKind(null);
+    }
+  }, [actionBusyId, navigate]);
 
   const handleLoadMoreArchived = useCallback(async () => {
     if (!sections || loadingMore || !sections.hasMoreArchived) {
@@ -948,8 +1019,8 @@ export function CompanionConversationsPage() {
             <>
               {focusedConversationCount > 0 ? (
                 <>
-                  <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-                  <SessionSection title="Open tabs" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="Open tabs" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
                 </>
               ) : (
                 <div className="px-4 pt-5">
@@ -983,8 +1054,10 @@ export function CompanionConversationsPage() {
                   sessions={archivedSessions}
                   workspaceSessionIds={workspaceSessionIds}
                   actionBusyId={actionBusyId}
+                  actionBusyKind={actionBusyKind}
                   revealedActionId={revealedActionId}
                   onSetArchived={handleSetArchived}
+                  onResume={handleResumeConversation}
                   onRevealActions={setRevealedActionId}
                   footer={titledSections.archivedTotal > 0 ? (
                     <div className="flex items-center justify-between gap-3">
