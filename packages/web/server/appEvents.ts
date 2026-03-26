@@ -218,7 +218,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: conversationAttentionStateFile, kind: 'file' },
       { path: deferredResumeStateFile, kind: 'file' },
       { path: alertsStateFile, kind: 'file' },
-      { path: conversationLinksDir, kind: 'directory' },
       ...activitySources,
     ],
     sessionFiles: [

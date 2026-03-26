@@ -82,12 +82,18 @@ export function fetchConversationBootstrapCached(
   return request;
 }
 
+export function buildConversationBootstrapVersionKey(input: { sessionsVersion: number }): string {
+  // Bootstrap is only the conversation-open fast path. The page/rail keep projects,
+  // execution, and other side-panel data incremental with their own invalidations.
+  return String(input.sessionsVersion);
+}
+
 export function useConversationBootstrap(
   conversationId: string | undefined,
   options?: { tailBlocks?: number; versionKey?: string },
 ) {
   const { versions } = useAppEvents();
-  const versionKey = options?.versionKey ?? `${versions.sessions}:${versions.projects}:${versions.runs}:${versions.executionTargets}`;
+  const versionKey = options?.versionKey ?? buildConversationBootstrapVersionKey({ sessionsVersion: versions.sessions });
   const [data, setData] = useState<ConversationBootstrapState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -11,6 +11,7 @@ import {
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
   shouldEnableConversationLiveStream,
+  shouldRefetchConversationExecutionOnRunsChange,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
 } from './ConversationPage.js';
@@ -37,6 +38,14 @@ describe('conversation live state helpers', () => {
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: true, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: false, conversationNeedsTakeover: true })).toBe(false);
+  });
+
+  it('only refetches conversation execution on run churn when a remote target is selected', () => {
+    expect(shouldRefetchConversationExecutionOnRunsChange('gpu-box')).toBe(true);
+    expect(shouldRefetchConversationExecutionOnRunsChange('  gpu-box  ')).toBe(true);
+    expect(shouldRefetchConversationExecutionOnRunsChange('')).toBe(false);
+    expect(shouldRefetchConversationExecutionOnRunsChange('   ')).toBe(false);
+    expect(shouldRefetchConversationExecutionOnRunsChange(null)).toBe(false);
   });
 
   it('does not show the missing state until session discovery has loaded', () => {

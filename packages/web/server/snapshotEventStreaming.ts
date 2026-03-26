@@ -27,6 +27,6 @@ export async function streamSnapshotEvents<TTopic, TEvent>(
       continue;
     }
 
-    options.writeEvent(builtEvents);
+    options.writeEvent(builtEvents as TEvent);
   }
 }
