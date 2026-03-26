@@ -7,6 +7,7 @@ import express, { type Request, type Response } from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
+import { streamSnapshotEvents } from './snapshotEventStreaming.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
@@ -1399,6 +1400,8 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
 }
 
 async function startConversationMemoryDistillBatchRecoveryRun(input: { profile: string; runIds: string[] }) {
+  await ensureDaemonAvailable();
+
   const runnerPath = resolveConversationMemoryDistillBatchRecoveryRunnerPath();
   if (!existsSync(runnerPath)) {
     return {
@@ -2885,55 +2888,49 @@ startDeferredResumeLoop();
 startConversationRecovery();
 startInboxCullLoop();
 
-async function buildSnapshotEvents(topics: AppEventTopic[]) {
-  const uniqueTopics = [...new Set(topics)];
-  const events: unknown[] = [];
-
-  for (const topic of uniqueTopics) {
-    switch (topic) {
-      case 'activity': {
-        const snapshot = getActivitySnapshotForCurrentProfile();
-        events.push({ type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount });
-        break;
-      }
-      case 'alerts': {
-        const snapshot = getAlertSnapshotForProfile(getCurrentProfile());
-        events.push({ type: 'alerts_snapshot' as const, entries: snapshot.entries, activeCount: snapshot.activeCount });
-        break;
-      }
-      case 'projects':
-        events.push({ type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfile() });
-        break;
-      case 'sessions':
-        events.push({ type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() });
-        break;
-      case 'tasks':
-        events.push({ type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() });
-        break;
-      case 'runs':
-        events.push({ type: 'runs_snapshot' as const, result: await listDurableRuns() });
-        break;
-      case 'daemon':
-        events.push({ type: 'daemon_snapshot' as const, state: await readDaemonState() });
-        break;
-      case 'sync':
-        events.push({ type: 'sync_snapshot' as const, state: await readSyncState() });
-        break;
-      case 'webUi':
-        events.push({ type: 'web_ui_snapshot' as const, state: readWebUiState() });
-        break;
-      default:
-        break;
+async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknown[]> {
+  switch (topic) {
+    case 'activity': {
+      const snapshot = getActivitySnapshotForCurrentProfile();
+      return [{ type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount }];
     }
+    case 'alerts': {
+      const snapshot = getAlertSnapshotForProfile(getCurrentProfile());
+      return [{ type: 'alerts_snapshot' as const, entries: snapshot.entries, activeCount: snapshot.activeCount }];
+    }
+    case 'projects':
+      return [{ type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfile() }];
+    case 'sessions':
+      return [{ type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() }];
+    case 'tasks':
+      return [{ type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() }];
+    case 'runs':
+      return [{ type: 'runs_snapshot' as const, result: await listDurableRuns() }];
+    case 'daemon':
+      return [{ type: 'daemon_snapshot' as const, state: await readDaemonState() }];
+    case 'sync':
+      return [{ type: 'sync_snapshot' as const, state: await readSyncState() }];
+    case 'webUi':
+      return [{ type: 'web_ui_snapshot' as const, state: readWebUiState() }];
+    default:
+      return [];
   }
-
-  return events;
 }
 
 const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(['activity', 'alerts', 'projects', 'sessions']);
 
-async function buildCompanionSnapshotEvents(topics: AppEventTopic[]) {
-  return buildSnapshotEvents(topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic)));
+async function emitSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: unknown) => void) {
+  await streamSnapshotEvents(topics, {
+    buildEvents: buildSnapshotEventsForTopic,
+    writeEvent,
+  });
+}
+
+async function emitCompanionSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: unknown) => void) {
+  await streamSnapshotEvents(topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic)), {
+    buildEvents: buildSnapshotEventsForTopic,
+    writeEvent,
+  });
 }
 
 function writeSseHeaders(res: Response): void {
@@ -3219,14 +3216,12 @@ app.get('/api/events', (req, res) => {
   };
 
   const writeSnapshotEvents = async (topics: AppEventTopic[]) => {
-    for (const event of await buildSnapshotEvents(topics)) {
-      writeEvent(event);
-    }
+    await emitSnapshotEvents(topics, writeEvent);
   };
 
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
+    await writeSnapshotEvents(['sessions', 'activity', 'projects', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
   });
 
   const heartbeat = setInterval(() => {
@@ -10411,14 +10406,12 @@ companionApp.get('/api/events', (req, res) => {
   };
 
   const writeSnapshotEvents = async (topics: AppEventTopic[]) => {
-    for (const event of await buildCompanionSnapshotEvents(topics)) {
-      writeEvent(event);
-    }
+    await emitCompanionSnapshotEvents(topics, writeEvent);
   };
 
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await writeSnapshotEvents(['activity', 'alerts', 'projects', 'sessions']);
+    await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'projects']);
   });
 
   const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);

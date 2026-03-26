@@ -82,7 +82,7 @@ import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
 } from '../conversationComposerSubmit';
-import { prependReplyQuoteToPrompt } from '../conversationReplyQuote';
+import { insertReplyQuoteIntoComposer } from '../conversationReplyQuote';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
@@ -1376,7 +1376,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setInputState(next);
   }, [draft, id, setInputState]);
-  const [replyQuote, setReplyQuote] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -1577,6 +1576,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerSelectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const composerResizeFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
@@ -1989,6 +1989,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     composerHistoryDraftRef.current = '';
   }, [composerHistoryScopeId]);
 
+  const rememberComposerSelection = useCallback((element?: HTMLTextAreaElement | null) => {
+    const target = element ?? textareaRef.current;
+    if (!target) {
+      return;
+    }
+
+    composerSelectionRef.current = {
+      start: target.selectionStart ?? target.value.length,
+      end: target.selectionEnd ?? target.value.length,
+    };
+  }, []);
+
   const moveComposerCaretToEnd = useCallback(() => {
     window.requestAnimationFrame(() => {
       const el = textareaRef.current;
@@ -1999,6 +2011,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const end = el.value.length;
       el.focus();
       el.setSelectionRange(end, end);
+      composerSelectionRef.current = { start: end, end };
     });
   }, []);
 
@@ -2377,10 +2390,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
-
-  useEffect(() => {
-    setReplyQuote(null);
-  }, [id]);
 
   // Refresh referenced projects when the agent finishes its run.
   useEffect(() => {
@@ -3479,27 +3488,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    setReplyQuote(selection.text);
+    const textarea = textareaRef.current;
+    const activeElement = typeof document === 'undefined' ? null : document.activeElement;
+    const insertionRange = textarea && activeElement === textarea
+      ? {
+          start: textarea.selectionStart ?? input.length,
+          end: textarea.selectionEnd ?? input.length,
+        }
+      : composerSelectionRef.current;
+    const next = insertReplyQuoteIntoComposer(input, selection.text, insertionRange);
+
+    setInput(next.text);
     setSlashIdx(0);
     setMentionIdx(0);
+    composerSelectionRef.current = {
+      start: next.selectionStart,
+      end: next.selectionEnd,
+    };
+
     window.requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el || el.disabled) {
         return;
       }
 
-      const end = el.value.length;
       el.focus();
-      el.setSelectionRange(end, end);
+      el.setSelectionRange(next.selectionStart, next.selectionEnd);
     });
-  }, []);
+  }, [input, setInput]);
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
     const pendingImageAttachments = attachments;
     const pendingDrawingAttachments = drawingAttachments;
-    const activeReplyQuote = replyQuote;
     if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
       return;
     }
@@ -3555,7 +3577,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const filePromptImages = await buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
-      const textToSend = prependReplyQuoteToPrompt(slashTextToSend ?? text, activeReplyQuote);
+      const textToSend = slashTextToSend ?? text;
 
       setInput('');
       setAttachments([]);
@@ -3604,7 +3626,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             images: promptImages,
             attachmentRefs,
           });
-          setReplyQuote(null);
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
           clearDraftConversationExecutionTarget();
@@ -3637,7 +3658,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (isLiveSession) {
         rememberComposerInput(inputSnapshot);
         await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
-        setReplyQuote(null);
 
         await refetchConversationProjects({ resetLoading: false });
         emitConversationProjectsChanged(id);
@@ -3653,7 +3673,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
-          setReplyQuote(null);
           await refetchConversationProjects({ resetLoading: false });
           emitConversationProjectsChanged(id);
           await refetchConversationAttachments();
@@ -3745,12 +3764,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (input.trim().length > 0) {
         rememberComposerInput(input);
       }
-      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0 || replyQuote) {
+      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
         e.preventDefault();
         setInput('');
         setAttachments([]);
         setDrawingAttachments([]);
-        setReplyQuote(null);
       }
       return;
     }
@@ -4697,24 +4715,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
-            {replyQuote && (
-              <div className="border-b border-border-subtle px-3 py-2.5">
-                <div className="flex items-start gap-3 rounded-xl border border-accent/20 bg-accent/8 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">Replying to selection</p>
-                    <p className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">{replyQuote}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setReplyQuote(null); textareaRef.current?.focus(); }}
-                    className="ui-action-button shrink-0 px-2 py-1 text-[11px]"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Textarea */}
             <div className="flex items-center gap-2 px-3 py-2.5">
               <input
@@ -4784,7 +4784,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   <textarea
                     ref={textareaRef}
                     value={input}
-                    onChange={e => { setInput(e.target.value); setSlashIdx(0); setMentionIdx(0); }}
+                    onChange={e => {
+                      setInput(e.target.value);
+                      setSlashIdx(0);
+                      setMentionIdx(0);
+                      rememberComposerSelection(e.target);
+                    }}
+                    onSelect={e => { rememberComposerSelection(e.currentTarget); }}
+                    onClick={e => { rememberComposerSelection(e.currentTarget); }}
+                    onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
+                    onFocus={e => { rememberComposerSelection(e.currentTarget); }}
                     onKeyDown={handleKeyDown}
                     onPaste={handlePaste}
                     rows={1}
