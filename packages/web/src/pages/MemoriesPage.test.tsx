@@ -77,18 +77,19 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('What notes are');
-    expect(html).toContain('+ New note');
-    expect(html).toContain('Browse notes');
-    expect(html).toContain('About this note');
+    expect(html).toContain('Search notes');
+    expect(html).toContain('New note');
+    expect(html).toContain('Selected @memory-index');
     expect(html).toContain('Memory index');
     expect(html).toContain('Writing style');
     expect(html).toContain('Structure note');
-    expect(html).toContain('child of @memory-index');
+    expect(html).toContain('parent @memory-index');
     expect(html).toContain('2 references');
     expect(html).toContain('1 related node');
     expect(html).toContain('href="/notes?note=memory-index"');
     expect(html).toContain('ui-list-row-selected');
+    expect(html).not.toContain('What notes are');
+    expect(html).not.toContain('About this note');
     expect(html).not.toContain('Browse memories');
   });
 
@@ -120,7 +121,7 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Node work queue');
+    expect(html).toContain('Note work queue');
     expect(html).toContain('Refactor memory pipeline');
     expect(html).toContain('run-123');
     expect(html).toContain('/conversations/conv-123?run=run-123');

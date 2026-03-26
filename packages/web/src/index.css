@@ -16,7 +16,25 @@
   }
 
   .ui-toolbar-button {
-    @apply text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md border border-border-default/70 bg-surface/80 px-2.5 py-1.5 text-[11px] font-medium text-secondary shadow-sm transition-colors hover:border-border-default hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base active:bg-panel disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .ui-toolbar-button.text-accent,
+  .ui-toolbar-button.text-accent:hover,
+  .ui-toolbar-button.text-accent:focus-visible {
+    color: rgb(var(--color-accent));
+  }
+
+  .ui-toolbar-button.text-warning,
+  .ui-toolbar-button.text-warning:hover,
+  .ui-toolbar-button.text-warning:focus-visible {
+    color: rgb(var(--color-warning));
+  }
+
+  .ui-toolbar-button.text-danger,
+  .ui-toolbar-button.text-danger:hover,
+  .ui-toolbar-button.text-danger:focus-visible {
+    color: rgb(var(--color-danger));
   }
 
   .ui-icon-button {
@@ -121,7 +139,19 @@
   }
 
   .ui-action-button {
-    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-dim transition-colors hover:bg-elevated hover:text-secondary;
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-border-subtle bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-border-default hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .ui-action-button.text-accent,
+  .ui-action-button.text-accent:hover,
+  .ui-action-button.text-accent:focus-visible {
+    color: rgb(var(--color-accent));
+  }
+
+  .ui-action-button.text-danger,
+  .ui-action-button.text-danger:hover,
+  .ui-action-button.text-danger:focus-visible {
+    color: rgb(var(--color-danger));
   }
 
   .ui-kbd {
@@ -205,15 +235,15 @@
   }
 
   .ui-segmented-control {
-    @apply flex items-center gap-px bg-elevated rounded-lg p-0.5;
+    @apply inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-surface/60 p-1;
   }
 
   .ui-segmented-button {
-    @apply px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors text-dim hover:text-secondary;
+    @apply inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-[11px] font-medium text-dim transition-colors hover:bg-elevated hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
   }
 
   .ui-segmented-button-active {
-    @apply bg-surface text-primary shadow-sm;
+    @apply bg-elevated text-primary shadow-sm;
   }
 
   .ui-list-row {
@@ -254,6 +284,43 @@
 
   .ui-card-meta {
     @apply text-[11px] text-dim;
+  }
+
+  .ui-disclosure {
+    @apply border-t border-border-subtle;
+  }
+
+  .ui-disclosure summary {
+    list-style: none;
+  }
+
+  .ui-disclosure summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ui-disclosure-summary {
+    @apply flex cursor-pointer items-center gap-3 py-3 text-[12px] font-medium text-primary transition-colors hover:text-primary;
+  }
+
+  .ui-disclosure-summary::after {
+    content: '+';
+    @apply ml-auto text-[13px] font-normal text-dim;
+  }
+
+  .ui-disclosure[open] .ui-disclosure-summary::after {
+    content: '–';
+  }
+
+  .ui-disclosure-meta {
+    @apply text-[11px] font-normal text-dim;
+  }
+
+  .ui-disclosure-body {
+    @apply pb-3;
+  }
+
+  .ui-note-document {
+    @apply rounded-2xl border border-border-subtle bg-base/80 px-5 py-5 shadow-sm;
   }
 
   .ui-detail-list {

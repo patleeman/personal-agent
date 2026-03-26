@@ -334,10 +334,11 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Note');
+    expect(html).toContain('Note info');
     expect(html).toContain('Role');
+    expect(html).toContain('Linked notes');
     expect(html).toContain('href="/notes?note=personal-agent-web-ui-preferences"');
-    expect(html).toContain('Files in this note');
+    expect(html).toContain('Files');
     expect(html).toContain('INDEX.md');
     expect(html).toContain('Web UI preferences');
     expect(html).toContain('references/personal-agent-web-ui-preferences.md');
