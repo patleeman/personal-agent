@@ -1132,7 +1132,7 @@ function describeLinkedRun(runId: string): { title: string; detail: string | nul
   }
 
   if (runId.startsWith('conversation-deferred-resume-')) {
-    return { title: 'Deferred Resume', detail: null };
+    return { title: 'Wakeup', detail: null };
   }
 
   if (runId.startsWith('task-')) {

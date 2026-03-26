@@ -1930,7 +1930,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     void resumeDeferredConversation()
       .then(() => {
         if (!cancelled) {
-          showNotice('accent', 'Deferred resume firing…');
+          showNotice('accent', 'Wakeup firing…');
         }
       })
       .catch((error) => {
@@ -2949,7 +2949,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   async function scheduleDeferredResume(delay: string, prompt?: string) {
     if (!id || draft) {
-      showNotice('danger', 'Deferred resume requires an existing conversation.', 4000);
+      showNotice('danger', 'Wakeup requires an existing conversation.', 4000);
       return;
     }
 
@@ -2958,7 +2958,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const result = await api.scheduleDeferredResume(id, { delay, prompt });
       setDeferredResumes(result.resumes);
       setInput('');
-      showNotice('accent', `Deferred resume scheduled for ${describeDeferredResumeStatus(result.resume)}.`);
+      showNotice('accent', `Wakeup scheduled for ${describeDeferredResumeStatus(result.resume)}.`);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -2975,7 +2975,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       const result = await api.fireDeferredResumeNow(id, resumeId);
       setDeferredResumes(result.resumes);
-      showNotice('accent', 'Deferred resume firing…');
+      showNotice('accent', 'Wakeup firing…');
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -2992,7 +2992,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       const result = await api.cancelDeferredResume(id, resumeId);
       setDeferredResumes(result.resumes);
-      showNotice('accent', 'Deferred resume cancelled.');
+      showNotice('accent', 'Wakeup cancelled.');
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -3015,6 +3015,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       await api.dismissAlert(alertId);
       const snapshot = await api.alerts();
       setAlerts(snapshot);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
+  async function snoozeConversationAlert(alertId: string) {
+    try {
+      await api.snoozeAlert(alertId, { delay: '15m' });
+      const snapshot = await api.alerts();
+      setAlerts(snapshot);
+      await refetchDeferredResumes().catch(() => {});
+      showNotice('accent', 'Wakeup snoozed for 15m.');
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -4477,6 +4489,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{alert.body}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                          {alert.wakeupId ? (
+                            <button
+                              type="button"
+                              onClick={() => { void snoozeConversationAlert(alert.id); }}
+                              className="text-accent transition-colors hover:text-accent/80"
+                            >
+                              snooze 15m
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => { void acknowledgeConversationAlert(alert.id); }}
@@ -4549,7 +4570,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
                           </div>
                           <div className="mt-0.5 text-[11px] text-dim">
-                            {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Deferred resume'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
+                            {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
                             {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
                           </div>
                         </div>

@@ -232,7 +232,7 @@ function runMomentLabel(run: DurableRunRecord): string | null {
 }
 
 function isGenericRunSummary(summary: string): boolean {
-  return /^(Live conversation|Background run|Scheduled task|Deferred resume|Remote execution)( · .+)?$/.test(summary)
+  return /^(Live conversation|Background run|Scheduled task|Wakeup|Remote execution)( · .+)?$/.test(summary)
     || summary === 'Conversation node distillation'
     || summary === 'Shell run'
     || summary === 'Workflow'

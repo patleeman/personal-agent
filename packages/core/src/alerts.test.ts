@@ -43,13 +43,14 @@ describe('alerts', () => {
         sourceKind: 'reminder-tool',
         sourceId: 'resume_123',
         conversationId: 'conv-123',
+        wakeupId: 'resume_123',
         requiresAck: true,
       },
     });
 
     expect(countActiveAlerts({ stateRoot, profile: 'datadog' })).toBe(1);
     expect(listAlerts({ stateRoot, profile: 'datadog' })).toEqual([
-      expect.objectContaining({ id: 'reminder-1', title: 'Watch the prod gates', status: 'active' }),
+      expect.objectContaining({ id: 'reminder-1', title: 'Watch the prod gates', status: 'active', wakeupId: 'resume_123' }),
     ]);
   });
 
@@ -70,6 +71,7 @@ describe('alerts', () => {
         createdAt: '2026-03-26T13:00:00.000Z',
         sourceKind: 'reminder-tool',
         sourceId: 'resume_123',
+        wakeupId: 'resume_123',
         requiresAck: true,
       },
     });

@@ -20,6 +20,7 @@ export interface AlertRecord {
   updatedAt: string;
   conversationId?: string;
   activityId?: string;
+  wakeupId?: string;
   sourceKind: string;
   sourceId: string;
   requiresAck: boolean;
@@ -142,6 +143,11 @@ function parseAlertRecord(value: unknown): AlertRecord | undefined {
   const activityId = normalizeOptionalString(value.activityId);
   if (activityId) {
     alert.activityId = activityId;
+  }
+
+  const wakeupId = normalizeOptionalString(value.wakeupId);
+  if (wakeupId) {
+    alert.wakeupId = wakeupId;
   }
 
   const acknowledgedAt = normalizeOptionalString(value.acknowledgedAt);

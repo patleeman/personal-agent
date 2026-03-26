@@ -6,6 +6,8 @@ import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHead
 import { timeAgo } from '../utils';
 import type { AlertEntry } from '../types';
 
+const DEFAULT_ALERT_SNOOZE_DELAY = '15m';
+
 function alertTone(entry: AlertEntry): 'warning' | 'accent' | 'danger' {
   if (entry.kind === 'approval-needed' || entry.kind === 'reminder') {
     return 'warning';
@@ -86,6 +88,19 @@ export function AlertsPage() {
     }
   }, [refresh]);
 
+  const snooze = useCallback(async (id: string) => {
+    setBusyId(id);
+    setError(null);
+    try {
+      await api.snoozeAlert(id, { delay: DEFAULT_ALERT_SNOOZE_DELAY });
+      await refresh();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh]);
+
   const isLoading = alerts === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
 
   return (
@@ -156,6 +171,11 @@ export function AlertsPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   {entry.status === 'active' ? (
                     <>
+                      {entry.wakeupId ? (
+                        <ToolbarButton disabled={busy} onClick={() => { void snooze(entry.id); }}>
+                          {busy ? 'Working…' : 'Snooze 15m'}
+                        </ToolbarButton>
+                      ) : null}
                       <ToolbarButton disabled={busy} onClick={() => { void acknowledge(entry.id); }}>
                         {busy ? 'Working…' : 'Acknowledge'}
                       </ToolbarButton>

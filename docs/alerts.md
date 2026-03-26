@@ -73,6 +73,8 @@ Alerts move through these states:
 
 `active` alerts show up in the Alerts page and the in-app alert overlay.
 
+Wakeup-backed alerts can also be **snoozed**, which acknowledges the current alert and reschedules the underlying wakeup for later.
+
 Acknowledging or dismissing an alert does **not** delete the underlying durable history.
 
 ## Web UI
@@ -82,7 +84,9 @@ The web UI exposes alerts through:
 - the **Alerts** page
 - floating in-app alert cards for active disruptive alerts
 - conversation-local alert banners when a linked conversation is open
-- companion/browser notifications when explicit alert records arrive and permission has already been granted
+- browser/companion notifications when explicit alert records arrive and permission has already been granted
+
+The desktop web UI now also prompts you to enable browser notifications the first time active alerts show up while browser alerts are still off.
 
 ## Practical rule of thumb
 

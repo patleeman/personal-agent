@@ -339,7 +339,7 @@ function OpenTab({
           {deferredResumeText && (
             <p
               className="ui-sidebar-session-meta mt-1 flex items-center gap-1.5 min-w-0"
-              title={`Deferred resume status: ${deferredResumeText}`}
+              title={`Wakeup status: ${deferredResumeText}`}
             >
               <span className={[
                 'shrink-0',
@@ -348,7 +348,7 @@ function OpenTab({
                 <Ico d={PATH.tasks} size={11} />
               </span>
               <span className="min-w-0 truncate">
-                <span className="text-secondary">Deferred </span>
+                <span className="text-secondary">Wakeups </span>
                 <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-accent'}>{deferredResumeText}</span>
               </span>
             </p>

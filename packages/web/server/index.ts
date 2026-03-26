@@ -364,6 +364,7 @@ import {
   dismissAlertForProfile,
   getAlertForProfile,
   getAlertSnapshotForProfile,
+  snoozeAlertForProfile,
 } from './alerts.js';
 import {
   activateDueDeferredResumesForSessionFile,
@@ -3699,6 +3700,23 @@ app.post('/api/alerts/:id/dismiss', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/alerts/:id/snooze', async (req, res) => {
+  try {
+    const { delay, at } = req.body as { delay?: string; at?: string };
+    const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
+    if (!result) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts', 'sessions', 'runs');
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
   }
 });
 
@@ -10510,6 +10528,23 @@ companionApp.post('/api/alerts/:id/dismiss', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/alerts/:id/snooze', async (req, res) => {
+  try {
+    const { delay, at } = req.body as { delay?: string; at?: string };
+    const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
+    if (!result) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('alerts', 'sessions', 'runs');
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(400).json({ error: message });
   }
 });
 

@@ -188,7 +188,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'Check back in after the build finishes.',
-      summary: 'Deferred resume · conv-123',
+      summary: 'Wakeup · conv-123',
     });
 
     expect(getRunConnections(run)).toEqual([
@@ -201,7 +201,7 @@ describe('runPresentation', () => {
       },
       {
         key: 'deferred-resume:resume-123',
-        label: 'Deferred resume',
+        label: 'Wakeup',
         value: 'resume-123',
         detail: 'Check back in after the build finishes.',
       },

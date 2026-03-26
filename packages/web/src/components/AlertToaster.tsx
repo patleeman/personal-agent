@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
 import type { AlertEntry, AlertSnapshot } from '../types';
 import { cx } from './ui';
+
+const DEFAULT_ALERT_SNOOZE_DELAY = '15m';
+
+type BrowserNotificationPermissionState = NotificationPermission | 'unsupported';
 
 function sortAlerts(entries: AlertEntry[]): AlertEntry[] {
   return [...entries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
@@ -29,10 +33,15 @@ function updateSnapshot(snapshot: AlertSnapshot | null, alertId: string, status:
   };
 }
 
+function readNotificationPermission(): BrowserNotificationPermissionState {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+}
+
 export function AlertToaster() {
   const location = useLocation();
   const { alerts, setAlerts = () => {} } = useAppData();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermissionState>(() => readNotificationPermission());
   const previousActiveAlertIdsRef = useRef<Set<string>>(new Set());
   const visibleAlerts = useMemo(() => {
     if (location.pathname.startsWith('/alerts')) {
@@ -41,6 +50,12 @@ export function AlertToaster() {
 
     return sortAlerts((alerts?.entries ?? []).filter((entry) => entry.status === 'active' && entry.severity === 'disruptive')).slice(0, 3);
   }, [alerts?.entries, location.pathname]);
+  const showPermissionPrompt = notificationPermission === 'default' && (alerts?.activeCount ?? 0) > 0;
+
+  const refreshAlerts = useCallback(async () => {
+    const snapshot = await api.alerts();
+    setAlerts(snapshot);
+  }, [setAlerts]);
 
   const acknowledge = useCallback(async (alertId: string) => {
     setBusyId(alertId);
@@ -48,12 +63,11 @@ export function AlertToaster() {
     try {
       await api.acknowledgeAlert(alertId);
     } catch {
-      const snapshot = await api.alerts();
-      setAlerts(snapshot);
+      await refreshAlerts();
     } finally {
       setBusyId(null);
     }
-  }, [alerts, setAlerts]);
+  }, [alerts, refreshAlerts, setAlerts]);
 
   const dismiss = useCallback(async (alertId: string) => {
     setBusyId(alertId);
@@ -61,19 +75,54 @@ export function AlertToaster() {
     try {
       await api.dismissAlert(alertId);
     } catch {
-      const snapshot = await api.alerts();
-      setAlerts(snapshot);
+      await refreshAlerts();
     } finally {
       setBusyId(null);
     }
-  }, [alerts, setAlerts]);
+  }, [alerts, refreshAlerts, setAlerts]);
+
+  const snooze = useCallback(async (alertId: string) => {
+    setBusyId(alertId);
+    setAlerts(updateSnapshot(alerts, alertId, 'acknowledged') ?? { entries: [], activeCount: 0 });
+    try {
+      await api.snoozeAlert(alertId, { delay: DEFAULT_ALERT_SNOOZE_DELAY });
+      await refreshAlerts();
+    } catch {
+      await refreshAlerts();
+    } finally {
+      setBusyId(null);
+    }
+  }, [alerts, refreshAlerts, setAlerts]);
+
+  const requestNotificationPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined' || notificationPermission !== 'default') {
+      return;
+    }
+
+    const nextPermission = await Notification.requestPermission();
+    setNotificationPermission(nextPermission);
+  }, [notificationPermission]);
+
+  useEffect(() => {
+    function syncNotificationPermission() {
+      setNotificationPermission(readNotificationPermission());
+    }
+
+    syncNotificationPermission();
+    window.addEventListener('focus', syncNotificationPermission);
+    document.addEventListener('visibilitychange', syncNotificationPermission);
+    return () => {
+      window.removeEventListener('focus', syncNotificationPermission);
+      document.removeEventListener('visibilitychange', syncNotificationPermission);
+    };
+  }, []);
 
   useEffect(() => {
     const nextActiveAlerts = (alerts?.entries ?? []).filter((entry) => entry.status === 'active' && entry.severity === 'disruptive');
     const previousIds = previousActiveAlertIdsRef.current;
     const nextIds = new Set(nextActiveAlerts.map((entry) => entry.id));
 
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden' && typeof Notification !== 'undefined' && notificationPermission === 'granted') {
       for (const entry of nextActiveAlerts) {
         if (previousIds.has(entry.id)) {
           continue;
@@ -95,16 +144,37 @@ export function AlertToaster() {
     }
 
     previousActiveAlertIdsRef.current = nextIds;
-  }, [alerts?.entries]);
+  }, [alerts?.entries, notificationPermission]);
 
-  if (visibleAlerts.length === 0) {
+  if (visibleAlerts.length === 0 && !showPermissionPrompt) {
     return null;
   }
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3">
+      {showPermissionPrompt ? (
+        <div className="pointer-events-auto rounded-2xl border border-accent/35 bg-surface/98 px-4 py-3 shadow-lg backdrop-blur">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Browser alerts</p>
+          <p className="mt-1 text-[14px] font-semibold text-primary">Enable browser notifications</p>
+          <p className="mt-1 text-[13px] leading-6 text-secondary">
+            Let reminders and scheduled-task callbacks interrupt even when this tab is hidden.
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="ui-toolbar-button"
+              onClick={() => { void requestNotificationPermission(); }}
+            >
+              Enable browser alerts
+            </button>
+            <Link to="/alerts" className="ui-action-button">Open alerts</Link>
+          </div>
+        </div>
+      ) : null}
+
       {visibleAlerts.map((entry) => {
         const busy = busyId === entry.id;
+        const canSnooze = Boolean(entry.wakeupId);
         return (
           <div
             key={entry.id}
@@ -131,6 +201,16 @@ export function AlertToaster() {
               ) : null}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              {canSnooze ? (
+                <button
+                  type="button"
+                  className="ui-toolbar-button"
+                  disabled={busy}
+                  onClick={() => { void snooze(entry.id); }}
+                >
+                  {busy ? 'Working…' : 'Snooze 15m'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="ui-toolbar-button"

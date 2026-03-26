@@ -932,7 +932,7 @@ export function CompanionConversationPage() {
             <div className="mt-3 overflow-hidden rounded-xl bg-surface">
               {orderedDeferredResumes.length > 0 ? (
                 <div className="px-3 py-2.5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Deferred</p>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Wakeups</p>
                   <p className={cx(
                     'mt-1 text-[12px] leading-relaxed',
                     hasReadyDeferredResumes ? 'text-warning' : 'text-secondary',

@@ -183,7 +183,7 @@ describe('Sidebar', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Deferred ');
+    expect(html).toContain('Wakeups ');
     expect(html).toContain('1 scheduled · next in 58s');
   });
 

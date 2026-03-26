@@ -6,6 +6,7 @@ import {
   setActivityConversationLinks,
   upsertAlert,
   writeProfileActivityEntry,
+  type AlertRecord,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
 
@@ -91,6 +92,43 @@ export function buildDeferredResumeAlertId(record: DeferredResumeRecord): string
   return `wakeup-${sanitizeIdSegment(record.id)}`;
 }
 
+function buildAlertRecord(input: {
+  entry: DeferredResumeRecord;
+  profile: string;
+  activityId: string;
+  alertId: string;
+  conversationId: string;
+}): AlertRecord {
+  return {
+    id: input.alertId,
+    profile: input.profile,
+    kind: input.entry.kind === 'task-callback' ? 'task-callback' : input.entry.kind === 'reminder' ? 'reminder' : 'deferred-resume',
+    severity: input.entry.delivery.alertLevel === 'passive' ? 'passive' : 'disruptive',
+    status: 'active',
+    title: buildAlertTitle(input.entry),
+    body: buildAlertBody(input.entry),
+    createdAt: input.entry.readyAt ?? input.entry.dueAt,
+    updatedAt: input.entry.readyAt ?? input.entry.dueAt,
+    conversationId: input.conversationId,
+    activityId: input.activityId,
+    wakeupId: input.entry.id,
+    sourceKind: input.entry.source?.kind ?? 'deferred-resume',
+    sourceId: input.entry.source?.id ?? input.entry.id,
+    requiresAck: input.entry.delivery.requireAck,
+  };
+}
+
+function shouldRefreshExistingAlert(existing: AlertRecord, next: AlertRecord): boolean {
+  if (existing.status !== 'active') {
+    return true;
+  }
+
+  return existing.createdAt !== next.createdAt
+    || existing.title !== next.title
+    || existing.body !== next.body
+    || existing.activityId !== next.activityId;
+}
+
 export function surfaceReadyDeferredResume(input: {
   entry: DeferredResumeRecord;
   repoRoot?: string;
@@ -137,26 +175,19 @@ export function surfaceReadyDeferredResume(input: {
   }
 
   const alertId = buildDeferredResumeAlertId(input.entry);
+  const nextAlert = buildAlertRecord({
+    entry: input.entry,
+    profile: input.profile,
+    activityId,
+    alertId,
+    conversationId,
+  });
   const existing = getAlert({ stateRoot: input.stateRoot, profile: input.profile, alertId });
-  if (!existing) {
+  if (!existing || shouldRefreshExistingAlert(existing, nextAlert)) {
     upsertAlert({
       stateRoot: input.stateRoot,
       profile: input.profile,
-      alert: {
-        id: alertId,
-        profile: input.profile,
-        kind: input.entry.kind === 'task-callback' ? 'task-callback' : input.entry.kind === 'reminder' ? 'reminder' : 'deferred-resume',
-        severity: input.entry.delivery.alertLevel === 'passive' ? 'passive' : 'disruptive',
-        status: 'active',
-        title: buildAlertTitle(input.entry),
-        body: buildAlertBody(input.entry),
-        createdAt: input.entry.readyAt ?? input.entry.dueAt,
-        conversationId,
-        activityId,
-        sourceKind: input.entry.source?.kind ?? 'deferred-resume',
-        sourceId: input.entry.source?.id ?? input.entry.id,
-        requiresAck: input.entry.delivery.requireAck,
-      },
+      alert: nextAlert,
     });
   }
 

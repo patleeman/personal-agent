@@ -646,7 +646,7 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
                 <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
                   <span className={cx('shrink-0', hasReadyDeferredResumes ? 'text-warning' : 'text-accent')} aria-hidden="true">⏰</span>
                   <span className="min-w-0 truncate">
-                    <span className="text-dim">Deferred </span>
+                    <span className="text-dim">Wakeups </span>
                     <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-secondary'}>{deferredResumeText}</span>
                   </span>
                 </p>

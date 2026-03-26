@@ -214,7 +214,7 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Live title from stream');
     expect(html).not.toContain('Review me');
     expect(html).toContain('Stored transcript');
-    expect(html).toContain('Deferred');
+    expect(html).toContain('Wakeups');
     expect(html).toContain('1 ready now');
     expect(html).not.toContain('Archived transcript');
     expect(html).toContain('Show 3 archived chats');

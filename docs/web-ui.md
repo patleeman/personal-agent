@@ -173,7 +173,9 @@ If execution targets are configured, the draft conversation empty state lets you
 
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
-From the wakeup details row, you can also fire a scheduled resume immediately or cancel it.
+Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
+
+When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
 
 Conversations can also carry lightweight automation.
 That automation is an ordered todo list of skill steps for that conversation.

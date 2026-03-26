@@ -9,6 +9,7 @@ import {
   createDeferredResumeConversationRunId,
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
+  markDeferredResumeConversationRunSnoozed,
   scheduleDeferredResumeConversationRun,
 } from './deferred-resume-conversations.js';
 import { readDurableRunEvents, resolveDurableRunPaths, resolveDurableRunsRoot, scanDurableRun } from './store.js';
@@ -156,6 +157,69 @@ describe('deferred resume conversation durable runs', () => {
       'conversation.deferred_resume.retry_scheduled',
       'conversation.deferred_resume.completed',
       'run.completed',
+    ]);
+  });
+
+  it('keeps snoozed deferred resume runs queued without marking them failed', async () => {
+    const daemonRoot = createTempDir('deferred-resume-runs-');
+    const sessionDir = join(daemonRoot, 'sessions');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-789.jsonl');
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-789","timestamp":"2026-03-12T15:00:00.000Z","cwd":"/tmp/workspace"}\n');
+
+    await scheduleDeferredResumeConversationRun({
+      daemonRoot,
+      deferredResumeId: 'resume_789',
+      sessionFile,
+      prompt: 'review the rollout',
+      dueAt: '2026-03-12T15:10:00.000Z',
+      createdAt: '2026-03-12T15:00:00.000Z',
+    });
+
+    await markDeferredResumeConversationRunReady({
+      daemonRoot,
+      deferredResumeId: 'resume_789',
+      sessionFile,
+      prompt: 'review the rollout',
+      dueAt: '2026-03-12T15:10:00.000Z',
+      createdAt: '2026-03-12T15:00:00.000Z',
+      readyAt: '2026-03-12T15:10:00.000Z',
+      conversationId: 'conv-789',
+    });
+
+    await markDeferredResumeConversationRunSnoozed({
+      daemonRoot,
+      deferredResumeId: 'resume_789',
+      sessionFile,
+      prompt: 'review the rollout',
+      dueAt: '2026-03-12T15:25:00.000Z',
+      createdAt: '2026-03-12T15:00:00.000Z',
+      conversationId: 'conv-789',
+      snoozedUntil: '2026-03-12T15:25:00.000Z',
+    });
+
+    const runId = createDeferredResumeConversationRunId('resume_789');
+    expect(scanDurableRun(resolveDurableRunsRoot(daemonRoot), runId)).toMatchObject({
+      recoveryAction: 'resume',
+      status: expect.objectContaining({
+        status: 'queued',
+        completedAt: undefined,
+        lastError: undefined,
+      }),
+      checkpoint: expect.objectContaining({
+        step: 'deferred-resume.snoozed',
+        payload: expect.objectContaining({
+          dueAt: '2026-03-12T15:25:00.000Z',
+        }),
+      }),
+    });
+
+    const eventTypes = readDurableRunEvents(resolveDurableRunPaths(resolveDurableRunsRoot(daemonRoot), runId).eventsPath).map((event) => event.type);
+    expect(eventTypes).toEqual([
+      'run.created',
+      'conversation.deferred_resume.scheduled',
+      'conversation.deferred_resume.ready',
+      'conversation.deferred_resume.snoozed',
     ]);
   });
 
