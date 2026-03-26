@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
@@ -110,6 +110,11 @@ function memoryWorkItemHref(item: MemoryWorkItem): string {
     : `${base}?run=${encodeURIComponent(item.runId)}`;
 }
 
+function canRetryMemoryWorkItem(item: MemoryWorkItem): boolean {
+  return !item.runId.startsWith('state:')
+    && (item.status === 'failed' || item.status === 'interrupted');
+}
+
 function formatReferenceCount(count: number | undefined): string {
   const normalized = count ?? 0;
   return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
@@ -124,6 +129,47 @@ function formatRelatedCount(related: string[] | undefined): string | null {
   return `${normalized} related ${normalized === 1 ? 'package' : 'packages'}`;
 }
 
+function MemoryWorkQueueRow({
+  item,
+  retrying,
+  retryDisabled,
+  onRetry,
+}: {
+  item: MemoryWorkItem;
+  retrying: boolean;
+  retryDisabled: boolean;
+  onRetry: (item: MemoryWorkItem) => void;
+}) {
+  const retryable = canRetryMemoryWorkItem(item);
+
+  return (
+    <div className="group ui-list-row ui-list-row-hover">
+      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryWorkItemDotClass(item)}`} />
+      <Link to={memoryWorkItemHref(item)} className="flex min-w-0 flex-1 flex-col justify-center self-stretch">
+        <p className="ui-row-title">{item.conversationTitle}</p>
+        <p className="ui-row-summary">{item.lastError || memoryWorkItemLabel(item)}</p>
+        <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
+          <span>{item.status}</span>
+          <span className="opacity-40">·</span>
+          <span className="font-mono" title={item.runId}>{item.runId}</span>
+          <span className="opacity-40">·</span>
+          <span>{timeAgo(item.updatedAt)}</span>
+        </div>
+      </Link>
+      {retryable && (
+        <ToolbarButton
+          className="shrink-0 self-center"
+          onClick={() => onRetry(item)}
+          disabled={retryDisabled}
+          title="Retry this memory distillation"
+        >
+          {retrying ? 'Retrying…' : 'Retry'}
+        </ToolbarButton>
+      )}
+    </div>
+  );
+}
+
 export function MemoriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -136,6 +182,8 @@ export function MemoriesPage() {
   } = useApi(api.memories);
 
   const [query, setQuery] = useState('');
+  const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const memories = data?.memories ?? [];
   const memoryQueue = data?.memoryQueue ?? [];
   const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
@@ -173,6 +221,23 @@ export function MemoriesPage() {
 
     setSelectedMemory(null, true);
   }, [loading, memories, selectedMemoryId, setSelectedMemory]);
+
+  const retryMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
+    if (!canRetryMemoryWorkItem(item) || retryingRunId) {
+      return;
+    }
+
+    setQueueError(null);
+    setRetryingRunId(item.runId);
+    try {
+      await api.retryMemoryDistillRun(item.runId);
+      await refetch({ resetLoading: false });
+    } catch (error) {
+      setQueueError(error instanceof Error ? error.message : 'Could not retry memory distillation.');
+    } finally {
+      setRetryingRunId(null);
+    }
+  }, [refetch, retryingRunId]);
 
   return (
     <div className="flex h-full flex-col">
@@ -213,23 +278,16 @@ export function MemoriesPage() {
               <div className="space-y-2">
                 <p className="ui-section-label">Memory work queue</p>
                 <p className="ui-card-meta">Memory distillation runs that are still active or did not finish cleanly.</p>
+                {queueError && <p className="text-[12px] text-danger">{queueError}</p>}
                 <div className="space-y-px">
                   {memoryQueue.map((item) => (
-                    <ListLinkRow
+                    <MemoryWorkQueueRow
                       key={item.runId}
-                      to={memoryWorkItemHref(item)}
-                      leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryWorkItemDotClass(item)}`} />}
-                    >
-                      <p className="ui-row-title">{item.conversationTitle}</p>
-                      <p className="ui-row-summary">{item.lastError || memoryWorkItemLabel(item)}</p>
-                      <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                        <span>{item.status}</span>
-                        <span className="opacity-40">·</span>
-                        <span className="font-mono" title={item.runId}>{item.runId}</span>
-                        <span className="opacity-40">·</span>
-                        <span>{timeAgo(item.updatedAt)}</span>
-                      </div>
-                    </ListLinkRow>
+                      item={item}
+                      retrying={retryingRunId === item.runId}
+                      retryDisabled={Boolean(retryingRunId)}
+                      onRetry={retryMemoryWorkItem}
+                    />
                   ))}
                 </div>
               </div>
