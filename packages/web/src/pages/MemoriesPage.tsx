@@ -230,14 +230,15 @@ export function MemoriesPage() {
     setQueueError(null);
     setRetryingRunId(item.runId);
     try {
-      await api.retryMemoryDistillRun(item.runId);
-      await refetch({ resetLoading: false });
+      const result = await api.retryMemoryDistillRun(item.runId);
+      navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not retry memory distillation.');
+      await refetch({ resetLoading: false });
     } finally {
       setRetryingRunId(null);
     }
-  }, [refetch, retryingRunId]);
+  }, [navigate, refetch, retryingRunId]);
 
   return (
     <div className="flex h-full flex-col">
