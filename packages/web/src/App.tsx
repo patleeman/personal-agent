@@ -262,58 +262,85 @@ export function App() {
     setWebUiState(state);
   }, []);
 
-  const bootstrapSnapshots = useCallback(async () => {
+  const bootstrapSnapshots = useCallback(() => {
     const companionRoute = isCompanionBrowserRoute();
-    const [activityEntries, alertSnapshot, projectItems, sessionItems, taskItems, runResult, daemonState, syncState, webUiState] = await Promise.allSettled([
-      api.activity(),
-      api.alerts(),
-      api.projects(),
-      companionRoute ? Promise.resolve<SessionMeta[] | null>(null) : fetchSessionsSnapshot(),
-      api.tasks(),
-      api.runs(),
-      api.daemon(),
-      api.sync(),
-      api.webUiState(),
-    ]);
 
-    if (activityEntries.status === 'fulfilled') {
-      setActivity({
-        entries: activityEntries.value,
-        unreadCount: activityEntries.value.filter((entry) => !entry.read).length,
+    void api.activity()
+      .then((entries) => {
+        setActivity({
+          entries,
+          unreadCount: entries.filter((entry) => !entry.read).length,
+        });
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
       });
+
+    void api.alerts()
+      .then((snapshot) => {
+        setAlerts(snapshot);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
+
+    void api.projects()
+      .then((items) => {
+        setProjects(items);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
+
+    if (!companionRoute) {
+      void fetchSessionsSnapshot()
+        .then((items) => {
+          setSessions(items);
+        })
+        .catch(() => {
+          // Keep waiting for SSE or a later retry.
+        });
     }
 
-    if (alertSnapshot.status === 'fulfilled') {
-      setAlerts(alertSnapshot.value);
-    }
+    void api.tasks()
+      .then((items) => {
+        setTasks(items);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
 
-    if (projectItems.status === 'fulfilled') {
-      setProjects(projectItems.value);
-    }
+    void api.runs()
+      .then((result) => {
+        setRuns(result);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
 
-    if (sessionItems.status === 'fulfilled' && sessionItems.value) {
-      setSessions(sessionItems.value);
-    }
+    void api.daemon()
+      .then((state) => {
+        setDaemon(state);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
 
-    if (taskItems.status === 'fulfilled') {
-      setTasks(taskItems.value);
-    }
+    void api.sync()
+      .then((state) => {
+        setSync(state);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
 
-    if (runResult.status === 'fulfilled') {
-      setRuns(runResult.value);
-    }
-
-    if (daemonState.status === 'fulfilled') {
-      setDaemon(daemonState.value);
-    }
-
-    if (syncState.status === 'fulfilled') {
-      setSync(syncState.value);
-    }
-
-    if (webUiState.status === 'fulfilled') {
-      setWebUi(webUiState.value);
-    }
+    void api.webUiState()
+      .then((state) => {
+        setWebUi(state);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
   }, [setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
