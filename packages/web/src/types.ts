@@ -120,6 +120,7 @@ export interface AlertEntry {
   updatedAt: string;
   conversationId?: string;
   activityId?: string;
+  wakeupId?: string;
   sourceKind: string;
   sourceId: string;
   requiresAck: boolean;

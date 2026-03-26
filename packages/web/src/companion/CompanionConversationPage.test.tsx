@@ -412,7 +412,7 @@ describe('CompanionConversationPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Deferred');
+    expect(html).toContain('Wakeups');
     expect(html).toContain('1 ready now');
     expect(html).toContain('Resume conversation');
     expect(html).toContain('Tasks');

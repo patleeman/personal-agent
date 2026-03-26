@@ -405,7 +405,7 @@ function compactRunCardSummary(
     return null;
   }
 
-  if (/^(Live conversation|Conversation run|Background run|Deferred resume|Scheduled task|Shell run|Workflow|Conversation node distillation)( · .+)?$/.test(trimmed)) {
+  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow|Conversation node distillation)( · .+)?$/.test(trimmed)) {
     return null;
   }
 

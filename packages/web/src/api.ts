@@ -383,6 +383,8 @@ export const api = {
   alerts: () => get<AlertSnapshot>('/alerts'),
   acknowledgeAlert: (id: string) => post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/ack`),
   dismissAlert: (id: string) => post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/dismiss`),
+  snoozeAlert: (id: string, input: { delay?: string; at?: string }) =>
+    post<{ ok: boolean; alert: AlertEntry; resume: DeferredResumeSummary }>(`/alerts/${encodeURIComponent(id)}/snooze`, input),
   activityCount: () => get<{ count: number }>('/activity/count'),
   clearInbox: () => post<{ ok: boolean; deletedActivityIds: string[]; clearedConversationIds: string[] }>('/inbox/clear'),
   markActivityRead: (id: string, read = true) =>

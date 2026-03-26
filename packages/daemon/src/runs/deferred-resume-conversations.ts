@@ -245,6 +245,18 @@ export async function markDeferredResumeConversationRunRetryScheduled(
   });
 }
 
+export async function markDeferredResumeConversationRunSnoozed(
+  input: DeferredResumeConversationRunInput & { snoozedUntil: string },
+): Promise<DeferredResumeConversationRunResult> {
+  return saveDeferredResumeConversationRunState({
+    ...input,
+    status: 'queued',
+    updatedAt: input.snoozedUntil,
+    step: 'deferred-resume.snoozed',
+    eventType: 'conversation.deferred_resume.snoozed',
+  });
+}
+
 export async function completeDeferredResumeConversationRun(
   input: DeferredResumeConversationRunInput & { completedAt: string },
 ): Promise<DeferredResumeConversationRunResult> {

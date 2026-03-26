@@ -266,7 +266,7 @@ function sourceKindLabel(run: DurableRunRecord): string {
   }
 
   if (run.manifest?.source?.type === 'deferred-resume') {
-    return 'Deferred resume';
+    return 'Wakeup';
   }
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
@@ -314,8 +314,8 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const headline = prompt ?? target ?? deferredResumeId ?? run.runId;
     const suffix = conversationId ?? deferredResumeId;
     const summary = suffix && headline !== suffix
-      ? `Deferred resume · ${suffix}`
-      : 'Deferred resume';
+      ? `Wakeup · ${suffix}`
+      : 'Wakeup';
     return { title: headline, summary };
   }
 
@@ -398,7 +398,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
     const prompt = excerpt(readCheckpoint(run, 'prompt') ?? readSpec(run, 'prompt'));
     connections.push({
       key: `deferred-resume:${run.manifest.source.id}`,
-      label: 'Deferred resume',
+      label: 'Wakeup',
       value: run.manifest.source.id,
       detail: prompt,
     });

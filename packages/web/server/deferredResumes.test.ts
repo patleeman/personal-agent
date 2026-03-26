@@ -214,6 +214,41 @@ describe('deferredResumes', () => {
     ]);
   });
 
+  it('preserves reminder metadata and absolute times', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const scheduled = await scheduleDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/current.jsonl',
+      at: '2026-03-12T09:30:00-04:00',
+      prompt: 'Watch the prod gates.',
+      title: 'Watch the prod gates',
+      kind: 'reminder',
+      notify: 'disruptive',
+      requireAck: true,
+      autoResumeIfOpen: false,
+      source: { kind: 'reminder-tool', id: 'reminder-1' },
+      now: new Date('2026-03-12T12:00:00.000Z'),
+    });
+
+    expect(scheduled).toEqual(expect.objectContaining({
+      prompt: 'Watch the prod gates.',
+      title: 'Watch the prod gates',
+      kind: 'reminder',
+      dueAt: '2026-03-12T13:30:00.000Z',
+      delivery: {
+        alertLevel: 'disruptive',
+        autoResumeIfOpen: false,
+        requireAck: true,
+      },
+    }));
+
+    const stored = Object.values(loadDeferredResumeState().resumes)[0];
+    expect(stored).toEqual(expect.objectContaining({
+      source: { kind: 'reminder-tool', id: 'reminder-1' },
+    }));
+  });
+
   it('rejects invalid delays', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

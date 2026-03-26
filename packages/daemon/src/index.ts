@@ -46,6 +46,7 @@ export {
   scheduleDeferredResumeConversationRun,
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
+  markDeferredResumeConversationRunSnoozed,
   completeDeferredResumeConversationRun,
   cancelDeferredResumeConversationRun,
 } from './runs/deferred-resume-conversations.js';
