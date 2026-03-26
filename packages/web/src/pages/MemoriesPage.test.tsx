@@ -122,9 +122,10 @@ describe('MemoriesPage', () => {
     expect(html).toContain('run-123');
     expect(html).toContain('/conversations/conv-123?run=run-123');
     expect(html).not.toContain('Retry');
+    expect(html).not.toContain('Recover');
   });
 
-  it('shows a retry button for failed distillation runs with durable run ids', () => {
+  it('shows retry and recover actions for failed distillation runs with durable run ids', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -153,6 +154,8 @@ describe('MemoriesPage', () => {
 
     expect(html).toContain('Retry');
     expect(html).toContain('Retry this memory distillation');
+    expect(html).toContain('Recover');
+    expect(html).toContain('Open a recovery conversation for this memory distillation');
   });
 
   it('keeps state-only queue items linked to the conversation when no durable run exists', () => {
@@ -185,6 +188,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('/conversations/conv-123');
     expect(html).not.toContain('/conversations/conv-123?run=state%3Aconv-123');
     expect(html).not.toContain('Retry');
+    expect(html).not.toContain('Recover');
   });
 
   it('shows the empty state when there are no memory packages', () => {

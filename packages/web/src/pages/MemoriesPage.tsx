@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { persistForkPromptDraft } from '../forking';
 import { useApi } from '../hooks';
 import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import type { MemoryDocItem, MemoryWorkItem } from '../types';
@@ -115,6 +116,10 @@ function canRetryMemoryWorkItem(item: MemoryWorkItem): boolean {
     && (item.status === 'failed' || item.status === 'interrupted');
 }
 
+function canRecoverMemoryWorkItem(item: MemoryWorkItem): boolean {
+  return canRetryMemoryWorkItem(item);
+}
+
 function formatReferenceCount(count: number | undefined): string {
   const normalized = count ?? 0;
   return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
@@ -131,40 +136,67 @@ function formatRelatedCount(related: string[] | undefined): string | null {
 
 function MemoryWorkQueueRow({
   item,
-  retrying,
-  retryDisabled,
+  activeAction,
+  actionDisabled,
   onRetry,
+  onRecover,
 }: {
   item: MemoryWorkItem;
-  retrying: boolean;
-  retryDisabled: boolean;
+  activeAction: 'retry' | 'recover' | null;
+  actionDisabled: boolean;
   onRetry: (item: MemoryWorkItem) => void;
+  onRecover: (item: MemoryWorkItem) => void;
 }) {
   const retryable = canRetryMemoryWorkItem(item);
+  const recoverable = canRecoverMemoryWorkItem(item);
+  const summary = activeAction === 'retry'
+    ? 'Queueing memory distillation…'
+    : activeAction === 'recover'
+      ? 'Opening recovery conversation…'
+      : item.lastError || memoryWorkItemLabel(item);
+  const status = activeAction === 'retry'
+    ? 'queueing'
+    : activeAction === 'recover'
+      ? 'recovering'
+      : item.status;
 
   return (
     <div className="group ui-list-row ui-list-row-hover">
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryWorkItemDotClass(item)}`} />
       <Link to={memoryWorkItemHref(item)} className="flex min-w-0 flex-1 flex-col justify-center self-stretch">
         <p className="ui-row-title">{item.conversationTitle}</p>
-        <p className="ui-row-summary">{item.lastError || memoryWorkItemLabel(item)}</p>
+        <p className="ui-row-summary">{summary}</p>
         <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-          <span>{item.status}</span>
+          <span>{status}</span>
           <span className="opacity-40">·</span>
           <span className="font-mono" title={item.runId}>{item.runId}</span>
           <span className="opacity-40">·</span>
           <span>{timeAgo(item.updatedAt)}</span>
         </div>
       </Link>
-      {retryable && (
-        <ToolbarButton
-          className="shrink-0 self-center"
-          onClick={() => onRetry(item)}
-          disabled={retryDisabled}
-          title="Retry this memory distillation"
-        >
-          {retrying ? 'Retrying…' : 'Retry'}
-        </ToolbarButton>
+      {(retryable || recoverable) && (
+        <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
+          {retryable && (
+            <ToolbarButton
+              className="shrink-0"
+              onClick={() => onRetry(item)}
+              disabled={actionDisabled}
+              title="Retry this memory distillation"
+            >
+              {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
+            </ToolbarButton>
+          )}
+          {recoverable && (
+            <ToolbarButton
+              className="shrink-0"
+              onClick={() => onRecover(item)}
+              disabled={actionDisabled}
+              title="Open a recovery conversation for this memory distillation"
+            >
+              {activeAction === 'recover' ? 'Opening…' : 'Recover'}
+            </ToolbarButton>
+          )}
+        </div>
       )}
     </div>
   );
@@ -182,7 +214,7 @@ export function MemoriesPage() {
   } = useApi(api.memories);
 
   const [query, setQuery] = useState('');
-  const [retryingRunId, setRetryingRunId] = useState<string | null>(null);
+  const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' | 'recover' } | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const memories = data?.memories ?? [];
   const memoryQueue = data?.memoryQueue ?? [];
@@ -223,22 +255,42 @@ export function MemoriesPage() {
   }, [loading, memories, selectedMemoryId, setSelectedMemory]);
 
   const retryMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
-    if (!canRetryMemoryWorkItem(item) || retryingRunId) {
+    if (!canRetryMemoryWorkItem(item) || pendingQueueAction) {
       return;
     }
 
     setQueueError(null);
-    setRetryingRunId(item.runId);
+    setPendingQueueAction({ runId: item.runId, kind: 'retry' });
     try {
       const result = await api.retryMemoryDistillRun(item.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (error) {
       setQueueError(error instanceof Error ? error.message : 'Could not retry memory distillation.');
+      setPendingQueueAction(null);
       await refetch({ resetLoading: false });
-    } finally {
-      setRetryingRunId(null);
     }
-  }, [navigate, refetch, retryingRunId]);
+  }, [navigate, pendingQueueAction, refetch]);
+
+  const recoverMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
+    if (!canRecoverMemoryWorkItem(item) || pendingQueueAction) {
+      return;
+    }
+
+    setQueueError(null);
+    setPendingQueueAction({ runId: item.runId, kind: 'recover' });
+    try {
+      const result = await api.recoverMemoryDistillRun(item.runId);
+      persistForkPromptDraft(
+        result.conversationId,
+        `Help me recover memory distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
+      );
+      navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
+    } catch (error) {
+      setQueueError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this memory distillation run.');
+      setPendingQueueAction(null);
+      await refetch({ resetLoading: false });
+    }
+  }, [navigate, pendingQueueAction, refetch]);
 
   return (
     <div className="flex h-full flex-col">
@@ -285,9 +337,10 @@ export function MemoriesPage() {
                     <MemoryWorkQueueRow
                       key={item.runId}
                       item={item}
-                      retrying={retryingRunId === item.runId}
-                      retryDisabled={Boolean(retryingRunId)}
+                      activeAction={pendingQueueAction?.runId === item.runId ? pendingQueueAction.kind : null}
+                      actionDisabled={Boolean(pendingQueueAction)}
                       onRetry={retryMemoryWorkItem}
+                      onRecover={recoverMemoryWorkItem}
                     />
                   ))}
                 </div>
