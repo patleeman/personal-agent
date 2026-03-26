@@ -1731,6 +1731,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     conversationProjectsCache.set(id, conversationProjects);
   }, [conversationProjects, id]);
+  useInvalidateOnTopics(['projects'], refetchConversationProjects);
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
@@ -1845,6 +1846,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setSessions(nextSessions);
     }
   }, [id, sessions, setSessions, visibleSessionDetail?.meta.title]);
+
+  useEffect(() => {
+    if (!id) {
+      setDeferredResumes([]);
+      return;
+    }
+
+    if (currentSessionMeta?.id === id) {
+      setDeferredResumes(currentSessionMeta.deferredResumes ?? []);
+    }
+  }, [currentSessionMeta, id]);
 
   const savedConversationSessionFile = currentSessionMeta?.file ?? null;
   const activeConversationAlerts = useMemo(
@@ -2052,6 +2064,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return data.resumes;
   }, [id]);
 
+  useInvalidateOnTopics(['attachments'], refetchConversationAttachments);
+
   const resumeDeferredConversation = useCallback(async () => {
     if (!savedConversationSessionFile) {
       throw new Error('Open the saved conversation before continuing deferred work.');
@@ -2084,7 +2098,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     void refetchDeferredResumes().catch(() => {});
-  }, [id, refetchDeferredResumes, versions.sessions]);
+  }, [id, refetchDeferredResumes]);
 
   useEffect(() => {
     if (!deferredResumeAutoResumeKey) {

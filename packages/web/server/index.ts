@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
-import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
+import { invalidateAppTopics, publishAppEvent, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { streamSnapshotEvents } from './snapshotEventStreaming.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
@@ -416,6 +416,20 @@ function listAllLiveSessions() {
   const localIds = new Set(local.map((session) => session.id));
   const remote = listRemoteLiveSessions().filter((session) => !localIds.has(session.id));
   return [...local, ...remote];
+}
+
+function publishConversationSessionMetaChanged(...conversationIds: Array<string | null | undefined>): void {
+  const seen = new Set<string>();
+
+  for (const value of conversationIds) {
+    const conversationId = typeof value === 'string' ? value.trim() : '';
+    if (!conversationId || seen.has(conversationId)) {
+      continue;
+    }
+
+    seen.add(conversationId);
+    publishAppEvent({ type: 'session_meta_changed', sessionId: conversationId });
+  }
 }
 
 function subscribeLiveSession(
@@ -1927,9 +1941,12 @@ function buildNoRemoteConversationMirrorTelemetry(): RemoteConversationMirrorSyn
   return { status: 'not-remote', durationMs: 0 };
 }
 
-function invalidateSessionsAfterRemoteMirrorSync(remoteMirror: RemoteConversationMirrorSyncTelemetry): void {
+function invalidateSessionsAfterRemoteMirrorSync(
+  conversationId: string,
+  remoteMirror: RemoteConversationMirrorSyncTelemetry,
+): void {
   if (remoteMirror.status === 'synced-live' || remoteMirror.status === 'synced-binding') {
-    invalidateAppTopics('sessions');
+    publishConversationSessionMetaChanged(conversationId);
   }
 }
 
@@ -1959,7 +1976,7 @@ async function readSessionDetailForRoute(input: {
 
   if (sessionRead.detail) {
     void remoteMirrorPromise.then((remoteMirror) => {
-      invalidateSessionsAfterRemoteMirrorSync(remoteMirror);
+      invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
     });
 
     return {
@@ -1974,6 +1991,7 @@ async function readSessionDetailForRoute(input: {
     input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
   );
 
+  invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
   return { sessionRead, remoteMirror };
 }
 
@@ -2802,6 +2820,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
     const now = new Date();
     const daemonRoot = resolveDaemonRoot();
     let mutated = false;
+    const mutatedConversationIds = new Set<string>();
 
     for (const session of liveSessions) {
       const activated = activateDueDeferredResumesForSessionFile({
@@ -2810,6 +2829,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
       });
       if (activated.length > 0) {
         mutated = true;
+        mutatedConversationIds.add(session.id);
         for (const entry of activated) {
           await markDeferredResumeConversationRunReady({
             daemonRoot,
@@ -2870,6 +2890,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
           });
           if (completedEntry) {
             mutated = true;
+            mutatedConversationIds.add(session.id);
             await completeDeferredResumeConversationRun({
               daemonRoot,
               deferredResumeId: completedEntry.id,
@@ -2904,6 +2925,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
           });
           if (retriedEntry) {
             mutated = true;
+            mutatedConversationIds.add(session.id);
             await markDeferredResumeConversationRunRetryScheduled({
               daemonRoot,
               deferredResumeId: retriedEntry.id,
@@ -2924,7 +2946,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
     }
 
     if (mutated) {
-      invalidateAppTopics('sessions');
+      publishConversationSessionMetaChanged(...mutatedConversationIds);
     }
   } finally {
     processingDeferredResumes = false;
@@ -5599,7 +5621,8 @@ app.post('/api/runs/:id/import', async (req, res) => {
       sessionFile,
     });
 
-    invalidateAppTopics('sessions', 'runs');
+    publishConversationSessionMetaChanged(conversationId);
+    invalidateAppTopics('runs');
     res.json({ ok: true, runId: req.params.id, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -6652,7 +6675,7 @@ app.post('/api/notes/:memoryId/start', async (req, res) => {
         conversationId: result.id,
         relatedProjectIds,
       });
-      invalidateAppTopics('projects', 'sessions');
+      invalidateAppTopics('projects');
     }
 
     await queuePromptContext(
@@ -6749,9 +6772,10 @@ app.post('/api/live-sessions', async (req, res) => {
           conversationId: result.id,
           relatedProjectIds: referencedProjectIds,
         });
-        invalidateAppTopics('projects', 'sessions');
+        invalidateAppTopics('projects');
       }
 
+      publishConversationSessionMetaChanged(result.id);
       migrateDraftConversationPlan(profile, result.id);
       res.json(result);
       return;
@@ -6767,7 +6791,7 @@ app.post('/api/live-sessions', async (req, res) => {
         conversationId: result.id,
         relatedProjectIds: referencedProjectIds,
       });
-      invalidateAppTopics('projects', 'sessions');
+      invalidateAppTopics('projects');
     }
     migrateDraftConversationPlan(profile, result.id);
     res.json(result);
@@ -6851,7 +6875,7 @@ app.post('/api/remote-runs', async (req, res) => {
       repoRoot: REPO_ROOT,
     });
 
-    invalidateAppTopics('sessions', 'runs');
+    invalidateAppTopics('runs');
     res.status(202).json({ accepted: true, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -7118,7 +7142,7 @@ function syncConversationProjectReferences(conversationId: string, mentionedProj
       conversationId,
       relatedProjectIds,
     });
-    invalidateAppTopics('projects', 'sessions');
+    invalidateAppTopics('projects');
   }
 
   return relatedProjectIds;
@@ -8064,7 +8088,7 @@ app.patch('/api/conversations/:id/title', (req, res) => {
     }
 
     const renamed = renameStoredSession(conversationId, nextName);
-    invalidateAppTopics('sessions');
+    publishConversationSessionMetaChanged(conversationId);
     res.json({ ok: true, title: renamed.title });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -8158,7 +8182,10 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
         await stopRemoteLiveSession(conversationId).catch(() => undefined);
       }
 
-      invalidateAppTopics('projects', 'sessions');
+      if (relatedProjectIds.length > 0) {
+        invalidateAppTopics('projects');
+      }
+      publishConversationSessionMetaChanged(conversationId, result.id);
       res.json({ id: result.id, sessionFile: result.sessionFile, cwd: resolved.cwd, changed: true });
       return;
     }
@@ -8205,13 +8232,14 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
         conversationId: result.id,
         relatedProjectIds,
       });
-      invalidateAppTopics('projects', 'sessions');
+      invalidateAppTopics('projects');
     }
 
     if (liveEntry) {
       destroySession(conversationId);
     }
 
+    publishConversationSessionMetaChanged(conversationId, result.id);
     res.json({ id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true });
   } catch (err) {
     logError('request handler error', {
@@ -8365,7 +8393,7 @@ app.post('/api/conversations/:id/attachments', (req, res) => {
       note: body.note,
     });
 
-    invalidateAppTopics('sessions');
+    invalidateAppTopics('attachments');
     res.json({
       conversationId: req.params.id,
       attachment,
@@ -8424,7 +8452,7 @@ app.patch('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
       note: body.note,
     });
 
-    invalidateAppTopics('sessions');
+    invalidateAppTopics('attachments');
     res.json({
       conversationId: req.params.id,
       attachment,
@@ -8448,7 +8476,7 @@ app.delete('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
       attachmentId: req.params.attachmentId,
     });
 
-    invalidateAppTopics('sessions');
+    invalidateAppTopics('attachments');
     res.json({
       conversationId: req.params.id,
       deleted,
@@ -8541,7 +8569,7 @@ app.post('/api/conversations/:id/projects', (req, res) => {
       projectId,
     });
 
-    invalidateAppTopics('projects', 'sessions');
+    invalidateAppTopics('projects');
     res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
   } catch (err) {
     logError('request handler error', {
@@ -8561,7 +8589,7 @@ app.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
       projectId: req.params.projectId,
     });
 
-    invalidateAppTopics('projects', 'sessions');
+    invalidateAppTopics('projects');
     res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
   } catch (err) {
     logError('request handler error', {
@@ -8613,7 +8641,7 @@ app.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
       prompt,
     });
 
-    invalidateAppTopics('sessions');
+    publishConversationSessionMetaChanged(req.params.id);
     res.json({
       conversationId: req.params.id,
       resume: resumeRecord,
@@ -8638,7 +8666,7 @@ app.post('/api/conversations/:id/deferred-resumes/:resumeId/fire', async (req, r
     });
 
     await flushLiveDeferredResumes();
-    invalidateAppTopics('sessions');
+    publishConversationSessionMetaChanged(req.params.id);
     res.json({
       conversationId: req.params.id,
       resume,
@@ -8662,7 +8690,7 @@ app.delete('/api/conversations/:id/deferred-resumes/:resumeId', async (req, res)
       id: req.params.resumeId,
     });
 
-    invalidateAppTopics('sessions');
+    publishConversationSessionMetaChanged(req.params.id);
     res.json({
       conversationId: req.params.id,
       cancelledId: req.params.resumeId,
@@ -11267,7 +11295,7 @@ companionApp.post('/api/live-sessions', async (req, res) => {
         conversationId: result.id,
         relatedProjectIds: referencedProjectIds,
       });
-      invalidateAppTopics('projects', 'sessions');
+      invalidateAppTopics('projects');
     }
     migrateDraftConversationPlan(profile, result.id);
     res.json(result);

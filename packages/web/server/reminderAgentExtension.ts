@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { invalidateAppTopics } from './appEvents.js';
+import { publishAppEvent } from './appEvents.js';
 import { scheduleDeferredResumeForSessionFile } from './deferredResumes.js';
 
 const ReminderToolParams = Type.Object({
@@ -66,7 +66,7 @@ export function createReminderAgentExtension(): (pi: ExtensionAPI) => void {
           },
         });
 
-        invalidateAppTopics('sessions');
+        publishAppEvent({ type: 'session_meta_changed', sessionId: ctx.sessionManager.getSessionId() });
         return {
           content: [{
             type: 'text' as const,
