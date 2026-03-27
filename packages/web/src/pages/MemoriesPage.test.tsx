@@ -129,7 +129,7 @@ describe('MemoriesPage', () => {
     expect(html).not.toContain('Recover');
   });
 
-  it('shows retry and recover actions for failed distillation runs with durable run ids', () => {
+  it('shows retry actions per failed distillation and a single batch recovery action', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -159,8 +159,9 @@ describe('MemoriesPage', () => {
 
     expect(html).toContain('Retry');
     expect(html).toContain('Retry this node distillation');
-    expect(html).toContain('Recover');
-    expect(html).toContain('Open a recovery conversation for this node distillation');
+    expect(html).toContain('Recover failed extractions');
+    expect(html).toContain('Start one background recovery run for every failed or interrupted note extraction');
+    expect(html).not.toContain('Open a recovery conversation for this node distillation');
   });
 
   it('keeps state-only queue items linked to the conversation when no durable run exists', () => {

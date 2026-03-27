@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { persistForkPromptDraft } from '../forking';
 import { useApi } from '../hooks';
 import { emitMemoriesChanged, MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import type { MemoryDocItem, MemoryWorkItem } from '../types';
@@ -198,26 +197,17 @@ function MemoryWorkQueueRow({
   activeAction,
   actionDisabled,
   onRetry,
-  onRecover,
 }: {
   item: MemoryWorkItem;
-  activeAction: 'retry' | 'recover' | null;
+  activeAction: 'retry' | null;
   actionDisabled: boolean;
   onRetry: (item: MemoryWorkItem) => void;
-  onRecover: (item: MemoryWorkItem) => void;
 }) {
   const retryable = canRetryMemoryWorkItem(item);
-  const recoverable = canRecoverMemoryWorkItem(item);
   const summary = activeAction === 'retry'
     ? 'Queueing node distillation…'
-    : activeAction === 'recover'
-      ? 'Opening recovery conversation…'
-      : item.lastError || memoryWorkItemLabel(item);
-  const status = activeAction === 'retry'
-    ? 'queueing'
-    : activeAction === 'recover'
-      ? 'recovering'
-      : item.status;
+    : item.lastError || memoryWorkItemLabel(item);
+  const status = activeAction === 'retry' ? 'queueing' : item.status;
 
   return (
     <div className="group ui-list-row ui-list-row-hover">
@@ -233,28 +223,16 @@ function MemoryWorkQueueRow({
           <span>{timeAgo(item.updatedAt)}</span>
         </div>
       </Link>
-      {(retryable || recoverable) && (
+      {retryable && (
         <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
-          {retryable && (
-            <ToolbarButton
-              className="shrink-0"
-              onClick={() => onRetry(item)}
-              disabled={actionDisabled}
-              title="Retry this node distillation"
-            >
-              {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
-            </ToolbarButton>
-          )}
-          {recoverable && (
-            <ToolbarButton
-              className="shrink-0"
-              onClick={() => onRecover(item)}
-              disabled={actionDisabled}
-              title="Open a recovery conversation for this node distillation"
-            >
-              {activeAction === 'recover' ? 'Opening…' : 'Recover'}
-            </ToolbarButton>
-          )}
+          <ToolbarButton
+            className="shrink-0"
+            onClick={() => onRetry(item)}
+            disabled={actionDisabled}
+            title="Retry this node distillation"
+          >
+            {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
+          </ToolbarButton>
         </div>
       )}
     </div>
@@ -280,16 +258,23 @@ export function MemoriesPage() {
   const [createTags, setCreateTags] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' | 'recover' } | null>(null);
+  const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' } | null>(null);
+  const [startingBatchRecovery, setStartingBatchRecovery] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const memories = data?.memories ?? [];
   const memoryQueue = data?.memoryQueue ?? [];
   const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
+  const recoverableQueueItems = useMemo(
+    () => memoryQueue.filter((item) => canRecoverMemoryWorkItem(item)),
+    [memoryQueue],
+  );
   const selectedMemoryId = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const value = params.get(NOTE_ID_SEARCH_PARAM) ?? params.get('memory');
     return value?.trim() || null;
   }, [location.search]);
+  const queueBusy = Boolean(pendingQueueAction) || startingBatchRecovery;
   const setSelectedMemory = useCallback((memoryId: string | null, replace = false) => {
     const nextSearch = buildNoteSearch(location.search, memoryId);
     navigate(`/notes${nextSearch}`, { replace });
@@ -317,11 +302,12 @@ export function MemoriesPage() {
   }, [loading, memories, selectedMemoryId, setSelectedMemory]);
 
   const retryMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
-    if (!canRetryMemoryWorkItem(item) || pendingQueueAction) {
+    if (!canRetryMemoryWorkItem(item) || queueBusy) {
       return;
     }
 
     setQueueError(null);
+    setQueueNotice(null);
     setPendingQueueAction({ runId: item.runId, kind: 'retry' });
     try {
       const result = await api.retryNodeDistillRun(item.runId);
@@ -331,28 +317,28 @@ export function MemoriesPage() {
       setPendingQueueAction(null);
       await refetch({ resetLoading: false });
     }
-  }, [navigate, pendingQueueAction, refetch]);
+  }, [navigate, queueBusy, refetch]);
 
-  const recoverMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
-    if (!canRecoverMemoryWorkItem(item) || pendingQueueAction) {
+  const recoverFailedMemoryWorkItems = useCallback(async () => {
+    if (recoverableQueueItems.length === 0 || queueBusy) {
       return;
     }
 
     setQueueError(null);
-    setPendingQueueAction({ runId: item.runId, kind: 'recover' });
+    setQueueNotice(null);
+    setStartingBatchRecovery(true);
     try {
-      const result = await api.recoverNodeDistillRun(item.runId);
-      persistForkPromptDraft(
-        result.conversationId,
-        `Help me recover node distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
+      const result = await api.recoverFailedNodeDistills();
+      setQueueNotice(
+        `Started recovery run ${result.runId} for ${result.count} failed ${result.count === 1 ? 'extraction' : 'extractions'}.`,
       );
-      navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
-    } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this node distillation run.');
-      setPendingQueueAction(null);
       await refetch({ resetLoading: false });
+    } catch (error) {
+      setQueueError(error instanceof Error ? error.message : 'Could not start failed note-extraction recovery.');
+    } finally {
+      setStartingBatchRecovery(false);
     }
-  }, [navigate, pendingQueueAction, refetch]);
+  }, [queueBusy, recoverableQueueItems.length, refetch]);
 
   async function handleCreateNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -508,7 +494,19 @@ export function MemoriesPage() {
                   <span className="ui-disclosure-meta">{memoryQueue.length} {memoryQueue.length === 1 ? 'item' : 'items'}</span>
                 </summary>
                 <div className="ui-disclosure-body space-y-2">
-                  <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
+                    {recoverableQueueItems.length > 0 && (
+                      <ToolbarButton
+                        onClick={() => { void recoverFailedMemoryWorkItems(); }}
+                        disabled={queueBusy}
+                        title="Start one background recovery run for every failed or interrupted note extraction"
+                      >
+                        {startingBatchRecovery ? 'Starting recovery…' : 'Recover failed extractions'}
+                      </ToolbarButton>
+                    )}
+                  </div>
+                  {queueNotice && <p className="text-[12px] text-secondary">{queueNotice}</p>}
                   {queueError && <p className="text-[12px] text-danger">{queueError}</p>}
                   <div className="space-y-px">
                     {memoryQueue.map((item) => (
@@ -516,9 +514,8 @@ export function MemoriesPage() {
                         key={item.runId}
                         item={item}
                         activeAction={pendingQueueAction?.runId === item.runId ? pendingQueueAction.kind : null}
-                        actionDisabled={Boolean(pendingQueueAction)}
+                        actionDisabled={queueBusy}
                         onRetry={retryMemoryWorkItem}
-                        onRecover={recoverMemoryWorkItem}
                       />
                     ))}
                   </div>
