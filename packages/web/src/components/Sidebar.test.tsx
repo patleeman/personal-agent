@@ -154,6 +154,13 @@ describe('Sidebar', () => {
     expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
+  it('keeps open conversation rows draggable so sidebar reordering still works', () => {
+    const html = renderSidebar('/inbox');
+
+    expect(html).toContain('draggable="true"');
+    expect(html).toContain('Drag to reorder or move between pinned and open conversations');
+  });
+
   it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
