@@ -187,23 +187,19 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-0.5 flex items-start gap-1.5 px-2 py-1.5 rounded-md text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
     @apply bg-elevated text-primary;
   }
 
-  .ui-sidebar-row-title {
-    @apply text-[12px] font-medium text-primary leading-tight;
-  }
-
   .ui-sidebar-session-meta {
-    @apply mt-0.5 truncate text-[10px] leading-tight text-dim;
+    @apply text-[11px] text-dim mt-0.5 truncate;
   }
 
   .ui-sidebar-shelf-row {
-    @apply mx-0.5 flex w-full items-center gap-1.5 px-2 py-1.5 rounded-md text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
+    @apply mx-1 flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
   }
 
   .ui-loading-state {
