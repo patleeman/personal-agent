@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import type { MemoryDocItem } from '../types';
 import { timeAgo } from '../utils';
+import { BrowserRecordRow } from '../components/ui';
 import { buildCompanionNotePath } from './routes';
 
 function sortCompanionMemories(memories: MemoryDocItem[]): MemoryDocItem[] {
@@ -40,7 +40,7 @@ function MemoriesSection({
   return (
     <section className="pt-5 first:pt-0">
       <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
-      <div className="mt-2 border-y border-border-subtle">
+      <div className="mt-2 space-y-2 px-4">
         {memories.map((memory) => {
           const meta = [
             formatReferenceCount(memory.referenceCount),
@@ -53,25 +53,18 @@ function MemoriesSection({
           const tags = memory.tags.slice(0, 3).join(' · ');
 
           return (
-            <Link
+            <BrowserRecordRow
               key={memory.id}
               to={buildCompanionNotePath(memory.id)}
-              className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
-            >
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{memory.title}</h3>
-                  <p className="mt-1 text-[12px] leading-relaxed text-secondary">{memory.summary || '(no summary)'}</p>
-                  <p className="mt-2 break-words text-[11px] text-dim">{meta.join(' · ')}</p>
-                  {tags ? <p className="mt-1 break-words text-[11px] text-dim/85">{tags}</p> : null}
-                </div>
-                <span className="pt-0.5 text-accent" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </span>
-              </div>
-            </Link>
+              label={memory.status === 'archived' ? 'Archived note' : 'Note'}
+              heading={memory.title}
+              summary={memory.summary || '(no summary)'}
+              meta={tags ? `${meta.join(' · ')} · ${tags}` : meta.join(' · ')}
+              className="py-3.5"
+              titleClassName="text-[15px]"
+              summaryClassName="text-[13px]"
+              metaClassName="text-[11px] break-words"
+            />
           );
         })}
       </div>

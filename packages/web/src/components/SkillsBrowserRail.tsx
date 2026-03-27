@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, LoadingState, ToolbarButton } from './ui';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
   buildSkillsSearch,
@@ -100,31 +100,31 @@ export function SkillsBrowserRail() {
         {selectedSkill && (
           <div className="space-y-2 border-t border-border-subtle pt-4">
             <p className="ui-section-label">Resources</p>
-            <div className="space-y-px">
-              <ListLinkRow
+            <div className="space-y-1">
+              <BrowserRecordRow
                 to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'definition', item: null })}`}
                 selected={selectedView === 'definition'}
-              >
-                <p className="ui-row-title">Definition</p>
-                <p className="ui-row-summary">Primary skill definition and guidance</p>
-                <p className="ui-row-meta">Edit the main skill document</p>
-              </ListLinkRow>
-              <ListLinkRow
+                label="Definition"
+                heading="Main document"
+                summary="Primary skill definition and guidance"
+                meta="Edit the main skill document"
+              />
+              <BrowserRecordRow
                 to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'references', item: selectedItem })}`}
                 selected={selectedView === 'references'}
-              >
-                <p className="ui-row-title">References</p>
-                <p className="ui-row-summary">Supporting notes and examples</p>
-                <p className="ui-row-meta">Open supporting files</p>
-              </ListLinkRow>
-              <ListLinkRow
+                label="Supporting material"
+                heading="References"
+                summary="Supporting notes and examples"
+                meta="Open supporting files"
+              />
+              <BrowserRecordRow
                 to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'links', item: null })}`}
                 selected={selectedView === 'links'}
-              >
-                <p className="ui-row-title">Links</p>
-                <p className="ui-row-summary">Relationships with other nodes</p>
-                <p className="ui-row-meta">Inspect incoming and outgoing links</p>
-              </ListLinkRow>
+                label="Relationships"
+                heading="Links"
+                summary="Relationships with other nodes"
+                meta="Inspect incoming and outgoing links"
+              />
             </div>
           </div>
         )}

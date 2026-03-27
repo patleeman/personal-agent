@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import type { MemorySkillItem } from '../types';
+import { BrowserRecordRow } from '../components/ui';
 import { buildCompanionSkillPath } from './routes';
 
 function sortCompanionSkills(skills: MemorySkillItem[]): MemorySkillItem[] {
@@ -44,29 +44,22 @@ export function CompanionSkillsPage() {
             </div>
           ) : null}
           {!loading && !error && skills.length > 0 ? (
-            <section>
-              <div className="border-y border-border-subtle">
+            <section className="px-4">
+              <div className="space-y-2">
                 {skills.map((skill) => (
-                  <Link
+                  <BrowserRecordRow
                     key={skill.name}
                     to={buildCompanionSkillPath(skill.name)}
-                    className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{humanizeSkillName(skill.name)}</h3>
-                        <p className="mt-1 text-[12px] leading-relaxed text-secondary">{skill.description}</p>
-                        <p className="mt-2 break-words text-[11px] text-dim">
-                          {formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} · {skill.source}
-                        </p>
-                      </div>
-                      <span className="pt-0.5 text-accent" aria-hidden="true">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="m9 6 6 6-6 6" />
-                        </svg>
-                      </span>
-                    </div>
-                  </Link>
+                    label={skill.source === 'shared' ? 'Shared skill' : 'Custom skill'}
+                    aside={skill.usedInLastSession ? 'Used recently' : null}
+                    heading={humanizeSkillName(skill.name)}
+                    summary={skill.description}
+                    meta={`${formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} · ${skill.source}`}
+                    className="py-3.5"
+                    titleClassName="text-[15px]"
+                    summaryClassName="text-[13px]"
+                    metaClassName="text-[11px] break-words"
+                  />
                 ))}
               </div>
             </section>
