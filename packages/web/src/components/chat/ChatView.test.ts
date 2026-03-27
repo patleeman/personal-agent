@@ -173,6 +173,28 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('linked run');
   });
 
+  it('shows only the latest 5 internal-work steps by default and summarizes older ones above', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: Array.from({ length: 7 }, (_, index) => ({
+        type: 'tool_use' as const,
+        ts: `2026-03-11T18:00:0${index}.000Z`,
+        tool: 'bash',
+        input: { command: `echo step-${index + 1}` },
+        output: '',
+        status: index === 6 ? 'running' as const : 'ok' as const,
+      })),
+      isStreaming: true,
+    }));
+
+    expect(html).toContain('7 steps');
+    expect(html).toContain('2 earlier steps summarized above.');
+    expect(html).toContain('Show all');
+    expect(html).toContain('echo step-3');
+    expect(html).toContain('echo step-7');
+    expect(html).not.toContain('echo step-1');
+    expect(html).not.toContain('echo step-2');
+  });
+
   it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
