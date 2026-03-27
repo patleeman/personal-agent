@@ -152,6 +152,8 @@ interface LiveEntry {
   contextUsageTimer?: ReturnType<typeof setTimeout>;
   pendingHiddenTurnCustomTypes: string[];
   activeHiddenTurnCustomType: string | null;
+  pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
+  lastCompactionSummaryTitle?: string | null;
   lastHandledAutomationCompletionKey?: string | null;
   presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
   controllerSurfaceId?: string | null;
@@ -641,6 +643,46 @@ function buildLiveStateBlocks(session: AgentSession, options: { omitStreamMessag
   })));
 }
 
+function resolveCompactionSummaryTitle(input: {
+  mode: 'manual' | 'auto';
+  reason?: 'overflow' | 'threshold' | null;
+  willRetry?: boolean;
+}): string {
+  if (input.mode === 'manual') {
+    return 'Manual compaction';
+  }
+
+  if (input.reason === 'overflow' || input.willRetry) {
+    return 'Overflow recovery compaction';
+  }
+
+  return 'Proactive compaction';
+}
+
+function applyLatestCompactionSummaryTitle(blocks: DisplayBlock[], title: string | null | undefined): DisplayBlock[] {
+  const normalizedTitle = title?.trim();
+  if (!normalizedTitle) {
+    return blocks;
+  }
+
+  const index = blocks.findLastIndex((block) => block.type === 'summary' && block.kind === 'compaction');
+  if (index < 0) {
+    return blocks;
+  }
+
+  const block = blocks[index];
+  if (block.type !== 'summary' || block.title === normalizedTitle) {
+    return blocks;
+  }
+
+  const next = blocks.slice();
+  next[index] = {
+    ...block,
+    title: normalizedTitle,
+  };
+  return next;
+}
+
 function fingerprintDisplayBlock(block: DisplayBlock): string {
   switch (block.type) {
     case 'user':
@@ -854,7 +896,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   const sessionFile = entry.session.sessionFile?.trim();
   if (!sessionFile || !existsSync(sessionFile)) {
     return {
-      blocks: liveBlocks,
+      blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
       blockOffset: 0,
       totalBlocks: liveBlocks.length,
     };
@@ -863,7 +905,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   const persisted = readSessionBlocksByFile(sessionFile, { tailBlocks: tailBlocks ?? DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS });
   if (!persisted || persisted.blocks.length === 0) {
     return {
-      blocks: liveBlocks,
+      blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
       blockOffset: 0,
       totalBlocks: liveBlocks.length,
     };
@@ -874,7 +916,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   // For idle live sessions we should render the durable transcript from disk exactly as persisted.
   if (!entry.session.isStreaming) {
     return {
-      blocks: persisted.blocks,
+      blocks: applyLatestCompactionSummaryTitle(persisted.blocks, entry.lastCompactionSummaryTitle),
       blockOffset: persisted.blockOffset,
       totalBlocks: persisted.totalBlocks,
     };
@@ -882,7 +924,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
 
   const blocks = mergeConversationHistoryBlocks(persisted.blocks, liveBlocks);
   return {
-    blocks,
+    blocks: applyLatestCompactionSummaryTitle(blocks, entry.lastCompactionSummaryTitle),
     blockOffset: persisted.blockOffset,
     totalBlocks: persisted.blockOffset + blocks.length,
   };
@@ -1705,6 +1747,8 @@ function wireSession(
     currentTurnError: null,
     pendingHiddenTurnCustomTypes: [],
     activeHiddenTurnCustomType: null,
+    pendingAutoCompactionReason: null,
+    lastCompactionSummaryTitle: null,
     lastHandledAutomationCompletionKey: null,
     presenceBySurfaceId: new Map(),
     controllerSurfaceId: null,
@@ -1783,12 +1827,26 @@ function wireSession(
       publishSessionMetaChanged(entry.sessionId);
     }
 
-    if (event.type === 'auto_compaction_end' && !event.aborted && event.result) {
-      broadcastSnapshot(entry);
-      clearContextUsageTimer(entry);
-      broadcastContextUsage(entry, true);
-      publishSessionMetaChanged(entry.sessionId);
-      notifyLiveSessionLifecycleHandlers(entry, 'auto_compaction_end');
+    if (event.type === 'auto_compaction_start') {
+      entry.pendingAutoCompactionReason = event.reason;
+    }
+
+    if (event.type === 'auto_compaction_end') {
+      const compactionReason = entry.pendingAutoCompactionReason;
+      entry.pendingAutoCompactionReason = null;
+
+      if (!event.aborted && event.result) {
+        entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({
+          mode: 'auto',
+          reason: compactionReason,
+          willRetry: event.willRetry,
+        });
+        broadcastSnapshot(entry);
+        clearContextUsageTimer(entry);
+        broadcastContextUsage(entry, true);
+        publishSessionMetaChanged(entry.sessionId);
+        notifyLiveSessionLifecycleHandlers(entry, 'auto_compaction_end');
+      }
     }
 
     const sse = toSse(event);
@@ -2507,6 +2565,7 @@ export async function compactSession(sessionId: string, customInstructions?: str
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   const result = await entry.session.compact(customInstructions);
+  entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({ mode: 'manual' });
   broadcastSnapshot(entry);
   clearContextUsageTimer(entry);
   broadcastContextUsage(entry, true);

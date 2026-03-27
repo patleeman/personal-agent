@@ -454,6 +454,21 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('renders specific compaction kinds when the summary title provides one', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'summary',
+        ts: '2026-03-11T18:00:00.000Z',
+        kind: 'compaction',
+        title: 'Overflow recovery compaction',
+        text: '## Goal\nRetry after compaction.',
+      }],
+    }));
+
+    expect(html).toContain('Overflow recovery compaction');
+    expect(html).toContain('interrupted turn could retry automatically');
+  });
+
   it('collapses long compaction summaries to a short preview by default', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

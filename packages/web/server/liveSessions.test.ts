@@ -44,6 +44,8 @@ function setLiveEntry(
     lastQueueStateJson: entry.lastQueueStateJson ?? null,
     pendingHiddenTurnCustomTypes: entry.pendingHiddenTurnCustomTypes ?? [],
     activeHiddenTurnCustomType: entry.activeHiddenTurnCustomType ?? null,
+    pendingAutoCompactionReason: entry.pendingAutoCompactionReason ?? null,
+    lastCompactionSummaryTitle: entry.lastCompactionSummaryTitle ?? null,
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
     ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
     session: entry.session as LiveRegistryEntry['session'],
@@ -985,6 +987,65 @@ describe('live session subscriptions', () => {
           kind: 'compaction',
           title: 'Compaction summary',
           text: '## Goal\nKeep the compacted context visible.',
+        },
+        {
+          type: 'user',
+          id: 'live-1',
+          ts: new Date(2).toISOString(),
+          text: 'Continue from the summary',
+        },
+      ],
+    });
+  });
+
+  it('labels the latest live compaction summary with the compaction kind when available', () => {
+    setLiveEntry('session-summary-labeled', {
+      sessionId: 'session-summary-labeled',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Compacted conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      lastCompactionSummaryTitle: 'Overflow recovery compaction',
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'compactionSummary',
+              summary: '## Goal\nRetry after compaction.',
+              timestamp: 1,
+            },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Continue from the summary' }],
+              timestamp: 2,
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-summary-labeled', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 2,
+      blocks: [
+        {
+          type: 'summary',
+          id: 'live-0',
+          ts: new Date(1).toISOString(),
+          kind: 'compaction',
+          title: 'Overflow recovery compaction',
+          text: '## Goal\nRetry after compaction.',
         },
         {
           type: 'user',
