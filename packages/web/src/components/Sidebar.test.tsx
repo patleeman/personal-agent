@@ -317,6 +317,39 @@ describe('Sidebar', () => {
     expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
   });
 
+  it('treats instructions as part of capabilities navigation', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/instructions']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('href="/plans"');
+    expect(html).toContain('href="/scheduled"');
+    expect(html).toContain('href="/tools"');
+    expect(html).toContain('href="/instructions"');
+    expect(html).not.toContain('href="/projects"');
+    expect(html).not.toContain('href="/notes"');
+    expect(html).not.toContain('href="/skills"');
+  });
+
   it('uses the persisted collapsed state for active nav groups', () => {
     storage.setItem(buildSidebarNavSectionStorageKey('conversations'), JSON.stringify(false));
 

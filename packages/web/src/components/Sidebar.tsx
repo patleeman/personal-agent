@@ -530,17 +530,17 @@ export function Sidebar() {
   const knowledgeProjectsActive = location.pathname.startsWith('/projects');
   const knowledgeMemoriesActive = location.pathname.startsWith('/notes') || location.pathname.startsWith('/memories');
   const knowledgeSkillsActive = location.pathname.startsWith('/skills');
-  const knowledgeInstructionsActive = location.pathname.startsWith('/instructions');
+  const instructionsActive = location.pathname.startsWith('/instructions');
   const knowledgeGroupActive = knowledgeProjectsActive
     || knowledgeMemoriesActive
-    || knowledgeSkillsActive
-    || knowledgeInstructionsActive;
+    || knowledgeSkillsActive;
   const capabilitiesPresetsActive = location.pathname.startsWith('/plans');
   const capabilitiesScheduledActive = location.pathname.startsWith('/scheduled')
     || location.pathname.startsWith('/tasks')
     || location.pathname.startsWith('/automations');
   const capabilitiesToolsActive = location.pathname.startsWith('/tools');
-  const capabilitiesGroupActive = capabilitiesPresetsActive
+  const capabilitiesGroupActive = instructionsActive
+    || capabilitiesPresetsActive
     || capabilitiesScheduledActive
     || capabilitiesToolsActive;
   const [conversationsExpanded, toggleConversationsExpanded] = useSidebarNavGroupExpansion(
@@ -970,12 +970,11 @@ export function Sidebar() {
           <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
           <SidebarSubNavItem to="/notes" label="Notes" active={knowledgeMemoriesActive} />
           <SidebarSubNavItem to="/skills" label="Skills" active={knowledgeSkillsActive} />
-          <SidebarSubNavItem to="/instructions" label="Instructions" active={knowledgeInstructionsActive} />
         </SidebarNavGroup>
         <SidebarNavGroup
           icon={PATH.automation}
           label="Capabilities"
-          title="Browse automation surfaces and runtime tools."
+          title="Browse instructions, automation surfaces, and runtime tools."
           active={capabilitiesGroupActive}
           expanded={capabilitiesExpanded}
           onToggle={toggleCapabilitiesExpanded}
@@ -983,6 +982,7 @@ export function Sidebar() {
           <SidebarSubNavItem to="/plans" label="Todo Presets" active={capabilitiesPresetsActive} />
           <SidebarSubNavItem to="/scheduled" label="Scheduled Tasks" active={capabilitiesScheduledActive} />
           <SidebarSubNavItem to="/tools" label="Tools" active={capabilitiesToolsActive} />
+          <SidebarSubNavItem to="/instructions" label="Instructions" active={instructionsActive} />
         </SidebarNavGroup>
       </div>
 
