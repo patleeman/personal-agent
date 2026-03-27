@@ -321,17 +321,21 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         )}
       </div>
 
-      <ChecklistComposer
-        currentItems={draftItems}
-        skills={data.skills}
-        presets={presets}
-        disabled={pendingAction !== null}
-        onAdd={async (nextItems) => {
-          setDraftItems(nextItems);
-          await handleCommitItems(nextItems);
-        }}
-        onErrorChange={setActionError}
-      />
+      <div className="space-y-2">
+        <p className="ui-section-label">Add item</p>
+        <ChecklistComposer
+          currentItems={draftItems}
+          skills={data.skills}
+          presets={presets}
+          placeholder="Add a todo item… /skill:… or /preset:…"
+          disabled={pendingAction !== null}
+          onAdd={async (nextItems) => {
+            setDraftItems(nextItems);
+            await handleCommitItems(nextItems);
+          }}
+          onErrorChange={setActionError}
+        />
+      </div>
 
       {actionError && <p className="text-[11px] text-danger">{actionError}</p>}
     </div>
