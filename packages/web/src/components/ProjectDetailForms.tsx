@@ -13,6 +13,7 @@ import {
 import { timeAgo } from '../utils';
 import { Pill, ToolbarButton, type PillTone } from './ui';
 import { MentionTextarea } from './MentionTextarea';
+import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
@@ -333,7 +334,7 @@ export function ProjectNoteEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Body</label>
-        <MentionTextarea value={value.body} onValueChange={(body) => onChange({ body })} className={TEXTAREA_CLASS} />
+        <RichMarkdownEditor value={value.body} onChange={(body) => onChange({ body })} placeholder="Start writing…" />
       </div>
 
       {error && <p className="text-[12px] text-danger">{error}</p>}

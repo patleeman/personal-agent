@@ -1,8 +1,5 @@
-import { Suspense, lazy, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { Suspense, lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { buildConversationFileHref } from '../conversationFiles';
@@ -38,13 +35,12 @@ import {
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
-import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
-import { emitMemoriesChanged } from '../memoryDocEvents';
+import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { getSystemComponentFromSearch, getSystemComponentLabel } from '../systemSelection';
 import { formatTaskSchedule } from '../taskSchedule';
@@ -74,7 +70,7 @@ import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs'
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
-import { InlineMarkdownCode } from './MarkdownInlineCode';
+import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
 import { MentionTextarea } from './MentionTextarea';
@@ -82,7 +78,6 @@ import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import { NotesBrowserRail } from './NotesBrowserRail';
 import { ProjectsBrowserRail } from './ProjectsBrowserRail';
 import { SkillsBrowserRail } from './SkillsBrowserRail';
-import { useNodeMentionItems } from '../useNodeMentionItems';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -2404,479 +2399,6 @@ export function ProjectDetailContext({ id }: { id: string }) {
   );
 }
 
-// ── Managed note nodes ───────────────────────────────────────────────────────
-
-const MANAGED_NOTE_ID_SEARCH_PARAM = 'note';
-const MANAGED_MEMORY_FILE_SEARCH_PARAM = 'file';
-
-function buildManagedNoteSearch(locationSearch: string, memoryId: string | null, relativePath: string | null = null): string {
-  const params = new URLSearchParams(locationSearch);
-
-  if (memoryId) {
-    params.set(MANAGED_NOTE_ID_SEARCH_PARAM, memoryId);
-  } else {
-    params.delete(MANAGED_NOTE_ID_SEARCH_PARAM);
-    params.delete('memory');
-  }
-
-  if (relativePath) {
-    params.set(MANAGED_MEMORY_FILE_SEARCH_PARAM, relativePath);
-  } else {
-    params.delete(MANAGED_MEMORY_FILE_SEARCH_PARAM);
-  }
-
-  const next = params.toString();
-  return next ? `?${next}` : '';
-}
-
-function MemoryDocDisclosure({
-  title,
-  summary,
-  defaultOpen = false,
-  children,
-}: {
-  title: string;
-  summary?: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <details className="ui-disclosure" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="ui-disclosure-summary">
-        <span>{title}</span>
-        {summary ? <span className="ui-disclosure-meta">{summary}</span> : null}
-      </summary>
-      <div className="ui-disclosure-body">{children}</div>
-    </details>
-  );
-}
-
-export function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relativePath: string | null }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { openSession } = useConversations();
-  const fetcher = useCallback(() => api.noteDoc(memoryId), [memoryId]);
-  const { data, loading, refreshing, error, refetch } = useApi(fetcher, memoryId);
-  const [draft, setDraft] = useState('');
-  const [savedContent, setSavedContent] = useState('');
-  const [selectedContent, setSelectedContent] = useState('');
-  const [selectedContentLoading, setSelectedContentLoading] = useState(false);
-  const [selectedContentError, setSelectedContentError] = useState<string | null>(null);
-  const [contentMode, setContentMode] = useState<'preview' | 'edit'>('preview');
-  const [saveBusy, setSaveBusy] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [startBusy, setStartBusy] = useState(false);
-  const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
-
-  const setSelectedMemory = useCallback((nextMemoryId: string | null, nextRelativePath: string | null = null, replace = false) => {
-    const nextSearch = buildManagedNoteSearch(location.search, nextMemoryId, nextRelativePath);
-    navigate(`/notes${nextSearch}`, { replace });
-  }, [location.search, navigate]);
-
-  const memory = data?.memory ?? null;
-  const references = data?.references ?? [];
-  const selectedReference = useMemo(
-    () => references.find((reference) => reference.relativePath === relativePath) ?? null,
-    [references, relativePath],
-  );
-  const selectedFilePath = selectedReference?.path ?? memory?.path ?? null;
-  const selectedFileLabel = selectedReference?.title ?? memory?.title ?? 'Note';
-  const selectedFileSummary = selectedReference?.summary ?? memory?.summary ?? '';
-  const selectedFileRelativePath = selectedReference?.relativePath ?? 'INDEX.md';
-  const dirty = draft !== savedContent;
-  const linkedNodeCount = (data?.links?.incoming?.length ?? 0) + (data?.links?.outgoing?.length ?? 0);
-  const unresolvedLinkCount = data?.links?.unresolved?.length ?? 0;
-  const linkedSummary = [
-    linkedNodeCount > 0 ? `${linkedNodeCount} linked` : null,
-    unresolvedLinkCount > 0 ? `${unresolvedLinkCount} unresolved` : null,
-  ].filter(Boolean).join(' · ') || 'No links';
-  const fileSummary = `${1 + references.length} ${(1 + references.length) === 1 ? 'file' : 'files'}`;
-  const noteInfoSummary = [
-    memory?.type ?? null,
-    memory?.status ?? null,
-    memory?.updated ? `updated ${timeAgo(memory.updated)}` : null,
-  ].filter(Boolean).join(' · ');
-
-  useEffect(() => {
-    if (!memory || !relativePath) {
-      return;
-    }
-
-    if (!references.some((reference) => reference.relativePath === relativePath)) {
-      setSelectedMemory(memory.id, null, true);
-    }
-  }, [memory, references, relativePath, setSelectedMemory]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadSelectedContent() {
-      if (!memory) {
-        return;
-      }
-
-      if (!selectedReference) {
-        setSelectedContent(data?.content ?? '');
-        setSelectedContentError(null);
-        setSelectedContentLoading(false);
-        return;
-      }
-
-      setSelectedContentLoading(true);
-      setSelectedContentError(null);
-      try {
-        const result = await api.memoryFile(selectedReference.path);
-        if (cancelled) {
-          return;
-        }
-        setSelectedContent(result.content);
-      } catch (selectedError) {
-        if (cancelled) {
-          return;
-        }
-        setSelectedContentError(selectedError instanceof Error ? selectedError.message : String(selectedError));
-        setSelectedContent('');
-      } finally {
-        if (!cancelled) {
-          setSelectedContentLoading(false);
-        }
-      }
-    }
-
-    void loadSelectedContent();
-    return () => {
-      cancelled = true;
-    };
-  }, [data?.content, memory?.id, selectedReference?.path]);
-
-  useEffect(() => {
-    setDraft(selectedContent);
-    setSavedContent(selectedContent);
-    setContentMode('preview');
-  }, [selectedContent, selectedFilePath]);
-
-  async function handleSave() {
-    if (!memory || !selectedFilePath || saveBusy || !dirty) {
-      return;
-    }
-
-    setSaveBusy(true);
-    setNotice(null);
-
-    try {
-      if (selectedReference) {
-        await api.memoryFileSave(selectedReference.path, draft);
-        const refreshedFile = await api.memoryFile(selectedReference.path);
-        setSelectedContent(refreshedFile.content);
-        setDraft(refreshedFile.content);
-        setSavedContent(refreshedFile.content);
-        await refetch({ resetLoading: false });
-        setNotice({ tone: 'accent', text: `Saved ${selectedReference.relativePath}.` });
-      } else {
-        const result = await api.saveNoteDoc(memory.id, draft);
-        setSelectedContent(result.content);
-        setDraft(result.content);
-        setSavedContent(result.content);
-        setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
-
-        if (result.memory.id !== memory.id) {
-          setSelectedMemory(result.memory.id, null, true);
-          return;
-        }
-
-        await refetch({ resetLoading: false });
-      }
-
-      emitMemoriesChanged();
-    } catch (saveError) {
-      setNotice({ tone: 'danger', text: saveError instanceof Error ? saveError.message : String(saveError) });
-    } finally {
-      setSaveBusy(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!memory || deleteBusy || selectedReference) {
-      return;
-    }
-
-    if (!window.confirm(`Delete note node @${memory.id}? This removes the full node, including references and assets.`)) {
-      return;
-    }
-
-    setDeleteBusy(true);
-    setNotice(null);
-
-    try {
-      await api.deleteNoteDoc(memory.id);
-      emitMemoriesChanged();
-      setSelectedMemory(null, null, true);
-    } catch (deleteError) {
-      setNotice({ tone: 'danger', text: deleteError instanceof Error ? deleteError.message : String(deleteError) });
-      setDeleteBusy(false);
-    }
-  }
-
-  async function handleStartConversation() {
-    if (!memory || startBusy) {
-      return;
-    }
-
-    setStartBusy(true);
-    setNotice(null);
-
-    try {
-      const result = await api.startNoteConversation(memory.id);
-      openSession(result.id);
-      navigate(`/conversations/${encodeURIComponent(result.id)}`);
-    } catch (startError) {
-      setNotice({ tone: 'danger', text: startError instanceof Error ? startError.message : String(startError) });
-      setStartBusy(false);
-    }
-  }
-
-  if (loading && !data) {
-    return <LoadingState label="Loading note…" className="px-4 py-4" />;
-  }
-
-  if (error && !data) {
-    return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
-  }
-
-  if (!memory) {
-    return <div className="px-4 py-4 text-[12px] text-dim">Note not found.</div>;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <p className="text-[18px] font-semibold tracking-tight text-primary">{selectedFileLabel}</p>
-            {selectedFileSummary && (
-              <p className="max-w-xl text-[13px] leading-relaxed text-secondary">{selectedFileSummary}</p>
-            )}
-            <p className="ui-card-meta font-mono" title={selectedFilePath ?? undefined}>@{memory.id} · {selectedFileRelativePath}</p>
-            {noteInfoSummary && <p className="ui-card-meta">{noteInfoSummary}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={() => { void refetch({ resetLoading: false }); }}
-            disabled={refreshing || selectedContentLoading}
-            className="ui-toolbar-button shrink-0"
-          >
-            {refreshing || selectedContentLoading ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="ui-segmented-control">
-            <button
-              type="button"
-              onClick={() => setContentMode('preview')}
-              className={contentMode === 'preview' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-            >
-              Preview
-            </button>
-            <button
-              type="button"
-              onClick={() => setContentMode('edit')}
-              className={contentMode === 'edit' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-            >
-              Edit markdown
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => { void handleStartConversation(); }}
-            disabled={startBusy || loading}
-            className="ui-toolbar-button text-accent"
-          >
-            {startBusy ? 'Starting…' : 'Chat about note'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { void handleSave(); }}
-            disabled={!dirty || saveBusy || loading || selectedContentLoading || Boolean(selectedContentError)}
-            className={dirty ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
-          >
-            {saveBusy ? 'Saving…' : 'Save'}
-          </button>
-          {!selectedReference && (
-            <button
-              type="button"
-              onClick={() => { void handleDelete(); }}
-              disabled={deleteBusy || loading}
-              className="ui-toolbar-button text-danger"
-            >
-              {deleteBusy ? 'Deleting…' : 'Delete note'}
-            </button>
-          )}
-          {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {selectedContentError ? (
-          <ErrorState message={`Failed to load file: ${selectedContentError}`} className="px-0 py-0" />
-        ) : selectedContentLoading ? (
-          <LoadingState label="Loading file…" className="px-0 py-0" />
-        ) : contentMode === 'preview' ? (
-          <div className="ui-note-document min-h-[24rem]">
-            <RailRenderedMarkdown content={draft} />
-          </div>
-        ) : (
-          <MentionTextarea
-            value={draft}
-            onValueChange={setDraft}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-                event.preventDefault();
-                void handleSave();
-              }
-            }}
-            className="min-h-[28rem] w-full resize-none rounded-2xl border border-border-subtle bg-base px-4 py-4 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60 focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
-            spellCheck={false}
-          />
-        )}
-
-        <div className="mt-4 space-y-1">
-          <p className="ui-card-meta">
-            {contentMode === 'preview'
-              ? 'Preview hides YAML frontmatter so the note reads like a document.'
-              : 'Edit the raw markdown directly. Use Cmd/Ctrl+S to save.'}
-          </p>
-          {notice && (
-            <p className={notice.tone === 'danger' ? 'text-[12px] text-danger' : 'text-[12px] text-accent'}>
-              {notice.text}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-5">
-          <MemoryDocDisclosure title="Note info" summary={noteInfoSummary || selectedFileRelativePath}>
-            <div className="ui-detail-list">
-              <div className="ui-detail-row">
-                <span className="ui-detail-label">Note</span>
-                <Link to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
-                  @{memory.id}
-                </Link>
-              </div>
-              {selectedFilePath && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">File</span>
-                  <span className="ui-detail-value break-all font-mono">{selectedFilePath}</span>
-                </div>
-              )}
-              {memory.updated && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Updated</span>
-                  <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
-                </div>
-              )}
-              {memory.role && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Role</span>
-                  <span className="ui-detail-value">{memory.role}</span>
-                </div>
-              )}
-              {memory.type && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Type</span>
-                  <span className="ui-detail-value">{memory.type}</span>
-                </div>
-              )}
-              {memory.status && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Status</span>
-                  <span className="ui-detail-value">{memory.status}</span>
-                </div>
-              )}
-              {memory.area && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Area</span>
-                  <span className="ui-detail-value">{memory.area}</span>
-                </div>
-              )}
-              {memory.parent && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Parent</span>
-                  <Link
-                    to={`/notes${buildManagedNoteSearch(location.search, memory.parent)}`}
-                    className="ui-detail-value text-accent hover:underline"
-                  >
-                    @{memory.parent}
-                  </Link>
-                </div>
-              )}
-              {memory.related && memory.related.length > 0 && (
-                <div className="ui-detail-row items-start">
-                  <span className="ui-detail-label">Related</span>
-                  <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
-                    {memory.related.map((relatedId) => (
-                      <Link
-                        key={relatedId}
-                        to={`/notes${buildManagedNoteSearch(location.search, relatedId)}`}
-                        className="text-accent hover:underline"
-                      >
-                        @{relatedId}
-                      </Link>
-                    ))}
-                  </span>
-                </div>
-              )}
-              {memory.tags.length > 0 && (
-                <div className="ui-detail-row">
-                  <span className="ui-detail-label">Tags</span>
-                  <span className="ui-detail-value">{memory.tags.join(' · ')}</span>
-                </div>
-              )}
-            </div>
-          </MemoryDocDisclosure>
-
-          <MemoryDocDisclosure title="Linked notes" summary={linkedSummary}>
-            <div className="space-y-4">
-              <NodeLinkList title="Links to" items={data?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-              <NodeLinkList title="Linked from" items={data?.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
-              <UnresolvedNodeLinks ids={data?.links?.unresolved} />
-            </div>
-          </MemoryDocDisclosure>
-
-          <MemoryDocDisclosure title="Files" summary={fileSummary} defaultOpen={Boolean(selectedReference)}>
-            <div className="space-y-2">
-              <p className="ui-card-meta">`INDEX.md` is the main note. Reference files hold supporting material, and assets stay on disk inside `assets/`.</p>
-              <div className="space-y-px">
-                <Link
-                  to={`/notes${buildManagedNoteSearch(location.search, memory.id)}`}
-                  className={relativePath ? 'ui-list-row ui-list-row-hover -mx-2 px-3 py-2.5' : 'ui-list-row ui-list-row-selected -mx-2 px-3 py-2.5'}
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="ui-row-title">INDEX.md</p>
-                    <p className="ui-row-meta">Main note</p>
-                  </div>
-                </Link>
-                {references.map((reference) => (
-                  <Link
-                    key={reference.path}
-                    to={`/notes${buildManagedNoteSearch(location.search, memory.id, reference.relativePath)}`}
-                    className={reference.relativePath === relativePath ? 'ui-list-row ui-list-row-selected -mx-2 px-3 py-2.5' : 'ui-list-row ui-list-row-hover -mx-2 px-3 py-2.5'}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="ui-row-title truncate">{reference.title}</p>
-                      <p className="ui-row-meta truncate">{reference.relativePath}</p>
-                    </div>
-                  </Link>
-                ))}
-                {references.length === 0 && <p className="ui-card-meta">No reference files yet.</p>}
-              </div>
-            </div>
-          </MemoryDocDisclosure>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Memory file content ───────────────────────────────────────────────────────
 
 function MemoryFileContext({ path }: { path: string }) {
@@ -2999,7 +2521,7 @@ function MemoryOverviewContext() {
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Agent nodes</p>
-        <p className="ui-card-meta">Select an item on the left to inspect the raw markdown.</p>
+        <p className="ui-card-meta">Select an item on the left to inspect the document content.</p>
       </div>
 
       <p className="ui-card-meta">
@@ -3048,56 +2570,11 @@ function RailMetadataRow({ label, value }: { label: string; value: React.ReactNo
 }
 
 function RailMarkdownPreview({ content, className }: { content: string; className?: string }) {
-  return (
-    <pre className={[
-      'overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary',
-      className,
-    ].filter(Boolean).join(' ')}>
-      {content}
-    </pre>
-  );
-}
-
-function extractRailMarkdownPreviewBody(content: string): string {
-  const normalized = content.replace(/\r\n/g, '\n');
-  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
-  return (match?.[1] ?? normalized).replace(/^\n+/, '');
+  return <RichMarkdownRenderer content={content} className={className ?? 'ui-markdown max-w-none text-[13px] leading-relaxed'} stripFrontmatter />;
 }
 
 function RailRenderedMarkdown({ content }: { content: string }) {
-  const footnoteId = useId();
-  const footnotePrefix = `rail-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
-  const body = extractRailMarkdownPreviewBody(content).trim();
-  const { data: mentionItems } = useNodeMentionItems();
-  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
-
-  if (body.length === 0) {
-    return <p className="ui-card-meta">This file has no rendered markdown yet.</p>;
-  }
-
-  return (
-    <div className="ui-markdown max-w-none text-[13px] leading-relaxed">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
-        components={{
-          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</td>,
-        }}
-      >
-        {body}
-      </ReactMarkdown>
-    </div>
-  );
+  return <RichMarkdownRenderer content={content} className="ui-markdown max-w-none text-[13px] leading-relaxed" emptyText="This file has no rendered markdown yet." stripFrontmatter />;
 }
 
 function sortKnowledgeProjects(items: ProjectRecord[]): ProjectRecord[] {
@@ -4034,7 +3511,7 @@ export function ContextRail() {
   // Managed note nodes
   if (section === 'notes' || section === 'memories') {
     const params = new URLSearchParams(location.search);
-    const memoryId = params.get(MANAGED_NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
+    const memoryId = params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">

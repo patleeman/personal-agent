@@ -8,6 +8,7 @@ import { useReloadState } from '../reloadState';
 import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import { EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
+import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { ProjectsBrowserRail } from '../components/ProjectsBrowserRail';
 import { buildRailWidthStorageKey } from '../layoutSizing';
@@ -139,11 +140,9 @@ function CreateProjectPanel({
 
           <div className="space-y-1.5">
             <label className="ui-card-meta" htmlFor="project-document">Starting doc</label>
-            <MentionTextarea
-              id="project-document"
+            <RichMarkdownEditor
               value={documentContent}
-              onValueChange={setDocumentContent}
-              className={TEXTAREA_CLASS}
+              onChange={setDocumentContent}
               placeholder="Optional. Add the initial context or plan you want to keep with the project."
             />
           </div>

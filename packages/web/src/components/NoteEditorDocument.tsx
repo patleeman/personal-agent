@@ -1,43 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import type { Extension } from '@codemirror/state';
-import { EditorView, placeholder as codeMirrorPlaceholder } from '@codemirror/view';
-import { useTheme } from '../theme';
-import { editorChromeTheme, languageExtensionForPath } from '../workspaceBrowser';
-
-const noteEditorTheme = EditorView.theme({
-  '&': {
-    height: '100%',
-    backgroundColor: 'transparent',
-  },
-  '.cm-scroller': {
-    fontFamily: '"DM Sans Variable", "DM Sans", system-ui, sans-serif',
-    lineHeight: '1.8',
-    backgroundColor: 'transparent',
-  },
-  '.cm-content': {
-    minHeight: '20rem',
-    padding: '0 0 18rem',
-    maxWidth: '48rem',
-    margin: '0 auto',
-    fontSize: '15px',
-  },
-  '.cm-line': {
-    padding: '0',
-  },
-  '.cm-gutters': {
-    display: 'none',
-  },
-  '.cm-activeLine': {
-    backgroundColor: 'transparent',
-  },
-  '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
-    backgroundColor: 'rgb(var(--color-accent) / 0.14)',
-  },
-  '.cm-placeholder': {
-    color: 'rgb(var(--color-dim))',
-  },
-});
+import { type ReactNode } from 'react';
+import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
 
 export function NoteEditorDocument({
   title,
@@ -46,7 +8,6 @@ export function NoteEditorDocument({
   onSummaryChange,
   body,
   onBodyChange,
-  path,
   meta,
   inferredTags,
   titlePlaceholder = 'Untitled',
@@ -68,21 +29,6 @@ export function NoteEditorDocument({
   bodyPlaceholder?: string;
   readOnly?: boolean;
 }) {
-  const { theme } = useTheme();
-  const editorExtensions = useMemo(() => {
-    const extensions: Extension[] = [
-      editorChromeTheme(theme === 'dark'),
-      noteEditorTheme,
-      EditorView.lineWrapping,
-      codeMirrorPlaceholder(bodyPlaceholder),
-    ];
-    const languageExtension = languageExtensionForPath(path);
-    if (languageExtension) {
-      extensions.push(languageExtension);
-    }
-    return extensions;
-  }, [bodyPlaceholder, path, theme]);
-
   return (
     <div className="ui-note-editor-frame">
       <div className="ui-note-editor-doc">
@@ -121,16 +67,13 @@ export function NoteEditorDocument({
           </div>
         </div>
 
-        <div className="ui-note-editor-shell">
-          <CodeMirror
-            value={body}
-            onChange={onBodyChange}
-            extensions={editorExtensions}
-            editable={!readOnly}
-            readOnly={readOnly}
-            className="h-full"
-          />
-        </div>
+        <RichMarkdownEditor
+          value={body}
+          onChange={onBodyChange}
+          placeholder={bodyPlaceholder}
+          readOnly={readOnly}
+          className="ui-note-rich-editor"
+        />
       </div>
     </div>
   );

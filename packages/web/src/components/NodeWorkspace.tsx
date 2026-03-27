@@ -1,16 +1,5 @@
-import { type ComponentProps, type ReactNode, useId, useMemo } from 'react';
+import { type ComponentProps, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import CodeMirror from '@uiw/react-codemirror';
-import { EditorView, lineNumbers } from '@codemirror/view';
-import type { Extension } from '@codemirror/state';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
-import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
-import { useNodeMentionItems } from '../useNodeMentionItems';
-import { editorChromeTheme, languageExtensionForPath } from '../workspaceBrowser';
-import { useTheme } from '../theme';
-import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ToolbarButton, cx } from './ui';
 
 export interface NodeWorkspaceTab {
@@ -19,14 +8,6 @@ export interface NodeWorkspaceTab {
   to?: string;
   selected?: boolean;
   onSelect?: () => void;
-}
-
-export type MarkdownDocumentMode = 'edit' | 'preview' | 'split';
-
-function stripFrontmatter(content: string): string {
-  const normalized = content.replace(/\r\n/g, '\n');
-  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
-  return (match?.[1] ?? normalized).replace(/^\n+/, '');
 }
 
 function TabButton({ tab }: { tab: NodeWorkspaceTab }) {
@@ -49,7 +30,6 @@ export function NodeWorkspaceShell({
   summary,
   meta,
   resourceTabs,
-  modeTabs,
   actions,
   notice,
   children,
@@ -61,7 +41,6 @@ export function NodeWorkspaceShell({
   summary?: ReactNode;
   meta?: ReactNode;
   resourceTabs?: NodeWorkspaceTab[];
-  modeTabs?: NodeWorkspaceTab[];
   actions?: ReactNode;
   notice?: ReactNode;
   children: ReactNode;
@@ -83,18 +62,13 @@ export function NodeWorkspaceShell({
           {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
 
-        {(resourceTabs || modeTabs || notice) && (
+        {(resourceTabs || notice) && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
             {resourceTabs ? (
               <div className="ui-segmented-control" role="tablist" aria-label="Node resources">
                 {resourceTabs.map((tab) => <TabButton key={tab.id} tab={tab} />)}
               </div>
             ) : <div />}
-            {modeTabs ? (
-              <div className="ui-segmented-control" role="tablist" aria-label="Document mode">
-                {modeTabs.map((tab) => <TabButton key={tab.id} tab={tab} />)}
-              </div>
-            ) : null}
           </div>
         )}
 
@@ -149,132 +123,6 @@ export function NodeMetadataList({
   );
 }
 
-export function RenderedMarkdownDocument({
-  content,
-  emptyText = 'Nothing to preview yet.',
-  className,
-}: {
-  content: string;
-  emptyText?: string;
-  className?: string;
-}) {
-  const footnoteId = useId();
-  const footnotePrefix = `node-doc-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
-  const body = stripFrontmatter(content).trim();
-  const { data: mentionItems } = useNodeMentionItems();
-  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
-
-  if (body.length === 0) {
-    return <p className="text-[13px] text-dim">{emptyText}</p>;
-  }
-
-  return (
-    <div className={cx('ui-markdown max-w-none', className)}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
-        components={{
-          code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</td>,
-        }}
-      >
-        {body}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
-export function MarkdownDocumentSurface({
-  value,
-  path,
-  mode,
-  onChange,
-  readOnly = false,
-  emptyPreviewText,
-}: {
-  value: string;
-  path: string;
-  mode: MarkdownDocumentMode;
-  onChange: (nextValue: string) => void;
-  readOnly?: boolean;
-  emptyPreviewText?: string;
-}) {
-  const { theme } = useTheme();
-  const editorExtensions = useMemo(() => {
-    const extensions: Extension[] = [editorChromeTheme(theme === 'dark'), EditorView.lineWrapping, lineNumbers()];
-    const languageExtension = languageExtensionForPath(path);
-    if (languageExtension) {
-      extensions.push(languageExtension);
-    }
-    return extensions;
-  }, [path, theme]);
-
-  const editor = (
-    <div className="h-full bg-panel">
-      <CodeMirror
-        value={value}
-        onChange={onChange}
-        extensions={editorExtensions}
-        editable={!readOnly}
-        readOnly={readOnly}
-        className="h-full"
-      />
-    </div>
-  );
-
-  const preview = (
-    <div className="h-full overflow-y-auto px-6 py-6">
-      <div className="ui-note-document min-h-full">
-        <RenderedMarkdownDocument content={value} emptyText={emptyPreviewText} />
-      </div>
-    </div>
-  );
-
-  if (mode === 'preview') {
-    return preview;
-  }
-
-  if (mode === 'split') {
-    return (
-      <div className="grid h-full min-h-0 grid-cols-1 divide-y divide-border-subtle lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-        <div className="min-h-[18rem] lg:min-h-0">{editor}</div>
-        <div className="min-h-[18rem] lg:min-h-0">{preview}</div>
-      </div>
-    );
-  }
-
-  return editor;
-}
-
-export function MarkdownDocumentModeTabs({
-  mode,
-  onModeChange,
-}: {
-  mode: MarkdownDocumentMode;
-  onModeChange: (mode: MarkdownDocumentMode) => void;
-}) {
-  const tabs: NodeWorkspaceTab[] = [
-    { id: 'edit', label: 'Edit', selected: mode === 'edit', onSelect: () => onModeChange('edit') },
-    { id: 'preview', label: 'Preview', selected: mode === 'preview', onSelect: () => onModeChange('preview') },
-    { id: 'split', label: 'Split', selected: mode === 'split', onSelect: () => onModeChange('split') },
-  ];
-
-  return (
-    <div className="ui-segmented-control" role="tablist" aria-label="Document mode">
-      {tabs.map((tab) => <TabButton key={tab.id} tab={tab} />)}
-    </div>
-  );
-}
-
 export function WorkspaceActionNotice({
   tone,
   children,
@@ -296,4 +144,8 @@ export function NodePrimaryToolbar({ children }: { children: ReactNode }) {
 
 export function NodeActionButton({ children, ...props }: ComponentProps<typeof ToolbarButton>) {
   return <ToolbarButton {...props}>{children}</ToolbarButton>;
+}
+
+export function NodeWorkspaceBody({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cx('h-full overflow-y-auto px-6 py-6', className)}>{children}</div>;
 }

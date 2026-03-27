@@ -78,7 +78,7 @@ export function CompanionSkillDetailPage() {
               </Section>
 
               <Section title="Definition">
-                <CompanionMarkdown content={data.content} />
+                <CompanionMarkdown content={data.content} stripFrontmatter />
               </Section>
 
               <Section title="Relationships">
