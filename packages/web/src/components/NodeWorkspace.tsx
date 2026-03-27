@@ -67,8 +67,8 @@ export function NodeWorkspaceShell({
   inspector?: ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border-subtle bg-base/70 shadow-sm">
-      <div className="shrink-0 border-b border-border-subtle px-4 py-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border-subtle pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             {eyebrow && <p className="ui-section-label">{eyebrow}</p>}
@@ -102,7 +102,7 @@ export function NodeWorkspaceShell({
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
 
       {inspector && (
-        <div className="shrink-0 border-t border-border-subtle bg-surface/25 px-4 py-4">
+        <div className="shrink-0 border-t border-border-subtle pt-4">
           <div className="space-y-4">{inspector}</div>
         </div>
       )}
@@ -230,7 +230,7 @@ export function MarkdownDocumentSurface({
   );
 
   const preview = (
-    <div className="h-full overflow-y-auto bg-surface/15 px-5 py-5">
+    <div className="h-full overflow-y-auto px-6 py-6">
       <div className="ui-note-document min-h-full">
         <RenderedMarkdownDocument content={value} emptyText={emptyPreviewText} />
       </div>

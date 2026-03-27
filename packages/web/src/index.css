@@ -320,7 +320,7 @@
   }
 
   .ui-note-document {
-    @apply rounded-2xl border border-border-subtle bg-base/80 px-5 py-5 shadow-sm;
+    @apply mx-auto w-full max-w-4xl;
   }
 
   .ui-detail-list {
