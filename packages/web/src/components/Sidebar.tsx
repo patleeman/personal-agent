@@ -414,6 +414,7 @@ export function Sidebar() {
       return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
     }).length;
   }, [activity?.entries, archivedSessions, pinnedSessions, tabs]);
+  const notificationCount = standaloneUnreadCount + activeAlertCount;
 
   useEffect(() => {
     function syncDraftState() {
@@ -561,7 +562,7 @@ export function Sidebar() {
       </div>
 
       <div className="pb-1 space-y-0.5">
-        <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={standaloneUnreadCount} />
+        <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
         <TopNavItem to="/notes" icon={PATH.notes} label="Notes" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
@@ -710,7 +711,6 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-        <TopNavItem to="/alerts" icon={PATH.alerts} label="Alerts" badge={activeAlertCount} />
         <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
       </div>
     </aside>

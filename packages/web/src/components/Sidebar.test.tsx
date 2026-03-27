@@ -131,7 +131,7 @@ describe('Sidebar', () => {
     expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Pinned Conversations');
     expect(html).toContain('Open Conversations');
-    expect(html).toContain('Alerts');
+    expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Knowledge Base');
     expect(html).not.toContain('Capabilities');

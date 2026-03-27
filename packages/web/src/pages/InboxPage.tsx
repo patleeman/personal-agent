@@ -5,8 +5,8 @@ import { useAppData, useSseConnection } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { kindMeta, timeAgo } from '../utils';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton, cx } from '../components/ui';
-import type { ActivityEntry, SessionMeta } from '../types';
+import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, cx } from '../components/ui';
+import type { ActivityEntry, AlertEntry, SessionMeta } from '../types';
 
 type InboxSurfaceItem =
   | {
@@ -49,10 +49,34 @@ function pickActivityConversationId(entry: Pick<ActivityEntry, 'relatedConversat
     : null;
 }
 
+function alertTone(entry: AlertEntry): 'warning' | 'accent' | 'danger' {
+  if (entry.kind === 'approval-needed' || entry.kind === 'reminder') {
+    return 'warning';
+  }
+
+  if (entry.kind === 'task-failed' || entry.kind === 'blocked') {
+    return 'danger';
+  }
+
+  return 'accent';
+}
+
+function alertLabel(entry: AlertEntry): string {
+  if (entry.kind === 'task-callback') {
+    return 'task callback';
+  }
+
+  return entry.kind.replace(/-/g, ' ');
+}
+
+function sortAlerts(entries: AlertEntry[]): AlertEntry[] {
+  return [...entries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 export function InboxPage() {
   const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
-  const { activity, setActivity } = useAppData();
+  const { activity, alerts, setActivity, setAlerts = () => {} } = useAppData();
   const { status: sseStatus } = useSseConnection();
   const { tabs, archivedSessions, archivedConversationIds = [], openSession, loading: conversationsLoading, refetch: refetchSessions } = useConversations();
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
@@ -61,6 +85,7 @@ export function InboxPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [startingActivityId, setStartingActivityId] = useState<string | null>(null);
+  const [busyAlertId, setBusyAlertId] = useState<string | null>(null);
 
   const standaloneActivities = useMemo(() => {
     const knownConversationIds = new Set([...tabs, ...archivedSessions].map((session) => session.id));
@@ -99,10 +124,15 @@ export function InboxPage() {
       .sort((left, right) => right.sortAt.localeCompare(left.sortAt));
   }, [attentionConversations, standaloneActivities]);
 
+  const activeAlerts = useMemo(
+    () => sortAlerts((alerts?.entries ?? []).filter((entry) => entry.status === 'active')),
+    [alerts?.entries],
+  );
   const unreadCount = useMemo(
     () => attentionConversations.length + standaloneActivities.filter((entry) => !entry.read).length,
     [attentionConversations.length, standaloneActivities],
   );
+  const notificationCount = unreadCount + activeAlerts.length;
   const visible = useMemo(
     () => filter === 'unread' ? allItems.filter((item) => !item.read) : allItems,
     [allItems, filter],
@@ -114,14 +144,16 @@ export function InboxPage() {
 
   const refreshInbox = useCallback(async () => {
     try {
-      const [nextActivity] = await Promise.all([
+      const [nextActivity, nextAlerts] = await Promise.all([
         api.activity(),
+        api.alerts(),
         refetchSessions(),
       ]);
       setActivity({
         entries: nextActivity,
         unreadCount: nextActivity.filter((entry) => !entry.read).length,
       });
+      setAlerts(nextAlerts);
       setRefreshError(null);
       return nextActivity;
     } catch (error) {
@@ -129,7 +161,7 @@ export function InboxPage() {
       setRefreshError(message);
       return null;
     }
-  }, [refetchSessions, setActivity]);
+  }, [refetchSessions, setActivity, setAlerts]);
 
   const markAllRead = useCallback(async () => {
     if (allItems.length === 0) return;
@@ -175,6 +207,57 @@ export function InboxPage() {
     }
   }, [allItems.length, refreshInbox]);
 
+  const acknowledgeAlert = useCallback(async (id: string) => {
+    if (busyAlertId) {
+      return;
+    }
+
+    setBusyAlertId(id);
+    setActionError(null);
+    try {
+      await api.acknowledgeAlert(id);
+      setAlerts(await api.alerts());
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyAlertId(null);
+    }
+  }, [busyAlertId, setAlerts]);
+
+  const dismissAlert = useCallback(async (id: string) => {
+    if (busyAlertId) {
+      return;
+    }
+
+    setBusyAlertId(id);
+    setActionError(null);
+    try {
+      await api.dismissAlert(id);
+      setAlerts(await api.alerts());
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyAlertId(null);
+    }
+  }, [busyAlertId, setAlerts]);
+
+  const snoozeAlert = useCallback(async (id: string) => {
+    if (busyAlertId) {
+      return;
+    }
+
+    setBusyAlertId(id);
+    setActionError(null);
+    try {
+      await api.snoozeAlert(id, { delay: '15m' });
+      setAlerts(await api.alerts());
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusyAlertId(null);
+    }
+  }, [busyAlertId, setAlerts]);
+
   const openActivityConversation = useCallback((conversationId: string) => {
     setActionError(null);
     openSession(conversationId);
@@ -201,11 +284,11 @@ export function InboxPage() {
   }, [navigate, openActivityConversation, openSession]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <PageHeader
         actions={(
           <>
-            {(activity || archivedSessions.length > 0) && (
+            {(activity || archivedSessions.length > 0 || activeAlerts.length > 0) && (
               <div className="ui-segmented-control">
                 <button
                   onClick={() => setFilter('unread')}
@@ -220,6 +303,11 @@ export function InboxPage() {
                   All{allItems.length > 0 && <span className="ml-1 opacity-50">{allItems.length}</span>}
                 </button>
               </div>
+            )}
+            {(alerts?.entries.length ?? 0) > 0 && (
+              <Link to="/alerts" className="ui-toolbar-button text-[11px]">
+                Alert history
+              </Link>
             )}
             {allItems.length > 0 && (
               <ToolbarButton
@@ -239,7 +327,7 @@ export function InboxPage() {
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </ToolbarButton>
             )}
-            <ToolbarButton onClick={() => { void refreshInbox(); }} disabled={clearingInbox}>↻ Refresh</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshInbox(); }} disabled={clearingInbox || busyAlertId !== null}>↻ Refresh</ToolbarButton>
           </>
         )}
       >
@@ -247,9 +335,11 @@ export function InboxPage() {
           title="Inbox"
           meta={(
             <>
-              {unreadCount} unread
+              {notificationCount} {notificationCount === 1 ? 'notification' : 'notifications'}
               {' · '}
-              {allItems.length} {allItems.length === 1 ? 'item' : 'items'}
+              {activeAlerts.length} active {activeAlerts.length === 1 ? 'alert' : 'alerts'}
+              {' · '}
+              {allItems.length} inbox {allItems.length === 1 ? 'item' : 'items'}
             </>
           )}
         />
@@ -259,14 +349,66 @@ export function InboxPage() {
       {visibleError && <ErrorState message={`Failed to load inbox: ${visibleError}`} className="px-6" />}
       {actionError && <ErrorState message={actionError} className="px-6" />}
 
-      {!isLoading && !visibleError && allItems.length === 0 && (
+      {!isLoading && !visibleError && activeAlerts.length > 0 && (
+        <div className="px-6 pt-4">
+          <section className="overflow-hidden rounded-2xl border border-border-subtle bg-surface/45">
+            <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3">
+              <div className="space-y-1">
+                <p className="ui-section-label">Active alerts</p>
+                <p className="ui-card-meta">Interrupting reminders and callbacks stay visible here until you acknowledge or dismiss them.</p>
+              </div>
+              <Link to="/alerts" className="ui-toolbar-button shrink-0">Open alerts</Link>
+            </div>
+            <div className="divide-y divide-border-subtle">
+              {activeAlerts.map((entry) => {
+                const busy = busyAlertId === entry.id;
+                const conversationPath = entry.conversationId ? `/conversations/${encodeURIComponent(entry.conversationId)}` : null;
+                return (
+                  <div key={entry.id} className="px-4 py-3.5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Pill tone={alertTone(entry)}>{alertLabel(entry)}</Pill>
+                          <span className="text-[11px] text-dim">{timeAgo(entry.updatedAt)}</span>
+                        </div>
+                        <p className="mt-2 text-[13px] font-medium text-primary">{entry.title}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{entry.body}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        {conversationPath ? (
+                          <Link to={conversationPath} className="ui-toolbar-button">Open conversation</Link>
+                        ) : null}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {entry.wakeupId ? (
+                            <ToolbarButton disabled={busy} onClick={() => { void snoozeAlert(entry.id); }}>
+                              {busy ? 'Working…' : 'Snooze 15m'}
+                            </ToolbarButton>
+                          ) : null}
+                          <ToolbarButton disabled={busy} onClick={() => { void acknowledgeAlert(entry.id); }}>
+                            {busy ? 'Working…' : 'Acknowledge'}
+                          </ToolbarButton>
+                          <ToolbarButton disabled={busy} onClick={() => { void dismissAlert(entry.id); }}>
+                            Dismiss
+                          </ToolbarButton>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {!isLoading && !visibleError && allItems.length === 0 && activeAlerts.length === 0 && (
         <EmptyState
-          title="No inbox items yet."
-          body="Standalone background activity and archived conversations that need attention appear here."
+          title="No notifications yet."
+          body="Standalone background activity, archived conversations that need attention, and sparse alerts appear here."
         />
       )}
 
-      {!isLoading && allItems.length > 0 && filter === 'unread' && unreadCount === 0 && (
+      {!isLoading && allItems.length > 0 && filter === 'unread' && unreadCount === 0 && activeAlerts.length === 0 && (
         <EmptyState
           title="All caught up."
           action={(
@@ -279,7 +421,7 @@ export function InboxPage() {
 
       {!isLoading && visible.length > 0 && (
         <div className="flex-1 overflow-y-auto">
-          <div className="px-6 py-4 space-y-px">
+          <div className="space-y-px px-6 py-4">
             {visible.map((item) => {
               if (item.type === 'conversation') {
                 const reason = buildConversationReason(item.session);
@@ -290,15 +432,15 @@ export function InboxPage() {
                     key={item.key}
                     to={`/conversations/${item.session.id}`}
                     onClick={() => openSession(item.session.id)}
-                    leading={<span className="mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all bg-warning" />}
+                    leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-warning" />}
                     trailing={<span className="shrink-0 self-center text-[10px] uppercase tracking-[0.14em] text-warning" title="Open the conversation that needs attention">open</span>}
                   >
                     <p className="ui-row-title">{item.session.title}</p>
                     <p className="ui-row-meta">
                       <span className="text-warning bg-warning/10">conversation</span>
-                      <span className="opacity-40 mx-1.5">·</span>
+                      <span className="mx-1.5 opacity-40">·</span>
                       {reason}
-                      <span className="opacity-40 mx-1.5">·</span>
+                      <span className="mx-1.5 opacity-40">·</span>
                       {timeAgo(sortAt)}
                     </p>
                   </ListLinkRow>
@@ -309,8 +451,8 @@ export function InboxPage() {
               const isSelected = item.entry.id === selectedId;
               const titleClass = item.entry.read ? 'ui-row-title text-secondary' : 'ui-row-title';
               const leadingClass = item.entry.read
-                ? 'mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all border border-border-default bg-transparent'
-                : `mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all ${meta.dot}`;
+                ? 'mt-1.5 h-2 w-2 shrink-0 rounded-full border border-border-default bg-transparent'
+                : `mt-1.5 h-2 w-2 shrink-0 rounded-full ${meta.dot}`;
               const linkedConversationId = pickActivityConversationId(item.entry);
               const isStarting = startingActivityId === item.entry.id;
 
@@ -321,17 +463,17 @@ export function InboxPage() {
                 >
                   <Link to={`/inbox/${item.entry.id}`} className="min-w-0 flex flex-1 items-start gap-4">
                     <span className={leadingClass} />
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className={titleClass}>{item.entry.summary}</p>
                       <p className="ui-row-meta">
                         <span className={meta.color}>{meta.label}</span>
-                        <span className="opacity-40 mx-1.5">·</span>
+                        <span className="mx-1.5 opacity-40">·</span>
                         {timeAgo(item.entry.createdAt)}
                       </p>
                     </div>
                   </Link>
-                  <div className="shrink-0 self-center flex items-center gap-3">
-                    {!item.entry.read && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                  <div className="flex shrink-0 self-center items-center gap-3">
+                    {!item.entry.read && <span className="h-1.5 w-1.5 rounded-full bg-accent" />}
                     <button
                       type="button"
                       onClick={() => { void handleActivityAction(item.entry); }}
