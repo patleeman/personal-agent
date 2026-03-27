@@ -29,14 +29,15 @@ import {
   type ProjectFormState,
   type TaskFormState,
 } from './projectDetailState';
-import { Pill, cx, type PillTone } from './ui';
+import { IconButton, Pill, cx, type PillTone } from './ui';
 import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
 const DANGER_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-danger hover:text-danger/75 transition-colors disabled:opacity-40';
-const RAIL_SECTION_CLASS = 'rounded-2xl border border-border-subtle bg-surface/25 px-4 py-4';
-const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-xl border border-border-default bg-base/70 px-3 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-surface';
-const RAIL_PRIMARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-xl bg-accent px-3 py-2 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-45';
+const RAIL_SECTION_CLASS = 'rounded-xl border border-border-subtle bg-transparent px-3 py-3';
+const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-lg border border-border-default bg-base/50 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface';
+const PROJECT_TOOLBAR_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-border-subtle bg-base/40 text-secondary hover:bg-surface hover:text-primary disabled:cursor-default disabled:opacity-40';
+const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-accent/25 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent disabled:cursor-default disabled:opacity-40';
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
@@ -119,6 +120,14 @@ function summarizeConversationMeta(conversation: ProjectDetail['linkedConversati
   return conversation.isRunning ? 'Conversation running' : 'Linked conversation';
 }
 
+function ToolbarGlyph({ path }: { path: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={path} />
+    </svg>
+  );
+}
+
 function ProjectSection({
   title,
   meta,
@@ -131,11 +140,11 @@ function ProjectSection({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-4 border-t border-border-subtle pt-8 first:border-t-0 first:pt-0">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <section className="space-y-3 border-t border-border-subtle pt-6 first:border-t-0 first:pt-0">
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-[24px] font-semibold tracking-tight text-primary">{title}</h2>
-          {meta ? <p className="mt-1 text-[13px] text-secondary">{meta}</p> : null}
+          <h2 className="text-[20px] font-semibold tracking-tight text-primary">{title}</h2>
+          {meta ? <p className="mt-0.5 text-[12px] text-secondary">{meta}</p> : null}
         </div>
         {action ? <div className="flex items-center gap-2">{action}</div> : null}
       </div>
@@ -159,21 +168,21 @@ function ProjectRailSection({
     <section className={RAIL_SECTION_CLASS}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-[14px] font-semibold text-primary">{title}</h3>
-          {meta ? <p className="mt-1 text-[12px] text-secondary">{meta}</p> : null}
+          <h3 className="text-[13px] font-semibold text-primary">{title}</h3>
+          {meta ? <p className="mt-0.5 text-[11px] text-secondary">{meta}</p> : null}
         </div>
         {action}
       </div>
-      <div className="mt-4">{children}</div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
 
 function ProjectPropertyRow({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{label}</p>
-      <div className="text-[14px] leading-relaxed text-primary">{value}</div>
+    <div className="space-y-1">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{label}</p>
+      <div className="text-[13px] leading-relaxed text-primary">{value}</div>
     </div>
   );
 }
@@ -184,7 +193,7 @@ function TaskStatusGlyph({ status }: { status: string }) {
   return (
     <span
       className={cx(
-        'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
+        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold',
         done
           ? 'border-success/45 bg-success/12 text-success'
           : status === 'doing' || status === 'in_progress'
@@ -219,22 +228,22 @@ function ProjectTaskRow({
   const done = isTaskDone(task.status);
 
   return (
-    <article id={`project-task-${task.id}`} className="flex items-start gap-3 px-4 py-3.5 scroll-mt-6">
+    <article id={`project-task-${task.id}`} className="flex items-start gap-2.5 px-3 py-2.5 scroll-mt-6">
       <TaskStatusGlyph status={task.status} />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <p className={cx('text-[15px] leading-relaxed', done ? 'text-secondary line-through' : 'font-medium text-primary')}>
+            <p className={cx('text-[14px] leading-relaxed', done ? 'text-secondary line-through' : 'font-medium text-primary')}>
               {task.title}
             </p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
               <span className="font-mono">{task.id}</span>
               <span className="opacity-40">·</span>
               <span>{formatProjectStatus(task.status)}</span>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 text-[12px]">
+          <div className="flex shrink-0 items-center gap-1.5 text-[11px]">
             <button type="button" onClick={() => onMove('up')} className={ACTION_TEXT_BUTTON_CLASS} disabled={busy || taskIndex === 0}>↑</button>
             <button type="button" onClick={() => onMove('down')} className={ACTION_TEXT_BUTTON_CLASS} disabled={busy || taskIndex === taskCount - 1}>↓</button>
             <button type="button" onClick={onEdit} className={ACTION_TEXT_BUTTON_CLASS}>Edit</button>
@@ -266,7 +275,7 @@ function ProjectTaskListBlock({
   emptyLabel?: string;
 }) {
   if (tasks.length === 0) {
-    return <p className="px-4 py-3.5 text-[13px] text-secondary">{emptyLabel}</p>;
+    return <p className="px-3 py-2.5 text-[12px] text-secondary">{emptyLabel}</p>;
   }
 
   return (
@@ -274,7 +283,7 @@ function ProjectTaskListBlock({
       {tasks.map((task, taskIndex) => {
         if (taskEditorTaskId === task.id) {
           return (
-            <div key={task.id} id={`project-task-${task.id}`} className="px-4 py-4 scroll-mt-6">
+            <div key={task.id} id={`project-task-${task.id}`} className="px-3 py-3 scroll-mt-6">
               {taskEditorForm}
             </div>
           );
@@ -313,29 +322,29 @@ function ProjectNoteList({
   onDeleteNote: (noteId: string) => void;
 }) {
   if (notes.length === 0 && noteEditor?.mode !== 'add') {
-    return <p className="text-[13px] text-secondary">No notes yet.</p>;
+    return <p className="text-[12px] text-secondary">No notes yet.</p>;
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {noteEditor?.mode === 'add' ? noteEditorForm : null}
-      <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+      <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
         {notes.map((note) => {
           const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
           if (isEditing) {
             return (
-              <div key={note.id} id={`project-note-${note.id}`} className="px-4 py-4 scroll-mt-6">
+              <div key={note.id} id={`project-note-${note.id}`} className="px-3 py-3 scroll-mt-6">
                 {noteEditorForm}
               </div>
             );
           }
 
           return (
-            <article key={note.id} className="px-4 py-3.5">
+            <article key={note.id} className="px-3 py-2.5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[14px] font-medium text-primary">{note.title}</p>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                  <p className="text-[13px] font-medium text-primary">{note.title}</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                     <span>{formatProjectStatus(note.kind)}</span>
                     <span className="opacity-40">·</span>
                     <span>updated {timeAgo(note.updatedAt)}</span>
@@ -364,24 +373,24 @@ function ProjectFileList({
   onDeleteFile: (file: ProjectFile) => void;
 }) {
   if (files.length === 0) {
-    return <p className="text-[13px] text-secondary">No files yet.</p>;
+    return <p className="text-[12px] text-secondary">No files yet.</p>;
   }
 
   return (
-    <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+    <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
       {files.map((file) => (
-        <article key={file.id} className="px-4 py-3.5">
+        <article key={file.id} className="px-3 py-2.5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <a href={file.downloadPath} className="text-[14px] font-medium text-accent transition-colors hover:text-accent/75">
+              <a href={file.downloadPath} className="text-[13px] font-medium text-accent transition-colors hover:text-accent/75">
                 {file.title}
               </a>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                 <span>{file.originalName}</span>
                 <span className="opacity-40">·</span>
                 <span>updated {timeAgo(file.updatedAt)}</span>
               </div>
-              {file.description ? <p className="mt-1 text-[12px] leading-relaxed text-secondary">{file.description}</p> : null}
+              {file.description ? <p className="mt-0.5 text-[11px] leading-relaxed text-secondary">{file.description}</p> : null}
             </div>
             <button type="button" onClick={() => onDeleteFile(file)} className={DANGER_TEXT_BUTTON_CLASS} disabled={fileBusy}>Delete</button>
           </div>
@@ -397,22 +406,22 @@ function ProjectConversationList({
   conversations: ProjectDetail['linkedConversations'];
 }) {
   if (conversations.length === 0) {
-    return <p className="text-[13px] text-secondary">No linked conversations yet.</p>;
+    return <p className="text-[12px] text-secondary">No linked conversations yet.</p>;
   }
 
   return (
-    <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+    <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
       {conversations.map((conversation) => (
         <a
           key={conversation.conversationId}
           href={`/conversations/${encodeURIComponent(conversation.conversationId)}`}
-          className="block px-4 py-3.5 transition-colors hover:bg-surface/50"
+          className="block px-3 py-2.5 transition-colors hover:bg-surface/50"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="truncate text-[14px] font-medium text-primary">{conversation.title}</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{summarizeConversationMeta(conversation)}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+              <p className="truncate text-[13px] font-medium text-primary">{conversation.title}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-secondary">{summarizeConversationMeta(conversation)}</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                 <span>{conversation.lastActivityAt ? `updated ${timeAgo(conversation.lastActivityAt)}` : 'linked'}</span>
                 {conversation.needsAttention ? (
                   <>
@@ -906,35 +915,70 @@ export function ProjectDetailPanel({
   ) : null;
 
   return (
-    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
-      <div className="min-w-0 space-y-8">
-        <section className="space-y-5 pb-2">
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
-            <span>Projects</span>
-            <span className="opacity-40">›</span>
-            <span className="font-mono text-secondary">{record.id}</span>
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+      <div className="min-w-0 space-y-6">
+        <section className="space-y-4 pb-1">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
+              <span>Projects</span>
+              <span className="opacity-40">›</span>
+              <span className="font-mono text-secondary">{record.id}</span>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <IconButton
+                type="button"
+                onClick={() => { void startConversationFromProject(); }}
+                disabled={conversationBusy || deleteBusy || !canStartConversation}
+                className={PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS}
+                title="Start conversation"
+                aria-label="Start conversation"
+              >
+                <ToolbarGlyph path="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z" />
+              </IconButton>
+              <IconButton
+                type="button"
+                onClick={openProjectEditor}
+                disabled={deleteBusy}
+                className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                title="Edit project"
+                aria-label="Edit project"
+              >
+                <ToolbarGlyph path="m15.232 5.232 3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 0 1 3.536 3.536L12.536 14.536A4 4 0 0 1 10.707 15.707L7 17l1.293-3.707A4 4 0 0 1 9 11Z" />
+              </IconButton>
+              <IconButton
+                type="button"
+                onClick={() => setAdvancedOpen((value) => !value)}
+                disabled={deleteBusy}
+                className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                title={advancedOpen ? 'Hide more' : 'More'}
+                aria-label={advancedOpen ? 'Hide more' : 'More'}
+              >
+                <ToolbarGlyph path="M12 6.5h.01M12 12h.01M12 17.5h.01" />
+              </IconButton>
+            </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>
                 {formatProjectStatus(record.status)}
               </Pill>
-              <span className="text-[12px] text-dim">updated {timeAgo(record.updatedAt)}</span>
-              {archived && record.archivedAt && <span className="text-[12px] text-dim">archived {timeAgo(record.archivedAt)}</span>}
+              <span className="text-[11px] text-dim">updated {timeAgo(record.updatedAt)}</span>
+              {archived && record.archivedAt && <span className="text-[11px] text-dim">archived {timeAgo(record.archivedAt)}</span>}
             </div>
 
-            <div className="space-y-3">
-              <h1 className="text-[42px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
-              {projectSummary ? <p className="max-w-4xl text-[18px] leading-relaxed text-secondary">{projectSummary}</p> : null}
+            <div className="space-y-2">
+              <h1 className="text-[36px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
+              {projectSummary ? <p className="max-w-3xl text-[15px] leading-relaxed text-secondary">{projectSummary}</p> : null}
               {record.currentFocus?.trim() ? (
-                <p className="text-[13px] text-dim">Current focus · {record.currentFocus.trim()}</p>
+                <p className="text-[12px] text-dim">Current focus · {record.currentFocus.trim()}</p>
               ) : null}
             </div>
           </div>
 
           {editingProject ? (
-            <div className="border-t border-border-subtle pt-6">
+            <div className="border-t border-border-subtle pt-5">
               <ProjectRecordEditorForm
                 value={projectForm}
                 statuses={PROJECT_STATUSES}
@@ -964,8 +1008,8 @@ export function ProjectDetailPanel({
             </button>
           )}
         >
-          <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface/15">
-            {taskEditor?.mode === 'add' ? <div className="px-4 py-4">{taskEditorForm}</div> : null}
+          <div className="overflow-hidden rounded-xl border border-border-subtle bg-transparent">
+            {taskEditor?.mode === 'add' ? <div className="px-3 py-3">{taskEditorForm}</div> : null}
             <ProjectTaskListBlock
               tasks={openTasks}
               taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
@@ -977,7 +1021,7 @@ export function ProjectDetailPanel({
               emptyLabel={completedTasks.length > 0 ? 'No open tasks.' : 'No tasks yet.'}
             />
             {completedTasks.length > 0 ? (
-              <div className="border-t border-border-subtle px-4 py-3.5">
+              <div className="border-t border-border-subtle px-3 py-2.5">
                 <button
                   type="button"
                   onClick={() => setShowCompletedTasks((value) => !value)}
@@ -988,7 +1032,7 @@ export function ProjectDetailPanel({
               </div>
             ) : null}
             {showCompletedTasks ? (
-              <div className="border-t border-border-subtle bg-base/15">
+              <div className="border-t border-border-subtle bg-base/10">
                 <ProjectTaskListBlock
                   tasks={completedTasks}
                   taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
@@ -1042,61 +1086,48 @@ export function ProjectDetailPanel({
         </ProjectSection>
       </div>
 
-      <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
-        <section className={RAIL_SECTION_CLASS}>
-          <div className="space-y-3">
-            <button
-              type="button"
-              onClick={() => { void startConversationFromProject(); }}
-              disabled={conversationBusy || deleteBusy || !canStartConversation}
-              className={RAIL_PRIMARY_BUTTON_CLASS}
-            >
-              {conversationBusy ? 'Starting…' : 'Start conversation'}
-            </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={openProjectEditor} disabled={deleteBusy} className={RAIL_SECONDARY_BUTTON_CLASS}>Edit project</button>
-              <button type="button" onClick={() => setAdvancedOpen((value) => !value)} disabled={deleteBusy} className={RAIL_SECONDARY_BUTTON_CLASS}>
-                {advancedOpen ? 'Hide more' : 'More'}
-              </button>
-            </div>
-            {!canStartConversation && activeProfile ? (
-              <p className="text-[12px] leading-relaxed text-secondary">
-                Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
-              </p>
-            ) : null}
-            {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
-            {advancedOpen ? (
-              <div className="space-y-2 border-t border-border-subtle pt-3">
-                <button type="button" onClick={downloadProjectPackage} className={RAIL_SECONDARY_BUTTON_CLASS}>Export package</button>
+      <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+        {!canStartConversation && activeProfile ? (
+          <p className="text-[12px] leading-relaxed text-secondary">
+            Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
+          </p>
+        ) : null}
+        {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
+
+        {advancedOpen ? (
+          <ProjectRailSection title="More">
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={downloadProjectPackage} className={RAIL_SECONDARY_BUTTON_CLASS}>Export</button>
                 <button type="button" onClick={() => { void toggleArchive(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={archiveBusy || deleteBusy}>
-                  {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
+                  {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore' : 'Archive')}
                 </button>
                 <button type="button" onClick={() => { void toggleRawProject(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={deleteBusy}>
-                  {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
+                  {rawProjectOpen ? 'Hide YAML' : 'Raw YAML'}
                 </button>
                 <button type="button" onClick={() => { void deleteProject(); }} className={DANGER_TEXT_BUTTON_CLASS} disabled={deleteBusy}>
                   {deleteBusy ? 'Deleting…' : 'Delete project'}
                 </button>
-                {rawProjectOpen ? (
-                  <ProjectRecordViewer
-                    repoRoot={record.repoRoot}
-                    summary={record.summary}
-                    rawProjectOpen={rawProjectOpen}
-                    rawProjectContent={rawProjectContent}
-                    rawProjectBusy={rawProjectBusy}
-                    rawProjectError={rawProjectError}
-                    onRawProjectContentChange={setRawProjectContent}
-                    onRawProjectSubmit={saveRawProject}
-                    showSummary={false}
-                  />
-                ) : null}
               </div>
-            ) : null}
-          </div>
-        </section>
+              {rawProjectOpen ? (
+                <ProjectRecordViewer
+                  repoRoot={record.repoRoot}
+                  summary={record.summary}
+                  rawProjectOpen={rawProjectOpen}
+                  rawProjectContent={rawProjectContent}
+                  rawProjectBusy={rawProjectBusy}
+                  rawProjectError={rawProjectError}
+                  onRawProjectContentChange={setRawProjectContent}
+                  onRawProjectSubmit={saveRawProject}
+                  showSummary={false}
+                />
+              ) : null}
+            </div>
+          </ProjectRailSection>
+        ) : null}
 
-        <ProjectRailSection title="Properties" meta="Project metadata and current state.">
-          <div className="space-y-4">
+        <ProjectRailSection title="Properties">
+          <div className="space-y-3">
             <ProjectPropertyRow
               label="Status"
               value={<Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>{formatProjectStatus(record.status)}</Pill>}
@@ -1109,7 +1140,7 @@ export function ProjectDetailPanel({
               <ProjectPropertyRow
                 label="Blockers"
                 value={(
-                  <ul className="list-disc space-y-1 pl-4 text-[13px] text-secondary">
+                  <ul className="list-disc space-y-1 pl-4 text-[12px] text-secondary">
                     {blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
                   </ul>
                 )}
@@ -1153,7 +1184,7 @@ export function ProjectDetailPanel({
             onEditNote={openNoteEdit}
             onDeleteNote={(noteId) => { void deleteNote(noteId); }}
           />
-          {noteError && !noteEditor ? <p className="mt-3 text-[12px] text-danger">{noteError}</p> : null}
+          {noteError && !noteEditor ? <p className="mt-2 text-[12px] text-danger">{noteError}</p> : null}
         </ProjectRailSection>
 
         <ProjectRailSection
@@ -1173,7 +1204,7 @@ export function ProjectDetailPanel({
             </button>
           )}
         >
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {fileUploadForm}
             <ProjectFileList files={project.files} fileBusy={fileBusy} onDeleteFile={(file) => { void deleteFile(file); }} />
             {fileError && !fileComposerOpen ? <p className="text-[12px] text-danger">{fileError}</p> : null}

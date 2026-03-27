@@ -293,16 +293,16 @@ function ProjectsTable({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-subtle bg-surface/20">
+    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border-subtle bg-surface/10">
       <table className="min-w-full border-collapse text-left">
         <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
-          <tr className="border-b border-border-subtle text-[11px] uppercase tracking-[0.14em] text-dim">
-            <th className="px-5 py-3 font-medium">Project</th>
-            <th className="px-4 py-3 font-medium">Status</th>
-            <th className="px-4 py-3 font-medium">Current focus</th>
-            <th className="px-4 py-3 font-medium">Tasks</th>
-            <th className="px-4 py-3 font-medium">Profile</th>
-            <th className="px-5 py-3 font-medium">Updated</th>
+          <tr className="border-b border-border-subtle text-[10px] uppercase tracking-[0.14em] text-dim">
+            <th className="px-4 py-2.5 font-medium">Project</th>
+            <th className="px-3 py-2.5 font-medium">Status</th>
+            <th className="px-3 py-2.5 font-medium">Current focus</th>
+            <th className="px-3 py-2.5 font-medium">Tasks</th>
+            <th className="px-3 py-2.5 font-medium">Profile</th>
+            <th className="px-4 py-2.5 font-medium">Updated</th>
           </tr>
         </thead>
         <tbody>
@@ -319,7 +319,7 @@ function ProjectsTable({
             return (
               <tr
                 key={`${project.profile ?? effectiveViewProfile ?? 'shared'}:${project.id}`}
-                className="cursor-pointer border-b border-border-subtle align-top transition-colors hover:bg-surface/45"
+                className="cursor-pointer border-b border-border-subtle align-top transition-colors hover:bg-surface/35"
                 tabIndex={0}
                 onClick={() => navigate(projectHref)}
                 onKeyDown={(event) => {
@@ -329,20 +329,20 @@ function ProjectsTable({
                   }
                 }}
               >
-                <td className="px-5 py-4">
-                  <div className="space-y-1.5">
+                <td className="px-4 py-3">
+                  <div className="space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={projectHref}
-                        className="text-[15px] font-medium text-primary transition-colors hover:text-accent"
+                        className="text-[14px] font-medium text-primary transition-colors hover:text-accent"
                         onClick={(event) => event.stopPropagation()}
                       >
                         {project.title}
                       </Link>
                       {archived && <span className="ui-card-meta">archived</span>}
                     </div>
-                    <p className="max-w-2xl text-[13px] leading-relaxed text-secondary">{summarizeProjectPreview(project)}</p>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                    <p className="max-w-2xl text-[12px] leading-relaxed text-secondary">{summarizeProjectPreview(project)}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                       <span className="font-mono">{project.id}</span>
                       {repoLabel && (
                         <>
@@ -359,18 +359,18 @@ function ProjectsTable({
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-4">
+                <td className="px-3 py-3">
                   <Pill tone={toneForProjectStatus(formatProjectStatus(project.status), archived)}>
                     {formatProjectStatus(project.status)}
                   </Pill>
                 </td>
-                <td className="px-4 py-4 text-[13px] leading-relaxed text-secondary">{currentFocus}</td>
-                <td className="px-4 py-4">
-                  <div className="text-[13px] text-primary">{taskSummary.open} open</div>
-                  <div className="mt-1 text-[12px] text-dim">{taskSummary.done} done</div>
+                <td className="px-3 py-3 text-[12px] leading-relaxed text-secondary">{currentFocus}</td>
+                <td className="px-3 py-3">
+                  <div className="text-[12px] text-primary">{taskSummary.open} open</div>
+                  <div className="mt-0.5 text-[11px] text-dim">{taskSummary.done} done</div>
                 </td>
-                <td className="px-4 py-4 text-[13px] text-secondary">{project.profile ?? effectiveViewProfile ?? 'shared'}</td>
-                <td className="px-5 py-4 text-[13px] text-secondary">{timeAgo(project.updatedAt)}</td>
+                <td className="px-3 py-3 text-[12px] text-secondary">{project.profile ?? effectiveViewProfile ?? 'shared'}</td>
+                <td className="px-4 py-3 text-[12px] text-secondary">{timeAgo(project.updatedAt)}</td>
               </tr>
             );
           })}
@@ -528,8 +528,8 @@ export function ProjectsPage() {
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
       {showCreateForm && createProfile ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
             <PageHeader
               actions={<ToolbarButton onClick={closeCreateForm}>Back to projects</ToolbarButton>}
             >
@@ -546,7 +546,7 @@ export function ProjectsPage() {
           </div>
         </div>
       ) : selectedId ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {projectDetailApi.loading && !projectDetailApi.data ? (
             <LoadingState label="Loading project…" className="h-full justify-center" />
           ) : projectDetailApi.error || !projectDetailApi.data ? (
@@ -570,8 +570,8 @@ export function ProjectsPage() {
           )}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-          <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
             <PageHeader
               actions={(
                 <>
