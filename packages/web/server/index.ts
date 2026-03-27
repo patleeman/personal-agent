@@ -11452,6 +11452,47 @@ companionApp.post('/api/live-sessions', async (req, res) => {
   }
 });
 
+companionApp.post('/api/live-sessions/resume', async (req, res) => {
+  try {
+    const { sessionFile } = req.body as { sessionFile: string };
+    if (!sessionFile) {
+      res.status(400).json({ error: 'sessionFile required' });
+      return;
+    }
+
+    const conversationId = SessionManager.open(sessionFile).getSessionId();
+    const profile = getCurrentProfile();
+    const targetBinding = getConversationExecutionTarget({
+      profile,
+      conversationId,
+    });
+
+    if (targetBinding) {
+      const result = await resumeRemoteLiveSession({
+        profile,
+        conversationId,
+        localSessionFile: sessionFile,
+        targetId: targetBinding.targetId,
+      });
+      res.json(result);
+      return;
+    }
+
+    const result = await resumeLocalSession(sessionFile, {
+      ...buildLiveSessionResourceOptions(),
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    });
+    await flushLiveDeferredResumes();
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 companionApp.get('/api/live-sessions/:id', (req, res) => {
   const live = isLiveSession(req.params.id);
   if (!live) {
