@@ -129,14 +129,25 @@ describe('Sidebar', () => {
     expect(html.indexOf('Notes')).toBeLessThan(html.indexOf('Projects'));
     expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Skills'));
     expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
-    expect(html).toContain('Pinned Conversations');
     expect(html).toContain('Open Conversations');
+    expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Knowledge Base');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');
+  });
+
+  it('keeps pinned conversations in the open conversations section', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
+
+    const html = renderSidebar('/inbox');
+
+    expect(html).toContain('Open Conversations');
+    expect(html).not.toContain('Pinned Conversations');
+    expect(html).toContain('Clarify background run link');
   });
 
   it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
