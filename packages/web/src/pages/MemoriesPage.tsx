@@ -1,7 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { persistForkPromptDraft } from '../forking';
 import { useApi } from '../hooks';
 import { emitMemoriesChanged, MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import { timeAgo } from '../utils';
@@ -25,7 +24,7 @@ import {
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
-import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
+import { CompactNodeLinkList, NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import {
   buildNoteSearch,
   NOTE_ID_SEARCH_PARAM,
@@ -83,31 +82,26 @@ function canRetryMemoryWorkItem(item: MemoryWorkItem): boolean {
     && (item.status === 'failed' || item.status === 'interrupted');
 }
 
+function canRecoverMemoryWorkItem(item: MemoryWorkItem): boolean {
+  return canRetryMemoryWorkItem(item);
+}
 
 function NoteWorkQueueRow({
   item,
   activeAction,
   actionDisabled,
   onRetry,
-  onRecover,
 }: {
   item: MemoryWorkItem;
-  activeAction: 'retry' | 'recover' | null;
+  activeAction: 'retry' | null;
   actionDisabled: boolean;
   onRetry: (item: MemoryWorkItem) => void;
-  onRecover: (item: MemoryWorkItem) => void;
 }) {
   const retryable = canRetryMemoryWorkItem(item);
   const summary = activeAction === 'retry'
     ? 'Queueing node distillation…'
-    : activeAction === 'recover'
-      ? 'Opening recovery conversation…'
-      : item.lastError || memoryWorkItemLabel(item);
-  const status = activeAction === 'retry'
-    ? 'queueing'
-    : activeAction === 'recover'
-      ? 'recovering'
-      : item.status;
+    : item.lastError || memoryWorkItemLabel(item);
+  const status = activeAction === 'retry' ? 'queueing' : item.status;
 
   return (
     <div className="group ui-list-row ui-list-row-hover">
@@ -123,28 +117,16 @@ function NoteWorkQueueRow({
           <span>{timeAgo(item.updatedAt)}</span>
         </div>
       </Link>
-      {(retryable || canRetryMemoryWorkItem(item)) && (
+      {retryable && (
         <div className="flex shrink-0 flex-col items-end gap-1.5 self-center">
-          {retryable && (
-            <ToolbarButton
-              className="shrink-0"
-              onClick={() => onRetry(item)}
-              disabled={actionDisabled}
-              title="Retry this node distillation"
-            >
-              {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
-            </ToolbarButton>
-          )}
-          {retryable && (
-            <ToolbarButton
-              className="shrink-0"
-              onClick={() => onRecover(item)}
-              disabled={actionDisabled}
-              title="Open a recovery conversation for this node distillation"
-            >
-              {activeAction === 'recover' ? 'Opening…' : 'Recover'}
-            </ToolbarButton>
-          )}
+          <ToolbarButton
+            className="shrink-0"
+            onClick={() => onRetry(item)}
+            disabled={actionDisabled}
+            title="Retry this node distillation"
+          >
+            {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
+          </ToolbarButton>
         </div>
       )}
     </div>
@@ -155,14 +137,22 @@ function NoteQueueSection({
   memoryQueue,
   pendingQueueAction,
   queueError,
+  queueNotice,
+  queueBusy,
+  recoverableCount,
+  startingBatchRecovery,
   onRetry,
-  onRecover,
+  onRecoverFailed,
 }: {
   memoryQueue: MemoryWorkItem[];
-  pendingQueueAction: { runId: string; kind: 'retry' | 'recover' } | null;
+  pendingQueueAction: { runId: string; kind: 'retry' } | null;
   queueError: string | null;
+  queueNotice: string | null;
+  queueBusy: boolean;
+  recoverableCount: number;
+  startingBatchRecovery: boolean;
   onRetry: (item: MemoryWorkItem) => void;
-  onRecover: (item: MemoryWorkItem) => void;
+  onRecoverFailed: () => void;
 }) {
   if (memoryQueue.length === 0) {
     return null;
@@ -175,7 +165,19 @@ function NoteQueueSection({
         <span className="ui-disclosure-meta">{memoryQueue.length} {memoryQueue.length === 1 ? 'item' : 'items'}</span>
       </summary>
       <div className="ui-disclosure-body space-y-2">
-        <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="ui-card-meta">Node distillation runs that are still active or did not finish cleanly.</p>
+          {recoverableCount > 0 && (
+            <ToolbarButton
+              onClick={onRecoverFailed}
+              disabled={queueBusy}
+              title="Start one background recovery run for every failed or interrupted note extraction"
+            >
+              {startingBatchRecovery ? 'Starting recovery…' : 'Recover failed extractions'}
+            </ToolbarButton>
+          )}
+        </div>
+        {queueNotice && <p className="text-[12px] text-secondary">{queueNotice}</p>}
         {queueError && <p className="text-[12px] text-danger">{queueError}</p>}
         <div className="space-y-px">
           {memoryQueue.map((item) => (
@@ -183,9 +185,8 @@ function NoteQueueSection({
               key={item.runId}
               item={item}
               activeAction={pendingQueueAction?.runId === item.runId ? pendingQueueAction.kind : null}
-              actionDisabled={Boolean(pendingQueueAction)}
+              actionDisabled={queueBusy}
               onRetry={onRetry}
-              onRecover={onRecover}
             />
           ))}
         </div>
@@ -215,8 +216,8 @@ function ReferencesList({
   }
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="space-y-px">
+    <div className="h-full overflow-y-auto px-6 py-6">
+      <div className="mx-auto max-w-4xl space-y-px">
         {references.map((reference) => (
           <ListLinkRow
             key={reference.path}
@@ -248,8 +249,8 @@ function ReferencesList({
 
 function NoteLinksView({ detail }: { detail: MemoryDocDetail }) {
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="space-y-5 rounded-2xl border border-border-subtle bg-base/40 px-4 py-4">
+    <div className="h-full overflow-y-auto px-6 py-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
         <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
         <UnresolvedNodeLinks ids={detail.links?.unresolved} />
@@ -510,7 +511,7 @@ function NoteWorkspace({
     }
   }
 
-  const metadataItems = [
+  const advancedItems = [
     { label: 'Note', value: <span className="font-mono text-primary">@{memory.id}</span> },
     { label: 'Kind', value: noteKindLabel(memory) },
     ...(memory.type ? [{ label: 'Type', value: memory.type }] : []),
@@ -518,13 +519,21 @@ function NoteWorkspace({
     ...(memory.status ? [{ label: 'Status', value: memory.status }] : []),
     ...(memory.area ? [{ label: 'Area', value: memory.area }] : []),
     ...(memory.updated ? [{ label: 'Updated', value: timeAgo(memory.updated) }] : []),
+    ...(memory.summary ? [{ label: 'Summary', value: memory.summary }] : []),
+    { label: 'Path', value: <span className="break-all font-mono text-[12px]">{selectedPath}</span> },
+    { label: 'Tags', value: memory.tags.length > 0 ? memory.tags.join(' · ') : 'No tags' },
+    ...(memory.parent ? [{ label: 'Parent', value: <Link to={`/notes${buildNoteSearch(locationSearch, { memoryId: memory.parent, view: 'main', item: null, creating: false })}`} className="text-accent hover:underline">@{memory.parent}</Link> }] : []),
   ];
+  const noteTags = !selectedReference && memory.tags.length > 0
+    ? memory.tags.join(' · ')
+    : null;
+  const hasCompactDetails = Boolean(memory.parent || (detail.links?.outgoing?.length ?? 0) > 0 || (detail.links?.incoming?.length ?? 0) > 0 || (detail.links?.unresolved?.length ?? 0) > 0);
 
   return (
     <NodeWorkspaceShell
       eyebrow="Notes"
       title={selectedLabel}
-      summary={selectedSummary || 'No summary yet.'}
+      summary={selectedReference ? (selectedSummary || undefined) : noteTags ? `Tags · ${noteTags}` : undefined}
       meta={(
         <>
           <span className="font-mono">@{memory.id}</span>
@@ -567,30 +576,33 @@ function NoteWorkspace({
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
         <>
-          <NodeInspectorSection title="Metadata">
-            <NodeMetadataList items={metadataItems} />
-          </NodeInspectorSection>
-          <NodeInspectorSection title="Summary">
-            <p className="text-[13px] leading-relaxed text-secondary">{memory.summary || 'No summary yet.'}</p>
-          </NodeInspectorSection>
-          <NodeInspectorSection title="Relationships" meta={formatRelatedCount(memory.related) ?? undefined}>
-            <div className="space-y-4">
-              <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-              <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
-              <UnresolvedNodeLinks ids={detail.links?.unresolved} />
-            </div>
-          </NodeInspectorSection>
+          {hasCompactDetails && (
+            <NodeInspectorSection title="Relationships" meta={formatRelatedCount(memory.related) ?? undefined}>
+              <div className="space-y-3">
+                {memory.parent && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Parent</p>
+                    <Link to={`/notes${buildNoteSearch(locationSearch, { memoryId: memory.parent, view: 'main', item: null, creating: false })}`} className="text-[12px] text-accent hover:underline">@{memory.parent}</Link>
+                  </div>
+                )}
+                <CompactNodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="No outgoing links." />
+                <CompactNodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No backlinks." />
+                {(detail.links?.unresolved?.length ?? 0) > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">Unresolved refs</p>
+                    <p className="text-[12px] text-secondary">{detail.links?.unresolved?.map((id) => `@${id}`).join(' · ')}</p>
+                  </div>
+                )}
+              </div>
+            </NodeInspectorSection>
+          )}
           <details className="ui-disclosure">
             <summary className="ui-disclosure-summary">
               <span>Advanced</span>
               <span className="ui-disclosure-meta">Source details</span>
             </summary>
             <div className="ui-disclosure-body space-y-3">
-              <NodeMetadataList items={[
-                { label: 'Path', value: <span className="break-all font-mono text-[12px]">{selectedPath}</span> },
-                { label: 'Tags', value: memory.tags.length > 0 ? memory.tags.join(' · ') : 'No tags' },
-                ...(memory.parent ? [{ label: 'Parent', value: <Link to={`/notes${buildNoteSearch(locationSearch, { memoryId: memory.parent, view: 'main', item: null, creating: false })}`} className="text-accent hover:underline">@{memory.parent}</Link> }] : []),
-              ]} />
+              <NodeMetadataList items={advancedItems} />
             </div>
           </details>
         </>
@@ -679,7 +691,7 @@ function NewNoteWorkspace({
       )}
       notice={createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
     >
-      <div className="h-full overflow-y-auto px-4 py-4">
+      <div className="h-full overflow-y-auto py-4">
         <form onSubmit={handleCreateNote} className="mx-auto max-w-3xl space-y-5">
           <div className="space-y-1.5">
             <label className="ui-card-meta" htmlFor="create-note-title">Title</label>
@@ -717,7 +729,7 @@ function NewNoteWorkspace({
             />
           </div>
 
-          <div className="rounded-2xl border border-border-subtle bg-surface/30 px-4 py-4">
+          <div className="border-t border-border-subtle pt-4">
             <p className="ui-section-label">What happens next</p>
             <p className="mt-2 text-[13px] leading-relaxed text-secondary">
               We’ll scaffold the node, open its main document in this workspace, and keep the right rail focused on browsing notes and references.
@@ -748,10 +760,16 @@ export function MemoriesPage() {
     replaceData,
   } = useApi(api.notes);
 
-  const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' | 'recover' } | null>(null);
+  const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' } | null>(null);
+  const [startingBatchRecovery, setStartingBatchRecovery] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const memories = data?.memories ?? [];
   const memoryQueue = data?.memoryQueue ?? [];
+  const recoverableQueueItems = useMemo(
+    () => memoryQueue.filter((item) => canRecoverMemoryWorkItem(item)),
+    [memoryQueue],
+  );
   const selectedMemoryId = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
@@ -797,12 +815,15 @@ export function MemoriesPage() {
     navigateNotes({ memoryId: null, view: 'main', item: null, creating: false }, true);
   }, [loading, memories, navigateNotes, selectedMemoryId]);
 
+  const queueBusy = Boolean(pendingQueueAction) || startingBatchRecovery;
+
   const retryMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
-    if (!canRetryMemoryWorkItem(item) || pendingQueueAction) {
+    if (!canRetryMemoryWorkItem(item) || queueBusy) {
       return;
     }
 
     setQueueError(null);
+    setQueueNotice(null);
     setPendingQueueAction({ runId: item.runId, kind: 'retry' });
     try {
       const result = await api.retryNodeDistillRun(item.runId);
@@ -812,28 +833,28 @@ export function MemoriesPage() {
       setPendingQueueAction(null);
       await refetch({ resetLoading: false });
     }
-  }, [navigate, pendingQueueAction, refetch]);
+  }, [navigate, queueBusy, refetch]);
 
-  const recoverMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
-    if (!canRetryMemoryWorkItem(item) || pendingQueueAction) {
+  const recoverFailedMemoryWorkItems = useCallback(async () => {
+    if (recoverableQueueItems.length === 0 || queueBusy) {
       return;
     }
 
     setQueueError(null);
-    setPendingQueueAction({ runId: item.runId, kind: 'recover' });
+    setQueueNotice(null);
+    setStartingBatchRecovery(true);
     try {
-      const result = await api.recoverNodeDistillRun(item.runId);
-      persistForkPromptDraft(
-        result.conversationId,
-        `Help me recover node distillation run ${item.runId}. Inspect the failure, then either retry it or finish it manually.`,
+      const result = await api.recoverFailedNodeDistills();
+      setQueueNotice(
+        `Started recovery run ${result.runId} for ${result.count} failed ${result.count === 1 ? 'extraction' : 'extractions'}.`,
       );
-      navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
-    } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this node distillation run.');
-      setPendingQueueAction(null);
       await refetch({ resetLoading: false });
+    } catch (error) {
+      setQueueError(error instanceof Error ? error.message : 'Could not start failed note-extraction recovery.');
+    } finally {
+      setStartingBatchRecovery(false);
     }
-  }, [navigate, pendingQueueAction, refetch]);
+  }, [queueBusy, recoverableQueueItems.length, refetch]);
 
   return (
     <div className="flex h-full flex-col">
@@ -873,8 +894,12 @@ export function MemoriesPage() {
               memoryQueue={memoryQueue}
               pendingQueueAction={pendingQueueAction}
               queueError={queueError}
+              queueNotice={queueNotice}
+              queueBusy={queueBusy}
+              recoverableCount={recoverableQueueItems.length}
+              startingBatchRecovery={startingBatchRecovery}
               onRetry={retryMemoryWorkItem}
-              onRecover={recoverMemoryWorkItem}
+              onRecoverFailed={() => { void recoverFailedMemoryWorkItems(); }}
             />
 
             <div className="min-h-0 flex-1 overflow-hidden">

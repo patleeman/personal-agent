@@ -62,6 +62,57 @@ export function NodeLinkList({
   );
 }
 
+function CompactNodeLink({ item, surface }: { item: NodeLinkSummary; surface: NodeMentionSurface }) {
+  const href = buildNodeMentionHref({
+    id: `@${item.id}`,
+    label: item.id,
+    kind: item.kind,
+    title: item.title,
+    summary: item.summary,
+  }, surface);
+  const content = (
+    <>
+      <span className="text-primary">{item.title}</span>
+      <span className="ml-1 font-mono text-dim">@{item.id}</span>
+    </>
+  );
+
+  if (!href) {
+    return <span>{content}</span>;
+  }
+
+  return <Link to={href} className="hover:text-primary hover:underline">{content}</Link>;
+}
+
+export function CompactNodeLinkList({
+  title,
+  items,
+  surface,
+  emptyText,
+}: {
+  title: string;
+  items: NodeLinkSummary[] | undefined;
+  surface: NodeMentionSurface;
+  emptyText: string;
+}) {
+  const normalized = items ?? [];
+
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">{title}</p>
+      {normalized.length === 0 ? (
+        <p className="text-[12px] text-dim">{emptyText}</p>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-secondary">
+          {normalized.map((item) => (
+            <CompactNodeLink key={`${item.kind}:${item.id}`} item={item} surface={surface} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UnresolvedNodeLinks({ ids }: { ids: string[] | undefined }) {
   const unresolved = ids ?? [];
   if (unresolved.length === 0) {
