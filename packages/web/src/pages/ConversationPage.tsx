@@ -3548,7 +3548,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             attemptAction: () => api.compactSession(liveConversationId, command.customInstructions, currentSurfaceId),
             takeOverSessionControl: () => streamTakeover(),
           });
-          showNotice('accent', 'Context compacted.');
+          showNotice('accent', 'Manual compaction complete.');
         } catch (error) {
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
         }

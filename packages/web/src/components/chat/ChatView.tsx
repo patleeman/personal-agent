@@ -2108,6 +2108,28 @@ function ContextMessage({
   );
 }
 
+function resolveCompactionSummaryLabel(title: string | undefined): string {
+  const normalized = title?.trim();
+  if (!normalized || normalized === 'Compaction summary') {
+    return 'Context compacted';
+  }
+
+  return normalized;
+}
+
+function resolveCompactionSummaryDetail(title: string | undefined): string {
+  switch (title?.trim()) {
+    case 'Manual compaction':
+      return 'You explicitly summarized older turns to shrink the active context window.';
+    case 'Proactive compaction':
+      return 'Older turns were summarized because the context window was getting full. The conversation is ready for the next turn.';
+    case 'Overflow recovery compaction':
+      return 'Older turns were summarized after a context overflow so the interrupted turn could retry automatically.';
+    default:
+      return 'Older turns were summarized to keep the active context window focused.';
+  }
+}
+
 function SummaryMessage({
   block,
   onOpenFilePath,
@@ -2116,9 +2138,9 @@ function SummaryMessage({
   onOpenFilePath?: (path: string) => void;
 }) {
   const isCompaction = block.kind === 'compaction';
-  const label = isCompaction ? 'Context compacted' : 'Branch summary';
+  const label = isCompaction ? resolveCompactionSummaryLabel(block.title) : block.title || 'Branch summary';
   const detail = isCompaction
-    ? 'Older turns were summarized to keep the active context window focused.'
+    ? resolveCompactionSummaryDetail(block.title)
     : 'Context from another branch was summarized while preserving the current path.';
   const accentClass = isCompaction
     ? 'border-warning/25 bg-warning/5'
