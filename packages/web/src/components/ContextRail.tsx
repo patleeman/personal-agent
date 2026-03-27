@@ -46,7 +46,7 @@ import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
 import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
-import { getSystemComponentFromSearch, getSystemComponentLabel, getSystemRunIdFromSearch } from '../systemSelection';
+import { getSystemComponentFromSearch, getSystemComponentLabel } from '../systemSelection';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
@@ -3780,7 +3780,7 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
     try {
       const result = await api.runTaskNow(data.id);
       await refetch({ resetLoading: false });
-      navigate(`/system?run=${encodeURIComponent(result.runId)}`);
+      navigate(`/runs/${encodeURIComponent(result.runId)}`);
     } finally {
       setRunningNow(false);
     }
@@ -3915,7 +3915,7 @@ function SettingsOverviewContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">What lives here</p>
-        <p className="ui-card-meta">Use Settings for stable preferences. Use System for live service state, runs, logs, and operational debugging.</p>
+        <p className="ui-card-meta">Use Settings for stable preferences. Use System for live service state, logs, and operational debugging. Use Runs for durable background work and recovery review.</p>
       </div>
     </div>
   );
@@ -4161,15 +4161,25 @@ export function ContextRail() {
     );
   }
 
+  if (section === 'runs') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Runs" sub={id ?? 'workspace'} />
+        <div className="min-h-0 flex-1">
+          {id ? <RunContextPanel runId={id} /> : <EmptyPrompt text="Select a run to inspect logs, recovery actions, and linked resources." />}
+        </div>
+      </div>
+    );
+  }
+
   // System
   if (section === 'system') {
-    const runId = getSystemRunIdFromSearch(location.search);
     const componentId = getSystemComponentFromSearch(location.search);
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="System" sub={runId ? 'Run' : getSystemComponentLabel(componentId)} />
+        <RailHeader label="System" sub={getSystemComponentLabel(componentId)} />
         <div className="min-h-0 flex-1">
-          {runId ? <RunContextPanel runId={runId} simplified /> : <SystemContextPanel componentId={componentId} />}
+          <SystemContextPanel componentId={componentId} />
         </div>
       </div>
     );

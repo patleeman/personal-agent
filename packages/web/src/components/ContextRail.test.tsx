@@ -249,7 +249,7 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Target conversation');
   });
 
-  it('opens run details in the system rail without conversation-only chrome', () => {
+  it('opens run details in the runs rail without conversation-only chrome', () => {
     vi.mocked(useDurableRunStream).mockReturnValue({
       detail: createDetail(),
       log: { path: '/tmp/runs/conversation-live-conv-123/output.log', log: '' },
@@ -259,7 +259,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/system?run=conversation-live-conv-123']}>
+      <MemoryRouter initialEntries={['/runs/conversation-live-conv-123']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,

@@ -35,11 +35,6 @@ function LegacyTaskRoutesRedirect() {
   return <Navigate to={id ? `/scheduled/${id}` : '/scheduled'} replace />;
 }
 
-function LegacyRunsRoutesRedirect() {
-  const { id } = useParams<{ id?: string }>();
-  return <Navigate to={id ? `/system?run=${encodeURIComponent(id)}` : '/system'} replace />;
-}
-
 function WorkspaceRouteRedirect() {
   const location = useLocation();
   return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
@@ -104,6 +99,7 @@ const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((m
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const AlertsPage = lazy(() => import('./pages/AlertsPage').then((module) => ({ default: module.AlertsPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
+const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then((module) => ({ default: module.SkillsPage })));
@@ -577,6 +573,8 @@ export function App() {
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
+                      <Route path="runs" element={suspendRoute(<RunsPage />)} />
+                      <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
@@ -584,8 +582,6 @@ export function App() {
                       <Route path="skills" element={suspendRoute(<SkillsPage />)} />
                       <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
                       <Route path="plans" element={suspendRoute(<AutomationPage />)} />
-                      <Route path="runs" element={<LegacyRunsRoutesRedirect />} />
-                      <Route path="runs/:id" element={<LegacyRunsRoutesRedirect />} />
                       <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
                       <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
                       <Route path="automations" element={<LegacyTaskRoutesRedirect />} />

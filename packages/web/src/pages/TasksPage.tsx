@@ -55,7 +55,7 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
       const result = await api.runTaskNow(task.id);
       onRefetch();
       setRunning(false);
-      navigate(`/system?run=${encodeURIComponent(result.runId)}`);
+      navigate(`/runs/${encodeURIComponent(result.runId)}`);
     } catch (error) {
       console.error(error);
       setRunning(false);

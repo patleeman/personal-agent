@@ -1,27 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
-import { useAppData, useSseConnection, useSystemStatus } from '../contexts';
-import {
-  getRunHeadline,
-  getRunImportState,
-  getRunMoment,
-  getRunPrimaryConnection,
-  getRunSortTimestamp,
-  isRunInProgress,
-  runNeedsAttention,
-  summarizeActiveRuns,
-  type RunPresentationLookups,
-} from '../runPresentation';
-import {
-  buildSystemRunSearch,
-  buildSystemSearch,
-  getSystemComponentFromSearch,
-  getSystemRunIdFromSearch,
-  readSystemComponentFromSearch,
-  type SystemComponentId,
-} from '../systemSelection';
-import type { DaemonState, DurableRunRecord, SyncState, WebUiState } from '../types';
+import { useSseConnection, useSystemStatus } from '../contexts';
+import { buildSystemSearch, getSystemComponentFromSearch, type SystemComponentId } from '../systemSelection';
+import type { DaemonState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
@@ -178,122 +160,9 @@ function buildSyncItem(data: SyncState | null): SystemRowItem {
   };
 }
 
-function runStatusTone(run: DurableRunRecord): PillTone {
-  const status = run.status?.status;
-
-  if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
-    return 'danger';
-  }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
-    return 'warning';
-  }
-  if (status === 'running' || status === 'completed') {
-    return 'success';
-  }
-  return 'muted';
-}
-
-function runStatusLabel(run: DurableRunRecord): string {
-  const status = run.status?.status;
-
-  if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
-    return 'issue';
-  }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
-    return 'review';
-  }
-  if (status === 'running') {
-    return 'running';
-  }
-  if (status === 'completed') {
-    return 'done';
-  }
-  return 'queued';
-}
-
-function formatRecoveryAction(action: string): string {
-  switch (action) {
-    case 'resume':
-      return 'resume';
-    case 'rerun':
-      return 'rerun';
-    case 'invalid':
-      return 'invalid';
-    case 'attention':
-      return 'manual review';
-    default:
-      return action;
-  }
-}
-
-function runMomentLabel(run: DurableRunRecord): string | null {
-  const moment = getRunMoment(run);
-  return moment.at ? `${moment.label} ${timeAgo(moment.at)}` : null;
-}
-
-function isGenericRunSummary(summary: string): boolean {
-  return /^(Live conversation|Background run|Scheduled task|Wakeup|Remote execution)( · .+)?$/.test(summary)
-    || summary === 'Conversation node distillation'
-    || summary === 'Shell run'
-    || summary === 'Workflow'
-    || summary === 'Run';
-}
-
-function buildRunSummary(headline: ReturnType<typeof getRunHeadline>): string | null {
-  return isGenericRunSummary(headline.summary) ? null : headline.summary;
-}
-
-function buildFeaturedRuns(runRecords: DurableRunRecord[], selectedRunId: string | null): DurableRunRecord[] {
-  const sorted = [...runRecords].sort((left, right) => {
-    const leftAttention = runNeedsAttention(left) ? 1 : 0;
-    const rightAttention = runNeedsAttention(right) ? 1 : 0;
-    if (leftAttention !== rightAttention) {
-      return rightAttention - leftAttention;
-    }
-
-    const leftActive = isRunInProgress(left) ? 1 : 0;
-    const rightActive = isRunInProgress(right) ? 1 : 0;
-    if (leftActive !== rightActive) {
-      return rightActive - leftActive;
-    }
-
-    return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
-  });
-
-  const attention = sorted.filter((run) => runNeedsAttention(run));
-  const active = sorted.filter((run) => isRunInProgress(run) && !runNeedsAttention(run));
-  const recentFinished = sorted.filter((run) => !runNeedsAttention(run) && !isRunInProgress(run)).slice(0, 8);
-
-  const seen = new Set<string>();
-  const featured: DurableRunRecord[] = [];
-  for (const run of [...attention, ...active, ...recentFinished]) {
-    if (seen.has(run.runId)) {
-      continue;
-    }
-    seen.add(run.runId);
-    featured.push(run);
-  }
-
-  if (selectedRunId) {
-    const selectedIndex = featured.findIndex((run) => run.runId === selectedRunId);
-    if (selectedIndex > 0) {
-      const [selectedRun] = featured.splice(selectedIndex, 1);
-      featured.unshift(selectedRun);
-    } else if (selectedIndex === -1) {
-      const selectedRun = runRecords.find((run) => run.runId === selectedRunId);
-      if (selectedRun) {
-        featured.unshift(selectedRun);
-      }
-    }
-  }
-
-  return featured;
-}
-
 export function SystemPage() {
   const location = useLocation();
   const { status: sseStatus } = useSseConnection();
-  const { tasks, sessions, runs, setRuns } = useAppData();
   const {
     daemon,
     sync,
@@ -307,30 +176,8 @@ export function SystemPage() {
   const [applicationAction, setApplicationAction] = useState<'restart' | 'update' | null>(null);
   const [applicationMessage, setApplicationMessage] = useState<string | null>(null);
   const [applicationError, setApplicationError] = useState<string | null>(null);
-  const [showMoreRuns, setShowMoreRuns] = useState(false);
   const actionTimeoutRef = useRef<number | null>(null);
   const restartReconnectRef = useRef<{ sawDisconnect: boolean; baselineRevision: string | null; baselineSlot: string | null } | null>(null);
-
-  useEffect(() => {
-    if (runs !== null) {
-      return;
-    }
-
-    let cancelled = false;
-    void api.runs()
-      .then((nextRuns) => {
-        if (!cancelled) {
-          setRuns(nextRuns);
-        }
-      })
-      .catch(() => {
-        // Keep the runs section in its current loading state until refresh or SSE catches up.
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [runs, setRuns]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -353,9 +200,6 @@ export function SystemPage() {
         api.webUiState()
           .then((next) => setWebUi(next))
           .catch((error) => recordError('Web UI', error)),
-        api.runs()
-          .then((next) => setRuns(next))
-          .catch((error) => recordError('Runs', error)),
       ]);
 
       if (errors.length > 0) {
@@ -364,7 +208,7 @@ export function SystemPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [setDaemon, setRuns, setSync, setWebUi]);
+  }, [setDaemon, setSync, setWebUi]);
 
   function clearActionMonitor() {
     if (actionTimeoutRef.current !== null) {
@@ -454,27 +298,12 @@ export function SystemPage() {
     buildSyncItem(sync),
   ], [daemon, sync, webUi]);
 
-  const selectedRunId = getSystemRunIdFromSearch(location.search);
-  const explicitComponent = readSystemComponentFromSearch(location.search);
-  const selectedComponent = selectedRunId
-    ? explicitComponent
-    : getSystemComponentFromSearch(location.search);
+  const selectedComponent = getSystemComponentFromSearch(location.search);
   const canManageApplication = webUi?.service.installed ?? false;
   const attentionItems = items.filter((item) => ['issue', 'offline', 'unavailable'].includes(item.state) && item.attention);
   const attentionCount = attentionItems.length;
   const disabledCount = items.filter((item) => item.state === 'disabled').length;
   const allReady = items.every((item) => item.state !== 'loading');
-
-  const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [sessions, tasks]);
-  const runRecords = useMemo(() => {
-    const next = [...(runs?.runs ?? [])];
-    next.sort((left, right) => getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left)) || right.runId.localeCompare(left.runId));
-    return next;
-  }, [runs]);
-  const activeRunSummary = useMemo(() => summarizeActiveRuns({ tasks, sessions, runs }), [runs, sessions, tasks]);
-  const runAttentionCount = useMemo(() => runRecords.filter((run) => runNeedsAttention(run)).length, [runRecords]);
-  const featuredRuns = useMemo(() => buildFeaturedRuns(runRecords, selectedRunId), [runRecords, selectedRunId]);
-  const visibleRuns = useMemo(() => featuredRuns.slice(0, showMoreRuns ? 16 : 8), [featuredRuns, showMoreRuns]);
 
   return (
     <div className="flex h-full flex-col">
@@ -482,6 +311,7 @@ export function SystemPage() {
         className="flex-wrap items-start gap-y-3"
         actions={(
           <>
+            <Link to="/runs" className="ui-toolbar-button">Open runs</Link>
             <ToolbarButton
               onClick={() => { void handleApplicationAction('update'); }}
               disabled={applicationAction !== null || !canManageApplication}
@@ -512,8 +342,6 @@ export function SystemPage() {
                   : disabledCount > 0
                     ? <span className="ml-2 text-secondary">· {disabledCount} disabled</span>
                     : <span className="ml-2 text-success">· all healthy</span>}
-              {activeRunSummary.total > 0 && <span className="ml-2 text-secondary">· {activeRunSummary.total} active run{activeRunSummary.total === 1 ? '' : 's'}</span>}
-              {runAttentionCount > 0 && <span className="ml-2 text-warning">· {runAttentionCount} run{runAttentionCount === 1 ? '' : 's'} need review</span>}
               <span className={`ml-2 ${sseStatus === 'open' ? 'text-secondary' : 'text-warning'}`}>
                 · live updates {sseStatus === 'open' ? 'via SSE' : 'offline'}
               </span>
@@ -555,7 +383,7 @@ export function SystemPage() {
                 </div>
               ) : (
                 <p className="ui-card-meta max-w-3xl">
-                  Everything looks healthy. Use the right pane for service logs or selected run details.
+                  Everything looks healthy. Use the right pane for service logs and controls.
                 </p>
               )}
             </section>
@@ -571,10 +399,10 @@ export function SystemPage() {
                   <ListLinkRow
                     key={item.id}
                     to={`/system${buildSystemSearch(location.search, item.id)}`}
-                    selected={selectedRunId === null && selectedComponent === item.id}
+                    selected={selectedComponent === item.id}
                     leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneDotClass(item.tone)}`} />}
                     trailing={(
-                      <span className={`mt-0.5 text-[11px] font-mono ${selectedRunId === null && selectedComponent === item.id ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>
+                      <span className={`mt-0.5 text-[11px] font-mono ${selectedComponent === item.id ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>
                         details
                       </span>
                     )}
@@ -593,68 +421,10 @@ export function SystemPage() {
             <section className="space-y-2 border-t border-border-subtle pt-5">
               <div className="space-y-1">
                 <p className="ui-section-label">Runs</p>
-                <p className="ui-card-meta">Active work, runs that need review, and a few recent finishes.</p>
+                <p className="ui-card-meta max-w-3xl">
+                  Durable background work and recovery review moved to <Link to="/runs" className="text-accent hover:underline">Runs</Link>.
+                </p>
               </div>
-
-              {runs === null ? (
-                <LoadingState label="Loading runs…" />
-              ) : visibleRuns.length === 0 ? (
-                <p className="ui-card-meta">No daemon-backed work yet.</p>
-              ) : (
-                <>
-                  <div className="space-y-px">
-                    {visibleRuns.map((run) => {
-                      const headline = getRunHeadline(run, lookups);
-                      const tone = runStatusTone(run);
-                      const statusLabel = runStatusLabel(run);
-                      const moment = runMomentLabel(run);
-                      const primaryConnection = getRunPrimaryConnection(run, lookups);
-                      const connectionLabel = primaryConnection?.label === 'Conversation to reopen'
-                        ? 'conversation'
-                        : primaryConnection?.label?.toLowerCase();
-                      const selected = selectedRunId === run.runId;
-                      const summary = buildRunSummary(headline);
-                      const recoveryLabel = formatRecoveryAction(run.recoveryAction);
-                      const metaParts = [moment, connectionLabel].filter((value): value is string => typeof value === 'string' && value.length > 0);
-                      if (run.recoveryAction !== 'none' && recoveryLabel !== statusLabel) {
-                        metaParts.push(recoveryLabel);
-                      }
-                      if (run.problems.length > 0) {
-                        metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
-                      }
-
-                      return (
-                        <ListLinkRow
-                          key={run.runId}
-                          to={`/system${buildSystemRunSearch(location.search, run.runId, selectedComponent ?? explicitComponent ?? null)}`}
-                          selected={selected}
-                          leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneDotClass(tone)}`} />}
-                          trailing={(
-                            <span className={`mt-0.5 text-[11px] font-mono ${selected ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>
-                              details
-                            </span>
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <p className="ui-row-title">{headline.title}</p>
-                            <Pill tone={tone}>{statusLabel}</Pill>
-                          </div>
-                          {summary && <p className="ui-row-summary">{summary}</p>}
-                          {metaParts.length > 0 && <p className="ui-row-meta break-words">{metaParts.join(' · ')}</p>}
-                        </ListLinkRow>
-                      );
-                    })}
-                  </div>
-
-                  {featuredRuns.length > visibleRuns.length && (
-                    <div className="pt-2">
-                      <ToolbarButton onClick={() => setShowMoreRuns((current) => !current)}>
-                        {showMoreRuns ? 'Show fewer runs' : `Show more (${featuredRuns.length - visibleRuns.length} more)`}
-                      </ToolbarButton>
-                    </div>
-                  )}
-                </>
-              )}
             </section>
           </div>
       </div>
