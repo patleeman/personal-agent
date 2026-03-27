@@ -104,13 +104,6 @@ export function formatRelatedCount(related: string[] | undefined): string | null
   return `${normalized} related ${normalized === 1 ? 'node' : 'nodes'}`;
 }
 
-export function parseCreateNoteTags(value: string): string[] {
-  return [...new Set(value
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter((entry) => entry.length > 0))];
-}
-
 export function noteKindLabel(memory: MemoryDocItem): string {
   const tags = new Set(memory.tags.map((tag) => tag.trim().toLowerCase()));
   const type = memory.type?.trim().toLowerCase();

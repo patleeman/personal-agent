@@ -537,12 +537,12 @@ export const api = {
   notes: () => get<{ memories: MemoryDocItem[]; memoryQueue: MemoryWorkItem[] }>('/notes'),
   recoverFailedNodeDistills: () =>
     post<{ accepted: true; runId: string; count: number }>('/notes/recover-failed-node-distills'),
-  createNoteDoc: (input: { title: string; summary?: string; tags?: string[] }) =>
+  createNoteDoc: (input: { title: string; summary?: string; body?: string }) =>
     post<MemoryDocDetail>('/notes', input),
   noteDoc: (memoryId: string) =>
     get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
-  saveNoteDoc: (memoryId: string, content: string) =>
-    post<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`, { content }),
+  saveNoteDoc: (memoryId: string, input: { content: string } | { title: string; summary?: string; body: string }) =>
+    post<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`, input),
   deleteNoteDoc: (memoryId: string) =>
     del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),
   skillDetail: (name: string, options?: { profile?: string }) =>

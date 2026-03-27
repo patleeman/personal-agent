@@ -123,7 +123,7 @@ describe('MemoriesPage', () => {
     expect(html).not.toContain('Search notes');
   });
 
-  it('shows active distillation work in the memory queue', () => {
+  it('keeps queue details out of the main notes workspace', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -145,15 +145,16 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('Note work queue');
-    expect(html).toContain('Refactor memory pipeline');
-    expect(html).toContain('run-123');
-    expect(html).toContain('/conversations/conv-123?run=run-123');
+    expect(html).toContain('1');
+    expect(html).toContain('in queue');
+    expect(html).not.toContain('Note work queue');
+    expect(html).not.toContain('Refactor memory pipeline');
+    expect(html).not.toContain('run-123');
     expect(html).not.toContain('Retry');
     expect(html).not.toContain('Recover');
   });
 
-  it('shows retry actions per failed distillation and a single batch recovery action', () => {
+  it('does not render queue actions in the main notes workspace', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -175,11 +176,11 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('Retry');
-    expect(html).toContain('Retry this node distillation');
-    expect(html).toContain('Recover failed extractions');
-    expect(html).toContain('Start one background recovery run for every failed or interrupted note extraction');
-    expect(html).not.toContain('Open a recovery conversation for this node distillation');
+    expect(html).toContain('1');
+    expect(html).toContain('in queue');
+    expect(html).not.toContain('Retry');
+    expect(html).not.toContain('Retry this node distillation');
+    expect(html).not.toContain('Recover');
   });
 
   it('shows the empty workspace state when there are no notes', () => {
@@ -198,7 +199,7 @@ describe('MemoriesPage', () => {
     const html = renderPage('/notes');
 
     expect(html).toContain('No notes yet');
-    expect(html).toContain('The right rail is now for browsing notes and their resources.');
+    expect(html).toContain('The right rail is for browsing notes and note resources.');
     expect(html).toContain('Create note');
   });
 });
