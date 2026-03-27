@@ -413,20 +413,20 @@ function formatInjectedContextLabel(customType?: string): string {
 // ── Tool icon & color ─────────────────────────────────────────────────────────
 
 const TOOL_META: Record<string, { icon: string; label: string; color: string; tone: 'steel' | 'teal' | 'accent' | 'success' | 'warning' | 'muted' }> = {
-  bash:        { icon: '$',  label: 'bash',            color: 'text-steel border-steel/25 bg-steel/5',         tone: 'steel' },
-  read:        { icon: '≡',  label: 'read',            color: 'text-teal border-teal/25 bg-teal/5',            tone: 'teal' },
-  write:       { icon: '✎', label: 'write',           color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
-  edit:        { icon: '✎', label: 'edit',            color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
-  web_search:  { icon: '⌕',  label: 'web_search',      color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
-  web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
-  screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary border-border-default bg-elevated', tone: 'muted' },
-  artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
-  ask_user_question: { icon: '?', label: 'question',   color: 'text-warning border-warning/25 bg-warning/5',    tone: 'warning' },
-  todo_list:   { icon: '☑',  label: 'todo_list',       color: 'text-warning border-warning/25 bg-warning/5',    tone: 'warning' },
-  deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning border-warning/25 bg-warning/5', tone: 'warning' },
+  bash:        { icon: '$',  label: 'bash',            color: 'text-steel bg-steel/5',       tone: 'steel' },
+  read:        { icon: '≡',  label: 'read',            color: 'text-teal bg-teal/5',         tone: 'teal' },
+  write:       { icon: '✎',  label: 'write',           color: 'text-accent bg-accent/5',     tone: 'accent' },
+  edit:        { icon: '✎',  label: 'edit',            color: 'text-accent bg-accent/5',     tone: 'accent' },
+  web_search:  { icon: '⌕',  label: 'web_search',      color: 'text-success bg-success/5',   tone: 'success' },
+  web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success bg-success/5',   tone: 'success' },
+  screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary bg-elevated',  tone: 'muted' },
+  artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent bg-accent/5',     tone: 'accent' },
+  ask_user_question: { icon: '?', label: 'question',   color: 'text-warning bg-warning/5',   tone: 'warning' },
+  todo_list:   { icon: '☑',  label: 'todo_list',       color: 'text-warning bg-warning/5',   tone: 'warning' },
+  deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning bg-warning/5', tone: 'warning' },
 };
 function toolMeta(t: string) {
-  return TOOL_META[t] ?? { icon: '⚙', label: t, color: 'text-secondary border-border-default bg-elevated', tone: 'muted' as const };
+  return TOOL_META[t] ?? { icon: '⚙', label: t, color: 'text-secondary bg-elevated', tone: 'muted' as const };
 }
 
 type DisclosurePreference = 'auto' | 'open' | 'closed';
@@ -1264,10 +1264,10 @@ function ToolBlock({
     : '';
 
   return (
-    <div className={cx('rounded-xl border text-[12px] font-mono overflow-hidden transition-colors', meta.color, isError && 'border-danger/40 bg-danger/5 text-danger')}>
+    <div className={cx('rounded-lg text-[12px] font-mono overflow-hidden transition-colors', meta.color, isError && 'border border-danger/40 bg-danger/5 text-danger')}>
       <button
         onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
-        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-black/5 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-black/5 transition-colors text-left"
       >
         {isRunning ? (
           <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
@@ -1290,7 +1290,7 @@ function ToolBlock({
       </button>
 
       {runIds.length > 0 && (
-        <div className="border-t border-inherit bg-black/5 px-3 py-2.5 text-[11px] font-sans">
+        <div className="border-t border-border-subtle/70 bg-black/5 px-2.5 py-2 text-[11px] font-sans">
           <p className="mb-1.5 uppercase tracking-[0.14em] opacity-40">
             {runIds.length === 1 ? 'linked run' : 'linked runs'}
           </p>
@@ -1310,7 +1310,7 @@ function ToolBlock({
                   onClick={() => { onOpenRun?.(runId); }}
                   disabled={!onOpenRun}
                   className={cx(
-                    'w-full rounded-md px-2.5 py-2 text-left transition-colors',
+                    'w-full rounded-md px-2 py-1.5 text-left transition-colors',
                     onOpenRun ? 'hover:bg-black/5' : 'cursor-default',
                     isActiveRun ? 'bg-black/10 text-primary' : 'text-accent',
                     !onOpenRun && 'text-dim',
@@ -1333,8 +1333,8 @@ function ToolBlock({
       )}
 
       {open && (
-        <div className="border-t border-inherit">
-          <div className="px-3 py-2.5 bg-black/5">
+        <div className="border-t border-border-subtle/70">
+          <div className="px-2.5 py-2 bg-black/5">
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
             <FilePathPreformattedText
               text={JSON.stringify(block.input, null, 2)}
@@ -1343,7 +1343,7 @@ function ToolBlock({
             />
           </div>
           {(isRunning || output || outputDeferred) && (
-            <div className={cx('px-3 py-2.5', isRunning && output && 'max-h-40 overflow-y-auto')}>
+            <div className={cx('px-2.5 py-2', isRunning && output && 'max-h-40 overflow-y-auto')}>
               <div className="mb-1 flex items-center gap-2">
                 <p className="text-[10px] uppercase tracking-wider opacity-40">
                   {isRunning ? 'live output' : `output · ${output.split('\n').length} lines`}
@@ -1385,10 +1385,10 @@ function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { typ
   const open = resolveDisclosureOpen(autoOpen, preference);
 
   return (
-    <SurfacePanel muted className="overflow-hidden text-[12px]">
+    <SurfacePanel muted className="overflow-hidden border-transparent bg-elevated/35 text-[12px] shadow-none">
       <button
         onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-elevated transition-colors"
+        className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-elevated transition-colors"
       >
         <span className="text-dim select-none">💭</span>
         <Pill tone="muted">Thinking</Pill>
@@ -1397,7 +1397,7 @@ function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { typ
         <span className="text-dim text-[10px]">{open ? '▲ hide' : '▼ show'}</span>
       </button>
       {open && (
-        <div className="px-3 pb-3 pt-2 border-t border-border-subtle text-secondary italic leading-relaxed space-y-1">
+        <div className="border-t border-border-subtle/70 px-2.5 pb-2.5 pt-1.5 text-secondary italic leading-relaxed space-y-1">
           {block.text.split('\n').map((l, i) => <p key={i} className="text-[12px]">{l || <br />}</p>)}
         </div>
       )}
@@ -1412,10 +1412,10 @@ function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subage
   const clr = { running: 'text-steel bg-steel/8 border-steel/20', complete: 'text-success bg-success/8 border-success/20', failed: 'text-danger bg-danger/8 border-danger/20' }[block.status];
   const tone = { running: 'steel', complete: 'success', failed: 'danger' }[block.status] as 'steel' | 'success' | 'danger';
   return (
-    <div className={`rounded-xl border overflow-hidden text-[12px] ${clr}`}>
+    <div className={`rounded-lg overflow-hidden text-[12px] ${clr}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-black/5 transition-colors"
+        className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-black/5 transition-colors"
       >
         {block.status === 'running'
           ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0" />
@@ -1426,7 +1426,7 @@ function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subage
         <span className="shrink-0 ml-1 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="border-t border-inherit px-3 py-2.5 space-y-2 bg-black/5">
+        <div className="border-t border-border-subtle/70 px-2.5 py-2 space-y-2 bg-black/5">
           <div>
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">prompt</p>
             <p className="opacity-70 leading-relaxed">{block.prompt}</p>
@@ -1456,6 +1456,8 @@ function traceSummaryTone(category: TraceClusterSummaryCategory) {
   }
 }
 
+const MAX_VISIBLE_TRACE_BLOCKS = 5;
+
 function TraceClusterBlock({
   blocks,
   summary,
@@ -1484,6 +1486,7 @@ function TraceClusterBlock({
   resumeLabel?: string;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
+  const [showAllBlocks, setShowAllBlocks] = useState(false);
   const expandedCategories = summary.categories.slice(0, 3);
   const remainingCategoryCount = Math.max(0, summary.categories.length - expandedCategories.length);
   const durationLabel = summary.durationMs && summary.durationMs > 0
@@ -1493,15 +1496,20 @@ function TraceClusterBlock({
   const title = isActive ? 'Working' : 'Internal work';
   const autoOpen = shouldAutoOpenTraceCluster(live, summary.hasRunning);
   const open = resolveDisclosureOpen(autoOpen, preference);
+  const hiddenBlockCount = Math.max(0, blocks.length - MAX_VISIBLE_TRACE_BLOCKS);
+  const visibleBlocks = showAllBlocks || hiddenBlockCount === 0
+    ? blocks
+    : blocks.slice(-MAX_VISIBLE_TRACE_BLOCKS);
+  const visibleStartIndex = blocks.length - visibleBlocks.length;
   const panelClassName = cx(
-    'flex-1 rounded-xl border px-3 py-2.5 text-left transition-colors',
+    'flex-1 rounded-xl border px-2.5 py-2 text-left transition-colors',
     summary.hasError
       ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
       : 'border-border-subtle bg-elevated/60 hover:bg-elevated',
   );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-2">
         <button
           type="button"
@@ -1523,7 +1531,7 @@ function TraceClusterBlock({
             <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
           </div>
           {summary.categories.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
               {expandedCategories.map((category) => (
                 <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
                   {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
@@ -1543,17 +1551,31 @@ function TraceClusterBlock({
       </div>
 
       {open && (
-        <div className="ml-3 space-y-2 border-l border-border-subtle pl-3">
-          {blocks.map((block, index) => {
-            const autoOpen = shouldAutoOpenConversationBlock(block, index, blocks.length, live);
+        <div className="ml-2.5 space-y-1.5 border-l border-border-subtle pl-2.5">
+          {hiddenBlockCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md bg-elevated/35 px-2.5 py-1.5 text-[11px] text-secondary">
+              <span>{showAllBlocks ? `Showing all ${blocks.length} steps.` : `${hiddenBlockCount} earlier step${hiddenBlockCount === 1 ? '' : 's'} summarized above.`}</span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setShowAllBlocks((current) => !current)}
+                className="ui-action-button text-[10px]"
+              >
+                {showAllBlocks ? `Show latest ${MAX_VISIBLE_TRACE_BLOCKS}` : 'Show all'}
+              </button>
+            </div>
+          )}
+          {visibleBlocks.map((block, index) => {
+            const blockIndex = visibleStartIndex + index;
+            const autoOpen = shouldAutoOpenConversationBlock(block, blockIndex, blocks.length, live);
 
             switch (block.type) {
               case 'thinking':
-                return <ThinkingBlock key={`thinking-${index}`} block={block} autoOpen={autoOpen} />;
+                return <ThinkingBlock key={`thinking-${blockIndex}`} block={block} autoOpen={autoOpen} />;
               case 'tool_use':
                 return (
                   <ToolBlock
-                    key={`tool-${index}`}
+                    key={`tool-${blockIndex}`}
                     block={block}
                     autoOpen={autoOpen}
                     onOpenArtifact={onOpenArtifact}
@@ -1564,9 +1586,9 @@ function TraceClusterBlock({
                   />
                 );
               case 'subagent':
-                return <SubagentBlock key={`subagent-${index}`} block={block} />;
+                return <SubagentBlock key={`subagent-${blockIndex}`} block={block} />;
               case 'error':
-                return <ErrorBlock key={`error-${index}`} block={block} onOpenFilePath={onOpenFilePath} />;
+                return <ErrorBlock key={`error-${blockIndex}`} block={block} onOpenFilePath={onOpenFilePath} />;
               default:
                 return null;
             }
