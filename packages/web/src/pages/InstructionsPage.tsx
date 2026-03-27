@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { getKnowledgeInstructionPath } from '../knowledgeSelection';
 import type { MemoryAgentsItem } from '../types';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import {
   EmptyState,
   ErrorState,
@@ -93,8 +94,9 @@ export function InstructionsPage() {
   }, [instructions, loading, selectedInstructionPath, setSelectedInstruction]);
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
+    <SettingsSplitLayout>
+      <div className="flex h-full flex-col">
+        <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={(
           <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
@@ -168,6 +170,7 @@ export function InstructionsPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }

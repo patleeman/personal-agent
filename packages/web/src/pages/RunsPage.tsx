@@ -14,6 +14,7 @@ import {
 } from '../runPresentation';
 import type { DurableRunRecord } from '../types';
 import { timeAgo } from '../utils';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
 function toneDotClass(tone: PillTone): string {
@@ -186,8 +187,9 @@ export function RunsPage() {
     : refreshError;
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); }} disabled={refreshing}>{refreshing ? 'Refreshing…' : '↻ Refresh'}</ToolbarButton>}>
+    <SettingsSplitLayout>
+      <div className="flex h-full flex-col">
+        <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); }} disabled={refreshing}>{refreshing ? 'Refreshing…' : '↻ Refresh'}</ToolbarButton>}>
         <PageHeading
           title="Runs"
           meta={runs
@@ -256,6 +258,7 @@ export function RunsPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }

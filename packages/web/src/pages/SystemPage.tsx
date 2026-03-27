@@ -6,6 +6,7 @@ import { buildSystemSearch, getSystemComponentFromSearch, type SystemComponentId
 import type { DaemonState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
 type SystemRowState = 'loading' | 'healthy' | 'issue' | 'offline' | 'disabled' | 'unavailable';
@@ -306,8 +307,9 @@ export function SystemPage() {
   const allReady = items.every((item) => item.state !== 'loading');
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
+    <SettingsSplitLayout>
+      <div className="flex h-full flex-col">
+        <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={(
           <>
@@ -428,6 +430,7 @@ export function SystemPage() {
             </section>
           </div>
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }

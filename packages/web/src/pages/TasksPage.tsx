@@ -5,6 +5,7 @@ import { useAppData, useSseConnection } from '../contexts';
 import type { ScheduledTaskSummary } from '../types';
 import { formatTaskSchedule } from '../taskSchedule';
 import { timeAgo } from '../utils';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 
 function statusDotClass(task: ScheduledTaskSummary) {
@@ -170,8 +171,9 @@ export function TasksPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader actions={(
+    <SettingsSplitLayout>
+      <div className="flex flex-col h-full">
+        <PageHeader actions={(
         <>
           <ToolbarButton onClick={toggleCreateTask}>{showingCreateForm ? 'Close new task' : '+ New task'}</ToolbarButton>
           <ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>
@@ -221,6 +223,7 @@ export function TasksPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }

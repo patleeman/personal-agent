@@ -4,6 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import type { ConversationAutomationWorkflowPreset, ConversationAutomationWorkspaceState } from '../types';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
 const PLAN_ID_SEARCH_PARAM = 'plan';
@@ -114,8 +115,9 @@ export function AutomationPage() {
     : 'Reusable todo presets';
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
+    <SettingsSplitLayout>
+      <div className="flex h-full flex-col">
+        <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={(
           <>
@@ -187,6 +189,7 @@ export function AutomationPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }
