@@ -30,7 +30,10 @@ export interface ConversationTitleMessageInput {
 
 export interface ConversationTitleModelRegistry {
   getAvailable(): Model<Api>[];
-  getApiKey(model: Model<Api>): Promise<string | undefined>;
+  getApiKeyAndHeaders(model: Model<Api>): Promise<
+    | { ok: true; apiKey?: string; headers?: Record<string, string> }
+    | { ok: false; error: string }
+  >;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -299,6 +302,11 @@ export async function generateConversationTitle(options: {
     return null;
   }
 
+  const authResult = await options.modelRegistry.getApiKeyAndHeaders(model);
+  if (!authResult.ok) {
+    return null;
+  }
+
   const response = await completeSimple(
     model,
     {
@@ -323,7 +331,8 @@ export async function generateConversationTitle(options: {
       ],
     },
     {
-      apiKey: await options.modelRegistry.getApiKey(model),
+      apiKey: authResult.apiKey,
+      headers: authResult.headers,
       reasoning: settings.reasoning,
       maxTokens: 32,
       cacheRetention: 'none',

@@ -201,9 +201,13 @@ export async function draftWorkspaceCommitMessage(options: {
     return withNotice(fallback, 'Used a local fallback draft because no coding model is available.');
   }
 
-  const apiKey = await modelRegistry.getApiKey(model);
-  if (!apiKey) {
-    return withNotice(fallback, 'Used a local fallback draft because no API key is configured for the active coding model.');
+  const authResult = await modelRegistry.getApiKeyAndHeaders(model);
+  if (!authResult.ok) {
+    return withNotice(fallback, `Used a local fallback draft because the active coding model auth could not be resolved: ${authResult.error}`);
+  }
+
+  if (!authResult.apiKey && !authResult.headers) {
+    return withNotice(fallback, 'Used a local fallback draft because no auth is configured for the active coding model.');
   }
 
   try {
@@ -220,7 +224,8 @@ export async function draftWorkspaceCommitMessage(options: {
         ],
       },
       {
-        apiKey,
+        apiKey: authResult.apiKey,
+        headers: authResult.headers,
         reasoning: settings.reasoning,
         maxTokens: 200,
         cacheRetention: 'none',
