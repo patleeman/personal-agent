@@ -14,7 +14,6 @@ import {
   ProjectActivityContent,
   ProjectDocumentContent,
   ProjectFilesContent,
-  ProjectNodeLinksContent,
   ProjectNotesContent,
   ProjectRecordViewer,
 } from './ProjectDetailSections';
@@ -205,15 +204,6 @@ export function ProjectDetailPanel({
   const filesPreview = fileCount > 0
     ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
     : 'No files yet.';
-  const outgoingLinkCount = project.links?.outgoing.length ?? 0;
-  const incomingLinkCount = project.links?.incoming.length ?? 0;
-  const unresolvedLinkCount = project.links?.unresolved.length ?? 0;
-  const hasDerivedLinks = outgoingLinkCount > 0 || incomingLinkCount > 0 || unresolvedLinkCount > 0;
-  const linksPreview = [
-    outgoingLinkCount > 0 ? `${outgoingLinkCount} outgoing` : null,
-    incomingLinkCount > 0 ? `${incomingLinkCount} backlinks` : null,
-    unresolvedLinkCount > 0 ? `${unresolvedLinkCount} unresolved` : null,
-  ].filter(Boolean).join(' · ');
   const projectApiOptions = { profile: projectProfile };
 
   const [editingProject, setEditingProject] = useState(false);
@@ -250,6 +240,7 @@ export function ProjectDetailPanel({
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
 
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -267,6 +258,7 @@ export function ProjectDetailPanel({
     setNoteError(null);
     setFileError(null);
     setArchiveError(null);
+    setAdvancedOpen(false);
     setDeleteError(null);
     setRawProjectOpen(false);
     setRawProjectLoaded(false);
@@ -277,6 +269,16 @@ export function ProjectDetailPanel({
   function openProjectEditor() {
     setEditingProject(true);
     setProjectError(null);
+  }
+
+  function toggleAdvanced() {
+    setAdvancedOpen((value) => {
+      const nextValue = !value;
+      if (!nextValue) {
+        setRawProjectOpen(false);
+      }
+      return nextValue;
+    });
   }
 
   function openTaskAdd() {
@@ -543,6 +545,7 @@ export function ProjectDetailPanel({
       return;
     }
 
+    setAdvancedOpen(true);
     setRawProjectError(null);
     setRawProjectOpen(true);
 
@@ -671,11 +674,15 @@ export function ProjectDetailPanel({
 
             <div className="flex flex-wrap items-center gap-2">
               <ToolbarButton onClick={downloadProjectPackage} disabled={deleteBusy}>Export package</ToolbarButton>
+              <ToolbarButton onClick={openProjectEditor} disabled={deleteBusy}>Edit project</ToolbarButton>
               <ToolbarButton onClick={toggleArchive} disabled={archiveBusy || deleteBusy}>
                 {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
               </ToolbarButton>
               <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy || !canStartConversation}>
                 {conversationBusy ? 'Starting…' : 'Start conversation'}
+              </ToolbarButton>
+              <ToolbarButton onClick={toggleAdvanced} disabled={deleteBusy}>
+                {advancedOpen ? 'Hide more' : 'More'}
               </ToolbarButton>
             </div>
           </div>
@@ -706,6 +713,20 @@ export function ProjectDetailPanel({
           </div>
 
           {(archiveError || deleteError) && <p className="text-[12px] text-danger">{archiveError ?? deleteError}</p>}
+
+          {editingProject && (
+            <div className="border-t border-border-subtle pt-6">
+              <ProjectRecordEditorForm
+                value={projectForm}
+                statuses={PROJECT_STATUSES}
+                busy={projectBusy}
+                error={projectError}
+                onChange={(patch) => setProjectForm((current) => ({ ...current, ...patch }))}
+                onSubmit={handleProjectSave}
+                onCancel={() => setEditingProject(false)}
+              />
+            </div>
+          )}
         </div>
       </section>
 
@@ -842,61 +863,33 @@ export function ProjectDetailPanel({
         />
       </DetailSection>
 
-      {hasDerivedLinks && (
-        <DetailSection
-          id="project-links"
-          title="Related"
-          meta={linksPreview}
-          collapsible
-          defaultOpen={false}
-          forceOpen={selectedView === 'links'}
-          collapsedPreview={linksPreview}
-          resetKey={record.id}
-        >
-          <ProjectNodeLinksContent links={project.links} />
-        </DetailSection>
+      {advancedOpen && (
+        <section className="border-t border-border-subtle pt-6 space-y-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
+              {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
+            </button>
+            <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
+              {deleteBusy ? 'Deleting…' : 'Delete project'}
+            </button>
+            <span className="ui-card-meta">Debug state stays hidden unless you ask for it.</span>
+          </div>
+
+          {rawProjectOpen && (
+            <ProjectRecordViewer
+              repoRoot={record.repoRoot}
+              summary={record.summary}
+              rawProjectOpen={rawProjectOpen}
+              rawProjectContent={rawProjectContent}
+              rawProjectBusy={rawProjectBusy}
+              rawProjectError={rawProjectError}
+              onRawProjectContentChange={setRawProjectContent}
+              onRawProjectSubmit={saveRawProject}
+              showSummary={false}
+            />
+          )}
+        </section>
       )}
-
-      <section id="project-record" className="border-t border-border-subtle pt-6 space-y-4 scroll-mt-6">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
-            {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
-          </button>
-          <button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
-            {editingProject ? 'Editing…' : 'Edit project'}
-          </button>
-          <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
-            {deleteBusy ? 'Deleting…' : 'Delete project'}
-          </button>
-          <span className="ui-card-meta">Project metadata stays tucked away unless you need it.</span>
-        </div>
-
-        {editingProject && (
-          <ProjectRecordEditorForm
-            value={projectForm}
-            statuses={PROJECT_STATUSES}
-            busy={projectBusy}
-            error={projectError}
-            onChange={(patch) => setProjectForm((current) => ({ ...current, ...patch }))}
-            onSubmit={handleProjectSave}
-            onCancel={() => setEditingProject(false)}
-          />
-        )}
-
-        {rawProjectOpen && (
-          <ProjectRecordViewer
-            repoRoot={record.repoRoot}
-            summary={record.summary}
-            rawProjectOpen={rawProjectOpen}
-            rawProjectContent={rawProjectContent}
-            rawProjectBusy={rawProjectBusy}
-            rawProjectError={rawProjectError}
-            onRawProjectContentChange={setRawProjectContent}
-            onRawProjectSubmit={saveRawProject}
-            showSummary={false}
-          />
-        )}
-      </section>
     </div>
   );
 }

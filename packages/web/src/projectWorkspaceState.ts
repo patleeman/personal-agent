@@ -22,7 +22,6 @@ export function projectViewToSectionId(view: string): string | null {
     case 'activity': return 'project-activity';
     case 'notes': return 'project-notes';
     case 'files': return 'project-files';
-    case 'links': return 'project-links';
     default: return null;
   }
 }

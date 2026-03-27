@@ -70,6 +70,61 @@ describe('nodeLinks', () => {
     ]);
   });
 
+  it('derives project links from project docs and notes instead of project metadata', () => {
+    const links = buildNodeLinksFromDocuments([
+      {
+        kind: 'project',
+        id: 'ship-ui',
+        title: 'Ship UI',
+        summary: 'Project node',
+        path: '/tmp/ship-ui/INDEX.md',
+        contentParts: [
+          'Project doc mentions @tool-agent-browser.',
+          'Decision log',
+          'Follow up with @paper-summary before the rollout.',
+        ],
+        explicitTargets: [],
+      },
+      {
+        kind: 'note',
+        id: 'paper-summary',
+        title: 'Paper Summary',
+        summary: 'Evergreen note',
+        path: '/tmp/paper-summary/INDEX.md',
+        contentParts: ['Tracks the paper.'],
+        explicitTargets: [],
+      },
+      {
+        kind: 'skill',
+        id: 'tool-agent-browser',
+        title: 'Tool Agent Browser',
+        summary: 'Browser automation skill',
+        path: '/tmp/tool-agent-browser/INDEX.md',
+        contentParts: ['Use for browser checks.'],
+        explicitTargets: [],
+      },
+    ]);
+
+    expect(links.get('project:ship-ui')).toEqual({
+      outgoing: [
+        {
+          kind: 'note',
+          id: 'paper-summary',
+          title: 'Paper Summary',
+          summary: 'Evergreen note',
+        },
+        {
+          kind: 'skill',
+          id: 'tool-agent-browser',
+          title: 'Tool Agent Browser',
+          summary: 'Browser automation skill',
+        },
+      ],
+      incoming: [],
+      unresolved: [],
+    });
+  });
+
   it('tracks unresolved ids when a mention is missing or ambiguous', () => {
     const links = buildNodeLinksFromDocuments([
       {
