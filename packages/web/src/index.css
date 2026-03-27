@@ -187,7 +187,7 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
@@ -199,7 +199,7 @@
   }
 
   .ui-sidebar-shelf-row {
-    @apply w-full flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded-lg text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
+    @apply mx-1 flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
   }
 
   .ui-loading-state {
