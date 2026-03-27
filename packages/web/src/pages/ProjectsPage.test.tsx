@@ -112,6 +112,58 @@ describe('ProjectsPage', () => {
     expect(html).toContain('Browse projects and jump between project sections.');
   });
 
+  it('renders the new-project panel from URL state', () => {
+    mockCommonAppData();
+
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'project-diagnostics:assistant') {
+        return {
+          data: {
+            profile: 'assistant',
+            invalidProjects: [],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: {
+          currentProfile: 'assistant',
+          profiles: ['assistant'],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/projects?viewProfile=assistant&new=1']}>
+        <Routes>
+          <Route path="/projects" element={<ProjectsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('New project');
+    expect(html).toContain('Create a lightweight project container');
+    expect(html).toContain('Create project');
+  });
+
   it('renders the selected project in the main workspace with the browser still visible', () => {
     mockCommonAppData();
 

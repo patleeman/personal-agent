@@ -9,6 +9,7 @@ import {
   OPEN_SESSION_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
+  PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from '../localSettings.js';
 import type { SessionMeta } from '../types.js';
@@ -131,6 +132,7 @@ describe('Sidebar', () => {
     expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
+    expect(html).toContain('Open create menu');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Knowledge Base');
@@ -139,15 +141,17 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Archived');
   });
 
-  it('keeps pinned conversations in the open conversations section', () => {
+  it('keeps pinned conversations in the open conversations section and shows a pinned indicator', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
+    storage.setItem(PINNED_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
 
     const html = renderSidebar('/inbox');
 
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
+    expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
