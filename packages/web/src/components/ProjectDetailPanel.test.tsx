@@ -20,56 +20,49 @@ function createProjectDetail(): ProjectDetail {
       summary: 'Keep the structured project record tucked away until it is needed.',
       requirements: {
         goal: 'Ship a tight prototype that proves whether proactive help feels useful.',
-        acceptanceCriteria: ['Teammates can define the pilot domain.', 'The prototype hands rich context into remediation flows.'],
+        acceptanceCriteria: ['Teammates can define the pilot domain.'],
       },
-      status: 'in_progress',
-      blockers: ['Need a sharper project detail layout for scanning.'],
-      currentFocus: 'Turn the project page into a quick read instead of a wall of text.',
-      recentProgress: ['Added a more compact summary flow for project readers.'],
-      planSummary: `- Keep the active work visible.
-- Push secondary detail behind explicit reveals.`,
-      completionSummary: 'Not done yet, but the outcome section is ready for when the prototype lands.',
+      status: 'active',
+      blockers: [],
+      recentProgress: [],
       plan: {
-        currentMilestoneId: 'scanability-pass',
-        milestones: [
-          {
-            id: 'scanability-pass',
-            title: 'Improve scanability',
-            status: 'in_progress',
-            summary: 'Reduce dense default-expanded sections.',
-          },
-        ],
+        milestones: [],
         tasks: [],
       },
     },
     taskCount: 1,
     noteCount: 1,
+    fileCount: 1,
     attachmentCount: 1,
     artifactCount: 0,
     tasks: [
       {
         id: 'collapse-secondary-sections',
-        status: 'in_progress',
+        status: 'doing',
         title: 'Collapse secondary sections by default',
-        milestoneId: 'scanability-pass',
       },
     ],
+    document: {
+      path: '/tmp/bloodhound-prototype/INDEX.md',
+      updatedAt: '2026-03-24T09:30:00.000Z',
+      content: `# Bloodhound prototype
+
+Ship a tight prototype that proves whether proactive help feels useful.
+
+## Plan
+
+- Push secondary detail behind explicit reveals.`,
+    },
     brief: {
       path: '/tmp/bloodhound-prototype/INDEX.md',
       updatedAt: '2026-03-24T09:30:00.000Z',
       content: `# Bloodhound prototype
 
-## Requirements
-
-Handoff-only narrative that should stay collapsed on first render.
+Ship a tight prototype that proves whether proactive help feels useful.
 
 ## Plan
 
-- Handoff-only implementation notes.
-
-## Completion summary
-
-Handoff-only completion notes.`,
+- Push secondary detail behind explicit reveals.`,
     },
     notes: [
       {
@@ -82,9 +75,10 @@ Handoff-only completion notes.`,
         updatedAt: '2026-03-23T15:46:00.000Z',
       },
     ],
-    attachments: [
+    files: [
       {
         id: 'file-1',
+        sourceKind: 'attachment',
         kind: 'attachment',
         path: '/tmp/bloodhound-prototype/files/file-1.md',
         title: 'Dense design notes',
@@ -94,9 +88,10 @@ Handoff-only completion notes.`,
         sizeBytes: 1024,
         createdAt: '2026-03-23T15:46:00.000Z',
         updatedAt: '2026-03-23T15:46:00.000Z',
-        downloadPath: '/api/projects/bloodhound-prototype/files/attachment/file-1',
+        downloadPath: '/api/projects/bloodhound-prototype/files/file-1',
       },
     ],
+    attachments: [],
     artifacts: [],
     linkedConversations: [],
     links: {
@@ -107,10 +102,9 @@ Handoff-only completion notes.`,
     timeline: [
       {
         id: 'timeline-1',
-        kind: 'note',
+        kind: 'document',
         createdAt: '2026-03-24T10:00:00.000Z',
-        title: 'Project kickoff note',
-        description: 'Hidden timeline body text that should not show until Timeline is expanded.',
+        title: 'Project doc updated',
       },
     ],
   };
@@ -134,7 +128,7 @@ describe('ProjectDetailPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('keeps secondary project sections collapsed on the first render', () => {
+  it('shows the main doc and keeps secondary sections collapsed on first render', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
@@ -143,22 +137,12 @@ describe('ProjectDetailPanel', () => {
 
     expect(html).toContain('Ship a tight prototype that proves whether proactive help feels useful.');
     expect(html).toContain('Push secondary detail behind explicit reveals.');
-
-    expect(html).toContain('Narrative brief with requirements, plan, and completion notes.');
-    expect(html).not.toContain('Handoff-only narrative that should stay collapsed on first render.');
-
-    expect(html).toContain('Latest activity: Project kickoff note');
-    expect(html).not.toContain('Hidden timeline body text that should not show until Timeline is expanded.');
-
-    expect(html).toContain('1 durable note across decisions, questions, and checkpoints.');
+    expect(html).toContain('1 open · 0 done');
+    expect(html).toContain('1 recent event');
+    expect(html).toContain('1 note');
+    expect(html).toContain('1 file');
     expect(html).not.toContain('Hidden note body that should not render until Notes is expanded.');
-
-    expect(html).toContain('1 outgoing · 1 backlinks');
-    expect(html).not.toContain('Tool Agent Browser');
-
-    expect(html).toContain('1 attachment · 0 artifacts');
     expect(html).not.toContain('Dense design notes');
-
-    expect(html).toContain('Keep the structured project record tucked away until it is needed.');
+    expect(html).not.toContain('Tool Agent Browser');
   });
 });

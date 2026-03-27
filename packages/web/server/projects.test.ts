@@ -5,20 +5,16 @@ import { join, resolve } from 'node:path';
 import { createProjectScaffold, resolveProjectPaths } from '@personal-agent/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  addProjectMilestone,
   createProjectRecord,
   createProjectTaskRecord,
-  deleteProjectMilestone,
   deleteProjectRecord,
   deleteProjectTaskRecord,
-  moveProjectMilestone,
   moveProjectTaskRecord,
   readProjectDetailFromProject,
   readProjectSource,
   saveProjectSource,
   setProjectArchivedState,
   sortProjectTasks,
-  updateProjectMilestone,
   updateProjectRecord,
   updateProjectTaskRecord,
 } from './projects.js';
@@ -40,18 +36,8 @@ function createTempRepo(): string {
 describe('sortProjectTasks', () => {
   it('preserves task order from state.yaml', () => {
     const sorted = sortProjectTasks([
-      {
-        id: 'task-b',
-        status: 'completed',
-        title: 'B',
-        milestoneId: 'execute-work',
-      },
-      {
-        id: 'task-a',
-        status: 'blocked',
-        title: 'A',
-        milestoneId: 'execute-work',
-      },
+      { id: 'task-b', status: 'done', title: 'B' },
+      { id: 'task-a', status: 'todo', title: 'A' },
     ]);
 
     expect(sorted.map((task) => task.id)).toEqual(['task-b', 'task-a']);
@@ -59,7 +45,7 @@ describe('sortProjectTasks', () => {
 });
 
 describe('readProjectDetailFromProject', () => {
-  it('returns the project document, notes, files, and tasks from project storage', () => {
+  it('returns the project document, files, notes, and flat tasks from project storage', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
@@ -71,42 +57,13 @@ describe('readProjectDetailFromProject', () => {
       now: new Date('2026-03-11T01:00:00.000Z'),
     });
 
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'planning',
-      title: 'Planning',
-      status: 'completed',
-    });
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'implementation',
-      title: 'Implementation',
-      status: 'in_progress',
-      makeCurrent: true,
-    });
-
-    createProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'completed-task',
-      status: 'completed',
-      title: 'Polish the list page',
-      milestoneId: 'planning',
-    });
-
     createProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
       taskId: 'in-progress-task',
-      status: 'in_progress',
+      status: 'doing',
       title: 'Build the project detail card',
-      milestoneId: 'implementation',
     });
 
     const detail = readProjectDetailFromProject({
@@ -118,24 +75,23 @@ describe('readProjectDetailFromProject', () => {
     expect(detail.project.id).toBe('web-ui');
     expect(detail.project.title).toBe('Project UI');
     expect(detail.project.description).toBe('Ship the project UI');
-    expect(detail.project.plan.milestones).toHaveLength(2);
-    expect(detail.project.plan.tasks).toHaveLength(2);
-    expect(detail.taskCount).toBe(2);
+    expect(detail.project.plan.milestones).toHaveLength(0);
+    expect(detail.project.plan.tasks).toEqual([
+      {
+        id: 'in-progress-task',
+        status: 'doing',
+        title: 'Build the project detail card',
+      },
+    ]);
+    expect(detail.taskCount).toBe(1);
     expect(detail.noteCount).toBe(0);
-    expect(detail.attachmentCount).toBe(0);
-    expect(detail.artifactCount).toBe(0);
-    expect(detail.tasks.map((task) => task.id)).toEqual(['completed-task', 'in-progress-task']);
-    expect(detail.tasks[1]).toEqual({
-      id: 'in-progress-task',
-      status: 'in_progress',
-      title: 'Build the project detail card',
-      milestoneId: 'implementation',
-    });
+    expect(detail.fileCount).toBe(0);
+    expect(detail.document?.content).toContain('Ship the project UI');
   });
 });
 
 describe('project editing helpers', () => {
-  it('creates a project record with editable fields', () => {
+  it('creates a project record with simplified editable fields', () => {
     const repoRoot = createTempRepo();
 
     const detail = createProjectRecord({
@@ -146,92 +102,18 @@ describe('project editing helpers', () => {
       description: 'Build the artifact model',
       projectRepoRoot: '../workspace/artifact-model',
       summary: 'The storage model is taking shape.',
-      goal: 'Build the artifact model and make the project structure easy to inspect.',
-      acceptanceCriteria: ['Project YAML has explicit requirements.', 'The UI exposes the work plan clearly.'],
-      planSummary: 'Define the schema first, then expose it cleanly in the web UI.',
-      completionSummary: 'Not complete yet.',
-      status: 'in_progress',
-      currentFocus: 'Define state.yaml.',
-      blockers: ['Need to settle task shape'],
-      recentProgress: ['Created the scaffold'],
+      status: 'active',
     });
 
     expect(detail.project.title).toBe('Artifact model');
-    expect(detail.project.description).toBe('Build the artifact model');
+    expect(detail.project.description).toBe('The storage model is taking shape.');
     expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
     expect(detail.project.summary).toBe('The storage model is taking shape.');
-    expect(detail.project.requirements.goal).toBe('Build the artifact model and make the project structure easy to inspect.');
-    expect(detail.project.requirements.acceptanceCriteria).toEqual([
-      'Project YAML has explicit requirements.',
-      'The UI exposes the work plan clearly.',
-    ]);
-    expect(detail.project.planSummary).toBe('Define the schema first, then expose it cleanly in the web UI.');
-    expect(detail.project.completionSummary).toBe('Not complete yet.');
-    expect(detail.project.status).toBe('in_progress');
-    expect(detail.project.currentFocus).toBe('Define state.yaml.');
-    expect(detail.project.blockers).toEqual(['Need to settle task shape']);
-    expect(detail.project.recentProgress).toEqual(['Created the scaffold']);
+    expect(detail.project.status).toBe('active');
+    expect(detail.document?.content).toContain('Build the artifact model');
   });
 
-  it('auto-generates a project id from the title when omitted', () => {
-    const repoRoot = createTempRepo();
-
-    const first = createProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      title: 'Artifact model',
-      description: 'Build the artifact model',
-    });
-
-    const second = createProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      title: 'Artifact model',
-      description: 'Build the artifact model',
-    });
-
-    expect(first.project.id).toBe('artifact-model');
-    expect(second.project.id).toBe('artifact-model-2');
-  });
-
-  it('keeps long auto-generated project ids compact', () => {
-    const repoRoot = createTempRepo();
-
-    const detail = createProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      title: 'Make the web UI cwd agnostic by default and add durable referenced project state',
-      description: 'Make the web UI cwd agnostic by default and add durable referenced project state',
-    });
-
-    expect(detail.project.id).toBe('make-the-web-ui-cwd-agnostic');
-    expect(detail.project.id.length).toBeLessThanOrEqual(36);
-  });
-
-  it('keeps duplicate suffixes inside the compact auto-generated id limit', () => {
-    const repoRoot = createTempRepo();
-    const title = 'Make the web UI cwd agnostic by default and add durable referenced project state';
-
-    const first = createProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      title,
-      description: title,
-    });
-
-    const second = createProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      title,
-      description: title,
-    });
-
-    expect(first.project.id).toBe('make-the-web-ui-cwd-agnostic');
-    expect(second.project.id).toBe('make-the-web-ui-cwd-agnostic-2');
-    expect(second.project.id.length).toBeLessThanOrEqual(36);
-  });
-
-  it('updates project fields and current milestone', () => {
+  it('updates simplified project fields', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
@@ -240,15 +122,6 @@ describe('project editing helpers', () => {
       projectId: 'artifact-model',
       title: 'Artifact model',
       description: 'Build the artifact model',
-    });
-
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      id: 'execute-work',
-      title: 'Execute the work',
-      status: 'pending',
     });
 
     const detail = updateProjectRecord({
@@ -256,276 +129,135 @@ describe('project editing helpers', () => {
       profile: 'datadog',
       projectId: 'artifact-model',
       title: 'Durable artifact model',
-      description: 'Build the durable artifact model',
       summary: 'state.yaml is now canonical.',
-      goal: 'Keep the project structure durable and easy to resume.',
-      acceptanceCriteria: ['Structured requirements live in state.yaml.', 'The current milestone is explicit.'],
-      planSummary: 'Finish the schema migration, then update the UI around it.',
-      completionSummary: 'Migration in progress.',
-      currentMilestoneId: 'execute-work',
-      blockers: [],
-      recentProgress: ['Migrated the project schema'],
+      projectRepoRoot: '../workspace/artifact-model',
+      status: 'paused',
     });
 
     expect(detail.project.title).toBe('Durable artifact model');
-    expect(detail.project.description).toBe('Build the durable artifact model');
     expect(detail.project.summary).toBe('state.yaml is now canonical.');
-    expect(detail.project.requirements.goal).toBe('Keep the project structure durable and easy to resume.');
-    expect(detail.project.requirements.acceptanceCriteria).toEqual([
-      'Structured requirements live in state.yaml.',
-      'The current milestone is explicit.',
-    ]);
-    expect(detail.project.planSummary).toBe('Finish the schema migration, then update the UI around it.');
-    expect(detail.project.completionSummary).toBe('Migration in progress.');
-    expect(detail.project.plan.currentMilestoneId).toBe('execute-work');
-    expect(detail.project.recentProgress).toEqual(['Migrated the project schema']);
-  });
-
-  it('updates and clears the project repo root', () => {
-    const repoRoot = createTempRepo();
-
-    createProjectScaffold({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      title: 'Build the artifact model',
-      description: 'Build the artifact model',
-    });
-
-    let detail = updateProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      projectRepoRoot: '../workspace/artifact-model',
-    });
-
     expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
-
-    detail = updateProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'artifact-model',
-      projectRepoRoot: '',
-    });
-
-    expect(detail.project.repoRoot).toBeUndefined();
+    expect(detail.project.status).toBe('paused');
+    expect(detail.project.plan.milestones).toHaveLength(0);
   });
 
-  it('adds and updates milestones', () => {
+  it('creates, updates, reorders, and deletes flat task records', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
-    });
-
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'polish',
-      title: 'Polish the project page',
-      status: 'pending',
-      summary: 'Reduce visual density and expose editing affordances.',
-      makeCurrent: true,
-    });
-
-    const updated = updateProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      milestoneId: 'polish',
-      status: 'in_progress',
-      summary: 'Editing flows are now the focus.',
-    });
-
-    const milestone = updated.project.plan.milestones.find((entry) => entry.id === 'polish');
-    expect(milestone).toEqual({
-      id: 'polish',
-      title: 'Polish the project page',
-      status: 'in_progress',
-      summary: 'Editing flows are now the focus.',
-    });
-    expect(updated.project.plan.currentMilestoneId).toBe('polish');
-  });
-
-  it('creates and updates task records', () => {
-    const repoRoot = createTempRepo();
-
-    createProjectScaffold({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
-    });
-
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'editing',
-      title: 'Add editing flows',
-      status: 'in_progress',
-      makeCurrent: true,
+      title: 'Project UI',
+      description: 'Ship the project UI',
     });
 
     createProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      title: 'Add a project editor',
-      status: 'pending',
-      milestoneId: 'editing',
+      taskId: 'first-task',
+      status: 'todo',
+      title: 'First task',
     });
-
-    const createdTask = readProjectDetailFromProject({
+    createProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-    }).tasks[0];
+      taskId: 'second-task',
+      status: 'doing',
+      title: 'Second task',
+    });
 
     const updated = updateProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      taskId: createdTask?.id ?? '',
-      status: 'in_progress',
+      taskId: 'first-task',
+      status: 'done',
+      title: 'First task complete',
+    });
+    expect(updated.tasks[0]).toEqual({
+      id: 'first-task',
+      status: 'done',
+      title: 'First task complete',
     });
 
-    const task = updated.tasks.find((entry) => entry.id === createdTask?.id);
-    expect(task).toEqual(expect.objectContaining({
-      status: 'in_progress',
-      milestoneId: 'editing',
-      title: 'Add a project editor',
-    }));
+    const moved = moveProjectTaskRecord({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      taskId: 'second-task',
+      direction: 'up',
+    });
+    expect(moved.tasks.map((task) => task.id)).toEqual(['second-task', 'first-task']);
+
+    const deleted = deleteProjectTaskRecord({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      taskId: 'first-task',
+    });
+    expect(deleted.tasks.map((task) => task.id)).toEqual(['second-task']);
   });
 
-  it('deletes and reorders milestones', () => {
+  it('archives and restores a project without changing its workflow status', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
       repoRoot,
       profile: 'datadog',
-      projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
+      projectId: 'archive-me',
+      title: 'Archive me',
+      description: 'Keep the history intact',
     });
 
-    addProjectMilestone({
+    const archived = setProjectArchivedState({
       repoRoot,
       profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'planning',
-      title: 'Planning',
-      status: 'completed',
+      projectId: 'archive-me',
+      archived: true,
     });
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'editing',
-      title: 'Add editing flows',
-      status: 'in_progress',
-    });
-    addProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      id: 'ship',
-      title: 'Ship it',
-      status: 'pending',
-    });
+    expect(archived.project.archivedAt).toBeTruthy();
+    expect(archived.project.status).toBe('active');
 
-    let detail = moveProjectMilestone({
+    const restored = setProjectArchivedState({
       repoRoot,
       profile: 'datadog',
-      projectId: 'web-ui',
-      milestoneId: 'ship',
-      direction: 'up',
+      projectId: 'archive-me',
+      archived: false,
     });
-
-    expect(detail.project.plan.milestones[1]?.id).toBe('ship');
-
-    detail = deleteProjectMilestone({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      milestoneId: 'editing',
-    });
-
-    expect(detail.project.plan.milestones.some((milestone) => milestone.id === 'editing')).toBe(false);
+    expect(restored.project.archivedAt).toBeUndefined();
+    expect(restored.project.status).toBe('active');
   });
 
-  it('deletes and reorders tasks within a milestone', () => {
+  it('reads and saves raw project yaml', () => {
     const repoRoot = createTempRepo();
 
-    createProjectScaffold({
+    createProjectRecord({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      title: 'Ship the web UI',
+      title: 'Project UI',
       description: 'Ship the web UI',
+      summary: 'A new project page.',
+      status: 'active',
     });
 
-    addProjectMilestone({
+    const projectSource = readProjectSource({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      id: 'work',
-      title: 'Work',
-      status: 'in_progress',
     });
 
-    createProjectTaskRecord({
+    const savedProject = saveProjectSource({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      taskId: 'task-a',
-      title: 'Task A',
-      status: 'pending',
-      milestoneId: 'work',
-    });
-    createProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'task-b',
-      title: 'Task B',
-      status: 'pending',
-      milestoneId: 'work',
-    });
-    createProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'task-c',
-      title: 'Task C',
-      status: 'pending',
-      milestoneId: 'work',
+      content: projectSource.content.replace('status: active', 'status: paused'),
     });
 
-    let detail = moveProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'task-c',
-      direction: 'up',
-    });
-
-    expect(detail.tasks.map((task) => task.id)).toEqual(['task-a', 'task-c', 'task-b']);
-
-    detail = deleteProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'task-c',
-    });
-
-    expect(detail.tasks.map((task) => task.id)).toEqual(['task-a', 'task-b']);
+    expect(savedProject.project.status).toBe('paused');
   });
 
   it('deletes a project directory recursively', () => {
@@ -534,96 +266,18 @@ describe('project editing helpers', () => {
     createProjectScaffold({
       repoRoot,
       profile: 'datadog',
-      projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
+      projectId: 'delete-me',
+      title: 'Delete me',
+      description: 'Clean up the project dir.',
     });
-
-    createProjectTaskRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      taskId: 'task-a',
-      title: 'Task A',
-      status: 'pending',
-    });
-
-    const paths = resolveProjectPaths({ repoRoot, profile: 'datadog', projectId: 'web-ui' });
-    expect(existsSync(paths.projectDir)).toBe(true);
 
     const result = deleteProjectRecord({
       repoRoot,
       profile: 'datadog',
-      projectId: 'web-ui',
+      projectId: 'delete-me',
     });
 
-    expect(result).toEqual({ ok: true, deletedProjectId: 'web-ui' });
-    expect(existsSync(paths.projectDir)).toBe(false);
-  });
-
-  it('archives and restores a project without changing its status', () => {
-    const repoRoot = createTempRepo();
-
-    createProjectScaffold({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
-    });
-
-    let detail = updateProjectRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      status: 'completed',
-      completionSummary: 'Shipped the work.',
-    });
-
-    expect(detail.project.archivedAt).toBeUndefined();
-    expect(detail.project.status).toBe('completed');
-
-    detail = setProjectArchivedState({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      archived: true,
-    });
-
-    expect(detail.project.status).toBe('completed');
-    expect(detail.project.archivedAt).toBeTruthy();
-
-    detail = setProjectArchivedState({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      archived: false,
-    });
-
-    expect(detail.project.status).toBe('completed');
-    expect(detail.project.archivedAt).toBeUndefined();
-  });
-
-  it('reads and saves raw project yaml', () => {
-    const repoRoot = createTempRepo();
-
-    createProjectScaffold({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      title: 'Ship the web UI',
-      description: 'Ship the web UI',
-    });
-
-    const projectSource = readProjectSource({ repoRoot, profile: 'datadog', projectId: 'web-ui' });
-    expect(projectSource.path).toContain('state.yaml');
-
-    const savedProject = saveProjectSource({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'web-ui',
-      content: projectSource.content.replace('description: Ship the web UI', 'description: Ship the web UI carefully'),
-    });
-    expect(savedProject.project.description).toBe('Ship the web UI carefully');
+    expect(result).toEqual({ ok: true, deletedProjectId: 'delete-me' });
+    expect(existsSync(resolveProjectPaths({ repoRoot, profile: 'datadog', projectId: 'delete-me' }).projectDir)).toBe(false);
   });
 });

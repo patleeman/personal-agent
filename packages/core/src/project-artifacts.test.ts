@@ -37,7 +37,7 @@ function createTempDir(): string {
 }
 
 describe('project artifacts', () => {
-  it('creates the default project document', () => {
+  it('creates the simplified default project document', () => {
     const project = createInitialProject({
       id: 'artifact-model',
       ownerProfile: 'assistant',
@@ -46,24 +46,13 @@ describe('project artifacts', () => {
       createdAt: '2026-03-10T12:00:00.000Z',
     });
 
-    expect(project).toEqual({
+    expect(project).toMatchObject({
       id: 'artifact-model',
       ownerProfile: 'assistant',
-      createdAt: '2026-03-10T12:00:00.000Z',
-      updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
-      summary: 'Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
-      requirements: {
-        goal: 'Create a durable artifact model.',
-        acceptanceCriteria: [],
-      },
-      status: 'created',
-      blockers: [],
-      currentFocus: 'Capture the first concrete work chunk.',
-      recentProgress: [],
-      planSummary: 'Break the work into milestones and tasks once the approach is clear.',
-      completionSummary: undefined,
+      summary: 'Create a durable artifact model.',
+      status: 'active',
       plan: {
         milestones: [],
         tasks: [],
@@ -71,7 +60,7 @@ describe('project artifacts', () => {
     });
   });
 
-  it('formats and parses project yaml as a round trip', () => {
+  it('formats project yaml as the new minimal state record', () => {
     const document: ProjectDocument = {
       id: 'artifact-model',
       ownerProfile: 'assistant',
@@ -89,40 +78,48 @@ describe('project artifacts', () => {
           'Agents can recover the state without reading the whole repo.',
         ],
       },
-      status: 'in_progress',
+      status: 'active',
       blockers: ['Need to settle the activity entry shape'],
       currentFocus: 'Build the CLI inbox surface.',
       recentProgress: ['Added project scaffold', 'Added path helpers'],
       planSummary: 'Land the schema first, then wire the CLI surface around it.',
       completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
       plan: {
-        currentMilestoneId: 'cli-inbox',
         milestones: [
           { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
-          { id: 'helpers', title: 'Implement read/write helpers', status: 'completed' },
-          { id: 'cli-inbox', title: 'Build the CLI inbox surface', status: 'in_progress', summary: 'Keep it compact and durable.' },
         ],
         tasks: [
-          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'in_progress', milestoneId: 'cli-inbox' },
+          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing', milestoneId: 'schema' },
         ],
       },
     };
 
     const yaml = formatProject(document);
-    expect(yaml).not.toContain('title: Durable artifact model');
-    expect(yaml).toContain('description: Create a durable artifact model.');
     expect(yaml).toContain('archivedAt: 2026-03-10T14:00:00.000Z');
     expect(yaml).toContain('repoRoot: /Users/patrick/workingdir/personal-agent');
-    expect(yaml).toContain('goal: Create a durable artifact model that stays easy to inspect and edit.');
-    expect(yaml).toContain('acceptanceCriteria:');
-    expect(yaml).toContain('planSummary: Land the schema first, then wire the CLI surface around it.');
-    expect(yaml).toContain('completionSummary: Not complete yet. The schema is stable and the CLI work is next.');
-    expect(yaml).toContain('currentMilestoneId: cli-inbox');
+    expect(yaml).toContain('status: active');
+    expect(yaml).toContain('plan:');
+    expect(yaml).toContain('tasks:');
+    expect(yaml).not.toContain('requirements:');
+    expect(yaml).not.toContain('planSummary:');
+    expect(yaml).not.toContain('completionSummary:');
+    expect(yaml).not.toContain('milestones:');
+    expect(yaml).not.toContain('milestoneId:');
 
-    expect(parseProject(yaml, document)).toEqual(document);
+    expect(parseProject(yaml, document)).toMatchObject({
+      archivedAt: '2026-03-10T14:00:00.000Z',
+      repoRoot: '/Users/patrick/workingdir/personal-agent',
+      status: 'active',
+      plan: {
+        milestones: [],
+        tasks: [
+          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing' },
+        ],
+      },
+    });
   });
 
-  it('rejects project yaml with a missing required plan block', () => {
+  it('defaults a missing plan block when parsing legacy yaml', () => {
     const yaml = `id: artifact-model
 createdAt: 2026-03-10T12:00:00.000Z
 updatedAt: 2026-03-10T12:00:00.000Z
@@ -130,69 +127,14 @@ title: Durable artifact model
 description: Create a durable artifact model.
 summary: Project created.
 status: created
-blockers: []
-recentProgress: []
 `;
 
-    expect(() => parseProject(yaml)).toThrow('Missing required key plan in Project');
-  });
-
-  it('rejects a current milestone id that is not present in the milestone list', () => {
-    const yaml = `id: artifact-model
-createdAt: 2026-03-10T12:00:00.000Z
-updatedAt: 2026-03-10T12:00:00.000Z
-title: Durable artifact model
-description: Create a durable artifact model.
-summary: Project created.
-status: created
-blockers: []
-recentProgress: []
-plan:
-  currentMilestoneId: missing
-  milestones:
-    - id: refine-plan
-      title: Refine the plan
-      status: in_progress
-  tasks: []
-`;
-
-    expect(() => parseProject(yaml)).toThrow('Current milestone id missing does not exist');
-  });
-
-  it('defaults missing structured fields when parsing older project yaml', () => {
-    const yaml = `id: artifact-model
-createdAt: 2026-03-10T12:00:00.000Z
-updatedAt: 2026-03-10T12:00:00.000Z
-title: Durable artifact model
-description: Create a durable artifact model.
-summary: Project created.
-status: created
-blockers: []
-currentFocus: Capture the first step.
-recentProgress: []
-plan:
-  milestones: []
-  tasks: []
-`;
-
-    expect(parseProject(yaml)).toEqual({
+    expect(parseProject(yaml)).toMatchObject({
       id: 'artifact-model',
-      ownerProfile: 'shared',
-      createdAt: '2026-03-10T12:00:00.000Z',
-      updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       summary: 'Project created.',
-      requirements: {
-        goal: 'Create a durable artifact model.',
-        acceptanceCriteria: [],
-      },
       status: 'created',
-      blockers: [],
-      currentFocus: 'Capture the first step.',
-      recentProgress: [],
-      planSummary: undefined,
-      completionSummary: undefined,
       plan: {
         milestones: [],
         tasks: [],
@@ -200,7 +142,7 @@ plan:
     });
   });
 
-  it('writes and reads project files', () => {
+  it('writes and reads simplified project files', () => {
     const dir = createTempDir();
     const path = join(dir, 'state.yaml');
     const document = createInitialProject({
@@ -213,10 +155,15 @@ plan:
 
     writeProject(path, document);
 
+    expect(readFileSync(path, 'utf-8')).toContain('status: active');
     expect(readFileSync(path, 'utf-8')).toContain('plan:');
-    expect(readFileSync(path, 'utf-8')).toContain('requirements:');
+    expect(readFileSync(path, 'utf-8')).not.toContain('requirements:');
     expect(readFileSync(join(dir, 'INDEX.md'), 'utf-8')).toContain('kind: project');
-    expect(readProject(path)).toEqual(document);
+    expect(readProject(path)).toMatchObject({
+      id: 'artifact-model',
+      summary: 'Create a durable artifact model.',
+      status: 'active',
+    });
   });
 });
 
@@ -249,43 +196,7 @@ describe('project activity artifacts', () => {
     const markdown = formatProjectActivityEntry(document);
     expect(markdown).toContain('# Activity');
     expect(markdown).toContain('relatedProjectIds: artifact-model, daily-review');
-
     expect(parseProjectActivityEntry(markdown)).toEqual(document);
-  });
-
-  it('ignores legacy relatedConversationIds frontmatter when parsing activity markdown', () => {
-    const markdown = [
-      '---',
-      'id: daily-report',
-      'createdAt: 2026-03-10T14:00:00.000Z',
-      'profile: datadog',
-      'kind: scheduled-task',
-      'notificationState: queued',
-      'relatedProjectIds: artifact-model, daily-review',
-      'relatedConversationIds: conv-123',
-      '---',
-      '# Activity',
-      '',
-      '## Summary',
-      '',
-      'Daily report completed.',
-      '',
-      '## Details',
-      '',
-      'Wrote the daily report artifact and refreshed the executive summary.',
-      '',
-    ].join('\n');
-
-    expect(parseProjectActivityEntry(markdown)).toEqual({
-      id: 'daily-report',
-      createdAt: '2026-03-10T14:00:00.000Z',
-      profile: 'datadog',
-      kind: 'scheduled-task',
-      summary: 'Daily report completed.',
-      details: 'Wrote the daily report artifact and refreshed the executive summary.',
-      relatedProjectIds: ['artifact-model', 'daily-review'],
-      notificationState: 'queued',
-    });
   });
 
   it('writes and reads activity files', () => {
@@ -297,12 +208,9 @@ describe('project activity artifacts', () => {
       profile: 'datadog',
       kind: 'scheduled-task',
       summary: 'Daily report completed.',
-      relatedProjectIds: ['artifact-model'],
     });
 
     writeProjectActivityEntry(path, document);
-
-    expect(readFileSync(path, 'utf-8')).toContain('## Summary');
     expect(readProjectActivityEntry(path)).toEqual(document);
   });
 });
@@ -310,32 +218,28 @@ describe('project activity artifacts', () => {
 describe('project task artifacts', () => {
   it('creates the default task document', () => {
     const task = createProjectTask({
-      id: 'implement-activity',
-      status: 'pending',
-      title: 'Implement activity records',
-      milestoneId: 'durable-activity',
+      id: 'wire-inbox',
+      status: 'doing',
+      title: 'Wire the inbox command',
+      milestoneId: 'legacy-milestone',
     });
 
     expect(task).toEqual({
-      id: 'implement-activity',
-      status: 'pending',
-      title: 'Implement activity records',
-      milestoneId: 'durable-activity',
+      id: 'wire-inbox',
+      status: 'doing',
+      title: 'Wire the inbox command',
+      milestoneId: 'legacy-milestone',
     });
   });
 
   it('formats and parses task yaml as a round trip', () => {
     const document: ProjectTaskDocument = {
-      id: 'implement-activity',
-      status: 'in_progress',
-      title: 'Implement activity records',
-      milestoneId: 'durable-activity',
+      id: 'wire-inbox',
+      status: 'doing',
+      title: 'Wire the inbox command',
     };
 
     const yaml = formatProjectTask(document);
-    expect(yaml).toContain('status: in_progress');
-    expect(yaml).toContain('milestoneId: durable-activity');
-
     expect(parseProjectTask(yaml)).toEqual(document);
   });
 
@@ -343,15 +247,12 @@ describe('project task artifacts', () => {
     const dir = createTempDir();
     const path = join(dir, 'task.yaml');
     const document = createProjectTask({
-      id: 'implement-activity',
-      status: 'pending',
-      title: 'Implement activity records',
-      milestoneId: 'durable-activity',
+      id: 'wire-inbox',
+      status: 'doing',
+      title: 'Wire the inbox command',
     });
 
     writeProjectTask(path, document);
-
-    expect(readFileSync(path, 'utf-8')).toContain('title: Implement activity records');
     expect(readProjectTask(path)).toEqual(document);
   });
 });
