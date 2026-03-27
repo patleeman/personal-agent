@@ -10105,7 +10105,7 @@ function extractMemorySearchText(filePaths: string[], maxCharacters = 16_000): s
 let memoryMigrationAttempted = false;
 const MEMORY_DOCS_CACHE_TTL_MS = 10_000;
 const RECENT_READ_USAGE_CACHE_TTL_MS = 60_000;
-const RECENT_READ_USAGE_SESSION_SCAN_LIMIT = 20;
+const RECENT_READ_USAGE_SESSION_SCAN_LIMIT = 10;
 const memoryDocsCache = new Map<'with-search' | 'without-search', { expiresAt: number; value: MemoryDocItem[] }>();
 let recentReadUsageCache: { expiresAt: number; key: string; value: Map<string, MemoryUsageSummary> } | null = null;
 
