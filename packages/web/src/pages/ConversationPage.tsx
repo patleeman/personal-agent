@@ -4,6 +4,7 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
+import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
@@ -4406,8 +4407,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader
+    <ConversationWorkspaceShell>
+      <div className="flex h-full flex-col overflow-hidden">
+        <PageHeader
         className="gap-3 py-2"
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
@@ -5112,6 +5114,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           />
         </Suspense>
       )}
-    </div>
+      </div>
+    </ConversationWorkspaceShell>
   );
 }

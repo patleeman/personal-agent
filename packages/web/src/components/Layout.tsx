@@ -447,7 +447,8 @@ export function Layout() {
     ? rail.width
     : Math.max(rail.width, artifactRailTargetWidth);
   const showContextRail = !(
-    location.pathname.startsWith('/notes')
+    location.pathname.startsWith('/conversations')
+    || location.pathname.startsWith('/notes')
     || location.pathname.startsWith('/memories')
     || location.pathname.startsWith('/projects')
     || location.pathname.startsWith('/skills')
