@@ -403,6 +403,204 @@
     @apply min-h-[24rem];
   }
 
+  .ui-note-rich-editor {
+    @apply mt-1;
+  }
+
+  .ui-rich-editor {
+    @apply rounded-2xl border border-border-subtle bg-base overflow-hidden;
+  }
+
+  .ui-rich-editor-readonly {
+    @apply border-border-subtle/60;
+  }
+
+  .ui-rich-editor-toolbar {
+    @apply flex flex-wrap items-center gap-2 border-b border-border-subtle bg-surface/30 px-3 py-2;
+  }
+
+  .ui-rich-editor-button {
+    @apply inline-flex items-center justify-center rounded-lg border border-transparent px-2.5 py-1.5 text-[12px] font-medium text-secondary transition-colors hover:border-border-subtle hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base;
+  }
+
+  .ui-rich-editor-button-active {
+    @apply border-border-default bg-elevated text-primary;
+  }
+
+  .ui-rich-editor-surface {
+    @apply min-h-[22rem] bg-base;
+  }
+
+  .ui-rich-editor-content {
+    @apply h-full;
+  }
+
+  .ui-rich-editor .ProseMirror {
+    @apply min-h-[22rem] px-4 py-4 text-[15px] leading-relaxed text-primary outline-none;
+  }
+
+  .ui-rich-editor .ProseMirror > *:first-child {
+    @apply mt-0;
+  }
+
+  .ui-rich-editor .ProseMirror > *:last-child {
+    @apply mb-0;
+  }
+
+  .ui-rich-editor .ProseMirror h1 {
+    @apply mt-1 mb-3 text-[28px] font-semibold tracking-tight text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror h2 {
+    @apply mt-5 mb-2 text-[20px] font-semibold text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror h3 {
+    @apply mt-4 mb-2 text-[17px] font-semibold text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror h4,
+  .ui-rich-editor .ProseMirror h5,
+  .ui-rich-editor .ProseMirror h6 {
+    @apply mt-3 mb-1.5 text-[15px] font-semibold text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror p {
+    @apply my-2 text-[15px] leading-relaxed text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror ul,
+  .ui-rich-editor .ProseMirror ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+
+  .ui-rich-editor .ProseMirror ul {
+    list-style: disc;
+  }
+
+  .ui-rich-editor .ProseMirror ul ul {
+    list-style: circle;
+  }
+
+  .ui-rich-editor .ProseMirror ul ul ul {
+    list-style: square;
+  }
+
+  .ui-rich-editor .ProseMirror ol {
+    list-style: decimal;
+  }
+
+  .ui-rich-editor .ProseMirror li > p {
+    @apply my-0;
+  }
+
+  .ui-rich-editor .ProseMirror blockquote {
+    @apply my-3 border-l-2 border-border-default pl-4 text-secondary;
+  }
+
+  .ui-rich-editor .ProseMirror hr {
+    @apply my-4 border-0 border-t border-border-subtle;
+  }
+
+  .ui-rich-editor .ProseMirror pre {
+    @apply my-3 overflow-x-auto rounded-xl bg-elevated px-3 py-2.5 text-[12px] leading-relaxed text-secondary;
+  }
+
+  .ui-rich-editor .ProseMirror code {
+    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent whitespace-pre-wrap break-words;
+    overflow-wrap: anywhere;
+  }
+
+  .ui-rich-editor .ProseMirror pre code {
+    @apply bg-transparent p-0 text-secondary;
+  }
+
+  .ui-rich-editor .ProseMirror table {
+    @apply my-3 w-full border-collapse text-left;
+  }
+
+  .ui-rich-editor .ProseMirror thead tr {
+    @apply border-b border-border-default;
+  }
+
+  .ui-rich-editor .ProseMirror tbody tr {
+    @apply border-b border-border-subtle last:border-b-0;
+  }
+
+  .ui-rich-editor .ProseMirror th {
+    @apply px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-dim;
+  }
+
+  .ui-rich-editor .ProseMirror td {
+    @apply px-2 py-1.5 align-top text-[14px] leading-relaxed text-primary;
+  }
+
+  .ui-rich-editor .ProseMirror a {
+    @apply text-accent underline decoration-accent/40 underline-offset-2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .ui-rich-editor .ProseMirror .is-empty::before {
+    content: attr(data-placeholder);
+    @apply pointer-events-none float-left h-0 text-dim;
+  }
+
+  .ui-rich-editor .ProseMirror .contains-task-list,
+  .ui-rich-editor .ProseMirror .task-list-item {
+    list-style: none;
+  }
+
+  .ui-rich-editor .ProseMirror .contains-task-list {
+    @apply pl-0;
+  }
+
+  .ui-rich-editor .ProseMirror .task-list-item input {
+    @apply mr-2;
+  }
+
+  .ui-rich-fields-block {
+    @apply my-4 rounded-2xl border border-border-subtle bg-surface/35 px-4 py-4;
+  }
+
+  .ui-rich-fields-block-selected {
+    @apply border-accent/50 ring-2 ring-accent/20;
+  }
+
+  .ui-rich-fields-block-header {
+    @apply mb-3 flex items-center justify-between gap-3;
+  }
+
+  .ui-rich-fields-grid {
+    @apply space-y-2;
+  }
+
+  .ui-rich-fields-row {
+    @apply grid items-center gap-3 md:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto];
+  }
+
+  .ui-rich-fields-key,
+  .ui-rich-fields-value {
+    @apply text-[14px] leading-relaxed text-secondary;
+  }
+
+  .ui-rich-fields-key {
+    @apply font-medium text-primary;
+  }
+
+  .ui-rich-fields-key-input,
+  .ui-rich-fields-value-input {
+    @apply w-full rounded-lg border border-border-subtle bg-base px-3 py-2 text-[14px] leading-relaxed text-primary outline-none focus:border-accent/60;
+  }
+
+  .ui-rich-fields-block-action {
+    @apply text-[12px] text-accent transition-colors hover:text-accent/70;
+  }
+
+  .ui-rich-fields-empty {
+    @apply rounded-xl border border-dashed border-border-subtle px-3 py-3 text-[13px] text-dim;
+  }
+
   .ui-detail-list {
     @apply space-y-2;
   }

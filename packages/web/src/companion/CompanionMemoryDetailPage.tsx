@@ -75,7 +75,7 @@ export function CompanionMemoryDetailPage() {
           {data && memory ? (
             <div className="overflow-hidden border-y border-border-subtle bg-surface/70">
               <Section title="Content">
-                <CompanionMarkdown content={data.content} />
+                <CompanionMarkdown content={data.content} stripFrontmatter />
               </Section>
 
               <Section title="References">

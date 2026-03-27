@@ -13,9 +13,8 @@ import {
   LoadingState,
   ToolbarButton,
 } from '../components/ui';
+import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import {
-  MarkdownDocumentSurface,
-  type MarkdownDocumentMode,
   NodeInspectorSection,
   NodeMetadataList,
   NodePrimaryToolbar,
@@ -33,6 +32,7 @@ import {
 } from '../skillWorkspaceState';
 import { buildRailWidthStorageKey } from '../layoutSizing';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { joinMarkdownFrontmatter, splitMarkdownFrontmatter } from '../markdownDocument';
 
 const SKILLS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('skills-browser');
 
@@ -103,9 +103,10 @@ function SkillWorkspace({
   onRefetched: () => void;
 }) {
   const selectedReference = detail.references.find((reference) => reference.relativePath === selectedItem) ?? null;
-  const [contentMode, setContentMode] = useState<MarkdownDocumentMode>('split');
-  const [savedContent, setSavedContent] = useState(detail.content);
-  const [draft, setDraft] = useState(detail.content);
+  const initialContentParts = useMemo(() => splitMarkdownFrontmatter(detail.content), [detail.content]);
+  const [savedContent, setSavedContent] = useState(initialContentParts.body);
+  const [draft, setDraft] = useState(initialContentParts.body);
+  const [selectedFrontmatter, setSelectedFrontmatter] = useState<string | null>(initialContentParts.frontmatter);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -134,13 +135,6 @@ function SkillWorkspace({
       selected: selectedView === 'links',
     },
   ];
-  const modeTabs = selectedView === 'links' || (selectedView === 'references' && !selectedReference)
-    ? undefined
-    : [
-        { id: 'edit', label: 'Edit', selected: contentMode === 'edit', onSelect: () => setContentMode('edit') },
-        { id: 'preview', label: 'Preview', selected: contentMode === 'preview', onSelect: () => setContentMode('preview') },
-        { id: 'split', label: 'Split', selected: contentMode === 'split', onSelect: () => setContentMode('split') },
-      ];
 
   useEffect(() => {
     if (selectedView !== 'references' || !selectedItem) {
@@ -159,14 +153,17 @@ function SkillWorkspace({
       if (selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
         setSavedContent('');
         setDraft('');
+        setSelectedFrontmatter(null);
         setContentError(null);
         setContentLoading(false);
         return;
       }
 
       if (selectedView === 'definition') {
-        setSavedContent(detail.content);
-        setDraft(detail.content);
+        const parts = splitMarkdownFrontmatter(detail.content);
+        setSavedContent(parts.body);
+        setDraft(parts.body);
+        setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
         setContentLoading(false);
         return;
@@ -183,13 +180,16 @@ function SkillWorkspace({
         if (cancelled) {
           return;
         }
-        setSavedContent(result.content);
-        setDraft(result.content);
+        const parts = splitMarkdownFrontmatter(result.content);
+        setSavedContent(parts.body);
+        setDraft(parts.body);
+        setSelectedFrontmatter(parts.frontmatter);
       } catch (error) {
         if (cancelled) {
           return;
         }
         setContentError(error instanceof Error ? error.message : String(error));
+        setSelectedFrontmatter(null);
         setSavedContent('');
         setDraft('');
       } finally {
@@ -248,7 +248,7 @@ function SkillWorkspace({
 
     try {
       const path = selectedReference?.path ?? detail.skill.path;
-      await api.memoryFileSave(path, draft);
+      await api.memoryFileSave(path, joinMarkdownFrontmatter(selectedFrontmatter, draft));
       setSavedContent(draft);
       setNotice({ tone: 'accent', text: selectedReference ? `Saved ${selectedReference.relativePath}.` : 'Saved skill definition.' });
       onRefetched();
@@ -268,8 +268,10 @@ function SkillWorkspace({
       setContentLoading(true);
       try {
         const result = await api.memoryFile(selectedReference.path);
-        setSavedContent(result.content);
-        setDraft(result.content);
+        const parts = splitMarkdownFrontmatter(result.content);
+        setSavedContent(parts.body);
+        setDraft(parts.body);
+        setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
       } catch (error) {
         setContentError(error instanceof Error ? error.message : String(error));
@@ -301,7 +303,6 @@ function SkillWorkspace({
         </>
       )}
       resourceTabs={resourceTabs}
-      modeTabs={modeTabs}
       actions={(
         <NodePrimaryToolbar>
           {(selectedView !== 'links' && !(selectedView === 'references' && !selectedReference)) && (
@@ -359,13 +360,15 @@ function SkillWorkspace({
       ) : selectedView === 'links' ? (
         <SkillLinksView detail={detail} />
       ) : (
-        <MarkdownDocumentSurface
-          value={draft}
-          onChange={setDraft}
-          path={selectedPath}
-          mode={contentMode}
-          emptyPreviewText="This file has no rendered markdown yet."
-        />
+        <div className="h-full overflow-y-auto px-6 py-6">
+          <div className="mx-auto min-h-full max-w-4xl">
+            <RichMarkdownEditor
+              value={draft}
+              onChange={setDraft}
+              placeholder="Start writing…"
+            />
+          </div>
+        </div>
       )}
     </NodeWorkspaceShell>
   );

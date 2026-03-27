@@ -14,9 +14,9 @@ import {
   ToolbarButton,
 } from '../components/ui';
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
+import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import { NotesBrowserRailContent } from '../components/NotesBrowserRail';
 import {
-  MarkdownDocumentSurface,
   NodePrimaryToolbar,
   NodeWorkspaceShell,
   WorkspaceActionNotice,
@@ -33,6 +33,7 @@ import {
 } from '../noteWorkspaceState';
 import { buildRailWidthStorageKey } from '../layoutSizing';
 import { inferInlineTags, readEditableNoteBody } from '../noteDocument';
+import { joinMarkdownFrontmatter, splitMarkdownFrontmatter } from '../markdownDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
 const NOTES_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('notes-browser');
@@ -128,6 +129,7 @@ function NoteWorkspace({
   const [noteBody, setNoteBody] = useState(readEditableNoteBody(detail.content, memory.title));
   const [savedContent, setSavedContent] = useState('');
   const [draft, setDraft] = useState('');
+  const [selectedFrontmatter, setSelectedFrontmatter] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -177,6 +179,7 @@ function NoteWorkspace({
       if (selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
         setSavedContent('');
         setDraft('');
+        setSelectedFrontmatter(null);
         setContentError(null);
         setContentLoading(false);
         return;
@@ -190,6 +193,7 @@ function NoteWorkspace({
         setNoteTitle(detail.memory.title);
         setNoteSummary(detail.memory.summary);
         setNoteBody(editableBody);
+        setSelectedFrontmatter(null);
         setContentError(null);
         setContentLoading(false);
         return;
@@ -206,13 +210,16 @@ function NoteWorkspace({
         if (cancelled) {
           return;
         }
-        setSavedContent(result.content);
-        setDraft(result.content);
+        const parts = splitMarkdownFrontmatter(result.content);
+        setSelectedFrontmatter(parts.frontmatter);
+        setSavedContent(parts.body);
+        setDraft(parts.body);
       } catch (error) {
         if (cancelled) {
           return;
         }
         setContentError(error instanceof Error ? error.message : String(error));
+        setSelectedFrontmatter(null);
         setSavedContent('');
         setDraft('');
       } finally {
@@ -271,7 +278,7 @@ function NoteWorkspace({
 
     try {
       if (selectedReference) {
-        await api.memoryFileSave(selectedReference.path, draft);
+        await api.memoryFileSave(selectedReference.path, joinMarkdownFrontmatter(selectedFrontmatter, draft));
         setSavedContent(draft);
         setNotice({ tone: 'accent', text: `Saved ${selectedReference.relativePath}.` });
       } else {
@@ -318,8 +325,10 @@ function NoteWorkspace({
       setContentLoading(true);
       try {
         const result = await api.memoryFile(selectedReference.path);
-        setSavedContent(result.content);
-        setDraft(result.content);
+        const parts = splitMarkdownFrontmatter(result.content);
+        setSelectedFrontmatter(parts.frontmatter);
+        setSavedContent(parts.body);
+        setDraft(parts.body);
         setContentError(null);
       } catch (error) {
         setContentError(error instanceof Error ? error.message : String(error));
@@ -443,13 +452,15 @@ function NoteWorkspace({
       ) : selectedView === 'links' ? (
         <NoteLinksView detail={detail} />
       ) : selectedReference ? (
-        <MarkdownDocumentSurface
-          value={draft}
-          onChange={setDraft}
-          path={selectedPath}
-          mode="edit"
-          emptyPreviewText="This file has no rendered markdown yet."
-        />
+        <div className="h-full overflow-y-auto px-6 py-6">
+          <div className="mx-auto min-h-full max-w-4xl">
+            <RichMarkdownEditor
+              value={draft}
+              onChange={setDraft}
+              placeholder="Start writing…"
+            />
+          </div>
+        </div>
       ) : (
         <NoteEditorDocument
           title={noteTitle}

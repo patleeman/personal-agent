@@ -1,18 +1,14 @@
-import { useId, useMemo, type FormEventHandler, type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
+import { type FormEventHandler, type ReactNode } from 'react';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
-import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
-import { MentionTextarea } from './MentionTextarea';
+import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
+import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
-import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
-import { useNodeMentionItems } from '../useNodeMentionItems';
 import type { ProjectActivityItemShape } from './projectDetailState';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
+
 
 function normalizeHeadingValue(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -54,34 +50,7 @@ function stripMatchingLeadingHeading(body: string, heading: string): string {
 }
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
-  const footnoteId = useId();
-  const footnotePrefix = `project-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
-  const { data: mentionItems } = useNodeMentionItems();
-  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
-
-  return (
-    <div className={className ?? 'ui-markdown max-w-none text-[14px]'}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
-        components={{
-          code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface: 'main' })}</td>,
-        }}
-      >
-        {body}
-      </ReactMarkdown>
-    </div>
-  );
+  return <RichMarkdownRenderer content={body} className={className ?? 'ui-markdown max-w-none text-[14px]'} />;
 }
 
 export function ProjectRequirementsContent({
@@ -291,11 +260,10 @@ export function ProjectDocumentContent({
     <div className="max-w-5xl space-y-4">
       {editing ? (
         <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">
-          <MentionTextarea
+          <RichMarkdownEditor
             value={content}
-            onValueChange={onChange}
-            className={`${INPUT_CLASS} min-h-[18rem] resize-y font-mono text-[13px] leading-[1.7]`}
-            spellCheck={false}
+            onChange={onChange}
+            placeholder="Start writing…"
           />
           {error && <p className="text-[12px] text-danger">{error}</p>}
           <div className="flex items-center gap-3">
