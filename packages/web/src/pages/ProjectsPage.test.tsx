@@ -38,11 +38,13 @@ describe('ProjectsPage', () => {
   it('renders invalid project warnings from diagnostics without hiding the page', () => {
     vi.mocked(useAppData).mockReturnValue({
       activity: null,
+      alerts: null,
       projects: null,
       sessions: null,
       tasks: null,
       runs: null,
       setActivity: vi.fn(),
+      setAlerts: vi.fn(),
       setProjects: vi.fn(),
       setSessions: vi.fn(),
       setTasks: vi.fn(),
@@ -82,6 +84,13 @@ describe('ProjectsPage', () => {
         refreshing: false,
         error: null,
         refetch: vi.fn(),
+      })
+      .mockReturnValueOnce({
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
       });
 
     const html = renderToString(
@@ -98,91 +107,132 @@ describe('ProjectsPage', () => {
     expect(html).toContain('npm run validate:projects -- --profile assistant');
   });
 
-  it('hides archived projects from the default active list while showing filter counts', () => {
+  it('renders the selected project in the main workspace instead of the project list', () => {
     vi.mocked(useAppData).mockReturnValue({
       activity: null,
+      alerts: null,
       projects: null,
       sessions: null,
       tasks: null,
       runs: null,
       setActivity: vi.fn(),
+      setAlerts: vi.fn(),
       setProjects: vi.fn(),
       setSessions: vi.fn(),
       setTasks: vi.fn(),
       setRuns: vi.fn(),
     });
 
-    vi.mocked(useApi)
-      .mockReturnValueOnce({
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'node-mentions') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'project-workspace:active-project:assistant') {
+        return {
+          data: {
+            profile: 'assistant',
+            project: {
+              id: 'active-project',
+              title: 'Active project',
+              description: 'Still being worked on.',
+              summary: 'In progress.',
+              repoRoot: '/tmp/project',
+              createdAt: '2026-03-16T10:00:00.000Z',
+              updatedAt: '2026-03-16T12:00:00.000Z',
+              status: 'in_progress',
+              currentFocus: 'Ship the work.',
+              blockers: [],
+              recentProgress: [],
+              requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
+              plan: { milestones: [], tasks: [] },
+            },
+            brief: null,
+            tasks: [],
+            notes: [],
+            attachments: [],
+            artifacts: [],
+            links: { outgoing: [], incoming: [], unresolved: [] },
+            linkedConversations: [],
+            timeline: [],
+            noteCount: 0,
+            taskCount: 0,
+            attachmentCount: 0,
+            artifactCount: 0,
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'project-diagnostics:assistant') {
+        return {
+          data: {
+            profile: 'assistant',
+            invalidProjects: [],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'projects:assistant') {
+        return {
+          data: [
+            {
+              id: 'active-project',
+              createdAt: '2026-03-16T10:00:00.000Z',
+              updatedAt: '2026-03-16T12:00:00.000Z',
+              title: 'Active project',
+              description: 'Still being worked on.',
+              summary: 'In progress.',
+              requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
+              status: 'in_progress',
+              blockers: [],
+              recentProgress: [],
+              plan: { milestones: [], tasks: [] },
+            },
+          ],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
         data: {
           currentProfile: 'assistant',
-          profiles: ['assistant', 'datadog'],
+          profiles: ['assistant'],
         },
         loading: false,
         refreshing: false,
         error: null,
         refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: [
-          {
-            id: 'active-project',
-            createdAt: '2026-03-16T10:00:00.000Z',
-            updatedAt: '2026-03-16T12:00:00.000Z',
-            title: 'Active project',
-            description: 'Still being worked on.',
-            summary: 'In progress.',
-            requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
-            status: 'in_progress',
-            blockers: [],
-            recentProgress: [],
-            plan: { milestones: [], tasks: [] },
-          },
-          {
-            id: 'archived-project',
-            createdAt: '2026-03-10T10:00:00.000Z',
-            updatedAt: '2026-03-12T12:00:00.000Z',
-            archivedAt: '2026-03-15T08:00:00.000Z',
-            title: 'Archived project',
-            description: 'Finished work.',
-            summary: 'Done.',
-            requirements: { goal: 'Keep the record.', acceptanceCriteria: [] },
-            status: 'completed',
-            blockers: [],
-            recentProgress: [],
-            completionSummary: 'Shipped.',
-            plan: { milestones: [], tasks: [] },
-          },
-        ],
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: {
-          profile: 'assistant',
-          invalidProjects: [],
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      });
+      };
+    });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/projects']}>
+      <MemoryRouter initialEntries={['/projects/active-project?viewProfile=assistant']}>
         <Routes>
-          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:id" element={<ProjectsPage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Active');
-    expect(html).toContain('Archived');
     expect(html).toContain('Active project');
-    expect(html).not.toContain('Archived project');
-    expect(html).toContain('1 archived');
-    expect(html).toContain('Profile');
+    expect(html).toContain('Still being worked on.');
+    expect(html).toContain('Use the right rail to browse projects and jump between logical project sections.');
+    expect(html).not.toContain('Select a project');
   });
 });

@@ -9947,6 +9947,7 @@ interface MemoryDocDetail {
 interface SkillDetail {
   skill: SkillItem;
   content: string;
+  references: MemoryReferenceItem[];
   links: NodeLinks;
 }
 
@@ -10157,6 +10158,7 @@ function readSkillDetailForProfile(skillName: string, profile = getCurrentProfil
   return {
     skill,
     content: readFileSync(skill.path, 'utf-8'),
+    references: buildMemoryReferenceItems(skill.path),
     links: readNodeLinksForProfile('skill', skill.name, profile),
   };
 }

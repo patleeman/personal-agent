@@ -80,6 +80,9 @@ import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
 import { MentionTextarea } from './MentionTextarea';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
+import { NotesBrowserRail } from './NotesBrowserRail';
+import { ProjectsBrowserRail } from './ProjectsBrowserRail';
+import { SkillsBrowserRail } from './SkillsBrowserRail';
 import { useNodeMentionItems } from '../useNodeMentionItems';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
@@ -2411,7 +2414,7 @@ function InboxItemContext({ id }: { id: string }) {
 
 const VIEW_PROFILE_SEARCH_PARAM = 'viewProfile';
 
-function ProjectDetailContext({ id }: { id: string }) {
+export function ProjectDetailContext({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const viewProfile = useMemo(() => {
@@ -2502,7 +2505,7 @@ function MemoryDocDisclosure({
   );
 }
 
-function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relativePath: string | null }) {
+export function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relativePath: string | null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { openSession } = useConversations();
@@ -4073,18 +4076,12 @@ export function ContextRail() {
   );
 
   // Projects
-  if (section === 'projects' && id) return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Project" />
-      <div className="flex-1 overflow-y-auto">
-        <ProjectDetailContext id={id} />
-      </div>
-    </div>
-  );
   if (section === 'projects') return (
-    <div className="flex-1 flex flex-col">
-      <RailHeader label="Project" />
-      <EmptyPrompt text="Select a project to inspect and edit it." />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <RailHeader label="Projects" sub={id ?? undefined} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ProjectsBrowserRail />
+      </div>
     </div>
   );
 
@@ -4092,23 +4089,13 @@ export function ContextRail() {
   if (section === 'notes' || section === 'memories') {
     const params = new URLSearchParams(location.search);
     const memoryId = params.get(MANAGED_NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
-    const relativePath = params.get(MANAGED_MEMORY_FILE_SEARCH_PARAM)?.trim() || null;
-
-    if (memoryId) {
-      return (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Notes" sub={relativePath ? `@${memoryId} · ${relativePath}` : `@${memoryId}`} />
-          <div className="flex-1 overflow-y-auto">
-            <MemoryDocContext memoryId={memoryId} relativePath={relativePath} />
-          </div>
-        </div>
-      );
-    }
 
     return (
-      <div className="flex-1 flex flex-col">
-        <RailHeader label="Notes" />
-        <EmptyPrompt text="Select a note node to inspect its INDEX.md, relationships, and package-local references." />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Notes" sub={memoryId ? `@${memoryId}` : undefined} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <NotesBrowserRail />
+        </div>
       </div>
     );
   }
@@ -4119,7 +4106,7 @@ export function ContextRail() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <RailHeader label="Skills" sub={skillName ?? undefined} />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <SkillsContextPanel />
+          <SkillsBrowserRail />
         </div>
       </div>
     );

@@ -283,10 +283,10 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('Full page');
   });
 
-  it('shows package-local references in the notes rail', () => {
+  it('shows note resources in the notes rail instead of the note editor', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
-        memory: {
+        memories: [{
           id: 'personal-agent',
           title: 'Personal-agent knowledge hub',
           summary: 'Durable knowledge hub for personal-agent.',
@@ -297,33 +297,29 @@ describe('ContextRail run detail', () => {
           area: 'personal-agent',
           role: 'hub',
           related: ['personal-agent-web-ui-preferences'],
-          updated: '2026-03-18T12:00:00.000Z',
-        },
-        content: '---\nname: personal-agent\n---\n# Personal-agent knowledge hub\n',
-        references: [{
-          title: 'Web UI preferences',
-          summary: 'Durable UI notes.',
-          tags: ['personal-agent', 'web-ui'],
-          path: '/tmp/personal-agent/references/personal-agent-web-ui-preferences.md',
-          relativePath: 'references/personal-agent-web-ui-preferences.md',
+          referenceCount: 1,
           updated: '2026-03-18T12:00:00.000Z',
         }],
+        memoryQueue: [],
       },
       loading: false,
       refreshing: false,
       error: null,
       refetch: vi.fn(),
+      replaceData: vi.fn(),
     });
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/notes?note=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
+          alerts: null,
           projects: null,
           sessions: [createSession()],
           tasks: null,
           runs: null,
           setActivity: vi.fn(),
+          setAlerts: vi.fn(),
           setProjects: vi.fn(),
           setSessions: vi.fn(),
           setTasks: vi.fn(),
@@ -334,14 +330,14 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Note info');
-    expect(html).toContain('Role');
-    expect(html).toContain('Linked notes');
-    expect(html).toContain('href="/notes?note=personal-agent-web-ui-preferences"');
-    expect(html).toContain('Files');
-    expect(html).toContain('INDEX.md');
-    expect(html).toContain('Web UI preferences');
-    expect(html).toContain('references/personal-agent-web-ui-preferences.md');
+    expect(html).toContain('Browse notes and open them in the main workspace.');
+    expect(html).toContain('Personal-agent knowledge hub');
+    expect(html).toContain('Resources');
+    expect(html).toContain('Main');
+    expect(html).toContain('References');
+    expect(html).toContain('Links');
+    expect(html).not.toContain('Note info');
+    expect(html).not.toContain('INDEX.md');
   });
 
   it('renders system details and logs in the context rail on the system page', () => {
@@ -468,55 +464,40 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Pinned session');
   });
 
-  it('renders selected memory details in the rail', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'personal-agent') {
-        return {
-          data: {
-            memory: {
-              id: 'personal-agent',
-              title: 'Personal-agent knowledge hub',
-              summary: 'Durable knowledge hub for personal-agent.',
-              tags: ['personal-agent'],
-              path: '/tmp/personal-agent/INDEX.md',
-              type: 'project',
-              status: 'active',
-              updated: '2026-03-18T12:00:00.000Z',
-            },
-            content: '# Personal-agent knowledge hub',
-            references: [{
-              title: 'Web UI preferences',
-              summary: 'Durable UI notes.',
-              tags: ['personal-agent'],
-              path: '/tmp/personal-agent/references/prefs.md',
-              relativePath: 'references/prefs.md',
-            }],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
+  it('renders the notes browser rail with selected note resources', () => {
+    vi.mocked(useApi).mockImplementation(() => ({
+      data: {
+        memories: [{
+          id: 'personal-agent',
+          title: 'Personal-agent knowledge hub',
+          summary: 'Durable knowledge hub for personal-agent.',
+          tags: ['personal-agent'],
+          path: '/tmp/personal-agent/INDEX.md',
+          type: 'project',
+          status: 'active',
+          referenceCount: 1,
+          updated: '2026-03-18T12:00:00.000Z',
+        }],
+        memoryQueue: [],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+      replaceData: vi.fn(),
+    }));
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/notes?note=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
+          alerts: null,
           projects: null,
           sessions: [createSession()],
           tasks: null,
           runs: null,
           setActivity: vi.fn(),
+          setAlerts: vi.fn(),
           setProjects: vi.fn(),
           setSessions: vi.fn(),
           setTasks: vi.fn(),
@@ -527,63 +508,48 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('Browse notes and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('INDEX.md');
-    expect(html).toContain('references/prefs.md');
+    expect(html).toContain('Resources');
+    expect(html).toContain('Main');
+    expect(html).toContain('References');
+    expect(html).toContain('Links');
+    expect(html).not.toContain('INDEX.md');
   });
 
-  it('renders selected skill details in the rail', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'skills-rail-memory') {
-        return {
-          data: {
-            profile: 'shared',
-            agentsMd: [],
-            memoryDocs: [],
-            skills: [{
-              name: 'tdd-feature',
-              description: 'Build a feature with test-driven development.',
-              source: 'shared',
-              path: '/tmp/tdd-feature/INDEX.md',
-              recentSessionCount: 2,
-              lastUsedAt: '2026-03-18T12:00:00.000Z',
-              usedInLastSession: true,
-            }],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-      if (key === 'knowledge-skill-rail:/tmp/tdd-feature/INDEX.md') {
-        return {
-          data: { content: '# TDD feature' },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
+  it('renders the skills browser rail with selected skill resources', () => {
+    vi.mocked(useApi).mockImplementation(() => ({
+      data: {
+        profile: 'shared',
+        agentsMd: [],
+        memoryDocs: [],
+        skills: [{
+          name: 'tdd-feature',
+          description: 'Build a feature with test-driven development.',
+          source: 'shared',
+          path: '/tmp/tdd-feature/INDEX.md',
+          recentSessionCount: 2,
+          lastUsedAt: '2026-03-18T12:00:00.000Z',
+          usedInLastSession: true,
+        }],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    }));
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/skills?skill=tdd-feature']}>
         <AppDataContext.Provider value={{
           activity: null,
+          alerts: null,
           projects: null,
           sessions: [createSession()],
           tasks: null,
           runs: null,
           setActivity: vi.fn(),
+          setAlerts: vi.fn(),
           setProjects: vi.fn(),
           setSessions: vi.fn(),
           setTasks: vi.fn(),
@@ -594,9 +560,12 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('Browse reusable workflows and open them in the main workspace.');
     expect(html).toContain('TDD Feature');
-    expect(html).toContain('Build a feature with test-driven development.');
-    expect(html).toContain('/tmp/tdd-feature/INDEX.md');
+    expect(html).toContain('Definition');
+    expect(html).toContain('References');
+    expect(html).toContain('Links');
+    expect(html).not.toContain('/tmp/tdd-feature/INDEX.md');
   });
 
   it('renders selected instruction details in the rail', () => {

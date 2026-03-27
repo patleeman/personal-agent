@@ -1018,6 +1018,7 @@ export interface MemoryData {
 export interface SkillDetail {
   skill: MemorySkillItem;
   content: string;
+  references: MemoryReferenceItem[];
   links?: NodeLinks;
 }
 
