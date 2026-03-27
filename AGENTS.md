@@ -36,6 +36,10 @@
 
 - For personal-agent web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
 
+## TEST YOUR WORK
+
+- For personal-agent web UI work, after you complete a feature, make sure you actually inspect your work. Spin up the UI on a separate port and use agent-browser to inspect and interact with your changes. Make sure the work is complete, to spec, works without bugs, and looks good.
+
 ## UI Design Bans
 
 - For personal-agent web UI work, avoid nested bordered containers/cards (`boxes inside boxes`) unless they are truly unavoidable.
