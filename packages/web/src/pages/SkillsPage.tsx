@@ -418,7 +418,7 @@ export function SkillsPage() {
       browser={<SkillsBrowserRail />}
       browserLabel="Skills browser"
     >
-      <div className="min-w-0 flex-1 px-6 py-4">
+      <div className="min-w-0 min-h-0 flex flex-1 flex-col px-6 py-4">
         <div className="flex items-center justify-end pb-4">
           <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); if (selectedSkillName) { void skillDetailApi.refetch({ resetLoading: false }); } }} disabled={refreshing || skillDetailApi.refreshing}>
             {refreshing || skillDetailApi.refreshing ? 'Refreshing…' : 'Refresh'}
