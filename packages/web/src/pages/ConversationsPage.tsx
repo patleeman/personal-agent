@@ -16,6 +16,7 @@ import {
 import { sessionNeedsAttention } from '../sessionIndicators';
 import type { DurableRunRecord, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
+import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, ListButtonRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
 type ConversationFilter = 'open' | 'attention' | 'archived' | 'all';
@@ -762,18 +763,19 @@ export function ConversationsPage() {
   }, [busyRunId, setRuns]);
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        className="flex-wrap items-start gap-y-3"
-        actions={(
-          <>
-            <ToolbarButton onClick={() => navigate('/conversations/new')}>+ New chat</ToolbarButton>
-            <ToolbarButton onClick={() => { void refetch(); }}>
-              ↻ Refresh
-            </ToolbarButton>
-          </>
-        )}
-      >
+    <ConversationWorkspaceShell>
+      <div className="flex h-full flex-col overflow-hidden">
+        <PageHeader
+          className="flex-wrap items-start gap-y-3"
+          actions={(
+            <>
+              <ToolbarButton onClick={() => navigate('/conversations/new')}>+ New chat</ToolbarButton>
+              <ToolbarButton onClick={() => { void refetch(); }}>
+                ↻ Refresh
+              </ToolbarButton>
+            </>
+          )}
+        >
         <PageHeading
           title="Conversations"
           meta={(
@@ -900,6 +902,7 @@ export function ConversationsPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </ConversationWorkspaceShell>
   );
 }
