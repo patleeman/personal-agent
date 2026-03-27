@@ -4,7 +4,7 @@ import { api } from '../api';
 import { formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { buildProjectsHref, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, LoadingState, ToolbarButton } from './ui';
 import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -206,22 +206,22 @@ export function ProjectsBrowserRail() {
         {selectedProject && (
           <div className="space-y-2 border-t border-border-subtle pt-4">
             <p className="ui-section-label">Sections</p>
-            <div className="space-y-px">
+            <div className="space-y-1">
               {[
-                ['document', 'Doc', 'Main project note and plan'],
-                ['tasks', 'Tasks', 'Flat project todo list'],
-                ['activity', 'Activity', 'Tiny recent log'],
-                ['notes', 'Notes', 'Project notes, decisions, and questions'],
-                ['files', 'Files', 'All attached project files'],
-              ].map(([view, label, summary]) => (
-                <ListLinkRow
+                ['document', 'Doc', 'Main project note and plan', 'Overview'],
+                ['tasks', 'Tasks', 'Flat project todo list', 'Execution'],
+                ['activity', 'Activity', 'Tiny recent log', 'History'],
+                ['notes', 'Notes', 'Project notes, decisions, and questions', 'Knowledge'],
+                ['files', 'Files', 'All attached project files', 'Artifacts'],
+              ].map(([view, label, summary, meta]) => (
+                <BrowserRecordRow
                   key={view}
                   to={buildProjectsHref(effectiveViewProfile ?? selectedProject.profile ?? 'shared', selectedProject.id, view === 'document' ? null : view)}
                   selected={selectedView === view}
-                >
-                  <p className="ui-row-title">{label}</p>
-                  <p className="ui-row-summary">{summary}</p>
-                </ListLinkRow>
+                  label={meta}
+                  heading={label}
+                  summary={summary}
+                />
               ))}
             </div>
           </div>

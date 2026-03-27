@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../api';
 import {
   formatProjectStatus,
@@ -10,6 +9,7 @@ import {
 import { useApi } from '../hooks';
 import type { ProjectRecord } from '../types';
 import { timeAgo } from '../utils';
+import { BrowserRecordRow } from '../components/ui';
 import { buildCompanionProjectPath } from './routes';
 
 function sortCompanionProjects(projects: ProjectRecord[]): ProjectRecord[] {
@@ -37,7 +37,7 @@ function ProjectsSection({
   return (
     <section className="pt-5 first:pt-0">
       <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
-      <div className="mt-2 border-y border-border-subtle">
+      <div className="mt-2 space-y-2 px-4">
         {projects.map((project) => {
           const archived = isProjectArchived(project);
           const preview = summarizeProjectPreview(project);
@@ -50,24 +50,19 @@ function ProjectsSection({
           ].filter((value): value is string => Boolean(value));
 
           return (
-            <Link
+            <BrowserRecordRow
               key={project.id}
               to={buildCompanionProjectPath(project.id)}
-              className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{project.title}</h3>
-                  <p className="mt-1 text-[12px] leading-relaxed text-secondary">{preview}</p>
-                  <p className="mt-2 break-words text-[11px] text-dim">{meta.join(' · ')}</p>
-                </div>
-                <span className="pt-0.5 text-accent" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </span>
-              </div>
-            </Link>
+              label={archived ? 'Archived project' : 'Project'}
+              aside={formatProjectStatus(project.status)}
+              heading={project.title}
+              summary={preview}
+              meta={meta.join(' · ')}
+              className="py-3.5"
+              titleClassName="text-[15px]"
+              summaryClassName="text-[13px]"
+              metaClassName="text-[11px] break-words"
+            />
           );
         })}
       </div>

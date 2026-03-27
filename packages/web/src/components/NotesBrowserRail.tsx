@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi, type UseApiResult } from '../hooks';
 import { timeAgo } from '../utils';
 import type { MemoryDocItem, MemoryWorkItem } from '../types';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, LoadingState, ToolbarButton } from './ui';
 import {
   buildNoteSearch,
   filterMemories,
@@ -329,31 +329,31 @@ export function NotesBrowserRailContent({
         {selectedMemory && !creating && (
           <div className="space-y-2 border-t border-border-subtle pt-4">
             <p className="ui-section-label">Resources</p>
-            <div className="space-y-px">
-              <ListLinkRow
+            <div className="space-y-1">
+              <BrowserRecordRow
                 to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'main', item: null, creating: false })}`}
                 selected={selectedView === 'main'}
-              >
-                <p className="ui-row-title">Main</p>
-                <p className="ui-row-summary">Primary note document</p>
-                <p className="ui-row-meta">{noteKindLabel(selectedMemory)}</p>
-              </ListLinkRow>
-              <ListLinkRow
+                label="Document"
+                heading="Main"
+                summary="Primary note document"
+                meta={noteKindLabel(selectedMemory)}
+              />
+              <BrowserRecordRow
                 to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'references', item: selectedItem, creating: false })}`}
                 selected={selectedView === 'references'}
-              >
-                <p className="ui-row-title">References</p>
-                <p className="ui-row-summary">Supporting documents and research</p>
-                <p className="ui-row-meta">{selectedMemory.referenceCount ?? 0} files</p>
-              </ListLinkRow>
-              <ListLinkRow
+                label="Supporting material"
+                heading="References"
+                summary="Supporting documents and research"
+                meta={`${selectedMemory.referenceCount ?? 0} ${(selectedMemory.referenceCount ?? 0) === 1 ? 'file' : 'files'}`}
+              />
+              <BrowserRecordRow
                 to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'links', item: null, creating: false })}`}
                 selected={selectedView === 'links'}
-              >
-                <p className="ui-row-title">Links</p>
-                <p className="ui-row-summary">Relationships with other nodes</p>
-                <p className="ui-row-meta">Open node graph details</p>
-              </ListLinkRow>
+                label="Relationships"
+                heading="Links"
+                summary="Relationships with other nodes"
+                meta="Open node graph details"
+              />
             </div>
           </div>
         )}

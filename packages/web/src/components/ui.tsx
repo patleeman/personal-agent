@@ -191,6 +191,10 @@ export function BrowserRecordRow({
   summary,
   meta,
   className,
+  headerClassName,
+  titleClassName,
+  summaryClassName,
+  metaClassName,
   ...props
 }: LinkProps & {
   selected?: boolean;
@@ -200,6 +204,10 @@ export function BrowserRecordRow({
   summary?: ReactNode;
   meta?: ReactNode;
   className?: string;
+  headerClassName?: string;
+  titleClassName?: string;
+  summaryClassName?: string;
+  metaClassName?: string;
 }) {
   return (
     <Link
@@ -208,14 +216,14 @@ export function BrowserRecordRow({
       {...props}
     >
       {(label || aside) && (
-        <div className="ui-browser-entry-header">
+        <div className={cx('ui-browser-entry-header', headerClassName)}>
           {label ? <p className="ui-browser-entry-label">{label}</p> : null}
           {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
         </div>
       )}
-      <p className="ui-browser-entry-title">{heading}</p>
-      {summary ? <p className="ui-browser-entry-summary">{summary}</p> : null}
-      {meta ? <div className="ui-browser-entry-meta">{meta}</div> : null}
+      <p className={cx('ui-browser-entry-title', titleClassName)}>{heading}</p>
+      {summary ? <p className={cx('ui-browser-entry-summary', summaryClassName)}>{summary}</p> : null}
+      {meta ? <div className={cx('ui-browser-entry-meta', metaClassName)}>{meta}</div> : null}
     </Link>
   );
 }
