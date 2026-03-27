@@ -188,6 +188,23 @@ function itemHref(item: ProjectActivityItemShape): string | undefined {
     : item.entry.href;
 }
 
+function itemKindLabel(item: ProjectActivityItemShape): string {
+  if (item.kind === 'conversation') {
+    return 'Conversation';
+  }
+
+  const normalized = item.entry.kind.replace(/[-_]+/g, ' ').trim();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function itemSummary(item: ProjectActivityItemShape): string | null {
+  if (item.kind === 'conversation') {
+    return item.conversation.snippet?.trim() || item.conversation.cwd?.trim() || null;
+  }
+
+  return null;
+}
+
 export function ProjectActivityContent({
   items,
 }: {
@@ -205,32 +222,41 @@ export function ProjectActivityContent({
     );
   }
 
-  let lastDay = '';
-
   return (
-    <div className="max-w-5xl space-y-1">
-      {items.map((item) => {
-        const at = itemTimestamp(item);
-        const day = dayLabel(at) ?? 'Unknown day';
-        const showDay = day !== lastDay;
-        lastDay = day;
-        const href = itemHref(item);
-        const title = itemTitle(item);
+    <div className="max-w-5xl">
+      <div className="divide-y divide-border-subtle overflow-hidden rounded-2xl border border-border-subtle bg-surface/15">
+        {items.map((item, index) => {
+          const at = itemTimestamp(item);
+          const href = itemHref(item);
+          const title = itemTitle(item);
+          const summary = itemSummary(item);
+          const timestamp = `${timeLabel(at)}${dayLabel(at) ? ` · ${dayLabel(at)}` : ''}`;
 
-        return (
-          <div key={item.id} className="space-y-1">
-            {showDay && <p className="ui-section-label pt-3 first:pt-0">{day}</p>}
-            <div className="flex items-baseline gap-3 text-[13px] leading-relaxed">
-              <span className="w-12 shrink-0 whitespace-nowrap font-mono tabular-nums text-secondary">{timeLabel(at)}</span>
-              {href ? (
-                <a href={href} className="min-w-0 text-accent hover:text-accent/75 transition-colors truncate">{title}</a>
-              ) : (
-                <span className="min-w-0 text-primary truncate">{title}</span>
-              )}
+          return (
+            <div key={item.id} className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-4 px-4 py-4">
+              <div className="flex flex-col items-center">
+                <span className={index === 0 ? 'mt-1.5 h-2.5 w-2.5 rounded-full bg-accent' : 'mt-1.5 h-2.5 w-2.5 rounded-full bg-border-default'} />
+                {index < items.length - 1 ? <span className="mt-2 w-px flex-1 bg-border-subtle" /> : null}
+              </div>
+
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between md:gap-4">
+                  {href ? (
+                    <a href={href} className="min-w-0 truncate text-[15px] font-medium text-accent transition-colors hover:text-accent/75">
+                      {title}
+                    </a>
+                  ) : (
+                    <p className="min-w-0 truncate text-[15px] font-medium text-primary">{title}</p>
+                  )}
+                  <span className="shrink-0 text-[12px] text-dim">{timestamp}</span>
+                </div>
+                {summary ? <p className="text-[13px] leading-relaxed text-secondary">{summary}</p> : null}
+                <p className="text-[12px] text-dim">{itemKindLabel(item)}</p>
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

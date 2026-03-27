@@ -1,26 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { useReloadState } from '../reloadState';
-import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
-import { EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, cx } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
-import { ProjectsBrowserRail } from '../components/ProjectsBrowserRail';
-import { buildRailWidthStorageKey } from '../layoutSizing';
 import {
   buildProjectsHref,
-  PROJECT_VIEW_QUERY_PARAM,
-  projectViewToSectionId,
   readCreateProjectState,
-  readProjectView,
   VIEW_PROFILE_QUERY_PARAM,
 } from '../projectWorkspaceState';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
@@ -28,7 +24,72 @@ const CREATE_PROJECT_TITLE_STORAGE_KEY = 'pa:reload:projects:create-title';
 const CREATE_PROJECT_DOCUMENT_STORAGE_KEY = 'pa:reload:projects:create-document';
 const CREATE_PROJECT_REPO_ROOT_STORAGE_KEY = 'pa:reload:projects:create-repo-root';
 const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
-const PROJECTS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('projects-browser');
+type ProjectFilter = 'active' | 'paused' | 'done' | 'archived' | 'all';
+
+function summarizeRepoRoot(repoRoot: string | undefined): string | null {
+  const normalized = repoRoot?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized.replace(/\\/g, '/').split('/').filter(Boolean);
+  return segments.at(-1) ?? normalized;
+}
+
+function toneForProjectStatus(status: string, archived: boolean): 'muted' | 'warning' | 'success' | 'teal' {
+  if (archived) {
+    return 'muted';
+  }
+
+  if (status === 'paused') {
+    return 'warning';
+  }
+
+  if (status === 'done') {
+    return 'success';
+  }
+
+  return 'teal';
+}
+
+function taskCounts(tasks: Array<{ status: string }>): { open: number; done: number } {
+  const done = tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
+  return {
+    open: Math.max(0, tasks.length - done),
+    done,
+  };
+}
+
+function matchesProjectFilter(
+  project: {
+    archivedAt?: string;
+    status: string;
+  },
+  filter: ProjectFilter,
+): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'archived') {
+    return isProjectArchived(project);
+  }
+
+  if (isProjectArchived(project)) {
+    return false;
+  }
+
+  const normalizedStatus = formatProjectStatus(project.status);
+  if (filter === 'done') {
+    return normalizedStatus === 'done';
+  }
+
+  if (filter === 'paused') {
+    return normalizedStatus === 'paused';
+  }
+
+  return normalizedStatus === 'active';
+}
 
 function CreateProjectPanel({
   profile,
@@ -95,16 +156,16 @@ function CreateProjectPanel({
   }
 
   return (
-    <div className="min-w-0 rounded-2xl border border-border-subtle bg-base/70 px-4 py-4 shadow-sm">
-      <div className="space-y-5">
+    <div className="mx-auto w-full max-w-5xl rounded-3xl border border-border-subtle bg-base/70 px-6 py-6 shadow-sm">
+      <div className="space-y-6">
         <div className="space-y-1">
-          <h2 className="text-[15px] font-medium text-primary">New project</h2>
+          <h2 className="text-[20px] font-semibold tracking-tight text-primary">New project</h2>
           <p className="ui-card-meta max-w-2xl">
-            Create a lightweight project container with a title, short summary, and an optional starting doc.
+            Create a durable project with a title, summary, repo root, and an optional starting brief.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1.5">
             <label className="ui-card-meta" htmlFor="project-title">Title</label>
             <input
@@ -139,11 +200,12 @@ function CreateProjectPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-document">Starting doc</label>
+            <label className="ui-card-meta" htmlFor="project-document">Starting brief</label>
             <RichMarkdownEditor
               value={documentContent}
               onChange={setDocumentContent}
               placeholder="Optional. Add the initial context or plan you want to keep with the project."
+              variant="panel"
             />
           </div>
 
@@ -177,7 +239,7 @@ function ProjectDiagnosticsPanel({
     : `npm run validate:projects -- --profile ${profile}`;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border-subtle bg-base/70 px-4 py-4 shadow-sm">
+    <div className="rounded-2xl border border-danger/25 bg-danger/5 px-4 py-4">
       <div className="space-y-1">
         <p className="text-[13px] text-danger">
           {invalidProjects.length} {invalidProjects.length === 1 ? 'project file could not be loaded.' : 'project files could not be loaded.'}
@@ -193,7 +255,7 @@ function ProjectDiagnosticsPanel({
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="mt-4 space-y-3">
         {invalidProjects.map((issue) => (
           <div key={`${issue.profile ?? profile}:${issue.projectId}`} className="space-y-0.5">
             <p className="font-mono text-[12px] text-danger">{issue.projectId}</p>
@@ -203,6 +265,117 @@ function ProjectDiagnosticsPanel({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ProjectsTable({
+  projects,
+  effectiveViewProfile,
+}: {
+  projects: Array<{
+    id: string;
+    title: string;
+    summary: string;
+    description: string;
+    profile?: string;
+    repoRoot?: string;
+    updatedAt: string;
+    archivedAt?: string;
+    status: string;
+    currentFocus?: string;
+    requirements: { goal: string; acceptanceCriteria: string[] };
+    plan: { tasks: Array<{ status: string }> };
+    blockers: string[];
+  }>;
+  effectiveViewProfile: string | 'all' | undefined;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-border-subtle bg-surface/20">
+      <table className="min-w-full border-collapse text-left">
+        <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
+          <tr className="border-b border-border-subtle text-[11px] uppercase tracking-[0.14em] text-dim">
+            <th className="px-5 py-3 font-medium">Project</th>
+            <th className="px-4 py-3 font-medium">Status</th>
+            <th className="px-4 py-3 font-medium">Current focus</th>
+            <th className="px-4 py-3 font-medium">Tasks</th>
+            <th className="px-4 py-3 font-medium">Profile</th>
+            <th className="px-5 py-3 font-medium">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((project) => {
+            const archived = isProjectArchived(project);
+            const projectHref = buildProjectsHref(effectiveViewProfile ?? project.profile ?? 'shared', project.id);
+            const taskSummary = taskCounts(project.plan.tasks);
+            const blockerCount = project.blockers.filter((blocker) => blocker.trim().length > 0).length;
+            const repoLabel = summarizeRepoRoot(project.repoRoot);
+            const currentFocus = project.currentFocus?.trim()
+              || project.requirements.goal.trim()
+              || '—';
+
+            return (
+              <tr
+                key={`${project.profile ?? effectiveViewProfile ?? 'shared'}:${project.id}`}
+                className="cursor-pointer border-b border-border-subtle align-top transition-colors hover:bg-surface/45"
+                tabIndex={0}
+                onClick={() => navigate(projectHref)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(projectHref);
+                  }
+                }}
+              >
+                <td className="px-5 py-4">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={projectHref}
+                        className="text-[15px] font-medium text-primary transition-colors hover:text-accent"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {project.title}
+                      </Link>
+                      {archived && <span className="ui-card-meta">archived</span>}
+                    </div>
+                    <p className="max-w-2xl text-[13px] leading-relaxed text-secondary">{summarizeProjectPreview(project)}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                      <span className="font-mono">{project.id}</span>
+                      {repoLabel && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{repoLabel}</span>
+                        </>
+                      )}
+                      {blockerCount > 0 && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{blockerCount} {blockerCount === 1 ? 'blocker' : 'blockers'}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-4">
+                  <Pill tone={toneForProjectStatus(formatProjectStatus(project.status), archived)}>
+                    {formatProjectStatus(project.status)}
+                  </Pill>
+                </td>
+                <td className="px-4 py-4 text-[13px] leading-relaxed text-secondary">{currentFocus}</td>
+                <td className="px-4 py-4">
+                  <div className="text-[13px] text-primary">{taskSummary.open} open</div>
+                  <div className="mt-1 text-[12px] text-dim">{taskSummary.done} done</div>
+                </td>
+                <td className="px-4 py-4 text-[13px] text-secondary">{project.profile ?? effectiveViewProfile ?? 'shared'}</td>
+                <td className="px-5 py-4 text-[13px] text-secondary">{timeAgo(project.updatedAt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -251,6 +424,8 @@ export function ProjectsPage() {
     `project-workspace:${selectedId ?? 'none'}:${effectiveViewProfile ?? ''}`,
   );
   const { projects: projectSnapshot, setProjects } = useAppData();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<ProjectFilter>('active');
 
   const currentProfile = profileState?.currentProfile ?? null;
   const createProfile = requestedViewProfile && requestedViewProfile !== 'all'
@@ -266,9 +441,30 @@ export function ProjectsPage() {
   const invalidProjects = diagnostics?.invalidProjects ?? [];
   const isLoading = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) && loading;
   const visibleError = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) ? error : null;
-  const selectedView = useMemo(() => readProjectView(location.search), [location.search]);
   const showCreateForm = useMemo(() => !selectedId && readCreateProjectState(location.search), [location.search, selectedId]);
-  const hasExplicitProjectView = useMemo(() => new URLSearchParams(location.search).has(PROJECT_VIEW_QUERY_PARAM), [location.search]);
+
+  const filteredProjects = useMemo(() => {
+    const items = projects ?? [];
+    const normalizedQuery = query.trim().toLowerCase();
+
+    return [...items]
+      .filter((project) => matchesProjectFilter(project, filter))
+      .filter((project) => {
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        return [
+          project.id,
+          project.title,
+          project.summary,
+          project.description,
+          project.currentFocus ?? '',
+          project.repoRoot ?? '',
+        ].join('\n').toLowerCase().includes(normalizedQuery);
+      })
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }, [filter, projects, query]);
 
   const refreshProjects = useCallback(async () => {
     const [nextProjects] = await Promise.all([
@@ -306,23 +502,6 @@ export function ProjectsPage() {
   }, [effectiveViewProfile, navigate, projects, selectedId]);
 
   useEffect(() => {
-    if (!selectedId || !projectDetailApi.data || showCreateForm || !hasExplicitProjectView) {
-      return;
-    }
-
-    const targetId = projectViewToSectionId(selectedView);
-    if (!targetId) {
-      return;
-    }
-
-    const handle = window.requestAnimationFrame(() => {
-      document.getElementById(targetId)?.scrollIntoView({ block: 'start' });
-    });
-
-    return () => window.cancelAnimationFrame(handle);
-  }, [hasExplicitProjectView, projectDetailApi.data, selectedId, selectedView, showCreateForm]);
-
-  useEffect(() => {
     if (!selectedId) {
       return;
     }
@@ -347,91 +526,145 @@ export function ProjectsPage() {
   }
 
   return (
-    <BrowserSplitLayout
-      storageKey={PROJECTS_BROWSER_WIDTH_STORAGE_KEY}
-      initialWidth={320}
-      minWidth={260}
-      maxWidth={440}
-      browser={<ProjectsBrowserRail />}
-      browserLabel="Projects browser"
-    >
-      <div className="min-w-0 min-h-0 flex-1 px-6 py-4">
-        <div className="flex h-full min-h-0 flex-col gap-4">
-          <div className="flex items-center justify-end gap-2">
-            <ToolbarButton onClick={() => {
-              if (showCreateForm) {
-                closeCreateForm();
-                return;
-              }
-
-              openCreateForm();
-            }} disabled={!createProfile}>
-              {showCreateForm ? 'Close new project' : 'New project'}
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { void refreshProjects(); }}>Refresh</ToolbarButton>
+    <div className="min-h-0 flex h-full flex-col overflow-hidden">
+      {showCreateForm && createProfile ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+            <PageHeader
+              actions={<ToolbarButton onClick={closeCreateForm}>Back to projects</ToolbarButton>}
+            >
+              <PageHeading
+                title="Projects"
+                meta="Create a new project and keep the durable brief, tasks, notes, and files together."
+              />
+            </PageHeader>
+            <CreateProjectPanel
+              profile={createProfile}
+              onCreated={handleCreated}
+              onCancel={closeCreateForm}
+            />
           </div>
-
-          {profilesError && <p className="text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
-          {isLoading && <LoadingState label="Loading projects…" />}
-          {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
-          {diagnosticsError && <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>}
-
-          {!isLoading && !visibleError && invalidProjects.length > 0 && diagnostics && (
-            <ProjectDiagnosticsPanel profile={diagnostics.profile} invalidProjects={invalidProjects} />
+        </div>
+      ) : selectedId ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+          {projectDetailApi.loading && !projectDetailApi.data ? (
+            <LoadingState label="Loading project…" className="h-full justify-center" />
+          ) : projectDetailApi.error || !projectDetailApi.data ? (
+            <ErrorState message={`Failed to load project: ${projectDetailApi.error ?? 'Project not found.'}`} />
+          ) : (
+            <div className="mx-auto w-full max-w-[1440px]">
+              <ProjectDetailPanel
+                project={projectDetailApi.data}
+                activeProfile={profileState?.currentProfile}
+                onChanged={() => {
+                  void projectDetailApi.refetch({ resetLoading: false });
+                  void refreshProjects();
+                  emitProjectsChanged();
+                }}
+                onDeleted={() => {
+                  navigate(effectiveViewProfile ? buildProjectsHref(effectiveViewProfile) : '/projects');
+                  emitProjectsChanged();
+                }}
+              />
+            </div>
           )}
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+          <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-6">
+            <PageHeader
+              actions={(
+                <>
+                  <ToolbarButton onClick={openCreateForm} disabled={!createProfile}>New project</ToolbarButton>
+                  <ToolbarButton onClick={() => { void refreshProjects(); }}>Refresh</ToolbarButton>
+                </>
+              )}
+            >
+              <PageHeading
+                title="Projects"
+                meta="Browse durable projects, then open one into the main workspace and the left sidebar shelf."
+              />
+            </PageHeader>
 
-          <div className="min-h-0 flex-1 overflow-hidden">
-            {showCreateForm && createProfile ? (
-              <div className="h-full overflow-y-auto">
-                <CreateProjectPanel
-                  profile={createProfile}
-                  onCreated={handleCreated}
-                  onCancel={closeCreateForm}
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {(['active', 'paused', 'done', 'archived', 'all'] as ProjectFilter[]).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFilter(value)}
+                    className={cx(
+                      'rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors',
+                      filter === value
+                        ? 'border-border-default bg-surface text-primary'
+                        : 'border-border-subtle bg-transparent text-secondary hover:text-primary',
+                    )}
+                  >
+                    {value === 'all' ? 'All' : value === 'done' ? 'Done' : value === 'paused' ? 'Paused' : value === 'archived' ? 'Archived' : 'Active'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto xl:items-center">
+                {profileState && (
+                  <select
+                    value={effectiveViewProfile ?? profileState.currentProfile}
+                    onChange={(event) => navigate(buildProjectsHref(event.target.value === 'all' ? 'all' : event.target.value))}
+                    className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary focus:outline-none focus:border-accent/60"
+                  >
+                    <option value="all">All profiles</option>
+                    {profileState.profiles.map((profile) => (
+                      <option key={profile} value={profile}>{profile}</option>
+                    ))}
+                  </select>
+                )}
+
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search projects"
+                  className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60 sm:w-[20rem]"
+                  autoComplete="off"
+                  spellCheck={false}
                 />
               </div>
-            ) : selectedId ? (
-              projectDetailApi.loading && !projectDetailApi.data ? (
-                <LoadingState label="Loading project…" className="h-full justify-center" />
-              ) : projectDetailApi.error || !projectDetailApi.data ? (
-                <ErrorState message={`Failed to load project: ${projectDetailApi.error ?? 'Project not found.'}`} />
-              ) : (
-                <div className="h-full overflow-y-auto pr-1">
-                  <ProjectDetailPanel
-                    project={projectDetailApi.data}
-                    activeProfile={profileState?.currentProfile}
-                    selectedView={selectedView}
-                    onChanged={() => {
-                      void projectDetailApi.refetch({ resetLoading: false });
-                      void refreshProjects();
-                      emitProjectsChanged();
-                    }}
-                    onDeleted={() => {
-                      navigate(effectiveViewProfile ? buildProjectsHref(effectiveViewProfile) : '/projects');
-                      emitProjectsChanged();
-                    }}
-                  />
-                </div>
-              )
-            ) : !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 ? (
+            </div>
+
+            {profilesError && <p className="text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
+            {diagnosticsError && <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>}
+
+            {!isLoading && !visibleError && invalidProjects.length > 0 && diagnostics && (
+              <ProjectDiagnosticsPanel profile={diagnostics.profile} invalidProjects={invalidProjects} />
+            )}
+
+            {isLoading ? <LoadingState label="Loading projects…" className="h-full" /> : null}
+            {visibleError ? <ErrorState message={`Failed to load projects: ${visibleError}`} /> : null}
+
+            {!isLoading && !visibleError && !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 ? (
               <EmptyState
-                className="h-full"
+                className="min-h-[18rem]"
                 title="No projects yet"
                 body={effectiveViewProfile === 'all'
                   ? 'No projects exist in any profile yet.'
                   : `Projects track ongoing work, milestones, and tasks for profile ${effectiveViewProfile ?? currentProfile ?? 'current'}.`}
                 action={<ToolbarButton onClick={openCreateForm}>Create project</ToolbarButton>}
               />
-            ) : (
+            ) : null}
+
+            {!isLoading && !visibleError && projects && filteredProjects.length > 0 ? (
+              <ProjectsTable projects={filteredProjects} effectiveViewProfile={effectiveViewProfile} />
+            ) : null}
+
+            {!isLoading && !visibleError && projects && filteredProjects.length === 0 && projects.length > 0 ? (
               <EmptyState
-                className="h-full"
-                title="Select a project"
-                body="Choose a project from the browser on the left to open it here."
+                className="min-h-[18rem]"
+                title="No matching projects"
+                body="Try a broader search or another filter."
               />
-            )}
+            ) : null}
           </div>
         </div>
-      </div>
-    </BrowserSplitLayout>
+      )}
+    </div>
   );
 }
-
