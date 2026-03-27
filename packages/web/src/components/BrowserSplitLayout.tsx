@@ -136,13 +136,13 @@ export function BrowserSplitLayout({
     <div className="flex h-full min-h-0 overflow-hidden">
       <aside
         style={{ width: browserPane.width }}
-        className={cx('min-h-0 flex-shrink-0 border-r border-border-subtle bg-surface/35', browserClassName)}
+        className={cx('flex min-h-0 flex-shrink-0 flex-col overflow-hidden border-r border-border-subtle bg-surface/35', browserClassName)}
         aria-label={browserLabel}
       >
         {browser}
       </aside>
       <ResizeHandle onMouseDown={browserPane.onMouseDown} />
-      <div className={cx('min-w-0 flex-1', contentClassName)}>{children}</div>
+      <div className={cx('min-w-0 min-h-0 flex flex-1 flex-col overflow-hidden', contentClassName)}>{children}</div>
     </div>
   );
 }
