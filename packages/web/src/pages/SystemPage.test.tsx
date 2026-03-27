@@ -210,7 +210,7 @@ describe('SystemPage', () => {
     expect(html).toContain('Sync');
     expect(html).toContain('1 local file changed in the sync repo');
     expect(html).toContain('via SSE');
-    expect(html).toContain('Runs');
-    expect(html).toContain('Fix runs navigation');
+    expect(html).toContain('Open runs');
+    expect(html).toContain('Durable background work and recovery review moved to');
   });
 });
