@@ -246,6 +246,58 @@
     @apply bg-elevated text-primary shadow-sm;
   }
 
+  .ui-browser-entry {
+    @apply flex items-start gap-3 rounded-xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
+  }
+
+  .ui-browser-entry-hover {
+    @apply hover:bg-elevated/45;
+  }
+
+  .ui-browser-entry-selected {
+    @apply bg-elevated/80;
+  }
+
+  .ui-browser-entry-glyph {
+    @apply mt-0.5 flex h-10 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface/70 text-dim transition-colors;
+  }
+
+  .ui-browser-entry:hover .ui-browser-entry-glyph {
+    @apply border-border-default text-secondary;
+  }
+
+  .ui-browser-entry-selected .ui-browser-entry-glyph {
+    @apply border-accent/30 bg-accent/10 text-accent;
+  }
+
+  .ui-browser-entry-header {
+    @apply flex flex-wrap items-center gap-x-2 gap-y-1;
+  }
+
+  .ui-browser-entry-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-dim;
+  }
+
+  .ui-browser-entry-aside {
+    @apply text-[10px] text-secondary;
+  }
+
+  .ui-browser-entry-title {
+    @apply mt-1 break-words text-[13px] font-semibold leading-snug text-primary;
+  }
+
+  .ui-browser-entry-summary {
+    @apply mt-1 text-[12px] leading-relaxed text-secondary;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .ui-browser-entry-meta {
+    @apply mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim;
+  }
+
   .ui-list-row {
     @apply flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg transition-colors;
   }

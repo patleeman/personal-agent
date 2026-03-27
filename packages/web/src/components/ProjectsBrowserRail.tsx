@@ -4,7 +4,7 @@ import { api } from '../api';
 import { formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { buildProjectsHref, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
 import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -14,6 +14,21 @@ type ProjectFilter = 'active' | 'archived' | 'all';
 function getSelectedProjectId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
   return parts[0] === 'projects' && parts[1] ? decodeURIComponent(parts[1]) : null;
+}
+
+function formatRailStatusLabel(status: string | undefined): string {
+  const label = formatProjectStatus(status);
+  return label.replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function summarizeRepoRoot(repoRoot: string | undefined): string | null {
+  const normalized = repoRoot?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized.replace(/\\/g, '/').split('/').filter(Boolean);
+  return segments.at(-1) ?? normalized;
 }
 
 export function ProjectsBrowserRail() {
@@ -129,27 +144,61 @@ export function ProjectsBrowserRail() {
         ) : null}
 
         {!loading && !error && filteredProjects.length > 0 && (
-          <div className="space-y-px">
+          <div className="space-y-1">
             {filteredProjects.map((project) => {
               const archived = isProjectArchived(project);
-              const dotClass = archived ? 'bg-border-default' : 'bg-teal';
+              const blockerCount = project.blockers.filter((blocker) => blocker.trim().length > 0).length;
+              const repoLabel = summarizeRepoRoot(project.repoRoot);
+              const milestoneCount = project.plan.milestones.length;
+              const taskCount = project.plan.tasks.length;
               return (
-                <ListLinkRow
+                <BrowserRecordRow
                   key={`${project.profile ?? effectiveViewProfile ?? 'shared'}:${project.id}`}
                   to={buildProjectsHref(effectiveViewProfile ?? project.profile ?? 'shared', project.id)}
                   selected={project.id === selectedProjectId}
-                  leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotClass}`} />}
-                >
-                  <p className="ui-row-title">{project.title}</p>
-                  <p className="ui-row-summary">{summarizeProjectPreview(project)}</p>
-                  <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                    <span>{formatProjectStatus(project.status)}</span>
-                    <span className="opacity-40">·</span>
-                    <span className="font-mono" title={project.id}>{project.id}</span>
-                    <span className="opacity-40">·</span>
-                    <span>{timeAgo(project.updatedAt)}</span>
-                  </div>
-                </ListLinkRow>
+                  icon={<ResourceGlyph kind="project" />}
+                  label={archived ? 'Archived project' : 'Project'}
+                  aside={formatRailStatusLabel(project.status)}
+                  heading={project.title}
+                  summary={summarizeProjectPreview(project)}
+                  meta={(
+                    <>
+                      <span className="font-mono" title={project.id}>{project.id}</span>
+                      {effectiveViewProfile === 'all' && project.profile && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{project.profile}</span>
+                        </>
+                      )}
+                      {repoLabel && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{repoLabel}</span>
+                        </>
+                      )}
+                      {milestoneCount > 0 && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{milestoneCount} {milestoneCount === 1 ? 'milestone' : 'milestones'}</span>
+                        </>
+                      )}
+                      {taskCount > 0 && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
+                        </>
+                      )}
+                      {blockerCount > 0 && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span>{blockerCount} {blockerCount === 1 ? 'blocker' : 'blockers'}</span>
+                        </>
+                      )}
+                      <span className="opacity-40">·</span>
+                      <span>{timeAgo(project.updatedAt)}</span>
+                    </>
+                  )}
+                />
               );
             })}
           </div>

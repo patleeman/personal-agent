@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
   buildSkillsSearch,
@@ -13,6 +13,10 @@ import {
 } from '../skillWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+
+function skillRecordLabel(source: string): string {
+  return source === 'shared' ? 'Shared skill' : 'Custom skill';
+}
 
 export function SkillsBrowserRail() {
   const location = useLocation();
@@ -65,18 +69,31 @@ export function SkillsBrowserRail() {
         ) : null}
 
         {!loading && !error && filteredSkills.length > 0 && (
-          <div className="space-y-px">
+          <div className="space-y-1">
             {filteredSkills.map((skill) => (
-              <ListLinkRow
+              <BrowserRecordRow
                 key={skill.name}
                 to={`/skills${buildSkillsSearch(location.search, { skillName: skill.name, view: 'definition', item: null })}`}
                 selected={skill.name === selectedSkillName}
-                leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${skill.usedInLastSession ? 'bg-accent' : 'bg-teal'}`} />}
-              >
-                <p className="ui-row-title">{humanizeSkillName(skill.name)}</p>
-                <p className="ui-row-summary">{skill.description}</p>
-                <p className="ui-row-meta break-words">{formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} · {skill.source}</p>
-              </ListLinkRow>
+                icon={<ResourceGlyph kind="skill" />}
+                label={skillRecordLabel(skill.source)}
+                aside={skill.usedInLastSession ? 'Used recently' : null}
+                heading={humanizeSkillName(skill.name)}
+                summary={skill.description}
+                meta={(
+                  <>
+                    <span className="font-mono">{skill.name}</span>
+                    <span className="opacity-40">·</span>
+                    <span>{formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')}</span>
+                    {skill.source !== 'shared' && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>source {skill.source}</span>
+                      </>
+                    )}
+                  </>
+                )}
+              />
             ))}
           </div>
         )}

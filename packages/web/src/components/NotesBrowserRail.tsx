@@ -3,10 +3,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi, type UseApiResult } from '../hooks';
 import { timeAgo } from '../utils';
-import type { MemoryWorkItem } from '../types';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
+import type { MemoryDocItem, MemoryWorkItem } from '../types';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
 import {
-  buildNoteListMeta,
   buildNoteSearch,
   filterMemories,
   NOTE_ID_SEARCH_PARAM,
@@ -18,15 +17,16 @@ import {
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
-function noteDotClass(status: string | undefined, usedInLastSession: boolean | undefined): string {
-  const normalizedStatus = status?.trim().toLowerCase();
+function noteRecordLabel(memory: MemoryDocItem): string {
+  const base = noteKindLabel(memory);
+  const normalizedStatus = memory.status?.trim().toLowerCase();
   if (normalizedStatus === 'archived') {
-    return 'bg-border-default';
+    return `Archived ${base.toLowerCase()}`;
   }
   if (normalizedStatus === 'draft') {
-    return 'bg-warning';
+    return `Draft ${base.toLowerCase()}`;
   }
-  return usedInLastSession ? 'bg-accent' : 'bg-teal';
+  return base;
 }
 
 function memoryWorkItemDotClass(item: MemoryWorkItem): string {
@@ -288,20 +288,41 @@ export function NotesBrowserRailContent({
         ) : null}
 
         {!loading && !error && filteredMemories.length > 0 && (
-          <div className="space-y-px">
+          <div className="space-y-1">
             {filteredMemories.map((memory) => (
-              <ListLinkRow
+              <BrowserRecordRow
                 key={memory.id}
                 to={`/notes${buildNoteSearch(location.search, { memoryId: memory.id, view: 'main', item: null, creating: false })}`}
                 selected={memory.id === selectedMemoryId && !creating}
-                leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${noteDotClass(memory.status, memory.usedInLastSession)}`} />}
-              >
-                <p className="ui-row-title">{memory.title}</p>
-                <p className="ui-row-summary">{memory.summary || 'No summary yet.'}</p>
-                <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                  <span>{buildNoteListMeta(memory)}</span>
-                </div>
-              </ListLinkRow>
+                icon={<ResourceGlyph kind="note" />}
+                label={noteRecordLabel(memory)}
+                aside={memory.usedInLastSession ? 'Used recently' : null}
+                heading={memory.title}
+                summary={memory.summary || 'No summary yet.'}
+                meta={(
+                  <>
+                    <span className="font-mono">@{memory.id}</span>
+                    {(memory.referenceCount ?? 0) > 0 && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>{memory.referenceCount} {(memory.referenceCount ?? 0) === 1 ? 'reference' : 'references'}</span>
+                      </>
+                    )}
+                    {(memory.related?.length ?? 0) > 0 && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>{memory.related?.length} related {(memory.related?.length ?? 0) === 1 ? 'node' : 'nodes'}</span>
+                      </>
+                    )}
+                    {memory.updated && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span>updated {timeAgo(memory.updated)}</span>
+                      </>
+                    )}
+                  </>
+                )}
+              />
             ))}
           </div>
         )}
