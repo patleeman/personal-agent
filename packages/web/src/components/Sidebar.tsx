@@ -103,11 +103,10 @@ function TopNavItem({
   );
 }
 
-function SectionHeader({ label, count }: { label: string; count?: number | string }) {
+function SectionHeader({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 px-4 pt-2 pb-1">
       <span className="ui-section-label">{label}</span>
-      {count != null && <span className="ui-section-count ml-auto">{count}</span>}
     </div>
   );
 }
@@ -141,6 +140,8 @@ function ShelfRow({
 }) {
   const [hovered, setHovered] = useState(false);
 
+  const showTrailingControls = hovered || pinned;
+
   return (
     <Link
       to={to}
@@ -152,58 +153,63 @@ function ShelfRow({
       onMouseLeave={() => setHovered(false)}
     >
       <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
-      <div className="min-w-0 flex-1">
+      <div className={[
+        'min-w-0 flex-1',
+        showTrailingControls && 'pr-11',
+      ].filter(Boolean).join(' ')}>
         <p className="ui-row-title truncate">{title}</p>
         {meta && <p className="ui-sidebar-session-meta truncate">{meta}</p>}
       </div>
-      <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
-        {!hovered && pinned ? <PinnedIndicator /> : null}
-        {hovered && pinned && onUnpin ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onUnpin();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Unpin"
-            aria-label="Unpin"
-          >
-            <Ico d={PATH.unpin} size={10} />
-          </button>
-        ) : null}
-        {hovered && !pinned && onPin ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onPin();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Pin"
-            aria-label="Pin"
-          >
-            <Ico d={PATH.pin} size={10} />
-          </button>
-        ) : null}
-        {hovered && !pinned && onClose ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onClose();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Close"
-            aria-label="Close"
-          >
-            <Ico d={PATH.close} size={10} />
-          </button>
-        ) : null}
-      </div>
+      {showTrailingControls ? (
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          {!hovered && pinned ? <PinnedIndicator /> : null}
+          {hovered && pinned && onUnpin ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onUnpin();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Unpin"
+              aria-label="Unpin"
+            >
+              <Ico d={PATH.unpin} size={10} />
+            </button>
+          ) : null}
+          {hovered && !pinned && onPin ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onPin();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Pin"
+              aria-label="Pin"
+            >
+              <Ico d={PATH.pin} size={10} />
+            </button>
+          ) : null}
+          {hovered && !pinned && onClose ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onClose();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Close"
+              aria-label="Close"
+            >
+              <Ico d={PATH.close} size={10} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </Link>
   );
 }
@@ -226,6 +232,8 @@ function OpenConversationRow({
   const [hovered, setHovered] = useState(false);
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
 
+  const showTrailingControls = hovered || pinned;
+
   return (
     <Link
       to={`/conversations/${session.id}`}
@@ -237,7 +245,10 @@ function OpenConversationRow({
       onMouseLeave={() => setHovered(false)}
     >
       <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
-      <div className="min-w-0 flex-1">
+      <div className={[
+        'min-w-0 flex-1',
+        showTrailingControls && 'pr-11',
+      ].filter(Boolean).join(' ')}>
         <p className="ui-row-title truncate">{session.title}</p>
         <p className="ui-sidebar-session-meta flex items-center gap-1.5 min-w-0">
           <span className="shrink-0">{timeAgo(session.timestamp)}</span>
@@ -255,54 +266,56 @@ function OpenConversationRow({
           )}
         </p>
       </div>
-      <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
-        {!hovered && pinned ? <PinnedIndicator /> : null}
-        {hovered && pinned && onUnpin ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onUnpin();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Unpin"
-            aria-label="Unpin"
-          >
-            <Ico d={PATH.unpin} size={10} />
-          </button>
-        ) : null}
-        {hovered && !pinned && onPin ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onPin();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Pin"
-            aria-label="Pin"
-          >
-            <Ico d={PATH.pin} size={10} />
-          </button>
-        ) : null}
-        {hovered && !pinned && onClose ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onClose();
-            }}
-            className="ui-icon-button ui-icon-button-compact"
-            title="Close"
-            aria-label="Close"
-          >
-            <Ico d={PATH.close} size={10} />
-          </button>
-        ) : null}
-      </div>
+      {showTrailingControls ? (
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          {!hovered && pinned ? <PinnedIndicator /> : null}
+          {hovered && pinned && onUnpin ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onUnpin();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Unpin"
+              aria-label="Unpin"
+            >
+              <Ico d={PATH.unpin} size={10} />
+            </button>
+          ) : null}
+          {hovered && !pinned && onPin ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onPin();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Pin"
+              aria-label="Pin"
+            >
+              <Ico d={PATH.pin} size={10} />
+            </button>
+          ) : null}
+          {hovered && !pinned && onClose ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onClose();
+              }}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Close"
+              aria-label="Close"
+            >
+              <Ico d={PATH.close} size={10} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </Link>
   );
 }
@@ -703,7 +716,7 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
-        <SectionHeader label="Open Conversations" count={loading ? '…' : openConversationItems.length} />
+        <SectionHeader label="Open Conversations" />
         <div className="py-1 space-y-0.5">
           {!loading && openConversationItems.length === 0 ? <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p> : null}
           {openConversationItems.map(({ session, pinned }) => {
@@ -724,7 +737,7 @@ export function Sidebar() {
 
         {openNotes.length > 0 && (
           <>
-            <SectionHeader label="Open Notes" count={openNotes.length} />
+            <SectionHeader label="Open Notes" />
             <div className="py-1 space-y-0.5">
               {openNotes.map((item) => {
                 const note = notesById.get(item.id) ?? null;
@@ -748,7 +761,7 @@ export function Sidebar() {
 
         {openProjects.length > 0 && (
           <>
-            <SectionHeader label="Open Projects" count={openProjects.length} />
+            <SectionHeader label="Open Projects" />
             <div className="py-1 space-y-0.5">
               {openProjects.map((item) => {
                 const project = projectsById.get(item.id) ?? null;
@@ -772,7 +785,7 @@ export function Sidebar() {
 
         {openSkills.length > 0 && (
           <>
-            <SectionHeader label="Open Skills" count={openSkills.length} />
+            <SectionHeader label="Open Skills" />
             <div className="py-1 space-y-0.5">
               {openSkills.map((item) => {
                 const skill = skillsByName.get(item.id) ?? null;
@@ -796,7 +809,7 @@ export function Sidebar() {
 
         {openWorkspaces.length > 0 && (
           <>
-            <SectionHeader label="Open Workspaces" count={openWorkspaces.length} />
+            <SectionHeader label="Open Workspaces" />
             <div className="py-1 space-y-0.5">
               {openWorkspaces.map((item) => (
                 <ShelfRow
