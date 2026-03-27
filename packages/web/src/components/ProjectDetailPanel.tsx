@@ -55,9 +55,15 @@ interface DetailSectionProps {
 }
 
 function previewLine(value: string): string | null {
-  for (const rawLine of value.split('\n')) {
-    const trimmed = rawLine.trim();
+  const lines = value.split('\n');
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]?.trim() ?? '';
     if (trimmed.length === 0) {
+      continue;
+    }
+
+    if (index === 0 && trimmed.startsWith('# ')) {
       continue;
     }
 
@@ -69,6 +75,15 @@ function previewLine(value: string): string | null {
   }
 
   return null;
+}
+
+function clampPreview(value: string, maxLength = 120): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
 function createDefaultProjectDocument(title: string): string {
@@ -105,7 +120,7 @@ function DetailSection({
   collapsedPreview,
   resetKey,
 }: DetailSectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(defaultOpen || forceOpen);
   const contentId = `${id}-content`;
 
   useEffect(() => {
@@ -152,11 +167,13 @@ function DetailSection({
 export function ProjectDetailPanel({
   project,
   activeProfile,
+  selectedView,
   onChanged,
   onDeleted,
 }: {
   project: ProjectDetail;
   activeProfile?: string;
+  selectedView?: string;
   onChanged?: () => void;
   onDeleted?: (projectId: string) => void;
 }) {
@@ -169,12 +186,12 @@ export function ProjectDetailPanel({
   const documentRecord = project.document ?? project.brief;
   const taskCount = project.taskCount ?? project.tasks.length;
   const noteCount = project.noteCount ?? project.notes.length;
-  const fileCount = project.fileCount ?? project.files.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
+  const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
   const taskDoneCount = project.tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
   const taskOpenCount = Math.max(0, project.tasks.length - taskDoneCount);
+  const projectSummary = record.summary.trim() || record.description.trim();
   const documentPreview = previewLine(documentRecord?.content ?? '')
-    || record.summary.trim()
-    || record.description.trim()
+    || projectSummary
     || 'No project doc yet.';
   const tasksPreview = taskCount > 0
     ? `${taskOpenCount} open · ${taskDoneCount} done`
@@ -188,9 +205,15 @@ export function ProjectDetailPanel({
   const filesPreview = fileCount > 0
     ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
     : 'No files yet.';
-  const linksPreview = project.links && (project.links.outgoing.length > 0 || project.links.incoming.length > 0)
-    ? `${project.links.outgoing.length} outgoing · ${project.links.incoming.length} backlinks`
-    : 'No linked nodes yet.';
+  const outgoingLinkCount = project.links?.outgoing.length ?? 0;
+  const incomingLinkCount = project.links?.incoming.length ?? 0;
+  const unresolvedLinkCount = project.links?.unresolved.length ?? 0;
+  const hasDerivedLinks = outgoingLinkCount > 0 || incomingLinkCount > 0 || unresolvedLinkCount > 0;
+  const linksPreview = [
+    outgoingLinkCount > 0 ? `${outgoingLinkCount} outgoing` : null,
+    incomingLinkCount > 0 ? `${incomingLinkCount} backlinks` : null,
+    unresolvedLinkCount > 0 ? `${unresolvedLinkCount} unresolved` : null,
+  ].filter(Boolean).join(' · ');
   const projectApiOptions = { profile: projectProfile };
 
   const [editingProject, setEditingProject] = useState(false);
@@ -641,7 +664,7 @@ export function ProjectDetailPanel({
               </div>
               <div className="space-y-2">
                 <h1 className="text-[32px] font-medium leading-tight tracking-tight text-primary">{record.title}</h1>
-                {record.summary.trim() && <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">{record.summary}</p>}
+                {projectSummary && <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">{projectSummary}</p>}
                 {record.repoRoot && <p className="ui-card-meta font-mono break-all">{record.repoRoot}</p>}
               </div>
             </div>
@@ -663,11 +686,23 @@ export function ProjectDetailPanel({
             </p>
           )}
 
+          <div className="grid gap-x-6 gap-y-4 border-y border-border-subtle py-4 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              ['Doc', clampPreview(documentPreview, 140)],
+              ['Tasks', tasksPreview],
+              ['Activity', activityPreview],
+              ['Notes', notesPreview],
+              ['Files', filesPreview],
+            ].map(([label, value]) => (
+              <div key={label} className="space-y-1.5">
+                <p className="ui-section-label">{label}</p>
+                <p className="text-[13px] leading-relaxed text-primary">{value}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="ui-card-meta">{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
-            <span className="ui-card-meta">{noteCount} {noteCount === 1 ? 'note' : 'notes'}</span>
-            <span className="ui-card-meta">{fileCount} {fileCount === 1 ? 'file' : 'files'}</span>
-            <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}</span>
+            <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation linked' : 'conversations linked'}</span>
           </div>
 
           {(archiveError || deleteError) && <p className="text-[12px] text-danger">{archiveError ?? deleteError}</p>}
@@ -679,7 +714,7 @@ export function ProjectDetailPanel({
         title="Project doc"
         collapsible
         defaultOpen
-        forceOpen={documentEditing}
+        forceOpen={documentEditing || selectedView === 'document'}
         collapsedPreview={documentPreview}
         resetKey={record.id}
         actions={(
@@ -706,6 +741,7 @@ export function ProjectDetailPanel({
       >
         <ProjectDocumentContent
           document={documentRecord}
+          projectTitle={record.title}
           editing={documentEditing}
           content={documentContent}
           busy={documentBusy}
@@ -721,7 +757,7 @@ export function ProjectDetailPanel({
         meta={`${taskOpenCount} open · ${taskDoneCount} done`}
         collapsible
         defaultOpen
-        forceOpen={taskEditor !== null}
+        forceOpen={taskEditor !== null || selectedView === 'tasks'}
         collapsedPreview={tasksPreview}
         resetKey={record.id}
         actions={(
@@ -755,6 +791,7 @@ export function ProjectDetailPanel({
         meta={activityPreview}
         collapsible
         defaultOpen={false}
+        forceOpen={selectedView === 'activity'}
         collapsedPreview={activityPreview}
         resetKey={record.id}
       >
@@ -767,7 +804,7 @@ export function ProjectDetailPanel({
         meta={`${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`}
         collapsible
         defaultOpen={false}
-        forceOpen={noteEditor !== null}
+        forceOpen={noteEditor !== null || selectedView === 'notes'}
         collapsedPreview={notesPreview}
         resetKey={record.id}
         actions={(
@@ -793,6 +830,7 @@ export function ProjectDetailPanel({
         meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
         collapsible
         defaultOpen={false}
+        forceOpen={selectedView === 'files'}
         collapsedPreview={filesPreview}
         resetKey={record.id}
       >
@@ -804,29 +842,36 @@ export function ProjectDetailPanel({
         />
       </DetailSection>
 
-      <DetailSection
-        id="project-record"
-        title="Record"
-        collapsible
-        defaultOpen={false}
-        forceOpen={editingProject || rawProjectOpen}
-        collapsedPreview={record.summary.trim() || 'Raw project metadata and YAML.'}
-        resetKey={record.id}
-        actions={(
-          <>
-            <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
-              {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
-            </button>
-            <button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
-              {editingProject ? 'Editing…' : 'Edit project'}
-            </button>
-            <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
-              {deleteBusy ? 'Deleting…' : 'Delete project'}
-            </button>
-          </>
-        )}
-      >
-        {editingProject ? (
+      {hasDerivedLinks && (
+        <DetailSection
+          id="project-links"
+          title="Related"
+          meta={linksPreview}
+          collapsible
+          defaultOpen={false}
+          forceOpen={selectedView === 'links'}
+          collapsedPreview={linksPreview}
+          resetKey={record.id}
+        >
+          <ProjectNodeLinksContent links={project.links} />
+        </DetailSection>
+      )}
+
+      <section id="project-record" className="border-t border-border-subtle pt-6 space-y-4 scroll-mt-6">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
+            {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
+          </button>
+          <button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
+            {editingProject ? 'Editing…' : 'Edit project'}
+          </button>
+          <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
+            {deleteBusy ? 'Deleting…' : 'Delete project'}
+          </button>
+          <span className="ui-card-meta">Project metadata stays tucked away unless you need it.</span>
+        </div>
+
+        {editingProject && (
           <ProjectRecordEditorForm
             value={projectForm}
             statuses={PROJECT_STATUSES}
@@ -836,43 +881,22 @@ export function ProjectDetailPanel({
             onSubmit={handleProjectSave}
             onCancel={() => setEditingProject(false)}
           />
-        ) : (
+        )}
+
+        {rawProjectOpen && (
           <ProjectRecordViewer
             repoRoot={record.repoRoot}
             summary={record.summary}
-            rawProjectOpen={false}
+            rawProjectOpen={rawProjectOpen}
             rawProjectContent={rawProjectContent}
             rawProjectBusy={rawProjectBusy}
             rawProjectError={rawProjectError}
             onRawProjectContentChange={setRawProjectContent}
             onRawProjectSubmit={saveRawProject}
+            showSummary={false}
           />
         )}
-
-        <ProjectRecordViewer
-          repoRoot={record.repoRoot}
-          summary={record.summary}
-          rawProjectOpen={rawProjectOpen}
-          rawProjectContent={rawProjectContent}
-          rawProjectBusy={rawProjectBusy}
-          rawProjectError={rawProjectError}
-          onRawProjectContentChange={setRawProjectContent}
-          onRawProjectSubmit={saveRawProject}
-          showSummary={false}
-        />
-      </DetailSection>
-
-      <DetailSection
-        id="project-links"
-        title="Links"
-        meta={linksPreview}
-        collapsible
-        defaultOpen={false}
-        collapsedPreview={linksPreview}
-        resetKey={record.id}
-      >
-        <ProjectNodeLinksContent links={project.links} />
-      </DetailSection>
+      </section>
     </div>
   );
 }

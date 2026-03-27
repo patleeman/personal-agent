@@ -145,4 +145,14 @@ describe('ProjectDetailPanel', () => {
     expect(html).not.toContain('Dense design notes');
     expect(html).not.toContain('Tool Agent Browser');
   });
+
+  it('opens the selected secondary section when routed from the rail', () => {
+    const html = renderToString(
+      <MemoryRouter>
+        <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" selectedView="activity" />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Project doc updated');
+  });
 });

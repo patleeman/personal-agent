@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { ProjectPlanOverview, ProjectRequirementsContent } from './ProjectDetailSections.js';
+import { ProjectActivityContent, ProjectDocumentContent, ProjectPlanOverview, ProjectRequirementsContent } from './ProjectDetailSections.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -31,5 +31,49 @@ describe('ProjectDetailSections markdown rendering', () => {
     const footnoteIds = Array.from(html.matchAll(/id="([^"]*fn-1)"/g), (match) => match[1]);
     expect(footnoteIds.length).toBeGreaterThanOrEqual(2);
     expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
+  });
+
+  it('strips the redundant leading project title heading from the rendered doc', () => {
+    const html = renderToString(
+      <ProjectDocumentContent
+        document={{
+          path: '/tmp/project/INDEX.md',
+          updatedAt: '2026-03-27T04:00:00.000Z',
+          content: '# Bloodhound prototype\n\nShip a tight prototype that proves whether proactive help feels useful.',
+        }}
+        projectTitle="Bloodhound prototype"
+        editing={false}
+        content=""
+        busy={false}
+        error={null}
+        onChange={() => undefined}
+        onSubmit={(event) => event.preventDefault()}
+      />,
+    );
+
+    expect(html).not.toContain('<h1>Bloodhound prototype</h1>');
+    expect(html).toContain('Ship a tight prototype that proves whether proactive help feels useful.');
+  });
+
+  it('renders activity rows without duplicating relative timestamps', () => {
+    const html = renderToString(
+      <ProjectActivityContent
+        items={[
+          {
+            id: 'timeline:document:1',
+            kind: 'timeline',
+            entry: {
+              id: 'document:1',
+              kind: 'document',
+              createdAt: '2026-03-27T14:15:00.000Z',
+              title: 'Project doc updated',
+            },
+          },
+        ]}
+      />,
+    );
+
+    expect(html).toContain('Project doc updated');
+    expect(html).not.toContain('ago');
   });
 });
