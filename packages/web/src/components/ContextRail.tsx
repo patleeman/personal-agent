@@ -217,7 +217,7 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cx('space-y-3 border-t border-border-subtle/70 pt-4 first:border-t-0 first:pt-0', className)}>
+    <section className={cx('mt-4 space-y-3 border-t border-border-subtle/70 pt-4 first:mt-0 first:border-t-0 first:pt-0', className)}>
       <p className="ui-section-label">{title}</p>
       <div className="space-y-3">{children}</div>
     </section>
