@@ -259,7 +259,7 @@
   }
 
   .ui-row-title {
-    @apply text-[13px] text-primary leading-snug;
+    @apply text-[13px] font-medium text-primary leading-snug;
   }
 
   .ui-row-title-mono {
@@ -267,7 +267,7 @@
   }
 
   .ui-row-summary {
-    @apply text-[12px] text-secondary mt-0.5 leading-snug;
+    @apply mt-1 text-[12px] leading-relaxed text-dim/90;
   }
 
   .ui-row-meta {
