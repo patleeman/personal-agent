@@ -101,6 +101,26 @@ function withViewProfile(path: string, profile?: string): string {
   return `${path}${separator}viewProfile=${encodeURIComponent(profile)}`;
 }
 
+const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
+
+function buildMemoryRequestKey(options?: { profile?: string }): string {
+  return options?.profile?.trim() || '__current__';
+}
+
+async function getMemoryData(options?: { profile?: string }): Promise<MemoryData> {
+  const cacheKey = buildMemoryRequestKey(options);
+  const pending = pendingMemoryRequests.get(cacheKey);
+  if (pending) {
+    return pending;
+  }
+
+  const request = get<MemoryData>(withViewProfile('/memory', options?.profile)).finally(() => {
+    pendingMemoryRequests.delete(cacheKey);
+  });
+  pendingMemoryRequests.set(cacheKey, request);
+  return request;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
@@ -365,7 +385,7 @@ export const api = {
     post<WorkspaceFileDetail>('/workspace/file', { path, content, cwd }),
 
   // ── Memory browser ────────────────────────────────────────────────────────
-  memory:         (options?: { profile?: string }) => get<MemoryData>(withViewProfile('/memory', options?.profile)),
+  memory:         (options?: { profile?: string }) => getMemoryData(options),
   memoryFile:     (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
   memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 

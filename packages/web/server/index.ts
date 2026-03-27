@@ -671,6 +671,8 @@ async function setCurrentProfile(profile: string): Promise<string> {
     });
   }
   writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
+  clearMemoryBrowserCaches();
+  warmMemoryBrowserCaches(profile);
   await syncDaemonTaskScopeForProfile(profile);
   invalidateAppTopics(
     'activity',
@@ -10102,7 +10104,8 @@ function extractMemorySearchText(filePaths: string[], maxCharacters = 16_000): s
 
 let memoryMigrationAttempted = false;
 const MEMORY_DOCS_CACHE_TTL_MS = 10_000;
-const RECENT_READ_USAGE_CACHE_TTL_MS = 10_000;
+const RECENT_READ_USAGE_CACHE_TTL_MS = 60_000;
+const RECENT_READ_USAGE_SESSION_SCAN_LIMIT = 20;
 const memoryDocsCache = new Map<'with-search' | 'without-search', { expiresAt: number; value: MemoryDocItem[] }>();
 let recentReadUsageCache: { expiresAt: number; key: string; value: Map<string, MemoryUsageSummary> } | null = null;
 
@@ -10444,7 +10447,7 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
   const recentWindowStart = Date.now() - (7 * 24 * 60 * 60 * 1000);
   const latestSessionId = sessions[0]?.id;
 
-  for (const session of sessions.slice(0, 60)) {
+  for (const session of sessions.slice(0, RECENT_READ_USAGE_SESSION_SCAN_LIMIT)) {
     const detail = readSessionBlocks(session.id);
     if (!detail) {
       continue;
@@ -10498,6 +10501,22 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
   };
 
   return usageMap;
+}
+
+function warmMemoryBrowserCaches(profile = getCurrentProfile()): void {
+  try {
+    const skills = listSkillsForProfile(profile);
+    const memoryDocs = listMemoryDocs();
+    buildRecentReadUsage([
+      ...skills.map((item) => item.path),
+      ...memoryDocs.map((item) => item.path),
+    ]);
+  } catch (err) {
+    logWarn('failed to warm memory browser caches', {
+      profile,
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 app.get('/api/memory', (req, res) => {
@@ -12025,6 +12044,8 @@ if (existsSync(DIST_DIR)) {
     );
   });
 }
+
+warmMemoryBrowserCaches();
 
 app.listen(PORT, LOOPBACK_HOST, () => {
   logInfo('web ui started', {
