@@ -23,8 +23,20 @@ export function pickAttachProjectId(
 }
 
 export function formatProjectStatus(status: string | undefined): string {
-  const normalized = (status ?? '').replace(/[-_]+/g, ' ').trim();
-  return normalized.length > 0 ? normalized : 'unknown';
+  switch ((status ?? '').trim()) {
+    case 'active': return 'active';
+    case 'paused': return 'paused';
+    case 'done': return 'done';
+    case 'created': return 'active';
+    case 'in_progress': return 'active';
+    case 'blocked': return 'paused';
+    case 'completed': return 'done';
+    case 'cancelled': return 'done';
+    default: {
+      const normalized = (status ?? '').replace(/[-_]+/g, ' ').trim();
+      return normalized.length > 0 ? normalized : 'unknown';
+    }
+  }
 }
 
 export function isProjectArchived(project: Pick<ProjectRecord, 'archivedAt'>): boolean {
@@ -64,29 +76,15 @@ export function pickCurrentMilestone(plan: ProjectPlan): ProjectMilestone | unde
   return plan.milestones[0];
 }
 
-export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'currentFocus' | 'blockers' | 'description' | 'requirements'>): string {
-  const currentFocus = project.currentFocus?.trim();
-  if (currentFocus) {
-    return currentFocus;
-  }
-
+export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'description'>): string {
   const summary = project.summary.trim();
   if (summary.length > 0) {
     return summary;
   }
 
-  const goal = project.requirements.goal.trim();
-  if (goal.length > 0) {
-    return goal;
-  }
-
   const description = project.description.trim();
   if (description.length > 0) {
     return description;
-  }
-
-  if (hasMeaningfulBlockers(project.blockers)) {
-    return `Blocked: ${project.blockers[0]}`;
   }
 
   return 'No summary yet.';

@@ -2,7 +2,7 @@ export const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 export const PROJECT_VIEW_QUERY_PARAM = 'view';
 
 export function readProjectView(search: string): string {
-  return new URLSearchParams(search).get(PROJECT_VIEW_QUERY_PARAM)?.trim() || 'overview';
+  return new URLSearchParams(search).get(PROJECT_VIEW_QUERY_PARAM)?.trim() || 'document';
 }
 
 export function buildProjectsHref(profile: string | 'all', projectId?: string, view?: string | null): string {
@@ -17,15 +17,13 @@ export function buildProjectsHref(profile: string | 'all', projectId?: string, v
 
 export function projectViewToSectionId(view: string): string | null {
   switch (view) {
-    case 'requirements': return 'project-requirements';
-    case 'plan': return 'project-plan';
-    case 'completion': return 'project-completion';
-    case 'timeline': return 'project-timeline';
-    case 'handoff': return 'project-handoff';
-    case 'record': return 'project-record';
-    case 'links': return 'project-links';
+    case 'document': return 'project-document';
+    case 'tasks': return 'project-tasks';
+    case 'activity': return 'project-activity';
     case 'notes': return 'project-notes';
     case 'files': return 'project-files';
+    case 'record': return 'project-record';
+    case 'links': return 'project-links';
     default: return null;
   }
 }

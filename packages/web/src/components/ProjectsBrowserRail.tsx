@@ -83,7 +83,7 @@ export function ProjectsBrowserRail() {
         {profileState && (
           <select
             value={effectiveViewProfile ?? profileState.currentProfile}
-            onChange={(event) => navigate(buildProjectsHref(event.target.value === 'all' ? 'all' : event.target.value, selectedProjectId ?? undefined, selectedView === 'overview' ? null : selectedView))}
+            onChange={(event) => navigate(buildProjectsHref(event.target.value === 'all' ? 'all' : event.target.value, selectedProjectId ?? undefined, selectedView === 'document' ? null : selectedView))}
             className={INPUT_CLASS}
           >
             <option value="all">All profiles</option>
@@ -160,20 +160,17 @@ export function ProjectsBrowserRail() {
             <p className="ui-section-label">Sections</p>
             <div className="space-y-px">
               {[
-                ['overview', 'Overview', 'Project summary and current state'],
-                ['requirements', 'Requirements', 'Goal and definition of done'],
-                ['plan', 'Plan', 'Milestones, tasks, blockers, and progress'],
-                ['completion', 'Completion', 'What shipped and what changed'],
-                ['timeline', 'Timeline', 'Activity and linked conversations'],
-                ['handoff', 'Handoff', 'Narrative project brief'],
+                ['document', 'Doc', 'Main project note and plan'],
+                ['tasks', 'Tasks', 'Flat project todo list'],
+                ['activity', 'Activity', 'Tiny recent log'],
+                ['notes', 'Notes', 'Project notes, decisions, and questions'],
+                ['files', 'Files', 'All attached project files'],
                 ['record', 'Record', 'Structured project metadata'],
                 ['links', 'Links', 'Relationships with other nodes'],
-                ['notes', 'Notes', 'Project notes, decisions, and questions'],
-                ['files', 'Files', 'Attachments and artifacts'],
               ].map(([view, label, summary]) => (
                 <ListLinkRow
                   key={view}
-                  to={buildProjectsHref(effectiveViewProfile ?? selectedProject.profile ?? 'shared', selectedProject.id, view === 'overview' ? null : view)}
+                  to={buildProjectsHref(effectiveViewProfile ?? selectedProject.profile ?? 'shared', selectedProject.id, view === 'document' ? null : view)}
                   selected={selectedView === view}
                 >
                   <p className="ui-row-title">{label}</p>

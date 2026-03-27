@@ -208,7 +208,7 @@ export interface ProjectNote {
 
 export interface ProjectFile {
   id: string;
-  kind: 'attachment' | 'artifact';
+  kind?: 'attachment' | 'artifact';
   path: string;
   title: string;
   description?: string;
@@ -218,6 +218,7 @@ export interface ProjectFile {
   createdAt: string;
   updatedAt: string;
   downloadPath: string;
+  sourceKind?: 'file' | 'attachment' | 'artifact';
 }
 
 export interface ProjectLinkedConversation {
@@ -233,10 +234,9 @@ export interface ProjectLinkedConversation {
 
 export interface ProjectTimelineEntry {
   id: string;
-  kind: 'brief' | 'note' | 'attachment' | 'artifact' | 'conversation' | 'activity';
+  kind: 'project' | 'document' | 'task' | 'note' | 'file' | 'conversation' | 'activity';
   createdAt: string;
   title: string;
-  description?: string;
   href?: string;
 }
 
@@ -245,11 +245,14 @@ export interface ProjectDetail {
   project: ProjectRecord;
   taskCount: number;
   noteCount: number;
+  fileCount: number;
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
+  document: ProjectBrief | null;
   brief: ProjectBrief | null;
   notes: ProjectNote[];
+  files: ProjectFile[];
   attachments: ProjectFile[];
   artifacts: ProjectFile[];
   linkedConversations: ProjectLinkedConversation[];

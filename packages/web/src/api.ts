@@ -174,32 +174,18 @@ export const api = {
   projectById:  (id: string, options?: { profile?: string }) => get<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
   createProject: (input: {
     title: string;
-    description: string;
+    description?: string;
+    documentContent?: string;
     repoRoot?: string | null;
     summary?: string;
-    goal?: string;
-    acceptanceCriteria?: string[];
-    planSummary?: string;
-    completionSummary?: string | null;
     status?: string;
-    currentFocus?: string | null;
-    blockers?: string[];
-    recentProgress?: string[];
   }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile('/projects', options?.profile), input),
   updateProject: (id: string, patchBody: {
     title?: string;
-    description?: string;
     repoRoot?: string | null;
     summary?: string;
-    goal?: string;
-    acceptanceCriteria?: string[];
-    planSummary?: string | null;
-    completionSummary?: string | null;
     status?: string;
-    currentFocus?: string | null;
     currentMilestoneId?: string | null;
-    blockers?: string[];
-    recentProgress?: string[];
   }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile), patchBody),
   deleteProject: (id: string, options?: { profile?: string }) =>
     del<{ ok: true; deletedProjectId: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
@@ -237,23 +223,26 @@ export const api = {
     post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, options?.profile), { direction }),
   projectSource: (id: string, options?: { profile?: string }) => get<{ path: string; content: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile)),
   saveProjectSource: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile), { content }),
-  saveProjectBrief: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/brief`, options?.profile), { content }),
-  regenerateProjectBrief: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/brief/regenerate`, options?.profile), {}),
+  saveProjectDocument: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/document`, options?.profile), { content }),
+  regenerateProjectDocument: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/document/regenerate`, options?.profile), {}),
   createProjectNote: (id: string, input: { title: string; kind: string; body?: string }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes`, options?.profile), input),
   updateProjectNote: (id: string, noteId: string, input: { title?: string; kind?: string; body?: string }, options?: { profile?: string }) =>
     patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, options?.profile), input),
   deleteProjectNote: (id: string, noteId: string, options?: { profile?: string }) =>
     del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, options?.profile)),
   uploadProjectFile: (id: string, input: {
-    kind: 'attachment' | 'artifact';
+    kind?: 'attachment' | 'artifact';
     name: string;
     mimeType?: string;
     title?: string;
     description?: string;
     data: string;
   }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files`, options?.profile), input),
-  deleteProjectFile: (id: string, kind: 'attachment' | 'artifact', fileId: string, options?: { profile?: string }) =>
-    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files/${kind}/${encodeURIComponent(fileId)}`, options?.profile)),
+  deleteProjectFile: (id: string, kindOrFileId: string, fileIdOrOptions?: string | { profile?: string }, maybeOptions?: { profile?: string }) => {
+    const fileId = typeof fileIdOrOptions === 'string' ? fileIdOrOptions : kindOrFileId;
+    const options = (typeof fileIdOrOptions === 'string' ? maybeOptions : fileIdOrOptions);
+    return del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`, options?.profile));
+  },
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 

@@ -91,7 +91,8 @@ function stripProjectRepoRoot(project: ProjectDocument): ProjectSharePackageProj
 
 function serializeFile(record: {
   id: string;
-  kind: 'attachment' | 'artifact';
+  kind?: 'attachment' | 'artifact';
+  sourceKind?: 'file' | 'attachment' | 'artifact';
   path: string;
   title: string;
   description?: string;
@@ -101,9 +102,11 @@ function serializeFile(record: {
   createdAt: string;
   updatedAt: string;
 }): ProjectSharePackageFile {
+  const kind = record.kind ?? (record.sourceKind === 'artifact' ? 'artifact' : 'attachment');
+
   return {
     id: record.id,
-    kind: record.kind,
+    kind,
     title: record.title,
     description: record.description,
     originalName: record.originalName,

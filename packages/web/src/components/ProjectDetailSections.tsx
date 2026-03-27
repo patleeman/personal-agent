@@ -2,17 +2,16 @@ import { useId, useMemo, type FormEventHandler, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { formatProjectStatus } from '../contextRailProject';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { timeAgo } from '../utils';
 import { InlineMarkdownCode } from './MarkdownInlineCode';
-import { summarizeActivityPreview, type ProjectActivityItemShape } from './projectDetailState';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
-import { EmptyState, Pill, ToolbarButton } from './ui';
+import { EmptyState, ToolbarButton } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import { buildMentionLookup, renderChildrenWithMentionLinks } from '../mentionRendering';
 import { useNodeMentionItems } from '../useNodeMentionItems';
+import type { ProjectActivityItemShape } from './projectDetailState';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 
@@ -56,35 +55,29 @@ export function ProjectRequirementsContent({
   fallbackContent: string;
   acceptanceCriteria: string[];
 }) {
-  return (
-    <div className="max-w-5xl space-y-6">
-      {goal.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="ui-card-meta">Goal</p>
-          <ProjectMarkdown body={goal} className="ui-markdown max-w-none" />
-        </div>
-      ) : fallbackContent.length > 0 ? (
-        <ProjectMarkdown body={fallbackContent} className="ui-markdown max-w-none" />
-      ) : (
-        <EmptyState
-          title="No requirements yet."
-          body="Add a goal and acceptance criteria so the project has a clear definition of done."
-          className="max-w-3xl py-8"
-        />
-      )}
+  const content = goal.trim() || fallbackContent.trim();
+  if (!content && acceptanceCriteria.length === 0) {
+    return (
+      <EmptyState
+        title="No project doc yet."
+        body="Write a short project note so future work has durable context."
+        className="max-w-3xl py-8"
+      />
+    );
+  }
 
+  return (
+    <div className="max-w-5xl space-y-5">
+      {content && <ProjectMarkdown body={content} className="ui-markdown max-w-none" />}
       {acceptanceCriteria.length > 0 && (
-        <div className="space-y-2">
-          <p className="ui-card-meta">Acceptance criteria</p>
-          <ul className="space-y-1.5">
-            {acceptanceCriteria.map((item) => (
-              <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                <span className="mt-[2px] shrink-0 text-success">✓</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="space-y-1.5">
+          {acceptanceCriteria.map((item) => (
+            <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
+              <span className="mt-[2px] shrink-0 text-success">✓</span>
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -95,65 +88,33 @@ export function ProjectPlanOverview({
   currentFocus,
   blockers,
   recentProgress,
-  pct,
 }: {
   planContent: string;
   currentFocus: string;
   blockers: string[];
   recentProgress: string[];
-  pct: number;
+  pct?: number;
 }) {
   return (
-    <>
-      {planContent.length > 0 && (
-        <ProjectMarkdown body={planContent} className="ui-markdown max-w-none" />
-      )}
-
-      {(currentFocus || blockers.length > 0 || recentProgress.length > 0) && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <div className="space-y-5">
-            {currentFocus && (
-              <div className="space-y-1.5">
-                <p className="ui-card-meta">Current focus</p>
-                <p className="ui-card-body">{currentFocus}</p>
-              </div>
-            )}
-
-            {blockers.length > 0 && (
-              <div className="space-y-2">
-                <p className="ui-card-meta">Blockers</p>
-                <ul className="space-y-1.5">
-                  {blockers.map((blocker) => (
-                    <li key={blocker} className="flex items-start gap-2 text-[14px] leading-relaxed text-warning">
-                      <span className="mt-[2px] shrink-0">⚠</span>
-                      <span>{blocker}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {recentProgress.length > 0 && (
-            <div className="space-y-2">
-              <p className="ui-card-meta">Recent progress</p>
-              <ul className="space-y-1.5">
-                {recentProgress.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                    <span className="mt-[2px] shrink-0 text-success">✓</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+    <div className="max-w-5xl space-y-5">
+      {planContent.trim() && <ProjectMarkdown body={planContent} className="ui-markdown max-w-none" />}
+      {currentFocus.trim() && (
+        <div className="space-y-1.5">
+          <p className="ui-card-meta">Current focus</p>
+          <p className="ui-card-body">{currentFocus}</p>
         </div>
       )}
-
-      <div className="h-1 rounded-full bg-base overflow-hidden">
-        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-      </div>
-    </>
+      {blockers.length > 0 && (
+        <ul className="space-y-1.5">
+          {blockers.map((item) => <li key={item} className="text-[14px] text-warning">{item}</li>)}
+        </ul>
+      )}
+      {recentProgress.length > 0 && (
+        <ul className="space-y-1.5">
+          {recentProgress.map((item) => <li key={item} className="text-[14px] text-secondary">{item}</li>)}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -164,38 +125,23 @@ export function ProjectCompletionContent({
   status: string;
   content: string;
 }) {
-  if (content.length > 0) {
-    return (
-      <div className="max-w-5xl space-y-5">
-        <ProjectMarkdown body={content} className="ui-markdown max-w-none" />
-      </div>
-    );
+  if (content.trim()) {
+    return <ProjectMarkdown body={content} className="ui-markdown max-w-none" />;
   }
 
   return (
-    <div className="max-w-5xl space-y-5">
-      <EmptyState
-        title="No completion summary yet."
-        body={status === 'completed'
-          ? 'Capture what shipped, what changed, and any follow-up work.'
-          : 'Use this section once the project is done to summarize the outcome.'}
-        className="max-w-3xl py-8"
-      />
-    </div>
+    <EmptyState
+      title="No completion notes yet."
+      body={status === 'done' || status === 'completed' ? 'Capture what shipped and any follow-up context.' : 'Use this area later if you want to summarize the outcome.'}
+      className="max-w-3xl py-8"
+    />
   );
 }
 
-const TIMELINE_DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-});
+const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+const TIME_FORMAT = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
 
-const TIMELINE_TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
-  hour: 'numeric',
-  minute: '2-digit',
-});
-
-function parseTimelineDate(value: string | undefined): Date | null {
+function parseDate(value: string | undefined): Date | null {
   if (!value) {
     return null;
   }
@@ -204,43 +150,28 @@ function parseTimelineDate(value: string | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatTimelineDay(value: string | undefined): string | null {
-  const parsed = parseTimelineDate(value);
-  return parsed ? TIMELINE_DAY_FORMAT.format(parsed) : null;
+function dayLabel(value: string | undefined): string | null {
+  const parsed = parseDate(value);
+  return parsed ? DAY_FORMAT.format(parsed) : null;
 }
 
-function formatTimelineTime(value: string | undefined): string | null {
-  const parsed = parseTimelineDate(value);
-  return parsed ? TIMELINE_TIME_FORMAT.format(parsed) : null;
+function timeLabel(value: string | undefined): string {
+  const parsed = parseDate(value);
+  return parsed ? TIME_FORMAT.format(parsed) : '—';
 }
 
-function timelineTimestamp(item: ProjectActivityItemShape): string | undefined {
+function itemTimestamp(item: ProjectActivityItemShape): string | undefined {
   return item.kind === 'conversation' ? item.conversation.lastActivityAt : item.entry.createdAt;
 }
 
-function timelineMarkerClass(item: ProjectActivityItemShape): string {
-  if (item.kind === 'conversation') {
-    return 'bg-teal';
-  }
-
-  switch (item.entry.kind) {
-    case 'brief':
-      return 'bg-accent';
-    case 'artifact':
-      return 'bg-steel';
-    case 'attachment':
-      return 'bg-secondary';
-    case 'activity':
-      return 'bg-warning';
-    default:
-      return 'bg-border-default';
-  }
+function itemTitle(item: ProjectActivityItemShape): string {
+  return item.kind === 'conversation' ? item.conversation.title : item.entry.title;
 }
 
-function timelinePreview(item: ProjectActivityItemShape): string | undefined {
+function itemHref(item: ProjectActivityItemShape): string | undefined {
   return item.kind === 'conversation'
-    ? summarizeActivityPreview(item.conversation.snippet, 180)
-    : summarizeActivityPreview(item.entry.description, 180);
+    ? `/conversations/${encodeURIComponent(item.conversation.conversationId)}`
+    : item.entry.href;
 }
 
 export function ProjectActivityContent({
@@ -252,88 +183,47 @@ export function ProjectActivityContent({
     return (
       <div className="max-w-5xl py-4">
         <EmptyState
-          title="No project timeline yet."
-          body="Conversations, notes, brief updates, and uploaded resources will collect here as the project moves forward."
+          title="No activity yet."
+          body="Notes, files, document edits, and linked conversations will show up here."
           className="max-w-3xl py-8"
         />
       </div>
     );
   }
 
+  let lastDay = '';
+
   return (
-    <div className="max-w-5xl relative">
-      <div className="pointer-events-none absolute bottom-4 left-[7.25rem] top-4 hidden w-px -translate-x-1/2 bg-border-subtle sm:block" aria-hidden="true" />
-      <div>
-        {items.map((item) => {
-          const at = timelineTimestamp(item);
-          const dayLabel = formatTimelineDay(at);
-          const timeLabel = formatTimelineTime(at);
-          const preview = timelinePreview(item);
+    <div className="max-w-5xl space-y-1">
+      {items.map((item) => {
+        const at = itemTimestamp(item);
+        const day = dayLabel(at) ?? 'Unknown day';
+        const showDay = day !== lastDay;
+        lastDay = day;
+        const href = itemHref(item);
+        const title = itemTitle(item);
 
-          if (item.kind === 'conversation') {
-            const conversation = item.conversation;
-            return (
-              <article key={item.id} className="grid gap-2 py-4 sm:grid-cols-[5.5rem_1.5rem_minmax(0,1fr)] sm:gap-4">
-                <div className="hidden pt-0.5 text-right sm:block">
-                  <p className="text-[11px] font-mono text-secondary">{timeLabel ?? '—'}</p>
-                  {dayLabel && <p className="mt-1 text-[11px] text-dim">{dayLabel}</p>}
-                </div>
-                <div className="hidden justify-center sm:flex">
-                  <span className={`relative z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-base ${timelineMarkerClass(item)}`} />
-                </div>
-                <div className="min-w-0 space-y-1.5 pb-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <a href={`/conversations/${encodeURIComponent(conversation.conversationId)}`} className="text-[15px] font-medium text-accent hover:text-accent/75 transition-colors">
-                      {conversation.title}
-                    </a>
-                    <Pill tone="muted">conversation</Pill>
-                    {conversation.isRunning && <Pill tone="accent">live</Pill>}
-                    {conversation.needsAttention && <Pill tone="warning">attention</Pill>}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-                    <span className="font-mono">{conversation.conversationId}</span>
-                    {conversation.lastActivityAt && <span>{timeAgo(conversation.lastActivityAt)}</span>}
-                  </div>
-                  {preview && <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{preview}</p>}
-                </div>
-              </article>
-            );
-          }
-
-          const entry = item.entry;
-          return (
-            <article key={item.id} className="grid gap-2 py-4 sm:grid-cols-[5.5rem_1.5rem_minmax(0,1fr)] sm:gap-4">
-              <div className="hidden pt-0.5 text-right sm:block">
-                <p className="text-[11px] font-mono text-secondary">{timeLabel ?? '—'}</p>
-                {dayLabel && <p className="mt-1 text-[11px] text-dim">{dayLabel}</p>}
-              </div>
-              <div className="hidden justify-center sm:flex">
-                <span className={`relative z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-base ${timelineMarkerClass(item)}`} />
-              </div>
-              <div className="min-w-0 space-y-1.5 pb-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  {entry.href ? (
-                    <a href={entry.href} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
-                      {entry.title}
-                    </a>
-                  ) : (
-                    <p className="text-[14px] font-medium text-primary">{entry.title}</p>
-                  )}
-                  <Pill tone="muted">{formatProjectStatus(entry.kind)}</Pill>
-                </div>
-                <p className="ui-card-meta">{timeAgo(entry.createdAt)}</p>
-                {preview && <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{preview}</p>}
-              </div>
-            </article>
-          );
-        })}
-      </div>
+        return (
+          <div key={item.id} className="space-y-1">
+            {showDay && <p className="ui-section-label pt-3 first:pt-0">{day}</p>}
+            <div className="flex items-baseline gap-3 text-[13px] leading-relaxed">
+              <span className="w-14 shrink-0 font-mono text-secondary">{timeLabel(at)}</span>
+              {href ? (
+                <a href={href} className="min-w-0 text-accent hover:text-accent/75 transition-colors truncate">{title}</a>
+              ) : (
+                <span className="min-w-0 text-primary truncate">{title}</span>
+              )}
+              <span className="shrink-0 text-dim">{timeAgo(at ?? '')}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export function ProjectHandoffDocContent({
-  brief,
+export function ProjectDocumentContent({
+  document,
   editing,
   content,
   busy,
@@ -341,7 +231,7 @@ export function ProjectHandoffDocContent({
   onChange,
   onSubmit,
 }: {
-  brief: ProjectBrief | null;
+  document: ProjectBrief | null;
   editing: boolean;
   content: string;
   busy: boolean;
@@ -364,16 +254,46 @@ export function ProjectHandoffDocContent({
             <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save doc'}</ToolbarButton>
           </div>
         </form>
-      ) : brief ? (
-        <ProjectMarkdown body={brief.content} className="ui-markdown max-w-none" />
+      ) : document ? (
+        <ProjectMarkdown body={document.content} className="ui-markdown max-w-none" />
       ) : (
         <EmptyState
-          title="No handoff doc yet."
-          body="Use this as the human-readable handoff layer if the structured project fields are not enough."
+          title="No project doc yet."
+          body="Use the main project doc for the plan, context, and anything you want to keep with the project."
           className="max-w-3xl py-8"
         />
       )}
     </div>
+  );
+}
+
+export function ProjectHandoffDocContent({
+  brief,
+  editing,
+  content,
+  busy,
+  error,
+  onChange,
+  onSubmit,
+}: {
+  brief: ProjectBrief | null;
+  editing: boolean;
+  content: string;
+  busy: boolean;
+  error: string | null;
+  onChange: (value: string) => void;
+  onSubmit: FormEventHandler<HTMLFormElement>;
+}) {
+  return (
+    <ProjectDocumentContent
+      document={brief}
+      editing={editing}
+      content={content}
+      busy={busy}
+      error={error}
+      onChange={onChange}
+      onSubmit={onSubmit}
+    />
   );
 }
 
@@ -411,7 +331,7 @@ export function ProjectRecordViewer({
 
           {summary.trim().length > 0 && (
             <div className="space-y-1.5">
-              <p className="ui-card-meta">List summary</p>
+              <p className="ui-card-meta">Summary</p>
               <p className="ui-card-body">{summary}</p>
             </div>
           )}
@@ -485,7 +405,7 @@ export function ProjectNotesContent({
       {notes.length === 0 && !noteEditor ? (
         <EmptyState
           title="No notes yet."
-          body="Append notes, decisions, questions, or checkpoints so the project keeps useful context between conversations."
+          body="Add running notes, decisions, and questions as the project evolves."
           className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
         />
       ) : (
@@ -522,49 +442,24 @@ export function ProjectNotesContent({
 
 export function ProjectFilesContent({
   uploadForm,
-  attachments,
-  artifacts,
+  files,
   fileBusy,
   onDeleteFile,
 }: {
   uploadForm: ReactNode;
-  attachments: ProjectFile[];
-  artifacts: ProjectFile[];
+  files: ProjectFile[];
   fileBusy: boolean;
   onDeleteFile: (file: ProjectFile) => void;
 }) {
   return (
-    <div className="max-w-5xl space-y-7">
+    <div className="max-w-5xl space-y-6">
       {uploadForm}
-
-      <div className="space-y-7">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="ui-card-meta">Attachments</p>
-            <p className="ui-card-meta">{attachments.length}</p>
-          </div>
-          <div className="divide-y divide-border-subtle border-t border-border-subtle">
-            {attachments.length > 0 ? attachments.map((file) => (
-              <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
-            )) : (
-              <div className="py-4"><p className="ui-card-meta">No attachments yet.</p></div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="ui-card-meta">Artifacts</p>
-            <p className="ui-card-meta">{artifacts.length}</p>
-          </div>
-          <div className="divide-y divide-border-subtle border-t border-border-subtle">
-            {artifacts.length > 0 ? artifacts.map((file) => (
-              <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
-            )) : (
-              <div className="py-4"><p className="ui-card-meta">No project artifacts yet.</p></div>
-            )}
-          </div>
-        </div>
+      <div className="divide-y divide-border-subtle border-y border-border-subtle">
+        {files.length > 0 ? files.map((file) => (
+          <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
+        )) : (
+          <div className="py-4"><p className="ui-card-meta">No files yet.</p></div>
+        )}
       </div>
     </div>
   );

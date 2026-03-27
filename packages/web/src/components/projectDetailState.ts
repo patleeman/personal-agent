@@ -4,17 +4,9 @@ export const UNASSIGNED_TASK_KEY = '__unassigned__';
 
 export interface ProjectFormState {
   title: string;
-  description: string;
   repoRoot: string;
   summary: string;
-  goal: string;
-  acceptanceCriteria: string;
-  planSummary: string;
-  completionSummary: string;
   status: string;
-  currentFocus: string;
-  blockers: string;
-  recentProgress: string;
 }
 
 export interface MilestoneFormState {
@@ -37,7 +29,6 @@ export interface NoteFormState {
 }
 
 export interface FileUploadState {
-  kind: 'attachment' | 'artifact';
   title: string;
   description: string;
   file: File | null;
@@ -66,17 +57,9 @@ export type ProjectActivityItemShape =
 export function projectFormFromDetail(project: ProjectDetail): ProjectFormState {
   return {
     title: project.project.title,
-    description: project.project.description,
     repoRoot: project.project.repoRoot ?? '',
     summary: project.project.summary,
-    goal: project.project.requirements.goal,
-    acceptanceCriteria: project.project.requirements.acceptanceCriteria.join('\n'),
-    planSummary: project.project.planSummary ?? '',
-    completionSummary: project.project.completionSummary ?? '',
     status: project.project.status,
-    currentFocus: project.project.currentFocus ?? '',
-    blockers: project.project.blockers.join('\n'),
-    recentProgress: project.project.recentProgress.join('\n'),
   };
 }
 
@@ -101,7 +84,7 @@ export function milestoneFormFromMilestone(milestone: ProjectMilestone, isCurren
 export function emptyTaskForm(): TaskFormState {
   return {
     title: '',
-    status: 'pending',
+    status: 'todo',
     milestoneId: '',
   };
 }
@@ -132,7 +115,6 @@ export function noteFormFromNote(note: ProjectNote): NoteFormState {
 
 export function emptyFileUploadState(): FileUploadState {
   return {
-    kind: 'attachment',
     title: '',
     description: '',
     file: null,
@@ -147,16 +129,7 @@ export function splitLines(value: string): string[] {
 }
 
 export function buildTasksByMilestone(tasks: ProjectTask[]): Map<string, ProjectTask[]> {
-  const tasksByMilestone = new Map<string, ProjectTask[]>();
-
-  tasks.forEach((task) => {
-    const milestoneKey = task.milestoneId ?? UNASSIGNED_TASK_KEY;
-    const existing = tasksByMilestone.get(milestoneKey) ?? [];
-    existing.push(task);
-    tasksByMilestone.set(milestoneKey, existing);
-  });
-
-  return tasksByMilestone;
+  return new Map([[UNASSIGNED_TASK_KEY, tasks]]);
 }
 
 function sortTimestamp(value: string | undefined): number {
@@ -197,36 +170,11 @@ export function summarizeActivityPreview(value: string | undefined, maxLength = 
 }
 
 export function buildActivityItems(project: ProjectDetail): ProjectActivityItemShape[] {
-  return [
-    ...project.linkedConversations.map((conversation) => ({
-      id: `conversation:${conversation.conversationId}`,
-      sortAt: sortTimestamp(conversation.lastActivityAt),
-      item: {
-        id: `conversation:${conversation.conversationId}`,
-        kind: 'conversation' as const,
-        conversation,
-      },
-    })),
-    ...project.timeline
-      .filter((entry) => entry.kind !== 'conversation')
-      .map((entry) => ({
-        id: `timeline:${entry.id}`,
-        sortAt: sortTimestamp(entry.createdAt),
-        item: {
-          id: `timeline:${entry.id}`,
-          kind: 'timeline' as const,
-          entry,
-        },
-      })),
-  ]
-    .sort((left, right) => {
-      const leftMissing = left.sortAt <= 0;
-      const rightMissing = right.sortAt <= 0;
-      if (leftMissing !== rightMissing) {
-        return leftMissing ? 1 : -1;
-      }
-
-      return left.sortAt - right.sortAt || left.id.localeCompare(right.id);
-    })
-    .map(({ item }) => item);
+  return [...project.timeline]
+    .sort((left, right) => sortTimestamp(right.createdAt) - sortTimestamp(left.createdAt))
+    .map((entry) => ({
+      id: `timeline:${entry.id}`,
+      kind: 'timeline' as const,
+      entry,
+    }));
 }

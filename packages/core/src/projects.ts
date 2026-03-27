@@ -26,6 +26,7 @@ export interface ProjectPaths {
   briefFile: string;
   tasksDir: string;
   notesDir: string;
+  filesDir: string;
   attachmentsDir: string;
   artifactsDir: string;
 }
@@ -58,6 +59,7 @@ interface DurableProjectPaths {
   briefFile: string;
   tasksDir: string;
   notesDir: string;
+  filesDir: string;
   attachmentsDir: string;
   artifactsDir: string;
 }
@@ -183,6 +185,7 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     briefFile: join(projectDir, 'INDEX.md'),
     tasksDir: join(projectDir, 'tasks'),
     notesDir: join(projectDir, 'notes'),
+    filesDir: join(projectDir, 'files'),
     attachmentsDir: join(projectDir, 'attachments'),
     artifactsDir: join(projectDir, 'artifacts'),
   };
@@ -280,8 +283,7 @@ export function createProjectScaffold(
   mkdirSync(paths.projectDir, { recursive: true });
   mkdirSync(paths.tasksDir, { recursive: true });
   mkdirSync(paths.notesDir, { recursive: true });
-  mkdirSync(paths.attachmentsDir, { recursive: true });
-  mkdirSync(paths.artifactsDir, { recursive: true });
+  mkdirSync(paths.filesDir, { recursive: true });
 
   writeProject(
     paths.projectFile,
