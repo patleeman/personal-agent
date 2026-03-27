@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
   buildSkillsSearch,
@@ -75,7 +75,6 @@ export function SkillsBrowserRail() {
                 key={skill.name}
                 to={`/skills${buildSkillsSearch(location.search, { skillName: skill.name, view: 'definition', item: null })}`}
                 selected={skill.name === selectedSkillName}
-                icon={<ResourceGlyph kind="skill" />}
                 label={skillRecordLabel(skill.source)}
                 aside={skill.usedInLastSession ? 'Used recently' : null}
                 heading={humanizeSkillName(skill.name)}

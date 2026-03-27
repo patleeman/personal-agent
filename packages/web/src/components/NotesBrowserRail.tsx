@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi, type UseApiResult } from '../hooks';
 import { timeAgo } from '../utils';
 import type { MemoryDocItem, MemoryWorkItem } from '../types';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
 import {
   buildNoteSearch,
   filterMemories,
@@ -294,7 +294,6 @@ export function NotesBrowserRailContent({
                 key={memory.id}
                 to={`/notes${buildNoteSearch(location.search, { memoryId: memory.id, view: 'main', item: null, creating: false })}`}
                 selected={memory.id === selectedMemoryId && !creating}
-                icon={<ResourceGlyph kind="note" />}
                 label={noteRecordLabel(memory)}
                 aside={memory.usedInLastSession ? 'Used recently' : null}
                 heading={memory.title}

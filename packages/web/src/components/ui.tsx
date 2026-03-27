@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode, type SVGProps } from 'react';
+import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import { Link, type LinkProps } from 'react-router-dom';
 
 export function cx(...parts: Array<string | false | null | undefined>) {
@@ -182,57 +182,9 @@ interface BaseRowProps {
   children: ReactNode;
 }
 
-export type ResourceGlyphKind = 'note' | 'project' | 'skill';
-
-function GlyphSvg({ className, ...props }: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cx('h-4 w-4', className)}
-      {...props}
-    />
-  );
-}
-
-export function ResourceGlyph({ kind, className }: { kind: ResourceGlyphKind; className?: string }) {
-  return (
-    <span className={cx('ui-browser-entry-glyph', className)} aria-hidden="true">
-      {kind === 'note' ? (
-        <GlyphSvg>
-          <path d="M6.25 2.75h5.4L15.75 6.9v10.35a1 1 0 0 1-1 1H6.25a1 1 0 0 1-1-1V3.75a1 1 0 0 1 1-1Z" />
-          <path d="M11.5 2.75V7h4.25" />
-          <path d="M7.75 10.25h4.75" />
-          <path d="M7.75 13.25h4.75" />
-        </GlyphSvg>
-      ) : kind === 'project' ? (
-        <GlyphSvg>
-          <rect x="3.25" y="4.25" width="13.5" height="11.5" rx="1.75" />
-          <path d="M7.5 4.25v11.5" />
-          <path d="M12.5 4.25v11.5" />
-          <path d="M3.25 8.25h13.5" />
-        </GlyphSvg>
-      ) : (
-        <GlyphSvg>
-          <circle cx="6" cy="5.75" r="1.75" />
-          <circle cx="14" cy="5.75" r="1.75" />
-          <circle cx="14" cy="14.25" r="1.75" />
-          <path d="M7.75 5.75h4.5" />
-          <path d="M6 7.5v4.75c0 .97.78 1.75 1.75 1.75h4.5" />
-        </GlyphSvg>
-      )}
-    </span>
-  );
-}
-
 export function BrowserRecordRow({
   to,
   selected,
-  icon,
   label,
   aside,
   heading,
@@ -242,7 +194,6 @@ export function BrowserRecordRow({
   ...props
 }: LinkProps & {
   selected?: boolean;
-  icon: ReactNode;
   label?: ReactNode;
   aside?: ReactNode;
   heading: ReactNode;
@@ -256,18 +207,15 @@ export function BrowserRecordRow({
       className={cx('group', 'ui-browser-entry', selected ? 'ui-browser-entry-selected' : 'ui-browser-entry-hover', className)}
       {...props}
     >
-      {icon}
-      <div className="min-w-0 flex-1">
-        {(label || aside) && (
-          <div className="ui-browser-entry-header">
-            {label ? <p className="ui-browser-entry-label">{label}</p> : null}
-            {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
-          </div>
-        )}
-        <p className="ui-browser-entry-title">{heading}</p>
-        {summary ? <p className="ui-browser-entry-summary">{summary}</p> : null}
-        {meta ? <div className="ui-browser-entry-meta">{meta}</div> : null}
-      </div>
+      {(label || aside) && (
+        <div className="ui-browser-entry-header">
+          {label ? <p className="ui-browser-entry-label">{label}</p> : null}
+          {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
+        </div>
+      )}
+      <p className="ui-browser-entry-title">{heading}</p>
+      {summary ? <p className="ui-browser-entry-summary">{summary}</p> : null}
+      {meta ? <div className="ui-browser-entry-meta">{meta}</div> : null}
     </Link>
   );
 }
