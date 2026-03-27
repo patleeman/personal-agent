@@ -135,6 +135,7 @@ describe('Sidebar', () => {
     expect(html).toContain('Open create menu');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
+    expect(html).not.toContain('Runs');
     expect(html).not.toContain('Knowledge Base');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
