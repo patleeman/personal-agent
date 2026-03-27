@@ -5,8 +5,8 @@
  *   - archivedConversationIds (localStorage + settings) = conversations explicitly archived out of live/review focus
  *   - archivedSessions        = all other sessions, restored on demand
  *
- * Restoring an archived conversation calls openSession() → adds to openIds → tab appears.
- * × on an open tab calls closeSession() → removed from openIds → back to the archive.
+ * Restoring an archived conversation calls restoreSession() → removes archived state → tab appears.
+ * Archive actions call archiveSession() → remove from pinned/open workspace → move into the archive.
  * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
