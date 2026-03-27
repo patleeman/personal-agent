@@ -65,7 +65,7 @@ describe('ProjectDetailSections markdown rendering', () => {
             entry: {
               id: 'document:1',
               kind: 'document',
-              createdAt: '2026-03-27T14:15:00.000Z',
+              createdAt: '2026-03-27T14:15:00',
               title: 'Project doc updated',
             },
           },
@@ -74,6 +74,7 @@ describe('ProjectDetailSections markdown rendering', () => {
     );
 
     expect(html).toContain('Project doc updated');
+    expect(html).toContain('2:15p');
     expect(html).not.toContain('ago');
   });
 });

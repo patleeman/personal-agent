@@ -177,7 +177,6 @@ export function ProjectCompletionContent({
 }
 
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-const TIME_FORMAT = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
 
 function parseDate(value: string | undefined): Date | null {
   if (!value) {
@@ -195,7 +194,15 @@ function dayLabel(value: string | undefined): string | null {
 
 function timeLabel(value: string | undefined): string {
   const parsed = parseDate(value);
-  return parsed ? TIME_FORMAT.format(parsed) : '—';
+  if (!parsed) {
+    return '—';
+  }
+
+  const hours = parsed.getHours();
+  const hour12 = hours % 12 || 12;
+  const minutes = String(parsed.getMinutes()).padStart(2, '0');
+  const suffix = hours >= 12 ? 'p' : 'a';
+  return `${hour12}:${minutes}${suffix}`;
 }
 
 function itemTimestamp(item: ProjectActivityItemShape): string | undefined {
@@ -245,7 +252,7 @@ export function ProjectActivityContent({
           <div key={item.id} className="space-y-1">
             {showDay && <p className="ui-section-label pt-3 first:pt-0">{day}</p>}
             <div className="flex items-baseline gap-3 text-[13px] leading-relaxed">
-              <span className="w-14 shrink-0 font-mono text-secondary">{timeLabel(at)}</span>
+              <span className="w-12 shrink-0 whitespace-nowrap font-mono tabular-nums text-secondary">{timeLabel(at)}</span>
               {href ? (
                 <a href={href} className="min-w-0 text-accent hover:text-accent/75 transition-colors truncate">{title}</a>
               ) : (
