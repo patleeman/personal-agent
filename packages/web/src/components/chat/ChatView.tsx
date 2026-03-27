@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
 import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
 import { normalizeReplyQuoteSelection } from '../../conversationReplyQuote';
+import { isVisibleReplySelectionRect, mergeReplySelectionRects, toReplySelectionRect } from '../../replySelectionRect';
 import {
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
@@ -318,6 +319,16 @@ function findSelectionReplyScopeElement(node: Node | null): HTMLElement | null {
   return getElementFromNode(node)?.closest('[data-selection-reply-scope="assistant-message"]') ?? null;
 }
 
+function findSelectionReplyScopeElements(selection: Selection, range: Range): { startScope: HTMLElement | null; endScope: HTMLElement | null } {
+  const anchorScope = findSelectionReplyScopeElement(selection.anchorNode);
+  const focusScope = findSelectionReplyScopeElement(selection.focusNode);
+
+  return {
+    startScope: anchorScope ?? findSelectionReplyScopeElement(range.startContainer),
+    endScope: focusScope ?? findSelectionReplyScopeElement(range.endContainer),
+  };
+}
+
 function readSelectedTextWithinElement(element: HTMLElement | null): string {
   if (!element || typeof window === 'undefined') {
     return '';
@@ -336,14 +347,23 @@ function readSelectedTextWithinElement(element: HTMLElement | null): string {
   return normalizeReplyQuoteSelection(selection.toString());
 }
 
-function readSelectionRect(range: Range): DOMRect | null {
-  const rect = range.getBoundingClientRect();
-  if (rect.width > 0 || rect.height > 0) {
-    return rect;
+function readSelectionRect(range: Range, scopeElement?: HTMLElement | null): DOMRect | null {
+  const rect = toReplySelectionRect(range.getBoundingClientRect());
+  if (isVisibleReplySelectionRect(rect)) {
+    return new DOMRect(rect.left, rect.top, rect.width, rect.height);
   }
 
-  const clientRect = range.getClientRects()[0];
-  return clientRect ?? null;
+  const mergedClientRect = mergeReplySelectionRects(Array.from(range.getClientRects()).map((clientRect) => toReplySelectionRect(clientRect)));
+  if (mergedClientRect) {
+    return new DOMRect(mergedClientRect.left, mergedClientRect.top, mergedClientRect.width, mergedClientRect.height);
+  }
+
+  const scopeRect = toReplySelectionRect(scopeElement?.getBoundingClientRect() ?? null);
+  if (isVisibleReplySelectionRect(scopeRect)) {
+    return new DOMRect(scopeRect.left, scopeRect.top, scopeRect.width, scopeRect.height);
+  }
+
+  return null;
 }
 
 function formatSummaryPreviewLine(line: string) {
@@ -2009,6 +2029,7 @@ function AssistantMessage({
   onRewind,
   onCheckpoint,
   onOpenFilePath,
+  onSelectionGesture,
   showCursor = false,
   layout = 'default',
 }: {
@@ -2018,6 +2039,7 @@ function AssistantMessage({
   onRewind?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
+  onSelectionGesture?: () => void;
   showCursor?: boolean;
   layout?: ChatViewLayout;
 }) {
@@ -2034,6 +2056,10 @@ function AssistantMessage({
           data-selection-reply-scope="assistant-message"
           data-message-index={typeof messageIndex === 'number' ? String(messageIndex) : undefined}
           data-block-id={blockId}
+          onMouseUp={onSelectionGesture}
+          onPointerUp={onSelectionGesture}
+          onKeyUp={onSelectionGesture}
+          onTouchEnd={onSelectionGesture}
           className="ui-message-card-assistant text-primary space-y-1"
         >
           {renderText(block.text, { onOpenFilePath })}
@@ -2402,6 +2428,7 @@ export const ChatView = memo(function ChatView({
   const [replyMenu, setReplyMenu] = useState<ReplySelectionMenuState | null>(null);
   const replyMenuRef = useRef<HTMLDivElement>(null);
   const replyMenuSyncFrameRef = useRef<number | null>(null);
+  const replyMenuSyncTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -2482,6 +2509,22 @@ export const ChatView = memo(function ChatView({
     setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
   }, []);
 
+  const clearScheduledReplyMenuSync = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (replyMenuSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(replyMenuSyncFrameRef.current);
+      replyMenuSyncFrameRef.current = null;
+    }
+
+    if (replyMenuSyncTimeoutRef.current !== null) {
+      window.clearTimeout(replyMenuSyncTimeoutRef.current);
+      replyMenuSyncTimeoutRef.current = null;
+    }
+  }, []);
+
   const syncReplyMenuFromSelection = useCallback(() => {
     if (typeof window === 'undefined') {
       setReplyMenu((current) => (current ? null : current));
@@ -2495,8 +2538,7 @@ export const ChatView = memo(function ChatView({
     }
 
     const range = selection.getRangeAt(0);
-    const startScope = findSelectionReplyScopeElement(range.startContainer);
-    const endScope = findSelectionReplyScopeElement(range.endContainer);
+    const { startScope, endScope } = findSelectionReplyScopeElements(selection, range);
     if (!startScope || startScope !== endScope) {
       setReplyMenu((current) => (current ? null : current));
       return;
@@ -2514,7 +2556,7 @@ export const ChatView = memo(function ChatView({
       return;
     }
 
-    const rect = readSelectionRect(range);
+    const rect = readSelectionRect(range, startScope);
     if (!rect) {
       setReplyMenu((current) => (current ? null : current));
       return;
@@ -2544,40 +2586,45 @@ export const ChatView = memo(function ChatView({
 
   const scheduleReplyMenuSync = useCallback(() => {
     if (typeof window === 'undefined' || !onReplyToSelection) {
+      clearScheduledReplyMenuSync();
       setReplyMenu((current) => (current ? null : current));
       return;
     }
 
-    if (replyMenuSyncFrameRef.current !== null) {
-      window.cancelAnimationFrame(replyMenuSyncFrameRef.current);
-    }
+    clearScheduledReplyMenuSync();
 
     replyMenuSyncFrameRef.current = window.requestAnimationFrame(() => {
       replyMenuSyncFrameRef.current = null;
       syncReplyMenuFromSelection();
     });
-  }, [onReplyToSelection, syncReplyMenuFromSelection]);
+    replyMenuSyncTimeoutRef.current = window.setTimeout(() => {
+      replyMenuSyncTimeoutRef.current = null;
+      syncReplyMenuFromSelection();
+    }, 40);
+  }, [clearScheduledReplyMenuSync, onReplyToSelection, syncReplyMenuFromSelection]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
+      clearScheduledReplyMenuSync();
       setReplyMenu(null);
       return;
     }
 
     document.addEventListener('selectionchange', scheduleReplyMenuSync);
-    window.addEventListener('mouseup', scheduleReplyMenuSync);
-    window.addEventListener('keyup', scheduleReplyMenuSync);
+    document.addEventListener('mouseup', scheduleReplyMenuSync);
+    document.addEventListener('pointerup', scheduleReplyMenuSync);
+    document.addEventListener('keyup', scheduleReplyMenuSync);
+    document.addEventListener('touchend', scheduleReplyMenuSync);
 
     return () => {
       document.removeEventListener('selectionchange', scheduleReplyMenuSync);
-      window.removeEventListener('mouseup', scheduleReplyMenuSync);
-      window.removeEventListener('keyup', scheduleReplyMenuSync);
-      if (replyMenuSyncFrameRef.current !== null) {
-        window.cancelAnimationFrame(replyMenuSyncFrameRef.current);
-        replyMenuSyncFrameRef.current = null;
-      }
+      document.removeEventListener('mouseup', scheduleReplyMenuSync);
+      document.removeEventListener('pointerup', scheduleReplyMenuSync);
+      document.removeEventListener('keyup', scheduleReplyMenuSync);
+      document.removeEventListener('touchend', scheduleReplyMenuSync);
+      clearScheduledReplyMenuSync();
     };
-  }, [onReplyToSelection, scheduleReplyMenuSync]);
+  }, [clearScheduledReplyMenuSync, onReplyToSelection, scheduleReplyMenuSync]);
 
   useEffect(() => {
     if (!replyMenu || typeof window === 'undefined' || typeof document === 'undefined') {
@@ -2704,6 +2751,7 @@ export const ChatView = memo(function ChatView({
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
               onOpenFilePath={onOpenFilePath}
+              onSelectionGesture={onReplyToSelection ? scheduleReplyMenuSync : undefined}
               layout={layout}
             />
           );
@@ -2762,7 +2810,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplyMenuSync]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {
