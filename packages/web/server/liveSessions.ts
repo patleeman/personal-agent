@@ -665,7 +665,15 @@ function applyLatestCompactionSummaryTitle(blocks: DisplayBlock[], title: string
     return blocks;
   }
 
-  const index = blocks.findLastIndex((block) => block.type === 'summary' && block.kind === 'compaction');
+  let index = -1;
+  for (let candidateIndex = blocks.length - 1; candidateIndex >= 0; candidateIndex -= 1) {
+    const candidate = blocks[candidateIndex];
+    if (candidate?.type === 'summary' && candidate.kind === 'compaction') {
+      index = candidateIndex;
+      break;
+    }
+  }
+
   if (index < 0) {
     return blocks;
   }

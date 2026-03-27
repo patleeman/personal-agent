@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { useApi } from '../hooks';
+import { useApi, type UseApiResult } from '../hooks';
 import { timeAgo } from '../utils';
 import type { MemoryWorkItem } from '../types';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
@@ -116,17 +116,35 @@ function NoteWorkQueueRow({
   );
 }
 
-export function NotesBrowserRail() {
+type NotesSnapshot = Awaited<ReturnType<typeof api.notes>>;
+type NotesQueueSnapshot = Awaited<ReturnType<typeof api.noteWorkQueue>>;
+type NotesBrowserState = Pick<UseApiResult<NotesSnapshot>, 'data' | 'loading' | 'refreshing' | 'error' | 'refetch'>;
+type NotesQueueState = Pick<UseApiResult<NotesQueueSnapshot>, 'data' | 'loading' | 'refreshing' | 'error' | 'refetch'>;
+
+export function NotesBrowserRailContent({
+  notesState,
+  queueState,
+}: {
+  notesState: NotesBrowserState;
+  queueState: NotesQueueState;
+}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { data, loading, error, refreshing, refetch } = useApi(api.notes);
+  const { data, loading, error, refreshing, refetch } = notesState;
+  const {
+    data: queueData,
+    loading: queueLoading,
+    error: queueFetchError,
+    refreshing: queueRefreshing,
+    refetch: refetchQueue,
+  } = queueState;
   const [query, setQuery] = useState('');
   const [pendingQueueAction, setPendingQueueAction] = useState<{ runId: string; kind: 'retry' } | null>(null);
   const [startingBatchRecovery, setStartingBatchRecovery] = useState(false);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const memories = data?.memories ?? [];
-  const memoryQueue = data?.memoryQueue ?? [];
+  const memoryQueue = queueData?.memoryQueue ?? data?.memoryQueue ?? [];
   const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
   const recoverableQueueItems = useMemo(
     () => memoryQueue.filter((item) => canRetryMemoryWorkItem(item)),
@@ -156,9 +174,9 @@ export function NotesBrowserRail() {
     } catch (retryError) {
       setQueueError(retryError instanceof Error ? retryError.message : 'Could not retry node distillation.');
       setPendingQueueAction(null);
-      await refetch({ resetLoading: false });
+      await refetchQueue({ resetLoading: false });
     }
-  }, [navigate, queueBusy, refetch]);
+  }, [navigate, queueBusy, refetchQueue]);
 
   const recoverFailedMemoryWorkItems = useCallback(async () => {
     if (recoverableQueueItems.length === 0 || queueBusy) {
@@ -171,13 +189,13 @@ export function NotesBrowserRail() {
     try {
       const result = await api.recoverFailedNodeDistills();
       setQueueNotice(`Started recovery run ${result.runId} for ${result.count} failed ${result.count === 1 ? 'extraction' : 'extractions'}.`);
-      await refetch({ resetLoading: false });
+      await refetchQueue({ resetLoading: false });
     } catch (recoverError) {
       setQueueError(recoverError instanceof Error ? recoverError.message : 'Could not start failed note-extraction recovery.');
     } finally {
       setStartingBatchRecovery(false);
     }
-  }, [queueBusy, recoverableQueueItems.length, refetch]);
+  }, [queueBusy, recoverableQueueItems.length, refetchQueue]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -191,8 +209,16 @@ export function NotesBrowserRail() {
             <Link to={`/notes${buildNoteSearch(location.search, { creating: true, view: 'main', item: null })}`} className="ui-toolbar-button text-accent">
               New
             </Link>
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
-              {refreshing ? 'Refreshing…' : '↻'}
+            <ToolbarButton
+              onClick={() => {
+                void Promise.allSettled([
+                  refetch({ resetLoading: false }),
+                  refetchQueue({ resetLoading: false }),
+                ]);
+              }}
+              disabled={refreshing || queueRefreshing}
+            >
+              {refreshing || queueRefreshing ? 'Refreshing…' : '↻'}
             </ToolbarButton>
           </div>
         </div>
@@ -213,6 +239,12 @@ export function NotesBrowserRail() {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {loading && !data ? <LoadingState label="Loading notes…" className="px-0 py-0" /> : null}
         {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} className="px-0 py-0" /> : null}
+
+        {!loading && !error && queueLoading && !queueData ? (
+          <LoadingState label="Loading work queue…" className="px-0 py-0" />
+        ) : null}
+
+        {!loading && !error && queueFetchError ? <ErrorState message={`Unable to load note work queue: ${queueFetchError}`} className="px-0 py-0" /> : null}
 
         {!loading && !error && memoryQueue.length > 0 && (
           <div className="space-y-2 border-b border-border-subtle pb-4">
@@ -308,4 +340,10 @@ export function NotesBrowserRail() {
       </div>
     </div>
   );
+}
+
+export function NotesBrowserRail() {
+  const notesState = useApi(api.notes);
+  const queueState = useApi(api.noteWorkQueue);
+  return <NotesBrowserRailContent notesState={notesState} queueState={queueState} />;
 }

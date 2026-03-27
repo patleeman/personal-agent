@@ -17,7 +17,7 @@ import {
 import { decorateRemoteExecutionRun } from './remoteExecution.js';
 import { decorateDurableRunAttention, decorateDurableRunsAttention } from './durableRunAttention.js';
 
-const LIST_DURABLE_RUNS_CACHE_TTL_MS = 1_500;
+const LIST_DURABLE_RUNS_CACHE_TTL_MS = 10_000;
 
 export interface DurableRunsListTelemetry {
   cache: 'hit' | 'inflight' | 'miss';

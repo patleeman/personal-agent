@@ -374,14 +374,6 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.runs()
-      .then((result) => {
-        setRuns(result);
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-
     void api.daemon()
       .then((state) => {
         setDaemon(state);

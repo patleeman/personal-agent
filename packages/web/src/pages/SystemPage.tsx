@@ -311,6 +311,27 @@ export function SystemPage() {
   const actionTimeoutRef = useRef<number | null>(null);
   const restartReconnectRef = useRef<{ sawDisconnect: boolean; baselineRevision: string | null; baselineSlot: string | null } | null>(null);
 
+  useEffect(() => {
+    if (runs !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.runs()
+      .then((nextRuns) => {
+        if (!cancelled) {
+          setRuns(nextRuns);
+        }
+      })
+      .catch(() => {
+        // Keep the runs section in its current loading state until refresh or SSE catches up.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runs, setRuns]);
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     setRefreshError(null);

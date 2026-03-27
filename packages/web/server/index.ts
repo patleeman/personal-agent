@@ -6318,10 +6318,23 @@ function generateCreatedNoteId(title: string): string {
   return `${base}-${Date.now()}`;
 }
 
-app.get('/api/notes', async (_req, res) => {
+app.get('/api/notes', (_req, res) => {
   try {
     res.json({
       memories: listMemoryDocs({ includeSearchText: true }),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/notes/work-queue', async (_req, res) => {
+  try {
+    res.json({
       memoryQueue: await listMemoryWorkItems(),
     });
   } catch (err) {
@@ -6413,6 +6426,7 @@ app.post('/api/notes', (req, res) => {
       body: editableBody,
     }), 'utf-8');
 
+    clearMemoryBrowserCaches();
     const detail = readNoteDetail(created.id);
     res.status(201).json(detail);
   } catch (err) {
@@ -6466,6 +6480,7 @@ app.post('/api/notes/:memoryId', (req, res) => {
       return;
     }
 
+    clearMemoryBrowserCaches();
     res.json(readNoteDetail(memory.id));
   } catch (err) {
     logError('request handler error', {
@@ -6490,6 +6505,7 @@ app.delete('/api/notes/:memoryId', (req, res) => {
     }
 
     rmSync(dirname(memory.path), { recursive: true, force: true });
+    clearMemoryBrowserCaches();
     res.json({ deleted: true, memoryId: memory.id });
   } catch (err) {
     logError('request handler error', {
@@ -10085,6 +10101,10 @@ function extractMemorySearchText(filePaths: string[], maxCharacters = 16_000): s
 }
 
 let memoryMigrationAttempted = false;
+const MEMORY_DOCS_CACHE_TTL_MS = 10_000;
+const RECENT_READ_USAGE_CACHE_TTL_MS = 10_000;
+const memoryDocsCache = new Map<'with-search' | 'without-search', { expiresAt: number; value: MemoryDocItem[] }>();
+let recentReadUsageCache: { expiresAt: number; key: string; value: Map<string, MemoryUsageSummary> } | null = null;
 
 function ensureMemoryDocsDir(): string {
   const profilesRoot = getProfilesRoot();
@@ -10098,10 +10118,34 @@ function ensureMemoryDocsDir(): string {
   return memoryDir;
 }
 
+function cloneMemoryDocItem(item: MemoryDocItem): MemoryDocItem {
+  return {
+    ...item,
+    tags: [...item.tags],
+    ...(item.related ? { related: [...item.related] } : {}),
+  };
+}
+
+function cloneMemoryUsageMap(map: Map<string, MemoryUsageSummary>): Map<string, MemoryUsageSummary> {
+  return new Map(
+    [...map.entries()].map(([path, summary]) => [path, { ...summary }] as const),
+  );
+}
+
+function clearMemoryBrowserCaches(): void {
+  memoryDocsCache.clear();
+  recentReadUsageCache = null;
+}
+
 function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
   const includeSearchText = options.includeSearchText === true;
-  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
+  const cacheKey = includeSearchText ? 'with-search' : 'without-search';
+  const cached = memoryDocsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value.map(cloneMemoryDocItem);
+  }
 
+  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
   const memoryDocs = loaded.docs.map((doc) => {
     const searchText = includeSearchText ? extractMemorySearchText([doc.filePath, ...doc.referencePaths]) : '';
 
@@ -10126,7 +10170,7 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
     } satisfies MemoryDocItem;
   });
 
-  return memoryDocs.sort((left, right) => {
+  const sorted = memoryDocs.sort((left, right) => {
     const leftUpdated = left.updated ?? '';
     const rightUpdated = right.updated ?? '';
     if (leftUpdated !== rightUpdated) {
@@ -10135,6 +10179,13 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
 
     return left.title.localeCompare(right.title);
   });
+
+  memoryDocsCache.set(cacheKey, {
+    expiresAt: Date.now() + MEMORY_DOCS_CACHE_TTL_MS,
+    value: sorted.map(cloneMemoryDocItem),
+  });
+
+  return sorted;
 }
 
 function findMemoryDocById(memoryId: string, options: { includeSearchText?: boolean } = {}): MemoryDocItem | null {
@@ -10356,8 +10407,21 @@ function listProfileAgentItems(): AgentsItem[] {
 }
 
 function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSummary> {
+  const trackedPathsKey = [...new Set(trackedPaths.map((itemPath) => normalize(itemPath)).filter(Boolean))]
+    .sort()
+    .join('\n');
+  if (!trackedPathsKey) {
+    return new Map<string, MemoryUsageSummary>();
+  }
+
+  if (recentReadUsageCache
+    && recentReadUsageCache.key === trackedPathsKey
+    && recentReadUsageCache.expiresAt > Date.now()) {
+    return cloneMemoryUsageMap(recentReadUsageCache.value);
+  }
+
   const usageMap = new Map<string, MemoryUsageSummary>();
-  const tracked = new Set(trackedPaths.map((itemPath) => normalize(itemPath)));
+  const tracked = new Set(trackedPathsKey.split('\n'));
 
   for (const itemPath of tracked) {
     usageMap.set(itemPath, {
@@ -10367,12 +10431,13 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
     });
   }
 
-  if (tracked.size === 0) {
-    return usageMap;
-  }
-
   const sessions = listSessions();
   if (sessions.length === 0) {
+    recentReadUsageCache = {
+      key: trackedPathsKey,
+      expiresAt: Date.now() + RECENT_READ_USAGE_CACHE_TTL_MS,
+      value: cloneMemoryUsageMap(usageMap),
+    };
     return usageMap;
   }
 
@@ -10425,6 +10490,12 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
       }
     }
   }
+
+  recentReadUsageCache = {
+    key: trackedPathsKey,
+    expiresAt: Date.now() + RECENT_READ_USAGE_CACHE_TTL_MS,
+    value: cloneMemoryUsageMap(usageMap),
+  };
 
   return usageMap;
 }
@@ -10535,6 +10606,7 @@ app.post('/api/memory/file', (req, res) => {
       res.status(403).json({ error: 'Access denied' }); return;
     }
     writeFileSync(filePath, content, 'utf-8');
+    clearMemoryBrowserCaches();
     res.json({ ok: true });
   } catch (err) {
     logError('request handler error', {

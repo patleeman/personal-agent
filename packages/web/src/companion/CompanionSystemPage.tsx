@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api';
 import { useAppData, useSseConnection, useSystemStatus } from '../contexts';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
@@ -224,6 +224,27 @@ export function CompanionSystemPage() {
     + (runSummary?.recoveryActions.rerun ?? 0)
     + (runSummary?.recoveryActions.attention ?? 0)
     + (runSummary?.recoveryActions.invalid ?? 0);
+
+  useEffect(() => {
+    if (runs !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.runs()
+      .then((nextRuns) => {
+        if (!cancelled) {
+          setRuns(nextRuns);
+        }
+      })
+      .catch(() => {
+        // Keep the companion runs summary in loading state until refresh or SSE catches up.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runs, setRuns]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);

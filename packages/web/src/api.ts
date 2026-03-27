@@ -534,7 +534,8 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  notes: () => get<{ memories: MemoryDocItem[]; memoryQueue: MemoryWorkItem[] }>('/notes'),
+  notes: () => get<{ memories: MemoryDocItem[]; memoryQueue?: MemoryWorkItem[] }>('/notes'),
+  noteWorkQueue: () => get<{ memoryQueue: MemoryWorkItem[] }>('/notes/work-queue'),
   recoverFailedNodeDistills: () =>
     post<{ accepted: true; runId: string; count: number }>('/notes/recover-failed-node-distills'),
   createNoteDoc: (input: { title: string; summary?: string; body?: string }) =>
