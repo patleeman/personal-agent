@@ -10,11 +10,10 @@ import {
   ErrorState,
   ListLinkRow,
   LoadingState,
-  PageHeader,
-  PageHeading,
   ToolbarButton,
 } from '../components/ui';
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
+import { NotesBrowserRail } from '../components/NotesBrowserRail';
 import {
   MarkdownDocumentSurface,
   NodePrimaryToolbar,
@@ -32,6 +31,7 @@ import {
   readNoteView,
 } from '../noteWorkspaceState';
 import { inferInlineTags, readEditableNoteBody } from '../noteDocument';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
 function ReferencesList({
   memory,
@@ -194,6 +194,10 @@ function NoteWorkspace({
       setContentLoading(true);
       setContentError(null);
       try {
+        if (!selectedReference) {
+          return;
+        }
+
         const result = await api.memoryFile(selectedReference.path);
         if (cancelled) {
           return;
@@ -558,7 +562,6 @@ export function MemoriesPage() {
   const {
     data,
     loading,
-    refreshing,
     error,
     refetch,
     replaceData,
@@ -611,30 +614,20 @@ export function MemoriesPage() {
     navigateNotes({ memoryId: null, view: 'main', item: null, creating: false }, true);
   }, [loading, memories, navigateNotes, selectedMemoryId]);
 
-  return (
-    <div className="flex h-full flex-col">
-      {!(selectedMemoryId || creating) && (
-        <PageHeader
-          className="flex-wrap items-start gap-y-3"
-          actions={(
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); if (selectedMemoryId) { void detailApi.refetch({ resetLoading: false }); } }} disabled={refreshing || detailApi.refreshing}>
-              {refreshing || detailApi.refreshing ? 'Refreshing…' : 'Refresh'}
-            </ToolbarButton>
-          )}
-        >
-          <PageHeading
-            title="Notes"
-            meta={(
-              <>
-                {memories.length} {memories.length === 1 ? 'note' : 'notes'}
-                {memoryQueue.length > 0 && <span className="ml-2 text-secondary">· {memoryQueue.length} in queue</span>}
-              </>
-            )}
-          />
-        </PageHeader>
-      )}
+  useEffect(() => {
+    if (!selectedMemoryId) {
+      return;
+    }
 
-      <div className="min-h-0 flex-1 px-6 py-4">
+    ensureOpenResourceShelfItem('note', selectedMemoryId);
+  }, [selectedMemoryId]);
+
+  return (
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
+        <NotesBrowserRail />
+      </div>
+      <div className="min-w-0 flex-1 px-6 py-4">
         {loading && !data ? <LoadingState label="Loading notes…" /> : null}
         {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} /> : null}
 
@@ -672,14 +665,14 @@ export function MemoriesPage() {
               <EmptyState
                 className="h-full"
                 title="No notes yet"
-                body="Create a note to open it in the main workspace. The right rail is for browsing notes and note resources."
+                body="Create a note to start building durable context."
                 action={<ToolbarButton onClick={() => navigateNotes({ creating: true })}>Create note</ToolbarButton>}
               />
             ) : (
               <EmptyState
                 className="h-full"
                 title="Select a note"
-                body="Use the right rail to browse notes and open one in the editor."
+                body="Choose a note from the browser on the left to open it here."
               />
             )}
           </div>

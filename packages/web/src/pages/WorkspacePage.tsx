@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { WorkspaceFileContent } from '../components/WorkspaceFileContent';
+import { WorkspaceRail } from '../components/WorkspaceRail';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
@@ -19,6 +20,7 @@ import {
   summarizeChanges,
   treeContainsPath,
 } from '../workspaceBrowser';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { emitWorkspaceChanged, setWorkspaceEditorDirty } from '../workspaceEvents';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -215,6 +217,15 @@ export function WorkspacePage() {
       summarizeChanges(snapshot.changedCount),
     ].join(' · ');
   }, [snapshot]);
+  const workspaceShelfId = snapshot?.repoRoot ?? snapshot?.cwd ?? requestedCwd ?? null;
+
+  useEffect(() => {
+    if (!workspaceShelfId) {
+      return;
+    }
+
+    ensureOpenResourceShelfItem('workspace', workspaceShelfId);
+  }, [workspaceShelfId]);
 
   const showingFileLoadingState = Boolean(
     normalizedRequestedFilePath
@@ -294,111 +305,124 @@ export function WorkspacePage() {
   }, [draftDirty, openWorkspaceSearch, requestedCwd, snapshot?.cwd, workspaceActionBusy]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader
-        className="flex-wrap items-start gap-y-3"
-        actions={(
-          <ToolbarButton onClick={() => { void snapshotApi.refetch({ resetLoading: false }); }} disabled={snapshotApi.refreshing || saveBusy}>
-            {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </ToolbarButton>
-        )}
-      >
-        <PageHeading title="Workspace" meta={workspaceMeta} />
-      </PageHeader>
-
-      <div className="border-b border-border-subtle px-6 py-3">
-        <form className="flex flex-wrap items-center gap-2" onSubmit={handleWorkspaceSubmit}>
-          <input
-            value={cwdDraft}
-            onChange={(event) => setCwdDraft(event.target.value)}
-            placeholder={snapshot?.cwd ?? 'Enter a folder path'}
-            className={`${INPUT_CLASS} min-w-[18rem] flex-1 font-mono text-[12px]`}
-            spellCheck={false}
-          />
-          <ToolbarButton type="button" onClick={() => { void handleWorkspaceBrowse(); }} disabled={workspaceActionBusy}>
-            Browse…
-          </ToolbarButton>
-          <ToolbarButton type="submit" disabled={workspaceActionBusy || cwdDraft.trim().length === 0}>
-            Open folder
-          </ToolbarButton>
-        </form>
-        {snapshot && (
-          <p className="mt-2 text-[11px] text-dim">
-            {snapshot.repoRoot
-              ? 'Browsing the repo root so git status and file selection stay aligned. The tree lives in the right panel.'
-              : 'Browsing this folder directly because no git repo was found. The tree lives in the right panel.'}
-          </p>
-        )}
-        {workspaceActionError && <p className="mt-2 text-[12px] text-danger">{workspaceActionError}</p>}
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="w-[22rem] shrink-0 border-r border-border-subtle bg-surface/35">
+        <WorkspaceRail />
       </div>
-
-      <div className="min-h-0 flex-1">
-        {snapshotApi.loading && !snapshot && (
-          <LoadingState label="Loading workspace…" className="h-full justify-center" />
-        )}
-
-        {snapshotApi.error && !snapshot && (
-          <ErrorState className="m-6" message={`Unable to load workspace: ${snapshotApi.error}`} />
-        )}
-
-        {snapshot && !selectedFilePath && (
-          <div className="flex h-full items-center justify-center px-8">
-            <EmptyState title="Select a file" body="Use the right-hand tree to open a file and inspect its diff." />
-          </div>
-        )}
-
-        {selectedFilePath && showingFileLoadingState && (
-          <LoadingState label="Loading file…" className="h-full justify-center" />
-        )}
-
-        {selectedFilePath && !showingFileLoadingState && fileApi.error && (
-          <div className="p-6">
-            <ErrorState message={`Unable to load file: ${fileApi.error}`} />
-          </div>
-        )}
-
-        {selectedFilePath && !showingFileLoadingState && !fileApi.error && fileDetail && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0 border-b border-border-subtle px-4 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-mono text-[13px] text-primary" title={fileDetail.path}>{fileDetail.relativePath}</p>
-                    {fileDetail.change && <Pill tone={changeTone(fileDetail.change)}>{changeLabel(fileDetail.change)}</Pill>}
-                    {draftDirty && <Pill tone="warning">unsaved changes</Pill>}
-                  </div>
-                  <p className="text-[11px] text-dim">
-                    {fileDetail.exists ? formatFileSize(fileDetail.sizeBytes) : 'Deleted from disk'}
-                    {fileDetail.repoRoot && ` · ${baseName(fileDetail.repoRoot)}`}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <ToolbarButton onClick={() => { void handleRevert(); }} disabled={saveBusy || fileApi.loading}>
-                    Reload
-                  </ToolbarButton>
-                  <ToolbarButton onClick={() => { void handleSave(); }} disabled={saveBusy || !draftDirty || fileDetail.binary || fileDetail.tooLarge || !fileDetail.exists}>
-                    {saveBusy ? 'Saving…' : 'Save'}
-                  </ToolbarButton>
-                </div>
-              </div>
-              {saveError && <p className="mt-2 text-[12px] text-danger">{saveError}</p>}
-              {externalChangePending && !saveError && (
-                <p className="mt-2 text-[12px] text-warning">
-                  Files changed on disk. Save or reload this file to sync with the latest workspace state.
-                </p>
-              )}
+      <div className="min-w-0 flex-1 flex flex-col">
+        <PageHeader
+          className="flex-wrap items-start gap-y-3"
+          actions={(
+            <div className="flex flex-wrap items-center gap-2">
+              <ToolbarButton onClick={() => navigate(buildWorkspacePath('files', buildWorkspaceSearch(location.search, { cwd: requestedCwd, file: selectedFilePath, changeScope: null })))}>
+                Files
+              </ToolbarButton>
+              <ToolbarButton onClick={() => navigate(buildWorkspacePath('changes', buildWorkspaceSearch(location.search, { cwd: requestedCwd, file: selectedFilePath, changeScope: null })))}>
+                Changes
+              </ToolbarButton>
+              <ToolbarButton onClick={() => { void snapshotApi.refetch({ resetLoading: false }); }} disabled={snapshotApi.refreshing || saveBusy}>
+                {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
+              </ToolbarButton>
             </div>
+          )}
+        >
+          <PageHeading title="Workspace" meta={workspaceMeta} />
+        </PageHeader>
 
-            <WorkspaceFileContent
-              detail={fileDetail}
-              value={draftContent}
-              draftDirty={draftDirty}
-              onChange={setDraftContent}
-              onOpenFilePath={(nextPath) => openWorkspaceSearch({ file: nextPath })}
+        <div className="border-b border-border-subtle px-6 py-3">
+          <form className="flex flex-wrap items-center gap-2" onSubmit={handleWorkspaceSubmit}>
+            <input
+              value={cwdDraft}
+              onChange={(event) => setCwdDraft(event.target.value)}
+              placeholder={snapshot?.cwd ?? 'Enter a folder path'}
+              className={`${INPUT_CLASS} min-w-[18rem] flex-1 font-mono text-[12px]`}
+              spellCheck={false}
             />
-          </div>
-        )}
+            <ToolbarButton type="button" onClick={() => { void handleWorkspaceBrowse(); }} disabled={workspaceActionBusy}>
+              Browse…
+            </ToolbarButton>
+            <ToolbarButton type="submit" disabled={workspaceActionBusy || cwdDraft.trim().length === 0}>
+              Open folder
+            </ToolbarButton>
+          </form>
+          {snapshot && (
+            <p className="mt-2 text-[11px] text-dim">
+              {snapshot.repoRoot
+                ? 'Browsing the repo root so git status and file selection stay aligned. Use the workspace browser on the left to switch files or jump to Changes.'
+                : 'Browsing this folder directly because no git repo was found. Use the workspace browser on the left to switch files.'}
+            </p>
+          )}
+          {workspaceActionError && <p className="mt-2 text-[12px] text-danger">{workspaceActionError}</p>}
+        </div>
+
+        <div className="min-h-0 flex-1">
+          {snapshotApi.loading && !snapshot && (
+            <LoadingState label="Loading workspace…" className="h-full justify-center" />
+          )}
+
+          {snapshotApi.error && !snapshot && (
+            <ErrorState className="m-6" message={`Unable to load workspace: ${snapshotApi.error}`} />
+          )}
+
+          {snapshot && !selectedFilePath && (
+            <div className="flex h-full items-center justify-center px-8">
+              <EmptyState title="Select a file" body="Choose a file from the workspace browser on the left." />
+            </div>
+          )}
+
+          {selectedFilePath && showingFileLoadingState && (
+            <LoadingState label="Loading file…" className="h-full justify-center" />
+          )}
+
+          {selectedFilePath && !showingFileLoadingState && fileApi.error && (
+            <div className="p-6">
+              <ErrorState message={`Unable to load file: ${fileApi.error}`} />
+            </div>
+          )}
+
+          {selectedFilePath && !showingFileLoadingState && !fileApi.error && fileDetail && (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="shrink-0 border-b border-border-subtle px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-mono text-[13px] text-primary" title={fileDetail.path}>{fileDetail.relativePath}</p>
+                      {fileDetail.change && <Pill tone={changeTone(fileDetail.change)}>{changeLabel(fileDetail.change)}</Pill>}
+                      {draftDirty && <Pill tone="warning">unsaved changes</Pill>}
+                    </div>
+                    <p className="text-[11px] text-dim">
+                      {fileDetail.exists ? formatFileSize(fileDetail.sizeBytes) : 'Deleted from disk'}
+                      {fileDetail.repoRoot && ` · ${baseName(fileDetail.repoRoot)}`}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <ToolbarButton onClick={() => { void handleRevert(); }} disabled={saveBusy || fileApi.loading}>
+                      Reload
+                    </ToolbarButton>
+                    <ToolbarButton onClick={() => { void handleSave(); }} disabled={saveBusy || !draftDirty || fileDetail.binary || fileDetail.tooLarge || !fileDetail.exists}>
+                      {saveBusy ? 'Saving…' : 'Save'}
+                    </ToolbarButton>
+                  </div>
+                </div>
+                {saveError && <p className="mt-2 text-[12px] text-danger">{saveError}</p>}
+                {externalChangePending && !saveError && (
+                  <p className="mt-2 text-[12px] text-warning">
+                    Files changed on disk. Save or reload this file to sync with the latest workspace state.
+                  </p>
+                )}
+              </div>
+
+              <WorkspaceFileContent
+                detail={fileDetail}
+                value={draftContent}
+                draftDirty={draftDirty}
+                onChange={setDraftContent}
+                onOpenFilePath={(nextPath) => openWorkspaceSearch({ file: nextPath })}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

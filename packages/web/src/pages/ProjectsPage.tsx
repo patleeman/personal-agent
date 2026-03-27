@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { isProjectArchived } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { useReloadState } from '../reloadState';
-import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
+import { EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
+import { ProjectsBrowserRail } from '../components/ProjectsBrowserRail';
 import { buildProjectsHref, PROJECT_VIEW_QUERY_PARAM, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
@@ -260,19 +261,6 @@ export function ProjectsPage() {
   const invalidProjects = diagnostics?.invalidProjects ?? [];
   const isLoading = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) && loading;
   const visibleError = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) ? error : null;
-  const viewProfileLabel = effectiveViewProfile === 'all'
-    ? 'all profiles'
-    : effectiveViewProfile
-      ? `profile ${effectiveViewProfile}`
-      : 'projects';
-  const projectCounts = useMemo(() => {
-    const items = projects ?? [];
-    const archived = items.filter((project) => isProjectArchived(project)).length;
-    return {
-      all: items.length,
-      archived,
-    };
-  }, [projects]);
   const selectedView = useMemo(() => readProjectView(location.search), [location.search]);
   const hasExplicitProjectView = useMemo(() => new URLSearchParams(location.search).has(PROJECT_VIEW_QUERY_PARAM), [location.search]);
 
@@ -328,6 +316,14 @@ export function ProjectsPage() {
     return () => window.cancelAnimationFrame(handle);
   }, [hasExplicitProjectView, projectDetailApi.data, selectedId, selectedView, showCreateForm]);
 
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    ensureOpenResourceShelfItem('project', selectedId);
+  }, [selectedId]);
+
   function openCreateForm() {
     const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
       ? effectiveViewProfile
@@ -350,11 +346,13 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <PageHeader
-        className="flex-wrap items-start gap-y-3"
-        actions={(
-          <>
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
+        <ProjectsBrowserRail />
+      </div>
+      <div className="min-w-0 flex-1 px-6 py-4">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+          <div className="flex items-center justify-end gap-2">
             <ToolbarButton onClick={() => {
               if (showCreateForm) {
                 setShowCreateForm(false);
@@ -366,21 +364,9 @@ export function ProjectsPage() {
               {showCreateForm ? 'Close new project' : 'New project'}
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refreshProjects(); }}>Refresh</ToolbarButton>
-          </>
-        )}
-      >
-        <PageHeading
-          title="Projects"
-          meta={projects
-            ? `${projectCounts.all} ${projectCounts.all === 1 ? 'project' : 'projects'}${projectCounts.archived > 0 ? ` · ${projectCounts.archived} archived` : ''} · ${viewProfileLabel}`
-            : `Browse durable work hubs across ${viewProfileLabel}.`}
-        />
-      </PageHeader>
+          </div>
 
-      <div className="min-h-0 flex-1 px-6 py-4">
-        <div className="flex h-full min-h-0 flex-col gap-4">
           {profilesError && <p className="text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
-
           {isLoading && <LoadingState label="Loading projects…" />}
           {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
           {diagnosticsError && <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>}
@@ -434,7 +420,7 @@ export function ProjectsPage() {
               <EmptyState
                 className="h-full"
                 title="Select a project"
-                body="Use the right rail to browse projects and open the selected project in the main workspace."
+                body="Choose a project from the browser on the left to open it here."
               />
             )}
           </div>

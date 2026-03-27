@@ -7,6 +7,14 @@ export const PINNED_SESSION_IDS_STORAGE_KEY = 'pa:pinned-session-ids';
 export const ARCHIVED_SESSION_IDS_STORAGE_KEY = 'pa:archived-session-ids';
 export const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'pa:sidebar-width';
+export const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
+export const PINNED_NOTE_IDS_STORAGE_KEY = 'pa:pinned-note-ids';
+export const OPEN_PROJECT_IDS_STORAGE_KEY = 'pa:open-project-ids';
+export const PINNED_PROJECT_IDS_STORAGE_KEY = 'pa:pinned-project-ids';
+export const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
+export const PINNED_SKILL_IDS_STORAGE_KEY = 'pa:pinned-skill-ids';
+export const OPEN_WORKSPACE_IDS_STORAGE_KEY = 'pa:open-workspace-ids';
+export const PINNED_WORKSPACE_IDS_STORAGE_KEY = 'pa:pinned-workspace-ids';
 export const SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX = 'pa:sidebar-nav-section:';
 
 export function buildSidebarNavSectionStorageKey(sectionId: string): string {
@@ -53,5 +61,13 @@ export function resetStoredConversationUiState(): void {
   removeStoredItem(PINNED_SESSION_IDS_STORAGE_KEY);
   removeStoredItem(ARCHIVED_SESSION_IDS_STORAGE_KEY);
   removeStoredItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY);
+  removeStoredItem(OPEN_NOTE_IDS_STORAGE_KEY);
+  removeStoredItem(PINNED_NOTE_IDS_STORAGE_KEY);
+  removeStoredItem(OPEN_PROJECT_IDS_STORAGE_KEY);
+  removeStoredItem(PINNED_PROJECT_IDS_STORAGE_KEY);
+  removeStoredItem(OPEN_SKILL_IDS_STORAGE_KEY);
+  removeStoredItem(PINNED_SKILL_IDS_STORAGE_KEY);
+  removeStoredItem(OPEN_WORKSPACE_IDS_STORAGE_KEY);
+  removeStoredItem(PINNED_WORKSPACE_IDS_STORAGE_KEY);
   removeStoredItemsMatching(isComposerHistoryStorageKey);
 }

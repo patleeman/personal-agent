@@ -120,7 +120,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Links');
     expect(html).toContain('Chat about note');
     expect(html).toContain('memory-index');
-    expect(html).not.toContain('Search notes');
+    expect(html).toContain('Search notes');
   });
 
   it('keeps queue details out of the main notes workspace', () => {
@@ -145,11 +145,10 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('1');
-    expect(html).toContain('in queue');
-    expect(html).not.toContain('Note work queue');
-    expect(html).not.toContain('Refactor memory pipeline');
-    expect(html).not.toContain('run-123');
+    expect(html).toContain('Work queue');
+    expect(html).toContain('Refactor memory pipeline');
+    expect(html).toContain('run-123');
+    expect(html).toContain('No notes yet');
     expect(html).not.toContain('Retry');
     expect(html).not.toContain('Recover');
   });
@@ -176,11 +175,10 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('1');
-    expect(html).toContain('in queue');
-    expect(html).not.toContain('Retry');
-    expect(html).not.toContain('Retry this node distillation');
-    expect(html).not.toContain('Recover');
+    expect(html).toContain('Work queue');
+    expect(html).toContain('Retry');
+    expect(html).toContain('Recover');
+    expect(html).toContain('Refactor memory pipeline');
   });
 
   it('shows the empty workspace state when there are no notes', () => {
@@ -199,7 +197,8 @@ describe('MemoriesPage', () => {
     const html = renderPage('/notes');
 
     expect(html).toContain('No notes yet');
-    expect(html).toContain('The right rail is for browsing notes and note resources.');
+    expect(html).toContain('Create a note to start building durable context.');
     expect(html).toContain('Create note');
+    expect(html).toContain('Search notes');
   });
 });
