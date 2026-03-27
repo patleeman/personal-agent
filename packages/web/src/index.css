@@ -247,31 +247,19 @@
   }
 
   .ui-browser-entry {
-    @apply flex items-start gap-3 rounded-xl px-3 py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
+    @apply block rounded-lg border border-border-subtle bg-base px-3 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
   }
 
   .ui-browser-entry-hover {
-    @apply hover:bg-elevated/45;
+    @apply hover:bg-elevated/60 hover:border-border-default;
   }
 
   .ui-browser-entry-selected {
-    @apply bg-elevated/80;
-  }
-
-  .ui-browser-entry-glyph {
-    @apply mt-0.5 flex h-10 w-8 shrink-0 items-center justify-center rounded-lg border border-border-subtle bg-surface/70 text-dim transition-colors;
-  }
-
-  .ui-browser-entry:hover .ui-browser-entry-glyph {
-    @apply border-border-default text-secondary;
-  }
-
-  .ui-browser-entry-selected .ui-browser-entry-glyph {
-    @apply border-accent/30 bg-accent/10 text-accent;
+    @apply border-border-default bg-elevated/70;
   }
 
   .ui-browser-entry-header {
-    @apply flex flex-wrap items-center gap-x-2 gap-y-1;
+    @apply flex flex-wrap items-center justify-between gap-x-3 gap-y-1;
   }
 
   .ui-browser-entry-label {
@@ -283,7 +271,7 @@
   }
 
   .ui-browser-entry-title {
-    @apply mt-1 break-words text-[13px] font-semibold leading-snug text-primary;
+    @apply mt-1 break-words text-[12px] font-medium leading-snug text-primary;
   }
 
   .ui-browser-entry-summary {
@@ -295,7 +283,7 @@
   }
 
   .ui-browser-entry-meta {
-    @apply mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim;
+    @apply mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim;
   }
 
   .ui-list-row {

@@ -4,7 +4,7 @@ import { api } from '../api';
 import { formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { buildProjectsHref, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
-import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ResourceGlyph, ToolbarButton } from './ui';
+import { BrowserRecordRow, EmptyState, ErrorState, ListLinkRow, LoadingState, ToolbarButton } from './ui';
 import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -156,7 +156,6 @@ export function ProjectsBrowserRail() {
                   key={`${project.profile ?? effectiveViewProfile ?? 'shared'}:${project.id}`}
                   to={buildProjectsHref(effectiveViewProfile ?? project.profile ?? 'shared', project.id)}
                   selected={project.id === selectedProjectId}
-                  icon={<ResourceGlyph kind="project" />}
                   label={archived ? 'Archived project' : 'Project'}
                   aside={formatRailStatusLabel(project.status)}
                   heading={project.title}
