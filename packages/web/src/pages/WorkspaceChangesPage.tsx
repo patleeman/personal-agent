@@ -437,7 +437,7 @@ export function WorkspaceChangesPage() {
       browser={<WorkspaceRail />}
       browserLabel="Workspace browser"
     >
-      <div className="min-w-0 flex-1 flex flex-col">
+      <div className="min-w-0 min-h-0 flex-1 flex flex-col">
         <PageHeader
           className="flex-wrap items-start gap-y-3"
           actions={(
