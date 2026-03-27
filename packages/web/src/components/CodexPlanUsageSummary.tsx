@@ -122,7 +122,7 @@ export function CodexPlanUsageSummary({
   } satisfies CodexPlanUsageState;
 
   return (
-    <div className="space-y-3 rounded-2xl border border-border-subtle/80 bg-surface/40 px-4 py-3">
+    <div className="space-y-3 border-t border-border-subtle pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-dim/70">Codex plan usage</p>
@@ -147,10 +147,16 @@ export function CodexPlanUsageSummary({
       {snapshot.error ? (
         <p className="text-[11px] text-dim">{snapshot.error}</p>
       ) : (
-        <div className="grid gap-4 md:grid-cols-3 md:gap-5">
-          <UsageWindowMetric label="5hr" window={snapshot.fiveHour} />
-          <UsageWindowMetric label="Weekly" window={snapshot.weekly} />
-          <CreditsMetric credits={snapshot.credits} />
+        <div className="grid gap-y-3 md:grid-cols-3 md:gap-x-6 md:gap-y-0">
+          <div className="min-w-0 md:pr-6 md:border-r md:border-border-subtle/70">
+            <UsageWindowMetric label="5hr" window={snapshot.fiveHour} />
+          </div>
+          <div className="min-w-0 border-t border-border-subtle/70 pt-3 md:border-t-0 md:border-r md:border-border-subtle/70 md:px-6 md:pt-0">
+            <UsageWindowMetric label="Weekly" window={snapshot.weekly} />
+          </div>
+          <div className="min-w-0 border-t border-border-subtle/70 pt-3 md:border-t-0 md:pl-6 md:pt-0">
+            <CreditsMetric credits={snapshot.credits} />
+          </div>
         </div>
       )}
     </div>
