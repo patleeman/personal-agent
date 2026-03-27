@@ -344,6 +344,13 @@ export function Sidebar() {
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
   );
+  const openConversationItems = useMemo(
+    () => [
+      ...pinnedSessions.map((session) => ({ session, pinned: true })),
+      ...visibleConversationTabs.map((session) => ({ session, pinned: false })),
+    ],
+    [pinnedSessions, visibleConversationTabs],
+  );
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -585,32 +592,20 @@ export function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
-        <SectionHeader label="Pinned Conversations" count={loading ? '…' : pinnedSessions.length} />
+        <SectionHeader label="Open Conversations" count={loading ? '…' : openConversationItems.length} />
         <div className="py-1 space-y-0.5">
-          {!loading && pinnedSessions.length === 0 ? <p className="px-4 py-2 text-[12px] text-dim">No pinned conversations.</p> : null}
-          {pinnedSessions.map((session) => (
-            <OpenConversationRow
-              key={session.id}
-              session={session}
-              active={location.pathname === `/conversations/${session.id}`}
-              pinned
-              onUnpin={() => unpinSession(session.id)}
-            />
-          ))}
-        </div>
-
-        <SectionHeader label="Open Conversations" count={loading ? '…' : visibleConversationTabs.length} />
-        <div className="py-1 space-y-0.5">
-          {!loading && visibleConversationTabs.length === 0 ? <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p> : null}
-          {visibleConversationTabs.map((session) => {
+          {!loading && openConversationItems.length === 0 ? <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p> : null}
+          {openConversationItems.map(({ session, pinned }) => {
             const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
             return (
               <OpenConversationRow
                 key={session.id}
                 session={session}
                 active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
-                onPin={isDraftTab ? undefined : () => pinSession(session.id)}
-                onClose={isDraftTab ? handleCloseDraftTab : () => handleCloseConversation(session.id)}
+                pinned={pinned}
+                onPin={pinned || isDraftTab ? undefined : () => pinSession(session.id)}
+                onUnpin={pinned ? () => unpinSession(session.id) : undefined}
+                onClose={pinned ? undefined : (isDraftTab ? handleCloseDraftTab : () => handleCloseConversation(session.id))}
               />
             );
           })}
