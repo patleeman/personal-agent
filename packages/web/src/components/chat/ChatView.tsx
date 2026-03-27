@@ -1,4 +1,5 @@
 import React, { Children, cloneElement, isValidElement, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
@@ -1778,7 +1779,7 @@ function ReplySelectionToolbar({
       role="toolbar"
       aria-label="Selected text actions"
       onMouseDown={(event) => { event.preventDefault(); }}
-      className="fixed z-[70] inline-flex items-center gap-1 rounded-full border border-border-default bg-surface/96 p-1 shadow-2xl backdrop-blur"
+      className="fixed z-[120] inline-flex items-center gap-1 rounded-full border border-border-default bg-surface/96 p-1 shadow-2xl backdrop-blur"
       style={{
         left: state.x,
         top: state.y,
@@ -2429,6 +2430,7 @@ export const ChatView = memo(function ChatView({
   const replyMenuRef = useRef<HTMLDivElement>(null);
   const replyMenuSyncFrameRef = useRef<number | null>(null);
   const replyMenuSyncTimeoutRef = useRef<number | null>(null);
+  const replyMenuClearTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -2525,42 +2527,68 @@ export const ChatView = memo(function ChatView({
     }
   }, []);
 
-  const syncReplyMenuFromSelection = useCallback(() => {
+  const cancelReplyMenuClear = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (replyMenuClearTimeoutRef.current !== null) {
+      window.clearTimeout(replyMenuClearTimeoutRef.current);
+      replyMenuClearTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleReplyMenuClear = useCallback(() => {
     if (typeof window === 'undefined') {
       setReplyMenu((current) => (current ? null : current));
       return;
     }
 
+    cancelReplyMenuClear();
+    replyMenuClearTimeoutRef.current = window.setTimeout(() => {
+      replyMenuClearTimeoutRef.current = null;
+      setReplyMenu((current) => (current ? null : current));
+    }, 140);
+  }, [cancelReplyMenuClear]);
+
+  const syncReplyMenuFromSelection = useCallback(() => {
+    if (typeof window === 'undefined') {
+      scheduleReplyMenuClear();
+      return;
+    }
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      setReplyMenu((current) => (current ? null : current));
+      scheduleReplyMenuClear();
       return;
     }
 
     const range = selection.getRangeAt(0);
     const { startScope, endScope } = findSelectionReplyScopeElements(selection, range);
     if (!startScope || startScope !== endScope) {
-      setReplyMenu((current) => (current ? null : current));
+      scheduleReplyMenuClear();
       return;
     }
 
     const text = readSelectedTextWithinElement(startScope);
     if (!text) {
-      setReplyMenu((current) => (current ? null : current));
+      scheduleReplyMenuClear();
       return;
     }
 
     const messageIndex = Number.parseInt(startScope.dataset.messageIndex ?? '', 10);
     if (!Number.isFinite(messageIndex)) {
-      setReplyMenu((current) => (current ? null : current));
+      scheduleReplyMenuClear();
       return;
     }
 
     const rect = readSelectionRect(range, startScope);
     if (!rect) {
-      setReplyMenu((current) => (current ? null : current));
+      scheduleReplyMenuClear();
       return;
     }
+
+    cancelReplyMenuClear();
 
     const x = Math.round(Math.max(28, Math.min(window.innerWidth - 28, rect.left + (rect.width / 2))));
     const placement = rect.top < 72 ? 'below' : 'above';
@@ -2582,11 +2610,12 @@ export const ChatView = memo(function ChatView({
 
       return { text, messageIndex, blockId, x, y, placement };
     });
-  }, []);
+  }, [cancelReplyMenuClear, scheduleReplyMenuClear]);
 
   const scheduleReplyMenuSync = useCallback(() => {
     if (typeof window === 'undefined' || !onReplyToSelection) {
       clearScheduledReplyMenuSync();
+      cancelReplyMenuClear();
       setReplyMenu((current) => (current ? null : current));
       return;
     }
@@ -2601,11 +2630,12 @@ export const ChatView = memo(function ChatView({
       replyMenuSyncTimeoutRef.current = null;
       syncReplyMenuFromSelection();
     }, 40);
-  }, [clearScheduledReplyMenuSync, onReplyToSelection, syncReplyMenuFromSelection]);
+  }, [cancelReplyMenuClear, clearScheduledReplyMenuSync, onReplyToSelection, syncReplyMenuFromSelection]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
       clearScheduledReplyMenuSync();
+      cancelReplyMenuClear();
       setReplyMenu(null);
       return;
     }
@@ -2623,8 +2653,9 @@ export const ChatView = memo(function ChatView({
       document.removeEventListener('keyup', scheduleReplyMenuSync);
       document.removeEventListener('touchend', scheduleReplyMenuSync);
       clearScheduledReplyMenuSync();
+      cancelReplyMenuClear();
     };
-  }, [clearScheduledReplyMenuSync, onReplyToSelection, scheduleReplyMenuSync]);
+  }, [cancelReplyMenuClear, clearScheduledReplyMenuSync, onReplyToSelection, scheduleReplyMenuSync]);
 
   useEffect(() => {
     if (!replyMenu || typeof window === 'undefined' || typeof document === 'undefined') {
@@ -2644,22 +2675,22 @@ export const ChatView = memo(function ChatView({
         setReplyMenu(null);
       }
     };
-    const handleClose = () => {
-      setReplyMenu(null);
+    const handleViewportChange = () => {
+      scheduleReplyMenuSync();
     };
 
     document.addEventListener('pointerdown', handlePointerDown);
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', handleClose);
-    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
 
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', handleClose);
-      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
     };
-  }, [replyMenu]);
+  }, [replyMenu, scheduleReplyMenuSync]);
 
   const handleReplySelection = useCallback(async () => {
     if (!replyMenu || !onReplyToSelection) {
@@ -2894,6 +2925,17 @@ export const ChatView = memo(function ChatView({
       </div>
     </div>
   ) : null;
+  const replyToolbar = replyMenu && typeof document !== 'undefined'
+    ? createPortal(
+        <ReplySelectionToolbar
+          state={replyMenu}
+          menuRef={replyMenuRef}
+          onReply={() => { void handleReplySelection(); }}
+          onCopy={() => { void handleCopyReplySelection(); }}
+        />,
+        document.body,
+      )
+    : null;
 
   return (
     <>
@@ -2907,14 +2949,7 @@ export const ChatView = memo(function ChatView({
           </div>
         )}
       </div>
-      {replyMenu && (
-        <ReplySelectionToolbar
-          state={replyMenu}
-          menuRef={replyMenuRef}
-          onReply={() => { void handleReplySelection(); }}
-          onCopy={() => { void handleCopyReplySelection(); }}
-        />
-      )}
+      {replyToolbar}
     </>
   );
 });
