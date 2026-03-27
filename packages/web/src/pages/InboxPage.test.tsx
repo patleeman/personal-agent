@@ -58,7 +58,7 @@ describe('InboxPage', () => {
     vi.clearAllMocks();
   });
 
-  it('shows conversation-open and activity-start actions in the inbox list', () => {
+  it('shows active alerts alongside conversation-open and activity-start actions in the inbox list', () => {
     const activity: ActivitySnapshot = {
       entries: [
         {
@@ -83,11 +83,27 @@ describe('InboxPage', () => {
               <SseConnectionContext.Provider value={{ status: 'open' }}>
                 <AppDataContext.Provider value={{
                   activity,
+                  alerts: {
+                    activeCount: 1,
+                    entries: [{
+                      id: 'alert-1',
+                      kind: 'reminder',
+                      severity: 'disruptive',
+                      status: 'active',
+                      title: 'Follow up now',
+                      body: 'Reminder fired for the deployment check-in.',
+                      createdAt: '2026-03-18T12:02:00.000Z',
+                      updatedAt: '2026-03-18T12:02:00.000Z',
+                      conversationId: 'conv-123',
+                      wakeupId: 'wakeup-1',
+                    }],
+                  },
                   projects: null,
                   sessions: [],
                   tasks: null,
                   runs: null,
                   setActivity: vi.fn(),
+                  setAlerts: vi.fn(),
                   setProjects: vi.fn(),
                   setSessions: vi.fn(),
                   setTasks: vi.fn(),
@@ -103,6 +119,9 @@ describe('InboxPage', () => {
     );
 
     expect(html).toContain('Verification failed for web UI deploy');
+    expect(html).toContain('Active alerts');
+    expect(html).toContain('Follow up now');
+    expect(html).toContain('Open alerts');
     expect(html).toContain('Clear inbox');
     expect(html).toContain('title="Start a new conversation from this inbox item"');
     expect(html).toContain('Follow up on failed verification');

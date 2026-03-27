@@ -124,13 +124,14 @@ export function AlertsPage() {
                 All{(alerts?.entries.length ?? 0) > 0 ? <span className="ml-1 opacity-60">{alerts?.entries.length ?? 0}</span> : null}
               </button>
             </div>
+            <Link to="/inbox" className="ui-toolbar-button">Back to inbox</Link>
             <ToolbarButton onClick={() => { void refresh(); }}>Refresh</ToolbarButton>
           </>
         )}
       >
         <PageHeading
-          title="Alerts"
-          meta="Sparse, interrupting reminders and callbacks that need acknowledgement."
+          title="Alert history"
+          meta="Sparse, interrupting reminders and callbacks. Active alerts also surface in Inbox so this page can stay low-frequency."
         />
       </PageHeader>
 
