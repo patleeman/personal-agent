@@ -423,7 +423,7 @@ describe('ContextRail run detail', () => {
     expect(html.indexOf('Todo list')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
     expect(html.indexOf('Referenced projects')).toBeLessThan(html.indexOf('Todo list'));
-    expect(html).toContain('Add');
+    expect(html).toContain('No referenced projects.');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {
