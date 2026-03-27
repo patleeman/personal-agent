@@ -1,18 +1,71 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
+import { buildRailWidthStorageKey } from '../layoutSizing';
 import { type ThemePreference, useTheme } from '../theme';
 import type { CodexPlanUsageState, ModelState, ProviderAuthSummary, ProviderOAuthLoginState, ProviderOAuthLoginStreamEvent } from '../types';
+import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
-import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
+import { ListButtonRow, ListLinkRow, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
+const SETTINGS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('settings-browser');
+
+const SETTINGS_SECTION_ITEMS = [
+  {
+    id: 'settings-appearance',
+    label: 'Appearance',
+    summary: 'Theme and other browser-local display preferences.',
+  },
+  {
+    id: 'settings-defaults',
+    label: 'Agent defaults',
+    summary: 'Profile, model, cwd, and conversation title defaults.',
+  },
+  {
+    id: 'settings-providers',
+    label: 'Provider credentials',
+    summary: 'API keys, OAuth, and Codex plan usage.',
+  },
+  {
+    id: 'settings-interface',
+    label: 'Interface state',
+    summary: 'Reset saved UI preferences and cached layout state.',
+  },
+  {
+    id: 'settings-workspace',
+    label: 'Workspace',
+    summary: 'Current repo root used by the web app runtime.',
+  },
+] as const;
+
+const SETTINGS_CONTROL_CENTER_ITEMS = [
+  {
+    href: '/system',
+    label: 'System',
+    summary: 'Daemon state, sync health, and durable runs.',
+  },
+  {
+    href: '/plans',
+    label: 'Capabilities',
+    summary: 'Todo presets and reusable automation patterns.',
+  },
+  {
+    href: '/tools',
+    label: 'Tools',
+    summary: 'Available tools, CLIs, MCP servers, and package sources.',
+  },
+  {
+    href: '/instructions',
+    label: 'Instructions',
+    summary: 'Loaded AGENTS and other durable instruction sources.',
+  },
+] as const;
 
 type ModelOption = ModelState['models'][number];
 
@@ -92,6 +145,25 @@ function formatProviderModelCoverage(provider: ProviderAuthSummary | null): stri
   return `${provider.modelCount} discovered ${provider.modelCount === 1 ? 'model' : 'models'} mapped to this provider.`;
 }
 
+type SettingsSectionId = (typeof SETTINGS_SECTION_ITEMS)[number]['id'];
+
+function readSettingsSectionId(hash: string): SettingsSectionId | null {
+  const normalized = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (SETTINGS_SECTION_ITEMS.some((section) => section.id === normalized)) {
+    return normalized as SettingsSectionId;
+  }
+
+  return null;
+}
+
+function preferredSettingsScrollBehavior(): ScrollBehavior {
+  if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return 'auto';
+  }
+
+  return 'smooth';
+}
+
 function ThemeButton({
   value,
   current,
@@ -112,6 +184,53 @@ function ThemeButton({
     >
       {label ?? value}
     </button>
+  );
+}
+
+function SettingsNavigationRail({
+  activeSectionId,
+  onSelectSection,
+}: {
+  activeSectionId: SettingsSectionId;
+  onSelectSection: (sectionId: SettingsSectionId) => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 space-y-1 border-b border-border-subtle px-4 py-4">
+        <p className="ui-card-title">Settings</p>
+        <p className="ui-card-meta">Stable preferences, provider auth, and interface recovery tools.</p>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-6">
+        <div className="space-y-px">
+          <SectionLabel label="Preferences" className="px-2 pb-1" />
+          {SETTINGS_SECTION_ITEMS.map((section) => (
+            <ListButtonRow
+              key={section.id}
+              selected={section.id === activeSectionId}
+              onClick={() => onSelectSection(section.id)}
+            >
+              <p className="ui-row-title">{section.label}</p>
+              <p className="ui-row-summary">{section.summary}</p>
+            </ListButtonRow>
+          ))}
+        </div>
+
+        <div className="space-y-px border-t border-border-subtle pt-4">
+          <SectionLabel label="Control center" className="px-2 pb-1" />
+          {SETTINGS_CONTROL_CENTER_ITEMS.map((item) => (
+            <ListLinkRow
+              key={item.href}
+              to={item.href}
+              trailing={<span aria-hidden="true" className="mt-0.5 text-[12px] text-dim">→</span>}
+            >
+              <p className="ui-row-title">{item.label}</p>
+              <p className="ui-row-summary">{item.summary}</p>
+            </ListLinkRow>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -183,6 +302,10 @@ export function SettingsPage() {
   const oauthTerminalStateKeyRef = useRef<string | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  const settingsContentRef = useRef<HTMLDivElement | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<SettingsSectionId>(() => (
+    readSettingsSectionId(typeof window === 'undefined' ? '' : window.location.hash) ?? SETTINGS_SECTION_ITEMS[0].id
+  ));
 
   const pageMeta = [
     `theme ${theme}`,
@@ -322,6 +445,76 @@ export function SettingsPage() {
   const selectedProviderLogin = oauthLoginState && selectedProvider && oauthLoginState.provider === selectedProvider.id
     ? oauthLoginState
     : null;
+
+  const updateActiveSectionFromScroll = useCallback(() => {
+    const container = settingsContentRef.current;
+    if (!container) {
+      return;
+    }
+
+    const threshold = 96;
+    let nextSectionId: SettingsSectionId = SETTINGS_SECTION_ITEMS[0].id;
+
+    for (const section of SETTINGS_SECTION_ITEMS) {
+      const element = document.getElementById(section.id);
+      if (!element) {
+        continue;
+      }
+
+      const offsetTop = element.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+      if (container.scrollTop + threshold >= offsetTop) {
+        nextSectionId = section.id;
+      }
+    }
+
+    setActiveSectionId((current) => current === nextSectionId ? current : nextSectionId);
+  }, []);
+
+  const scrollToSection = useCallback((sectionId: SettingsSectionId, behavior: ScrollBehavior = preferredSettingsScrollBehavior()) => {
+    const element = document.getElementById(sectionId);
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ block: 'start', behavior });
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}${window.location.search}#${sectionId}`);
+    setActiveSectionId(sectionId);
+  }, []);
+
+  useEffect(() => {
+    const container = settingsContentRef.current;
+    if (!container) {
+      return;
+    }
+
+    function handleHashChange() {
+      const sectionId = readSettingsSectionId(window.location.hash);
+      if (sectionId) {
+        scrollToSection(sectionId, 'auto');
+      }
+    }
+
+    const initialFrame = window.requestAnimationFrame(() => {
+      const initialSectionId = readSettingsSectionId(window.location.hash);
+      if (initialSectionId) {
+        scrollToSection(initialSectionId, 'auto');
+        return;
+      }
+
+      updateActiveSectionFromScroll();
+    });
+
+    container.addEventListener('scroll', updateActiveSectionFromScroll, { passive: true });
+    window.addEventListener('resize', updateActiveSectionFromScroll);
+    window.addEventListener('hashchange', handleHashChange);
+
+    return () => {
+      window.cancelAnimationFrame(initialFrame);
+      container.removeEventListener('scroll', updateActiveSectionFromScroll);
+      window.removeEventListener('resize', updateActiveSectionFromScroll);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
+  }, [scrollToSection, updateActiveSectionFromScroll]);
 
   async function handleProfileChange(nextProfile: string) {
     if (!profileState || nextProfile === profileState.currentProfile || switchingProfile) {
@@ -583,61 +776,37 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader actions={<ToolbarButton onClick={() => {
-        void Promise.all([
-          refetchProfiles({ resetLoading: false }),
-          refetchModels({ resetLoading: false }),
-          refetchDefaultCwd({ resetLoading: false }),
-          refetchConversationTitleSettings({ resetLoading: false }),
-          refetchProviderAuth({ resetLoading: false }),
-          refetchCodexPlanUsage({ resetLoading: false }),
-          refetchStatus({ resetLoading: false }),
-          oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-        ]);
-      }}>↻ Refresh</ToolbarButton>}>
-        <PageHeading
-          title="Settings"
-          meta={pageMeta || 'Theme, profile defaults, working directory defaults, provider credentials, and interface reset tools.'}
-        />
-      </PageHeader>
+    <BrowserSplitLayout
+      storageKey={SETTINGS_BROWSER_WIDTH_STORAGE_KEY}
+      initialWidth={248}
+      minWidth={220}
+      maxWidth={320}
+      browser={<SettingsNavigationRail activeSectionId={activeSectionId} onSelectSection={scrollToSection} />}
+      browserLabel="Settings navigation"
+    >
+      <div className="flex h-full min-h-0 flex-col">
+        <PageHeader actions={<ToolbarButton onClick={() => {
+          void Promise.all([
+            refetchProfiles({ resetLoading: false }),
+            refetchModels({ resetLoading: false }),
+            refetchDefaultCwd({ resetLoading: false }),
+            refetchConversationTitleSettings({ resetLoading: false }),
+            refetchProviderAuth({ resetLoading: false }),
+            refetchCodexPlanUsage({ resetLoading: false }),
+            refetchStatus({ resetLoading: false }),
+            oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
+          ]);
+        }}>↻ Refresh</ToolbarButton>}>
+          <PageHeading
+            title="Settings"
+            meta={pageMeta || 'Stable preferences, provider credentials, and interface reset tools.'}
+          />
+        </PageHeader>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="max-w-5xl space-y-8 pb-6">
-          <section className="space-y-4 border-b border-border-subtle pb-8">
-            <SectionLabel label="Control center" />
-            <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">Low-frequency tools</h2>
-              <p className="ui-card-meta max-w-2xl">
-                System status, todo presets, tools, and instruction sources live here so the main sidebar can stay focused on day-to-day work.
-              </p>
-            </div>
-            <div className="grid gap-x-8 gap-y-1 lg:grid-cols-2">
-              {[
-                ['/system', 'System', 'Daemon state, sync health, and durable runs.'],
-                ['/plans', 'Capabilities', 'Todo presets and reusable automation patterns.'],
-                ['/tools', 'Tools', 'Available tools, CLIs, MCP servers, and package sources.'],
-                ['/instructions', 'Instructions', 'Loaded AGENTS and other durable instruction sources.'],
-              ].map(([href, label, summary]) => (
-                <Link
-                  key={href}
-                  to={href}
-                  className="group -mx-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[13px] font-medium text-primary">{label}</p>
-                      <p className="max-w-md text-[12px] leading-relaxed text-secondary">{summary}</p>
-                    </div>
-                    <span aria-hidden="true" className="mt-0.5 shrink-0 text-[12px] text-dim transition-colors group-hover:text-primary">→</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <SectionLabel label="Appearance" />
+        <div ref={settingsContentRef} className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="max-w-5xl space-y-8 pb-6">
+            <section id="settings-appearance" className="space-y-4 scroll-mt-6">
+              <SectionLabel label="Appearance" />
 
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Theme</h2>
@@ -658,7 +827,7 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <section className="space-y-5 border-t border-border-subtle pt-6">
+          <section id="settings-defaults" className="space-y-5 border-t border-border-subtle pt-6 scroll-mt-6">
             <SectionLabel label="Agent defaults" />
 
             <div className="grid gap-8 lg:grid-cols-2 xl:grid-cols-4">
@@ -906,7 +1075,7 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <section className="space-y-5 border-t border-border-subtle pt-6">
+          <section id="settings-providers" className="space-y-5 border-t border-border-subtle pt-6 scroll-mt-6">
             <SectionLabel label="Provider credentials" />
 
             <div className="grid gap-8 lg:grid-cols-2">
@@ -1102,7 +1271,7 @@ export function SettingsPage() {
             />
           </section>
 
-          <section className="space-y-5 border-t border-border-subtle pt-6">
+          <section id="settings-interface" className="space-y-5 border-t border-border-subtle pt-6 scroll-mt-6">
             <SectionLabel label="Interface state" />
 
             <div className="space-y-1">
@@ -1146,7 +1315,7 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <section className="space-y-4 border-t border-border-subtle pt-6">
+          <section id="settings-workspace" className="space-y-4 border-t border-border-subtle pt-6 scroll-mt-6">
             <SectionLabel label="Workspace" />
 
             <div className="space-y-1">
@@ -1164,5 +1333,6 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
+    </BrowserSplitLayout>
   );
 }
