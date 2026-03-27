@@ -34,10 +34,11 @@ import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
 const DANGER_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-danger hover:text-danger/75 transition-colors disabled:opacity-40';
-const RAIL_SECTION_CLASS = 'rounded-xl border border-border-subtle bg-transparent px-3 py-3';
+const RAIL_SECTION_CLASS = 'border-t border-border-subtle pt-3 first:border-t-0 first:pt-0';
 const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-lg border border-border-default bg-base/50 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface';
 const PROJECT_TOOLBAR_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-border-subtle bg-base/40 text-secondary hover:bg-surface hover:text-primary disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-accent/25 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent disabled:cursor-default disabled:opacity-40';
+const PROJECT_TOOLBAR_GROUP_CLASS = 'inline-flex items-center gap-1 rounded-full border border-border-subtle bg-base/30 p-1';
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
@@ -173,7 +174,7 @@ function ProjectRailSection({
         </div>
         {action}
       </div>
-      <div className="mt-3">{children}</div>
+      <div className="mt-2.5">{children}</div>
     </section>
   );
 }
@@ -328,7 +329,7 @@ function ProjectNoteList({
   return (
     <div className="space-y-2.5">
       {noteEditor?.mode === 'add' ? noteEditorForm : null}
-      <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
+      <div className="divide-y divide-border-subtle">
         {notes.map((note) => {
           const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
           if (isEditing) {
@@ -377,7 +378,7 @@ function ProjectFileList({
   }
 
   return (
-    <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
+    <div className="divide-y divide-border-subtle">
       {files.map((file) => (
         <article key={file.id} className="px-3 py-2.5">
           <div className="flex items-start justify-between gap-3">
@@ -410,7 +411,7 @@ function ProjectConversationList({
   }
 
   return (
-    <div className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-base/20">
+    <div className="divide-y divide-border-subtle">
       {conversations.map((conversation) => (
         <a
           key={conversation.conversationId}
@@ -420,7 +421,7 @@ function ProjectConversationList({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-[13px] font-medium text-primary">{conversation.title}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-secondary">{summarizeConversationMeta(conversation)}</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-secondary" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{summarizeConversationMeta(conversation)}</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                 <span>{conversation.lastActivityAt ? `updated ${timeAgo(conversation.lastActivityAt)}` : 'linked'}</span>
                 {conversation.needsAttention ? (
@@ -925,7 +926,7 @@ export function ProjectDetailPanel({
               <span className="font-mono text-secondary">{record.id}</span>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className={PROJECT_TOOLBAR_GROUP_CLASS}>
               <IconButton
                 type="button"
                 onClick={() => { void startConversationFromProject(); }}
@@ -969,8 +970,8 @@ export function ProjectDetailPanel({
             </div>
 
             <div className="space-y-2">
-              <h1 className="text-[36px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
-              {projectSummary ? <p className="max-w-3xl text-[15px] leading-relaxed text-secondary">{projectSummary}</p> : null}
+              <h1 className="text-[32px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
+              {projectSummary ? <p className="max-w-3xl text-[14px] leading-relaxed text-secondary">{projectSummary}</p> : null}
               {record.currentFocus?.trim() ? (
                 <p className="text-[12px] text-dim">Current focus · {record.currentFocus.trim()}</p>
               ) : null}

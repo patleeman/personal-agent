@@ -250,7 +250,7 @@ export function ProjectActivityContent({
                   )}
                   <span className="shrink-0 text-[11px] text-dim">{timestamp}</span>
                 </div>
-                {summary ? <p className="text-[12px] leading-relaxed text-secondary">{summary}</p> : null}
+                {summary ? <p className="text-[12px] leading-relaxed text-secondary" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{summary}</p> : null}
                 <p className="text-[11px] text-dim">{itemKindLabel(item)}</p>
               </div>
             </div>
