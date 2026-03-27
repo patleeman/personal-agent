@@ -637,7 +637,7 @@ export function MemoriesPage() {
       browser={<NotesBrowserRailContent notesState={{ data, loading, refreshing, error, refetch }} queueState={queueState} />}
       browserLabel="Notes browser"
     >
-      <div className="min-w-0 flex-1 px-6 py-4">
+      <div className="min-w-0 min-h-0 flex flex-1 flex-col px-6 py-4">
         {loading && !data ? <LoadingState label="Loading notes…" /> : null}
         {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} /> : null}
 

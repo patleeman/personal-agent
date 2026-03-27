@@ -356,7 +356,7 @@ export function ProjectsPage() {
       browser={<ProjectsBrowserRail />}
       browserLabel="Projects browser"
     >
-      <div className="min-w-0 flex-1 px-6 py-4">
+      <div className="min-w-0 min-h-0 flex-1 px-6 py-4">
         <div className="flex h-full min-h-0 flex-col gap-4">
           <div className="flex items-center justify-end gap-2">
             <ToolbarButton onClick={() => {
