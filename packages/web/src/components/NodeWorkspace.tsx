@@ -54,6 +54,7 @@ export function NodeWorkspaceShell({
   notice,
   children,
   inspector,
+  compactTitle = false,
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
@@ -65,6 +66,7 @@ export function NodeWorkspaceShell({
   notice?: ReactNode;
   children: ReactNode;
   inspector?: ReactNode;
+  compactTitle?: boolean;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -73,7 +75,7 @@ export function NodeWorkspaceShell({
           <div className="min-w-0 space-y-1.5">
             {eyebrow && <p className="ui-section-label">{eyebrow}</p>}
             <div className="space-y-1">
-              <h2 className="break-words text-[22px] font-semibold tracking-tight text-primary">{title}</h2>
+              <h2 className={compactTitle ? 'break-words text-[13px] font-medium text-secondary' : 'break-words text-[22px] font-semibold tracking-tight text-primary'}>{title}</h2>
               {summary && <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{summary}</p>}
             </div>
             {meta && <div className="ui-card-meta flex flex-wrap items-center gap-1.5">{meta}</div>}

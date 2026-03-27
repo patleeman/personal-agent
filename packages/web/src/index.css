@@ -323,6 +323,46 @@
     @apply mx-auto w-full max-w-4xl;
   }
 
+  .ui-note-editor-frame {
+    @apply h-full overflow-y-auto;
+  }
+
+  .ui-note-editor-doc {
+    @apply mx-auto flex w-full max-w-4xl flex-col gap-5 px-8 py-8;
+  }
+
+  .ui-note-title-input {
+    @apply w-full border-0 bg-transparent p-0 text-[34px] font-semibold tracking-tight text-primary outline-none placeholder:text-dim;
+  }
+
+  .ui-note-inline-meta {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-dim;
+  }
+
+  .ui-note-properties {
+    @apply border-y border-border-subtle/80;
+  }
+
+  .ui-note-property-row {
+    @apply grid grid-cols-[84px_minmax(0,1fr)] gap-3 border-b border-border-subtle/70 py-2.5 last:border-b-0;
+  }
+
+  .ui-note-property-label {
+    @apply pt-1 text-[11px] font-medium text-dim;
+  }
+
+  .ui-note-property-input {
+    @apply w-full border-0 bg-transparent p-0 text-[14px] text-secondary outline-none placeholder:text-dim;
+  }
+
+  .ui-note-property-value {
+    @apply min-h-[24px] text-[14px] leading-relaxed text-secondary;
+  }
+
+  .ui-note-editor-shell {
+    @apply min-h-[24rem];
+  }
+
   .ui-detail-list {
     @apply space-y-2;
   }

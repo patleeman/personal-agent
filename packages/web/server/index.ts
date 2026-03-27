@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
+import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, publishAppEvent, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
@@ -6176,16 +6177,111 @@ function normalizeCreatedNoteSummary(value: unknown): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
-function normalizeCreatedNoteTags(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+function normalizeNoteBody(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
   }
 
-  return [...new Set(value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .flatMap((entry) => entry.split(','))
-    .map((entry) => entry.trim().toLowerCase())
+  return value.replace(/\r\n/g, '\n').trim();
+}
+
+function inferNoteTagsFromBody(content: string): string[] {
+  return [...new Set(Array.from(content.matchAll(/(^|[^\w/])#([a-z0-9][a-z0-9-]*)\b/gi))
+    .map((match) => match[2]?.trim().toLowerCase() ?? '')
     .filter((entry) => entry.length > 0))];
+}
+
+function extractNoteSummaryFromBody(content: string): string {
+  const paragraphs = content
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .filter((paragraph) => !paragraph.startsWith('#'));
+
+  const first = paragraphs[0];
+  if (!first) {
+    return '';
+  }
+
+  return first.replace(/\s+/g, ' ').trim();
+}
+
+function parseNoteFrontmatterContent(rawContent: string): { frontmatter: Record<string, unknown>; body: string } {
+  const normalized = rawContent.replace(/\r\n/g, '\n');
+  const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    return { frontmatter: {}, body: normalized.trim() };
+  }
+
+  const document = parseDocument(match[1] ?? '', {
+    prettyErrors: true,
+    uniqueKeys: true,
+  });
+  if (document.errors.length > 0) {
+    throw new Error(document.errors[0]?.message ?? 'Invalid note frontmatter.');
+  }
+
+  const parsed = document.toJS({ mapAsMap: false }) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Note frontmatter must be an object.');
+  }
+
+  return {
+    frontmatter: parsed as Record<string, unknown>,
+    body: (match[2] ?? '').replace(/^\n+/, ''),
+  };
+}
+
+function stringifyNoteMarkdown(frontmatter: Record<string, unknown>, body: string): string {
+  const frontmatterText = stringifyYaml(frontmatter, {
+    lineWidth: 0,
+    indent: 2,
+    minContentWidth: 0,
+  }).trimEnd();
+  const normalizedBody = body.replace(/\r\n/g, '\n').trim();
+  return `---\n${frontmatterText}\n---\n\n${normalizedBody.length > 0 ? `${normalizedBody}\n` : ''}`;
+}
+
+function buildStructuredNoteMarkdown(rawContent: string, input: {
+  noteId: string;
+  title: string;
+  summary?: string;
+  body: string;
+}): string {
+  const title = normalizeCreatedNoteTitle(input.title);
+  if (title.length === 0) {
+    throw new Error('title required');
+  }
+
+  const editableBody = normalizeNoteBody(input.body);
+  const summary = normalizeCreatedNoteSummary(input.summary)
+    || extractNoteSummaryFromBody(editableBody)
+    || `Personal note about ${title}.`;
+  const tags = inferNoteTagsFromBody(`${summary}\n${editableBody}`);
+  const parsed = parseNoteFrontmatterContent(rawContent);
+  const frontmatter = {
+    ...parsed.frontmatter,
+    id: (typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0)
+      ? parsed.frontmatter.id.trim()
+      : input.noteId,
+    kind: 'note',
+    title,
+    summary,
+    status: (typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0)
+      ? parsed.frontmatter.status.trim()
+      : 'active',
+    updatedAt: new Date().toISOString().slice(0, 10),
+  } satisfies Record<string, unknown>;
+
+  if (tags.length > 0) {
+    frontmatter.tags = tags;
+  } else {
+    delete frontmatter.tags;
+  }
+
+  const markdownBody = editableBody.length > 0 ? `# ${title}\n\n${editableBody}` : `# ${title}`;
+  return stringifyNoteMarkdown(frontmatter, markdownBody);
 }
 
 function slugifyCreatedNoteId(value: string): string {
@@ -6298,28 +6394,27 @@ app.post('/api/notes', (req, res) => {
       return;
     }
 
-    const summary = normalizeCreatedNoteSummary(req.body?.summary) || `Personal note about ${title}.`;
-    const tags = normalizeCreatedNoteTags(req.body?.tags);
+    const editableBody = normalizeNoteBody(req.body?.body);
+    const summary = normalizeCreatedNoteSummary(req.body?.summary)
+      || extractNoteSummaryFromBody(editableBody)
+      || `Personal note about ${title}.`;
     const created = createMemoryDoc({
       id: generateCreatedNoteId(title),
       title,
       summary,
-      tags,
+      tags: inferNoteTagsFromBody(`${summary}\n${editableBody}`),
       status: 'active',
     });
-    const memory = findMemoryDocById(created.id, { includeSearchText: true });
 
-    if (!memory) {
-      res.status(500).json({ error: 'Created note could not be loaded.' });
-      return;
-    }
+    writeFileSync(created.filePath, buildStructuredNoteMarkdown(readFileSync(created.filePath, 'utf-8'), {
+      noteId: created.id,
+      title,
+      summary,
+      body: editableBody,
+    }), 'utf-8');
 
-    res.status(201).json({
-      memory,
-      content: readFileSync(created.filePath, 'utf-8'),
-      references: [],
-      links: readNodeLinksForCurrentProfile('note', memory.id),
-    });
+    const detail = readNoteDetail(created.id);
+    res.status(201).json(detail);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -6350,20 +6445,28 @@ app.post('/api/notes/:memoryId', (req, res) => {
       return;
     }
 
-    const { content } = req.body as { content?: string };
-    if (typeof content !== 'string') {
-      res.status(400).json({ error: 'content required' });
+    const { content, title, summary, body } = req.body as {
+      content?: string;
+      title?: string;
+      summary?: string;
+      body?: string;
+    };
+
+    if (typeof content === 'string') {
+      writeFileSync(memory.path, content, 'utf-8');
+    } else if (typeof title === 'string' && typeof body === 'string') {
+      writeFileSync(memory.path, buildStructuredNoteMarkdown(readFileSync(memory.path, 'utf-8'), {
+        noteId: memory.id,
+        title,
+        summary,
+        body,
+      }), 'utf-8');
+    } else {
+      res.status(400).json({ error: 'content or { title, body } required' });
       return;
     }
 
-    writeFileSync(memory.path, content, 'utf-8');
-    const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
-    res.json({
-      memory: refreshed,
-      content,
-      references: buildMemoryReferenceItems(refreshed.path),
-      links: readNodeLinksForCurrentProfile('note', refreshed.id),
-    });
+    res.json(readNoteDetail(memory.id));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
