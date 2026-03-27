@@ -6260,7 +6260,7 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
     || `Personal note about ${title}.`;
   const tags = inferNoteTagsFromBody(`${summary}\n${editableBody}`);
   const parsed = parseNoteFrontmatterContent(rawContent);
-  const frontmatter = {
+  const frontmatter: Record<string, unknown> & { tags?: string[] } = {
     ...parsed.frontmatter,
     id: (typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0)
       ? parsed.frontmatter.id.trim()
@@ -6272,7 +6272,7 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
       ? parsed.frontmatter.status.trim()
       : 'active',
     updatedAt: new Date().toISOString().slice(0, 10),
-  } satisfies Record<string, unknown>;
+  };
 
   if (tags.length > 0) {
     frontmatter.tags = tags;
