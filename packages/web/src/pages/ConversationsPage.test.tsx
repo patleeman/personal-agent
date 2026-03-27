@@ -231,7 +231,8 @@ describe('ConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Switch views from the sidebar.');
+    expect(html).toContain('Needs review');
+    expect(html).toContain('Archived');
     expect(html).not.toContain('Conversation runs');
     expect(html).not.toContain('Needs review conversation');
     expect(html).not.toContain('Archived but still running');

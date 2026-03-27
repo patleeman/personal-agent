@@ -4,11 +4,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import {
-  buildSidebarNavSectionStorageKey,
+  OPEN_NOTE_IDS_STORAGE_KEY,
+  OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
+  OPEN_SKILL_IDS_STORAGE_KEY,
+  OPEN_WORKSPACE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from '../localSettings.js';
-import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types.js';
+import type { SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -16,20 +19,12 @@ import { Sidebar } from './Sidebar.js';
 class MemoryStorage {
   private readonly store = new Map<string, string>();
 
-  get length() {
-    return this.store.size;
-  }
-
   clear() {
     this.store.clear();
   }
 
   getItem(key: string) {
     return this.store.get(key) ?? null;
-  }
-
-  key(index: number) {
-    return [...this.store.keys()][index] ?? null;
   }
 
   removeItem(key: string) {
@@ -47,89 +42,12 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     file: '/tmp/conv-123.jsonl',
     timestamp: '2026-03-16T09:30:00.000Z',
     cwd: '/Users/patrickc.lee/personal/personal-agent',
-    cwdSlug: 'Users-patrickc.lee-personal-personal-agent',
+    cwdSlug: 'personal-agent',
     model: 'openai/gpt-5.4',
     title: 'Clarify background run link',
     messageCount: 4,
     isRunning: false,
-    deferredResumes: [{
-      id: 'resume-1',
-      sessionFile: '/tmp/conv-123.jsonl',
-      prompt: 'Continue the investigation.',
-      dueAt: '2026-03-16T10:01:00.000Z',
-      createdAt: '2026-03-16T10:00:00.000Z',
-      attempts: 0,
-      status: 'scheduled',
-    }],
     ...overrides,
-  };
-}
-
-function createTask(overrides: Partial<ScheduledTaskSummary> = {}): ScheduledTaskSummary {
-  return {
-    id: 'daily-report',
-    filePath: '/tmp/daily-report.task.md',
-    scheduleType: 'cron',
-    running: false,
-    enabled: true,
-    cron: '0 9 * * *',
-    prompt: 'Summarize yesterday and today.',
-    ...overrides,
-  };
-}
-
-function createRunsResult(): DurableRunListResult {
-  return {
-    scannedAt: '2026-03-16T10:00:00.000Z',
-    runsRoot: '/tmp/runs',
-    summary: {
-      total: 1,
-      recoveryActions: {},
-      statuses: { running: 1 },
-    },
-    runs: [{
-      runId: 'run-subagent-123',
-      paths: {
-        root: '/tmp/runs/run-subagent-123',
-        manifestPath: '/tmp/runs/run-subagent-123/manifest.json',
-        statusPath: '/tmp/runs/run-subagent-123/status.json',
-        checkpointPath: '/tmp/runs/run-subagent-123/checkpoint.json',
-        eventsPath: '/tmp/runs/run-subagent-123/events.jsonl',
-        outputLogPath: '/tmp/runs/run-subagent-123/output.log',
-        resultPath: '/tmp/runs/run-subagent-123/result.json',
-      },
-      manifest: {
-        version: 1,
-        id: 'run-subagent-123',
-        kind: 'background-run',
-        resumePolicy: 'manual',
-        createdAt: '2026-03-16T09:59:00.000Z',
-        spec: {
-          taskSlug: 'subagent',
-        },
-        source: {
-          type: 'tool',
-          id: 'conv-123',
-        },
-      },
-      status: {
-        version: 1,
-        runId: 'run-subagent-123',
-        status: 'running',
-        createdAt: '2026-03-16T09:59:00.000Z',
-        updatedAt: '2026-03-16T10:00:00.000Z',
-        activeAttempt: 1,
-        startedAt: '2026-03-16T09:59:10.000Z',
-      },
-      checkpoint: {
-        version: 1,
-        runId: 'run-subagent-123',
-        updatedAt: '2026-03-16T10:00:00.000Z',
-        payload: {},
-      },
-      problems: [],
-      recoveryAction: 'none',
-    }],
   };
 }
 
@@ -163,17 +81,32 @@ describe('Sidebar', () => {
     vi.useRealTimers();
   });
 
-  it('shows deferred resume timing for conversations with a pending resume', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/inbox']}>
+  function renderSidebar(pathname = '/inbox') {
+    return renderToString(
+      <MemoryRouter initialEntries={[pathname]}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
           <AppDataContext.Provider value={{
             activity: { entries: [], unreadCount: 0 },
-            projects: null,
+            alerts: { entries: [], activeCount: 0 },
+            projects: [{
+              id: 'active-project',
+              title: 'Active project',
+              summary: 'In progress.',
+              description: 'Still being worked on.',
+              createdAt: '2026-03-16T10:00:00.000Z',
+              updatedAt: '2026-03-16T12:00:00.000Z',
+              requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
+              status: 'in_progress',
+              blockers: [],
+              recentProgress: [],
+              plan: { milestones: [], tasks: [] },
+              profile: 'assistant',
+            }],
             sessions: [createSession()],
             tasks: null,
             runs: null,
             setActivity: () => {},
+            setAlerts: () => {},
             setProjects: () => {},
             setSessions: () => {},
             setTasks: () => {},
@@ -186,232 +119,50 @@ describe('Sidebar', () => {
         </SseConnectionContext.Provider>
       </MemoryRouter>,
     );
+  }
 
-    expect(html).toContain('Wakeups ');
-    expect(html).toContain('1 scheduled · next in 58s');
-  });
-
-  it('shows the active run badge on the system nav item', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/inbox']}>
-        <SseConnectionContext.Provider value={{ status: 'open' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession({ isRunning: true })],
-            tasks: [createTask({ running: true })],
-            runs: createRunsResult(),
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('System</span><span class="ui-sidebar-nav-badge">3</span>');
-    expect(html).toContain('3 active now · 1 conversation · 1 scheduled · 1 background.');
-  });
-
-  it('keeps sidebar sections collapsed by default on unrelated pages', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/inbox']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
+  it('renders a flat primary nav for core workspaces', () => {
+    const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Workspace'));
-    expect(html.indexOf('Workspace')).toBeLessThan(html.indexOf('Knowledge Base'));
-    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Capabilities'));
-    expect(html.indexOf('Capabilities')).toBeLessThan(html.indexOf('New chat'));
-    expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
-    expect(html.indexOf('Pinned')).toBeLessThan(html.indexOf('Open conversations'));
-    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('System'));
-    expect(html.indexOf('System')).toBeLessThan(html.indexOf('Settings'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Notes'));
+    expect(html.indexOf('Notes')).toBeLessThan(html.indexOf('Projects'));
+    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Skills'));
+    expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html).toContain('Pinned Conversations');
+    expect(html).toContain('Open Conversations');
+    expect(html).toContain('Alerts');
+    expect(html).toContain('Settings');
+    expect(html).not.toContain('Knowledge Base');
+    expect(html).not.toContain('Capabilities');
+    expect(html).not.toContain('Needs review');
+    expect(html).not.toContain('Archived');
+  });
+
+  it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
+    storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
+    storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
+    storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['tool-agent-browser']));
+    storage.setItem(OPEN_WORKSPACE_IDS_STORAGE_KEY, JSON.stringify(['/tmp/repo']));
+
+    const html = renderSidebar('/inbox');
+
+    expect(html).toContain('Open Notes');
+    expect(html).toContain('note-index');
+    expect(html).toContain('Open Projects');
+    expect(html).toContain('Active project');
+    expect(html).toContain('Open Skills');
+    expect(html).toContain('Agent Browser');
+    expect(html).toContain('Open Workspaces');
+    expect(html).toContain('repo');
+  });
+
+  it('keeps the workspace nav simple on workspace routes', () => {
+    const html = renderSidebar('/workspace/changes?cwd=/tmp/repo');
+
+    expect(html).toContain('href="/workspace/files"');
+    expect(html).not.toContain('ui-sidebar-subnav-item');
     expect(html).not.toContain('Files');
     expect(html).not.toContain('Changes');
-    expect(html).not.toContain('Projects');
-    expect(html).not.toContain('Todo Presets');
-  });
-
-  it('expands the active conversations section to reveal conversation workspace views', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/conversations?filter=attention']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('Needs review');
-    expect(html).toContain('Archived');
-    expect(html).toContain('href="/conversations?filter=attention"');
-    expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
-  });
-
-  it('expands the active workspace section to reveal files and changes routes', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/workspace/changes']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('Files');
-    expect(html).toContain('Changes');
-    expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
-  });
-
-  it('treats instructions as part of capabilities navigation', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/instructions']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('href="/plans"');
-    expect(html).toContain('href="/scheduled"');
-    expect(html).toContain('href="/tools"');
-    expect(html).toContain('href="/instructions"');
-    expect(html).not.toContain('href="/projects"');
-    expect(html).not.toContain('href="/notes"');
-    expect(html).not.toContain('href="/skills"');
-  });
-
-  it('uses the persisted collapsed state for active nav groups', () => {
-    storage.setItem(buildSidebarNavSectionStorageKey('conversations'), JSON.stringify(false));
-
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/conversations?filter=attention']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [createSession()],
-            tasks: null,
-            runs: null,
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).not.toContain('href="/conversations?filter=attention"');
-    expect(html).not.toContain('href="/conversations?filter=archived"');
-  });
-
-  it('nests child conversations under their parent conversation when run lineage is available', () => {
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'child-1']));
-
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/inbox']}>
-        <SseConnectionContext.Provider value={{ status: 'offline' }}>
-          <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            projects: null,
-            sessions: [
-              createSession({ id: 'conv-123', title: 'Parent conversation', file: '/tmp/conv-123.jsonl', deferredResumes: [] }),
-              createSession({ id: 'child-1', title: 'Child conversation', file: '/tmp/child-1.jsonl', deferredResumes: [], sourceRunId: 'run-subagent-123' }),
-            ],
-            tasks: null,
-            runs: createRunsResult(),
-            setActivity: () => {},
-            setProjects: () => {},
-            setSessions: () => {},
-            setTasks: () => {},
-            setRuns: () => {},
-          }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
-              <Sidebar />
-            </LiveTitlesContext.Provider>
-          </AppDataContext.Provider>
-        </SseConnectionContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('Parent conversation');
-    expect(html).toContain('↳ Child conversation');
-    expect(html).toContain('Nested under Parent conversation');
-    expect(html.indexOf('Parent conversation')).toBeLessThan(html.indexOf('↳ Child conversation'));
   });
 });

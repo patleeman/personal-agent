@@ -10,8 +10,6 @@ import {
   ErrorState,
   ListLinkRow,
   LoadingState,
-  PageHeader,
-  PageHeading,
   ToolbarButton,
 } from '../components/ui';
 import {
@@ -23,6 +21,7 @@ import {
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
+import { SkillsBrowserRail } from '../components/SkillsBrowserRail';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import {
   buildSkillsSearch,
@@ -31,6 +30,7 @@ import {
   type SkillWorkspaceView,
   sortSkills,
 } from '../skillWorkspaceState';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
 function SkillReferencesList({
   detail,
@@ -171,6 +171,10 @@ function SkillWorkspace({
       setContentLoading(true);
       setContentError(null);
       try {
+        if (!selectedReference) {
+          return;
+        }
+
         const result = await api.memoryFile(selectedReference.path);
         if (cancelled) {
           return;
@@ -393,28 +397,26 @@ export function SkillsPage() {
     setSelectedSkill({ skillName: null, view: 'definition', item: null }, true);
   }, [loading, selectedSkillName, setSelectedSkill, skills]);
 
+  useEffect(() => {
+    if (!selectedSkillName) {
+      return;
+    }
+
+    ensureOpenResourceShelfItem('skill', selectedSkillName);
+  }, [selectedSkillName]);
+
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        className="flex-wrap items-start gap-y-3"
-        actions={(
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
+        <SkillsBrowserRail />
+      </div>
+      <div className="min-w-0 flex-1 px-6 py-4">
+        <div className="flex items-center justify-end pb-4">
           <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); if (selectedSkillName) { void skillDetailApi.refetch({ resetLoading: false }); } }} disabled={refreshing || skillDetailApi.refreshing}>
             {refreshing || skillDetailApi.refreshing ? 'Refreshing…' : 'Refresh'}
           </ToolbarButton>
-        )}
-      >
-        <PageHeading
-          title="Skills"
-          meta={(
-            <>
-              {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
-              {selectedSkillName && <span className="ml-2 text-secondary">· {humanizeSkillName(selectedSkillName)}</span>}
-            </>
-          )}
-        />
-      </PageHeader>
+        </div>
 
-      <div className="min-h-0 flex-1 px-6 py-4">
         {loading && !data ? <LoadingState label="Loading skills…" /> : null}
         {error && !data ? <ErrorState message={`Unable to load skills: ${error}`} /> : null}
 
@@ -448,7 +450,7 @@ export function SkillsPage() {
               <EmptyState
                 className="h-full"
                 title="Select a skill"
-                body="Use the right rail to browse reusable workflows. The selected skill opens here in a document-first workspace."
+                body="Choose a skill from the browser on the left to open it here."
               />
             )}
           </div>

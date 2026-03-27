@@ -35,7 +35,7 @@ describe('ProjectsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders invalid project warnings from diagnostics without hiding the page', () => {
+  function mockCommonAppData() {
     vi.mocked(useAppData).mockReturnValue({
       activity: null,
       alerts: null,
@@ -50,9 +50,42 @@ describe('ProjectsPage', () => {
       setTasks: vi.fn(),
       setRuns: vi.fn(),
     });
+  }
 
-    vi.mocked(useApi)
-      .mockReturnValueOnce({
+  it('renders invalid project warnings from diagnostics without hiding the page', () => {
+    mockCommonAppData();
+
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'project-diagnostics:assistant') {
+        return {
+          data: {
+            profile: 'assistant',
+            invalidProjects: [
+              {
+                projectId: 'broken-project',
+                path: '/tmp/broken-project/state.yaml',
+                error: 'Project.recentProgress[0] must be a string.',
+              },
+            ],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
         data: {
           currentProfile: 'assistant',
           profiles: ['assistant', 'datadog'],
@@ -61,37 +94,8 @@ describe('ProjectsPage', () => {
         refreshing: false,
         error: null,
         refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: [],
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: {
-          profile: 'assistant',
-          invalidProjects: [
-            {
-              projectId: 'broken-project',
-              path: '/tmp/broken-project/state.yaml',
-              error: 'Project.recentProgress[0] must be a string.',
-            },
-          ],
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      });
+      };
+    });
 
     const html = renderToString(
       <MemoryRouter initialEntries={['/projects']}>
@@ -105,23 +109,11 @@ describe('ProjectsPage', () => {
     expect(html).toContain('broken-project');
     expect(html).toContain('Project.recentProgress[0] must be a string.');
     expect(html).toContain('npm run validate:projects -- --profile assistant');
+    expect(html).toContain('Browse projects and jump between project sections.');
   });
 
-  it('renders the selected project in the main workspace instead of the project list', () => {
-    vi.mocked(useAppData).mockReturnValue({
-      activity: null,
-      alerts: null,
-      projects: null,
-      sessions: null,
-      tasks: null,
-      runs: null,
-      setActivity: vi.fn(),
-      setAlerts: vi.fn(),
-      setProjects: vi.fn(),
-      setSessions: vi.fn(),
-      setTasks: vi.fn(),
-      setRuns: vi.fn(),
-    });
+  it('renders the selected project in the main workspace with the browser still visible', () => {
+    mockCommonAppData();
 
     vi.mocked(useApi).mockImplementation((_, key) => {
       if (key === 'node-mentions') {
@@ -186,7 +178,7 @@ describe('ProjectsPage', () => {
         };
       }
 
-      if (key === 'projects:assistant') {
+      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
         return {
           data: [
             {
@@ -201,6 +193,7 @@ describe('ProjectsPage', () => {
               blockers: [],
               recentProgress: [],
               plan: { milestones: [], tasks: [] },
+              profile: 'assistant',
             },
           ],
           loading: false,
@@ -230,9 +223,9 @@ describe('ProjectsPage', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('Browse projects and jump between project sections.');
     expect(html).toContain('Active project');
     expect(html).toContain('In progress.');
-    expect(html).not.toContain('Use the right rail to browse projects and jump between logical project sections.');
     expect(html).not.toContain('Select a project');
   });
 });

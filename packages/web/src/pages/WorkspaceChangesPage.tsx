@@ -9,13 +9,14 @@ import {
   buildWorkspacePath,
   buildWorkspaceSearch,
   changeLabel,
-  changeShortLabel,
   changeTone,
   readWorkspaceChangeScopeFromSearch,
   readWorkspaceCwdFromSearch,
   readWorkspaceFileFromSearch,
 } from '../workspaceBrowser';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import type { WorkspaceChangeKind, WorkspaceCommitDraftResult, WorkspaceGitScope, WorkspaceGitStatusSummary } from '../types';
+import { WorkspaceRail } from '../components/WorkspaceRail';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -412,189 +413,211 @@ export function WorkspaceChangesPage() {
       changeCountLabel(status.untrackedCount, status.untrackedCount === 1 ? 'untracked' : 'untracked'),
     ].join(' · ');
   }, [status]);
+  const workspaceShelfId = status?.repoRoot ?? status?.cwd ?? requestedCwd ?? null;
+
+  useEffect(() => {
+    if (!workspaceShelfId) {
+      return;
+    }
+
+    ensureOpenResourceShelfItem('workspace', workspaceShelfId);
+  }, [workspaceShelfId]);
 
   const selectedActionLabel = selectedRow ? rowActionLabel(selectedRow.scope) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader
-        className="flex-wrap items-start gap-y-3"
-        actions={(
-          <ToolbarButton onClick={() => { void refreshStatusAndDiff(); }} disabled={statusApi.refreshing || mutationBusy || commitBusy}>
-            {statusApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </ToolbarButton>
-        )}
-      >
-        <PageHeading title="Workspace" meta={workspaceMeta} />
-      </PageHeader>
-
-      <div className="border-b border-border-subtle px-6 py-3">
-        <form className="flex flex-wrap items-center gap-2" onSubmit={handleWorkspaceSubmit}>
-          <input
-            value={cwdDraft}
-            onChange={(event) => setCwdDraft(event.target.value)}
-            placeholder={status?.cwd ?? 'Enter a folder path'}
-            className={`${INPUT_CLASS} min-w-[18rem] flex-1 font-mono text-[12px]`}
-            spellCheck={false}
-          />
-          <ToolbarButton type="button" onClick={() => { void handleWorkspaceBrowse(); }} disabled={workspaceActionBusy}>
-            Browse…
-          </ToolbarButton>
-          <ToolbarButton type="submit" disabled={workspaceActionBusy || cwdDraft.trim().length === 0}>
-            Open folder
-          </ToolbarButton>
-        </form>
-        {status && (
-          <p className="mt-2 text-[11px] text-dim">
-            {status.repoRoot
-              ? 'Changes mode reviews the repo root so staged and unstaged state stay aligned with the current git working tree.'
-              : 'Changes mode is only available inside a git repository. Switch folders or go back to Files mode.'}
-          </p>
-        )}
-        {workspaceActionError && <p className="mt-2 text-[12px] text-danger">{workspaceActionError}</p>}
+    <div className="flex h-full min-h-0 overflow-hidden">
+      <div className="w-[22rem] shrink-0 border-r border-border-subtle bg-surface/35">
+        <WorkspaceRail />
       </div>
-
-      {status && status.repoRoot && (
-        <div className="border-b border-border-subtle px-4 py-3">
-          <div className="flex flex-wrap items-center gap-2">
-            {status.branch && <Pill tone="muted">{status.branch}</Pill>}
-            <Pill tone={status.stagedCount > 0 ? 'accent' : 'muted'}>{status.stagedCount} staged</Pill>
-            <Pill tone={status.unstagedCount > 0 ? 'warning' : 'muted'}>{status.unstagedCount} unstaged</Pill>
-            <Pill tone={status.untrackedCount > 0 ? 'teal' : 'muted'}>{status.untrackedCount} untracked</Pill>
-            {status.conflictedCount > 0 && <Pill tone="danger">{status.conflictedCount} conflicted</Pill>}
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <ToolbarButton onClick={handleStageAll} disabled={mutationBusy || status.stagedCount + status.unstagedCount + status.untrackedCount === 0}>
-                Stage all
+      <div className="min-w-0 flex-1 flex flex-col">
+        <PageHeader
+          className="flex-wrap items-start gap-y-3"
+          actions={(
+            <div className="flex flex-wrap items-center gap-2">
+              <ToolbarButton onClick={() => navigate(buildWorkspacePath('files', buildWorkspaceSearch(location.search, { cwd: requestedCwd, file: requestedFilePath, changeScope: null })))}>
+                Files
               </ToolbarButton>
-              <ToolbarButton onClick={handleUnstageAll} disabled={mutationBusy || status.stagedCount === 0}>
-                Unstage all
+              <ToolbarButton onClick={() => navigate(buildWorkspacePath('changes', buildWorkspaceSearch(location.search, { cwd: requestedCwd, file: requestedFilePath, changeScope: requestedScope })))}>
+                Changes
+              </ToolbarButton>
+              <ToolbarButton onClick={() => { void refreshStatusAndDiff(); }} disabled={statusApi.refreshing || mutationBusy || commitBusy}>
+                {statusApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
               </ToolbarButton>
             </div>
-          </div>
-          {mutationError && <p className="mt-2 text-[12px] text-danger">{mutationError}</p>}
-          {commitNotice && <p className="mt-2 text-[12px] text-teal">{commitNotice}</p>}
+          )}
+        >
+          <PageHeading title="Workspace" meta={workspaceMeta} />
+        </PageHeader>
+
+        <div className="border-b border-border-subtle px-6 py-3">
+          <form className="flex flex-wrap items-center gap-2" onSubmit={handleWorkspaceSubmit}>
+            <input
+              value={cwdDraft}
+              onChange={(event) => setCwdDraft(event.target.value)}
+              placeholder={status?.cwd ?? 'Enter a folder path'}
+              className={`${INPUT_CLASS} min-w-[18rem] flex-1 font-mono text-[12px]`}
+              spellCheck={false}
+            />
+            <ToolbarButton type="button" onClick={() => { void handleWorkspaceBrowse(); }} disabled={workspaceActionBusy}>
+              Browse…
+            </ToolbarButton>
+            <ToolbarButton type="submit" disabled={workspaceActionBusy || cwdDraft.trim().length === 0}>
+              Open folder
+            </ToolbarButton>
+          </form>
+          {status && (
+            <p className="mt-2 text-[11px] text-dim">
+              {status.repoRoot
+                ? 'Review git changes for this workspace here while keeping the current CWD aligned. Use the browser on the left to switch files or jump back to Files.'
+                : 'Changes are only available inside a git repository. Switch folders or use Files mode.'}
+            </p>
+          )}
+          {workspaceActionError && <p className="mt-2 text-[12px] text-danger">{workspaceActionError}</p>}
         </div>
-      )}
 
-      <div className="min-h-0 flex-1">
-        {statusApi.loading && !status && (
-          <LoadingState label="Loading changes…" className="h-full justify-center" />
-        )}
-
-        {statusApi.error && !status && (
-          <ErrorState className="m-6" message={`Unable to load changes: ${statusApi.error}`} />
-        )}
-
-        {status && !status.repoRoot && (
-          <div className="flex h-full items-center justify-center px-8">
-            <EmptyState title="Git repo required" body="Open a git repository to review changes, stage files, and create commits here." />
-          </div>
-        )}
-
-        {status && status.repoRoot && rows.length === 0 && (
-          <div className="flex h-full items-center justify-center px-8">
-            <EmptyState title="Working tree clean" body="There are no staged, unstaged, or untracked changes to review right now." />
-          </div>
-        )}
-
-        {status && status.repoRoot && rows.length > 0 && selectedRow && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="shrink-0 border-b border-border-subtle px-4 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate font-mono text-[13px] text-primary" title={selectedRow.relativePath}>{selectedRow.relativePath}</p>
-                    <Pill tone={changeTone(selectedRow.change)}>{changeLabel(selectedRow.change)}</Pill>
-                    <Pill tone={selectedRow.scope === 'staged' ? 'accent' : selectedRow.scope === 'conflicted' ? 'danger' : selectedRow.scope === 'untracked' ? 'teal' : 'warning'}>{selectedRow.scope}</Pill>
-                  </div>
-                  <p className="text-[11px] text-dim">
-                    {selectedRow.oldRelativePath ? `from ${selectedRow.oldRelativePath}` : selectedRow.exists ? 'File exists on disk' : 'Deleted from disk'}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <ToolbarButton onClick={handleOpenInFiles}>Open in Files</ToolbarButton>
-                  {selectedActionLabel && (
-                    <ToolbarButton onClick={handleSelectedRowAction} disabled={mutationBusy || commitBusy}>
-                      {selectedActionLabel}
-                    </ToolbarButton>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-hidden bg-panel">
-              {diffApi.loading && !diffDetail ? (
-                <LoadingState label="Loading diff…" className="h-full justify-center" />
-              ) : diffApi.error && !diffDetail ? (
-                <div className="p-6">
-                  <ErrorState message={`Unable to load diff: ${diffApi.error}`} />
-                </div>
-              ) : diffDetail ? (
-                diffDetail.diff.trim().length > 0 ? (
-                  <pre className="h-full overflow-auto px-4 py-4 font-mono text-[12px] leading-6 text-secondary whitespace-pre-wrap break-words">{diffDetail.diff}</pre>
-                ) : (
-                  <div className="flex h-full items-center justify-center px-8">
-                    <EmptyState title="No diff output" body="Git returned no patch text for the selected change." />
-                  </div>
-                )
-              ) : null}
-            </div>
-
-            <div className="shrink-0 border-t border-border-subtle px-4 py-3 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="ui-section-label">Commit</p>
-                  <p className="text-[11px] text-dim">Create a commit from the currently staged changes only.</p>
-                </div>
-                <p className="text-[11px] text-dim">Shortcuts: ↑/↓ or j/k · s stage toggle · e open in Files · ⌘/Ctrl+Enter commit</p>
-              </div>
-
-              <textarea
-                value={commitMessage}
-                onChange={(event) => setCommitMessage(event.target.value)}
-                placeholder="Write a commit message…"
-                className={`${TEXTAREA_CLASS} min-h-[96px] font-mono text-[12px]`}
-                spellCheck={false}
-              />
-
-              {draftSuggestion && (
-                <div className="rounded-xl border border-border-subtle bg-surface/30 px-4 py-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="ui-section-label">Suggested draft</p>
-                    <Pill tone={draftSuggestion.source === 'ai' ? 'accent' : 'muted'}>{draftSuggestion.source === 'ai' ? 'AI' : 'fallback'}</Pill>
-                  </div>
-                  <pre className="font-mono text-[12px] leading-6 text-secondary whitespace-pre-wrap break-words">{draftSuggestion.message}</pre>
-                  {draftSuggestion.notice && <p className="text-[11px] text-dim">{draftSuggestion.notice}</p>}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <ToolbarButton
-                      onClick={() => {
-                        setCommitMessage(draftSuggestion.message);
-                        setCommitNotice(draftSuggestion.notice);
-                        setDraftSuggestion(null);
-                      }}
-                    >
-                      Use draft
-                    </ToolbarButton>
-                    <ToolbarButton onClick={() => setDraftSuggestion(null)}>Dismiss</ToolbarButton>
-                  </div>
-                </div>
-              )}
-
-              {draftError && <p className="text-[12px] text-danger">{draftError}</p>}
-              {commitError && <p className="text-[12px] text-danger">{commitError}</p>}
-
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <ToolbarButton onClick={() => { void handleDraftCommitMessage(); }} disabled={draftBusy || commitBusy || status.stagedCount === 0}>
-                  {draftBusy ? 'Drafting…' : 'Draft with AI'}
+        {status && status.repoRoot && (
+          <div className="border-b border-border-subtle px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {status.branch && <Pill tone="muted">{status.branch}</Pill>}
+              <Pill tone={status.stagedCount > 0 ? 'accent' : 'muted'}>{status.stagedCount} staged</Pill>
+              <Pill tone={status.unstagedCount > 0 ? 'warning' : 'muted'}>{status.unstagedCount} unstaged</Pill>
+              <Pill tone={status.untrackedCount > 0 ? 'teal' : 'muted'}>{status.untrackedCount} untracked</Pill>
+              {status.conflictedCount > 0 && <Pill tone="danger">{status.conflictedCount} conflicted</Pill>}
+              <div className="ml-auto flex flex-wrap items-center gap-2">
+                <ToolbarButton onClick={handleStageAll} disabled={mutationBusy || status.stagedCount + status.unstagedCount + status.untrackedCount === 0}>
+                  Stage all
                 </ToolbarButton>
-                <ToolbarButton onClick={() => { void handleCommit(); }} disabled={commitBusy || status.stagedCount === 0 || status.conflictedCount > 0 || commitMessage.trim().length === 0}>
-                  {commitBusy ? 'Committing…' : 'Commit'}
+                <ToolbarButton onClick={handleUnstageAll} disabled={mutationBusy || status.stagedCount === 0}>
+                  Unstage all
                 </ToolbarButton>
               </div>
             </div>
+            {mutationError && <p className="mt-2 text-[12px] text-danger">{mutationError}</p>}
+            {commitNotice && <p className="mt-2 text-[12px] text-teal">{commitNotice}</p>}
           </div>
         )}
+
+        <div className="min-h-0 flex-1">
+          {statusApi.loading && !status && (
+            <LoadingState label="Loading changes…" className="h-full justify-center" />
+          )}
+
+          {statusApi.error && !status && (
+            <ErrorState className="m-6" message={`Unable to load changes: ${statusApi.error}`} />
+          )}
+
+          {status && !status.repoRoot && (
+            <div className="flex h-full items-center justify-center px-8">
+              <EmptyState title="Git repo required" body="Open a git repository to review changes, stage files, and create commits here." />
+            </div>
+          )}
+
+          {status && status.repoRoot && rows.length === 0 && (
+            <div className="flex h-full items-center justify-center px-8">
+              <EmptyState title="Working tree clean" body="There are no staged, unstaged, or untracked changes to review right now." />
+            </div>
+          )}
+
+          {status && status.repoRoot && rows.length > 0 && selectedRow && (
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="shrink-0 border-b border-border-subtle px-4 py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-mono text-[13px] text-primary" title={selectedRow.relativePath}>{selectedRow.relativePath}</p>
+                      <Pill tone={changeTone(selectedRow.change)}>{changeLabel(selectedRow.change)}</Pill>
+                      <Pill tone={selectedRow.scope === 'staged' ? 'accent' : selectedRow.scope === 'conflicted' ? 'danger' : selectedRow.scope === 'untracked' ? 'teal' : 'warning'}>{selectedRow.scope}</Pill>
+                    </div>
+                    <p className="text-[11px] text-dim">
+                      {selectedRow.oldRelativePath ? `from ${selectedRow.oldRelativePath}` : selectedRow.exists ? 'File exists on disk' : 'Deleted from disk'}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <ToolbarButton onClick={handleOpenInFiles}>Open in Files</ToolbarButton>
+                    {selectedActionLabel && (
+                      <ToolbarButton onClick={handleSelectedRowAction} disabled={mutationBusy || commitBusy}>
+                        {selectedActionLabel}
+                      </ToolbarButton>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-hidden bg-panel">
+                {diffApi.loading && !diffDetail ? (
+                  <LoadingState label="Loading diff…" className="h-full justify-center" />
+                ) : diffApi.error && !diffDetail ? (
+                  <div className="p-6">
+                    <ErrorState message={`Unable to load diff: ${diffApi.error}`} />
+                  </div>
+                ) : diffDetail ? (
+                  diffDetail.diff.trim().length > 0 ? (
+                    <pre className="h-full overflow-auto px-4 py-4 font-mono text-[12px] leading-6 text-secondary whitespace-pre-wrap break-words">{diffDetail.diff}</pre>
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-8">
+                      <EmptyState title="No diff output" body="Git returned no patch text for the selected change." />
+                    </div>
+                  )
+                ) : null}
+              </div>
+
+              <div className="shrink-0 border-t border-border-subtle px-4 py-3 space-y-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="ui-section-label">Commit</p>
+                    <p className="text-[11px] text-dim">Create a commit from the currently staged changes only.</p>
+                  </div>
+                  <p className="text-[11px] text-dim">Shortcuts: ↑/↓ or j/k · s stage toggle · e open in Files · ⌘/Ctrl+Enter commit</p>
+                </div>
+
+                <textarea
+                  value={commitMessage}
+                  onChange={(event) => setCommitMessage(event.target.value)}
+                  placeholder="Write a commit message…"
+                  className={`${TEXTAREA_CLASS} min-h-[96px] font-mono text-[12px]`}
+                  spellCheck={false}
+                />
+
+                {draftSuggestion && (
+                  <div className="rounded-xl border border-border-subtle bg-surface/30 px-4 py-3 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="ui-section-label">Suggested draft</p>
+                      <Pill tone={draftSuggestion.source === 'ai' ? 'accent' : 'muted'}>{draftSuggestion.source === 'ai' ? 'AI' : 'fallback'}</Pill>
+                    </div>
+                    <pre className="font-mono text-[12px] leading-6 text-secondary whitespace-pre-wrap break-words">{draftSuggestion.message}</pre>
+                    {draftSuggestion.notice && <p className="text-[11px] text-dim">{draftSuggestion.notice}</p>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ToolbarButton
+                        onClick={() => {
+                          setCommitMessage(draftSuggestion.message);
+                          setCommitNotice(draftSuggestion.notice);
+                          setDraftSuggestion(null);
+                        }}
+                      >
+                        Use draft
+                      </ToolbarButton>
+                      <ToolbarButton onClick={() => setDraftSuggestion(null)}>Dismiss</ToolbarButton>
+                    </div>
+                  </div>
+                )}
+
+                {draftError && <p className="text-[12px] text-danger">{draftError}</p>}
+                {commitError && <p className="text-[12px] text-danger">{commitError}</p>}
+
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <ToolbarButton onClick={() => { void handleDraftCommitMessage(); }} disabled={draftBusy || commitBusy || status.stagedCount === 0}>
+                    {draftBusy ? 'Drafting…' : 'Draft with AI'}
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => { void handleCommit(); }} disabled={commitBusy || status.stagedCount === 0 || status.conflictedCount > 0 || commitMessage.trim().length === 0}>
+                    {commitBusy ? 'Committing…' : 'Commit'}
+                  </ToolbarButton>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

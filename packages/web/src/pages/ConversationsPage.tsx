@@ -791,8 +791,26 @@ export function ConversationsPage() {
         {loading ? <LoadingState label="Loading conversations…" /> : (
           <div className="space-y-5 pb-5">
             <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {([
+                  ['open', 'Open'],
+                  ['attention', 'Needs review'],
+                  ['archived', 'Archived'],
+                  ['all', 'All'],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => navigate(value === 'open' ? '/conversations' : `/conversations?filter=${value}`)}
+                    className={filter === value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <p className="ui-card-meta">
-                View: {conversationFilterLabel(filter)} · Switch views from the sidebar. Use ⌘K for global jump/search.
+                View: {conversationFilterLabel(filter)} · Use ⌘K for global jump/search.
               </p>
 
               <input

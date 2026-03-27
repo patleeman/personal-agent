@@ -446,11 +446,17 @@ export function Layout() {
   const railWidth = artifactRailTargetWidth === null
     ? rail.width
     : Math.max(rail.width, artifactRailTargetWidth);
+  const showContextRail = !(
+    location.pathname.startsWith('/notes')
+    || location.pathname.startsWith('/memories')
+    || location.pathname.startsWith('/projects')
+    || location.pathname.startsWith('/skills')
+    || location.pathname.startsWith('/workspace')
+  );
 
   return (
     <>
       <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
-        {/* Left sidebar */}
         <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
           <Sidebar />
         </div>
@@ -458,17 +464,18 @@ export function Layout() {
         <ResizeHandle onMouseDown={sidebar.onMouseDown} />
 
         <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
-          {/* Center */}
           <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
             <Outlet />
           </main>
 
-          <>
-            <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-            <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 flex flex-col overflow-hidden select-text">
-              <ContextRail />
-            </div>
-          </>
+          {showContextRail ? (
+            <>
+              <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+              <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 flex flex-col overflow-hidden select-text">
+                <ContextRail />
+              </div>
+            </>
+          ) : null}
         </RouteContentBoundary>
       </div>
 
