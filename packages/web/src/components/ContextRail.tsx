@@ -74,7 +74,7 @@ import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } 
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
-import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
+import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
@@ -207,12 +207,20 @@ export function prefetchConversationRailData(input: {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div>
-      <p className="ui-section-label mb-2">{title}</p>
-      {children}
-    </div>
+    <section className={cx('space-y-3 border-t border-border-subtle/70 pt-4 first:border-t-0 first:pt-0', className)}>
+      <p className="ui-section-label">{title}</p>
+      <div className="space-y-3">{children}</div>
+    </section>
   );
 }
 
@@ -337,7 +345,7 @@ function RemoteFolderBrowser({
   onClose: () => void;
 }) {
   return (
-    <div className="space-y-2 rounded-lg border border-border-subtle bg-base px-3 py-3">
+    <div className="space-y-2.5 border-t border-border-subtle/70 pt-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="ui-section-label">Remote folders</p>
@@ -371,13 +379,13 @@ function RemoteFolderBrowser({
         <p className="text-[11px] text-dim">No subdirectories found here.</p>
       )}
       {!loading && listing && listing.entries.length > 0 && (
-        <div className="max-h-56 overflow-y-auto rounded-lg border border-border-subtle bg-surface">
+        <div className="max-h-56 overflow-y-auto divide-y divide-border-subtle/70 border-t border-border-subtle/70">
           {listing.entries.map((entry) => (
             <button
               key={entry.path}
               type="button"
               onClick={() => onNavigate(entry.path)}
-              className="flex w-full items-center justify-between gap-3 border-t border-border-subtle px-3 py-2 text-left first:border-t-0 hover:bg-elevated/70"
+              className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:text-primary"
               title={entry.path}
             >
               <span className="truncate text-[12px] text-primary">{entry.name}</span>
@@ -936,9 +944,9 @@ function ReferencedProjectsSectionContent({
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {relatedProjectIds.length > 0 && (
-        <div className="space-y-1">
+        <div className="divide-y divide-border-subtle/70">
           {relatedProjectIds.map((projectId) => {
             const projectRecord = allProjects.find((project) => project.id === projectId) ?? null;
             const isSelected = projectModalOpen && projectId === focusedProjectId;
@@ -947,7 +955,10 @@ function ReferencedProjectsSectionContent({
                 key={projectId}
                 type="button"
                 onClick={() => onOpenProject(projectId)}
-                className={isSelected ? 'w-full rounded-md bg-elevated/80 px-2.5 py-2 text-left transition-colors' : 'w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-elevated/50'}
+                className={cx(
+                  'w-full py-2.5 text-left transition-colors',
+                  isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
+                )}
                 title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -974,11 +985,11 @@ function ReferencedProjectsSectionContent({
       )}
 
       {availableProjects.length > 0 && (
-        <div className="flex min-w-0 items-center gap-2">
+        <div className={cx('flex min-w-0 items-center gap-2', relatedProjectIds.length > 0 && 'border-t border-border-subtle/70 pt-3')}>
           <select
             value={attachProjectId}
             onChange={(event) => onAttachProjectIdChange(event.target.value)}
-            className="min-w-0 flex-1 w-0 rounded-md border border-border-subtle bg-base/70 px-2.5 py-1.5 text-[12px] text-secondary focus:border-accent/60 focus:outline-none"
+            className="min-w-0 w-0 flex-1 rounded-md border border-border-subtle bg-base/70 px-2.5 py-1.5 text-[12px] text-secondary focus:border-accent/60 focus:outline-none"
             aria-label="Reference project"
             title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id}${selectedAttachProject.profile ? ` · ${selectedAttachProject.profile}` : ''})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
           >
@@ -1239,116 +1250,114 @@ function DraftConversationContextPanel() {
   }
 
   return (
-    <div className="space-y-5 px-4 py-4">
+    <div className="px-4 py-4">
       <Section title="Working Directory">
-        <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-          <div className="space-y-2">
-            {hasExplicitCwd ? (
-              <p className="ui-card-body min-w-0 break-all pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
-            ) : (
-              <p className="ui-card-body min-w-0 text-dim">No working directory set.</p>
+        <div className="flex items-start gap-2">
+          {hasExplicitCwd ? (
+            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
+          ) : (
+            <p className="ui-card-body min-w-0 flex-1 text-dim">No working directory set.</p>
+          )}
+          <div className="flex shrink-0 items-center gap-0.5">
+            {hasExplicitCwd && !changingCwd && (
+              <IconButton
+                compact
+                onClick={clearExplicitCwd}
+                className="text-danger"
+                title="Clear the draft working directory"
+                aria-label="Clear the draft working directory"
+              >
+                <XIcon />
+              </IconButton>
             )}
-            <div className="flex items-center justify-end gap-0.5">
-              {hasExplicitCwd && !changingCwd && (
-                <IconButton
-                  compact
-                  onClick={clearExplicitCwd}
-                  className="text-danger"
-                  title="Clear the draft working directory"
-                  aria-label="Clear the draft working directory"
-                >
-                  <XIcon />
-                </IconButton>
-              )}
-              <IconButton
-                compact
-                onClick={() => { void pickDraftCwd(); }}
-                disabled={pickCwdBusy || remotePickerBusy}
-                className="text-accent"
-                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
-                aria-label={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
-              >
-                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
-              </IconButton>
-              <IconButton
-                compact
-                onClick={startChangingCwd}
-                disabled={pickCwdBusy || remotePickerBusy}
-                title="Enter the working directory manually"
-                aria-label="Enter the working directory manually"
-              >
-                <PencilIcon />
-              </IconButton>
-            </div>
-          </div>
-          {remotePickerOpen && isRemoteDraft && (
-            <RemoteFolderBrowser
-              listing={remotePickerListing}
-              loading={remotePickerBusy}
-              error={remotePickerError}
-              onNavigate={(path) => { void loadRemoteDraftFolders(path); }}
-              onSelect={selectRemoteDraftFolder}
-              onClose={() => {
-                setRemotePickerOpen(false);
-                setRemotePickerError(null);
-              }}
-            />
-          )}
-          {changingCwd && (
-            <form
-              className="space-y-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                saveDraftCwd();
-              }}
+            <IconButton
+              compact
+              onClick={() => { void pickDraftCwd(); }}
+              disabled={pickCwdBusy || remotePickerBusy}
+              className="text-accent"
+              title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
+              aria-label={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
             >
-              <input
-                autoFocus
-                value={requestedCwd}
-                onChange={(event) => {
-                  setRequestedCwd(event.target.value);
-                  if (changeCwdError) {
-                    setChangeCwdError(null);
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelChangingCwd();
-                  }
-                }}
-                placeholder="~/workingdir/project"
-                spellCheck={false}
-                disabled={pickCwdBusy}
-                aria-label="Draft conversation working directory"
-                className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
-              />
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-dim">{isRemoteDraft ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={cancelChangingCwd}
-                    disabled={pickCwdBusy}
-                    className="ui-toolbar-button"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={pickCwdBusy}
-                    className="ui-toolbar-button text-accent"
-                  >
-                    Save
-                  </button>
-                </div>
+              <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+            </IconButton>
+            <IconButton
+              compact
+              onClick={startChangingCwd}
+              disabled={pickCwdBusy || remotePickerBusy}
+              title="Enter the working directory manually"
+              aria-label="Enter the working directory manually"
+            >
+              <PencilIcon />
+            </IconButton>
+          </div>
+        </div>
+        {remotePickerOpen && isRemoteDraft && (
+          <RemoteFolderBrowser
+            listing={remotePickerListing}
+            loading={remotePickerBusy}
+            error={remotePickerError}
+            onNavigate={(path) => { void loadRemoteDraftFolders(path); }}
+            onSelect={selectRemoteDraftFolder}
+            onClose={() => {
+              setRemotePickerOpen(false);
+              setRemotePickerError(null);
+            }}
+          />
+        )}
+        {changingCwd && (
+          <form
+            className="space-y-2 border-t border-border-subtle/70 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveDraftCwd();
+            }}
+          >
+            <input
+              autoFocus
+              value={requestedCwd}
+              onChange={(event) => {
+                setRequestedCwd(event.target.value);
+                if (changeCwdError) {
+                  setChangeCwdError(null);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelChangingCwd();
+                }
+              }}
+              placeholder="~/workingdir/project"
+              spellCheck={false}
+              disabled={pickCwdBusy}
+              aria-label="Draft conversation working directory"
+              className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-dim">{isRemoteDraft ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={cancelChangingCwd}
+                  disabled={pickCwdBusy}
+                  className="ui-toolbar-button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pickCwdBusy}
+                  className="ui-toolbar-button text-accent"
+                >
+                  Save
+                </button>
               </div>
-            </form>
-          )}
-          {changeCwdError && (
-            <p className="text-[11px] text-danger/80">{changeCwdError}</p>
-          )}
-        </SurfacePanel>
+            </div>
+          </form>
+        )}
+        {changeCwdError && (
+          <p className="text-[11px] text-danger/80">{changeCwdError}</p>
+        )}
       </Section>
 
       <Section title="Referenced projects">
@@ -1975,165 +1984,163 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const canToggleWorkingTreeChanges = workingTreeChanges.length > MAX_VISIBLE_WORKING_TREE_CHANGES;
 
   return (
-    <div className="space-y-5 px-4 py-4">
+    <div className="px-4 py-4">
       <Section title="Working Directory">
-        <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-          <div className="flex items-start gap-2">
-            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <IconButton
-                compact
-                onClick={() => { void pickAndSubmitCwd(); }}
-                disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
-                className="text-accent"
-                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
-                aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
-              >
-                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
-              </IconButton>
-              <IconButton
-                compact
-                onClick={startChangingCwd}
-                disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
-                title="Enter the working directory manually"
-                aria-label="Enter the working directory manually"
-              >
-                <PencilIcon />
-              </IconButton>
-            </div>
-          </div>
-          {(data.branch || data.git || workspaceBrowserLink) && (
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-secondary">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                {data.branch && (
-                  <div className="flex items-center gap-2">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
-                      <line x1="6" y1="3" x2="6" y2="15" />
-                      <circle cx="18" cy="6" r="3" />
-                      <circle cx="6" cy="18" r="3" />
-                      <path d="M18 9a9 9 0 0 1-9 9" />
-                    </svg>
-                    <Pill tone="teal" mono>{data.branch}</Pill>
-                  </div>
-                )}
-                {data.git && (
-                  <span className="font-mono text-dim">
-                    {gitChangeLabel}
-                    {data.git.changeCount > 0 && (
-                      <>
-                        {' '}
-                        <span className="text-success">+{data.git.linesAdded}</span>{' '}
-                        <span className="text-danger">-{data.git.linesDeleted}</span>
-                      </>
-                    )}
-                  </span>
-                )}
-              </div>
-              {workspaceBrowserLink && (
-                <Link to={workspaceBrowserLink} className="ui-toolbar-button shrink-0 text-accent">
-                  Open workspace browser
-                </Link>
-              )}
-            </div>
-          )}
-          {remotePickerOpen && isRemoteConversation && (
-            <RemoteFolderBrowser
-              listing={remotePickerListing}
-              loading={remotePickerBusy}
-              error={remotePickerError}
-              selecting={changeCwdBusy}
-              onNavigate={(path) => { void loadRemoteConversationFolders(path); }}
-              onSelect={(path) => { void submitCwdChange(path); }}
-              onClose={() => {
-                setRemotePickerOpen(false);
-                setRemotePickerError(null);
-              }}
-            />
-          )}
-          {changingCwd && (
-            <form
-              className="space-y-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void submitCwdChange();
-              }}
+        <div className="flex items-start gap-2">
+          <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <IconButton
+              compact
+              onClick={() => { void pickAndSubmitCwd(); }}
+              disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
+              className="text-accent"
+              title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+              aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
             >
-              <input
-                autoFocus
-                value={requestedCwd}
-                onChange={(event) => {
-                  setRequestedCwd(event.target.value);
-                  if (changeCwdError) {
-                    setChangeCwdError(null);
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelChangingCwd();
-                  }
-                }}
-                placeholder={data.cwd}
-                spellCheck={false}
-                disabled={changeCwdBusy || pickCwdBusy}
-                aria-label="Conversation working directory"
-                className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
-              />
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-dim">{isRemoteConversation ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={cancelChangingCwd}
-                    disabled={changeCwdBusy || pickCwdBusy}
-                    className="ui-toolbar-button"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={changeCwdBusy || pickCwdBusy}
-                    className="ui-toolbar-button text-accent"
-                  >
-                    {changeCwdBusy ? 'Switching…' : 'Switch'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-          {!isRemoteConversation && visibleWorkingTreeChanges.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="ui-section-label">Changed files</p>
-              <div className="space-y-px">
-                {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
-                  <Link
-                    key={`${change}:${relativePath}`}
-                    to={buildConversationFileHref(location.pathname, location.search, { cwd: data.cwd, file: relativePath })}
-                    className="group grid grid-cols-[1rem,minmax(0,1fr)] items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface/80"
-                    title={`Open ${relativePath} in the conversation file viewer`}
-                  >
-                    <WorkingTreeChangeMark change={change} />
-                    <span className="min-w-0 truncate font-mono text-[10px] leading-4 text-secondary group-hover:text-primary">{relativePath}</span>
-                  </Link>
-                ))}
-              </div>
-              {canToggleWorkingTreeChanges && (
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="ui-toolbar-button text-accent"
-                    onClick={() => setWorkingTreeExpanded((value) => !value)}
-                  >
-                    {workingTreeExpanded ? 'Show less' : `Show ${hiddenWorkingTreeChangeCount} more`}
-                  </button>
+              <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+            </IconButton>
+            <IconButton
+              compact
+              onClick={startChangingCwd}
+              disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
+              title="Enter the working directory manually"
+              aria-label="Enter the working directory manually"
+            >
+              <PencilIcon />
+            </IconButton>
+          </div>
+        </div>
+        {(data.branch || data.git || workspaceBrowserLink) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-secondary">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {data.branch && (
+                <div className="flex items-center gap-2">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  <Pill tone="teal" mono>{data.branch}</Pill>
                 </div>
               )}
+              {data.git && (
+                <span className="font-mono text-dim">
+                  {gitChangeLabel}
+                  {data.git.changeCount > 0 && (
+                    <>
+                      {' '}
+                      <span className="text-success">+{data.git.linesAdded}</span>{' '}
+                      <span className="text-danger">-{data.git.linesDeleted}</span>
+                    </>
+                  )}
+                </span>
+              )}
             </div>
-          )}
-          {changeCwdError && (
-            <p className="text-[11px] text-danger/80">{changeCwdError}</p>
-          )}
-        </SurfacePanel>
+            {workspaceBrowserLink && (
+              <Link to={workspaceBrowserLink} className="ui-toolbar-button shrink-0 text-accent">
+                Open workspace browser
+              </Link>
+            )}
+          </div>
+        )}
+        {remotePickerOpen && isRemoteConversation && (
+          <RemoteFolderBrowser
+            listing={remotePickerListing}
+            loading={remotePickerBusy}
+            error={remotePickerError}
+            selecting={changeCwdBusy}
+            onNavigate={(path) => { void loadRemoteConversationFolders(path); }}
+            onSelect={(path) => { void submitCwdChange(path); }}
+            onClose={() => {
+              setRemotePickerOpen(false);
+              setRemotePickerError(null);
+            }}
+          />
+        )}
+        {changingCwd && (
+          <form
+            className="space-y-2 border-t border-border-subtle/70 pt-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitCwdChange();
+            }}
+          >
+            <input
+              autoFocus
+              value={requestedCwd}
+              onChange={(event) => {
+                setRequestedCwd(event.target.value);
+                if (changeCwdError) {
+                  setChangeCwdError(null);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelChangingCwd();
+                }
+              }}
+              placeholder={data.cwd}
+              spellCheck={false}
+              disabled={changeCwdBusy || pickCwdBusy}
+              aria-label="Conversation working directory"
+              className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] text-dim">{isRemoteConversation ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={cancelChangingCwd}
+                  disabled={changeCwdBusy || pickCwdBusy}
+                  className="ui-toolbar-button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={changeCwdBusy || pickCwdBusy}
+                  className="ui-toolbar-button text-accent"
+                >
+                  {changeCwdBusy ? 'Switching…' : 'Switch'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+        {!isRemoteConversation && visibleWorkingTreeChanges.length > 0 && (
+          <div className="space-y-2 border-t border-border-subtle/70 pt-3">
+            <p className="ui-section-label">Changed files</p>
+            <div className="divide-y divide-border-subtle/70">
+              {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
+                <Link
+                  key={`${change}:${relativePath}`}
+                  to={buildConversationFileHref(location.pathname, location.search, { cwd: data.cwd, file: relativePath })}
+                  className="group grid grid-cols-[1rem,minmax(0,1fr)] items-center gap-2 py-2 transition-colors hover:text-primary"
+                  title={`Open ${relativePath} in the conversation file viewer`}
+                >
+                  <WorkingTreeChangeMark change={change} />
+                  <span className="min-w-0 truncate font-mono text-[10px] leading-4 text-secondary group-hover:text-primary">{relativePath}</span>
+                </Link>
+              ))}
+            </div>
+            {canToggleWorkingTreeChanges && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  className="ui-toolbar-button text-accent"
+                  onClick={() => setWorkingTreeExpanded((value) => !value)}
+                >
+                  {workingTreeExpanded ? 'Show less' : `Show ${hiddenWorkingTreeChangeCount} more`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {changeCwdError && (
+          <p className="text-[11px] text-danger/80">{changeCwdError}</p>
+        )}
       </Section>
 
       <Section title="Todo list">
@@ -2159,79 +2166,86 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       </Section>
 
       <Section title="Runs">
-        <div className="space-y-2.5">
-          <button
-            type="button"
-            onClick={() => setRunsExpanded((open) => !open)}
-            aria-expanded={runsExpanded}
-            aria-controls={`conversation-runs-${id}`}
-            className={runsExpanded ? 'w-full rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-secondary">{runSummary}</span>
-              <span className={runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                {runsExpanded ? 'hide' : 'show'}
-              </span>
-            </div>
-          </button>
+        <button
+          type="button"
+          onClick={() => setRunsExpanded((open) => !open)}
+          aria-expanded={runsExpanded}
+          aria-controls={`conversation-runs-${id}`}
+          className="w-full text-left transition-colors hover:text-primary"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-secondary">{runSummary}</span>
+            <span className={runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'}>
+              {runsExpanded ? 'hide' : 'show'}
+            </span>
+          </div>
+        </button>
 
-          {runsExpanded && (
-            <div id={`conversation-runs-${id}`} className="space-y-2.5">
-              {runsLoading && visibleRunCards.every(({ record }) => !record) && (
-                <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
-              )}
-              {runsError && (
-                <p className="text-[11px] text-danger/80">{runsError}</p>
-              )}
-              {visibleRunCards.map(({ mention, record, headline, status, activityAt }) => {
-                const isSelected = mention.selected;
-                const title = headline?.title ?? mention.label;
-                const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
-                const showSummary = Boolean(summary && summary !== title);
-                const issueCount = record?.problems.length ?? 0;
-                const showRecovery = record && record.recoveryAction !== 'none';
-                const timeLabel = activityAt ? timeAgo(activityAt) : null;
+        {runsExpanded && (
+          <div id={`conversation-runs-${id}`} className="space-y-3 border-t border-border-subtle/70 pt-3">
+            {runsLoading && visibleRunCards.every(({ record }) => !record) && (
+              <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
+            )}
+            {runsError && (
+              <p className="text-[11px] text-danger/80">{runsError}</p>
+            )}
+            {visibleRunCards.length > 0 ? (
+              <div className="divide-y divide-border-subtle/70">
+                {visibleRunCards.map(({ mention, record, headline, status, activityAt }) => {
+                  const isSelected = mention.selected;
+                  const title = headline?.title ?? mention.label;
+                  const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
+                  const showSummary = Boolean(summary && summary !== title);
+                  const issueCount = record?.problems.length ?? 0;
+                  const showRecovery = record && record.recoveryAction !== 'none';
+                  const timeLabel = activityAt ? timeAgo(activityAt) : null;
 
-                return (
-                  <button
-                    key={mention.runId}
-                    type="button"
-                    onClick={() => openRun(mention.runId)}
-                    className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                      {showSummary && (
-                        <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
+                  return (
+                    <button
+                      key={mention.runId}
+                      type="button"
+                      onClick={() => openRun(mention.runId)}
+                      className={cx(
+                        'w-full py-2.5 text-left transition-colors',
+                        isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
                       )}
-                      <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
-                        <span className={status.cls}>{status.text}</span>
-                        {timeLabel && (
-                          <>
-                            <span className="opacity-35">·</span>
-                            <span className="text-dim">{timeLabel}</span>
-                          </>
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-medium text-primary">{title}</p>
+                        {showSummary && (
+                          <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
                         )}
-                        {showRecovery && record && (
-                          <>
-                            <span className="opacity-35">·</span>
-                            <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
-                          </>
-                        )}
-                        {issueCount > 0 && (
-                          <>
-                            <span className="opacity-35">·</span>
-                            <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
-                          </>
-                        )}
+                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
+                          <span className={status.cls}>{status.text}</span>
+                          {timeLabel && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-dim">{timeLabel}</span>
+                            </>
+                          )}
+                          {showRecovery && record && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
+                            </>
+                          )}
+                          {issueCount > 0 && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              !runsLoading && !runsError && <p className="text-[11px] text-dim">No active runs right now.</p>
+            )}
+          </div>
+        )}
       </Section>
 
       {projectModalOpen && focusedProjectId && (

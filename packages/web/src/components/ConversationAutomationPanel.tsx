@@ -12,7 +12,7 @@ import type {
   ConversationAutomationTodoItem,
 } from '../types';
 import { ChecklistComposer, ChecklistItemList } from './ChecklistEditor';
-import { ErrorState, LoadingState, SurfacePanel } from './ui';
+import { ErrorState, LoadingState } from './ui';
 
 type PendingAction = 'save' | 'toggle' | null;
 
@@ -226,11 +226,11 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   }, [automation, draftItems]);
 
   if (loading && !data) {
-    return <LoadingState label="Loading todo list…" className="px-3 py-3" />;
+    return <LoadingState label="Loading todo list…" className="py-2" />;
   }
 
   if (error && !data) {
-    return <ErrorState message={error} className="px-3 py-3" />;
+    return <ErrorState message={error} className="py-2" />;
   }
 
   if (!data || !automation) {
@@ -278,16 +278,13 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   }
 
   return (
-    <SurfacePanel muted className="overflow-hidden px-0 py-0">
-      <div className="flex items-start justify-between gap-3 px-3 py-3">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium text-primary">Todo list</p>
-          <p className="mt-1 text-[11px] text-dim">
-            {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
-            <span className="mx-1.5 opacity-40">·</span>
-            {progressLabel}
-          </p>
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[11px] text-dim">
+          {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
+          <span className="mx-1.5 opacity-40">·</span>
+          {progressLabel}
+        </p>
         <Link to="/plans" className="ui-toolbar-button inline-flex shrink-0 items-center gap-1 text-[11px] text-accent" title="Edit presets">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 6h18" />
@@ -299,12 +296,12 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       </div>
 
       {automation.waitingForUser && (
-        <p className="border-t border-border-subtle/70 px-3 py-3 text-[11px] text-warning">
+        <p className="text-[11px] text-warning">
           Waiting for you{automation.waitingForUser.reason ? `: ${automation.waitingForUser.reason}` : '.'}
         </p>
       )}
 
-      <div className="border-t border-border-subtle/70">
+      <div className="border-y border-border-subtle/70">
         <ChecklistItemList
           items={draftItems}
           itemStates={itemStates}
@@ -317,28 +314,26 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         />
 
         {automation.review && (
-          <div className="px-3 py-2.5 text-[11px] text-dim">
+          <div className="border-t border-border-subtle/70 px-3 py-2.5 text-[11px] text-dim">
             Review pass · {automation.review.status} · round {automation.review.round}
             {automation.review.resultReason ? ` · ${automation.review.resultReason}` : ''}
           </div>
         )}
       </div>
 
-      <div className="border-t border-border-subtle/70 px-3 py-2.5">
-        <ChecklistComposer
-          currentItems={draftItems}
-          skills={data.skills}
-          presets={presets}
-          disabled={pendingAction !== null}
-          onAdd={async (nextItems) => {
-            setDraftItems(nextItems);
-            await handleCommitItems(nextItems);
-          }}
-          onErrorChange={setActionError}
-        />
-      </div>
+      <ChecklistComposer
+        currentItems={draftItems}
+        skills={data.skills}
+        presets={presets}
+        disabled={pendingAction !== null}
+        onAdd={async (nextItems) => {
+          setDraftItems(nextItems);
+          await handleCommitItems(nextItems);
+        }}
+        onErrorChange={setActionError}
+      />
 
-      {actionError && <p className="px-3 pb-3 text-[11px] text-danger">{actionError}</p>}
-    </SurfacePanel>
+      {actionError && <p className="text-[11px] text-danger">{actionError}</p>}
+    </div>
   );
 }
