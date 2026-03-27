@@ -5,9 +5,15 @@ import { timeAgo } from '../utils';
 import { IconButton, Pill, SurfacePanel } from './ui';
 
 function previewLine(value: string): string | null {
-  for (const rawLine of value.split('\n')) {
-    const trimmed = rawLine.trim();
+  const lines = value.split('\n');
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index]?.trim() ?? '';
     if (!trimmed) {
+      continue;
+    }
+
+    if (index === 0 && trimmed.startsWith('# ')) {
       continue;
     }
 
@@ -51,7 +57,7 @@ export function ProjectOverviewPanel({
   const taskCount = project.taskCount ?? project.tasks.length;
   const noteCount = project.noteCount ?? project.notes.length;
   const fileCount = project.fileCount ?? project.files.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
-  const documentPreview = (previewLine(documentRecord?.content ?? '') ?? record.summary.trim()) || record.description.trim();
+  const documentPreview = previewLine(documentRecord?.content ?? '') || record.summary.trim() || record.description.trim();
   const tasks = [...project.tasks].sort((left, right) => taskRank(left.status) - taskRank(right.status)).slice(0, 4);
   const hiddenTasks = Math.max(0, project.tasks.length - tasks.length);
   const metrics = [

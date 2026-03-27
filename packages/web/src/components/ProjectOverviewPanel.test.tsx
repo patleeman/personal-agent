@@ -9,6 +9,7 @@ import { ProjectOverviewPanel } from './ProjectOverviewPanel.js';
 
 function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
   return {
+    profile: 'assistant',
     project: {
       id: 'sidebar-refresh',
       createdAt: '2026-03-16T08:00:00.000Z',
@@ -18,66 +19,62 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
       summary: 'Make the project context easier to scan while chatting.',
       requirements: {
         goal: '',
-        acceptanceCriteria: ['Show the goal', 'Show the plan summary'],
+        acceptanceCriteria: [],
       },
-      status: 'in_progress',
-      blockers: ['Need the sidebar summary to reuse the full project narrative.'],
-      currentFocus: 'Pull the richer narrative into the conversation rail.',
-      recentProgress: ['Added the new project overview layout.'],
+      status: 'active',
+      blockers: [],
+      recentProgress: [],
       plan: {
-        currentMilestoneId: 'rail-digest',
-        milestones: [
-          {
-            id: 'rail-digest',
-            title: 'Ship the richer project digest',
-            status: 'in_progress',
-            summary: 'Mirror the important parts of the full project view.',
-          },
-          {
-            id: 'polish',
-            title: 'Polish spacing and copy',
-            status: 'pending',
-          },
-        ],
+        milestones: [],
         tasks: [],
       },
     },
     taskCount: 2,
     noteCount: 1,
+    fileCount: 1,
     attachmentCount: 0,
     artifactCount: 1,
     tasks: [
       {
         id: 'overview-implementation',
-        status: 'in_progress',
+        status: 'doing',
         title: 'Implement the richer summary panel',
-        milestoneId: 'rail-digest',
       },
       {
         id: 'copy-pass',
-        status: 'pending',
+        status: 'todo',
         title: 'Review project sidebar copy',
       },
     ],
+    document: {
+      path: '/tmp/sidebar-refresh/INDEX.md',
+      updatedAt: '2026-03-16T09:30:00.000Z',
+      content: `# Sidebar refresh
+
+Make the active project easy to scan from the conversation sidebar.`,
+    },
     brief: {
       path: '/tmp/sidebar-refresh/INDEX.md',
       updatedAt: '2026-03-16T09:30:00.000Z',
       content: `# Sidebar refresh
 
-## Requirements
-
-Make the active project easy to scan from the conversation sidebar.
-
-## Plan
-
-- Scope the conversation sidebar refresh.
-- Pull in the project brief when list fields are sparse.
-
-## Completion summary
-
-Shipped the richer sidebar summary.`,
+Make the active project easy to scan from the conversation sidebar.`,
     },
     notes: [],
+    files: [
+      {
+        id: 'file-1',
+        sourceKind: 'artifact',
+        kind: 'artifact',
+        path: '/tmp/sidebar-refresh/report.md',
+        title: 'Rail report',
+        originalName: 'report.md',
+        sizeBytes: 123,
+        createdAt: '2026-03-16T09:30:00.000Z',
+        updatedAt: '2026-03-16T09:30:00.000Z',
+        downloadPath: '/api/projects/sidebar-refresh/files/file-1/download',
+      },
+    ],
     attachments: [],
     artifacts: [],
     linkedConversations: [
@@ -112,79 +109,21 @@ describe('ProjectOverviewPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('renders a richer project digest using brief-derived requirements and plan sections', () => {
+  it('renders the simplified project digest with doc and task previews', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectOverviewPanel project={createProjectDetail()} />
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Requirements');
+    expect(html).toContain('Sidebar refresh');
+    expect(html).toContain('Make the project context easier to scan while chatting.');
+    expect(html).toContain('Doc');
     expect(html).toContain('Make the active project easy to scan from the conversation sidebar.');
-    expect(html).toContain('Acceptance criteria');
-    expect(html).toContain('Show the goal');
-    expect(html).toContain('Plan');
-    expect(html).toContain('Scope the conversation sidebar refresh.');
-    expect(html).toContain('Pull the richer narrative into the conversation rail.');
-    expect(html).toContain('Milestones');
     expect(html).toContain('Tasks');
-    expect(html).toContain('unassigned');
-  });
-
-  it('renders inline paths in overview markdown as plain code', () => {
-    const html = renderToString(
-      <MemoryRouter>
-        <ProjectOverviewPanel
-          project={createProjectDetail({
-            brief: {
-              path: '/tmp/sidebar-refresh/INDEX.md',
-              updatedAt: '2026-03-16T09:30:00.000Z',
-              content: '# Sidebar refresh\n\n## Requirements\n\nUse `/Users/patrick/sidebar-refresh/notes.md` when reviewing copy.',
-            },
-          })}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('/Users/patrick/sidebar-refresh/notes.md');
-    expect(html).not.toContain('role="tooltip"');
-    expect(html).not.toContain('>Open<');
-    expect(html).not.toContain('>Copy<');
-  });
-
-  it('renders markdown footnotes with isolated ids across overview sections', () => {
-    const html = renderToString(
-      <MemoryRouter>
-        <ProjectOverviewPanel
-          project={createProjectDetail({
-            brief: {
-              path: '/tmp/sidebar-refresh/INDEX.md',
-              updatedAt: '2026-03-16T09:30:00.000Z',
-              content: `# Sidebar refresh
-
-## Requirements
-
-Requirement note.[^1]
-
-[^1]: Requirements reference
-
-## Plan
-
-Plan note.[^1]
-
-[^1]: Plan reference`,
-            },
-          })}
-        />
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('class="footnotes"');
-    expect(html).toContain('Requirements reference');
-    expect(html).toContain('Plan reference');
-
-    const footnoteIds = Array.from(html.matchAll(/id="([^"]*fn-1)"/g), (match) => match[1]);
-    expect(footnoteIds.length).toBeGreaterThanOrEqual(2);
-    expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
+    expect(html).toContain('Implement the richer summary panel');
+    expect(html).toContain('Review project sidebar copy');
+    expect(html).toContain('1 file');
+    expect(html).toContain('1 conversation');
   });
 });

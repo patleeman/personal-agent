@@ -172,7 +172,10 @@ export function ProjectDetailPanel({
   const fileCount = project.fileCount ?? project.files.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
   const taskDoneCount = project.tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
   const taskOpenCount = Math.max(0, project.tasks.length - taskDoneCount);
-  const documentPreview = (previewLine(documentRecord?.content ?? '') ?? record.summary.trim() || record.description.trim()) || 'No project doc yet.';
+  const documentPreview = previewLine(documentRecord?.content ?? '')
+    || record.summary.trim()
+    || record.description.trim()
+    || 'No project doc yet.';
   const tasksPreview = taskCount > 0
     ? `${taskOpenCount} open · ${taskDoneCount} done`
     : 'No tasks yet.';

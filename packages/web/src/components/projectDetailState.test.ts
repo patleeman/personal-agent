@@ -15,7 +15,7 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
         goal: '',
         acceptanceCriteria: [],
       },
-      status: 'in_progress',
+      status: 'active',
       blockers: [],
       recentProgress: [],
       plan: {
@@ -23,13 +23,17 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
         tasks: [],
       },
     },
+    profile: 'assistant',
     taskCount: 0,
     noteCount: 0,
+    fileCount: 0,
     attachmentCount: 0,
     artifactCount: 0,
     tasks: [],
+    document: null,
     brief: null,
     notes: [],
+    files: [],
     attachments: [],
     artifacts: [],
     linkedConversations: [],
@@ -49,29 +53,14 @@ describe('project detail timeline helpers', () => {
     expect(summarizeActivityPreview('   \n\n   ')).toBeUndefined();
   });
 
-  it('orders activity items as a chronological timeline and keeps missing timestamps last', () => {
+  it('orders timeline entries newest first', () => {
     const detail = createProjectDetail({
-      linkedConversations: [
-        {
-          conversationId: 'conversation-late',
-          title: 'Later conversation',
-          lastActivityAt: '2026-03-16T11:00:00.000Z',
-          isRunning: false,
-          needsAttention: false,
-        },
-        {
-          conversationId: 'conversation-missing-time',
-          title: 'Conversation without timestamp',
-          isRunning: false,
-          needsAttention: false,
-        },
-      ],
       timeline: [
         {
-          id: 'brief:demo-project',
-          kind: 'brief',
+          id: 'project:demo-project',
+          kind: 'project',
           createdAt: '2026-03-16T09:00:00.000Z',
-          title: 'Project handoff doc updated',
+          title: 'Project created',
         },
         {
           id: 'note:decision-log',
@@ -83,16 +72,15 @@ describe('project detail timeline helpers', () => {
           id: 'conversation:shadowed',
           kind: 'conversation',
           createdAt: '2026-03-16T12:00:00.000Z',
-          title: 'Shadowed conversation entry',
+          title: 'Related conversation',
         },
       ],
     });
 
     expect(buildActivityItems(detail).map((item) => item.id)).toEqual([
-      'timeline:brief:demo-project',
+      'timeline:conversation:shadowed',
       'timeline:note:decision-log',
-      'conversation:conversation-late',
-      'conversation:conversation-missing-time',
+      'timeline:project:demo-project',
     ]);
   });
 });

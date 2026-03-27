@@ -38,25 +38,25 @@ function createTempRepo(): string {
 }
 
 describe('projectResources', () => {
-  it('writes and reads a canonical project brief', () => {
+  it('writes and reads a canonical project document', () => {
     const repoRoot = createTempRepo();
     createProjectScaffold({
       repoRoot,
       profile: 'datadog',
       projectId: 'briefs',
       title: 'Briefs',
-      description: 'Test project briefs',
+      description: 'Test project docs',
     });
 
     saveProjectBrief({
       repoRoot,
       profile: 'datadog',
       projectId: 'briefs',
-      content: '# Project brief\n\nA durable brief.',
+      content: '# Project doc\n\nA durable project note.',
     });
 
     const brief = readProjectBrief({ repoRoot, profile: 'datadog', projectId: 'briefs' });
-    expect(brief?.content).toContain('A durable brief.');
+    expect(brief?.content).toContain('A durable project note.');
     expect(brief?.path).toContain('INDEX.md');
   });
 
@@ -76,7 +76,7 @@ describe('projectResources', () => {
       projectId: 'notes',
       title: 'Capture the decision',
       kind: 'decision',
-      body: 'Keep project briefs in INDEX.md.',
+      body: 'Keep the main project doc in INDEX.md.',
     });
 
     const updated = updateProjectNoteRecord({
@@ -84,10 +84,10 @@ describe('projectResources', () => {
       profile: 'datadog',
       projectId: 'notes',
       noteId: created.id,
-      body: 'Keep project briefs in INDEX.md and regenerate them on demand.',
+      body: 'Keep the main project doc in INDEX.md and regenerate it on demand.',
     });
 
-    expect(updated.body).toContain('regenerate them on demand');
+    expect(updated.body).toContain('regenerate it on demand');
     expect(listProjectNotes({ repoRoot, profile: 'datadog', projectId: 'notes' })).toHaveLength(1);
 
     deleteProjectNoteRecord({
@@ -100,7 +100,7 @@ describe('projectResources', () => {
     expect(listProjectNotes({ repoRoot, profile: 'datadog', projectId: 'notes' })).toHaveLength(0);
   });
 
-  it('uploads, downloads, and deletes project files', () => {
+  it('uploads, downloads, and deletes project files from the unified files bucket', () => {
     const repoRoot = createTempRepo();
     createProjectScaffold({
       repoRoot,
@@ -114,7 +114,6 @@ describe('projectResources', () => {
       repoRoot,
       profile: 'datadog',
       projectId: 'files',
-      kind: 'attachment',
       name: 'notes.txt',
       mimeType: 'text/plain',
       title: 'Meeting notes',
@@ -122,14 +121,13 @@ describe('projectResources', () => {
       data: Buffer.from('hello world').toString('base64'),
     });
 
-    expect(file.downloadPath).toContain('/api/projects/files/files/attachment/');
-    expect(listProjectFiles({ repoRoot, profile: 'datadog', projectId: 'files', kind: 'attachment' })).toHaveLength(1);
+    expect(file.downloadPath).toContain('/api/projects/files/files/');
+    expect(listProjectFiles({ repoRoot, profile: 'datadog', projectId: 'files' })).toHaveLength(1);
 
     const download = readProjectFileDownload({
       repoRoot,
       profile: 'datadog',
       projectId: 'files',
-      kind: 'attachment',
       fileId: file.id,
     });
     expect(readFileSync(download.filePath, 'utf-8')).toBe('hello world');
@@ -138,12 +136,11 @@ describe('projectResources', () => {
       repoRoot,
       profile: 'datadog',
       projectId: 'files',
-      kind: 'attachment',
       fileId: file.id,
     });
 
     const paths = resolveProjectPaths({ repoRoot, profile: 'datadog', projectId: 'files' });
-    expect(existsSync(paths.attachmentsDir)).toBe(true);
-    expect(listProjectFiles({ repoRoot, profile: 'datadog', projectId: 'files', kind: 'attachment' })).toHaveLength(0);
+    expect(existsSync(paths.filesDir)).toBe(true);
+    expect(listProjectFiles({ repoRoot, profile: 'datadog', projectId: 'files' })).toHaveLength(0);
   });
 });
