@@ -53,7 +53,7 @@ describe('project detail timeline helpers', () => {
     expect(summarizeActivityPreview('   \n\n   ')).toBeUndefined();
   });
 
-  it('orders timeline entries newest first', () => {
+  it('orders activity newest first across timeline entries and linked conversations', () => {
     const detail = createProjectDetail({
       timeline: [
         {
@@ -68,17 +68,20 @@ describe('project detail timeline helpers', () => {
           createdAt: '2026-03-16T10:00:00.000Z',
           title: 'Decision log',
         },
+      ],
+      linkedConversations: [
         {
-          id: 'conversation:shadowed',
-          kind: 'conversation',
-          createdAt: '2026-03-16T12:00:00.000Z',
+          conversationId: 'conv-1',
           title: 'Related conversation',
+          lastActivityAt: '2026-03-16T12:00:00.000Z',
+          isRunning: false,
+          needsAttention: false,
         },
       ],
     });
 
     expect(buildActivityItems(detail).map((item) => item.id)).toEqual([
-      'timeline:conversation:shadowed',
+      'conversation:conv-1',
       'timeline:note:decision-log',
       'timeline:project:demo-project',
     ]);

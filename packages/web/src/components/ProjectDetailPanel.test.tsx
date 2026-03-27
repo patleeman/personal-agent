@@ -24,6 +24,7 @@ function createProjectDetail(): ProjectDetail {
       },
       status: 'active',
       blockers: [],
+      currentFocus: 'Tighten the main project workspace.',
       recentProgress: [],
       plan: {
         milestones: [],
@@ -70,7 +71,7 @@ Ship a tight prototype that proves whether proactive help feels useful.
         path: '/tmp/bloodhound-prototype/notes/note-1.md',
         title: 'Teammate feel',
         kind: 'note',
-        body: 'Hidden note body that should not render until Notes is expanded.',
+        body: 'Hidden note body that should not render in the compact sidebar list.',
         createdAt: '2026-03-23T15:46:00.000Z',
         updatedAt: '2026-03-23T15:46:00.000Z',
       },
@@ -93,7 +94,16 @@ Ship a tight prototype that proves whether proactive help feels useful.
     ],
     attachments: [],
     artifacts: [],
-    linkedConversations: [],
+    linkedConversations: [
+      {
+        conversationId: 'conv-1',
+        title: 'Prototype review thread',
+        lastActivityAt: '2026-03-24T10:10:00.000Z',
+        isRunning: false,
+        needsAttention: false,
+        snippet: 'Debating whether the right rail should own more project metadata.',
+      },
+    ],
     links: {
       outgoing: [{ kind: 'skill', id: 'tool-agent-browser', title: 'Tool Agent Browser', summary: 'Browser automation.' }],
       incoming: [{ kind: 'note', id: 'bloodhound-roadmap', title: 'Bloodhound roadmap', summary: 'Related note.' }],
@@ -128,33 +138,35 @@ describe('ProjectDetailPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('shows the main doc and keeps secondary sections collapsed on first render', () => {
+  it('renders a linear-style project detail with activity, subtasks, and a right rail', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Ship a tight prototype that proves whether proactive help feels useful.');
-    expect(html).toContain('Push secondary detail behind explicit reveals.');
+    expect(html).toContain('Bloodhound prototype');
+    expect(html).toContain('Start conversation');
+    expect(html).toContain('Activity');
+    expect(html).toContain('Tasks');
+    expect(html).toContain('Brief');
     expect(html).toContain('1 open · 0 done');
-    expect(html).toContain('1 recent event');
-    expect(html).toContain('1 note');
-    expect(html).toContain('1 file');
-    expect(html).not.toContain('Hidden note body that should not render until Notes is expanded.');
-    expect(html).not.toContain('Dense design notes');
-    expect(html).not.toContain('Tool Agent Browser');
-    expect(html).not.toContain('Related');
-    expect(html).not.toContain('Raw YAML');
+    expect(html).toContain('Collapse secondary sections by default');
+    expect(html).toContain('Dense design notes');
+    expect(html).toContain('Prototype review thread');
+    expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
+    expect(html).not.toContain('>Project doc<');
   });
 
-  it('opens the selected secondary section when routed from the rail', () => {
+  it('merges linked conversations into the visible activity stream', () => {
     const html = renderToString(
       <MemoryRouter>
-        <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" selectedView="activity" />
+        <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
       </MemoryRouter>,
     );
 
     expect(html).toContain('Project doc updated');
+    expect(html).toContain('Prototype review thread');
+    expect(html).toContain('Conversation');
   });
 });

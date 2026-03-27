@@ -52,11 +52,11 @@ describe('ProjectsPage', () => {
     });
   }
 
-  it('renders invalid project warnings from diagnostics without hiding the page', () => {
+  it('renders invalid project warnings above the large project table', () => {
     mockCommonAppData();
 
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
+      if (key === 'projects:assistant') {
         return {
           data: [],
           loading: false,
@@ -109,14 +109,14 @@ describe('ProjectsPage', () => {
     expect(html).toContain('broken-project');
     expect(html).toContain('Project.recentProgress[0] must be a string.');
     expect(html).toContain('npm run validate:projects -- --profile assistant');
-    expect(html).toContain('Browse projects and jump between project sections.');
+    expect(html).toContain('Browse durable projects, then open one into the main workspace and the left sidebar shelf.');
   });
 
-  it('renders the new-project panel from URL state', () => {
+  it('renders the full-page new-project form from URL state', () => {
     mockCommonAppData();
 
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
+      if (key === 'projects:assistant') {
         return {
           data: [],
           loading: false,
@@ -160,24 +160,15 @@ describe('ProjectsPage', () => {
     );
 
     expect(html).toContain('New project');
-    expect(html).toContain('Create a lightweight project container');
+    expect(html).toContain('Create a durable project with a title, summary, repo root, and an optional starting brief.');
     expect(html).toContain('Create project');
+    expect(html).toContain('Back to projects');
   });
 
-  it('renders the selected project in the main workspace with the browser still visible', () => {
+  it('replaces the list page with the selected project detail view', () => {
     mockCommonAppData();
 
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'node-mentions') {
-        return {
-          data: [],
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
       if (key === 'project-workspace:active-project:assistant') {
         return {
           data: {
@@ -190,7 +181,7 @@ describe('ProjectsPage', () => {
               repoRoot: '/tmp/project',
               createdAt: '2026-03-16T10:00:00.000Z',
               updatedAt: '2026-03-16T12:00:00.000Z',
-              status: 'in_progress',
+              status: 'active',
               currentFocus: 'Ship the work.',
               blockers: [],
               recentProgress: [],
@@ -198,8 +189,10 @@ describe('ProjectsPage', () => {
               plan: { milestones: [], tasks: [] },
             },
             brief: null,
+            document: null,
             tasks: [],
             notes: [],
+            files: [],
             attachments: [],
             artifacts: [],
             links: { outgoing: [], incoming: [], unresolved: [] },
@@ -207,6 +200,7 @@ describe('ProjectsPage', () => {
             timeline: [],
             noteCount: 0,
             taskCount: 0,
+            fileCount: 0,
             attachmentCount: 0,
             artifactCount: 0,
           },
@@ -230,7 +224,7 @@ describe('ProjectsPage', () => {
         };
       }
 
-      if (key === 'projects:assistant' || key === 'rail-projects:assistant') {
+      if (key === 'projects:assistant') {
         return {
           data: [
             {
@@ -241,9 +235,10 @@ describe('ProjectsPage', () => {
               description: 'Still being worked on.',
               summary: 'In progress.',
               requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
-              status: 'in_progress',
+              status: 'active',
               blockers: [],
               recentProgress: [],
+              currentFocus: 'Ship the work.',
               plan: { milestones: [], tasks: [] },
               profile: 'assistant',
             },
@@ -275,9 +270,10 @@ describe('ProjectsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse projects and jump between project sections.');
     expect(html).toContain('Active project');
-    expect(html).toContain('In progress.');
-    expect(html).not.toContain('Select a project');
+    expect(html).toContain('Start conversation');
+    expect(html).toContain('Activity');
+    expect(html).not.toContain('Search projects');
+    expect(html).not.toContain('Browse durable projects, then open one into the main workspace and the left sidebar shelf.');
   });
 });

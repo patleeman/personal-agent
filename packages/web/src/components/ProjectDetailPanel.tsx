@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
@@ -8,13 +8,10 @@ import {
   ProjectNoteEditorForm,
   ProjectRecordEditorForm,
   ProjectTaskEditorForm,
-  ProjectTaskList,
 } from './ProjectDetailForms';
 import {
   ProjectActivityContent,
   ProjectDocumentContent,
-  ProjectFilesContent,
-  ProjectNotesContent,
   ProjectRecordViewer,
 } from './ProjectDetailSections';
 import {
@@ -32,58 +29,17 @@ import {
   type ProjectFormState,
   type TaskFormState,
 } from './projectDetailState';
-import { Pill, SectionLabel, ToolbarButton } from './ui';
+import { Pill, cx, type PillTone } from './ui';
 import { timeAgo } from '../utils';
 
-const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
+const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
+const DANGER_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-danger hover:text-danger/75 transition-colors disabled:opacity-40';
+const RAIL_SECTION_CLASS = 'rounded-2xl border border-border-subtle bg-surface/25 px-4 py-4';
+const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-xl border border-border-default bg-base/70 px-3 py-2 text-[13px] font-medium text-primary transition-colors hover:bg-surface';
+const RAIL_PRIMARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-xl bg-accent px-3 py-2 text-[13px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-45';
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
-
-interface DetailSectionProps {
-  id: string;
-  title: string;
-  meta?: React.ReactNode;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-  forceOpen?: boolean;
-  collapsedPreview?: React.ReactNode;
-  resetKey?: string;
-}
-
-function previewLine(value: string): string | null {
-  const lines = value.split('\n');
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const trimmed = lines[index]?.trim() ?? '';
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    if (index === 0 && trimmed.startsWith('# ')) {
-      continue;
-    }
-
-    return trimmed
-      .replace(/^#{1,6}\s+/, '')
-      .replace(/^[-*+]\s+/, '')
-      .replace(/^\d+\.\s+/, '')
-      .trim();
-  }
-
-  return null;
-}
-
-function clampPreview(value: string, maxLength = 120): string {
-  const normalized = value.replace(/\s+/g, ' ').trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
-}
 
 function createDefaultProjectDocument(title: string): string {
   return `# ${title.trim() || 'Project'}\n\n`;
@@ -107,72 +63,386 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function DetailSection({
-  id,
+function toneForProjectStatus(status: string, archived: boolean): PillTone {
+  if (archived) {
+    return 'muted';
+  }
+
+  if (status === 'paused') {
+    return 'warning';
+  }
+
+  if (status === 'done') {
+    return 'success';
+  }
+
+  return 'teal';
+}
+
+function toneForTaskStatus(status: string): PillTone {
+  switch (status) {
+    case 'doing':
+    case 'in_progress':
+      return 'accent';
+    case 'blocked':
+    case 'paused':
+      return 'warning';
+    case 'done':
+    case 'completed':
+      return 'success';
+    default:
+      return 'muted';
+  }
+}
+
+function isTaskDone(status: string): boolean {
+  return status === 'done' || status === 'completed';
+}
+
+function formatTaskSummary(tasks: ProjectTask[]): { open: number; done: number } {
+  const done = tasks.filter((task) => isTaskDone(task.status)).length;
+  return {
+    open: Math.max(0, tasks.length - done),
+    done,
+  };
+}
+
+function summarizeConversationMeta(conversation: ProjectDetail['linkedConversations'][number]): string {
+  if (conversation.snippet?.trim()) {
+    return conversation.snippet.trim();
+  }
+
+  if (conversation.cwd?.trim()) {
+    return conversation.cwd.trim();
+  }
+
+  return conversation.isRunning ? 'Conversation running' : 'Linked conversation';
+}
+
+function ProjectSection({
   title,
   meta,
-  actions,
+  action,
   children,
-  collapsible = false,
-  defaultOpen = true,
-  forceOpen = false,
-  collapsedPreview,
-  resetKey,
-}: DetailSectionProps) {
-  const [open, setOpen] = useState(defaultOpen || forceOpen);
-  const contentId = `${id}-content`;
+}: {
+  title: string;
+  meta?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-4 border-t border-border-subtle pt-8 first:border-t-0 first:pt-0">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-[24px] font-semibold tracking-tight text-primary">{title}</h2>
+          {meta ? <p className="mt-1 text-[13px] text-secondary">{meta}</p> : null}
+        </div>
+        {action ? <div className="flex items-center gap-2">{action}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
 
-  useEffect(() => {
-    setOpen(defaultOpen);
-  }, [defaultOpen, resetKey]);
+function ProjectRailSection({
+  title,
+  meta,
+  action,
+  children,
+}: {
+  title: string;
+  meta?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className={RAIL_SECTION_CLASS}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-semibold text-primary">{title}</h3>
+          {meta ? <p className="mt-1 text-[12px] text-secondary">{meta}</p> : null}
+        </div>
+        {action}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
 
-  useEffect(() => {
-    if (forceOpen) {
-      setOpen(true);
-    }
-  }, [forceOpen]);
+function ProjectPropertyRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{label}</p>
+      <div className="text-[14px] leading-relaxed text-primary">{value}</div>
+    </div>
+  );
+}
+
+function TaskStatusGlyph({ status }: { status: string }) {
+  const done = isTaskDone(status);
 
   return (
-    <section id={id} className="border-t border-border-subtle pt-8 space-y-5 scroll-mt-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <SectionLabel label={title} />
-        <div className="flex items-center gap-3 flex-wrap">
-          {meta && <div className="ui-card-meta">{meta}</div>}
-          {actions}
-          {collapsible && (
-            <button
-              type="button"
-              onClick={() => setOpen((value) => !value)}
-              className={ACTION_BUTTON_CLASS}
-              aria-expanded={open}
-              aria-controls={contentId}
-            >
-              {open ? 'Hide' : 'Show'}
-            </button>
-          )}
+    <span
+      className={cx(
+        'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold',
+        done
+          ? 'border-success/45 bg-success/12 text-success'
+          : status === 'doing' || status === 'in_progress'
+            ? 'border-accent/55 bg-accent/10 text-accent'
+            : status === 'blocked' || status === 'paused'
+              ? 'border-warning/45 bg-warning/10 text-warning'
+              : 'border-border-default text-secondary',
+      )}
+    >
+      {done ? '✓' : ''}
+    </span>
+  );
+}
+
+function ProjectTaskRow({
+  task,
+  taskIndex,
+  taskCount,
+  busy,
+  onMove,
+  onEdit,
+  onDelete,
+}: {
+  task: ProjectTask;
+  taskIndex: number;
+  taskCount: number;
+  busy: boolean;
+  onMove: (direction: 'up' | 'down') => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const done = isTaskDone(task.status);
+
+  return (
+    <article id={`project-task-${task.id}`} className="flex items-start gap-3 px-4 py-3.5 scroll-mt-6">
+      <TaskStatusGlyph status={task.status} />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className={cx('text-[15px] leading-relaxed', done ? 'text-secondary line-through' : 'font-medium text-primary')}>
+              {task.title}
+            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+              <span className="font-mono">{task.id}</span>
+              <span className="opacity-40">·</span>
+              <span>{formatProjectStatus(task.status)}</span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2 text-[12px]">
+            <button type="button" onClick={() => onMove('up')} className={ACTION_TEXT_BUTTON_CLASS} disabled={busy || taskIndex === 0}>↑</button>
+            <button type="button" onClick={() => onMove('down')} className={ACTION_TEXT_BUTTON_CLASS} disabled={busy || taskIndex === taskCount - 1}>↓</button>
+            <button type="button" onClick={onEdit} className={ACTION_TEXT_BUTTON_CLASS}>Edit</button>
+            <button type="button" onClick={onDelete} className={DANGER_TEXT_BUTTON_CLASS} disabled={busy}>Delete</button>
+          </div>
         </div>
       </div>
-      {open ? (
-        <div id={contentId}>{children}</div>
-      ) : collapsedPreview ? (
-        <p id={contentId} className="max-w-4xl text-[13px] leading-relaxed text-secondary">
-          {collapsedPreview}
-        </p>
-      ) : null}
-    </section>
+    </article>
+  );
+}
+
+function ProjectTaskListBlock({
+  tasks,
+  taskEditorTaskId,
+  taskEditorForm,
+  busy,
+  onMoveTask,
+  onEditTask,
+  onDeleteTask,
+  emptyLabel = 'No tasks yet.',
+}: {
+  tasks: ProjectTask[];
+  taskEditorTaskId: string | null;
+  taskEditorForm: ReactNode;
+  busy: boolean;
+  onMoveTask: (taskId: string, direction: 'up' | 'down') => void;
+  onEditTask: (task: ProjectTask) => void;
+  onDeleteTask: (taskId: string) => void;
+  emptyLabel?: string;
+}) {
+  if (tasks.length === 0) {
+    return <p className="px-4 py-3.5 text-[13px] text-secondary">{emptyLabel}</p>;
+  }
+
+  return (
+    <div className="divide-y divide-border-subtle">
+      {tasks.map((task, taskIndex) => {
+        if (taskEditorTaskId === task.id) {
+          return (
+            <div key={task.id} id={`project-task-${task.id}`} className="px-4 py-4 scroll-mt-6">
+              {taskEditorForm}
+            </div>
+          );
+        }
+
+        return (
+          <ProjectTaskRow
+            key={task.id}
+            task={task}
+            taskIndex={taskIndex}
+            taskCount={tasks.length}
+            busy={busy}
+            onMove={(direction) => onMoveTask(task.id, direction)}
+            onEdit={() => onEditTask(task)}
+            onDelete={() => onDeleteTask(task.id)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectNoteList({
+  notes,
+  noteEditor,
+  noteEditorForm,
+  noteBusy,
+  onEditNote,
+  onDeleteNote,
+}: {
+  notes: ProjectNote[];
+  noteEditor: ProjectNoteEditorState | null;
+  noteEditorForm: ReactNode;
+  noteBusy: boolean;
+  onEditNote: (note: ProjectNote) => void;
+  onDeleteNote: (noteId: string) => void;
+}) {
+  if (notes.length === 0 && noteEditor?.mode !== 'add') {
+    return <p className="text-[13px] text-secondary">No notes yet.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {noteEditor?.mode === 'add' ? noteEditorForm : null}
+      <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+        {notes.map((note) => {
+          const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
+          if (isEditing) {
+            return (
+              <div key={note.id} id={`project-note-${note.id}`} className="px-4 py-4 scroll-mt-6">
+                {noteEditorForm}
+              </div>
+            );
+          }
+
+          return (
+            <article key={note.id} className="px-4 py-3.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-primary">{note.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                    <span>{formatProjectStatus(note.kind)}</span>
+                    <span className="opacity-40">·</span>
+                    <span>updated {timeAgo(note.updatedAt)}</span>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={() => onEditNote(note)} className={ACTION_TEXT_BUTTON_CLASS}>Edit</button>
+                  <button type="button" onClick={() => onDeleteNote(note.id)} className={DANGER_TEXT_BUTTON_CLASS} disabled={noteBusy}>Delete</button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ProjectFileList({
+  files,
+  fileBusy,
+  onDeleteFile,
+}: {
+  files: ProjectFile[];
+  fileBusy: boolean;
+  onDeleteFile: (file: ProjectFile) => void;
+}) {
+  if (files.length === 0) {
+    return <p className="text-[13px] text-secondary">No files yet.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+      {files.map((file) => (
+        <article key={file.id} className="px-4 py-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <a href={file.downloadPath} className="text-[14px] font-medium text-accent transition-colors hover:text-accent/75">
+                {file.title}
+              </a>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                <span>{file.originalName}</span>
+                <span className="opacity-40">·</span>
+                <span>updated {timeAgo(file.updatedAt)}</span>
+              </div>
+              {file.description ? <p className="mt-1 text-[12px] leading-relaxed text-secondary">{file.description}</p> : null}
+            </div>
+            <button type="button" onClick={() => onDeleteFile(file)} className={DANGER_TEXT_BUTTON_CLASS} disabled={fileBusy}>Delete</button>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ProjectConversationList({
+  conversations,
+}: {
+  conversations: ProjectDetail['linkedConversations'];
+}) {
+  if (conversations.length === 0) {
+    return <p className="text-[13px] text-secondary">No linked conversations yet.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-border-subtle rounded-xl border border-border-subtle bg-base/30">
+      {conversations.map((conversation) => (
+        <a
+          key={conversation.conversationId}
+          href={`/conversations/${encodeURIComponent(conversation.conversationId)}`}
+          className="block px-4 py-3.5 transition-colors hover:bg-surface/50"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-medium text-primary">{conversation.title}</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{summarizeConversationMeta(conversation)}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-dim">
+                <span>{conversation.lastActivityAt ? `updated ${timeAgo(conversation.lastActivityAt)}` : 'linked'}</span>
+                {conversation.needsAttention ? (
+                  <>
+                    <span className="opacity-40">·</span>
+                    <span>needs attention</span>
+                  </>
+                ) : null}
+                {conversation.isRunning ? (
+                  <>
+                    <span className="opacity-40">·</span>
+                    <span>running</span>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </a>
+      ))}
+    </div>
   );
 }
 
 export function ProjectDetailPanel({
   project,
   activeProfile,
-  selectedView,
   onChanged,
   onDeleted,
 }: {
   project: ProjectDetail;
   activeProfile?: string;
-  selectedView?: string;
   onChanged?: () => void;
   onDeleted?: (projectId: string) => void;
 }) {
@@ -183,27 +453,12 @@ export function ProjectDetailPanel({
   const archived = isProjectArchived(record);
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
   const documentRecord = project.document ?? project.brief;
-  const taskCount = project.taskCount ?? project.tasks.length;
-  const noteCount = project.noteCount ?? project.notes.length;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
-  const taskDoneCount = project.tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
-  const taskOpenCount = Math.max(0, project.tasks.length - taskDoneCount);
   const projectSummary = record.summary.trim() || record.description.trim();
-  const documentPreview = previewLine(documentRecord?.content ?? '')
-    || projectSummary
-    || 'No project doc yet.';
-  const tasksPreview = taskCount > 0
-    ? `${taskOpenCount} open · ${taskDoneCount} done`
-    : 'No tasks yet.';
-  const activityPreview = project.timeline.length > 0
-    ? `${project.timeline.length} recent ${project.timeline.length === 1 ? 'event' : 'events'}`
-    : 'No activity yet.';
-  const notesPreview = noteCount > 0
-    ? `${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`
-    : 'No notes yet.';
-  const filesPreview = fileCount > 0
-    ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
-    : 'No files yet.';
+  const taskSummary = formatTaskSummary(project.tasks);
+  const openTasks = project.tasks.filter((task) => !isTaskDone(task.status));
+  const completedTasks = project.tasks.filter((task) => isTaskDone(task.status));
+  const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const projectApiOptions = { profile: projectProfile };
 
   const [editingProject, setEditingProject] = useState(false);
@@ -215,6 +470,7 @@ export function ProjectDetailPanel({
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
 
   const [documentEditing, setDocumentEditing] = useState(false);
   const [documentContent, setDocumentContent] = useState(documentRecord?.content ?? '');
@@ -229,7 +485,10 @@ export function ProjectDetailPanel({
   const [fileUpload, setFileUpload] = useState<FileUploadState>(() => emptyFileUploadState());
   const [fileBusy, setFileBusy] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [fileComposerOpen, setFileComposerOpen] = useState(false);
+
   const [conversationBusy, setConversationBusy] = useState(false);
+  const [conversationError, setConversationError] = useState<string | null>(null);
 
   const [rawProjectOpen, setRawProjectOpen] = useState(false);
   const [rawProjectLoaded, setRawProjectLoaded] = useState(false);
@@ -252,11 +511,14 @@ export function ProjectDetailPanel({
     setNoteEditor(null);
     setDocumentEditing(false);
     setFileUpload(emptyFileUploadState());
+    setFileComposerOpen(false);
+    setShowCompletedTasks(false);
     setProjectError(null);
     setTaskError(null);
     setDocumentError(null);
     setNoteError(null);
     setFileError(null);
+    setConversationError(null);
     setArchiveError(null);
     setAdvancedOpen(false);
     setDeleteError(null);
@@ -264,21 +526,11 @@ export function ProjectDetailPanel({
     setRawProjectLoaded(false);
     setRawProjectContent('');
     setRawProjectError(null);
-  }, [project]);
+  }, [documentRecord?.content, project]);
 
   function openProjectEditor() {
     setEditingProject(true);
     setProjectError(null);
-  }
-
-  function toggleAdvanced() {
-    setAdvancedOpen((value) => {
-      const nextValue = !value;
-      if (!nextValue) {
-        setRawProjectOpen(false);
-      }
-      return nextValue;
-    });
   }
 
   function openTaskAdd() {
@@ -489,6 +741,7 @@ export function ProjectDetailPanel({
         data,
       }, projectApiOptions);
       setFileUpload(emptyFileUploadState());
+      setFileComposerOpen(false);
       onChanged?.();
     } catch (error) {
       setFileError(error instanceof Error ? error.message : String(error));
@@ -521,11 +774,12 @@ export function ProjectDetailPanel({
     }
 
     setConversationBusy(true);
+    setConversationError(null);
     try {
       const { id } = await api.createLiveSession(undefined, [record.id]);
       navigate(`/conversations/${id}`);
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : String(error));
+      setConversationError(error instanceof Error ? error.message : String(error));
       setConversationBusy(false);
     }
   }
@@ -641,7 +895,7 @@ export function ProjectDetailPanel({
     />
   ) : null;
 
-  const fileUploadForm = (
+  const fileUploadForm = fileComposerOpen ? (
     <ProjectFileUploadForm
       value={fileUpload}
       error={fileError}
@@ -649,72 +903,37 @@ export function ProjectDetailPanel({
       onChange={(patch) => setFileUpload((current) => ({ ...current, ...patch }))}
       onSubmit={saveFile}
     />
-  );
+  ) : null;
 
   return (
-    <div className="space-y-8" id="top">
-      <section className="space-y-5">
-        <div className="space-y-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill tone={archived ? 'muted' : record.status === 'paused' ? 'warning' : record.status === 'done' ? 'success' : 'teal'}>
-                  {formatProjectStatus(record.status)}
-                </Pill>
-                <span className="ui-card-meta font-mono">{record.id}</span>
-                <span className="ui-card-meta">updated {timeAgo(record.updatedAt)}</span>
-                {archived && record.archivedAt && <span className="ui-card-meta">archived {timeAgo(record.archivedAt)}</span>}
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-[32px] font-medium leading-tight tracking-tight text-primary">{record.title}</h1>
-                {projectSummary && <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">{projectSummary}</p>}
-                {record.repoRoot && <p className="ui-card-meta font-mono break-all">{record.repoRoot}</p>}
-              </div>
-            </div>
+    <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="min-w-0 space-y-8">
+        <section className="space-y-5 pb-2">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
+            <span>Projects</span>
+            <span className="opacity-40">›</span>
+            <span className="font-mono text-secondary">{record.id}</span>
+          </div>
 
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <ToolbarButton onClick={downloadProjectPackage} disabled={deleteBusy}>Export package</ToolbarButton>
-              <ToolbarButton onClick={openProjectEditor} disabled={deleteBusy}>Edit project</ToolbarButton>
-              <ToolbarButton onClick={toggleArchive} disabled={archiveBusy || deleteBusy}>
-                {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
-              </ToolbarButton>
-              <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy || !canStartConversation}>
-                {conversationBusy ? 'Starting…' : 'Start conversation'}
-              </ToolbarButton>
-              <ToolbarButton onClick={toggleAdvanced} disabled={deleteBusy}>
-                {advancedOpen ? 'Hide more' : 'More'}
-              </ToolbarButton>
+              <Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>
+                {formatProjectStatus(record.status)}
+              </Pill>
+              <span className="text-[12px] text-dim">updated {timeAgo(record.updatedAt)}</span>
+              {archived && record.archivedAt && <span className="text-[12px] text-dim">archived {timeAgo(record.archivedAt)}</span>}
+            </div>
+
+            <div className="space-y-3">
+              <h1 className="text-[42px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
+              {projectSummary ? <p className="max-w-4xl text-[18px] leading-relaxed text-secondary">{projectSummary}</p> : null}
+              {record.currentFocus?.trim() ? (
+                <p className="text-[13px] text-dim">Current focus · {record.currentFocus.trim()}</p>
+              ) : null}
             </div>
           </div>
 
-          {!canStartConversation && activeProfile && (
-            <p className="ui-card-meta max-w-4xl">
-              Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
-            </p>
-          )}
-
-          <div className="grid gap-x-6 gap-y-4 border-y border-border-subtle py-4 sm:grid-cols-2 xl:grid-cols-5">
-            {[
-              ['Doc', clampPreview(documentPreview, 140)],
-              ['Tasks', tasksPreview],
-              ['Activity', activityPreview],
-              ['Notes', notesPreview],
-              ['Files', filesPreview],
-            ].map(([label, value]) => (
-              <div key={label} className="space-y-1.5">
-                <p className="ui-section-label">{label}</p>
-                <p className="text-[13px] leading-relaxed text-primary">{value}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation linked' : 'conversations linked'}</span>
-          </div>
-
-          {(archiveError || deleteError) && <p className="text-[12px] text-danger">{archiveError ?? deleteError}</p>}
-
-          {editingProject && (
+          {editingProject ? (
             <div className="border-t border-border-subtle pt-6">
               <ProjectRecordEditorForm
                 value={projectForm}
@@ -726,170 +945,241 @@ export function ProjectDetailPanel({
                 onCancel={() => setEditingProject(false)}
               />
             </div>
+          ) : null}
+        </section>
+
+        <ProjectSection
+          title="Activity"
+          meta={activityItems.length > 0 ? `${activityItems.length} recent ${activityItems.length === 1 ? 'event' : 'events'}` : 'No activity yet'}
+        >
+          <ProjectActivityContent items={activityItems} />
+        </ProjectSection>
+
+        <ProjectSection
+          title="Tasks"
+          meta={`${taskSummary.open} open · ${taskSummary.done} done`}
+          action={(
+            <button type="button" onClick={openTaskAdd} className={ACTION_TEXT_BUTTON_CLASS} disabled={taskBusy}>
+              + Add task
+            </button>
           )}
-        </div>
-      </section>
-
-      <DetailSection
-        id="project-document"
-        title="Project doc"
-        collapsible
-        defaultOpen
-        forceOpen={documentEditing || selectedView === 'document'}
-        collapsedPreview={documentPreview}
-        resetKey={record.id}
-        actions={(
-          <>
-            <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_BUTTON_CLASS} disabled={documentBusy}>
-              {documentBusy ? 'Regenerating…' : 'Regenerate'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setDocumentError(null);
-                if (!documentEditing && documentContent.trim().length === 0) {
-                  setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
-                }
-                setDocumentEditing((value) => !value);
-              }}
-              className={ACTION_BUTTON_CLASS}
-              disabled={documentBusy}
-            >
-              {documentEditing ? 'Cancel' : (documentRecord ? 'Edit doc' : 'Write doc')}
-            </button>
-          </>
-        )}
-      >
-        <ProjectDocumentContent
-          document={documentRecord}
-          projectTitle={record.title}
-          editing={documentEditing}
-          content={documentContent}
-          busy={documentBusy}
-          error={documentError}
-          onChange={setDocumentContent}
-          onSubmit={saveDocument}
-        />
-      </DetailSection>
-
-      <DetailSection
-        id="project-tasks"
-        title="Tasks"
-        meta={`${taskOpenCount} open · ${taskDoneCount} done`}
-        collapsible
-        defaultOpen
-        forceOpen={taskEditor !== null || selectedView === 'tasks'}
-        collapsedPreview={tasksPreview}
-        resetKey={record.id}
-        actions={(
-          <button type="button" onClick={openTaskAdd} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-            + Add task
-          </button>
-        )}
-      >
-        <div className="max-w-5xl space-y-5">
-          {taskEditor?.mode === 'add' && taskEditorForm}
-          {project.tasks.length > 0 ? (
-            <ProjectTaskList
-              tasks={project.tasks}
+        >
+          <div className="overflow-hidden rounded-2xl border border-border-subtle bg-surface/15">
+            {taskEditor?.mode === 'add' ? <div className="px-4 py-4">{taskEditorForm}</div> : null}
+            <ProjectTaskListBlock
+              tasks={openTasks}
               taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
               taskEditorForm={taskEditorForm}
               busy={taskBusy}
               onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
               onEditTask={openTaskEdit}
               onDeleteTask={(taskId) => { void deleteTask(taskId); }}
+              emptyLabel={completedTasks.length > 0 ? 'No open tasks.' : 'No tasks yet.'}
             />
-          ) : !taskEditor ? (
-            <p className="ui-card-meta">No tasks yet.</p>
-          ) : null}
-          {taskError && !taskEditor && <p className="text-[12px] text-danger">{taskError}</p>}
-        </div>
-      </DetailSection>
-
-      <DetailSection
-        id="project-activity"
-        title="Activity"
-        meta={activityPreview}
-        collapsible
-        defaultOpen={false}
-        forceOpen={selectedView === 'activity'}
-        collapsedPreview={activityPreview}
-        resetKey={record.id}
-      >
-        <ProjectActivityContent items={activityItems} />
-      </DetailSection>
-
-      <DetailSection
-        id="project-notes"
-        title="Notes"
-        meta={`${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`}
-        collapsible
-        defaultOpen={false}
-        forceOpen={noteEditor !== null || selectedView === 'notes'}
-        collapsedPreview={notesPreview}
-        resetKey={record.id}
-        actions={(
-          <button type="button" onClick={openNoteAdd} className={ACTION_BUTTON_CLASS} disabled={noteBusy}>
-            + Add note
-          </button>
-        )}
-      >
-        <ProjectNotesContent
-          notes={project.notes}
-          noteEditor={noteEditor}
-          noteEditorForm={noteEditorForm}
-          noteBusy={noteBusy}
-          noteError={noteError}
-          onEditNote={openNoteEdit}
-          onDeleteNote={(noteId) => { void deleteNote(noteId); }}
-        />
-      </DetailSection>
-
-      <DetailSection
-        id="project-files"
-        title="Files"
-        meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
-        collapsible
-        defaultOpen={false}
-        forceOpen={selectedView === 'files'}
-        collapsedPreview={filesPreview}
-        resetKey={record.id}
-      >
-        <ProjectFilesContent
-          uploadForm={fileUploadForm}
-          files={project.files}
-          fileBusy={fileBusy}
-          onDeleteFile={(file) => { void deleteFile(file); }}
-        />
-      </DetailSection>
-
-      {advancedOpen && (
-        <section className="border-t border-border-subtle pt-6 space-y-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
-              {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
-            </button>
-            <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
-              {deleteBusy ? 'Deleting…' : 'Delete project'}
-            </button>
-            <span className="ui-card-meta">Debug state stays hidden unless you ask for it.</span>
+            {completedTasks.length > 0 ? (
+              <div className="border-t border-border-subtle px-4 py-3.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCompletedTasks((value) => !value)}
+                  className={ACTION_TEXT_BUTTON_CLASS}
+                >
+                  {showCompletedTasks ? 'Hide completed tasks' : `Show completed tasks (${completedTasks.length})`}
+                </button>
+              </div>
+            ) : null}
+            {showCompletedTasks ? (
+              <div className="border-t border-border-subtle bg-base/15">
+                <ProjectTaskListBlock
+                  tasks={completedTasks}
+                  taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
+                  taskEditorForm={taskEditorForm}
+                  busy={taskBusy}
+                  onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
+                  onEditTask={openTaskEdit}
+                  onDeleteTask={(taskId) => { void deleteTask(taskId); }}
+                />
+              </div>
+            ) : null}
           </div>
+          {taskError && !taskEditor ? <p className="text-[12px] text-danger">{taskError}</p> : null}
+        </ProjectSection>
 
-          {rawProjectOpen && (
-            <ProjectRecordViewer
-              repoRoot={record.repoRoot}
-              summary={record.summary}
-              rawProjectOpen={rawProjectOpen}
-              rawProjectContent={rawProjectContent}
-              rawProjectBusy={rawProjectBusy}
-              rawProjectError={rawProjectError}
-              onRawProjectContentChange={setRawProjectContent}
-              onRawProjectSubmit={saveRawProject}
-              showSummary={false}
-            />
+        <ProjectSection
+          title="Brief"
+          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No brief yet'}
+          action={(
+            <>
+              <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_TEXT_BUTTON_CLASS} disabled={documentBusy}>
+                {documentBusy ? 'Regenerating…' : 'Regenerate'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentError(null);
+                  if (!documentEditing && documentContent.trim().length === 0) {
+                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
+                  }
+                  setDocumentEditing((value) => !value);
+                }}
+                className={ACTION_TEXT_BUTTON_CLASS}
+                disabled={documentBusy}
+              >
+                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit brief' : 'Write brief')}
+              </button>
+            </>
           )}
+        >
+          <ProjectDocumentContent
+            document={documentRecord}
+            projectTitle={record.title}
+            editing={documentEditing}
+            content={documentContent}
+            busy={documentBusy}
+            error={documentError}
+            onChange={setDocumentContent}
+            onSubmit={saveDocument}
+          />
+        </ProjectSection>
+      </div>
+
+      <aside className="space-y-4 xl:sticky xl:top-0 xl:self-start">
+        <section className={RAIL_SECTION_CLASS}>
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => { void startConversationFromProject(); }}
+              disabled={conversationBusy || deleteBusy || !canStartConversation}
+              className={RAIL_PRIMARY_BUTTON_CLASS}
+            >
+              {conversationBusy ? 'Starting…' : 'Start conversation'}
+            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={openProjectEditor} disabled={deleteBusy} className={RAIL_SECONDARY_BUTTON_CLASS}>Edit project</button>
+              <button type="button" onClick={() => setAdvancedOpen((value) => !value)} disabled={deleteBusy} className={RAIL_SECONDARY_BUTTON_CLASS}>
+                {advancedOpen ? 'Hide more' : 'More'}
+              </button>
+            </div>
+            {!canStartConversation && activeProfile ? (
+              <p className="text-[12px] leading-relaxed text-secondary">
+                Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
+              </p>
+            ) : null}
+            {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
+            {advancedOpen ? (
+              <div className="space-y-2 border-t border-border-subtle pt-3">
+                <button type="button" onClick={downloadProjectPackage} className={RAIL_SECONDARY_BUTTON_CLASS}>Export package</button>
+                <button type="button" onClick={() => { void toggleArchive(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={archiveBusy || deleteBusy}>
+                  {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
+                </button>
+                <button type="button" onClick={() => { void toggleRawProject(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={deleteBusy}>
+                  {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
+                </button>
+                <button type="button" onClick={() => { void deleteProject(); }} className={DANGER_TEXT_BUTTON_CLASS} disabled={deleteBusy}>
+                  {deleteBusy ? 'Deleting…' : 'Delete project'}
+                </button>
+                {rawProjectOpen ? (
+                  <ProjectRecordViewer
+                    repoRoot={record.repoRoot}
+                    summary={record.summary}
+                    rawProjectOpen={rawProjectOpen}
+                    rawProjectContent={rawProjectContent}
+                    rawProjectBusy={rawProjectBusy}
+                    rawProjectError={rawProjectError}
+                    onRawProjectContentChange={setRawProjectContent}
+                    onRawProjectSubmit={saveRawProject}
+                    showSummary={false}
+                  />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </section>
-      )}
+
+        <ProjectRailSection title="Properties" meta="Project metadata and current state.">
+          <div className="space-y-4">
+            <ProjectPropertyRow
+              label="Status"
+              value={<Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>{formatProjectStatus(record.status)}</Pill>}
+            />
+            <ProjectPropertyRow label="Profile" value={projectProfile} />
+            <ProjectPropertyRow label="Updated" value={timeAgo(record.updatedAt)} />
+            {record.repoRoot ? <ProjectPropertyRow label="Repo root" value={<span className="font-mono break-all">{record.repoRoot}</span>} /> : null}
+            {record.currentFocus?.trim() ? <ProjectPropertyRow label="Current focus" value={record.currentFocus.trim()} /> : null}
+            {blockers.length > 0 ? (
+              <ProjectPropertyRow
+                label="Blockers"
+                value={(
+                  <ul className="list-disc space-y-1 pl-4 text-[13px] text-secondary">
+                    {blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                  </ul>
+                )}
+              />
+            ) : null}
+          </div>
+        </ProjectRailSection>
+
+        <ProjectRailSection
+          title="Linked conversations"
+          meta={`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`}
+        >
+          <ProjectConversationList conversations={project.linkedConversations} />
+        </ProjectRailSection>
+
+        <ProjectRailSection
+          title="Notes"
+          meta={`${project.noteCount ?? project.notes.length} ${project.notes.length === 1 ? 'note' : 'notes'}`}
+          action={(
+            <button
+              type="button"
+              onClick={() => {
+                if (noteEditor?.mode === 'add') {
+                  setNoteEditor(null);
+                  return;
+                }
+                openNoteAdd();
+              }}
+              className={ACTION_TEXT_BUTTON_CLASS}
+              disabled={noteBusy}
+            >
+              {noteEditor?.mode === 'add' ? 'Cancel' : '+ Add note'}
+            </button>
+          )}
+        >
+          <ProjectNoteList
+            notes={project.notes}
+            noteEditor={noteEditor}
+            noteEditorForm={noteEditorForm}
+            noteBusy={noteBusy}
+            onEditNote={openNoteEdit}
+            onDeleteNote={(noteId) => { void deleteNote(noteId); }}
+          />
+          {noteError && !noteEditor ? <p className="mt-3 text-[12px] text-danger">{noteError}</p> : null}
+        </ProjectRailSection>
+
+        <ProjectRailSection
+          title="Files"
+          meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
+          action={(
+            <button
+              type="button"
+              onClick={() => {
+                setFileError(null);
+                setFileComposerOpen((value) => !value);
+              }}
+              className={ACTION_TEXT_BUTTON_CLASS}
+              disabled={fileBusy}
+            >
+              {fileComposerOpen ? 'Cancel' : 'Upload file'}
+            </button>
+          )}
+        >
+          <div className="space-y-3">
+            {fileUploadForm}
+            <ProjectFileList files={project.files} fileBusy={fileBusy} onDeleteFile={(file) => { void deleteFile(file); }} />
+            {fileError && !fileComposerOpen ? <p className="text-[12px] text-danger">{fileError}</p> : null}
+          </div>
+        </ProjectRailSection>
+      </aside>
     </div>
   );
 }

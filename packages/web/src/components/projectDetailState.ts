@@ -141,6 +141,10 @@ function sortTimestamp(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function activityItemTimestamp(item: ProjectActivityItemShape): string | undefined {
+  return item.kind === 'conversation' ? item.conversation.lastActivityAt : item.entry.createdAt;
+}
+
 export function summarizeActivityPreview(value: string | undefined, maxLength = 160): string | undefined {
   const normalized = (value ?? '')
     .replace(/```[\s\S]*?```/g, ' ')
@@ -170,11 +174,16 @@ export function summarizeActivityPreview(value: string | undefined, maxLength = 
 }
 
 export function buildActivityItems(project: ProjectDetail): ProjectActivityItemShape[] {
-  return [...project.timeline]
-    .sort((left, right) => sortTimestamp(right.createdAt) - sortTimestamp(left.createdAt))
-    .map((entry) => ({
+  return [
+    ...project.timeline.map((entry) => ({
       id: `timeline:${entry.id}`,
       kind: 'timeline' as const,
       entry,
-    }));
+    })),
+    ...project.linkedConversations.map((conversation) => ({
+      id: `conversation:${conversation.conversationId}`,
+      kind: 'conversation' as const,
+      conversation,
+    })),
+  ].sort((left, right) => sortTimestamp(activityItemTimestamp(right)) - sortTimestamp(activityItemTimestamp(left)));
 }
