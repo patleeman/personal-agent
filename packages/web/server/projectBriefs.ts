@@ -185,6 +185,11 @@ export async function generateProjectBrief(options: {
     throw new Error(`Project brief model not found: ${settings.provider}/${settings.model}`);
   }
 
+  const authResult = await modelRegistry.getApiKeyAndHeaders(model);
+  if (!authResult.ok) {
+    throw new Error(`Project brief model auth could not be resolved: ${authResult.error}`);
+  }
+
   const response = await completeSimple(
     model,
     {
@@ -218,7 +223,8 @@ export async function generateProjectBrief(options: {
       ],
     },
     {
-      apiKey: await modelRegistry.getApiKey(model),
+      apiKey: authResult.apiKey,
+      headers: authResult.headers,
       reasoning: settings.reasoning,
       temperature: 0.2,
       maxTokens: 900,

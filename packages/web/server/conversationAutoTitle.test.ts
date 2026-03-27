@@ -149,7 +149,7 @@ describe('generateConversationTitle', () => {
     } as unknown as TitleModel;
     const modelRegistry = {
       getAvailable: () => [model],
-      getApiKey: vi.fn().mockResolvedValue('test-key'),
+      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: 'test-key' }),
     };
 
     const title = await generateConversationTitle({
@@ -171,7 +171,7 @@ describe('generateConversationTitle', () => {
     });
 
     expect(title).toBe('Rename chats from first assistant reply');
-    expect(modelRegistry.getApiKey).toHaveBeenCalledWith(model);
+    expect(modelRegistry.getApiKeyAndHeaders).toHaveBeenCalledWith(model);
     expect(completeSimpleMock).toHaveBeenCalledWith(
       model,
       expect.objectContaining({
@@ -212,7 +212,7 @@ describe('generateConversationTitle', () => {
     } as unknown as TitleModel;
     const modelRegistry = {
       getAvailable: () => [model],
-      getApiKey: vi.fn().mockResolvedValue('test-key'),
+      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true, apiKey: 'test-key' }),
     };
 
     await expect(generateConversationTitle({
