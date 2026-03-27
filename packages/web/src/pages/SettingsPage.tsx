@@ -50,7 +50,12 @@ const SETTINGS_CONTROL_CENTER_ITEMS = [
   {
     href: '/system',
     label: 'System',
-    summary: 'Daemon state, sync health, and durable runs.',
+    summary: 'Daemon state, sync health, and operational status.',
+  },
+  {
+    href: '/runs',
+    label: 'Runs',
+    summary: 'Durable background work and recovery review.',
   },
   {
     href: '/scheduled',
