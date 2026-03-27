@@ -7,6 +7,15 @@ export const PINNED_SESSION_IDS_STORAGE_KEY = 'pa:pinned-session-ids';
 export const ARCHIVED_SESSION_IDS_STORAGE_KEY = 'pa:archived-session-ids';
 export const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'pa:sidebar-width';
+export const SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX = 'pa:sidebar-nav-section:';
+
+export function buildSidebarNavSectionStorageKey(sectionId: string): string {
+  return `${SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX}${sectionId}`;
+}
+
+export function isSidebarNavSectionStorageKey(key: string): boolean {
+  return key.startsWith(SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX);
+}
 
 function removeStoredItem(key: string): void {
   try {
@@ -36,7 +45,7 @@ function removeStoredItemsMatching(predicate: (key: string) => boolean): void {
 
 export function resetStoredLayoutPreferences(): void {
   removeStoredItem(SIDEBAR_WIDTH_STORAGE_KEY);
-  removeStoredItemsMatching(isRailWidthStorageKey);
+  removeStoredItemsMatching((key) => isRailWidthStorageKey(key) || isSidebarNavSectionStorageKey(key));
 }
 
 export function resetStoredConversationUiState(): void {
