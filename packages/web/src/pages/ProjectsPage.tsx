@@ -390,11 +390,6 @@ export function ProjectsPage() {
     return () => window.cancelAnimationFrame(handle);
   }, [projectDetailApi.data, selectedId, selectedView, showCreateForm]);
 
-  function setViewProfile(nextProfile: string | 'all') {
-    setShowCreateForm(false);
-    navigate(buildProjectsHref(nextProfile, selectedId, selectedView === 'overview' ? null : selectedView));
-  }
-
   function openCreateForm() {
     const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
       ? effectiveViewProfile
@@ -447,25 +442,6 @@ export function ProjectsPage() {
       <div className="min-h-0 flex-1 px-6 py-4">
         <div className="flex h-full min-h-0 flex-col gap-4">
           {profilesError && <p className="text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
-
-          {profileState && (
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2">
-                <span className="ui-card-meta">Profile</span>
-                <select
-                  value={effectiveViewProfile ?? profileState.currentProfile}
-                  onChange={(event) => setViewProfile(event.target.value === 'all' ? 'all' : event.target.value)}
-                  className={`${INPUT_CLASS} min-w-[12rem] py-1.5`}
-                >
-                  <option value="all">All profiles</option>
-                  {profileState.profiles.map((profile) => (
-                    <option key={profile} value={profile}>{profile}</option>
-                  ))}
-                </select>
-              </label>
-              <p className="ui-card-meta">Use the right rail to browse projects and jump between logical project sections.</p>
-            </div>
-          )}
 
           {isLoading && <LoadingState label="Loading projects…" />}
           {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}

@@ -51,8 +51,8 @@ function SkillReferencesList({
   }
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="space-y-px">
+    <div className="h-full overflow-y-auto px-6 py-6">
+      <div className="mx-auto max-w-4xl space-y-px">
         {detail.references.map((reference) => (
           <ListLinkRow
             key={reference.path}
@@ -73,8 +73,8 @@ function SkillReferencesList({
 
 function SkillLinksView({ detail }: { detail: SkillDetail }) {
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
-      <div className="space-y-5 rounded-2xl border border-border-subtle bg-base/40 px-4 py-4">
+    <div className="h-full overflow-y-auto px-6 py-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
         <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
         <UnresolvedNodeLinks ids={detail.links?.unresolved} />
