@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ListLinkRow, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 import { useApi } from '../hooks';
 import type {
@@ -334,8 +335,9 @@ export function ToolsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
+    <SettingsSplitLayout>
+      <div className="flex h-full flex-col">
+        <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={<ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>↻ Refresh</ToolbarButton>}
       >
@@ -704,6 +706,7 @@ export function ToolsPage() {
           </section>
         </div>
       </div>
-    </div>
+      </div>
+    </SettingsSplitLayout>
   );
 }

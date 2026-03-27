@@ -188,4 +188,12 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Files');
     expect(html).not.toContain('Changes');
   });
+
+  it('treats settings-related routes as part of Settings in the main sidebar', () => {
+    const html = renderSidebar('/runs/conversation-live-conv-123');
+
+    expect(html).toContain('href="/settings"');
+    expect(html).toContain('ui-sidebar-nav-item-active');
+    expect(html).not.toContain('>Runs<');
+  });
 });

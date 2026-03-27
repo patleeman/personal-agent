@@ -61,6 +61,11 @@ const PATH = {
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/plans', '/tools', '/instructions'] as const;
+
+function matchesSettingsRoute(pathname: string): boolean {
+  return SETTINGS_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 function normalizeHotkeyKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
@@ -79,18 +84,20 @@ function TopNavItem({
   icon,
   label,
   badge,
+  forceActive = false,
 }: {
   to: string;
   icon: string;
   label: string;
   badge?: number | null;
+  forceActive?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) => [
         'ui-sidebar-nav-item',
-        isActive && 'ui-sidebar-nav-item-active',
+        (forceActive || isActive) && 'ui-sidebar-nav-item-active',
       ].filter(Boolean).join(' ')}
     >
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
@@ -455,6 +462,7 @@ export function Sidebar() {
     () => location.pathname.startsWith('/workspace') ? readWorkspaceCwdFromSearch(location.search) : null,
     [location.pathname, location.search],
   );
+  const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
 
   const notesById = useMemo(
     () => new Map((notesData?.memories ?? []).map((memory) => [memory.id, memory] as const)),
@@ -1051,7 +1059,7 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-        <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
+        <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
       </div>
     </aside>
   );
