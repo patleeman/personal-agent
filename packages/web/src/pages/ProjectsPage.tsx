@@ -11,12 +11,18 @@ import { MentionTextarea } from '../components/MentionTextarea';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { ProjectsBrowserRail } from '../components/ProjectsBrowserRail';
 import { buildRailWidthStorageKey } from '../layoutSizing';
-import { buildProjectsHref, PROJECT_VIEW_QUERY_PARAM, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
+import {
+  buildProjectsHref,
+  PROJECT_VIEW_QUERY_PARAM,
+  projectViewToSectionId,
+  readCreateProjectState,
+  readProjectView,
+  VIEW_PROFILE_QUERY_PARAM,
+} from '../projectWorkspaceState';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
-const CREATE_PROJECT_OPEN_STORAGE_KEY = 'pa:reload:projects:create-open';
 const CREATE_PROJECT_TITLE_STORAGE_KEY = 'pa:reload:projects:create-title';
 const CREATE_PROJECT_DOCUMENT_STORAGE_KEY = 'pa:reload:projects:create-document';
 const CREATE_PROJECT_REPO_ROOT_STORAGE_KEY = 'pa:reload:projects:create-repo-root';
@@ -206,12 +212,6 @@ export function ProjectsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: selectedId } = useParams<{ id?: string }>();
-  const createFormStorageKey = selectedId ? null : CREATE_PROJECT_OPEN_STORAGE_KEY;
-  const [showCreateForm, setShowCreateForm] = useReloadState<boolean>({
-    storageKey: createFormStorageKey,
-    initialValue: false,
-    shouldPersist: (value) => value,
-  });
   const { data: profileState, error: profilesError } = useApi(api.profiles);
   const requestedViewProfile = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -254,6 +254,9 @@ export function ProjectsPage() {
   const { projects: projectSnapshot, setProjects } = useAppData();
 
   const currentProfile = profileState?.currentProfile ?? null;
+  const createProfile = requestedViewProfile && requestedViewProfile !== 'all'
+    ? requestedViewProfile
+    : currentProfile;
   const usingCurrentProfileSnapshot = Boolean(
     currentProfile
     && effectiveViewProfile
@@ -265,6 +268,7 @@ export function ProjectsPage() {
   const isLoading = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) && loading;
   const visibleError = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) ? error : null;
   const selectedView = useMemo(() => readProjectView(location.search), [location.search]);
+  const showCreateForm = useMemo(() => !selectedId && readCreateProjectState(location.search), [location.search, selectedId]);
   const hasExplicitProjectView = useMemo(() => new URLSearchParams(location.search).has(PROJECT_VIEW_QUERY_PARAM), [location.search]);
 
   const refreshProjects = useCallback(async () => {
@@ -328,23 +332,18 @@ export function ProjectsPage() {
   }, [selectedId]);
 
   function openCreateForm() {
-    const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
-      ? effectiveViewProfile
-      : currentProfile;
-
     if (!createProfile) {
       return;
     }
 
-    navigate(buildProjectsHref(createProfile));
-    setShowCreateForm(true);
+    navigate(buildProjectsHref(createProfile, undefined, null, true));
+  }
+
+  function closeCreateForm() {
+    navigate(createProfile ? buildProjectsHref(createProfile) : (effectiveViewProfile ? buildProjectsHref(effectiveViewProfile) : '/projects'));
   }
 
   function handleCreated(projectId: string) {
-    const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
-      ? effectiveViewProfile
-      : currentProfile;
-    setShowCreateForm(false);
     navigate(createProfile ? buildProjectsHref(createProfile, projectId) : `/projects/${projectId}`);
   }
 
@@ -362,12 +361,12 @@ export function ProjectsPage() {
           <div className="flex items-center justify-end gap-2">
             <ToolbarButton onClick={() => {
               if (showCreateForm) {
-                setShowCreateForm(false);
+                closeCreateForm();
                 return;
               }
 
               openCreateForm();
-            }} disabled={!currentProfile && effectiveViewProfile !== 'all'}>
+            }} disabled={!createProfile}>
               {showCreateForm ? 'Close new project' : 'New project'}
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refreshProjects(); }}>Refresh</ToolbarButton>
@@ -383,12 +382,12 @@ export function ProjectsPage() {
           )}
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            {showCreateForm && effectiveViewProfile && effectiveViewProfile !== 'all' ? (
+            {showCreateForm && createProfile ? (
               <div className="h-full overflow-y-auto">
                 <CreateProjectPanel
-                  profile={effectiveViewProfile}
+                  profile={createProfile}
                   onCreated={handleCreated}
-                  onCancel={() => setShowCreateForm(false)}
+                  onCancel={closeCreateForm}
                 />
               </div>
             ) : selectedId ? (

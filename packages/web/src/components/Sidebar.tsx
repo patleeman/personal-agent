@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
@@ -56,6 +56,7 @@ const PATH = {
   close: 'M6 18 18 6M6 6l12 12',
   pin: 'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
   unpin: 'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
+  chevronDown: 'm6 9 6 6 6-6',
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
@@ -111,6 +112,14 @@ function SectionHeader({ label, count }: { label: string; count?: number | strin
   );
 }
 
+function PinnedIndicator() {
+  return (
+    <span role="img" aria-label="Pinned" className="inline-flex items-center justify-center rounded-md p-1 text-accent/80">
+      <Ico d={PATH.pin} size={10} />
+    </span>
+  );
+}
+
 function ShelfRow({
   to,
   active,
@@ -148,6 +157,7 @@ function ShelfRow({
         {meta && <p className="ui-sidebar-session-meta truncate">{meta}</p>}
       </div>
       <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
+        {!hovered && pinned ? <PinnedIndicator /> : null}
         {hovered && pinned && onUnpin ? (
           <button
             type="button"
@@ -246,6 +256,7 @@ function OpenConversationRow({
         </p>
       </div>
       <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
+        {!hovered && pinned ? <PinnedIndicator /> : null}
         {hovered && pinned && onUnpin ? (
           <button
             type="button"
@@ -331,6 +342,8 @@ export function Sidebar() {
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
   const [draftReferencedProjectIds, setDraftReferencedProjectIds] = useState(() => readDraftConversationProjectIds());
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
 
   const draftTab = useMemo(() => {
     if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds)) {
@@ -422,6 +435,29 @@ export function Sidebar() {
     }).length;
   }, [activity?.entries, archivedSessions, pinnedSessions, tabs]);
   const notificationCount = standaloneUnreadCount + activeAlertCount;
+  const createProjectHref = useMemo(
+    () => buildProjectsHref(status?.profile ?? 'shared', undefined, null, true),
+    [status?.profile],
+  );
+  const createMenuItems = useMemo(
+    () => [
+      {
+        id: 'note',
+        label: 'New note',
+        description: 'Create a durable note node.',
+        to: `/notes${buildNoteSearch('', { view: 'main', item: null, creating: true })}`,
+        icon: PATH.notes,
+      },
+      {
+        id: 'project',
+        label: 'New project',
+        description: `Create a project in ${status?.profile ?? 'shared'}.`,
+        to: createProjectHref,
+        icon: PATH.projects,
+      },
+    ],
+    [createProjectHref, status?.profile],
+  );
 
   useEffect(() => {
     function syncDraftState() {
@@ -451,7 +487,41 @@ export function Sidebar() {
     });
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
+  useEffect(() => {
+    setCreateMenuOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!createMenuOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!createMenuRef.current || !(event.target instanceof Node)) {
+        return;
+      }
+
+      if (!createMenuRef.current.contains(event.target)) {
+        setCreateMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setCreateMenuOpen(false);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [createMenuOpen]);
+
   const handleNewConversation = useCallback(() => {
+    setCreateMenuOpen(false);
     navigate('/conversations/new');
   }, [navigate]);
 
@@ -580,15 +650,56 @@ export function Sidebar() {
       <div className="mx-3 border-t border-border-subtle my-2" />
 
       <div className="px-1 pb-2">
-        <button
-          onClick={handleNewConversation}
-          className="ui-sidebar-nav-item"
-          style={{ width: 'calc(100% - 8px)' }}
-          title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
-          New chat
-        </button>
+        <div ref={createMenuRef} className="relative mx-1">
+          <div className="flex items-stretch gap-1">
+            <button
+              onClick={handleNewConversation}
+              className="ui-sidebar-nav-item mx-0 flex-1"
+              title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
+              <span className="flex-1 text-left">New chat</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateMenuOpen((current) => !current)}
+              className="ui-sidebar-nav-item mx-0 shrink-0 px-2.5"
+              aria-haspopup="menu"
+              aria-expanded={createMenuOpen}
+              aria-label="Open create menu"
+              title="Open create menu"
+            >
+              <Ico d={PATH.chevronDown} size={14} />
+            </button>
+          </div>
+
+          {createMenuOpen ? (
+            <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-border-default bg-surface shadow-xl" role="menu" aria-label="Create menu">
+              <div className="border-b border-border-subtle px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">Create</p>
+              </div>
+              <div className="py-1.5">
+                {createMenuItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    to={item.to}
+                    role="menuitem"
+                    className="flex items-start gap-2.5 px-3 py-2 text-[13px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary"
+                    onClick={() => setCreateMenuOpen(false)}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 opacity-70">
+                      <path d={item.icon} />
+                    </svg>
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium text-primary">{item.label}</span>
+                      <span className="block text-[11px] text-dim">{item.description}</span>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
