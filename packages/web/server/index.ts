@@ -351,7 +351,7 @@ import {
   deleteProjectFileRecord,
   deleteProjectNoteRecord,
   readProjectFileDownload,
-  saveProjectBrief,
+  saveProjectDocument,
   updateProjectNoteRecord,
   uploadProjectFile,
 } from './projectResources.js';
@@ -2691,16 +2691,23 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
   const activityEntries = listActivityForProfile(profile)
     .filter((entry) => (entry.relatedProjectIds ?? []).includes(detail.project.id));
 
-  const timeline: ProjectTimelineEntry[] = [];
+  const timeline: ProjectTimelineEntry[] = [
+    {
+      id: `project:${detail.project.id}`,
+      kind: 'project',
+      createdAt: detail.project.createdAt,
+      title: 'Project created',
+      href: '#top',
+    },
+  ];
 
-  if (detail.brief) {
+  if (detail.document) {
     timeline.push({
-      id: `brief:${detail.project.id}`,
-      kind: 'brief',
-      createdAt: detail.brief.updatedAt,
-      title: 'Project handoff doc updated',
-      description: detail.brief.content.split('\n').find((line) => line.trim().length > 0)?.trim(),
-      href: '#project-handoff',
+      id: `document:${detail.project.id}`,
+      kind: 'document',
+      createdAt: detail.document.updatedAt,
+      title: 'Project doc updated',
+      href: '#project-document',
     });
   }
 
@@ -2710,29 +2717,16 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
       kind: 'note',
       createdAt: note.updatedAt,
       title: note.title,
-      description: note.body.replace(/\s+/g, ' ').trim() || undefined,
       href: `#project-note-${note.id}`,
     });
   }
 
-  for (const file of detail.attachments) {
+  for (const file of detail.files) {
     timeline.push({
-      id: `attachment:${file.id}`,
-      kind: 'attachment',
+      id: `file:${file.id}`,
+      kind: 'file',
       createdAt: file.updatedAt,
       title: file.title,
-      description: file.description ?? file.originalName,
-      href: file.downloadPath,
-    });
-  }
-
-  for (const file of detail.artifacts) {
-    timeline.push({
-      id: `artifact:${file.id}`,
-      kind: 'artifact',
-      createdAt: file.updatedAt,
-      title: file.title,
-      description: file.description ?? file.originalName,
       href: file.downloadPath,
     });
   }
@@ -2743,7 +2737,6 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
       kind: 'conversation',
       createdAt: conversation.lastActivityAt ?? '',
       title: conversation.title,
-      description: conversation.snippet,
       href: `/conversations/${encodeURIComponent(conversation.conversationId)}`,
     });
   }
@@ -2754,14 +2747,14 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
       kind: 'activity',
       createdAt: activity.createdAt,
       title: activity.summary,
-      description: activity.details,
       href: '/inbox',
     });
   }
 
   return timeline
     .filter((entry) => entry.createdAt.length > 0)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+    .slice(0, 12);
 }
 
 function applyProjectProfile<T extends { downloadPath: string }>(items: T[], profile: string): T[] {
@@ -2785,13 +2778,17 @@ function readProjectDetailForProfile(projectId: string, profile = getCurrentProf
     projectId,
   });
   const linkedConversations = listLinkedProjectConversations(projectId, profile);
+  const appliedFiles = applyProjectProfile(detail.files, profile);
+  const appliedAttachments = applyProjectProfile(detail.attachments, profile);
+  const appliedArtifacts = applyProjectProfile(detail.artifacts, profile);
   const enriched: ProjectDetailWithProfile = {
     ...detail,
     profile,
     links: readNodeLinksForProfile('project', detail.project.id, profile),
     project: annotateProjectRecord(detail.project, profile),
-    attachments: applyProjectProfile(detail.attachments, profile),
-    artifacts: applyProjectProfile(detail.artifacts, profile),
+    files: appliedFiles,
+    attachments: appliedAttachments,
+    artifacts: appliedArtifacts,
     linkedConversations,
     timeline: [],
   };
@@ -7169,35 +7166,18 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
         lineParts.push(`  profile: ${projectProfile}`);
       }
       lineParts.push(`  title: ${detail.project.title}`);
-      lineParts.push(`  description: ${detail.project.description}`);
       lineParts.push(`  summary: ${detail.project.summary}`);
-      lineParts.push(`  goal: ${detail.project.requirements.goal}`);
-      if (detail.project.requirements.acceptanceCriteria.length > 0) {
-        lineParts.push(`  acceptanceCriteria: ${detail.project.requirements.acceptanceCriteria.join(' | ')}`);
-      }
-      if (detail.project.planSummary) {
-        lineParts.push(`  planSummary: ${detail.project.planSummary}`);
-      }
-      if (detail.project.completionSummary) {
-        lineParts.push(`  completionSummary: ${detail.project.completionSummary}`);
-      }
-      if (detail.project.currentFocus) {
-        lineParts.push(`  currentFocus: ${detail.project.currentFocus}`);
-      }
       if (detail.project.repoRoot) {
         lineParts.push(`  repoRoot: ${detail.project.repoRoot}`);
       }
-      if (detail.brief) {
-        lineParts.push(`  brief: ${relative(REPO_ROOT, detail.brief.path)}`);
+      if (detail.document) {
+        lineParts.push(`  document: ${relative(REPO_ROOT, detail.document.path)}`);
       }
       if (detail.noteCount > 0) {
         lineParts.push(`  notesDir: ${relative(REPO_ROOT, paths.notesDir)} (${detail.noteCount} notes)`);
       }
-      if (detail.attachmentCount > 0) {
-        lineParts.push(`  attachmentsDir: ${relative(REPO_ROOT, paths.attachmentsDir)} (${detail.attachmentCount} files)`);
-      }
-      if (detail.artifactCount > 0) {
-        lineParts.push(`  artifactsDir: ${relative(REPO_ROOT, paths.artifactsDir)} (${detail.artifactCount} files)`);
+      if (detail.fileCount > 0) {
+        lineParts.push(`  filesDir: ${relative(REPO_ROOT, paths.filesDir)} (${detail.fileCount} files)`);
       }
     } catch {
       // Ignore malformed project metadata in the lightweight reference summary.
@@ -8962,33 +8942,21 @@ app.post('/api/projects', (req, res) => {
     const body = req.body as {
       title?: string;
       description?: string;
+      documentContent?: string;
       repoRoot?: string | null;
       summary?: string;
-      goal?: string;
-      acceptanceCriteria?: string[];
-      planSummary?: string;
-      completionSummary?: string | null;
       status?: string;
-      currentFocus?: string | null;
-      blockers?: string[];
-      recentProgress?: string[];
     };
 
     const detail = createProjectRecord({
       repoRoot: REPO_ROOT,
       profile,
       title: body.title ?? '',
-      description: body.description ?? '',
+      description: body.description,
+      documentContent: body.documentContent,
       projectRepoRoot: body.repoRoot,
       summary: body.summary,
-      goal: body.goal,
-      acceptanceCriteria: body.acceptanceCriteria,
-      planSummary: body.planSummary,
-      completionSummary: body.completionSummary,
       status: body.status,
-      currentFocus: body.currentFocus,
-      blockers: body.blockers,
-      recentProgress: body.recentProgress,
     });
     invalidateAppTopics('projects');
     res.status(201).json(readProjectDetailForProfile(detail.project.id, profile));
@@ -9002,18 +8970,10 @@ app.patch('/api/projects/:id', (req, res) => {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
-      description?: string;
       repoRoot?: string | null;
       summary?: string;
-      goal?: string;
-      acceptanceCriteria?: string[];
-      planSummary?: string | null;
-      completionSummary?: string | null;
       status?: string;
-      currentFocus?: string | null;
       currentMilestoneId?: string | null;
-      blockers?: string[];
-      recentProgress?: string[];
     };
 
     updateProjectRecord({
@@ -9021,18 +8981,10 @@ app.patch('/api/projects/:id', (req, res) => {
       profile,
       projectId: req.params.id,
       title: body.title,
-      description: body.description,
       projectRepoRoot: body.repoRoot,
       summary: body.summary,
-      goal: body.goal,
-      acceptanceCriteria: body.acceptanceCriteria,
-      planSummary: body.planSummary,
-      completionSummary: body.completionSummary,
       status: body.status,
-      currentFocus: body.currentFocus,
       currentMilestoneId: body.currentMilestoneId,
-      blockers: body.blockers,
-      recentProgress: body.recentProgress,
     });
     invalidateAppTopics('projects');
     res.json(readProjectDetailForProfile(req.params.id, profile));
@@ -9088,11 +9040,11 @@ app.post('/api/projects/:id/unarchive', (req, res) => {
   }
 });
 
-app.post('/api/projects/:id/brief', (req, res) => {
+app.post('/api/projects/:id/document', (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { content?: string };
-    saveProjectBrief({
+    saveProjectDocument({
       repoRoot: REPO_ROOT,
       profile,
       projectId: req.params.id,
@@ -9105,22 +9057,22 @@ app.post('/api/projects/:id/brief', (req, res) => {
   }
 });
 
-app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
+app.post('/api/projects/:id/document/regenerate', async (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const detail = readProjectDetailForProfile(req.params.id, profile);
-    const brief = await generateProjectBrief({
+    const generatedDocument = await generateProjectBrief({
       detail,
       linkedConversations: detail.linkedConversations,
       activityEntries: listActivityForProfile(profile).filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
       settingsFile: SETTINGS_FILE,
       authFile: AUTH_FILE,
     });
-    saveProjectBrief({
+    saveProjectDocument({
       repoRoot: REPO_ROOT,
       profile,
       projectId: req.params.id,
-      content: brief,
+      content: generatedDocument,
     });
     invalidateAppTopics('projects');
     res.json(readProjectDetailForProfile(req.params.id, profile));
@@ -9188,7 +9140,6 @@ app.post('/api/projects/:id/files', (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
-      kind?: 'attachment' | 'artifact';
       name?: string;
       mimeType?: string;
       title?: string;
@@ -9199,7 +9150,6 @@ app.post('/api/projects/:id/files', (req, res) => {
       repoRoot: REPO_ROOT,
       profile,
       projectId: req.params.id,
-      kind: body.kind ?? 'attachment',
       name: body.name ?? '',
       mimeType: body.mimeType,
       title: body.title,
@@ -9213,14 +9163,13 @@ app.post('/api/projects/:id/files', (req, res) => {
   }
 });
 
-app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
+app.get('/api/projects/:id/files/:fileId/download', (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const download = readProjectFileDownload({
       repoRoot: REPO_ROOT,
       profile,
       projectId: req.params.id,
-      kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
       fileId: req.params.fileId,
     });
     if (download.file.mimeType) {
@@ -9233,14 +9182,13 @@ app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
   }
 });
 
-app.delete('/api/projects/:id/files/:kind/:fileId', (req, res) => {
+app.delete('/api/projects/:id/files/:fileId', (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     deleteProjectFileRecord({
       repoRoot: REPO_ROOT,
       profile,
       projectId: req.params.id,
-      kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
       fileId: req.params.fileId,
     });
     invalidateAppTopics('projects');

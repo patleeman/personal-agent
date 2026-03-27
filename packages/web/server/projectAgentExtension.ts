@@ -40,6 +40,7 @@ const PROJECT_ACTION_VALUES = [
   'unarchive',
   'reference',
   'unreference',
+  'save_document',
   'save_brief',
   'create_note',
   'update_note',
@@ -139,28 +140,16 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     `title: ${project.title}`,
     `status: ${project.status}`,
     `summary: ${project.summary}`,
-    `description: ${project.description}`,
   ];
 
   if (project.archivedAt) {
     lines.push(`archivedAt: ${project.archivedAt}`);
   }
 
-  if (project.currentFocus) {
-    lines.push(`currentFocus: ${project.currentFocus}`);
-  }
-
   if (project.repoRoot) {
     lines.push(`repoRoot: ${project.repoRoot}`);
   }
 
-  if (project.blockers.length > 0) {
-    lines.push(`blockers: ${project.blockers.join('; ')}`);
-  }
-
-  if (project.plan.milestones.length > 0) {
-    lines.push(`milestones: ${project.plan.milestones.map((milestone) => `${milestone.id}:${milestone.status}`).join(', ')}`);
-  }
 
   if (detail.tasks.length > 0) {
     lines.push(`tasks: ${detail.tasks.map((task) => `${task.id}:${task.status}`).join(', ')}`);
@@ -170,8 +159,8 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     lines.push(`notes: ${detail.notes.map((note) => note.id).join(', ')}`);
   }
 
-  if (detail.brief) {
-    lines.push(`brief: ${detail.brief.path}`);
+  if (detail.document) {
+    lines.push(`document: ${detail.document.path}`);
   }
 
   return lines.join('\n');
@@ -196,11 +185,11 @@ export function createProjectAgentExtension(options: {
       name: 'project',
       label: 'Project',
       description: 'Inspect, manage, and reference durable projects for the active profile.',
-      promptSnippet: 'Use the project tool for durable project CRUD, milestones, tasks, notes, briefs, and current-conversation references.',
+      promptSnippet: 'Use the project tool for durable project CRUD, tasks, notes, document edits, files, and current-conversation references.',
       promptGuidelines: [
         'Use this tool for structured project management instead of hand-editing project state.yaml for normal cases.',
         'Use reference and unreference to manage current conversation ↔ project links.',
-        'Use create/update/get/list/archive/unarchive for project state, milestone/task actions for plan maintenance, and note/brief actions for durable narrative context.',
+        'Use create/update/get/list/archive/unarchive for project state, create/update/delete_task for flat task management, and note/document actions for durable context.',
       ],
       parameters: ProjectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -248,17 +237,10 @@ export function createProjectAgentExtension(options: {
                 profile,
                 projectId: readOptionalString(params.projectId),
                 title: readRequiredString(params.title, 'title'),
-                description: readRequiredString(params.description, 'description'),
+                description: readOptionalString(params.description) ?? readOptionalString(params.body) ?? readRequiredString(params.title, 'title'),
                 projectRepoRoot: params.projectRepoRoot,
                 summary: params.summary,
-                goal: params.goal,
-                acceptanceCriteria: params.acceptanceCriteria,
-                planSummary: params.planSummary,
-                completionSummary: params.completionSummary,
                 status: params.status,
-                currentFocus: params.currentFocus,
-                blockers: params.blockers,
-                recentProgress: params.recentProgress,
               });
               invalidateAppTopics('projects');
               return {
@@ -278,18 +260,10 @@ export function createProjectAgentExtension(options: {
                 profile,
                 projectId,
                 title: params.title,
-                description: params.description,
                 projectRepoRoot: params.projectRepoRoot,
                 summary: params.summary,
-                goal: params.goal,
-                acceptanceCriteria: params.acceptanceCriteria,
-                planSummary: params.planSummary,
-                completionSummary: params.completionSummary,
                 status: params.status,
-                currentFocus: params.currentFocus,
                 currentMilestoneId: params.currentMilestoneId,
-                blockers: params.blockers,
-                recentProgress: params.recentProgress,
               });
               invalidateAppTopics('projects');
               return {
@@ -394,6 +368,7 @@ export function createProjectAgentExtension(options: {
               };
             }
 
+            case 'save_document':
             case 'save_brief': {
               const projectId = readRequiredString(params.projectId, 'projectId');
               const brief = saveProjectBrief({
@@ -404,9 +379,9 @@ export function createProjectAgentExtension(options: {
               });
               invalidateAppTopics('projects');
               return {
-                content: [{ type: 'text' as const, text: `Saved brief for @${projectId}.` }],
+                content: [{ type: 'text' as const, text: `Saved document for @${projectId}.` }],
                 details: {
-                  action: 'save_brief',
+                  action: params.action === 'save_document' ? 'save_document' : 'save_brief',
                   profile,
                   projectId,
                   path: brief.path,

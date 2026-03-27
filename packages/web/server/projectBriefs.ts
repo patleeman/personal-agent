@@ -93,19 +93,13 @@ function buildProjectDigest(
   activityEntries: ProjectActivityEntryInput[],
 ): string {
   const project = detail.project;
-  const milestoneLines = project.plan.milestones.slice(0, DEFAULT_MAX_ITEMS).map((milestone) => (
-    `- ${milestone.title} [${milestone.status}]${milestone.summary ? ` — ${truncate(milestone.summary, 160)}` : ''}`
-  ));
   const taskLines = detail.tasks.slice(0, DEFAULT_MAX_ITEMS).map((task) => (
-    `- ${task.title} [${task.status}]${task.milestoneId ? ` (milestone: ${task.milestoneId})` : ' (unassigned)'}`
+    `- ${task.title} [${task.status}]`
   ));
   const noteLines = detail.notes.slice(0, DEFAULT_MAX_ITEMS).map((note) => (
     `- ${note.title} [${note.kind}] — ${truncate(note.body, 180) || 'No body.'}`
   ));
-  const attachmentLines = detail.attachments.slice(0, DEFAULT_MAX_ITEMS).map((file) => (
-    `- ${file.title} (${file.originalName}, ${file.sizeBytes} bytes)${file.description ? ` — ${truncate(file.description, 140)}` : ''}`
-  ));
-  const artifactLines = detail.artifacts.slice(0, DEFAULT_MAX_ITEMS).map((file) => (
+  const fileLines = detail.files.slice(0, DEFAULT_MAX_ITEMS).map((file) => (
     `- ${file.title} (${file.originalName}, ${file.sizeBytes} bytes)${file.description ? ` — ${truncate(file.description, 140)}` : ''}`
   ));
   const conversationLines = linkedConversations.slice(0, DEFAULT_MAX_ITEMS).map((conversation) => (
@@ -119,40 +113,20 @@ function buildProjectDigest(
     `Project ID: ${project.id}`,
     `Title: ${project.title}`,
     `Status: ${project.status}`,
-    `Description: ${project.description}`,
     `Summary: ${project.summary}`,
-    `Goal: ${project.requirements.goal}`,
-    project.requirements.acceptanceCriteria.length > 0
-      ? `Acceptance criteria: ${project.requirements.acceptanceCriteria.join(' | ')}`
-      : 'Acceptance criteria: none',
-    project.planSummary ? `Plan summary: ${project.planSummary}` : 'Plan summary: none',
-    project.completionSummary ? `Completion summary: ${project.completionSummary}` : 'Completion summary: none',
-    project.currentFocus ? `Current focus: ${project.currentFocus}` : 'Current focus: none',
     project.repoRoot ? `Repo root: ${project.repoRoot}` : 'Repo root: none',
-    '',
-    'Blockers:',
-    formatList(project.blockers.map((blocker) => `- ${blocker}`), '- none'),
-    '',
-    'Recent progress:',
-    formatList(project.recentProgress.map((item) => `- ${item}`), '- none'),
-    '',
-    'Milestones:',
-    formatList(milestoneLines, '- none'),
     '',
     'Tasks:',
     formatList(taskLines, '- none'),
     '',
-    'Existing handoff doc:',
-    detail.brief ? truncate(detail.brief.content, 2_000) : 'No project handoff doc exists yet.',
+    'Existing project doc:',
+    detail.document ? truncate(detail.document.content, 2_000) : 'No project doc exists yet.',
     '',
     'Recent notes:',
     formatList(noteLines, '- none'),
     '',
-    'Attachments:',
-    formatList(attachmentLines, '- none'),
-    '',
-    'Artifacts:',
-    formatList(artifactLines, '- none'),
+    'Files:',
+    formatList(fileLines, '- none'),
     '',
     'Linked conversations:',
     formatList(conversationLines, '- none'),

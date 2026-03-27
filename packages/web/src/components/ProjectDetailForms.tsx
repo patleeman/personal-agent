@@ -11,57 +11,30 @@ import {
   type TaskFormState,
 } from './projectDetailState';
 import { timeAgo } from '../utils';
-import { Pill, ToolbarButton, cx, type PillTone } from './ui';
+import { Pill, ToolbarButton, type PillTone } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const FILE_UPLOAD_FIELD_CLASS = 'w-full rounded-none border-0 border-b border-border-default bg-transparent px-0 pb-2.5 pt-1 text-[15px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
-const FILE_UPLOAD_SELECT_CLASS = `${FILE_UPLOAD_FIELD_CLASS} pr-8`;
 const FILE_PICKER_CLASS = 'block w-full min-w-0 text-[14px] leading-relaxed text-primary focus:outline-none file:mr-4 file:rounded-full file:border file:border-border-subtle file:bg-elevated/65 file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-secondary file:transition-colors hover:file:border-border-default hover:file:text-primary';
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
-const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-40';
 
 function toneForStatus(status: string): PillTone {
   switch (status) {
-    case 'running':
+    case 'doing':
     case 'in_progress':
       return 'accent';
     case 'blocked':
+    case 'paused':
       return 'warning';
-    case 'failed':
-      return 'danger';
+    case 'done':
     case 'completed':
       return 'success';
     default:
       return 'muted';
   }
-}
-
-function dotClassForStatus(status: string): string {
-  switch (status) {
-    case 'in_progress':
-    case 'running':
-      return 'bg-accent';
-    case 'blocked':
-      return 'bg-warning';
-    case 'failed':
-      return 'bg-danger';
-    case 'completed':
-      return 'bg-success';
-    default:
-      return 'bg-border-default';
-  }
-}
-
-function milestoneStatusButtonClass(isActive: boolean): string {
-  return cx(
-    STATUS_ACTION_BUTTON_CLASS,
-    isActive
-      ? 'border-accent/30 bg-accent/10 text-accent'
-      : 'border-border-subtle bg-base text-dim hover:border-border-default hover:text-primary',
-  );
 }
 
 function formatBytes(sizeBytes: number): string {
@@ -101,61 +74,12 @@ export function ProjectRecordEditorForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="ui-card-meta">Description</label>
-        <MentionTextarea value={value.description} onValueChange={(description) => onChange({ description })} className={TEXTAREA_CLASS} />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Repo root</label>
-        <input
-          value={value.repoRoot}
-          onChange={(event) => onChange({ repoRoot: event.target.value })}
-          className={INPUT_CLASS}
-          placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">List summary</label>
+        <label className="ui-card-meta">Summary</label>
         <MentionTextarea
           value={value.summary}
           onValueChange={(summary) => onChange({ summary })}
           className={TEXTAREA_CLASS}
-          placeholder="Used in project lists and compact previews."
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Goal</label>
-        <MentionTextarea value={value.goal} onValueChange={(goal) => onChange({ goal })} className={TEXTAREA_CLASS} />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Acceptance criteria (one per line)</label>
-        <MentionTextarea
-          value={value.acceptanceCriteria}
-          onValueChange={(acceptanceCriteria) => onChange({ acceptanceCriteria })}
-          className={TEXTAREA_CLASS}
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Plan summary</label>
-        <MentionTextarea
-          value={value.planSummary}
-          onValueChange={(planSummary) => onChange({ planSummary })}
-          className={TEXTAREA_CLASS}
-          placeholder="Optional narrative plan before or alongside milestones and tasks."
-        />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Completion summary</label>
-        <MentionTextarea
-          value={value.completionSummary}
-          onValueChange={(completionSummary) => onChange({ completionSummary })}
-          className={TEXTAREA_CLASS}
-          placeholder="Optional until the project is complete."
+          placeholder="Short durable summary shown in lists and previews."
         />
       </div>
 
@@ -170,25 +94,13 @@ export function ProjectRecordEditorForm({
         </div>
 
         <div className="space-y-1.5">
-          <label className="ui-card-meta">Current focus</label>
+          <label className="ui-card-meta">Repo root</label>
           <input
-            value={value.currentFocus}
-            onChange={(event) => onChange({ currentFocus: event.target.value })}
+            value={value.repoRoot}
+            onChange={(event) => onChange({ repoRoot: event.target.value })}
             className={INPUT_CLASS}
-            placeholder="Optional"
+            placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
           />
-        </div>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-2">
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Blockers (one per line)</label>
-          <MentionTextarea value={value.blockers} onValueChange={(blockers) => onChange({ blockers })} className={TEXTAREA_CLASS} />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Recent progress (one per line)</label>
-          <MentionTextarea value={value.recentProgress} onValueChange={(recentProgress) => onChange({ recentProgress })} className={TEXTAREA_CLASS} />
         </div>
       </div>
 
@@ -204,17 +116,7 @@ export function ProjectRecordEditorForm({
   );
 }
 
-export function ProjectMilestoneEditorForm({
-  editor,
-  value,
-  statuses,
-  busy,
-  error,
-  onChange,
-  onCancel,
-  onSubmit,
-  showDivider = true,
-}: {
+export function ProjectMilestoneEditorForm(_props: {
   editor: ProjectMilestoneEditorState;
   value: MilestoneFormState;
   statuses: string[];
@@ -225,14 +127,35 @@ export function ProjectMilestoneEditorForm({
   onSubmit: FormEventHandler<HTMLFormElement>;
   showDivider?: boolean;
 }) {
+  return null;
+}
+
+export function ProjectTaskEditorForm({
+  editor,
+  value,
+  statuses,
+  error,
+  busy,
+  onChange,
+  onCancel,
+  onSubmit,
+}: {
+  editor: ProjectTaskEditorState;
+  value: TaskFormState;
+  milestones?: ProjectMilestone[];
+  statuses: string[];
+  error: string | null;
+  busy: boolean;
+  onChange: (patch: Partial<TaskFormState>) => void;
+  onCancel: () => void;
+  onSubmit: FormEventHandler<HTMLFormElement>;
+}) {
   return (
-    <form onSubmit={onSubmit} className={cx('space-y-5', showDivider && 'border-t border-border-subtle pt-5')}>
+    <form onSubmit={onSubmit} className="space-y-5 border-t border-border-subtle pt-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="ui-card-meta">{editor.mode === 'add' ? 'New milestone' : `Edit milestone ${editor.milestoneId}`}</p>
+        <p className="ui-card-meta">{editor.mode === 'add' ? 'New task' : `Edit task ${editor.taskId}`}</p>
         <button type="button" onClick={onCancel} className={ACTION_BUTTON_CLASS}>Cancel</button>
       </div>
-
-      {editor.mode === 'edit' && <p className="ui-card-meta font-mono">{editor.milestoneId}</p>}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
         <div className="space-y-1.5">
@@ -250,81 +173,6 @@ export function ProjectMilestoneEditorForm({
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Summary</label>
-        <MentionTextarea value={value.summary} onValueChange={(summary) => onChange({ summary })} className={TEXTAREA_CLASS} />
-      </div>
-
-      <label className="flex items-center gap-2 text-[13px] text-secondary">
-        <input type="checkbox" checked={value.makeCurrent} onChange={(event) => onChange({ makeCurrent: event.target.checked })} />
-        Set as current milestone
-      </label>
-
-      {error && <p className="text-[12px] text-danger">{error}</p>}
-
-      <div className="flex items-center gap-3">
-        <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save milestone'}</ToolbarButton>
-      </div>
-    </form>
-  );
-}
-
-export function ProjectTaskEditorForm({
-  editor,
-  value,
-  milestones,
-  statuses,
-  error,
-  busy,
-  onChange,
-  onCancel,
-  onSubmit,
-}: {
-  editor: ProjectTaskEditorState;
-  value: TaskFormState;
-  milestones: ProjectMilestone[];
-  statuses: string[];
-  error: string | null;
-  busy: boolean;
-  onChange: (patch: Partial<TaskFormState>) => void;
-  onCancel: () => void;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-}) {
-  return (
-    <form onSubmit={onSubmit} className="space-y-5 border-t border-border-subtle pt-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="ui-card-meta">{editor.mode === 'add' ? 'New task' : `Edit task ${editor.taskId}`}</p>
-        <button type="button" onClick={onCancel} className={ACTION_BUTTON_CLASS}>Cancel</button>
-      </div>
-
-      {editor.mode === 'edit' && <p className="ui-card-meta font-mono">{editor.taskId}</p>}
-
-      <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Title</label>
-          <input value={value.title} onChange={(event) => onChange({ title: event.target.value })} className={INPUT_CLASS} />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Status</label>
-          <select value={value.status} onChange={(event) => onChange({ status: event.target.value })} className={SELECT_CLASS}>
-            {statuses.map((status) => (
-              <option key={status} value={status}>{formatProjectStatus(status)}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Milestone</label>
-          <select value={value.milestoneId} onChange={(event) => onChange({ milestoneId: event.target.value })} className={SELECT_CLASS}>
-            <option value="">No milestone</option>
-            {milestones.map((milestone) => (
-              <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
       {error && <p className="text-[12px] text-danger">{error}</p>}
 
       <div className="flex items-center gap-3">
@@ -334,7 +182,7 @@ export function ProjectTaskEditorForm({
   );
 }
 
-export function ProjectTaskRow({
+function ProjectTaskRow({
   task,
   taskIndex,
   taskCount,
@@ -417,27 +265,7 @@ export function ProjectTaskList({
   );
 }
 
-export function ProjectMilestoneRow({
-  milestone,
-  isCurrent,
-  milestoneIndex,
-  milestoneCount,
-  busy,
-  quickStatuses,
-  taskBusy,
-  milestoneTasks,
-  taskEditor,
-  taskEditorForm,
-  onMove,
-  onMakeCurrent,
-  onEdit,
-  onDelete,
-  onSetStatus,
-  onOpenTaskAdd,
-  onMoveTask,
-  onEditTask,
-  onDeleteTask,
-}: {
+export function ProjectMilestoneRow(_props: {
   milestone: ProjectMilestone;
   isCurrent: boolean;
   milestoneIndex: number;
@@ -458,86 +286,7 @@ export function ProjectMilestoneRow({
   onEditTask: (task: ProjectTask) => void;
   onDeleteTask: (taskId: string) => void;
 }) {
-  const taskEditorIsAnchoredHere = taskEditor != null && taskEditor.anchorMilestoneId === milestone.id;
-  const taskEditorTaskId = taskEditor?.mode === 'edit' ? taskEditor.taskId : null;
-
-  return (
-    <div className="py-4 space-y-4" id={`project-milestone-${milestone.id}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-start gap-2.5">
-            <span className={cx('mt-[7px] h-2 w-2 shrink-0 rounded-full', dotClassForStatus(milestone.status))} />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[14px] font-medium leading-relaxed text-primary">{milestone.title}</p>
-                {isCurrent && <span className="ui-card-meta">current</span>}
-                <Pill tone={toneForStatus(milestone.status)}>{formatProjectStatus(milestone.status)}</Pill>
-              </div>
-              {milestone.summary && <p className="ui-card-meta mt-1 break-words">{milestone.summary}</p>}
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-          <button type="button" onClick={() => onMove('up')} className={ACTION_BUTTON_CLASS} disabled={busy || milestoneIndex === 0}>↑</button>
-          <button type="button" onClick={() => onMove('down')} className={ACTION_BUTTON_CLASS} disabled={busy || milestoneIndex === milestoneCount - 1}>↓</button>
-          {!isCurrent && (
-            <button type="button" onClick={onMakeCurrent} className={ACTION_BUTTON_CLASS} disabled={busy}>
-              Make current
-            </button>
-          )}
-          <button type="button" onClick={onEdit} className={ACTION_BUTTON_CLASS}>Edit</button>
-          <button type="button" onClick={onDelete} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={busy}>
-            Delete
-          </button>
-        </div>
-      </div>
-
-      <div className="ml-5 space-y-4 border-l border-border-subtle pl-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="ui-card-meta">State</span>
-          {quickStatuses.map((status) => (
-            <button
-              key={`${milestone.id}-${status}`}
-              type="button"
-              onClick={() => onSetStatus(status)}
-              className={milestoneStatusButtonClass(milestone.status === status)}
-              disabled={busy || milestone.status === status}
-            >
-              {formatProjectStatus(status)}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="ui-card-meta">Tasks for this milestone</p>
-              <p className="ui-card-meta mt-1">{milestoneTasks.length} {milestoneTasks.length === 1 ? 'task' : 'tasks'}</p>
-            </div>
-            <button type="button" onClick={onOpenTaskAdd} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-              + Add task
-            </button>
-          </div>
-
-          {taskEditorIsAnchoredHere && taskEditorForm}
-
-          {milestoneTasks.length > 0 ? (
-            <ProjectTaskList
-              tasks={milestoneTasks}
-              taskEditorTaskId={taskEditorTaskId}
-              taskEditorForm={taskEditorForm}
-              busy={taskBusy}
-              onMoveTask={onMoveTask}
-              onEditTask={onEditTask}
-              onDeleteTask={onDeleteTask}
-            />
-          ) : !taskEditorIsAnchoredHere ? (
-            <p className="ui-card-meta">No tasks for this milestone yet.</p>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export function ProjectNoteEditorForm({
@@ -642,7 +391,6 @@ export function ProjectFileUploadForm({
   onChange: (patch: Partial<FileUploadState>) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
-  const kindId = useId();
   const fileId = useId();
   const titleId = useId();
   const descriptionId = useId();
@@ -652,33 +400,19 @@ export function ProjectFileUploadForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">
-      <div className="grid gap-x-6 gap-y-4 xl:grid-cols-[11rem_minmax(0,1fr)] xl:items-end">
-        <div className="space-y-1.5">
-          <label htmlFor={kindId} className="ui-card-meta">Kind</label>
-          <select
-            id={kindId}
-            value={value.kind}
-            onChange={(event) => onChange({ kind: event.target.value as 'attachment' | 'artifact' })}
-            className={FILE_UPLOAD_SELECT_CLASS}
-          >
-            <option value="attachment">Attachment</option>
-            <option value="artifact">Artifact</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <label htmlFor={fileId} className="ui-card-meta">File</label>
-          <div className="space-y-1.5 border-b border-border-default pb-2.5">
-            <input
-              id={fileId}
-              type="file"
-              onChange={(event) => onChange({
-                file: event.target.files?.[0] ?? null,
-                title: value.title || event.target.files?.[0]?.name || '',
-              })}
-              className={FILE_PICKER_CLASS}
-            />
-            <p className="ui-card-meta truncate">{fileMeta}</p>
-          </div>
+      <div className="space-y-1.5">
+        <label htmlFor={fileId} className="ui-card-meta">File</label>
+        <div className="space-y-1.5 border-b border-border-default pb-2.5">
+          <input
+            id={fileId}
+            type="file"
+            onChange={(event) => onChange({
+              file: event.target.files?.[0] ?? null,
+              title: value.title || event.target.files?.[0]?.name || '',
+            })}
+            className={FILE_PICKER_CLASS}
+          />
+          <p className="ui-card-meta truncate">{fileMeta}</p>
         </div>
       </div>
       <div className="grid gap-x-6 gap-y-4 xl:grid-cols-2">

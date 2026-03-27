@@ -15,8 +15,8 @@ import {
 import {
   listProjectFiles,
   listProjectNotes,
-  readProjectBrief,
-  type ProjectBriefRecord,
+  readProjectDocument,
+  type ProjectDocumentRecord,
   type ProjectFileRecord,
   type ProjectNoteRecord,
 } from './projectResources.js';
@@ -34,10 +34,9 @@ export interface ProjectLinkedConversation {
 
 export interface ProjectTimelineEntry {
   id: string;
-  kind: 'brief' | 'note' | 'attachment' | 'artifact' | 'conversation' | 'activity';
+  kind: 'project' | 'document' | 'task' | 'note' | 'file' | 'conversation' | 'activity';
   createdAt: string;
   title: string;
-  description?: string;
   href?: string;
 }
 
@@ -45,11 +44,14 @@ export interface ProjectDetail {
   project: ProjectDocument;
   taskCount: number;
   noteCount: number;
+  fileCount: number;
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTaskDocument[];
-  brief: ProjectBriefRecord | null;
+  document: ProjectDocumentRecord | null;
+  brief: ProjectDocumentRecord | null;
   notes: ProjectNoteRecord[];
+  files: ProjectFileRecord[];
   attachments: ProjectFileRecord[];
   artifacts: ProjectFileRecord[];
   linkedConversations: ProjectLinkedConversation[];
@@ -72,7 +74,8 @@ export interface CreateProjectRecordInput {
   profile: string;
   projectId?: string;
   title: string;
-  description: string;
+  description?: string;
+  documentContent?: string;
   projectRepoRoot?: string | null;
   summary?: string;
   goal?: string;
@@ -392,18 +395,23 @@ export function readProjectDetailFromProject(options: {
   const project = readProject(resolveProjectPaths(options).projectFile);
   const tasks = sortProjectTasks(project.plan.tasks ?? []);
   const notes = listProjectNotes(options);
-  const attachments = listProjectFiles({ ...options, kind: 'attachment' });
-  const artifacts = listProjectFiles({ ...options, kind: 'artifact' });
+  const files = listProjectFiles(options);
+  const attachments = files.filter((file) => file.sourceKind !== 'artifact');
+  const artifacts = files.filter((file) => file.sourceKind === 'artifact');
+  const document = readProjectDocument(options);
 
   return {
     project,
     taskCount: tasks.length,
     noteCount: notes.length,
+    fileCount: files.length,
     attachmentCount: attachments.length,
     artifactCount: artifacts.length,
     tasks,
-    brief: readProjectBrief(options),
+    document,
+    brief: document,
     notes,
+    files,
     attachments,
     artifacts,
     linkedConversations: [],
@@ -413,7 +421,9 @@ export function readProjectDetailFromProject(options: {
 
 export function createProjectRecord(input: CreateProjectRecordInput): ProjectDetail {
   const title = readRequiredString(input.title, 'Project title');
-  const description = readRequiredString(input.description, 'Project description');
+  const initialDocument = readOptionalString(input.documentContent)
+    ?? readOptionalString(input.description)
+    ?? title;
   const projectId = readOptionalString(input.projectId)
     ?? generateUniqueId(title, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
 
@@ -422,29 +432,28 @@ export function createProjectRecord(input: CreateProjectRecordInput): ProjectDet
     profile: input.profile,
     projectId,
     title,
-    description,
+    description: initialDocument,
   });
 
   const { paths, project } = readProjectRecord({ ...input, projectId });
   const updatedProject: ProjectDocument = {
     ...project,
     title,
-    description,
+    description: initialDocument,
     repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot),
-    summary: readOptionalString(input.summary) ?? project.summary,
-    requirements: {
-      goal: readOptionalString(input.goal) ?? project.requirements.goal,
-      acceptanceCriteria: input.acceptanceCriteria
-        ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
-        : project.requirements.acceptanceCriteria,
-    },
-    planSummary: readOptionalString(input.planSummary) ?? project.planSummary,
-    completionSummary: readOptionalString(input.completionSummary) ?? project.completionSummary,
-    status: readOptionalString(input.status) ?? project.status,
-    currentFocus: readOptionalString(input.currentFocus) ?? project.currentFocus,
-    blockers: input.blockers ? readStringList(input.blockers, 'Project blockers') : project.blockers,
-    recentProgress: input.recentProgress ? readStringList(input.recentProgress, 'Project recentProgress') : project.recentProgress,
+    summary: readOptionalString(input.summary) ?? initialDocument,
+    status: readOptionalString(input.status) ?? 'active',
     updatedAt: nowIso(),
+    plan: {
+      ...project.plan,
+      milestones: [],
+      currentMilestoneId: undefined,
+      tasks: project.plan.tasks.map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+      })),
+    },
   };
 
   writeProject(paths.projectFile, updatedProject);
@@ -457,37 +466,23 @@ export function updateProjectRecord(input: UpdateProjectRecordInput): ProjectDet
   const updatedProject: ProjectDocument = {
     ...project,
     ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Project title') } : {}),
-    ...(input.description !== undefined ? { description: readRequiredString(input.description, 'Project description') } : {}),
     ...(input.projectRepoRoot !== undefined ? { repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot) } : {}),
     ...(input.summary !== undefined ? { summary: readRequiredString(input.summary, 'Project summary') } : {}),
-    ...(input.goal !== undefined || input.acceptanceCriteria !== undefined
-      ? {
-          requirements: {
-            goal: input.goal !== undefined ? readRequiredString(input.goal, 'Project goal') : project.requirements.goal,
-            acceptanceCriteria: input.acceptanceCriteria !== undefined
-              ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
-              : project.requirements.acceptanceCriteria,
-          },
-        }
-      : {}),
-    ...(input.planSummary !== undefined ? { planSummary: readOptionalString(input.planSummary) } : {}),
-    ...(input.completionSummary !== undefined ? { completionSummary: readOptionalString(input.completionSummary) } : {}),
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Project status') } : {}),
-    ...(input.currentFocus !== undefined ? { currentFocus: readOptionalString(input.currentFocus) } : {}),
-    ...(input.blockers !== undefined ? { blockers: readStringList(input.blockers, 'Project blockers') } : {}),
-    ...(input.recentProgress !== undefined ? { recentProgress: readStringList(input.recentProgress, 'Project recentProgress') } : {}),
     updatedAt: nowIso(),
-  };
-
-  const projectDocumentToWrite: ProjectDocument = {
-    ...updatedProject,
     plan: {
-      ...updatedProject.plan,
-      ...(input.currentMilestoneId !== undefined ? { currentMilestoneId: readOptionalString(input.currentMilestoneId) } : {}),
+      ...project.plan,
+      milestones: [],
+      currentMilestoneId: input.currentMilestoneId !== undefined ? readOptionalString(input.currentMilestoneId) : undefined,
+      tasks: (project.plan.tasks ?? []).map((task) => ({
+        id: task.id,
+        title: task.title,
+        status: task.status,
+      })),
     },
   };
 
-  writeProject(paths.projectFile, projectDocumentToWrite);
+  writeProject(paths.projectFile, updatedProject);
   return readProjectDetailFromProject(input);
 }
 
@@ -589,14 +584,12 @@ export function updateProjectMilestone(input: UpdateProjectMilestoneInput): Proj
 
 export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
-  const milestoneId = input.milestoneId !== undefined
-    ? readOptionalString(input.milestoneId)
-    : readOptionalString(project.plan.currentMilestoneId);
-
-  assertMilestoneExists(project, milestoneId);
-
   const title = readRequiredString(input.title, 'Task title');
-  const existingTasks = sortProjectTasks(project.plan.tasks ?? []);
+  const existingTasks = sortProjectTasks(project.plan.tasks ?? []).map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+  }));
   const taskId = readOptionalString(input.taskId)
     ?? generateUniqueId(title, existingTasks.map((task) => task.id), 'task');
 
@@ -610,7 +603,6 @@ export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): Pr
       id: taskId,
       status: readRequiredString(input.status, 'Task status'),
       title,
-      milestoneId,
     }),
   ];
 
@@ -619,6 +611,8 @@ export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): Pr
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
+      milestones: [],
+      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });
@@ -635,24 +629,17 @@ export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): Pr
   }
 
   const existingTask = project.plan.tasks[taskIndex] as ProjectTaskDocument;
-  const milestoneId = input.milestoneId !== undefined
-    ? readOptionalString(input.milestoneId)
-    : existingTask.milestoneId;
-
-  assertMilestoneExists(project, milestoneId);
-
   const updatedTask: ProjectTaskDocument = {
-    ...existingTask,
-    ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Task title') } : {}),
-    ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Task status') } : {}),
-    ...(milestoneId ? { milestoneId } : {}),
+    id: existingTask.id,
+    title: input.title !== undefined ? readRequiredString(input.title, 'Task title') : existingTask.title,
+    status: input.status !== undefined ? readRequiredString(input.status, 'Task status') : existingTask.status,
   };
 
-  if (!milestoneId) {
-    delete updatedTask.milestoneId;
-  }
-
-  const nextTasks = [...project.plan.tasks];
+  const nextTasks = [...project.plan.tasks].map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+  }));
   nextTasks[taskIndex] = updatedTask;
 
   writeProject(paths.projectFile, {
@@ -660,6 +647,8 @@ export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): Pr
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
+      milestones: [],
+      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });
@@ -746,33 +735,26 @@ export function deleteProjectTaskRecord(input: DeleteProjectTaskRecordInput): Pr
 
 export function moveProjectTaskRecord(input: MoveProjectTaskRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
-  const tasks = sortProjectTasks(project.plan.tasks ?? []);
-  const task = tasks.find((entry) => entry.id === input.taskId);
+  const tasks = sortProjectTasks(project.plan.tasks ?? []).map((task) => ({
+    id: task.id,
+    title: task.title,
+    status: task.status,
+  }));
+  const taskIndex = tasks.findIndex((entry) => entry.id === input.taskId);
 
-  if (!task) {
+  if (taskIndex === -1) {
     throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
   }
 
-  const milestoneTasks = tasks.filter((entry) => entry.milestoneId === task.milestoneId);
-  const taskIndex = milestoneTasks.findIndex((entry) => entry.id === input.taskId);
-  const movedMilestoneTasks = moveArrayItem(milestoneTasks, taskIndex, input.direction);
-
-  let milestoneCursor = 0;
-  const nextTasks = tasks.map((entry) => {
-    if (entry.milestoneId !== task.milestoneId) {
-      return entry;
-    }
-
-    const replacement = movedMilestoneTasks[milestoneCursor];
-    milestoneCursor += 1;
-    return replacement as ProjectTaskDocument;
-  });
+  const nextTasks = moveArrayItem(tasks, taskIndex, input.direction);
 
   writeProject(paths.projectFile, {
     ...project,
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
+      milestones: [],
+      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });

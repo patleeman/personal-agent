@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import { readProject, resolveProjectPaths, writeProjectIndexBody } from '@personal-agent/core';
+import { readProject, readProjectIndexBody, resolveProjectPaths, writeProjectIndexBody } from '@personal-agent/core';
 
 export type ProjectNoteKind = 'note' | 'decision' | 'question' | 'meeting' | 'checkpoint';
-export type ProjectFileKind = 'attachment' | 'artifact';
+export type LegacyProjectFileSourceKind = 'file' | 'attachment' | 'artifact';
 
-export interface ProjectBriefRecord {
+export interface ProjectDocumentRecord {
   path: string;
   content: string;
   updatedAt: string;
@@ -24,7 +24,7 @@ export interface ProjectNoteRecord {
 
 export interface ProjectFileRecord {
   id: string;
-  kind: ProjectFileKind;
+  kind?: 'attachment' | 'artifact';
   path: string;
   title: string;
   description?: string;
@@ -34,6 +34,7 @@ export interface ProjectFileRecord {
   createdAt: string;
   updatedAt: string;
   downloadPath: string;
+  sourceKind?: LegacyProjectFileSourceKind;
 }
 
 interface StoredProjectFileMetadata {
@@ -44,6 +45,7 @@ interface StoredProjectFileMetadata {
   mimeType?: string;
   createdAt: string;
   updatedAt: string;
+  sourceKind?: LegacyProjectFileSourceKind;
 }
 
 interface ResolveProjectResourceOptions {
@@ -160,25 +162,29 @@ function resolveNotesDir(options: ResolveProjectResourceOptions): string {
   return resolveProjectPaths(options).notesDir;
 }
 
-function resolveFileEntriesDir(options: ResolveProjectResourceOptions, kind: ProjectFileKind): string {
+function resolveFilesDir(options: ResolveProjectResourceOptions): string {
+  return resolveProjectPaths(options).filesDir;
+}
+
+function resolveLegacyFileRoots(options: ResolveProjectResourceOptions): Array<{ dir: string; sourceKind: LegacyProjectFileSourceKind }> {
   const paths = resolveProjectPaths(options);
-  return kind === 'attachment' ? paths.attachmentsDir : paths.artifactsDir;
+  return [
+    { dir: resolveFilesDir(options), sourceKind: 'file' },
+    { dir: paths.attachmentsDir, sourceKind: 'attachment' },
+    { dir: paths.artifactsDir, sourceKind: 'artifact' },
+  ];
 }
 
 function resolveProjectNotePath(options: ResolveProjectResourceOptions & { noteId: string }): string {
   return join(resolveNotesDir(options), `${options.noteId}.md`);
 }
 
-function resolveProjectFileEntryDir(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): string {
-  return join(resolveFileEntriesDir(options, options.kind), options.fileId);
+function resolveProjectFileMetadataPath(entryDir: string): string {
+  return join(entryDir, 'metadata.json');
 }
 
-function resolveProjectFileMetadataPath(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): string {
-  return join(resolveProjectFileEntryDir(options), 'metadata.json');
-}
-
-function resolveProjectFileBlobPath(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): string {
-  return join(resolveProjectFileEntryDir(options), 'blob');
+function resolveProjectFileBlobPath(entryDir: string): string {
+  return join(entryDir, 'blob');
 }
 
 function readProjectFileMetadata(path: string): StoredProjectFileMetadata {
@@ -191,6 +197,7 @@ function readProjectFileMetadata(path: string): StoredProjectFileMetadata {
     mimeType: readOptionalString(parsed.mimeType),
     createdAt: readRequiredString(parsed.createdAt, 'Project file createdAt'),
     updatedAt: readRequiredString(parsed.updatedAt, 'Project file updatedAt'),
+    sourceKind: parsed.sourceKind === 'attachment' || parsed.sourceKind === 'artifact' ? parsed.sourceKind : 'file',
   };
 }
 
@@ -199,8 +206,8 @@ function writeProjectFileMetadata(path: string, metadata: StoredProjectFileMetad
   writeFileSync(path, JSON.stringify(metadata, null, 2) + '\n');
 }
 
-function buildDownloadPath(projectId: string, kind: ProjectFileKind, fileId: string): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/files/${kind}/${encodeURIComponent(fileId)}/download`;
+function buildDownloadPath(projectId: string, fileId: string): string {
+  return `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileId)}/download`;
 }
 
 function listEntryDirectories(dir: string): string[] {
@@ -214,32 +221,30 @@ function listEntryDirectories(dir: string): string[] {
     .sort((left, right) => basename(left).localeCompare(basename(right)));
 }
 
-function stripNodeFrontmatter(markdown: string): string {
-  const normalized = markdown.replace(/\r\n/g, '\n');
-  const match = normalized.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
-  return (match?.[1] ?? normalized).trim();
-}
-
-export function readProjectBrief(options: ResolveProjectResourceOptions): ProjectBriefRecord | null {
+export function readProjectDocument(options: ResolveProjectResourceOptions): ProjectDocumentRecord | null {
   const { briefFile } = resolveProjectPaths(options);
-  if (!existsSync(briefFile)) {
+  const content = readProjectIndexBody(resolveProjectPaths(options).projectFile);
+  if (content === null || !existsSync(briefFile)) {
     return null;
   }
 
   const stats = statSync(briefFile);
   return {
     path: briefFile,
-    content: stripNodeFrontmatter(readFileSync(briefFile, 'utf-8')),
+    content,
     updatedAt: stats.mtime.toISOString(),
   };
 }
 
-export function saveProjectBrief(options: ResolveProjectResourceOptions & { content: string }): ProjectBriefRecord {
+export function saveProjectDocument(options: ResolveProjectResourceOptions & { content: string }): ProjectDocumentRecord {
   const paths = resolveProjectPaths(options);
   const project = readProject(paths.projectFile);
   writeProjectIndexBody(paths.projectFile, project, options.content.replace(/\r\n/g, '\n').trim());
-  return readProjectBrief(options) as ProjectBriefRecord;
+  return readProjectDocument(options) as ProjectDocumentRecord;
 }
+
+export const readProjectBrief = readProjectDocument;
+export const saveProjectBrief = saveProjectDocument;
 
 export function listProjectNotes(options: ResolveProjectResourceOptions): ProjectNoteRecord[] {
   const notesDir = resolveNotesDir(options);
@@ -327,41 +332,60 @@ export function deleteProjectNoteRecord(options: ResolveProjectResourceOptions &
   return { ok: true, noteId: options.noteId };
 }
 
-export function listProjectFiles(options: ResolveProjectResourceOptions & { kind: ProjectFileKind }): ProjectFileRecord[] {
-  const entryDirs = listEntryDirectories(resolveFileEntriesDir(options, options.kind));
+function listResolvedProjectFiles(options: ResolveProjectResourceOptions): Array<ProjectFileRecord & { entryDir: string }> {
+  const files: Array<ProjectFileRecord & { entryDir: string }> = [];
+  const seenIds = new Set<string>();
 
-  const files = entryDirs.flatMap((entryDir) => {
-    const fileId = basename(entryDir);
-    const metadataPath = resolveProjectFileMetadataPath({ ...options, fileId });
-    const blobPath = resolveProjectFileBlobPath({ ...options, fileId });
+  for (const { dir, sourceKind } of resolveLegacyFileRoots(options)) {
+    for (const entryDir of listEntryDirectories(dir)) {
+      const metadataPath = resolveProjectFileMetadataPath(entryDir);
+      const blobPath = resolveProjectFileBlobPath(entryDir);
 
-    if (!existsSync(metadataPath) || !existsSync(blobPath)) {
-      return [];
+      if (!existsSync(metadataPath) || !existsSync(blobPath)) {
+        continue;
+      }
+
+      const metadata = readProjectFileMetadata(metadataPath);
+      const stats = statSync(blobPath);
+      if (seenIds.has(metadata.id)) {
+        continue;
+      }
+      seenIds.add(metadata.id);
+
+      const resolvedSourceKind = metadata.sourceKind ?? sourceKind;
+      files.push({
+        id: metadata.id,
+        ...(resolvedSourceKind === 'attachment' || resolvedSourceKind === 'artifact' ? { kind: resolvedSourceKind } : {}),
+        path: blobPath,
+        title: metadata.title,
+        description: metadata.description,
+        originalName: metadata.originalName,
+        mimeType: metadata.mimeType,
+        sizeBytes: stats.size,
+        createdAt: metadata.createdAt,
+        updatedAt: metadata.updatedAt,
+        downloadPath: buildDownloadPath(options.projectId, metadata.id),
+        sourceKind: resolvedSourceKind,
+        entryDir,
+      });
     }
-
-    const metadata = readProjectFileMetadata(metadataPath);
-    const stats = statSync(blobPath);
-    return [{
-      id: metadata.id,
-      kind: options.kind,
-      path: blobPath,
-      title: metadata.title,
-      description: metadata.description,
-      originalName: metadata.originalName,
-      mimeType: metadata.mimeType,
-      sizeBytes: stats.size,
-      createdAt: metadata.createdAt,
-      updatedAt: metadata.updatedAt,
-      downloadPath: buildDownloadPath(options.projectId, options.kind, metadata.id),
-    } satisfies ProjectFileRecord];
-  });
+  }
 
   files.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return files;
 }
 
+export function listProjectFiles(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact' }): ProjectFileRecord[] {
+  const files = listResolvedProjectFiles(options).map(({ entryDir: _entryDir, ...file }) => file);
+  if (!options.kind) {
+    return files;
+  }
+
+  return files.filter((file) => file.sourceKind === options.kind || file.kind === options.kind);
+}
+
 export function uploadProjectFile(options: ResolveProjectResourceOptions & {
-  kind: ProjectFileKind;
+  kind?: 'attachment' | 'artifact';
   name: string;
   mimeType?: string;
   title?: string;
@@ -373,10 +397,10 @@ export function uploadProjectFile(options: ResolveProjectResourceOptions & {
   const description = readOptionalString(options.description);
   const mimeType = readOptionalString(options.mimeType);
   const existingIds = listProjectFiles(options).map((file) => file.id);
-  const fileId = generateUniqueId(title, existingIds, options.kind);
-  const entryDir = resolveProjectFileEntryDir({ ...options, fileId });
-  const blobPath = resolveProjectFileBlobPath({ ...options, fileId });
-  const metadataPath = resolveProjectFileMetadataPath({ ...options, fileId });
+  const fileId = generateUniqueId(title, existingIds, 'file');
+  const entryDir = join(resolveFilesDir(options), fileId);
+  const blobPath = resolveProjectFileBlobPath(entryDir);
+  const metadataPath = resolveProjectFileMetadataPath(entryDir);
   const timestamp = nowIso();
 
   let buffer: Buffer;
@@ -396,36 +420,38 @@ export function uploadProjectFile(options: ResolveProjectResourceOptions & {
     mimeType,
     createdAt: timestamp,
     updatedAt: timestamp,
+    sourceKind: options.kind ?? 'file',
   });
 
   return listProjectFiles(options).find((file) => file.id === fileId) as ProjectFileRecord;
 }
 
-export function readProjectFileRecord(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): ProjectFileRecord | null {
+export function readProjectFileRecord(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact'; fileId: string }): ProjectFileRecord | null {
   return listProjectFiles(options).find((file) => file.id === options.fileId) ?? null;
 }
 
-export function readProjectFileDownload(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): {
+export function readProjectFileDownload(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact'; fileId: string }): {
   file: ProjectFileRecord;
   filePath: string;
 } {
-  const file = readProjectFileRecord(options);
-  if (!file) {
-    throw new Error(`Project ${options.kind} not found: ${options.fileId}`);
+  const record = listResolvedProjectFiles(options).find((file) => file.id === options.fileId);
+  if (!record) {
+    throw new Error(`Project file not found: ${options.fileId}`);
   }
 
+  const { entryDir: _entryDir, ...file } = record;
   return {
     file,
-    filePath: resolveProjectFileBlobPath(options),
+    filePath: record.path,
   };
 }
 
-export function deleteProjectFileRecord(options: ResolveProjectResourceOptions & { kind: ProjectFileKind; fileId: string }): { ok: true; fileId: string } {
-  const entryDir = resolveProjectFileEntryDir(options);
-  if (!existsSync(entryDir)) {
-    throw new Error(`Project ${options.kind} not found: ${options.fileId}`);
+export function deleteProjectFileRecord(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact'; fileId: string }): { ok: true; fileId: string } {
+  const record = listResolvedProjectFiles(options).find((file) => file.id === options.fileId);
+  if (!record) {
+    throw new Error(`Project file not found: ${options.fileId}`);
   }
 
-  rmSync(entryDir, { recursive: true, force: false });
+  rmSync(record.entryDir, { recursive: true, force: false });
   return { ok: true, fileId: options.fileId };
 }

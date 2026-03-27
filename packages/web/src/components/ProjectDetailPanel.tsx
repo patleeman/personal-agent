@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import {
-  formatProjectStatus,
-  getPlanProgress,
-  hasMeaningfulBlockers,
-  isProjectArchived,
-  pickCurrentMilestone,
-} from '../contextRailProject';
-import type { ProjectDetail, ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
-import { createEmptyProjectDocument, parseProjectDocument } from '../projectDocument';
-import { timeAgo } from '../utils';
+import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
+import type { ProjectDetail, ProjectFile, ProjectNote, ProjectTask } from '../types';
 import {
   ProjectFileUploadForm,
-  ProjectMilestoneEditorForm,
-  ProjectMilestoneRow,
   ProjectNoteEditorForm,
   ProjectRecordEditorForm,
   ProjectTaskEditorForm,
@@ -22,45 +12,33 @@ import {
 } from './ProjectDetailForms';
 import {
   ProjectActivityContent,
-  ProjectCompletionContent,
+  ProjectDocumentContent,
   ProjectFilesContent,
-  ProjectHandoffDocContent,
   ProjectNodeLinksContent,
   ProjectNotesContent,
-  ProjectPlanOverview,
   ProjectRecordViewer,
-  ProjectRequirementsContent,
 } from './ProjectDetailSections';
 import {
   buildActivityItems,
-  buildTasksByMilestone,
   emptyFileUploadState,
-  emptyMilestoneForm,
   emptyNoteForm,
   emptyTaskForm,
-  milestoneFormFromMilestone,
   noteFormFromNote,
   projectFormFromDetail,
+  taskFormFromTask,
   type FileUploadState,
-  type MilestoneFormState,
   type NoteFormState,
-  type ProjectFormState,
-  type ProjectMilestoneEditorState,
   type ProjectNoteEditorState,
   type ProjectTaskEditorState,
-  splitLines,
-  taskFormFromTask,
+  type ProjectFormState,
   type TaskFormState,
-  UNASSIGNED_TASK_KEY,
 } from './projectDetailState';
-import { EmptyState, Pill, SectionLabel, ToolbarButton } from './ui';
+import { Pill, SectionLabel, ToolbarButton } from './ui';
+import { timeAgo } from '../utils';
 
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
-
-const PROJECT_STATUSES = ['created', 'in_progress', 'blocked', 'completed', 'cancelled'];
-const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
-const MILESTONE_QUICK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed'];
-const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
+const PROJECT_STATUSES = ['active', 'paused', 'done'];
+const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
 
 interface DetailSectionProps {
@@ -91,6 +69,28 @@ function previewLine(value: string): string | null {
   }
 
   return null;
+}
+
+function createDefaultProjectDocument(title: string): string {
+  return `# ${title.trim() || 'Project'}\n\n`;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Unable to read file.'));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Unable to read file.'));
+        return;
+      }
+
+      const commaIndex = result.indexOf(',');
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function DetailSection({
@@ -164,34 +164,46 @@ export function ProjectDetailPanel({
   const record = project.project;
   const projectProfile = project.profile;
   const canStartConversation = !activeProfile || activeProfile === projectProfile;
-  const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
-  const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
   const archived = isProjectArchived(record);
-  const milestones = record.plan.milestones;
-  const currentMilestone = pickCurrentMilestone(record.plan);
-  const { done, total, pct } = getPlanProgress(milestones);
-  const tasksByMilestone = useMemo(() => buildTasksByMilestone(project.tasks), [project.tasks]);
-  const unassignedTasks = tasksByMilestone.get(UNASSIGNED_TASK_KEY) ?? [];
+  const activityItems = useMemo(() => buildActivityItems(project), [project]);
+  const documentRecord = project.document ?? project.brief;
+  const taskCount = project.taskCount ?? project.tasks.length;
+  const noteCount = project.noteCount ?? project.notes.length;
+  const fileCount = project.fileCount ?? project.files.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
+  const taskDoneCount = project.tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
+  const taskOpenCount = Math.max(0, project.tasks.length - taskDoneCount);
+  const documentPreview = (previewLine(documentRecord?.content ?? '') ?? record.summary.trim() || record.description.trim()) || 'No project doc yet.';
+  const tasksPreview = taskCount > 0
+    ? `${taskOpenCount} open · ${taskDoneCount} done`
+    : 'No tasks yet.';
+  const activityPreview = project.timeline.length > 0
+    ? `${project.timeline.length} recent ${project.timeline.length === 1 ? 'event' : 'events'}`
+    : 'No activity yet.';
+  const notesPreview = noteCount > 0
+    ? `${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`
+    : 'No notes yet.';
+  const filesPreview = fileCount > 0
+    ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
+    : 'No files yet.';
+  const linksPreview = project.links && (project.links.outgoing.length > 0 || project.links.incoming.length > 0)
+    ? `${project.links.outgoing.length} outgoing · ${project.links.incoming.length} backlinks`
+    : 'No linked nodes yet.';
+  const projectApiOptions = { profile: projectProfile };
 
   const [editingProject, setEditingProject] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(() => projectFormFromDetail(project));
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
 
-  const [milestoneEditor, setMilestoneEditor] = useState<ProjectMilestoneEditorState | null>(null);
-  const [milestoneForm, setMilestoneForm] = useState<MilestoneFormState>(() => emptyMilestoneForm());
-  const [milestoneBusy, setMilestoneBusy] = useState(false);
-  const [milestoneError, setMilestoneError] = useState<string | null>(null);
-
   const [taskEditor, setTaskEditor] = useState<ProjectTaskEditorState | null>(null);
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
 
-  const [briefEditing, setBriefEditing] = useState(false);
-  const [briefContent, setBriefContent] = useState(project.brief?.content ?? '');
-  const [briefBusy, setBriefBusy] = useState(false);
-  const [briefError, setBriefError] = useState<string | null>(null);
+  const [documentEditing, setDocumentEditing] = useState(false);
+  const [documentContent, setDocumentContent] = useState(documentRecord?.content ?? '');
+  const [documentBusy, setDocumentBusy] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
 
   const [noteEditor, setNoteEditor] = useState<ProjectNoteEditorState | null>(null);
   const [noteForm, setNoteForm] = useState<NoteFormState>(() => emptyNoteForm());
@@ -215,84 +227,54 @@ export function ProjectDetailPanel({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const projectDocumentSource = briefEditing ? briefContent : (project.brief?.content ?? '');
-  const projectDocument = useMemo(() => parseProjectDocument(projectDocumentSource), [projectDocumentSource]);
-  const goal = record.requirements.goal.trim();
-  const acceptanceCriteria = record.requirements.acceptanceCriteria.filter((item) => item.trim().length > 0);
-  const requirementsFallbackContent = projectDocument.requirements.trim();
-  const planContent = (record.planSummary ?? '').trim() || projectDocument.plan.trim();
-  const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
-  const activityItems = useMemo(() => buildActivityItems(project), [project]);
-  const topLevelError = archiveError ?? deleteError;
-  const latestActivityItem = activityItems.length > 0 ? activityItems[activityItems.length - 1] : null;
-  const latestActivityLabel = latestActivityItem
-    ? latestActivityItem.kind === 'conversation'
-      ? latestActivityItem.conversation.title
-      : latestActivityItem.entry.title
-    : null;
-  const requirementsPreview = goal || acceptanceCriteria[0] || previewLine(requirementsFallbackContent) || 'Capture the goal and definition of done.';
-  const planPreview = record.currentFocus?.trim()
-    || blockers[0]
-    || recentProgress[0]
-    || (currentMilestone ? `Current milestone: ${currentMilestone.title}` : null)
-    || previewLine(planContent)
-    || 'Break the work into milestones and tasks.';
-  const completionPreview = previewLine(completionSummaryContent)
-    || (record.status === 'completed'
-      ? 'Capture what shipped, what changed, and any follow-up work.'
-      : 'No completion summary yet.');
-  const timelinePreview = latestActivityLabel
-    ? `Latest activity: ${latestActivityLabel}`
-    : 'No project timeline yet.';
-  const handoffPreview = project.brief
-    ? 'Narrative brief with requirements, plan, and completion notes.'
-    : 'No handoff doc yet.';
-  const projectRecordPreview = record.summary.trim() || record.repoRoot?.trim() || 'Structured metadata and raw state.yaml.';
-  const linksPreview = ((project.links?.incoming.length ?? 0) + (project.links?.outgoing.length ?? 0)) > 0
-    ? `${project.links?.outgoing.length ?? 0} outgoing · ${project.links?.incoming.length ?? 0} backlinks`
-    : 'No node relationships yet.';
-  const notesPreview = project.noteCount > 0
-    ? `${project.noteCount} durable ${project.noteCount === 1 ? 'note' : 'notes'} across decisions, questions, and checkpoints.`
-    : 'No notes yet.';
-  const filesPreview = project.attachmentCount + project.artifactCount > 0
-    ? `${project.attachmentCount} ${project.attachmentCount === 1 ? 'attachment' : 'attachments'} · ${project.artifactCount} ${project.artifactCount === 1 ? 'artifact' : 'artifacts'}`
-    : 'No attachments or artifacts yet.';
-  const projectApiOptions = useMemo(() => ({ profile: projectProfile }), [projectProfile]);
-
   useEffect(() => {
-    if (!editingProject) {
-      setProjectForm(projectFormFromDetail(project));
-    }
-  }, [editingProject, project]);
-
-  useEffect(() => {
-    setMilestoneEditor(null);
-    setMilestoneForm(emptyMilestoneForm());
-    setMilestoneError(null);
+    setProjectForm(projectFormFromDetail(project));
+    setDocumentContent(documentRecord?.content ?? '');
+    setEditingProject(false);
     setTaskEditor(null);
-    setTaskForm(emptyTaskForm());
-    setTaskError(null);
-    setBriefEditing(false);
-    setBriefContent(project.brief?.content ?? '');
-    setBriefError(null);
     setNoteEditor(null);
-    setNoteForm(emptyNoteForm());
-    setNoteError(null);
+    setDocumentEditing(false);
     setFileUpload(emptyFileUploadState());
+    setProjectError(null);
+    setTaskError(null);
+    setDocumentError(null);
+    setNoteError(null);
     setFileError(null);
-    setRawProjectLoaded(false);
-    setRawProjectError(null);
     setArchiveError(null);
     setDeleteError(null);
-    if (!rawProjectOpen) {
-      setRawProjectContent('');
-    }
-  }, [project, rawProjectOpen]);
+    setRawProjectOpen(false);
+    setRawProjectLoaded(false);
+    setRawProjectContent('');
+    setRawProjectError(null);
+  }, [project]);
 
   function openProjectEditor() {
     setEditingProject(true);
     setProjectError(null);
-    document.getElementById('project-record')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function openTaskAdd() {
+    setTaskEditor({ mode: 'add' });
+    setTaskForm(emptyTaskForm());
+    setTaskError(null);
+  }
+
+  function openTaskEdit(task: ProjectTask) {
+    setTaskEditor({ mode: 'edit', taskId: task.id });
+    setTaskForm(taskFormFromTask(task));
+    setTaskError(null);
+  }
+
+  function openNoteAdd() {
+    setNoteEditor({ mode: 'add' });
+    setNoteForm(emptyNoteForm());
+    setNoteError(null);
+  }
+
+  function openNoteEdit(note: ProjectNote) {
+    setNoteEditor({ mode: 'edit', noteId: note.id });
+    setNoteForm(noteFormFromNote(note));
+    setNoteError(null);
   }
 
   async function handleProjectSave(event: React.FormEvent<HTMLFormElement>) {
@@ -302,18 +284,10 @@ export function ProjectDetailPanel({
 
     try {
       await api.updateProject(record.id, {
-        title: projectForm.title,
-        description: projectForm.description,
+        title: projectForm.title.trim(),
         repoRoot: projectForm.repoRoot.trim() || null,
-        summary: projectForm.summary,
-        goal: projectForm.goal,
-        acceptanceCriteria: splitLines(projectForm.acceptanceCriteria),
-        planSummary: projectForm.planSummary.trim() || null,
-        completionSummary: projectForm.completionSummary.trim() || null,
+        summary: projectForm.summary.trim(),
         status: projectForm.status,
-        currentFocus: projectForm.currentFocus.trim() || null,
-        blockers: splitLines(projectForm.blockers),
-        recentProgress: splitLines(projectForm.recentProgress),
       }, projectApiOptions);
       setEditingProject(false);
       onChanged?.();
@@ -324,128 +298,23 @@ export function ProjectDetailPanel({
     }
   }
 
-  function openMilestoneAdd() {
-    setMilestoneEditor({ mode: 'add' });
-    setMilestoneForm(emptyMilestoneForm());
-    setMilestoneError(null);
-  }
-
-  function openMilestoneEdit(milestone: ProjectMilestone) {
-    setMilestoneEditor({ mode: 'edit', milestoneId: milestone.id });
-    setMilestoneForm(milestoneFormFromMilestone(milestone, currentMilestone?.id === milestone.id));
-    setMilestoneError(null);
-  }
-
-  async function saveMilestone(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!milestoneEditor) return;
-
-    setMilestoneBusy(true);
-    setMilestoneError(null);
-
-    try {
-      if (milestoneEditor.mode === 'add') {
-        await api.addProjectMilestone(record.id, {
-          title: milestoneForm.title,
-          status: milestoneForm.status,
-          summary: milestoneForm.summary.trim() || undefined,
-          makeCurrent: milestoneForm.makeCurrent,
-        }, projectApiOptions);
-      } else {
-        await api.updateProjectMilestone(record.id, milestoneEditor.milestoneId, {
-          title: milestoneForm.title,
-          status: milestoneForm.status,
-          summary: milestoneForm.summary.trim() || null,
-          makeCurrent: milestoneForm.makeCurrent,
-        }, projectApiOptions);
-      }
-
-      setMilestoneEditor(null);
-      setMilestoneForm(emptyMilestoneForm());
-      onChanged?.();
-    } catch (error) {
-      setMilestoneError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMilestoneBusy(false);
-    }
-  }
-
-  async function makeMilestoneCurrent(milestoneId: string) {
-    setMilestoneBusy(true);
-    setMilestoneError(null);
-
-    try {
-      await api.updateProject(record.id, { currentMilestoneId: milestoneId }, projectApiOptions);
-      onChanged?.();
-    } catch (error) {
-      setMilestoneError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMilestoneBusy(false);
-    }
-  }
-
-  async function setMilestoneStatus(milestoneId: string, status: string) {
-    setMilestoneBusy(true);
-    setMilestoneError(null);
-
-    try {
-      await api.updateProjectMilestone(record.id, milestoneId, status === 'in_progress'
-        ? { status, makeCurrent: true }
-        : { status }, projectApiOptions);
-
-      const isCurrent = currentMilestone?.id === milestoneId;
-      if (isCurrent && (status === 'completed' || status === 'cancelled')) {
-        const nextCurrentMilestone = milestones.find((milestone) => (
-          milestone.id !== milestoneId
-          && milestone.status !== 'completed'
-          && milestone.status !== 'cancelled'
-        ));
-        await api.updateProject(record.id, { currentMilestoneId: nextCurrentMilestone?.id ?? null }, projectApiOptions);
-      }
-
-      onChanged?.();
-    } catch (error) {
-      setMilestoneError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMilestoneBusy(false);
-    }
-  }
-
-  function openTaskAdd(milestoneId = '') {
-    setTaskEditor({ mode: 'add', anchorMilestoneId: milestoneId || undefined });
-    setTaskForm({
-      ...emptyTaskForm(),
-      milestoneId,
-    });
-    setTaskError(null);
-  }
-
-  function openTaskEdit(task: ProjectTask) {
-    setTaskEditor({ mode: 'edit', taskId: task.id, anchorMilestoneId: task.milestoneId });
-    setTaskForm(taskFormFromTask(task));
-    setTaskError(null);
-  }
-
   async function saveTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!taskEditor) return;
-
     setTaskBusy(true);
     setTaskError(null);
 
     try {
-      const payload = {
-        title: taskForm.title,
-        status: taskForm.status,
-        milestoneId: taskForm.milestoneId.trim() || null,
-      };
-
-      if (taskEditor.mode === 'add') {
-        await api.createProjectTask(record.id, payload, projectApiOptions);
+      if (taskEditor?.mode === 'edit') {
+        await api.updateProjectTask(record.id, taskEditor.taskId, {
+          title: taskForm.title.trim(),
+          status: taskForm.status,
+        }, projectApiOptions);
       } else {
-        await api.updateProjectTask(record.id, taskEditor.taskId, payload, projectApiOptions);
+        await api.createProjectTask(record.id, {
+          title: taskForm.title.trim(),
+          status: taskForm.status,
+        }, projectApiOptions);
       }
-
       setTaskEditor(null);
       setTaskForm(emptyTaskForm());
       onChanged?.();
@@ -453,41 +322,6 @@ export function ProjectDetailPanel({
       setTaskError(error instanceof Error ? error.message : String(error));
     } finally {
       setTaskBusy(false);
-    }
-  }
-
-  async function moveMilestone(milestoneId: string, direction: 'up' | 'down') {
-    setMilestoneBusy(true);
-    setMilestoneError(null);
-
-    try {
-      await api.moveProjectMilestone(record.id, milestoneId, direction, projectApiOptions);
-      onChanged?.();
-    } catch (error) {
-      setMilestoneError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMilestoneBusy(false);
-    }
-  }
-
-  async function deleteMilestone(milestoneId: string) {
-    if (!window.confirm(`Delete milestone ${milestoneId}?`)) {
-      return;
-    }
-
-    setMilestoneBusy(true);
-    setMilestoneError(null);
-
-    try {
-      await api.deleteProjectMilestone(record.id, milestoneId, projectApiOptions);
-      if (milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestoneId) {
-        setMilestoneEditor(null);
-      }
-      onChanged?.();
-    } catch (error) {
-      setMilestoneError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMilestoneBusy(false);
     }
   }
 
@@ -526,146 +360,55 @@ export function ProjectDetailPanel({
     }
   }
 
-  async function toggleRawProject() {
-    const nextOpen = !rawProjectOpen;
-    setRawProjectOpen(nextOpen);
-    setRawProjectError(null);
-
-    if (!nextOpen || rawProjectLoaded || rawProjectBusy) {
-      return;
-    }
-
-    setRawProjectBusy(true);
-    try {
-      const source = await api.projectSource(record.id, projectApiOptions);
-      setRawProjectContent(source.content);
-      setRawProjectLoaded(true);
-    } catch (error) {
-      setRawProjectError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRawProjectBusy(false);
-    }
-  }
-
-  async function saveRawProject(event: React.FormEvent<HTMLFormElement>) {
+  async function saveDocument(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setRawProjectBusy(true);
-    setRawProjectError(null);
+    setDocumentBusy(true);
+    setDocumentError(null);
 
     try {
-      await api.saveProjectSource(record.id, rawProjectContent, projectApiOptions);
+      await api.saveProjectDocument(record.id, documentContent, projectApiOptions);
+      setDocumentEditing(false);
       onChanged?.();
     } catch (error) {
-      setRawProjectError(error instanceof Error ? error.message : String(error));
+      setDocumentError(error instanceof Error ? error.message : String(error));
     } finally {
-      setRawProjectBusy(false);
+      setDocumentBusy(false);
     }
   }
 
-  async function toggleArchivedState(nextArchived: boolean) {
-    const confirmationMessage = nextArchived
-      ? (record.status === 'completed' || record.status === 'cancelled'
-          ? `Archive project ${record.id}? It will move out of the active project list but remain available.`
-          : `Archive project ${record.id}? It is still marked ${formatProjectStatus(record.status)}.`)
-      : `Restore project ${record.id} to the active project list?`;
-
-    if (!window.confirm(confirmationMessage)) {
-      return;
-    }
-
-    setArchiveBusy(true);
-    setArchiveError(null);
+  async function regenerateDocument() {
+    setDocumentBusy(true);
+    setDocumentError(null);
 
     try {
-      if (nextArchived) {
-        await api.archiveProject(record.id, projectApiOptions);
-      } else {
-        await api.unarchiveProject(record.id, projectApiOptions);
-      }
+      await api.regenerateProjectDocument(record.id, projectApiOptions);
+      setDocumentEditing(false);
       onChanged?.();
     } catch (error) {
-      setArchiveError(error instanceof Error ? error.message : String(error));
+      setDocumentError(error instanceof Error ? error.message : String(error));
     } finally {
-      setArchiveBusy(false);
+      setDocumentBusy(false);
     }
-  }
-
-  async function deleteProject() {
-    if (!window.confirm(`Delete project ${record.id}? This removes state.yaml, INDEX.md, notes, attachments, and artifacts.`)) {
-      return;
-    }
-
-    setDeleteBusy(true);
-    setDeleteError(null);
-
-    try {
-      await api.deleteProject(record.id, projectApiOptions);
-      setDeleteBusy(false);
-      onDeleted?.(record.id);
-      return;
-    } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : String(error));
-      setDeleteBusy(false);
-    }
-  }
-
-  async function saveBrief(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBriefBusy(true);
-    setBriefError(null);
-
-    try {
-      await api.saveProjectBrief(record.id, briefContent, projectApiOptions);
-      setBriefEditing(false);
-      onChanged?.();
-    } catch (error) {
-      setBriefError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBriefBusy(false);
-    }
-  }
-
-  async function regenerateBrief() {
-    setBriefBusy(true);
-    setBriefError(null);
-
-    try {
-      await api.regenerateProjectBrief(record.id, projectApiOptions);
-      setBriefEditing(false);
-      onChanged?.();
-    } catch (error) {
-      setBriefError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBriefBusy(false);
-    }
-  }
-
-  function openNoteAdd() {
-    setNoteEditor({ mode: 'add' });
-    setNoteForm(emptyNoteForm());
-    setNoteError(null);
-  }
-
-  function openNoteEdit(note: ProjectNote) {
-    setNoteEditor({ mode: 'edit', noteId: note.id });
-    setNoteForm(noteFormFromNote(note));
-    setNoteError(null);
   }
 
   async function saveNote(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!noteEditor) {
-      return;
-    }
-
     setNoteBusy(true);
     setNoteError(null);
 
     try {
-      if (noteEditor.mode === 'add') {
-        await api.createProjectNote(record.id, noteForm, projectApiOptions);
+      if (noteEditor?.mode === 'edit') {
+        await api.updateProjectNote(record.id, noteEditor.noteId, {
+          title: noteForm.title.trim(),
+          kind: noteForm.kind,
+          body: noteForm.body.trim() || undefined,
+        }, projectApiOptions);
       } else {
-        await api.updateProjectNote(record.id, noteEditor.noteId, noteForm, projectApiOptions);
+        await api.createProjectNote(record.id, {
+          title: noteForm.title.trim(),
+          kind: noteForm.kind,
+          body: noteForm.body.trim() || undefined,
+        }, projectApiOptions);
       }
       setNoteEditor(null);
       setNoteForm(emptyNoteForm());
@@ -698,23 +441,10 @@ export function ProjectDetailPanel({
     }
   }
 
-  async function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error(`Failed to read ${file.name}.`));
-      reader.onload = () => {
-        const result = typeof reader.result === 'string' ? reader.result : '';
-        const commaIndex = result.indexOf(',');
-        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function saveFile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!fileUpload.file) {
-      setFileError('Choose a file to upload.');
+      setFileError('Pick a file first.');
       return;
     }
 
@@ -724,7 +454,6 @@ export function ProjectDetailPanel({
     try {
       const data = await fileToBase64(fileUpload.file);
       await api.uploadProjectFile(record.id, {
-        kind: fileUpload.kind,
         name: fileUpload.file.name,
         mimeType: fileUpload.file.type || undefined,
         title: fileUpload.title.trim() || undefined,
@@ -749,7 +478,7 @@ export function ProjectDetailPanel({
     setFileError(null);
 
     try {
-      await api.deleteProjectFile(record.id, file.kind, file.id, projectApiOptions);
+      await api.deleteProjectFile(record.id, file.id, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setFileError(error instanceof Error ? error.message : String(error));
@@ -782,30 +511,91 @@ export function ProjectDetailPanel({
     link.remove();
   }
 
+  async function toggleRawProject() {
+    if (rawProjectOpen) {
+      setRawProjectOpen(false);
+      return;
+    }
+
+    setRawProjectError(null);
+    setRawProjectOpen(true);
+
+    if (rawProjectLoaded) {
+      return;
+    }
+
+    setRawProjectBusy(true);
+    try {
+      const source = await api.projectSource(record.id, projectApiOptions);
+      setRawProjectContent(source.content);
+      setRawProjectLoaded(true);
+    } catch (error) {
+      setRawProjectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRawProjectBusy(false);
+    }
+  }
+
+  async function saveRawProject(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setRawProjectBusy(true);
+    setRawProjectError(null);
+
+    try {
+      await api.saveProjectSource(record.id, rawProjectContent, projectApiOptions);
+      onChanged?.();
+    } catch (error) {
+      setRawProjectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRawProjectBusy(false);
+    }
+  }
+
+  async function toggleArchive() {
+    setArchiveBusy(true);
+    setArchiveError(null);
+
+    try {
+      if (archived) {
+        await api.unarchiveProject(record.id, projectApiOptions);
+      } else {
+        await api.archiveProject(record.id, projectApiOptions);
+      }
+      onChanged?.();
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
+  async function deleteProject() {
+    if (!window.confirm(`Delete project ${record.id}?`)) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    setDeleteError(null);
+
+    try {
+      await api.deleteProject(record.id, projectApiOptions);
+      onDeleted?.(record.id);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : String(error));
+      setDeleteBusy(false);
+    }
+  }
+
   const taskEditorForm = taskEditor ? (
     <ProjectTaskEditorForm
       editor={taskEditor}
       value={taskForm}
-      milestones={milestones}
       statuses={TASK_STATUSES}
       error={taskError}
       busy={taskBusy}
       onChange={(patch) => setTaskForm((current) => ({ ...current, ...patch }))}
       onCancel={() => setTaskEditor(null)}
       onSubmit={saveTask}
-    />
-  ) : null;
-
-  const milestoneEditorForm = milestoneEditor ? (
-    <ProjectMilestoneEditorForm
-      editor={milestoneEditor}
-      value={milestoneForm}
-      statuses={MILESTONE_STATUSES}
-      busy={milestoneBusy}
-      error={milestoneError}
-      onChange={(patch) => setMilestoneForm((current) => ({ ...current, ...patch }))}
-      onCancel={() => setMilestoneEditor(null)}
-      onSubmit={saveMilestone}
     />
   ) : null;
 
@@ -833,29 +623,29 @@ export function ProjectDetailPanel({
   );
 
   return (
-    <div className="min-w-0 space-y-10 px-4 py-3">
+    <div className="space-y-8" id="top">
       <section className="space-y-5">
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="font-mono text-secondary">{record.id}</span>
-          <span className="text-dim">profile {projectProfile}</span>
-          <span className="text-dim">updated {timeAgo(record.updatedAt)}</span>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="space-y-3 min-w-0">
-              <h2 className="max-w-4xl text-[26px] leading-[1.2] font-semibold tracking-tight text-primary">
-                {record.title}
-              </h2>
-              <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">
-                {record.description}
-              </p>
+        <div className="space-y-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={archived ? 'muted' : record.status === 'paused' ? 'warning' : record.status === 'done' ? 'success' : 'teal'}>
+                  {formatProjectStatus(record.status)}
+                </Pill>
+                <span className="ui-card-meta font-mono">{record.id}</span>
+                <span className="ui-card-meta">updated {timeAgo(record.updatedAt)}</span>
+                {archived && record.archivedAt && <span className="ui-card-meta">archived {timeAgo(record.archivedAt)}</span>}
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-[32px] font-medium leading-tight tracking-tight text-primary">{record.title}</h1>
+                {record.summary.trim() && <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">{record.summary}</p>}
+                {record.repoRoot && <p className="ui-card-meta font-mono break-all">{record.repoRoot}</p>}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ToolbarButton onClick={downloadProjectPackage} disabled={deleteBusy}>
-                Export package
-              </ToolbarButton>
-              <ToolbarButton onClick={() => { void toggleArchivedState(!archived); }} disabled={archiveBusy || deleteBusy}>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <ToolbarButton onClick={downloadProjectPackage} disabled={deleteBusy}>Export package</ToolbarButton>
+              <ToolbarButton onClick={toggleArchive} disabled={archiveBusy || deleteBusy}>
                 {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
               </ToolbarButton>
               <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy || !canStartConversation}>
@@ -863,268 +653,171 @@ export function ProjectDetailPanel({
               </ToolbarButton>
             </div>
           </div>
+
           {!canStartConversation && activeProfile && (
             <p className="ui-card-meta max-w-4xl">
               Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
             </p>
           )}
+
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Pill tone={archived ? 'muted' : hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
-              {formatProjectStatus(record.status)}
-            </Pill>
-            {archived && record.archivedAt && <Pill tone="muted">archived {timeAgo(record.archivedAt)}</Pill>}
-            <span className="ui-card-meta">{milestones.length} {milestones.length === 1 ? 'milestone' : 'milestones'}</span>
-            <span className="ui-card-meta">{project.taskCount} {project.taskCount === 1 ? 'task' : 'tasks'}</span>
-            <span className="ui-card-meta">{project.noteCount} {project.noteCount === 1 ? 'note' : 'notes'}</span>
-            <span className="ui-card-meta">{project.attachmentCount} attachments</span>
-            <span className="ui-card-meta">{project.artifactCount} artifacts</span>
+            <span className="ui-card-meta">{taskCount} {taskCount === 1 ? 'task' : 'tasks'}</span>
+            <span className="ui-card-meta">{noteCount} {noteCount === 1 ? 'note' : 'notes'}</span>
+            <span className="ui-card-meta">{fileCount} {fileCount === 1 ? 'file' : 'files'}</span>
             <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}</span>
           </div>
-          {topLevelError && <p className="text-[12px] text-danger">{topLevelError}</p>}
+
+          {(archiveError || deleteError) && <p className="text-[12px] text-danger">{archiveError ?? deleteError}</p>}
         </div>
       </section>
 
       <DetailSection
-        id="project-requirements"
-        title="Requirements"
-        actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
+        id="project-document"
+        title="Project doc"
         collapsible
         defaultOpen
-        collapsedPreview={requirementsPreview}
-        resetKey={record.id}
-      >
-        <ProjectRequirementsContent
-          goal={goal}
-          fallbackContent={requirementsFallbackContent}
-          acceptanceCriteria={acceptanceCriteria}
-        />
-      </DetailSection>
-
-      <DetailSection
-        id="project-plan"
-        title="Plan"
-        meta={`${done}/${total} complete · ${pct}%`}
-        collapsible
-        defaultOpen
-        forceOpen={milestoneEditor !== null || taskEditor !== null}
-        collapsedPreview={planPreview}
+        forceOpen={documentEditing}
+        collapsedPreview={documentPreview}
         resetKey={record.id}
         actions={(
           <>
-            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-              + Add task
+            <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_BUTTON_CLASS} disabled={documentBusy}>
+              {documentBusy ? 'Regenerating…' : 'Regenerate'}
             </button>
-            <button type="button" onClick={openMilestoneAdd} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
-              + Add milestone
+            <button
+              type="button"
+              onClick={() => {
+                setDocumentError(null);
+                if (!documentEditing && documentContent.trim().length === 0) {
+                  setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
+                }
+                setDocumentEditing((value) => !value);
+              }}
+              className={ACTION_BUTTON_CLASS}
+              disabled={documentBusy}
+            >
+              {documentEditing ? 'Cancel' : (documentRecord ? 'Edit doc' : 'Write doc')}
             </button>
           </>
         )}
       >
-        <div className="max-w-5xl space-y-6">
-          <ProjectPlanOverview
-            planContent={planContent}
-            currentFocus={record.currentFocus ?? ''}
-            blockers={blockers}
-            recentProgress={recentProgress}
-            pct={pct}
-          />
+        <ProjectDocumentContent
+          document={documentRecord}
+          editing={documentEditing}
+          content={documentContent}
+          busy={documentBusy}
+          error={documentError}
+          onChange={setDocumentContent}
+          onSubmit={saveDocument}
+        />
+      </DetailSection>
 
-          {milestoneEditor?.mode === 'add' && milestoneEditorForm}
-
-          {milestones.length === 0 && !milestoneEditor && (
-            <EmptyState
-              title="No milestones yet."
-              body="Add milestones to break the work into clear chunks. Tasks can then live inside each chunk instead of floating around the project."
-              className="max-w-3xl py-8"
+      <DetailSection
+        id="project-tasks"
+        title="Tasks"
+        meta={`${taskOpenCount} open · ${taskDoneCount} done`}
+        collapsible
+        defaultOpen
+        forceOpen={taskEditor !== null}
+        collapsedPreview={tasksPreview}
+        resetKey={record.id}
+        actions={(
+          <button type="button" onClick={openTaskAdd} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+            + Add task
+          </button>
+        )}
+      >
+        <div className="max-w-5xl space-y-5">
+          {taskEditor?.mode === 'add' && taskEditorForm}
+          {project.tasks.length > 0 ? (
+            <ProjectTaskList
+              tasks={project.tasks}
+              taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
+              taskEditorForm={taskEditorForm}
+              busy={taskBusy}
+              onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
+              onEditTask={openTaskEdit}
+              onDeleteTask={(taskId) => { void deleteTask(taskId); }}
             />
-          )}
-
-          <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-            {milestones.map((milestone, milestoneIndex) => {
-              const isCurrent = currentMilestone?.id === milestone.id;
-              const isEditing = milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestone.id;
-              const milestoneTasks = tasksByMilestone.get(milestone.id) ?? [];
-
-              if (isEditing) {
-                return (
-                  <div key={milestone.id} className="py-5" id={`project-milestone-${milestone.id}`}>
-                    <ProjectMilestoneEditorForm
-                      editor={milestoneEditor}
-                      value={milestoneForm}
-                      statuses={MILESTONE_STATUSES}
-                      busy={milestoneBusy}
-                      error={milestoneError}
-                      onChange={(patch) => setMilestoneForm((current) => ({ ...current, ...patch }))}
-                      onCancel={() => setMilestoneEditor(null)}
-                      onSubmit={saveMilestone}
-                      showDivider={false}
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <ProjectMilestoneRow
-                  key={milestone.id}
-                  milestone={milestone}
-                  isCurrent={isCurrent}
-                  milestoneIndex={milestoneIndex}
-                  milestoneCount={milestones.length}
-                  busy={milestoneBusy}
-                  quickStatuses={MILESTONE_QUICK_STATUSES}
-                  taskBusy={taskBusy}
-                  milestoneTasks={milestoneTasks}
-                  taskEditor={taskEditor}
-                  taskEditorForm={taskEditorForm}
-                  onMove={(direction) => { void moveMilestone(milestone.id, direction); }}
-                  onMakeCurrent={() => { void makeMilestoneCurrent(milestone.id); }}
-                  onEdit={() => openMilestoneEdit(milestone)}
-                  onDelete={() => { void deleteMilestone(milestone.id); }}
-                  onSetStatus={(status) => { void setMilestoneStatus(milestone.id, status); }}
-                  onOpenTaskAdd={() => openTaskAdd(milestone.id)}
-                  onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
-                  onEditTask={openTaskEdit}
-                  onDeleteTask={(taskId) => { void deleteTask(taskId); }}
-                />
-              );
-            })}
-          </div>
-
-          {(unassignedTasks.length > 0 || (taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId)) && (
-            <div className="space-y-4 border-t border-border-subtle pt-4" id="project-unassigned-tasks">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="ui-card-meta">Unassigned tasks</p>
-                  <p className="ui-card-meta mt-1">Tasks that are not tied to a milestone yet.</p>
-                </div>
-                <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-                  + Add task
-                </button>
-              </div>
-
-              {taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId && taskEditorForm}
-
-              {unassignedTasks.length > 0 ? (
-                <ProjectTaskList
-                  tasks={unassignedTasks}
-                  taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
-                  taskEditorForm={taskEditorForm}
-                  busy={taskBusy}
-                  onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
-                  onEditTask={openTaskEdit}
-                  onDeleteTask={(taskId) => { void deleteTask(taskId); }}
-                />
-              ) : null}
-            </div>
-          )}
-
-          {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
-          {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
+          ) : !taskEditor ? (
+            <p className="ui-card-meta">No tasks yet.</p>
+          ) : null}
+          {taskError && !taskEditor && <p className="text-[12px] text-danger">{taskError}</p>}
         </div>
       </DetailSection>
 
       <DetailSection
-        id="project-completion"
-        title="Completion summary"
-        meta={record.status === 'completed' ? 'project completed' : formatProjectStatus(record.status)}
-        actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
-        collapsible
-        defaultOpen={record.status === 'completed' || completionSummaryContent.length > 0}
-        collapsedPreview={completionPreview}
-        resetKey={record.id}
-      >
-        <ProjectCompletionContent status={record.status} content={completionSummaryContent} />
-      </DetailSection>
-
-      <DetailSection
-        id="project-timeline"
-        title="Timeline"
-        meta={`${activityItems.length} ${activityItems.length === 1 ? 'event' : 'events'}`}
+        id="project-activity"
+        title="Activity"
+        meta={activityPreview}
         collapsible
         defaultOpen={false}
-        collapsedPreview={timelinePreview}
+        collapsedPreview={activityPreview}
         resetKey={record.id}
       >
         <ProjectActivityContent items={activityItems} />
       </DetailSection>
 
       <DetailSection
-        id="project-handoff"
-        title="Handoff doc"
-        meta={project.brief ? `updated ${timeAgo(project.brief.updatedAt)}` : 'No handoff doc yet'}
+        id="project-notes"
+        title="Notes"
+        meta={`${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`}
         collapsible
         defaultOpen={false}
-        forceOpen={briefEditing}
-        collapsedPreview={handoffPreview}
+        forceOpen={noteEditor !== null}
+        collapsedPreview={notesPreview}
         resetKey={record.id}
         actions={(
-          <>
-            <button type="button" onClick={() => { void regenerateBrief(); }} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
-              {briefBusy ? 'Regenerating…' : 'Regenerate doc'}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setBriefError(null);
-                if (!briefEditing && briefContent.trim().length === 0) {
-                  setBriefContent(project.brief?.content ?? createEmptyProjectDocument(record.title));
-                }
-                setBriefEditing((value) => !value);
-              }}
-              className={ACTION_BUTTON_CLASS}
-              disabled={briefBusy}
-            >
-              {briefEditing ? 'Cancel' : (project.brief ? 'Edit doc' : 'Write doc')}
-            </button>
-          </>
+          <button type="button" onClick={openNoteAdd} className={ACTION_BUTTON_CLASS} disabled={noteBusy}>
+            + Add note
+          </button>
         )}
       >
-        <ProjectHandoffDocContent
-          brief={project.brief}
-          editing={briefEditing}
-          content={briefContent}
-          busy={briefBusy}
-          error={briefError}
-          onChange={setBriefContent}
-          onSubmit={saveBrief}
+        <ProjectNotesContent
+          notes={project.notes}
+          noteEditor={noteEditor}
+          noteEditorForm={noteEditorForm}
+          noteBusy={noteBusy}
+          noteError={noteError}
+          onEditNote={openNoteEdit}
+          onDeleteNote={(noteId) => { void deleteNote(noteId); }}
+        />
+      </DetailSection>
+
+      <DetailSection
+        id="project-files"
+        title="Files"
+        meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
+        collapsible
+        defaultOpen={false}
+        collapsedPreview={filesPreview}
+        resetKey={record.id}
+      >
+        <ProjectFilesContent
+          uploadForm={fileUploadForm}
+          files={project.files}
+          fileBusy={fileBusy}
+          onDeleteFile={(file) => { void deleteFile(file); }}
         />
       </DetailSection>
 
       <DetailSection
         id="project-record"
-        title="Project record"
+        title="Record"
         collapsible
         defaultOpen={false}
         forceOpen={editingProject || rawProjectOpen}
-        collapsedPreview={projectRecordPreview}
+        collapsedPreview={record.summary.trim() || 'Raw project metadata and YAML.'}
         resetKey={record.id}
         actions={(
           <>
-            <button
-              type="button"
-              onClick={() => { void toggleRawProject(); }}
-              className={ACTION_BUTTON_CLASS}
-              disabled={deleteBusy}
-            >
+            <button type="button" onClick={() => { void toggleRawProject(); }} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
               {rawProjectOpen ? 'Hide raw YAML' : 'Raw YAML'}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingProject((value) => !value);
-                setProjectError(null);
-              }}
-              className={ACTION_BUTTON_CLASS}
-              disabled={deleteBusy}
-            >
-              {editingProject ? 'Cancel' : 'Edit project'}
+            <button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS} disabled={deleteBusy}>
+              {editingProject ? 'Editing…' : 'Edit project'}
             </button>
-            <button
-              type="button"
-              onClick={() => { void deleteProject(); }}
-              className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40"
-              disabled={deleteBusy}
-            >
+            <button type="button" onClick={() => { void deleteProject(); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={deleteBusy}>
               {deleteBusy ? 'Deleting…' : 'Delete project'}
             </button>
           </>
@@ -1168,8 +861,8 @@ export function ProjectDetailPanel({
 
       <DetailSection
         id="project-links"
-        title="Relationships"
-        meta={`${project.links?.outgoing.length ?? 0} outgoing · ${project.links?.incoming.length ?? 0} backlinks`}
+        title="Links"
+        meta={linksPreview}
         collapsible
         defaultOpen={false}
         collapsedPreview={linksPreview}
@@ -1177,51 +870,6 @@ export function ProjectDetailPanel({
       >
         <ProjectNodeLinksContent links={project.links} />
       </DetailSection>
-
-      <DetailSection
-        id="project-notes"
-        title="Notes"
-        meta={`${project.noteCount} notes`}
-        collapsible
-        defaultOpen={false}
-        forceOpen={noteEditor !== null}
-        collapsedPreview={notesPreview}
-        resetKey={record.id}
-        actions={(
-          <button type="button" onClick={openNoteAdd} className={ACTION_BUTTON_CLASS} disabled={noteBusy}>
-            + Add note
-          </button>
-        )}
-      >
-        <ProjectNotesContent
-          notes={project.notes}
-          noteEditor={noteEditor}
-          noteEditorForm={noteEditorForm}
-          noteBusy={noteBusy}
-          noteError={noteError}
-          onEditNote={openNoteEdit}
-          onDeleteNote={(noteId) => { void deleteNote(noteId); }}
-        />
-      </DetailSection>
-
-      <DetailSection
-        id="project-files"
-        title="Files"
-        meta={`${project.attachmentCount} attachments · ${project.artifactCount} artifacts`}
-        collapsible
-        defaultOpen={false}
-        collapsedPreview={filesPreview}
-        resetKey={record.id}
-      >
-        <ProjectFilesContent
-          uploadForm={fileUploadForm}
-          attachments={project.attachments}
-          artifacts={project.artifacts}
-          fileBusy={fileBusy}
-          onDeleteFile={(file) => { void deleteFile(file); }}
-        />
-      </DetailSection>
-
     </div>
   );
 }

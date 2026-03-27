@@ -15,12 +15,9 @@ const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
 const CREATE_PROJECT_OPEN_STORAGE_KEY = 'pa:reload:projects:create-open';
 const CREATE_PROJECT_TITLE_STORAGE_KEY = 'pa:reload:projects:create-title';
-const CREATE_PROJECT_DESCRIPTION_STORAGE_KEY = 'pa:reload:projects:create-description';
+const CREATE_PROJECT_DOCUMENT_STORAGE_KEY = 'pa:reload:projects:create-document';
 const CREATE_PROJECT_REPO_ROOT_STORAGE_KEY = 'pa:reload:projects:create-repo-root';
 const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
-const CREATE_PROJECT_GOAL_STORAGE_KEY = 'pa:reload:projects:create-goal';
-const CREATE_PROJECT_ACCEPTANCE_CRITERIA_STORAGE_KEY = 'pa:reload:projects:create-acceptance-criteria';
-const CREATE_PROJECT_PLAN_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-plan-summary';
 
 function CreateProjectPanel({
   profile,
@@ -36,8 +33,8 @@ function CreateProjectPanel({
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
-  const [description, setDescription, clearDescription] = useReloadState<string>({
-    storageKey: CREATE_PROJECT_DESCRIPTION_STORAGE_KEY,
+  const [documentContent, setDocumentContent, clearDocumentContent] = useReloadState<string>({
+    storageKey: CREATE_PROJECT_DOCUMENT_STORAGE_KEY,
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
@@ -51,32 +48,14 @@ function CreateProjectPanel({
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
-  const [goal, setGoal, clearGoal] = useReloadState<string>({
-    storageKey: CREATE_PROJECT_GOAL_STORAGE_KEY,
-    initialValue: '',
-    shouldPersist: (value) => value.length > 0,
-  });
-  const [acceptanceCriteria, setAcceptanceCriteria, clearAcceptanceCriteria] = useReloadState<string>({
-    storageKey: CREATE_PROJECT_ACCEPTANCE_CRITERIA_STORAGE_KEY,
-    initialValue: '',
-    shouldPersist: (value) => value.length > 0,
-  });
-  const [planSummary, setPlanSummary, clearPlanSummary] = useReloadState<string>({
-    storageKey: CREATE_PROJECT_PLAN_SUMMARY_STORAGE_KEY,
-    initialValue: '',
-    shouldPersist: (value) => value.length > 0,
-  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handleCancel() {
     clearTitle();
-    clearDescription();
+    clearDocumentContent();
     clearRepoRoot();
     clearSummary();
-    clearGoal();
-    clearAcceptanceCriteria();
-    clearPlanSummary();
     onCancel();
   }
 
@@ -88,23 +67,14 @@ function CreateProjectPanel({
     try {
       const detail = await api.createProject({
         title,
-        description,
+        documentContent,
         repoRoot: repoRoot.trim() || undefined,
         summary: summary.trim() || undefined,
-        goal: goal.trim() || undefined,
-        acceptanceCriteria: acceptanceCriteria
-          .split('\n')
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0),
-        planSummary: planSummary.trim() || undefined,
       }, { profile });
       clearTitle();
-      clearDescription();
+      clearDocumentContent();
       clearRepoRoot();
       clearSummary();
-      clearGoal();
-      clearAcceptanceCriteria();
-      clearPlanSummary();
       emitProjectsChanged();
       onCreated(detail.project.id);
     } catch (submitError) {
@@ -119,7 +89,7 @@ function CreateProjectPanel({
         <div className="space-y-1">
           <h2 className="text-[15px] font-medium text-primary">New project</h2>
           <p className="ui-card-meta max-w-2xl">
-            Create a project from a short title and a longer description. The ID is auto-generated from the title.
+            Create a lightweight project container with a title, short summary, and an optional starting doc.
           </p>
         </div>
 
@@ -136,13 +106,13 @@ function CreateProjectPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-description">Description</label>
+            <label className="ui-card-meta" htmlFor="project-summary">Summary</label>
             <MentionTextarea
-              id="project-description"
-              value={description}
-              onValueChange={setDescription}
+              id="project-summary"
+              value={summary}
+              onValueChange={setSummary}
               className={TEXTAREA_CLASS}
-              placeholder="Describe the project at a high level."
+              placeholder="Short summary shown in project lists."
             />
           </div>
 
@@ -158,46 +128,13 @@ function CreateProjectPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-summary">List summary</label>
+            <label className="ui-card-meta" htmlFor="project-document">Starting doc</label>
             <MentionTextarea
-              id="project-summary"
-              value={summary}
-              onValueChange={setSummary}
+              id="project-document"
+              value={documentContent}
+              onValueChange={setDocumentContent}
               className={TEXTAREA_CLASS}
-              placeholder="Optional. Used in project lists and compact previews."
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-goal">Goal</label>
-            <MentionTextarea
-              id="project-goal"
-              value={goal}
-              onValueChange={setGoal}
-              className={TEXTAREA_CLASS}
-              placeholder="What should this project accomplish?"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-acceptance-criteria">Acceptance criteria (one per line)</label>
-            <MentionTextarea
-              id="project-acceptance-criteria"
-              value={acceptanceCriteria}
-              onValueChange={setAcceptanceCriteria}
-              className={TEXTAREA_CLASS}
-              placeholder="How will you know the project is done?"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-plan-summary">Plan summary</label>
-            <MentionTextarea
-              id="project-plan-summary"
-              value={planSummary}
-              onValueChange={setPlanSummary}
-              className={TEXTAREA_CLASS}
-              placeholder="Optional. Outline the intended approach before you create milestones and tasks."
+              placeholder="Optional. Add the initial context or plan you want to keep with the project."
             />
           </div>
 
