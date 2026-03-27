@@ -462,7 +462,7 @@ function SectionBlock({
                         type="button"
                         className={INLINE_ACTION_CLASS}
                         onClick={() => onClose(session.id)}
-                        title="Archive conversation from the open workspace"
+                        title="Archive conversation from the workspace"
                       >
                         close
                       </button>
@@ -561,9 +561,10 @@ export function ConversationsPage() {
     tabs,
     archivedSessions,
     openSession,
-    closeSession,
     pinSession,
     unpinSession,
+    archiveSession,
+    restoreSession,
     refetch,
     loading,
   } = useConversations();
@@ -749,10 +750,10 @@ export function ConversationsPage() {
 
   const handleOpen = useCallback((sessionId: string, options?: { restore?: boolean }) => {
     if (options?.restore) {
-      openSession(sessionId);
+      restoreSession(sessionId);
     }
     navigate(`/conversations/${encodeURIComponent(sessionId)}`);
-  }, [navigate, openSession]);
+  }, [navigate, restoreSession]);
 
   const handleOpenWorkItem = useCallback((item: ConversationWorkItem) => {
     if (item.workspace === 'archived' || item.workspace === 'unknown') {
@@ -889,7 +890,7 @@ export function ConversationsPage() {
                     onOpen={handleOpen}
                     onPin={pinSession}
                     onUnpin={unpinSession}
-                    onClose={closeSession}
+                    onClose={archiveSession}
                     onMarkRead={handleMarkRead}
                     busyId={busyConversationId}
                   />
@@ -905,7 +906,7 @@ export function ConversationsPage() {
                     onOpen={handleOpen}
                     onPin={pinSession}
                     onUnpin={unpinSession}
-                    onClose={closeSession}
+                    onClose={archiveSession}
                     onMarkRead={handleMarkRead}
                     busyId={busyConversationId}
                   />
@@ -921,7 +922,7 @@ export function ConversationsPage() {
                     onOpen={handleOpen}
                     onPin={pinSession}
                     onUnpin={unpinSession}
-                    onClose={closeSession}
+                    onClose={archiveSession}
                     onMarkRead={handleMarkRead}
                     busyId={busyConversationId}
                   />

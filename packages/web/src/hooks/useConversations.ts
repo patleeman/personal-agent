@@ -25,6 +25,7 @@ import {
   readOpenSessionIds,
   readPinnedSessionIds,
   replaceConversationLayout,
+  setConversationArchivedState,
   type ConversationLayout,
   type ConversationShelf,
   type OpenConversationDropPosition,
@@ -136,6 +137,16 @@ export function useConversations() {
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
+  const archiveSession = useCallback((id: string) => {
+    const nextLayout = setConversationArchivedState(id, true);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+  }, []);
+
+  const restoreSession = useCallback((id: string) => {
+    const nextLayout = setConversationArchivedState(id, false);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+  }, []);
+
   const moveSession = useCallback((
     sessionId: string,
     targetSection: ConversationShelf,
@@ -238,6 +249,8 @@ export function useConversations() {
     closeSession,
     pinSession,
     unpinSession,
+    archiveSession,
+    restoreSession,
     moveSession,
     loading,
     refetch,
