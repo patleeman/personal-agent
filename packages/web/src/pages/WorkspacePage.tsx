@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import { WorkspaceFileContent } from '../components/WorkspaceFileContent';
 import { WorkspaceRail } from '../components/WorkspaceRail';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { buildRailWidthStorageKey } from '../layoutSizing';
 import {
   baseName,
   buildWorkspacePath,
@@ -25,6 +27,7 @@ import { emitWorkspaceChanged, setWorkspaceEditorDirty } from '../workspaceEvent
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const WORKSPACE_REFRESH_THROTTLE_MS = 1000;
+const WORKSPACE_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('workspace-browser');
 
 export function WorkspacePage() {
   const location = useLocation();
@@ -305,10 +308,14 @@ export function WorkspacePage() {
   }, [draftDirty, openWorkspaceSearch, requestedCwd, snapshot?.cwd, workspaceActionBusy]);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="w-[22rem] shrink-0 border-r border-border-subtle bg-surface/35">
-        <WorkspaceRail />
-      </div>
+    <BrowserSplitLayout
+      storageKey={WORKSPACE_BROWSER_WIDTH_STORAGE_KEY}
+      initialWidth={352}
+      minWidth={272}
+      maxWidth={480}
+      browser={<WorkspaceRail />}
+      browserLabel="Workspace browser"
+    >
       <div className="min-w-0 flex-1 flex flex-col">
         <PageHeader
           className="flex-wrap items-start gap-y-3"
@@ -424,6 +431,6 @@ export function WorkspacePage() {
           )}
         </div>
       </div>
-    </div>
+    </BrowserSplitLayout>
   );
 }

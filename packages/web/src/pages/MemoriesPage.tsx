@@ -5,6 +5,7 @@ import { useApi } from '../hooks';
 import { emitMemoriesChanged, MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import { timeAgo } from '../utils';
 import type { MemoryDocDetail, MemoryDocItem, MemoryReferenceItem } from '../types';
+import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import {
   EmptyState,
   ErrorState,
@@ -30,8 +31,11 @@ import {
   readCreateState,
   readNoteView,
 } from '../noteWorkspaceState';
+import { buildRailWidthStorageKey } from '../layoutSizing';
 import { inferInlineTags, readEditableNoteBody } from '../noteDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+
+const NOTES_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('notes-browser');
 
 function ReferencesList({
   memory,
@@ -623,10 +627,14 @@ export function MemoriesPage() {
   }, [selectedMemoryId]);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
-        <NotesBrowserRail />
-      </div>
+    <BrowserSplitLayout
+      storageKey={NOTES_BROWSER_WIDTH_STORAGE_KEY}
+      initialWidth={320}
+      minWidth={260}
+      maxWidth={440}
+      browser={<NotesBrowserRail />}
+      browserLabel="Notes browser"
+    >
       <div className="min-w-0 flex-1 px-6 py-4">
         {loading && !data ? <LoadingState label="Loading notes…" /> : null}
         {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} /> : null}
@@ -678,7 +686,7 @@ export function MemoriesPage() {
           </div>
         )}
       </div>
-    </div>
+    </BrowserSplitLayout>
   );
 }
 

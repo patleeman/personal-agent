@@ -5,10 +5,12 @@ import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { useReloadState } from '../reloadState';
+import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import { EmptyState, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { ProjectsBrowserRail } from '../components/ProjectsBrowserRail';
+import { buildRailWidthStorageKey } from '../layoutSizing';
 import { buildProjectsHref, PROJECT_VIEW_QUERY_PARAM, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 
@@ -19,6 +21,7 @@ const CREATE_PROJECT_TITLE_STORAGE_KEY = 'pa:reload:projects:create-title';
 const CREATE_PROJECT_DOCUMENT_STORAGE_KEY = 'pa:reload:projects:create-document';
 const CREATE_PROJECT_REPO_ROOT_STORAGE_KEY = 'pa:reload:projects:create-repo-root';
 const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
+const PROJECTS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('projects-browser');
 
 function CreateProjectPanel({
   profile,
@@ -346,10 +349,14 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
-        <ProjectsBrowserRail />
-      </div>
+    <BrowserSplitLayout
+      storageKey={PROJECTS_BROWSER_WIDTH_STORAGE_KEY}
+      initialWidth={320}
+      minWidth={260}
+      maxWidth={440}
+      browser={<ProjectsBrowserRail />}
+      browserLabel="Projects browser"
+    >
       <div className="min-w-0 flex-1 px-6 py-4">
         <div className="flex h-full min-h-0 flex-col gap-4">
           <div className="flex items-center justify-end gap-2">
@@ -426,7 +433,7 @@ export function ProjectsPage() {
           </div>
         </div>
       </div>
-    </div>
+    </BrowserSplitLayout>
   );
 }
 
