@@ -974,7 +974,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     data: conversationBootstrap,
     loading: conversationBootstrapLoading,
   } = useConversationBootstrap(id, { tailBlocks: historicalTailBlocks });
-  const bootstrapSessionDetail = conversationBootstrap?.sessionDetail?.meta.id === id
+  const bootstrapSessionDetail = id && conversationBootstrap?.sessionDetail?.meta.id === id
     ? conversationBootstrap.sessionDetail
     : null;
   const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);

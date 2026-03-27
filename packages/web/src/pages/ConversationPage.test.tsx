@@ -211,4 +211,12 @@ describe('ConversationPage', () => {
       </MemoryRouter>,
     )).not.toThrow();
   });
+
+  it('renders safely before the route param is available', () => {
+    expect(() => renderToString(
+      <MemoryRouter>
+        <ConversationPage />
+      </MemoryRouter>,
+    )).not.toThrow();
+  });
 });
