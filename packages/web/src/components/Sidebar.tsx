@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
@@ -35,6 +35,7 @@ import {
   unpinOpenResourceShelfItem,
 } from '../openResourceShelves';
 import { humanizeSkillName } from '../memoryOverview';
+import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (
@@ -218,16 +219,30 @@ function OpenConversationRow({
   session,
   active,
   pinned = false,
+  canDrag = false,
+  isDragging = false,
+  dropPosition = null,
   onPin,
   onUnpin,
   onClose,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   session: { id: string; title: string; timestamp: string; cwd: string; isRunning?: boolean };
   active: boolean;
   pinned?: boolean;
+  canDrag?: boolean;
+  isDragging?: boolean;
+  dropPosition?: OpenConversationDropPosition | null;
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
+  onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
@@ -235,88 +250,134 @@ function OpenConversationRow({
   const showTrailingControls = hovered || pinned;
 
   return (
-    <Link
-      to={`/conversations/${session.id}`}
-      className={[
-        'ui-sidebar-session-row select-none',
-        active && 'ui-sidebar-session-row-active',
-      ].filter(Boolean).join(' ')}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+    <div
+      className="relative"
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
+      onDragOver={canDrag ? onDragOver : undefined}
+      onDrop={canDrag ? onDrop : undefined}
+      onDragEnd={canDrag ? onDragEnd : undefined}
     >
-      <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
-      <div className={[
-        'min-w-0 flex-1',
-        showTrailingControls && 'pr-11',
-      ].filter(Boolean).join(' ')}>
-        <p className="ui-row-title truncate">{session.title}</p>
-        <p className="ui-sidebar-session-meta flex items-center gap-1.5 min-w-0">
-          <span className="shrink-0">{timeAgo(session.timestamp)}</span>
-          {session.cwd ? (
-            <>
-              <span className="shrink-0 opacity-40">·</span>
-              <span className="truncate min-w-0 opacity-55" title={session.cwd}>{baseName(session.cwd)}</span>
-            </>
-          ) : null}
-          {(session.isRunning || needsAttention) && (
-            <>
-              <span className="shrink-0 opacity-40">·</span>
-              <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
-            </>
-          )}
-        </p>
-      </div>
-      {showTrailingControls ? (
-        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-          {!hovered && pinned ? <PinnedIndicator /> : null}
-          {hovered && pinned && onUnpin ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onUnpin();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Unpin"
-              aria-label="Unpin"
-            >
-              <Ico d={PATH.unpin} size={10} />
-            </button>
-          ) : null}
-          {hovered && !pinned && onPin ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onPin();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Pin"
-              aria-label="Pin"
-            >
-              <Ico d={PATH.pin} size={10} />
-            </button>
-          ) : null}
-          {hovered && !pinned && onClose ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onClose();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Close"
-              aria-label="Close"
-            >
-              <Ico d={PATH.close} size={10} />
-            </button>
-          ) : null}
-        </div>
+      {dropPosition ? (
+        <span
+          aria-hidden="true"
+          className={[
+            'pointer-events-none absolute left-4 right-4 z-10 h-0.5 rounded-full bg-accent/80',
+            dropPosition === 'before' ? 'top-0' : 'bottom-0',
+          ].join(' ')}
+        />
       ) : null}
-    </Link>
+      <Link
+        to={`/conversations/${session.id}`}
+        draggable={false}
+        className={[
+          'ui-sidebar-session-row select-none',
+          active && 'ui-sidebar-session-row-active',
+          canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
+        ].filter(Boolean).join(' ')}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        title={canDrag ? 'Drag to reorder or move between pinned and open conversations' : undefined}
+      >
+        <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
+        <div className={[
+          'min-w-0 flex-1',
+          showTrailingControls && 'pr-11',
+        ].filter(Boolean).join(' ')}>
+          <p className="ui-row-title truncate">{session.title}</p>
+          <p className="ui-sidebar-session-meta flex items-center gap-1.5 min-w-0">
+            <span className="shrink-0">{timeAgo(session.timestamp)}</span>
+            {session.cwd ? (
+              <>
+                <span className="shrink-0 opacity-40">·</span>
+                <span className="truncate min-w-0 opacity-55" title={session.cwd}>{baseName(session.cwd)}</span>
+              </>
+            ) : null}
+            {(session.isRunning || needsAttention) && (
+              <>
+                <span className="shrink-0 opacity-40">·</span>
+                <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
+              </>
+            )}
+          </p>
+        </div>
+        {showTrailingControls ? (
+          <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+            {!hovered && pinned ? <PinnedIndicator /> : null}
+            {hovered && pinned && onUnpin ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onUnpin();
+                }}
+                className="ui-icon-button ui-icon-button-compact"
+                title="Unpin"
+                aria-label="Unpin"
+              >
+                <Ico d={PATH.unpin} size={10} />
+              </button>
+            ) : null}
+            {hovered && !pinned && onPin ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onPin();
+                }}
+                className="ui-icon-button ui-icon-button-compact"
+                title="Pin"
+                aria-label="Pin"
+              >
+                <Ico d={PATH.pin} size={10} />
+              </button>
+            ) : null}
+            {hovered && !pinned && onClose ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onClose();
+                }}
+                className="ui-icon-button ui-icon-button-compact"
+                title="Close"
+                aria-label="Close"
+              >
+                <Ico d={PATH.close} size={10} />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </Link>
+    </div>
+  );
+}
+
+function ShelfDropZone({
+  label,
+  active = false,
+  onDragOver,
+  onDrop,
+}: {
+  label: string;
+  active?: boolean;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={[
+        'mx-3 rounded-lg border border-dashed px-3 py-2 text-[11px] transition-colors',
+        active ? 'border-accent/60 bg-accent/8 text-accent' : 'border-border-subtle bg-elevated/35 text-dim',
+      ].join(' ')}
+    >
+      {label}
+    </div>
   );
 }
 
@@ -343,6 +404,7 @@ export function Sidebar() {
     closeSession,
     pinSession,
     unpinSession,
+    moveSession,
     loading,
   } = useConversations();
 
@@ -357,6 +419,13 @@ export function Sidebar() {
   const [draftReferencedProjectIds, setDraftReferencedProjectIds] = useState(() => readDraftConversationProjectIds());
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
+  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    section: ConversationShelf;
+    sessionId: string | null;
+    position: OpenConversationDropPosition;
+  } | null>(null);
 
   const draftTab = useMemo(() => {
     if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds)) {
@@ -369,13 +438,6 @@ export function Sidebar() {
   const visibleConversationTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
-  );
-  const openConversationItems = useMemo(
-    () => [
-      ...pinnedSessions.map((session) => ({ session, pinned: true })),
-      ...visibleConversationTabs.map((session) => ({ session, pinned: false })),
-    ],
-    [pinnedSessions, visibleConversationTabs],
   );
 
   const activeConversationId = useMemo(() => {
@@ -471,6 +533,87 @@ export function Sidebar() {
     ],
     [createProjectHref, status?.profile],
   );
+
+  function clearDragState() {
+    setDraggingSessionId(null);
+    setDraggingSection(null);
+    setDropTarget(null);
+  }
+
+  function getDropPosition(event: DragEvent<HTMLDivElement>): OpenConversationDropPosition {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+  }
+
+  function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+    setDraggingSessionId(sessionId);
+    setDraggingSection(section);
+    setDropTarget(null);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', sessionId);
+  }
+
+  function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+    const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
+    if (!draggedId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    if (draggedId === sessionId && draggingSection === section) {
+      setDropTarget(null);
+      return;
+    }
+
+    const position = getDropPosition(event);
+    setDropTarget((current) => (
+      current?.section === section && current.sessionId === sessionId && current.position === position
+        ? current
+        : { section, sessionId, position }
+    ));
+  }
+
+  function handleEmptyShelfDragOver(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
+    const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
+    if (!draggedId) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget((current) => (
+      current?.section === section && current.sessionId === null
+        ? current
+        : { section, sessionId: null, position: 'after' }
+    ));
+  }
+
+  function handleConversationDrop(targetSection: ConversationShelf, targetSessionId: string | null, position: OpenConversationDropPosition) {
+    if (!draggingSessionId) {
+      clearDragState();
+      return;
+    }
+
+    if (targetSessionId === draggingSessionId && draggingSection === targetSection) {
+      clearDragState();
+      return;
+    }
+
+    moveSession(draggingSessionId, targetSection, targetSessionId, position);
+    clearDragState();
+  }
+
+  function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    handleConversationDrop(section, sessionId, getDropPosition(event));
+  }
+
+  function handleEmptyShelfDrop(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    handleConversationDrop(section, null, 'after');
+  }
 
   useEffect(() => {
     function syncDraftState() {
@@ -601,6 +744,10 @@ export function Sidebar() {
     setDraftHasAttachments(false);
     setDraftReferencedProjectIds([]);
 
+    if (draggingSessionId === DRAFT_CONVERSATION_ID) {
+      clearDragState();
+    }
+
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
       navigate('/conversations');
     }
@@ -609,8 +756,26 @@ export function Sidebar() {
   function handleCloseConversation(sessionId: string) {
     closeSession(sessionId);
 
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+
     if (location.pathname === `/conversations/${sessionId}`) {
       navigate('/conversations');
+    }
+  }
+
+  function handlePinConversation(sessionId: string) {
+    pinSession(sessionId);
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+  }
+
+  function handleUnpinConversation(sessionId: string) {
+    unpinSession(sessionId);
+    if (draggingSessionId === sessionId) {
+      clearDragState();
     }
   }
 
@@ -641,6 +806,9 @@ export function Sidebar() {
       navigate(buildWorkspacePath('files'));
     }
   }
+
+  const pinnedDropTargetActive = dropTarget?.section === 'pinned' && dropTarget.sessionId === null;
+  const openDropTargetActive = dropTarget?.section === 'open' && dropTarget.sessionId === null;
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
@@ -718,18 +886,71 @@ export function Sidebar() {
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
         <SectionHeader label="Open Conversations" />
         <div className="py-1 space-y-0.5">
-          {!loading && openConversationItems.length === 0 ? <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p> : null}
-          {openConversationItems.map(({ session, pinned }) => {
+          {!loading && pinnedSessions.length === 0 && draggingSection === 'open' ? (
+            <ShelfDropZone
+              label="Drop here to pin this conversation."
+              active={pinnedDropTargetActive}
+              onDragOver={(event) => handleEmptyShelfDragOver('pinned', event)}
+              onDrop={(event) => handleEmptyShelfDrop('pinned', event)}
+            />
+          ) : null}
+
+          {pinnedSessions.map((session) => {
+            const dropPosition = dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+              ? dropTarget.position
+              : null;
+
+            return (
+              <OpenConversationRow
+                key={session.id}
+                session={session}
+                active={location.pathname === `/conversations/${session.id}`}
+                pinned
+                canDrag
+                isDragging={draggingSessionId === session.id}
+                dropPosition={dropPosition}
+                onUnpin={() => handleUnpinConversation(session.id)}
+                onDragStart={(event) => handleTabDragStart('pinned', session.id, event)}
+                onDragOver={(event) => handleTabDragOver('pinned', session.id, event)}
+                onDrop={(event) => handleTabDrop('pinned', session.id, event)}
+                onDragEnd={() => clearDragState()}
+              />
+            );
+          })}
+
+          {!loading && tabs.length === 0 && draggingSection === 'pinned' ? (
+            <ShelfDropZone
+              label="Drop here to move back into open conversations."
+              active={openDropTargetActive}
+              onDragOver={(event) => handleEmptyShelfDragOver('open', event)}
+              onDrop={(event) => handleEmptyShelfDrop('open', event)}
+            />
+          ) : null}
+
+          {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 ? (
+            <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
+          ) : null}
+
+          {visibleConversationTabs.map((session) => {
             const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
+            const dropPosition = !isDraftTab && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+              ? dropTarget.position
+              : null;
             return (
               <OpenConversationRow
                 key={session.id}
                 session={session}
                 active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
-                pinned={pinned}
-                onPin={pinned || isDraftTab ? undefined : () => pinSession(session.id)}
-                onUnpin={pinned ? () => unpinSession(session.id) : undefined}
-                onClose={pinned ? undefined : (isDraftTab ? handleCloseDraftTab : () => handleCloseConversation(session.id))}
+                pinned={false}
+                canDrag={!isDraftTab}
+                isDragging={!isDraftTab && draggingSessionId === session.id}
+                dropPosition={dropPosition}
+                onPin={isDraftTab ? undefined : () => handlePinConversation(session.id)}
+                onClose={isDraftTab ? handleCloseDraftTab : () => handleCloseConversation(session.id)}
+                onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart('open', session.id, event)}
+                onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver('open', session.id, event)}
+                onDrop={isDraftTab ? undefined : (event) => handleTabDrop('open', session.id, event)}
+                onDragEnd={isDraftTab ? undefined : () => clearDragState()}
               />
             );
           })}
