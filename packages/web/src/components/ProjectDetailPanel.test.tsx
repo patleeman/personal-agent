@@ -144,6 +144,8 @@ describe('ProjectDetailPanel', () => {
     expect(html).not.toContain('Hidden note body that should not render until Notes is expanded.');
     expect(html).not.toContain('Dense design notes');
     expect(html).not.toContain('Tool Agent Browser');
+    expect(html).not.toContain('Related');
+    expect(html).not.toContain('Raw YAML');
   });
 
   it('opens the selected secondary section when routed from the rail', () => {
