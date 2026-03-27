@@ -165,8 +165,6 @@ export function ProjectsBrowserRail() {
                 ['activity', 'Activity', 'Tiny recent log'],
                 ['notes', 'Notes', 'Project notes, decisions, and questions'],
                 ['files', 'Files', 'All attached project files'],
-                ['record', 'Record', 'Structured project metadata'],
-                ['links', 'Links', 'Relationships with other nodes'],
               ].map(([view, label, summary]) => (
                 <ListLinkRow
                   key={view}

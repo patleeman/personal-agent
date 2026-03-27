@@ -231,7 +231,7 @@ describe('ProjectsPage', () => {
     );
 
     expect(html).toContain('Active project');
-    expect(html).toContain('Still being worked on.');
+    expect(html).toContain('In progress.');
     expect(html).not.toContain('Use the right rail to browse projects and jump between logical project sections.');
     expect(html).not.toContain('Select a project');
   });

@@ -56,8 +56,9 @@ export function ProjectOverviewPanel({
   const documentRecord = project.document ?? project.brief;
   const taskCount = project.taskCount ?? project.tasks.length;
   const noteCount = project.noteCount ?? project.notes.length;
-  const fileCount = project.fileCount ?? project.files.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
-  const documentPreview = previewLine(documentRecord?.content ?? '') || record.summary.trim() || record.description.trim();
+  const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
+  const projectSummary = record.summary.trim() || record.description.trim();
+  const documentPreview = previewLine(documentRecord?.content ?? '') || projectSummary;
   const tasks = [...project.tasks].sort((left, right) => taskRank(left.status) - taskRank(right.status)).slice(0, 4);
   const hiddenTasks = Math.max(0, project.tasks.length - tasks.length);
   const metrics = [
@@ -79,7 +80,7 @@ export function ProjectOverviewPanel({
             </div>
             <div className="space-y-1.5">
               <p className="ui-card-title text-[14px] leading-snug">{record.title}</p>
-              {record.summary.trim() && <p className="ui-card-body">{record.summary}</p>}
+              {projectSummary && <p className="ui-card-body">{projectSummary}</p>}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

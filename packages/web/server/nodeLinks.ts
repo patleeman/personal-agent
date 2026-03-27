@@ -357,23 +357,10 @@ function readSkillDocuments(options: { repoRoot: string; profilesRoot: string; p
   return documents;
 }
 
-function buildProjectText(detail: ReturnType<typeof readProjectDetailFromProject>, rawState: string): string[] {
-  const record = detail.project;
-
+function buildProjectText(detail: ReturnType<typeof readProjectDetailFromProject>): string[] {
   return [
-    rawState,
-    record.title,
-    record.description,
-    record.summary,
-    record.requirements.goal,
-    ...record.requirements.acceptanceCriteria,
-    record.planSummary ?? '',
-    record.completionSummary ?? '',
-    record.currentFocus ?? '',
-    ...record.blockers,
-    ...record.recentProgress,
-    detail.brief?.content ?? '',
-    ...detail.notes.map((note) => note.body),
+    detail.document?.content ?? detail.brief?.content ?? '',
+    ...detail.notes.flatMap((note) => [note.title, note.body]),
   ].filter((value) => value.trim().length > 0);
 }
 
@@ -396,8 +383,8 @@ function readProjectDocuments(options: { repoRoot: string; profile: string }): N
         id: detail.project.id,
         title: detail.project.title,
         summary: detail.project.summary || detail.project.description,
-        path: source.path,
-        contentParts: buildProjectText(detail, source.content),
+        path: detail.document?.path ?? source.path,
+        contentParts: buildProjectText(detail),
         explicitTargets: [],
       } satisfies NodeDocument];
     } catch {

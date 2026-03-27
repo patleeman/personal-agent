@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
-import { timeAgo } from '../utils';
 import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
@@ -14,6 +13,45 @@ import { useNodeMentionItems } from '../useNodeMentionItems';
 import type { ProjectActivityItemShape } from './projectDetailState';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
+
+function normalizeHeadingValue(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function stripMatchingLeadingHeading(body: string, heading: string): string {
+  const normalizedHeading = normalizeHeadingValue(heading);
+  if (normalizedHeading.length === 0) {
+    return body;
+  }
+
+  const lines = body.split('\n');
+  let firstContentIndex = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if ((lines[index] ?? '').trim().length > 0) {
+      firstContentIndex = index;
+      break;
+    }
+  }
+
+  if (firstContentIndex < 0) {
+    return body;
+  }
+
+  const firstLine = (lines[firstContentIndex] ?? '').trim();
+  const match = firstLine.match(/^#\s+(.+)$/);
+  if (!match || normalizeHeadingValue(match[1] ?? '') !== normalizedHeading) {
+    return body;
+  }
+
+  let bodyStart = firstContentIndex + 1;
+  while (bodyStart < lines.length && (lines[bodyStart] ?? '').trim().length === 0) {
+    bodyStart += 1;
+  }
+
+  const stripped = lines.slice(bodyStart).join('\n').trim();
+  return stripped.length > 0 ? stripped : body;
+}
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
   const footnoteId = useId();
@@ -213,7 +251,6 @@ export function ProjectActivityContent({
               ) : (
                 <span className="min-w-0 text-primary truncate">{title}</span>
               )}
-              <span className="shrink-0 text-dim">{timeAgo(at ?? '')}</span>
             </div>
           </div>
         );
@@ -224,6 +261,7 @@ export function ProjectActivityContent({
 
 export function ProjectDocumentContent({
   document,
+  projectTitle,
   editing,
   content,
   busy,
@@ -232,6 +270,7 @@ export function ProjectDocumentContent({
   onSubmit,
 }: {
   document: ProjectBrief | null;
+  projectTitle: string;
   editing: boolean;
   content: string;
   busy: boolean;
@@ -239,6 +278,8 @@ export function ProjectDocumentContent({
   onChange: (value: string) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
+  const renderedContent = document ? stripMatchingLeadingHeading(document.content, projectTitle) : '';
+
   return (
     <div className="max-w-5xl space-y-4">
       {editing ? (
@@ -255,7 +296,7 @@ export function ProjectDocumentContent({
           </div>
         </form>
       ) : document ? (
-        <ProjectMarkdown body={document.content} className="ui-markdown max-w-none" />
+        <ProjectMarkdown body={renderedContent} className="ui-markdown max-w-none" />
       ) : (
         <EmptyState
           title="No project doc yet."
@@ -269,6 +310,7 @@ export function ProjectDocumentContent({
 
 export function ProjectHandoffDocContent({
   brief,
+  projectTitle,
   editing,
   content,
   busy,
@@ -277,6 +319,7 @@ export function ProjectHandoffDocContent({
   onSubmit,
 }: {
   brief: ProjectBrief | null;
+  projectTitle: string;
   editing: boolean;
   content: string;
   busy: boolean;
@@ -287,6 +330,7 @@ export function ProjectHandoffDocContent({
   return (
     <ProjectDocumentContent
       document={brief}
+      projectTitle={projectTitle}
       editing={editing}
       content={content}
       busy={busy}

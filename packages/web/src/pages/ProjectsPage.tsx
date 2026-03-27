@@ -9,7 +9,7 @@ import { useReloadState } from '../reloadState';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
-import { buildProjectsHref, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
+import { buildProjectsHref, PROJECT_VIEW_QUERY_PARAM, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
@@ -274,6 +274,7 @@ export function ProjectsPage() {
     };
   }, [projects]);
   const selectedView = useMemo(() => readProjectView(location.search), [location.search]);
+  const hasExplicitProjectView = useMemo(() => new URLSearchParams(location.search).has(PROJECT_VIEW_QUERY_PARAM), [location.search]);
 
   const refreshProjects = useCallback(async () => {
     const [nextProjects] = await Promise.all([
@@ -311,7 +312,7 @@ export function ProjectsPage() {
   }, [effectiveViewProfile, navigate, projects, selectedId]);
 
   useEffect(() => {
-    if (!selectedId || !projectDetailApi.data || showCreateForm) {
+    if (!selectedId || !projectDetailApi.data || showCreateForm || !hasExplicitProjectView) {
       return;
     }
 
@@ -325,7 +326,7 @@ export function ProjectsPage() {
     });
 
     return () => window.cancelAnimationFrame(handle);
-  }, [projectDetailApi.data, selectedId, selectedView, showCreateForm]);
+  }, [hasExplicitProjectView, projectDetailApi.data, selectedId, selectedView, showCreateForm]);
 
   function openCreateForm() {
     const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
@@ -407,6 +408,7 @@ export function ProjectsPage() {
                   <ProjectDetailPanel
                     project={projectDetailApi.data}
                     activeProfile={profileState?.currentProfile}
+                    selectedView={selectedView}
                     onChanged={() => {
                       void projectDetailApi.refetch({ resetLoading: false });
                       void refreshProjects();
