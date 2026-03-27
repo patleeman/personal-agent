@@ -3543,10 +3543,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setInput('');
         try {
           const liveConversationId = await ensureConversationIsLive('be compacted');
-          if (!ensureConversationCanControl('compact it')) {
-            return { kind: 'handled' };
-          }
-          await api.compactSession(liveConversationId, command.customInstructions, currentSurfaceId);
+          await retryLiveSessionActionAfterTakeover({
+            attemptAction: () => api.compactSession(liveConversationId, command.customInstructions, currentSurfaceId),
+            takeOverSessionControl: () => streamTakeover(),
+          });
           showNotice('accent', 'Context compacted.');
         } catch (error) {
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
