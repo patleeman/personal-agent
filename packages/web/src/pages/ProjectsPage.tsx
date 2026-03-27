@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import {
-  formatProjectStatus,
-  hasMeaningfulBlockers,
-  isProjectArchived,
-  summarizeProjectPreview,
-} from '../contextRailProject';
+import { isProjectArchived } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { useReloadState } from '../reloadState';
-import { timeAgo } from '../utils';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
+import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 import { MentionTextarea } from '../components/MentionTextarea';
+import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
+import { buildProjectsHref, projectViewToSectionId, readProjectView, VIEW_PROFILE_QUERY_PARAM } from '../projectWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
@@ -25,15 +21,6 @@ const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
 const CREATE_PROJECT_GOAL_STORAGE_KEY = 'pa:reload:projects:create-goal';
 const CREATE_PROJECT_ACCEPTANCE_CRITERIA_STORAGE_KEY = 'pa:reload:projects:create-acceptance-criteria';
 const CREATE_PROJECT_PLAN_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-plan-summary';
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-
-type ProjectListFilter = 'active' | 'archived' | 'all';
-
-const PROJECT_FILTER_OPTIONS: Array<{ value: ProjectListFilter; label: string }> = [
-  { value: 'active', label: 'Active' },
-  { value: 'archived', label: 'Archived' },
-  { value: 'all', label: 'All' },
-];
 
 function CreateProjectPanel({
   profile,
@@ -127,101 +114,103 @@ function CreateProjectPanel({
   }
 
   return (
-    <div className="min-w-0 space-y-5 border-t border-border-subtle pt-5">
-      <div className="space-y-1">
-        <h2 className="text-[15px] font-medium text-primary">New project</h2>
-        <p className="ui-card-meta max-w-2xl">
-          Create a project from a short title and a longer description. The ID is auto-generated from the title.
-        </p>
+    <div className="min-w-0 rounded-2xl border border-border-subtle bg-base/70 px-4 py-4 shadow-sm">
+      <div className="space-y-5">
+        <div className="space-y-1">
+          <h2 className="text-[15px] font-medium text-primary">New project</h2>
+          <p className="ui-card-meta max-w-2xl">
+            Create a project from a short title and a longer description. The ID is auto-generated from the title.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-title">Title</label>
+            <input
+              id="project-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className={INPUT_CLASS}
+              placeholder="Short project title"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-description">Description</label>
+            <MentionTextarea
+              id="project-description"
+              value={description}
+              onValueChange={setDescription}
+              className={TEXTAREA_CLASS}
+              placeholder="Describe the project at a high level."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-repo-root">Repo root</label>
+            <input
+              id="project-repo-root"
+              value={repoRoot}
+              onChange={(event) => setRepoRoot(event.target.value)}
+              className={INPUT_CLASS}
+              placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-summary">List summary</label>
+            <MentionTextarea
+              id="project-summary"
+              value={summary}
+              onValueChange={setSummary}
+              className={TEXTAREA_CLASS}
+              placeholder="Optional. Used in project lists and compact previews."
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-goal">Goal</label>
+            <MentionTextarea
+              id="project-goal"
+              value={goal}
+              onValueChange={setGoal}
+              className={TEXTAREA_CLASS}
+              placeholder="What should this project accomplish?"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-acceptance-criteria">Acceptance criteria (one per line)</label>
+            <MentionTextarea
+              id="project-acceptance-criteria"
+              value={acceptanceCriteria}
+              onValueChange={setAcceptanceCriteria}
+              className={TEXTAREA_CLASS}
+              placeholder="How will you know the project is done?"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta" htmlFor="project-plan-summary">Plan summary</label>
+            <MentionTextarea
+              id="project-plan-summary"
+              value={planSummary}
+              onValueChange={setPlanSummary}
+              className={TEXTAREA_CLASS}
+              placeholder="Optional. Outline the intended approach before you create milestones and tasks."
+            />
+          </div>
+
+          {error && <p className="text-[12px] text-danger">{error}</p>}
+
+          <div className="flex items-center gap-3">
+            <ToolbarButton type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create project'}</ToolbarButton>
+            <button type="button" onClick={handleCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
+              Cancel
+            </button>
+          </div>
+        </form>
       </div>
-
-      <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-title">Title</label>
-          <input
-            id="project-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            className={INPUT_CLASS}
-            placeholder="Short project title"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-description">Description</label>
-          <MentionTextarea
-            id="project-description"
-            value={description}
-            onValueChange={setDescription}
-            className={TEXTAREA_CLASS}
-            placeholder="Describe the project at a high level."
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-repo-root">Repo root</label>
-          <input
-            id="project-repo-root"
-            value={repoRoot}
-            onChange={(event) => setRepoRoot(event.target.value)}
-            className={INPUT_CLASS}
-            placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-summary">List summary</label>
-          <MentionTextarea
-            id="project-summary"
-            value={summary}
-            onValueChange={setSummary}
-            className={TEXTAREA_CLASS}
-            placeholder="Optional. Used in project lists and compact previews."
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-goal">Goal</label>
-          <MentionTextarea
-            id="project-goal"
-            value={goal}
-            onValueChange={setGoal}
-            className={TEXTAREA_CLASS}
-            placeholder="What should this project accomplish?"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-acceptance-criteria">Acceptance criteria (one per line)</label>
-          <MentionTextarea
-            id="project-acceptance-criteria"
-            value={acceptanceCriteria}
-            onValueChange={setAcceptanceCriteria}
-            className={TEXTAREA_CLASS}
-            placeholder="How will you know the project is done?"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta" htmlFor="project-plan-summary">Plan summary</label>
-          <MentionTextarea
-            id="project-plan-summary"
-            value={planSummary}
-            onValueChange={setPlanSummary}
-            className={TEXTAREA_CLASS}
-            placeholder="Optional. Outline the intended approach before you create milestones and tasks."
-          />
-        </div>
-
-        {error && <p className="text-[12px] text-danger">{error}</p>}
-
-        <div className="flex items-center gap-3">
-          <ToolbarButton type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create project'}</ToolbarButton>
-          <button type="button" onClick={handleCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
-            Cancel
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
@@ -242,7 +231,7 @@ function ProjectDiagnosticsPanel({
     : `npm run validate:projects -- --profile ${profile}`;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-2xl border border-border-subtle bg-base/70 px-4 py-4 shadow-sm">
       <div className="space-y-1">
         <p className="text-[13px] text-danger">
           {invalidProjects.length} {invalidProjects.length === 1 ? 'project file could not be loaded.' : 'project files could not be loaded.'}
@@ -282,7 +271,6 @@ export function ProjectsPage() {
     initialValue: false,
     shouldPersist: (value) => value,
   });
-  const [filter, setFilter] = useState<ProjectListFilter>('active');
   const { data: profileState, error: profilesError } = useApi(api.profiles);
   const requestedViewProfile = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -318,6 +306,10 @@ export function ProjectsPage() {
     loading: diagnosticsLoading,
     error: diagnosticsError,
   } = useApi(diagnosticsFetcher, effectiveViewProfile ? `project-diagnostics:${effectiveViewProfile}` : 'project-diagnostics');
+  const projectDetailApi = useApi(
+    () => selectedId ? api.projectById(selectedId, effectiveViewProfile && effectiveViewProfile !== 'all' ? { profile: effectiveViewProfile } : undefined) : Promise.resolve(null),
+    `project-workspace:${selectedId ?? 'none'}:${effectiveViewProfile ?? ''}`,
+  );
   const { projects: projectSnapshot, setProjects } = useAppData();
 
   const currentProfile = profileState?.currentProfile ?? null;
@@ -336,44 +328,21 @@ export function ProjectsPage() {
     : effectiveViewProfile
       ? `profile ${effectiveViewProfile}`
       : 'projects';
-
   const projectCounts = useMemo(() => {
     const items = projects ?? [];
     const archived = items.filter((project) => isProjectArchived(project)).length;
-    const active = items.length - archived;
-
     return {
       all: items.length,
-      active,
       archived,
     };
   }, [projects]);
-
-  const filteredProjects = useMemo(() => {
-    const items = projects ?? [];
-
-    if (filter === 'archived') {
-      return items.filter((project) => isProjectArchived(project));
-    }
-
-    if (filter === 'all') {
-      return items;
-    }
-
-    return items.filter((project) => !isProjectArchived(project));
-  }, [filter, projects]);
-
-  const buildProjectsHref = useCallback((profile: string | 'all', projectId?: string) => {
-    const params = new URLSearchParams();
-    params.set(VIEW_PROFILE_QUERY_PARAM, profile);
-    const search = `?${params.toString()}`;
-    return projectId ? `/projects/${projectId}${search}` : `/projects${search}`;
-  }, []);
+  const selectedView = useMemo(() => readProjectView(location.search), [location.search]);
 
   const refreshProjects = useCallback(async () => {
     const [nextProjects] = await Promise.all([
       projectsFetcher(),
       diagnosticsFetcher(),
+      selectedId ? projectDetailApi.refetch({ resetLoading: false }) : Promise.resolve(null),
     ]);
 
     if (nextProjects && usingCurrentProfileSnapshot) {
@@ -381,7 +350,7 @@ export function ProjectsPage() {
     }
 
     return nextProjects;
-  }, [diagnosticsFetcher, projectsFetcher, setProjects, usingCurrentProfileSnapshot]);
+  }, [diagnosticsFetcher, projectDetailApi, projectsFetcher, selectedId, setProjects, usingCurrentProfileSnapshot]);
 
   useEffect(() => {
     function handleProjectsChanged() {
@@ -392,9 +361,38 @@ export function ProjectsPage() {
     return () => window.removeEventListener(PROJECTS_CHANGED_EVENT, handleProjectsChanged);
   }, [refreshProjects]);
 
+  useEffect(() => {
+    if (!selectedId || !projects) {
+      return;
+    }
+
+    if (projects.some((project) => project.id === selectedId)) {
+      return;
+    }
+
+    navigate(effectiveViewProfile ? buildProjectsHref(effectiveViewProfile) : '/projects', { replace: true });
+  }, [effectiveViewProfile, navigate, projects, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || !projectDetailApi.data || showCreateForm) {
+      return;
+    }
+
+    const targetId = projectViewToSectionId(selectedView);
+    if (!targetId) {
+      return;
+    }
+
+    const handle = window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(handle);
+  }, [projectDetailApi.data, selectedId, selectedView, showCreateForm]);
+
   function setViewProfile(nextProfile: string | 'all') {
     setShowCreateForm(false);
-    navigate(buildProjectsHref(nextProfile));
+    navigate(buildProjectsHref(nextProfile, selectedId, selectedView === 'overview' ? null : selectedView));
   }
 
   function openCreateForm() {
@@ -432,9 +430,9 @@ export function ProjectsPage() {
 
               openCreateForm();
             }} disabled={!currentProfile && effectiveViewProfile !== 'all'}>
-              {showCreateForm ? 'Close new project' : '+ New project'}
+              {showCreateForm ? 'Close new project' : 'New project'}
             </ToolbarButton>
-            <ToolbarButton onClick={() => { void refreshProjects(); }}>↻ Refresh</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshProjects(); }}>Refresh</ToolbarButton>
           </>
         )}
       >
@@ -446,31 +444,12 @@ export function ProjectsPage() {
         />
       </PageHeader>
 
-      <div className="flex-1 px-6 py-4">
-        {profilesError && <p className="mb-4 text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
+      <div className="min-h-0 flex-1 px-6 py-4">
+        <div className="flex h-full min-h-0 flex-col gap-4">
+          {profilesError && <p className="text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
 
-        {(profileState || (projects && projects.length > 0) || filter !== 'active') && (
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            {(projectCounts.archived > 0 || filter !== 'active') && (
-              <div className="ui-segmented-control" role="group" aria-label="Project filter">
-                {PROJECT_FILTER_OPTIONS.map((option) => {
-                  const count = projectCounts[option.value];
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setFilter(option.value)}
-                      className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-                    >
-                      {option.label}
-                      <span className="ml-1 text-dim/70">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {profileState && (
+          {profileState && (
+            <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2">
                 <span className="ui-card-meta">Profile</span>
                 <select
@@ -484,120 +463,69 @@ export function ProjectsPage() {
                   ))}
                 </select>
               </label>
-            )}
+              <p className="ui-card-meta">Use the right rail to browse projects and jump between logical project sections.</p>
+            </div>
+          )}
 
-            {effectiveViewProfile === 'all' && projects && projects.length > 0 && (
-              <p className="ui-card-meta">Selecting a project jumps into that project&apos;s profile view.</p>
-            )}
-          </div>
-        )}
+          {isLoading && <LoadingState label="Loading projects…" />}
+          {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
+          {diagnosticsError && <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>}
 
-        {isLoading && <LoadingState label="Loading projects…" />}
-        {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
+          {!isLoading && !visibleError && invalidProjects.length > 0 && diagnostics && (
+            <ProjectDiagnosticsPanel profile={diagnostics.profile} invalidProjects={invalidProjects} />
+          )}
 
-        {!isLoading && !visibleError && !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 && !diagnosticsError && !showCreateForm && (
-          <EmptyState
-            title="No projects yet."
-            body={effectiveViewProfile === 'all'
-              ? 'No projects exist in any profile yet.'
-              : `Projects track ongoing work, milestones, and tasks for profile ${effectiveViewProfile ?? currentProfile ?? 'current'}.`}
-            action={<ToolbarButton onClick={openCreateForm}>Create project</ToolbarButton>}
-          />
-        )}
-
-        {!isLoading && !visibleError && (showCreateForm || diagnosticsError !== null || invalidProjects.length > 0 || (projects && projects.length > 0)) && (
-          <div className="space-y-6">
-            {showCreateForm && effectiveViewProfile && effectiveViewProfile !== 'all' && (
-              <CreateProjectPanel
-                profile={effectiveViewProfile}
-                onCreated={handleCreated}
-                onCancel={() => setShowCreateForm(false)}
-              />
-            )}
-
-            {diagnosticsError && (
-              <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>
-            )}
-
-            {diagnostics && invalidProjects.length > 0 && (
-              <ProjectDiagnosticsPanel
-                profile={diagnostics.profile}
-                invalidProjects={invalidProjects}
-              />
-            )}
-
-            {projects && projects.length > 0 && (
-              <div className="space-y-4">
-                {filteredProjects.length > 0 ? (
-                  <div className="space-y-px">
-                    {filteredProjects.map((project) => {
-                      const status = formatProjectStatus(project.status);
-                      const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
-                      const isBlocked = hasMeaningfulBlockers(project.blockers);
-                      const archived = isProjectArchived(project);
-                      const detailProfile = effectiveViewProfile === 'all' ? (project.profile ?? currentProfile ?? 'shared') : (effectiveViewProfile ?? currentProfile ?? 'shared');
-                      const isSelected = project.id === selectedId && detailProfile === effectiveViewProfile;
-                      const preview = summarizeProjectPreview(project);
-                      const dotClass = archived ? 'bg-border-default' : isBlocked ? 'bg-warning' : 'bg-teal';
-
-                      return (
-                        <ListLinkRow
-                          key={`${project.profile ?? detailProfile}:${project.id}`}
-                          to={buildProjectsHref(detailProfile, project.id)}
-                          selected={isSelected}
-                          leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
-                        >
-                          <p className="ui-card-title">{project.title}</p>
-                          <p className="ui-row-summary">{preview}</p>
-                          <div className="flex items-center gap-1.5 flex-wrap ui-card-meta">
-                            <span>{status}</span>
-                            {effectiveViewProfile === 'all' && project.profile && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>profile {project.profile}</span>
-                              </>
-                            )}
-                            {archived && project.archivedAt && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span>archived {timeAgo(project.archivedAt)}</span>
-                              </>
-                            )}
-                            <span className="opacity-40">·</span>
-                            <span className="max-w-[18rem] truncate font-mono" title={project.id}>{project.id}</span>
-                            <span className="opacity-40">·</span>
-                            <span>{timeAgo(project.updatedAt)}</span>
-                            {!archived && isBlocked && blockers[0] && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span className="text-warning">{blockers[0]}</span>
-                              </>
-                            )}
-                          </div>
-                        </ListLinkRow>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <EmptyState
-                    title={filter === 'archived' ? 'No archived projects yet.' : filter === 'active' ? 'No active projects.' : 'No projects match this filter.'}
-                    body={filter === 'archived'
-                      ? 'Archive completed or cancelled projects to move them out of the active list without deleting the history.'
-                      : filter === 'active'
-                        ? 'All current projects are archived. Switch to the archived filter to browse finished work.'
-                        : 'Try another project filter.'}
-                    action={filter === 'active' && projectCounts.archived > 0
-                      ? <ToolbarButton onClick={() => setFilter('archived')}>View archived projects</ToolbarButton>
-                      : filter !== 'all'
-                        ? <ToolbarButton onClick={() => setFilter('all')}>Show all projects</ToolbarButton>
-                        : undefined}
-                  />
-                )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            {showCreateForm && effectiveViewProfile && effectiveViewProfile !== 'all' ? (
+              <div className="h-full overflow-y-auto">
+                <CreateProjectPanel
+                  profile={effectiveViewProfile}
+                  onCreated={handleCreated}
+                  onCancel={() => setShowCreateForm(false)}
+                />
               </div>
+            ) : selectedId ? (
+              projectDetailApi.loading && !projectDetailApi.data ? (
+                <LoadingState label="Loading project…" className="h-full justify-center" />
+              ) : projectDetailApi.error || !projectDetailApi.data ? (
+                <ErrorState message={`Failed to load project: ${projectDetailApi.error ?? 'Project not found.'}`} />
+              ) : (
+                <div className="h-full overflow-y-auto pr-1">
+                  <ProjectDetailPanel
+                    project={projectDetailApi.data}
+                    activeProfile={profileState?.currentProfile}
+                    onChanged={() => {
+                      void projectDetailApi.refetch({ resetLoading: false });
+                      void refreshProjects();
+                      emitProjectsChanged();
+                    }}
+                    onDeleted={() => {
+                      navigate(effectiveViewProfile ? buildProjectsHref(effectiveViewProfile) : '/projects');
+                      emitProjectsChanged();
+                    }}
+                  />
+                </div>
+              )
+            ) : !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 ? (
+              <EmptyState
+                className="h-full"
+                title="No projects yet"
+                body={effectiveViewProfile === 'all'
+                  ? 'No projects exist in any profile yet.'
+                  : `Projects track ongoing work, milestones, and tasks for profile ${effectiveViewProfile ?? currentProfile ?? 'current'}.`}
+                action={<ToolbarButton onClick={openCreateForm}>Create project</ToolbarButton>}
+              />
+            ) : (
+              <EmptyState
+                className="h-full"
+                title="Select a project"
+                body="Use the right rail to browse projects and open the selected project in the main workspace."
+              />
             )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
+

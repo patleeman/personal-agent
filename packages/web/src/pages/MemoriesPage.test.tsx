@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoriesPage } from './MemoriesPage.js';
 import { useApi } from '../hooks';
+import { ThemeProvider } from '../theme';
 
 vi.mock('../hooks', () => ({
   useApi: vi.fn(),
@@ -30,67 +31,96 @@ describe('MemoriesPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders notes with clearer overview copy and selected note context', () => {
-    vi.mocked(useApi).mockReturnValue({
-      data: {
-        memories: [
-          {
-            id: 'memory-index',
-            title: 'Memory index',
-            summary: 'Top-level knowledge hub.',
-            tags: ['notes', 'index', 'structure'],
-            path: '/tmp/memory-index/INDEX.md',
-            type: 'structure',
-            status: 'active',
-            role: 'structure',
-            area: 'notes',
-            related: ['personal-agent'],
-            referenceCount: 2,
-            updated: '2026-03-17T12:00:00.000Z',
+  function renderPage(path: string) {
+    return renderToString(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/notes" element={<MemoriesPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+  }
+
+  it('renders the selected note in the main workspace instead of the browse list', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'note-workspace:memory-index') {
+        return {
+          data: {
+            memory: {
+              id: 'memory-index',
+              title: 'Memory index',
+              summary: 'Top-level knowledge hub.',
+              tags: ['notes', 'index', 'structure'],
+              path: '/tmp/memory-index/INDEX.md',
+              type: 'structure',
+              status: 'active',
+              role: 'structure',
+              area: 'notes',
+              related: ['personal-agent'],
+              referenceCount: 2,
+              updated: '2026-03-17T12:00:00.000Z',
+            },
+            content: '# Memory index\n\nTop-level knowledge hub.',
+            references: [{
+              title: 'Web UI preferences',
+              summary: 'Durable UI notes.',
+              tags: ['personal-agent'],
+              path: '/tmp/memory-index/references/prefs.md',
+              relativePath: 'references/prefs.md',
+            }],
+            links: {
+              outgoing: [],
+              incoming: [],
+              unresolved: [],
+            },
           },
-          {
-            id: 'writing-style',
-            title: 'Writing style',
-            summary: 'Keep responses concise and direct.',
-            tags: ['communication'],
-            path: '/tmp/writing-style/INDEX.md',
-            area: 'communication',
-            parent: 'memory-index',
-            referenceCount: 1,
-            updated: '2026-03-15T08:00:00.000Z',
-          },
-        ],
-        memoryQueue: [],
-      },
-      loading: false,
-      refreshing: false,
-      error: null,
-      refetch: vi.fn(),
-      replaceData: vi.fn(),
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: {
+          memories: [
+            {
+              id: 'memory-index',
+              title: 'Memory index',
+              summary: 'Top-level knowledge hub.',
+              tags: ['notes', 'index', 'structure'],
+              path: '/tmp/memory-index/INDEX.md',
+              type: 'structure',
+              status: 'active',
+              role: 'structure',
+              area: 'notes',
+              related: ['personal-agent'],
+              referenceCount: 2,
+              updated: '2026-03-17T12:00:00.000Z',
+            },
+          ],
+          memoryQueue: [],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+        replaceData: vi.fn(),
+      };
     });
 
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/notes?note=memory-index']}>
-        <Routes>
-          <Route path="/notes" element={<MemoriesPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderPage('/notes?note=memory-index');
 
-    expect(html).toContain('Search notes');
-    expect(html).toContain('New note');
-    expect(html).toContain('Selected @memory-index');
     expect(html).toContain('Memory index');
-    expect(html).toContain('Writing style');
-    expect(html).toContain('Structure note');
-    expect(html).toContain('parent @memory-index');
-    expect(html).toContain('2 references');
-    expect(html).toContain('1 related node');
-    expect(html).toContain('href="/notes?note=memory-index"');
-    expect(html).toContain('ui-list-row-selected');
-    expect(html).not.toContain('What notes are');
-    expect(html).not.toContain('About this note');
-    expect(html).not.toContain('Browse memories');
+    expect(html).toContain('Top-level knowledge hub.');
+    expect(html).toContain('Main');
+    expect(html).toContain('References (1)');
+    expect(html).toContain('Links');
+    expect(html).toContain('Chat about note');
+    expect(html).toContain('memory-index');
+    expect(html).not.toContain('Search notes');
   });
 
   it('shows active distillation work in the memory queue', () => {
@@ -113,13 +143,7 @@ describe('MemoriesPage', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/notes']}>
-        <Routes>
-          <Route path="/notes" element={<MemoriesPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderPage('/notes');
 
     expect(html).toContain('Note work queue');
     expect(html).toContain('Refactor memory pipeline');
@@ -149,13 +173,7 @@ describe('MemoriesPage', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/notes']}>
-        <Routes>
-          <Route path="/notes" element={<MemoriesPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderPage('/notes');
 
     expect(html).toContain('Retry');
     expect(html).toContain('Retry this node distillation');
@@ -164,41 +182,7 @@ describe('MemoriesPage', () => {
     expect(html).not.toContain('Open a recovery conversation for this node distillation');
   });
 
-  it('keeps state-only queue items linked to the conversation when no durable run exists', () => {
-    vi.mocked(useApi).mockReturnValue({
-      data: {
-        memories: [],
-        memoryQueue: [{
-          conversationId: 'conv-123',
-          conversationTitle: 'Refactor memory pipeline',
-          runId: 'state:conv-123',
-          status: 'failed',
-          createdAt: '2026-03-17T12:00:00.000Z',
-          updatedAt: '2026-03-17T12:05:00.000Z',
-        }],
-      },
-      loading: false,
-      refreshing: false,
-      error: null,
-      refetch: vi.fn(),
-      replaceData: vi.fn(),
-    });
-
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/notes']}>
-        <Routes>
-          <Route path="/notes" element={<MemoriesPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('/conversations/conv-123');
-    expect(html).not.toContain('/conversations/conv-123?run=state%3Aconv-123');
-    expect(html).not.toContain('Retry');
-    expect(html).not.toContain('Recover');
-  });
-
-  it('shows the empty state when there are no note nodes', () => {
+  it('shows the empty workspace state when there are no notes', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -211,16 +195,10 @@ describe('MemoriesPage', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/notes']}>
-        <Routes>
-          <Route path="/notes" element={<MemoriesPage />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    const html = renderPage('/notes');
 
-    expect(html).toContain('No notes yet.');
-    expect(html).toContain('Create one yourself or distill a conversation into a durable note.');
+    expect(html).toContain('No notes yet');
+    expect(html).toContain('The right rail is now for browsing notes and their resources.');
     expect(html).toContain('Create note');
   });
 });
