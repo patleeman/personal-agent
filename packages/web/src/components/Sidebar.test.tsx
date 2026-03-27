@@ -3,7 +3,11 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
-import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../localSettings.js';
+import {
+  buildSidebarNavSectionStorageKey,
+  OPEN_SESSION_IDS_STORAGE_KEY,
+  PINNED_SESSION_IDS_STORAGE_KEY,
+} from '../localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
@@ -311,6 +315,36 @@ describe('Sidebar', () => {
     expect(html).toContain('Files');
     expect(html).toContain('Changes');
     expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
+  });
+
+  it('uses the persisted collapsed state for active nav groups', () => {
+    storage.setItem(buildSidebarNavSectionStorageKey('conversations'), JSON.stringify(false));
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations?filter=attention']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).not.toContain('href="/conversations?filter=attention"');
+    expect(html).not.toContain('href="/conversations?filter=archived"');
   });
 
   it('nests child conversations under their parent conversation when run lineage is available', () => {

@@ -26,6 +26,7 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
+import { buildSidebarNavSectionStorageKey } from '../localSettings';
 import { markConversationOpenStart } from '../perfDiagnostics';
 import { buildNestedSessionRows } from '../sessionLineage';
 import { summarizeActiveRuns } from '../runPresentation';
@@ -212,6 +213,74 @@ function parseConversationFilter(value: string | null): 'open' | 'attention' | '
     default:
       return 'open';
   }
+}
+
+function readStoredSidebarGroupExpanded(storageKey: string): boolean | null {
+  try {
+    const storage = typeof globalThis !== 'undefined' && 'localStorage' in globalThis
+      ? globalThis.localStorage
+      : null;
+    const raw = storage?.getItem(storageKey);
+    if (raw === null || raw === undefined) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === 'boolean' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSidebarGroupExpanded(storageKey: string, expanded: boolean): void {
+  try {
+    const storage = typeof globalThis !== 'undefined' && 'localStorage' in globalThis
+      ? globalThis.localStorage
+      : null;
+    storage?.setItem(storageKey, JSON.stringify(expanded));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function useSidebarNavGroupExpansion(storageKey: string, defaultExpanded: boolean) {
+  const [state, setState] = useState(() => {
+    const storedExpanded = readStoredSidebarGroupExpanded(storageKey);
+    return {
+      expanded: storedExpanded ?? defaultExpanded,
+      hasStoredPreference: storedExpanded !== null,
+    };
+  });
+
+  useEffect(() => {
+    if (state.hasStoredPreference) {
+      return;
+    }
+
+    setState((current) => {
+      if (current.hasStoredPreference || current.expanded === defaultExpanded) {
+        return current;
+      }
+
+      return {
+        ...current,
+        expanded: defaultExpanded,
+      };
+    });
+  }, [defaultExpanded, state.hasStoredPreference]);
+
+  const toggle = useCallback(() => {
+    setState((current) => {
+      const expanded = !current.expanded;
+      persistSidebarGroupExpanded(storageKey, expanded);
+      return {
+        expanded,
+        hasStoredPreference: true,
+      };
+    });
+  }, [storageKey]);
+
+  return [state.expanded, toggle] as const;
 }
 
 // ── Conversation shelf rows ───────────────────────────────────────────────
@@ -474,10 +543,22 @@ export function Sidebar() {
   const capabilitiesGroupActive = capabilitiesPresetsActive
     || capabilitiesScheduledActive
     || capabilitiesToolsActive;
-  const [conversationsExpanded, setConversationsExpanded] = useState(conversationsGroupActive);
-  const [workspaceExpanded, setWorkspaceExpanded] = useState(workspaceGroupActive);
-  const [knowledgeExpanded, setKnowledgeExpanded] = useState(knowledgeGroupActive);
-  const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(capabilitiesGroupActive);
+  const [conversationsExpanded, toggleConversationsExpanded] = useSidebarNavGroupExpansion(
+    buildSidebarNavSectionStorageKey('conversations'),
+    conversationsGroupActive,
+  );
+  const [workspaceExpanded, toggleWorkspaceExpanded] = useSidebarNavGroupExpansion(
+    buildSidebarNavSectionStorageKey('workspace'),
+    workspaceGroupActive,
+  );
+  const [knowledgeExpanded, toggleKnowledgeExpanded] = useSidebarNavGroupExpansion(
+    buildSidebarNavSectionStorageKey('knowledge'),
+    knowledgeGroupActive,
+  );
+  const [capabilitiesExpanded, toggleCapabilitiesExpanded] = useSidebarNavGroupExpansion(
+    buildSidebarNavSectionStorageKey('capabilities'),
+    capabilitiesGroupActive,
+  );
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -611,22 +692,6 @@ export function Sidebar() {
       // Ignore optimistic attention-clear failures; SSE or manual refresh can recover.
     });
   }, [activeConversationId, allSessions]);
-
-  useEffect(() => {
-    setConversationsExpanded(conversationsGroupActive);
-  }, [conversationsGroupActive]);
-
-  useEffect(() => {
-    setWorkspaceExpanded(workspaceGroupActive);
-  }, [workspaceGroupActive]);
-
-  useEffect(() => {
-    setKnowledgeExpanded(knowledgeGroupActive);
-  }, [knowledgeGroupActive]);
-
-  useEffect(() => {
-    setCapabilitiesExpanded(capabilitiesGroupActive);
-  }, [capabilitiesGroupActive]);
 
   function clearDragState() {
     setDraggingSessionId(null);
@@ -876,7 +941,7 @@ export function Sidebar() {
           title="Browse open, review, archived, or all conversations."
           active={conversationsGroupActive}
           expanded={conversationsExpanded}
-          onToggle={() => setConversationsExpanded((current) => !current)}
+          onToggle={toggleConversationsExpanded}
         >
           <SidebarSubNavItem to="/conversations" label="Open" active={conversationsOpenActive} />
           <SidebarSubNavItem to="/conversations?filter=attention" label="Needs review" active={conversationsAttentionActive} />
@@ -889,7 +954,7 @@ export function Sidebar() {
           title="Browse files or review git changes in the current workspace."
           active={workspaceGroupActive}
           expanded={workspaceExpanded}
-          onToggle={() => setWorkspaceExpanded((current) => !current)}
+          onToggle={toggleWorkspaceExpanded}
         >
           <SidebarSubNavItem to="/workspace/files" label="Files" active={workspaceFilesActive} />
           <SidebarSubNavItem to="/workspace/changes" label="Changes" active={workspaceChangesActive} />
@@ -900,7 +965,7 @@ export function Sidebar() {
           title="Browse durable context sources."
           active={knowledgeGroupActive}
           expanded={knowledgeExpanded}
-          onToggle={() => setKnowledgeExpanded((current) => !current)}
+          onToggle={toggleKnowledgeExpanded}
         >
           <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
           <SidebarSubNavItem to="/notes" label="Notes" active={knowledgeMemoriesActive} />
@@ -913,7 +978,7 @@ export function Sidebar() {
           title="Browse automation surfaces and runtime tools."
           active={capabilitiesGroupActive}
           expanded={capabilitiesExpanded}
-          onToggle={() => setCapabilitiesExpanded((current) => !current)}
+          onToggle={toggleCapabilitiesExpanded}
         >
           <SidebarSubNavItem to="/plans" label="Todo Presets" active={capabilitiesPresetsActive} />
           <SidebarSubNavItem to="/scheduled" label="Scheduled Tasks" active={capabilitiesScheduledActive} />

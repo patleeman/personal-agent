@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildComposerHistoryStorageKey } from './composerHistory';
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
+  buildSidebarNavSectionStorageKey,
   CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   resetStoredConversationUiState,
@@ -56,8 +57,10 @@ describe('localSettings', () => {
     expect(localStorage.getItem('pa:keep-me')).toBe('yes');
   });
 
-  it('clears the saved sidebar width and all per-page rail widths', () => {
+  it('clears the saved sidebar width, nav sections, and all per-page rail widths', () => {
+    const conversationsSectionKey = buildSidebarNavSectionStorageKey('conversations');
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, '224');
+    localStorage.setItem(conversationsSectionKey, JSON.stringify(false));
     localStorage.setItem('pa:rail-width:skills', '460');
     localStorage.setItem('pa:rail-width:instructions', '520');
     localStorage.setItem('pa:rail-width:knowledge', '480');
@@ -66,6 +69,7 @@ describe('localSettings', () => {
     resetStoredLayoutPreferences();
 
     expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(conversationsSectionKey)).toBeNull();
     expect(localStorage.getItem('pa:rail-width:skills')).toBeNull();
     expect(localStorage.getItem('pa:rail-width:instructions')).toBeNull();
     expect(localStorage.getItem('pa:rail-width:knowledge')).toBeNull();
