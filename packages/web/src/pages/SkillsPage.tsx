@@ -5,6 +5,7 @@ import { useApi } from '../hooks';
 import { getKnowledgeSkillName } from '../knowledgeSelection';
 import type { SkillDetail } from '../types';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
+import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import {
   EmptyState,
   ErrorState,
@@ -30,7 +31,10 @@ import {
   type SkillWorkspaceView,
   sortSkills,
 } from '../skillWorkspaceState';
+import { buildRailWidthStorageKey } from '../layoutSizing';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+
+const SKILLS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('skills-browser');
 
 function SkillReferencesList({
   detail,
@@ -406,10 +410,14 @@ export function SkillsPage() {
   }, [selectedSkillName]);
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="w-[20rem] shrink-0 border-r border-border-subtle bg-surface/35">
-        <SkillsBrowserRail />
-      </div>
+    <BrowserSplitLayout
+      storageKey={SKILLS_BROWSER_WIDTH_STORAGE_KEY}
+      initialWidth={320}
+      minWidth={260}
+      maxWidth={440}
+      browser={<SkillsBrowserRail />}
+      browserLabel="Skills browser"
+    >
       <div className="min-w-0 flex-1 px-6 py-4">
         <div className="flex items-center justify-end pb-4">
           <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); if (selectedSkillName) { void skillDetailApi.refetch({ resetLoading: false }); } }} disabled={refreshing || skillDetailApi.refreshing}>
@@ -456,7 +464,7 @@ export function SkillsPage() {
           </div>
         )}
       </div>
-    </div>
+    </BrowserSplitLayout>
   );
 }
 
