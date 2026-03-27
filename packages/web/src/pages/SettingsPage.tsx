@@ -604,7 +604,7 @@ export function SettingsPage() {
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="max-w-5xl space-y-8 pb-6">
-          <section className="space-y-4 rounded-2xl border border-border-subtle bg-base/60 px-4 py-4">
+          <section className="space-y-4 border-b border-border-subtle pb-8">
             <SectionLabel label="Control center" />
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Low-frequency tools</h2>
@@ -612,16 +612,25 @@ export function SettingsPage() {
                 System status, todo presets, tools, and instruction sources live here so the main sidebar can stay focused on day-to-day work.
               </p>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-x-8 gap-y-1 lg:grid-cols-2">
               {[
                 ['/system', 'System', 'Daemon state, sync health, and durable runs.'],
                 ['/plans', 'Capabilities', 'Todo presets and reusable automation patterns.'],
                 ['/tools', 'Tools', 'Available tools, CLIs, MCP servers, and package sources.'],
                 ['/instructions', 'Instructions', 'Loaded AGENTS and other durable instruction sources.'],
               ].map(([href, label, summary]) => (
-                <Link key={href} to={href} className="rounded-xl border border-border-subtle bg-surface/50 px-4 py-3 transition-colors hover:bg-surface">
-                  <p className="text-[13px] font-medium text-primary">{label}</p>
-                  <p className="mt-1 text-[12px] leading-5 text-secondary">{summary}</p>
+                <Link
+                  key={href}
+                  to={href}
+                  className="group -mx-2 rounded-lg px-2 py-2.5 transition-colors hover:bg-surface/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-[13px] font-medium text-primary">{label}</p>
+                      <p className="max-w-md text-[12px] leading-relaxed text-secondary">{summary}</p>
+                    </div>
+                    <span aria-hidden="true" className="mt-0.5 shrink-0 text-[12px] text-dim transition-colors group-hover:text-primary">→</span>
+                  </div>
                 </Link>
               ))}
             </div>
