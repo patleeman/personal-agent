@@ -46,6 +46,34 @@ const SETTINGS_PAGE_ITEMS = [
   },
 ] as const;
 
+const SETTINGS_CONTROL_CENTER_ITEMS = [
+  {
+    href: '/system',
+    label: 'System',
+    summary: 'Daemon state, sync health, and durable runs.',
+  },
+  {
+    href: '/scheduled',
+    label: 'Scheduled tasks',
+    summary: 'Browse cron jobs, one-time tasks, and unattended automation.',
+  },
+  {
+    href: '/plans',
+    label: 'Capabilities',
+    summary: 'Todo presets and reusable automation patterns.',
+  },
+  {
+    href: '/tools',
+    label: 'Tools',
+    summary: 'Available tools, CLIs, MCP servers, and package sources.',
+  },
+  {
+    href: '/instructions',
+    label: 'Instructions',
+    summary: 'Loaded AGENTS and other durable instruction sources.',
+  },
+] as const;
+
 type ModelOption = ModelState['models'][number];
 
 const EMPTY_CODEX_PLAN_USAGE: CodexPlanUsageState = {
@@ -173,11 +201,12 @@ function SettingsNavigationRail({ activePageId }: { activePageId: SettingsPageId
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-1 border-b border-border-subtle px-4 py-4">
         <p className="ui-card-title">Settings</p>
-        <p className="ui-card-meta">Navigate between settings pages.</p>
+        <p className="ui-card-meta">Navigate between settings pages and related control-center views.</p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-6">
         <div className="space-y-px">
+          <SectionLabel label="Preferences" className="px-2 pb-1" />
           {SETTINGS_PAGE_ITEMS.map((page) => (
             <ListLinkRow
               key={page.id}
@@ -186,6 +215,20 @@ function SettingsNavigationRail({ activePageId }: { activePageId: SettingsPageId
             >
               <p className="ui-row-title">{page.label}</p>
               <p className="ui-row-summary">{page.summary}</p>
+            </ListLinkRow>
+          ))}
+        </div>
+
+        <div className="space-y-px border-t border-border-subtle pt-4">
+          <SectionLabel label="Control center" className="px-2 pb-1" />
+          {SETTINGS_CONTROL_CENTER_ITEMS.map((item) => (
+            <ListLinkRow
+              key={item.href}
+              to={item.href}
+              trailing={<span aria-hidden="true" className="mt-0.5 text-[12px] text-dim">→</span>}
+            >
+              <p className="ui-row-title">{item.label}</p>
+              <p className="ui-row-summary">{item.summary}</p>
             </ListLinkRow>
           ))}
         </div>
