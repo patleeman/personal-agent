@@ -14,7 +14,7 @@ import {
   ToolbarButton,
 } from '../components/ui';
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
-import { NotesBrowserRail } from '../components/NotesBrowserRail';
+import { NotesBrowserRailContent } from '../components/NotesBrowserRail';
 import {
   MarkdownDocumentSurface,
   NodePrimaryToolbar,
@@ -566,13 +566,15 @@ export function MemoriesPage() {
   const {
     data,
     loading,
+    refreshing,
     error,
     refetch,
     replaceData,
   } = useApi(api.notes);
+  const queueState = useApi(api.noteWorkQueue);
 
   const memories = data?.memories ?? [];
-  const memoryQueue = data?.memoryQueue ?? [];
+  const memoryQueue = queueState.data?.memoryQueue ?? data?.memoryQueue ?? [];
   const selectedMemoryId = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
@@ -632,7 +634,7 @@ export function MemoriesPage() {
       initialWidth={320}
       minWidth={260}
       maxWidth={440}
-      browser={<NotesBrowserRail />}
+      browser={<NotesBrowserRailContent notesState={{ data, loading, refreshing, error, refetch }} queueState={queueState} />}
       browserLabel="Notes browser"
     >
       <div className="min-w-0 flex-1 px-6 py-4">
@@ -666,6 +668,7 @@ export function MemoriesPage() {
                   onRefetched={() => {
                     void detailApi.refetch({ resetLoading: false });
                     void refetch({ resetLoading: false });
+                    void queueState.refetch({ resetLoading: false });
                   }}
                 />
               )

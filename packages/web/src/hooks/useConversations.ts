@@ -25,7 +25,6 @@ import {
   readOpenSessionIds,
   readPinnedSessionIds,
   replaceConversationLayout,
-  syncOpenConversationTabsToServer,
   type ConversationLayout,
   type ConversationShelf,
   type OpenConversationDropPosition,
@@ -83,7 +82,6 @@ export function useConversations() {
     const localLayout = readConversationLayout();
 
     if (localLayout.sessionIds.length > 0 || localLayout.pinnedSessionIds.length > 0 || localLayout.archivedSessionIds.length > 0) {
-      syncOpenConversationTabsToServer(localLayout.sessionIds, localLayout.pinnedSessionIds, localLayout.archivedSessionIds);
       return;
     }
 

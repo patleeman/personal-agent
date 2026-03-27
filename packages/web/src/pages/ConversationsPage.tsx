@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
@@ -17,7 +17,7 @@ import { sessionNeedsAttention } from '../sessionIndicators';
 import type { DurableRunRecord, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
-import { EmptyState, ListButtonRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
+import { EmptyState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, cx, type PillTone } from '../components/ui';
 
 type ConversationFilter = 'open' | 'attention' | 'archived' | 'all';
 type ConversationSection = 'pinned' | 'open' | 'archived';
@@ -39,7 +39,7 @@ type ConversationWorkItem = {
 };
 
 const INPUT_CLASS = 'w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
-const INLINE_ACTION_CLASS = 'text-[11px] font-mono text-dim transition-colors hover:text-accent disabled:opacity-40';
+const INLINE_ACTION_CLASS = 'ui-toolbar-button min-h-0 px-2 py-1 text-[11px] font-mono leading-none disabled:opacity-40';
 
 function normalizeQuery(query: string): string {
   return query.trim().toLowerCase();
@@ -198,6 +198,32 @@ function sectionSummary(section: ConversationSection, count: number): string {
     default:
       return `${count}`;
   }
+}
+
+function ListActionRow({
+  onClick,
+  leading,
+  actions,
+  children,
+}: {
+  onClick: () => void;
+  leading: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx('group', 'ui-list-row', 'ui-list-row-hover')}>
+      {leading}
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex min-w-0 flex-1 flex-col items-start self-stretch rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
+      >
+        {children}
+      </button>
+      {actions ? <div className="mt-0.5 flex shrink-0 items-center gap-3 self-start">{actions}</div> : null}
+    </div>
+  );
 }
 
 function runStatusTone(run: DurableRunRecord): PillTone {
@@ -386,20 +412,17 @@ function SectionBlock({
           {sessions.map((session) => {
             const archived = section === 'archived';
             return (
-              <ListButtonRow
+              <ListActionRow
                 key={session.id}
                 onClick={() => onOpen(session.id, archived ? { restore: true } : undefined)}
                 leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sectionDotClass(session, section)}`} />}
-                trailing={(
-                  <div className="mt-0.5 flex shrink-0 items-center gap-3">
+                actions={(
+                  <>
                     {sessionNeedsAttention(session) && (
                       <button
                         type="button"
                         className={INLINE_ACTION_CLASS}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onMarkRead(session.id);
-                        }}
+                        onClick={() => onMarkRead(session.id)}
                         disabled={busyId === session.id}
                         title="Mark as reviewed"
                       >
@@ -410,10 +433,7 @@ function SectionBlock({
                       <button
                         type="button"
                         className={INLINE_ACTION_CLASS}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpen(session.id, { restore: true });
-                        }}
+                        onClick={() => onOpen(session.id, { restore: true })}
                         title="Restore conversation"
                       >
                         restore
@@ -422,10 +442,7 @@ function SectionBlock({
                       <button
                         type="button"
                         className={INLINE_ACTION_CLASS}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onUnpin(session.id);
-                        }}
+                        onClick={() => onUnpin(session.id)}
                         title="Move back to open conversations"
                       >
                         unpin
@@ -434,10 +451,7 @@ function SectionBlock({
                       <button
                         type="button"
                         className={INLINE_ACTION_CLASS}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onPin(session.id);
-                        }}
+                        onClick={() => onPin(session.id)}
                         title="Pin conversation"
                       >
                         pin
@@ -447,22 +461,19 @@ function SectionBlock({
                       <button
                         type="button"
                         className={INLINE_ACTION_CLASS}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onClose(session.id);
-                        }}
+                        onClick={() => onClose(session.id)}
                         title="Archive conversation from the open workspace"
                       >
                         close
                       </button>
                     )}
-                  </div>
+                  </>
                 )}
               >
                 <p className="ui-row-title">{session.title}</p>
                 <p className="ui-row-summary">{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</p>
                 <p className="ui-row-meta break-words">{sectionMeta(session)}</p>
-              </ListButtonRow>
+              </ListActionRow>
             );
           })}
         </div>
@@ -505,20 +516,17 @@ function ConversationWorkBlock({
 
       <div className="space-y-px">
         {items.map((item) => (
-          <ListButtonRow
+          <ListActionRow
             key={item.key}
             onClick={() => onOpen(item)}
             leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone === 'danger' ? 'bg-danger' : item.tone === 'warning' ? 'bg-warning' : item.tone === 'accent' ? 'bg-accent animate-pulse' : item.tone === 'success' ? 'bg-success' : 'bg-border-default'}`} />}
-            trailing={(
-              <div className="mt-0.5 flex shrink-0 items-center gap-3">
+            actions={(
+              <>
                 {item.needsReview && item.runId && (
                   <button
                     type="button"
                     className={INLINE_ACTION_CLASS}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onMarkRead(item.runId as string);
-                    }}
+                    onClick={() => onMarkRead(item.runId as string)}
                     disabled={busyRunId === item.runId}
                     title="Mark run as reviewed"
                   >
@@ -526,7 +534,7 @@ function ConversationWorkBlock({
                   </button>
                 )}
                 <span className="text-[11px] font-mono text-dim transition-colors group-hover:text-secondary">open</span>
-              </div>
+              </>
             )}
           >
             <div className="flex flex-wrap items-center gap-2">
@@ -535,7 +543,7 @@ function ConversationWorkBlock({
             </div>
             {item.summary && <p className="ui-row-summary">{item.summary}</p>}
             <p className="ui-row-meta break-words">{item.meta}</p>
-          </ListButtonRow>
+          </ListActionRow>
         ))}
       </div>
     </section>
@@ -564,6 +572,27 @@ export function ConversationsPage() {
   const [query, setQuery] = useState('');
   const [busyConversationId, setBusyConversationId] = useState<string | null>(null);
   const [busyRunId, setBusyRunId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (runs !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.runs()
+      .then((nextRuns) => {
+        if (!cancelled) {
+          setRuns(nextRuns);
+        }
+      })
+      .catch(() => {
+        // Leave the page-level runs section empty until a later refresh or SSE update.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runs, setRuns]);
 
   const archivedConversationIdSet = useMemo(
     () => new Set(archivedConversationIds),

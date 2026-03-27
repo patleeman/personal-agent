@@ -1392,7 +1392,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
-  const { tasks, sessions, runs, projects: projectSnapshot } = useAppData();
+  const { tasks, sessions, runs, projects: projectSnapshot, setRuns } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
   const [conversationProjects, setConversationProjects] = useState<ConversationProjectLinks | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
@@ -1419,6 +1419,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
   const allProjects = referenceableProjects ?? projectSnapshot ?? [];
+  useEffect(() => {
+    if (runs !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.runs()
+      .then((nextRuns) => {
+        if (!cancelled) {
+          setRuns(nextRuns);
+        }
+      })
+      .catch(() => {
+        // Leave the connected-runs section in loading state until the next retry.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [runs, setRuns]);
+
   const runRecordsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
