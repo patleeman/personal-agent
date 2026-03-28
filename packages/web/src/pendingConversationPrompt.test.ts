@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from './reloadState';
+import { buildConversationComposerStorageKey } from './forking';
 import {
   buildPendingConversationPromptStorageKey,
   clearPendingConversationPrompt,
@@ -66,6 +67,7 @@ describe('pendingConversationPrompt helpers', () => {
 
   it('consumes pending prompts at most once', () => {
     const storage = createStorage();
+    const composerKey = buildConversationComposerStorageKey('session-123');
 
     persistPendingConversationPrompt('session-123', {
       text: 'hello world',
@@ -73,6 +75,7 @@ describe('pendingConversationPrompt helpers', () => {
       images: [],
       attachmentRefs: [],
     }, storage);
+    storage.setItem(composerKey, JSON.stringify('hello world'));
 
     expect(consumePendingConversationPrompt('session-123', storage)).toEqual({
       text: 'hello world',
@@ -80,6 +83,7 @@ describe('pendingConversationPrompt helpers', () => {
       images: [],
       attachmentRefs: [],
     });
+    expect(storage.getItem(composerKey)).toBeNull();
     expect(consumePendingConversationPrompt('session-123', storage)).toBeNull();
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });

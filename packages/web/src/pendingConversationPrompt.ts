@@ -1,3 +1,4 @@
+import { clearConversationComposerDraft } from './forking';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
 import type { PromptAttachmentRefInput, PromptImageInput } from './types';
 
@@ -115,6 +116,7 @@ export function consumePendingConversationPrompt(
   }
 
   clearPendingConversationPrompt(sessionId, storage);
+  clearConversationComposerDraft(sessionId, storage);
   return prompt;
 }
 
