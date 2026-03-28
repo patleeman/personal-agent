@@ -454,6 +454,29 @@ function hasQueuedOrActiveHiddenTurn(entry: Pick<LiveEntry, 'pendingHiddenTurnCu
   return Boolean(entry.activeHiddenTurnCustomType) || pendingHiddenTurnCustomTypes.length > 0;
 }
 
+export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    return false;
+  }
+
+  if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
+    return false;
+  }
+
+  const steering = typeof entry.session.getSteeringMessages === 'function'
+    ? entry.session.getSteeringMessages()
+    : [];
+  if (steering.length > 0) {
+    return false;
+  }
+
+  const followUp = typeof entry.session.getFollowUpMessages === 'function'
+    ? entry.session.getFollowUpMessages()
+    : [];
+  return followUp.length === 0;
+}
+
 function formatQueuedPromptPreviewText(text: string, imageCount: number): string {
   const normalizedText = text.trim();
   if (normalizedText && imageCount > 0) {
