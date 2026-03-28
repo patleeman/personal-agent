@@ -2718,6 +2718,10 @@ export const ChatView = memo(function ChatView({
       return;
     }
 
+    const fallbackIntervalId = window.setInterval(() => {
+      syncReplyMenuFromSelection();
+    }, 180);
+
     document.addEventListener('selectionchange', scheduleReplyMenuSync);
     document.addEventListener('mouseup', scheduleReplyMenuSync);
     document.addEventListener('pointerup', scheduleReplyMenuSync);
@@ -2725,6 +2729,7 @@ export const ChatView = memo(function ChatView({
     document.addEventListener('touchend', scheduleReplyMenuSync);
 
     return () => {
+      window.clearInterval(fallbackIntervalId);
       document.removeEventListener('selectionchange', scheduleReplyMenuSync);
       document.removeEventListener('mouseup', scheduleReplyMenuSync);
       document.removeEventListener('pointerup', scheduleReplyMenuSync);
@@ -2733,7 +2738,7 @@ export const ChatView = memo(function ChatView({
       clearScheduledReplyMenuSync();
       cancelReplyMenuClear();
     };
-  }, [cancelReplyMenuClear, clearScheduledReplyMenuSync, onReplyToSelection, scheduleReplyMenuSync]);
+  }, [cancelReplyMenuClear, clearScheduledReplyMenuSync, onReplyToSelection, scheduleReplyMenuSync, syncReplyMenuFromSelection]);
 
   useEffect(() => {
     if (!replyMenu || typeof window === 'undefined' || typeof document === 'undefined') {
