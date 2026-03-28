@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getConversationBottomScrollTop,
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
@@ -23,6 +24,18 @@ describe('conversation scroll helpers', () => {
       isLiveSession: false,
       hasLiveSnapshot: false,
     })).toBe('conv-123:settled');
+  });
+
+  it('returns the maximum scrollTop needed to reach the bottom of the conversation', () => {
+    expect(getConversationBottomScrollTop({
+      scrollHeight: 1200,
+      clientHeight: 400,
+    })).toBe(800);
+
+    expect(getConversationBottomScrollTop({
+      scrollHeight: 320,
+      clientHeight: 400,
+    })).toBe(0);
   });
 
   it('treats the viewport as pinned when it is within the bottom threshold', () => {

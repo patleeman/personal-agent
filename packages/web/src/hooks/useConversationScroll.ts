@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
+  getConversationBottomScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
@@ -8,6 +9,7 @@ import type { MessageBlock } from '../types';
 
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
+const SMOOTH_SCROLL_SETTLE_DELAY_MS = 360;
 
 export interface UseConversationScrollOptions {
   conversationId: string | null;
@@ -44,9 +46,79 @@ export function useConversationScroll({
     scrollHeight: number;
     scrollTop: number;
   } | null>(null);
+  const bottomScrollAnimationFrameRef = useRef(0);
+  const smoothBottomScrollTimeoutRef = useRef<number | null>(null);
+  const smoothBottomScrollCleanupRef = useRef<(() => void) | null>(null);
   const hasMessages = (messages?.length ?? 0) > 0;
 
+  const clearSmoothBottomScrollSettle = useCallback(() => {
+    if (smoothBottomScrollTimeoutRef.current !== null) {
+      window.clearTimeout(smoothBottomScrollTimeoutRef.current);
+      smoothBottomScrollTimeoutRef.current = null;
+    }
+
+    if (smoothBottomScrollCleanupRef.current) {
+      smoothBottomScrollCleanupRef.current();
+      smoothBottomScrollCleanupRef.current = null;
+    }
+  }, []);
+
+  const cancelBottomScrollSettle = useCallback(() => {
+    if (bottomScrollAnimationFrameRef.current !== 0) {
+      window.cancelAnimationFrame(bottomScrollAnimationFrameRef.current);
+      bottomScrollAnimationFrameRef.current = 0;
+    }
+
+    clearSmoothBottomScrollSettle();
+  }, [clearSmoothBottomScrollSettle]);
+
+  const settleBottomScroll = useCallback((onSettled?: () => void) => {
+    const el = scrollRef.current;
+    if (!el) {
+      onSettled?.();
+      return;
+    }
+
+    if (bottomScrollAnimationFrameRef.current !== 0) {
+      window.cancelAnimationFrame(bottomScrollAnimationFrameRef.current);
+      bottomScrollAnimationFrameRef.current = 0;
+    }
+
+    let lastScrollHeight = -1;
+    let stableFrames = 0;
+    let frameCount = 0;
+
+    const tick = () => {
+      bottomScrollAnimationFrameRef.current = 0;
+      const nextScrollHeight = el.scrollHeight;
+      scrollPinnedToBottomRef.current = true;
+      el.scrollTop = getConversationBottomScrollTop({
+        scrollHeight: nextScrollHeight,
+        clientHeight: el.clientHeight,
+      });
+      setAtBottom(true);
+      frameCount += 1;
+
+      if (nextScrollHeight === lastScrollHeight) {
+        stableFrames += 1;
+      } else {
+        lastScrollHeight = nextScrollHeight;
+        stableFrames = 0;
+      }
+
+      if (stableFrames >= INITIAL_SCROLL_STABLE_FRAME_COUNT || frameCount >= INITIAL_SCROLL_MAX_FRAMES) {
+        onSettled?.();
+        return;
+      }
+
+      bottomScrollAnimationFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    tick();
+  }, [scrollRef]);
+
   useLayoutEffect(() => {
+    cancelBottomScrollSettle();
     pendingPrependRestoreRef.current = null;
     completedInitialScrollKeyRef.current = null;
     streamingTailAutoScrollKeyRef.current = null;
@@ -54,11 +126,18 @@ export function useConversationScroll({
 
     const el = scrollRef.current;
     if (el) {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop = getConversationBottomScrollTop({
+        scrollHeight: el.scrollHeight,
+        clientHeight: el.clientHeight,
+      });
     }
 
     setAtBottom(true);
-  }, [conversationId, scrollRef]);
+  }, [cancelBottomScrollSettle, conversationId, scrollRef]);
+
+  useLayoutEffect(() => () => {
+    cancelBottomScrollSettle();
+  }, [cancelBottomScrollSettle]);
 
   const syncScrollStateFromDom = useCallback(() => {
     const el = scrollRef.current;
@@ -84,13 +163,44 @@ export function useConversationScroll({
     }
 
     scrollPinnedToBottomRef.current = true;
-    if (options?.behavior) {
-      el.scrollTo({ top: el.scrollHeight, behavior: options.behavior });
-    } else {
-      el.scrollTop = el.scrollHeight;
+    cancelBottomScrollSettle();
+
+    if (options?.behavior === 'smooth') {
+      let settled = false;
+      const settleAfterSmoothScroll = () => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        clearSmoothBottomScrollSettle();
+        settleBottomScroll();
+      };
+      const handleScrollEnd = () => {
+        settleAfterSmoothScroll();
+      };
+
+      smoothBottomScrollCleanupRef.current = () => {
+        el.removeEventListener('scrollend', handleScrollEnd);
+      };
+      smoothBottomScrollTimeoutRef.current = window.setTimeout(() => {
+        settleAfterSmoothScroll();
+      }, SMOOTH_SCROLL_SETTLE_DELAY_MS);
+
+      el.addEventListener('scrollend', handleScrollEnd, { once: true });
+      el.scrollTo({
+        top: getConversationBottomScrollTop({
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+        }),
+        behavior: 'smooth',
+      });
+      setAtBottom(true);
+      return;
     }
-    setAtBottom(true);
-  }, [scrollRef]);
+
+    settleBottomScroll();
+  }, [cancelBottomScrollSettle, clearSmoothBottomScrollSettle, scrollRef, settleBottomScroll]);
 
   const capturePrependRestore = useCallback(() => {
     if (!conversationId) {
@@ -158,43 +268,15 @@ export function useConversationScroll({
       return;
     }
 
-    const el = scrollRef.current;
-    let animationFrame = 0;
-    let lastScrollHeight = -1;
-    let stableFrames = 0;
-    let frameCount = 0;
-
-    const settleScroll = () => {
-      animationFrame = 0;
-      const nextScrollHeight = el.scrollHeight;
-      scrollPinnedToBottomRef.current = true;
-      el.scrollTop = nextScrollHeight;
-      setAtBottom(true);
-      frameCount += 1;
-
-      if (nextScrollHeight === lastScrollHeight) {
-        stableFrames += 1;
-      } else {
-        lastScrollHeight = nextScrollHeight;
-        stableFrames = 0;
-      }
-
-      if (stableFrames >= INITIAL_SCROLL_STABLE_FRAME_COUNT || frameCount >= INITIAL_SCROLL_MAX_FRAMES) {
-        completedInitialScrollKeyRef.current = initialScrollKey;
-        return;
-      }
-
-      animationFrame = window.requestAnimationFrame(settleScroll);
-    };
-
-    settleScroll();
+    scrollPinnedToBottomRef.current = true;
+    settleBottomScroll(() => {
+      completedInitialScrollKeyRef.current = initialScrollKey;
+    });
 
     return () => {
-      if (animationFrame !== 0) {
-        window.cancelAnimationFrame(animationFrame);
-      }
+      cancelBottomScrollSettle();
     };
-  }, [hasMessages, initialScrollKey, scrollRef, sessionLoading]);
+  }, [cancelBottomScrollSettle, hasMessages, initialScrollKey, scrollRef, sessionLoading, settleBottomScroll]);
 
   useLayoutEffect(() => {
     const tailBlock = messages?.[messages.length - 1];
