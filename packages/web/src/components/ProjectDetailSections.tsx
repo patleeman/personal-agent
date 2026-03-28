@@ -1,4 +1,4 @@
-import { type FormEventHandler, type ReactNode } from 'react';
+import { useState, type FormEventHandler, type ReactNode } from 'react';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
@@ -205,11 +205,15 @@ function itemSummary(item: ProjectActivityItemShape): string | null {
   return null;
 }
 
+const INITIAL_ACTIVITY_ITEMS = 6;
+
 export function ProjectActivityContent({
   items,
 }: {
   items: ProjectActivityItemShape[];
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (items.length === 0) {
     return (
       <div className="max-w-5xl py-4">
@@ -222,10 +226,13 @@ export function ProjectActivityContent({
     );
   }
 
+  const visibleItems = showAll ? items : items.slice(0, INITIAL_ACTIVITY_ITEMS);
+  const hiddenCount = Math.max(0, items.length - visibleItems.length);
+
   return (
-    <div className="max-w-5xl">
-      <div className="divide-y divide-border-subtle overflow-hidden rounded-xl border border-border-subtle bg-transparent">
-        {items.map((item, index) => {
+    <div className="max-w-5xl space-y-2.5">
+      <div className="space-y-1.5">
+        {visibleItems.map((item, index) => {
           const at = itemTimestamp(item);
           const href = itemHref(item);
           const title = itemTitle(item);
@@ -233,30 +240,46 @@ export function ProjectActivityContent({
           const timestamp = `${timeLabel(at)}${dayLabel(at) ? ` · ${dayLabel(at)}` : ''}`;
 
           return (
-            <div key={item.id} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-3 px-3 py-3">
+            <div key={item.id} className="grid grid-cols-[0.875rem_minmax(0,1fr)] gap-2.5 py-1.5">
               <div className="flex flex-col items-center">
-                <span className={index === 0 ? 'mt-1.5 h-2 w-2 rounded-full bg-accent' : 'mt-1.5 h-2 w-2 rounded-full bg-border-default'} />
-                {index < items.length - 1 ? <span className="mt-1.5 w-px flex-1 bg-border-subtle" /> : null}
+                <span className={index === 0 ? 'mt-1.5 h-1.5 w-1.5 rounded-full bg-accent' : 'mt-1.5 h-1.5 w-1.5 rounded-full bg-border-default'} />
+                {index < visibleItems.length - 1 ? <span className="mt-1 w-px flex-1 bg-border-subtle" /> : null}
               </div>
 
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-col gap-0.5 md:flex-row md:items-start md:justify-between md:gap-3">
-                  {href ? (
-                    <a href={href} className="min-w-0 truncate text-[14px] font-medium text-accent transition-colors hover:text-accent/75">
-                      {title}
-                    </a>
-                  ) : (
-                    <p className="min-w-0 truncate text-[14px] font-medium text-primary">{title}</p>
-                  )}
-                  <span className="shrink-0 text-[11px] text-dim">{timestamp}</span>
+              <div className="min-w-0 space-y-0.5">
+                {href ? (
+                  <a href={href} className="block min-w-0 truncate text-[13px] font-medium text-accent transition-colors hover:text-accent/75">
+                    {title}
+                  </a>
+                ) : (
+                  <p className="min-w-0 truncate text-[13px] font-medium text-primary">{title}</p>
+                )}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-dim">
+                  <span className="shrink-0">{itemKindLabel(item)}</span>
+                  {summary ? (
+                    <>
+                      <span className="shrink-0 opacity-40">·</span>
+                      <span className="min-w-0 truncate text-secondary">{summary}</span>
+                    </>
+                  ) : null}
+                  <span className="shrink-0 opacity-40">·</span>
+                  <span className="shrink-0 text-[10px] text-dim">{timestamp}</span>
                 </div>
-                {summary ? <p className="text-[12px] leading-relaxed text-secondary" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{summary}</p> : null}
-                <p className="text-[11px] text-dim">{itemKindLabel(item)}</p>
               </div>
             </div>
           );
         })}
       </div>
+
+      {items.length > INITIAL_ACTIVITY_ITEMS ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((value) => !value)}
+          className="text-[12px] font-medium text-accent transition-colors hover:text-accent/75"
+        >
+          {showAll ? 'Show less activity' : `Show ${hiddenCount} older ${hiddenCount === 1 ? 'event' : 'events'}`}
+        </button>
+      ) : null}
     </div>
   );
 }

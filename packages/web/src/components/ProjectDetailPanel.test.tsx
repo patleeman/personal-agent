@@ -138,7 +138,7 @@ describe('ProjectDetailPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('renders a linear-style project detail with activity, subtasks, and a right rail', () => {
+  it('renders a linear-style project detail with the brief before activity, subtasks, and a right rail', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
@@ -156,6 +156,7 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('Prototype review thread');
     expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
     expect(html).not.toContain('>Project doc<');
+    expect(html.indexOf('>Brief<')).toBeLessThan(html.indexOf('>Activity<'));
   });
 
   it('merges linked conversations into the visible activity stream', () => {

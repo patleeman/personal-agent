@@ -994,6 +994,43 @@ export function ProjectDetailPanel({
         </section>
 
         <ProjectSection
+          title="Brief"
+          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No brief yet'}
+          action={(
+            <>
+              <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_TEXT_BUTTON_CLASS} disabled={documentBusy}>
+                {documentBusy ? 'Regenerating…' : 'Regenerate'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentError(null);
+                  if (!documentEditing && documentContent.trim().length === 0) {
+                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
+                  }
+                  setDocumentEditing((value) => !value);
+                }}
+                className={ACTION_TEXT_BUTTON_CLASS}
+                disabled={documentBusy}
+              >
+                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit brief' : 'Write brief')}
+              </button>
+            </>
+          )}
+        >
+          <ProjectDocumentContent
+            document={documentRecord}
+            projectTitle={record.title}
+            editing={documentEditing}
+            content={documentContent}
+            busy={documentBusy}
+            error={documentError}
+            onChange={setDocumentContent}
+            onSubmit={saveDocument}
+          />
+        </ProjectSection>
+
+        <ProjectSection
           title="Activity"
           meta={activityItems.length > 0 ? `${activityItems.length} recent ${activityItems.length === 1 ? 'event' : 'events'}` : 'No activity yet'}
         >
@@ -1047,43 +1084,6 @@ export function ProjectDetailPanel({
             ) : null}
           </div>
           {taskError && !taskEditor ? <p className="text-[12px] text-danger">{taskError}</p> : null}
-        </ProjectSection>
-
-        <ProjectSection
-          title="Brief"
-          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No brief yet'}
-          action={(
-            <>
-              <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_TEXT_BUTTON_CLASS} disabled={documentBusy}>
-                {documentBusy ? 'Regenerating…' : 'Regenerate'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDocumentError(null);
-                  if (!documentEditing && documentContent.trim().length === 0) {
-                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
-                  }
-                  setDocumentEditing((value) => !value);
-                }}
-                className={ACTION_TEXT_BUTTON_CLASS}
-                disabled={documentBusy}
-              >
-                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit brief' : 'Write brief')}
-              </button>
-            </>
-          )}
-        >
-          <ProjectDocumentContent
-            document={documentRecord}
-            projectTitle={record.title}
-            editing={documentEditing}
-            content={documentContent}
-            busy={documentBusy}
-            error={documentError}
-            onChange={setDocumentContent}
-            onSubmit={saveDocument}
-          />
         </ProjectSection>
       </div>
 
