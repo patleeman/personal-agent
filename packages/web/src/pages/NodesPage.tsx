@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
@@ -39,13 +38,11 @@ import {
   SKILL_VIEW_SEARCH_PARAM,
 } from '../skillWorkspaceState';
 import { SkillWorkspace } from './SkillsPage';
-import { buildRailWidthStorageKey } from '../layoutSizing';
 import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
 const NODE_KIND_ORDER: NodeLinkKind[] = ['note', 'project', 'skill'];
-const NODES_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('nodes-browser');
 
 type NodeBrowserSort = 'updated' | 'title';
 
@@ -86,19 +83,6 @@ function pluralKindLabel(kind: NodeLinkKind): string {
       return 'Projects';
     case 'skill':
       return 'Skills';
-  }
-}
-
-function singularFilterLabel(filter: NodeBrowserFilter): string {
-  switch (filter) {
-    case 'note':
-      return 'note';
-    case 'project':
-      return 'project';
-    case 'skill':
-      return 'skill';
-    default:
-      return 'node';
   }
 }
 
@@ -312,18 +296,17 @@ function NodeBrowserListItem({
   );
 }
 
-function KnowledgeBrowserRail({
+function KnowledgeBrowserPage({
   nodes,
   filteredNodes,
-  selected,
   locationSearch,
   filter,
   query,
   sort,
-  counts,
   loading,
   error,
   refreshing,
+  pageMeta,
   onRefresh,
   onQueryChange,
   onSortChange,
@@ -331,21 +314,19 @@ function KnowledgeBrowserRail({
 }: {
   nodes: UnifiedNodeItem[];
   filteredNodes: UnifiedNodeItem[];
-  selected: { kind: NodeLinkKind; id: string } | null;
   locationSearch: string;
   filter: NodeBrowserFilter;
   query: string;
   sort: NodeBrowserSort;
-  counts: { all: number; note: number; project: number; skill: number };
   loading: boolean;
   error: string | null;
   refreshing: boolean;
+  pageMeta: string;
   onRefresh: () => void;
   onQueryChange: (value: string) => void;
   onSortChange: (value: NodeBrowserSort) => void;
   onFilterChange: (value: NodeBrowserFilter) => void;
 }) {
-  const overviewHref = useMemo(() => buildOverviewHref(locationSearch), [locationSearch]);
   const groupedNodes = useMemo(() => {
     if (filter !== 'all') {
       return [];
@@ -360,79 +341,71 @@ function KnowledgeBrowserRail({
   }, [filter, filteredNodes]);
 
   const filterLabel = filter === 'all' ? 'All' : pluralKindLabel(filter);
-  const filteredCountLabel = `${filteredNodes.length} visible ${filteredNodes.length === 1 ? 'node' : 'nodes'}`;
-  const selectedLabel = selected ? `@${selected.id}` : 'overview';
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 space-y-3 border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="ui-card-title">Knowledge Base</p>
-            <p className="ui-card-meta mt-1">Browse notes, projects, and skills together.</p>
-          </div>
+    <div className="min-h-0 flex h-full flex-col overflow-hidden">
+      <PageHeader
+        actions={(
           <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
-            {refreshing ? 'Refreshing…' : '↻'}
+            {refreshing ? 'Refreshing…' : 'Refresh'}
           </ToolbarButton>
-        </div>
-
-        <div className="ui-segmented-control" role="group" aria-label="Node filter">
-          {([
-            ['all', 'All'],
-            ['note', 'Notes'],
-            ['project', 'Projects'],
-            ['skill', 'Skills'],
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onFilterChange(value)}
-              className={filter === value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <input
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search knowledge"
-          aria-label="Search knowledge"
-          className={INPUT_CLASS}
-          autoComplete="off"
-          spellCheck={false}
+        )}
+      >
+        <PageHeading
+          title="Knowledge Base"
+          meta={pageMeta}
         />
+      </PageHeader>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={sort}
-            onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)}
-            aria-label="Sort nodes"
-            className={SELECT_CLASS}
-          >
-            <option value="updated">Recently updated</option>
-            <option value="title">Title</option>
-          </select>
-          <p className="min-w-0 flex-1 truncate text-[11px] text-dim">
-            {counts.all} total nodes
-          </p>
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="ui-segmented-control" role="group" aria-label="Node filter">
+              {([
+                ['all', 'All'],
+                ['note', 'Notes'],
+                ['project', 'Projects'],
+                ['skill', 'Skills'],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onFilterChange(value)}
+                  className={filter === value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-        {error && nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-border-subtle px-4 py-2 text-[11px] text-dim">
-          <div className="flex items-center justify-between gap-3">
-            <span>{filteredCountLabel}</span>
-            <span className="max-w-[12rem] truncate" title={selectedLabel}>{selectedLabel}</span>
+            <div className="flex items-center gap-2 text-[11px] text-dim">
+              <select
+                value={sort}
+                onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)}
+                aria-label="Sort nodes"
+                className={SELECT_CLASS}
+              >
+                <option value="updated">Recently updated</option>
+                <option value="title">Title</option>
+              </select>
+              <span>{filteredNodes.length} visible</span>
+            </div>
           </div>
-        </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-          {loading && nodes.length === 0 ? <LoadingState label="Loading knowledge base…" className="px-1 py-6" /> : null}
-          {error && nodes.length === 0 ? <ErrorState message={`Unable to load knowledge base: ${error}`} className="px-1 py-6" /> : null}
+          <input
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search knowledge"
+            aria-label="Search knowledge"
+            className={INPUT_CLASS}
+            autoComplete="off"
+            spellCheck={false}
+          />
+
+          {error && nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
+
+          {loading && nodes.length === 0 ? <LoadingState label="Loading knowledge base…" className="py-10" /> : null}
+          {error && nodes.length === 0 ? <ErrorState message={`Unable to load knowledge base: ${error}`} className="py-10" /> : null}
 
           {!loading && !error && nodes.length === 0 ? (
             <EmptyState
@@ -442,33 +415,18 @@ function KnowledgeBrowserRail({
             />
           ) : null}
 
-          {!loading && !error && nodes.length > 0 ? (
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <SectionLabel label="Overview" className="px-3 pb-1" />
-                <ListLinkRow to={overviewHref} selected={!selected}>
-                  <p className="ui-row-title">Overview</p>
-                  <p className="ui-row-summary">Browse the whole knowledge base and open the workspace you want.</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-                    <span>{counts.all} nodes</span>
-                    <span className="opacity-40">·</span>
-                    <span>{counts.note} notes</span>
-                    <span className="opacity-40">·</span>
-                    <span>{counts.project} projects</span>
-                    <span className="opacity-40">·</span>
-                    <span>{counts.skill} skills</span>
-                  </div>
-                </ListLinkRow>
-              </div>
+          {!loading && !error && nodes.length > 0 && filteredNodes.length === 0 ? (
+            <EmptyState
+              className="py-10"
+              title="No matching nodes"
+              body={`No ${filterLabel.toLowerCase()} match the current browser filter.`}
+            />
+          ) : null}
 
-              {filteredNodes.length === 0 ? (
-                <EmptyState
-                  className="py-10"
-                  title="No matching nodes"
-                  body={`No ${filterLabel.toLowerCase()} match the current browser filter.`}
-                />
-              ) : filter === 'all' ? (
-                groupedNodes.map((entry) => (
+          {!loading && !error && filteredNodes.length > 0 ? (
+            filter === 'all' ? (
+              <div className="space-y-5">
+                {groupedNodes.map((entry) => (
                   <div key={entry.kind} className="space-y-1">
                     <SectionLabel label={pluralKindLabel(entry.kind)} count={entry.items.length} className="px-3 pb-1" />
                     <div className="space-y-0.5">
@@ -476,29 +434,29 @@ function KnowledgeBrowserRail({
                         <NodeBrowserListItem
                           key={`${item.kind}:${item.id}`}
                           item={item}
-                          selected={selected?.kind === item.kind && selected?.id === item.id}
+                          selected={false}
                           locationSearch={locationSearch}
                         />
                       ))}
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="space-y-1">
-                  <SectionLabel label={filterLabel} count={filteredNodes.length} className="px-3 pb-1" />
-                  <div className="space-y-0.5">
-                    {filteredNodes.map((item) => (
-                      <NodeBrowserListItem
-                        key={`${item.kind}:${item.id}`}
-                        item={item}
-                        selected={selected?.kind === item.kind && selected?.id === item.id}
-                        locationSearch={locationSearch}
-                      />
-                    ))}
-                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <SectionLabel label={filterLabel} count={filteredNodes.length} className="px-3 pb-1" />
+                <div className="space-y-0.5">
+                  {filteredNodes.map((item) => (
+                    <NodeBrowserListItem
+                      key={`${item.kind}:${item.id}`}
+                      item={item}
+                      selected={false}
+                      locationSearch={locationSearch}
+                    />
+                  ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )
           ) : null}
         </div>
       </div>
@@ -599,69 +557,6 @@ function SelectedNodeView({
           emitProjectsChanged();
           navigate(overviewHref);
         }}
-      />
-    </div>
-  );
-}
-
-function KnowledgeLandingView({
-  nodes,
-  filteredNodes,
-  counts,
-  filter,
-  query,
-  loading,
-  error,
-}: {
-  nodes: UnifiedNodeItem[];
-  filteredNodes: UnifiedNodeItem[];
-  counts: { all: number; note: number; project: number; skill: number };
-  filter: NodeBrowserFilter;
-  query: string;
-  loading: boolean;
-  error: string | null;
-}) {
-  if (loading && nodes.length === 0) {
-    return <LoadingState label="Loading knowledge base…" className="h-full justify-center" />;
-  }
-
-  if (error && nodes.length === 0) {
-    return <ErrorState message={`Unable to load knowledge base: ${error}`} className="m-6" />;
-  }
-
-  if (nodes.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-8">
-        <EmptyState
-          title="No nodes yet"
-          body="Create a note or project, or add a skill, to start building the shared knowledge base."
-        />
-      </div>
-    );
-  }
-
-  if (filteredNodes.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-8">
-        <EmptyState
-          title="No matching nodes"
-          body="Adjust the browser filters or try a broader search."
-        />
-      </div>
-    );
-  }
-
-  const selectionBody = query.trim()
-    ? `Showing ${filteredNodes.length} matching ${filteredNodes.length === 1 ? 'node' : 'nodes'} in the browser on the left.`
-    : filter === 'all'
-      ? 'Choose a note, project, or skill from the browser on the left to open its workspace.'
-      : `Choose a ${singularFilterLabel(filter)} from the browser on the left to open its workspace.`;
-
-  return (
-    <div className="flex h-full items-center justify-center px-8">
-      <EmptyState
-        title="Select a node"
-        body={`${selectionBody} ${counts.all} total nodes are available across ${counts.note} notes, ${counts.project} projects, and ${counts.skill} skills.`}
       />
     </div>
   );
@@ -812,50 +707,22 @@ export function NodesPage() {
   }
 
   return (
-    <BrowserSplitLayout
-      storageKey={NODES_BROWSER_WIDTH_STORAGE_KEY}
-      initialWidth={340}
-      minWidth={280}
-      maxWidth={420}
-      browser={(
-        <KnowledgeBrowserRail
-          nodes={nodes}
-          filteredNodes={filteredNodes}
-          selected={selected}
-          locationSearch={location.search}
-          filter={filter}
-          query={query}
-          sort={sort}
-          counts={counts}
-          loading={dataLoading}
-          error={combinedError}
-          refreshing={memoryApi.refreshing || projectsApi.refreshing}
-          onRefresh={() => { void refreshAll(); }}
-          onQueryChange={setQuery}
-          onSortChange={setSort}
-          onFilterChange={handleFilterChange}
-        />
-      )}
-      browserLabel="Knowledge browser"
-    >
-      <div className="min-w-0 min-h-0 flex flex-1 flex-col overflow-hidden">
-        <PageHeader>
-          <PageHeading
-            title="Knowledge Base"
-            meta={pageMeta}
-          />
-        </PageHeader>
-        <KnowledgeLandingView
-          nodes={nodes}
-          filteredNodes={filteredNodes}
-          counts={counts}
-          filter={filter}
-          query={query}
-          loading={dataLoading}
-          error={combinedError}
-        />
-      </div>
-    </BrowserSplitLayout>
+    <KnowledgeBrowserPage
+      nodes={nodes}
+      filteredNodes={filteredNodes}
+      locationSearch={location.search}
+      filter={filter}
+      query={query}
+      sort={sort}
+      loading={dataLoading}
+      error={combinedError}
+      refreshing={memoryApi.refreshing || projectsApi.refreshing}
+      pageMeta={pageMeta}
+      onRefresh={() => { void refreshAll(); }}
+      onQueryChange={setQuery}
+      onSortChange={setSort}
+      onFilterChange={handleFilterChange}
+    />
   );
 }
 

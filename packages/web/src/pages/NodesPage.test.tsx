@@ -194,14 +194,14 @@ describe('NodesPage', () => {
     const html = renderPage('/nodes');
 
     expect(html).toContain('Knowledge Base');
-    expect(html).toContain('Browse notes, projects, and skills together');
-    expect(html).toContain('Select a node');
+    expect(html).toContain('Refresh');
+    expect(html).not.toContain('Select a node');
     expect(html).toContain('3 nodes · 1 notes · 1 projects · 1 skills');
-    expect(html).toContain('Overview');
     expect(html).toContain('Notes');
     expect(html).toContain('Projects');
     expect(html).toContain('Skills');
     expect(html).toContain('Recently updated');
+    expect(html).toMatch(/3.*visible/);
     expect(html).toContain('Search knowledge');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
