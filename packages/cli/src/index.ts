@@ -5235,6 +5235,10 @@ Global options:
   return program;
 }
 
+function printRootHelp(program: Command): void {
+  process.stdout.write(`${program.helpInformation()}\n`);
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const parsedFlags = parseGlobalFlags(argv);
   configureUi({ plain: parsedFlags.plain });
@@ -5269,7 +5273,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
         return 0;
       }
 
-      await printCliHome();
+      printRootHelp(program);
       return 0;
     }
 
