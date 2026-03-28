@@ -121,15 +121,24 @@ export function listProfileActivityEntries(options: ResolveActivityOptions): Sto
     return [];
   }
 
-  const entries = readdirSync(activityDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .map((entry) => {
-      const path = join(activityDir, entry.name);
-      return {
+  const entries: StoredActivityEntry[] = [];
+
+  for (const activityFile of readdirSync(activityDir, { withFileTypes: true })) {
+    if (!activityFile.isFile() || !activityFile.name.endsWith('.md')) {
+      continue;
+    }
+
+    const path = join(activityDir, activityFile.name);
+
+    try {
+      entries.push({
         path,
         entry: readProjectActivityEntry(path),
-      };
-    });
+      });
+    } catch {
+      continue;
+    }
+  }
 
   entries.sort((left, right) => {
     const timestampCompare = right.entry.createdAt.localeCompare(left.entry.createdAt);
