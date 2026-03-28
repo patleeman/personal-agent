@@ -669,7 +669,17 @@ Recover me after restart
 
     await waitForCondition(() => {
       const status = module.getStatus?.() as { totalRuns?: number };
-      return (status.totalRuns ?? 0) === 1;
+      if ((status.totalRuns ?? 0) !== 1) {
+        return false;
+      }
+
+      const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
+        tasks: Record<string, { activeRunId?: string; lastRunId?: string; oneTimeResolvedStatus?: string }>;
+      };
+      const taskState = persistedState.tasks[taskPath];
+      return taskState?.activeRunId === undefined
+        && taskState.lastRunId !== priorRunId
+        && taskState.oneTimeResolvedStatus === 'success';
     });
 
     expect(runTask).toHaveBeenCalledTimes(1);
