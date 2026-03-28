@@ -62,8 +62,7 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
     writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(syncRoot, 'agents', 'shared-core.md'), '# Durable shared\n');
-    writeFile(join(syncRoot, 'agents', 'datadog.md'), '# Durable datadog\n');
+    writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Durable datadog\n');
     writeFile(join(syncRoot, 'settings', 'global.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
     writeFile(join(syncRoot, 'skills', 'shared-skill', 'INDEX.md'), '---\nname: shared-skill\ndescription: Shared\n---\n');
@@ -80,8 +79,7 @@ describe('resources profile loader', () => {
     expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'durable', 'local']);
     expect(resolved.agentsFiles).toEqual([
       join(repo, 'defaults/agent/AGENTS.md'),
-      join(syncRoot, 'agents', 'datadog.md'),
-      join(syncRoot, 'agents', 'shared-core.md'),
+      join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'),
       join(local, 'agent', 'AGENTS.md'),
     ]);
     expect(resolved.settingsFiles).toEqual([
@@ -149,7 +147,7 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(syncRoot, 'agents', 'datadog.md'), '# Datadog\n');
+    writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
     writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });

@@ -117,10 +117,6 @@ export function getDurableProfilesDir(syncRoot: string = getSyncRoot()): string 
   return join(syncRoot, 'profiles');
 }
 
-export function getDurableAgentsDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'agents');
-}
-
 export function getDurableSettingsDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'settings');
 }

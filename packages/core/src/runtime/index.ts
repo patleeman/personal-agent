@@ -22,7 +22,6 @@ export {
   getDurableSessionsDir,
   getDurableConversationAttentionDir,
   getDurableProfilesDir,
-  getDurableAgentsDir,
   getDurableSettingsDir,
   getDurableModelsDir,
   getDurableSkillsDir,

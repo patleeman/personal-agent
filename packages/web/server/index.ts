@@ -263,6 +263,7 @@ import {
   getExecutionTarget,
   getSyncRoot,
   getProfilesRoot,
+  getLocalProfileDir,
   getStateRoot,
   createMemoryDoc,
   loadMemoryDocs,
@@ -10167,6 +10168,21 @@ function pathIsWithin(pathValue: string, dirValue: string): boolean {
     || normalizedPath.startsWith(`${normalizedDir}\\`);
 }
 
+function isEditableMemoryFilePath(filePath: string): boolean {
+  if (!filePath.endsWith('.md')) {
+    return false;
+  }
+
+  const allowedRoots = [
+    REPO_ROOT,
+    getSyncRoot(),
+    getProfilesRoot(),
+    getLocalProfileDir(),
+  ];
+
+  return allowedRoots.some((rootPath) => pathIsWithin(filePath, rootPath));
+}
+
 function inferSkillSource(skillPath: string, profile: string): string {
   const frontmatter = parseFrontmatter(skillPath);
   const profiles = Array.isArray(frontmatter.profiles)
@@ -10263,8 +10279,11 @@ function listSkillsForCurrentProfile(): SkillItem[] {
 }
 
 function inferAgentSource(filePath: string, profile: string): string {
-  const normalizedBase = basename(filePath).replace(/\.[^.]+$/, '');
-  if (normalizedBase === profile || normalizedBase.startsWith(`${profile}-`)) {
+  if (pathIsWithin(filePath, getLocalProfileDir())) {
+    return 'local';
+  }
+
+  if (pathIsWithin(filePath, join(getProfilesRoot(), profile, 'agent'))) {
     return profile;
   }
 
@@ -10470,11 +10489,7 @@ app.get('/api/memory/file', (req, res) => {
     const filePath = req.query.path as string;
     if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
 
-    const syncRoot = getSyncRoot();
-    const allowed = filePath.endsWith('.md') && (
-      pathIsWithin(filePath, REPO_ROOT)
-      || pathIsWithin(filePath, syncRoot)
-    );
+    const allowed = isEditableMemoryFilePath(filePath);
 
     if (!allowed) {
       res.status(403).json({ error: 'Access denied' }); return;
@@ -10506,11 +10521,7 @@ app.post('/api/memory/file', (req, res) => {
     const { path: filePath, content } = req.body as { path: string; content: string };
     if (!filePath || content === undefined) { res.status(400).json({ error: 'path and content required' }); return; }
 
-    const syncRoot = getSyncRoot();
-    const allowed = filePath.endsWith('.md') && (
-      pathIsWithin(filePath, REPO_ROOT)
-      || pathIsWithin(filePath, syncRoot)
-    );
+    const allowed = isEditableMemoryFilePath(filePath);
 
     if (!allowed) {
       res.status(403).json({ error: 'Access denied' }); return;
