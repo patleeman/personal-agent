@@ -49,7 +49,7 @@ function normalizeThinkingLevel(value: unknown): ThinkingLevel {
   }
 }
 
-function readProjectBriefSettings(settingsFile: string): {
+function readProjectDocumentSettings(settingsFile: string): {
   provider: string;
   model: string;
   reasoning: ThinkingLevel;
@@ -145,23 +145,23 @@ function extractAssistantText(content: Array<{ type?: string; text?: string }>):
     .trim();
 }
 
-export async function generateProjectBrief(options: {
+export async function generateProjectDocument(options: {
   detail: ProjectDetail;
   linkedConversations: ProjectLinkedConversation[];
   activityEntries: ProjectActivityEntryInput[];
   settingsFile: string;
   authFile: string;
 }): Promise<string> {
-  const settings = readProjectBriefSettings(options.settingsFile);
+  const settings = readProjectDocumentSettings(options.settingsFile);
   const modelRegistry = makeModelRegistry(options.authFile);
   const model = resolveModel(modelRegistry, settings);
   if (!model) {
-    throw new Error(`Project brief model not found: ${settings.provider}/${settings.model}`);
+    throw new Error(`Project document model not found: ${settings.provider}/${settings.model}`);
   }
 
   const authResult = await modelRegistry.getApiKeyAndHeaders(model);
   if (!authResult.ok) {
-    throw new Error(`Project brief model auth could not be resolved: ${authResult.error}`);
+    throw new Error(`Project document model auth could not be resolved: ${authResult.error}`);
   }
 
   const response = await completeSimple(
@@ -208,7 +208,7 @@ export async function generateProjectBrief(options: {
 
   const text = extractAssistantText(response.content as Array<{ type?: string; text?: string }>);
   if (!text) {
-    throw new Error('Project brief generation returned no text.');
+    throw new Error('Project document generation returned no text.');
   }
 
   return text.trim();

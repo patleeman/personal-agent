@@ -447,7 +447,7 @@ export function ProjectDetailPanel({
   const canStartConversation = !activeProfile || activeProfile === projectProfile;
   const archived = isProjectArchived(record);
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
-  const documentRecord = project.document ?? project.brief;
+  const documentRecord = project.document;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
   const projectSummary = record.summary.trim() || record.description.trim();
   const taskSummary = formatTaskSummary(project.tasks);
@@ -979,8 +979,8 @@ export function ProjectDetailPanel({
         </section>
 
         <ProjectSection
-          title="Brief"
-          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No brief yet'}
+          title="Document"
+          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No document yet'}
           action={(
             <>
               <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_TEXT_BUTTON_CLASS} disabled={documentBusy}>
@@ -998,7 +998,7 @@ export function ProjectDetailPanel({
                 className={ACTION_TEXT_BUTTON_CLASS}
                 disabled={documentBusy}
               >
-                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit brief' : 'Write brief')}
+                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit document' : 'Write document')}
               </button>
             </>
           )}

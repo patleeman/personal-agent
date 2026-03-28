@@ -9,12 +9,12 @@ import { readProjectDetailFromProject } from './projects.js';
 import { listSessions, readSessionSearchText } from './sessions.js';
 
 export const PROJECT_SHARE_PACKAGE_KIND = 'personal-agent.project-package';
-export const PROJECT_SHARE_PACKAGE_VERSION = 1;
+export const PROJECT_SHARE_PACKAGE_VERSION = 2;
 const PROJECT_SHARE_PACKAGE_TRANSCRIPT_FORMAT = 'pi-session-jsonl';
 
 export type ProjectSharePackageProject = Omit<ProjectDocument, 'repoRoot'>;
 
-export interface ProjectSharePackageBrief {
+export interface ProjectSharePackageProjectDocument {
   updatedAt: string;
   content: string;
 }
@@ -75,7 +75,7 @@ export interface ProjectSharePackageDocument {
     projectId: string;
   };
   project: ProjectSharePackageProject;
-  brief: ProjectSharePackageBrief | null;
+  document: ProjectSharePackageProjectDocument | null;
   notes: ProjectSharePackageNote[];
   attachments: ProjectSharePackageFile[];
   artifacts: ProjectSharePackageFile[];
@@ -202,10 +202,10 @@ export function exportProjectSharePackage(input: {
       projectId: input.projectId,
     },
     project: stripProjectRepoRoot(detail.project),
-    brief: detail.brief
+    document: detail.document
       ? {
-        updatedAt: detail.brief.updatedAt,
-        content: detail.brief.content,
+        updatedAt: detail.document.updatedAt,
+        content: detail.document.content,
       }
       : null,
     notes: detail.notes.map((note) => ({

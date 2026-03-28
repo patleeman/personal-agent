@@ -53,13 +53,6 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
 
 Make the active project easy to scan from the conversation sidebar.`,
     },
-    brief: {
-      path: '/tmp/sidebar-refresh/INDEX.md',
-      updatedAt: '2026-03-16T09:30:00.000Z',
-      content: `# Sidebar refresh
-
-Make the active project easy to scan from the conversation sidebar.`,
-    },
     notes: [],
     files: [
       {

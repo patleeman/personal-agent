@@ -23,7 +23,7 @@ export interface ProjectPaths {
   projectsDir: string;
   projectDir: string;
   projectFile: string;
-  briefFile: string;
+  documentFile: string;
   tasksDir: string;
   notesDir: string;
   filesDir: string;
@@ -56,7 +56,7 @@ interface DurableProjectPaths {
   projectsDir: string;
   projectDir: string;
   projectFile: string;
-  briefFile: string;
+  documentFile: string;
   tasksDir: string;
   notesDir: string;
   filesDir: string;
@@ -182,7 +182,7 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     projectsDir,
     projectDir,
     projectFile: join(projectDir, 'state.yaml'),
-    briefFile: join(projectDir, 'INDEX.md'),
+    documentFile: join(projectDir, 'INDEX.md'),
     tasksDir: join(projectDir, 'tasks'),
     notesDir: join(projectDir, 'notes'),
     filesDir: join(projectDir, 'files'),

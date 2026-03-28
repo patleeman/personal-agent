@@ -31,7 +31,6 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
     artifactCount: 0,
     tasks: [],
     document: null,
-    brief: null,
     notes: [],
     files: [],
     attachments: [],

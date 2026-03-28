@@ -149,9 +149,9 @@ export function CompanionProjectDetailPage() {
                 </Section>
               ) : null}
 
-              {data.brief?.content ? (
-                <Section title="Brief">
-                  <CompanionMarkdown content={data.brief.content} />
+              {data.document?.content ? (
+                <Section title="Document">
+                  <CompanionMarkdown content={data.document.content} />
                 </Section>
               ) : null}
 

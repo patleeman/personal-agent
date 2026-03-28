@@ -222,15 +222,15 @@ function listEntryDirectories(dir: string): string[] {
 }
 
 export function readProjectDocument(options: ResolveProjectResourceOptions): ProjectDocumentRecord | null {
-  const { briefFile } = resolveProjectPaths(options);
+  const { documentFile } = resolveProjectPaths(options);
   const content = readProjectIndexBody(resolveProjectPaths(options).projectFile);
-  if (content === null || !existsSync(briefFile)) {
+  if (content === null || !existsSync(documentFile)) {
     return null;
   }
 
-  const stats = statSync(briefFile);
+  const stats = statSync(documentFile);
   return {
-    path: briefFile,
+    path: documentFile,
     content,
     updatedAt: stats.mtime.toISOString(),
   };

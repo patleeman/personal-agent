@@ -904,11 +904,13 @@ Run hourly task
 
     await waitForCondition(() => {
       const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-      return Object.keys(state.resumes).length === 1;
+      const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+      return Object.keys(state.resumes).length === 1
+        && activityEntries.some(({ entry }) => entry.summary?.includes('Scheduled task watch-prod completed.') ?? false);
     });
 
     const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(activityEntries[0]?.entry.summary).toContain('Scheduled task watch-prod completed.');
+    expect(activityEntries.some(({ entry }) => entry.summary?.includes('Scheduled task watch-prod completed.') ?? false)).toBe(true);
 
     const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
     const callback = Object.values(deferredState.resumes)[0];

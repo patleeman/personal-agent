@@ -41,7 +41,6 @@ const PROJECT_ACTION_VALUES = [
   'reference',
   'unreference',
   'save_document',
-  'save_brief',
   'create_note',
   'update_note',
   'delete_note',
@@ -422,8 +421,7 @@ export function createProjectAgentExtension(options: {
               };
             }
 
-            case 'save_document':
-            case 'save_brief': {
+            case 'save_document': {
               const projectId = readRequiredString(params.projectId, 'projectId');
               const document = saveProjectDocument({
                 repoRoot: options.repoRoot,
@@ -435,7 +433,7 @@ export function createProjectAgentExtension(options: {
               return {
                 content: [{ type: 'text' as const, text: `Saved document for @${projectId}.` }],
                 details: {
-                  action: params.action === 'save_document' ? 'save_document' : 'save_brief',
+                  action: 'save_document',
                   profile,
                   projectId,
                   path: document.path,
