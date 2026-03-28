@@ -393,6 +393,55 @@ describe('runPresentation', () => {
     expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
   });
 
+  it('strips leading environment wrappers from background shell headlines', () => {
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-web-ui-123',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          taskSlug: 'web-ui-smoke',
+          shellCommand: 'PA_WEB_PORT=4232 PA_WEB_COMPANION_PORT=4233 npm --prefix packages/web run dev',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+    });
+
+    expect(getRunHeadline(run)).toEqual({
+      title: 'npm --prefix packages/web run dev',
+      summary: 'Background run · web-ui-smoke',
+    });
+  });
+
+  it('strips env command wrappers from raw shell headlines', () => {
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-raw-shell-123',
+        kind: 'raw-shell',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          shellCommand: 'env -u PA_WEB_DIST -u PERSONAL_AGENT_WEB_SLOT -u PERSONAL_AGENT_WEB_REVISION npm --prefix packages/web run dev',
+        },
+        source: {
+          type: 'cli',
+          id: 'web-ui-dev-server',
+        },
+      },
+    });
+
+    expect(getRunHeadline(run)).toEqual({
+      title: 'npm --prefix packages/web run dev',
+      summary: 'Shell run',
+    });
+  });
+
   it('shows conversation node distillation runs with a dedicated headline', () => {
     const sessions: SessionMeta[] = [{
       id: 'conv-123',

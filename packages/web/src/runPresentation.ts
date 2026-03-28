@@ -164,6 +164,164 @@ function excerpt(value: string | undefined, maxLength = 88): string | undefined 
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
+interface ShellToken {
+  raw: string;
+  start: number;
+}
+
+function tokenizeShell(command: string): ShellToken[] {
+  const tokens: ShellToken[] = [];
+  let index = 0;
+
+  while (index < command.length) {
+    while (index < command.length && /\s/.test(command[index] ?? '')) {
+      index += 1;
+    }
+
+    if (index >= command.length) {
+      break;
+    }
+
+    const start = index;
+    let quote: '"' | "'" | null = null;
+
+    while (index < command.length) {
+      const char = command[index] ?? '';
+      if (quote) {
+        if (char === '\\' && quote === '"' && index + 1 < command.length) {
+          index += 2;
+          continue;
+        }
+
+        index += 1;
+        if (char === quote) {
+          quote = null;
+        }
+        continue;
+      }
+
+      if (char === '"' || char === "'") {
+        quote = char;
+        index += 1;
+        continue;
+      }
+
+      if (char === '\\' && index + 1 < command.length) {
+        index += 2;
+        continue;
+      }
+
+      if (/\s/.test(char)) {
+        break;
+      }
+
+      index += 1;
+    }
+
+    tokens.push({
+      raw: command.slice(start, index),
+      start,
+    });
+  }
+
+  return tokens;
+}
+
+function shellTokenValue(token: string): string {
+  if (
+    (token.startsWith('"') && token.endsWith('"'))
+    || (token.startsWith("'") && token.endsWith("'"))
+  ) {
+    return token.slice(1, -1);
+  }
+
+  return token;
+}
+
+function isShellEnvAssignment(token: string): boolean {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+}
+
+function stripLeadingShellEnvironment(command: string | undefined): string | undefined {
+  if (!command) {
+    return undefined;
+  }
+
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const tokens = tokenizeShell(trimmed);
+  if (tokens.length === 0) {
+    return trimmed;
+  }
+
+  let index = 0;
+  if (shellTokenValue(tokens[0]?.raw ?? '') === 'env') {
+    index = 1;
+
+    while (index < tokens.length) {
+      const token = shellTokenValue(tokens[index]?.raw ?? '');
+      if (!token) {
+        index += 1;
+        continue;
+      }
+
+      if (token === '--') {
+        index += 1;
+        break;
+      }
+
+      if (
+        token === '-u'
+        || token === '--unset'
+        || token === '-C'
+        || token === '--chdir'
+        || token === '-S'
+        || token === '--split-string'
+      ) {
+        index += 2;
+        continue;
+      }
+
+      if (
+        token === '-i'
+        || token === '--ignore-environment'
+        || token === '-0'
+        || token === '--null'
+        || token.startsWith('--unset=')
+        || token.startsWith('--chdir=')
+        || (token.startsWith('-u') && token.length > 2)
+        || (token.startsWith('-C') && token.length > 2)
+      ) {
+        index += 1;
+        continue;
+      }
+
+      if (!token.startsWith('-')) {
+        break;
+      }
+
+      index += 1;
+    }
+  }
+
+  while (index < tokens.length && isShellEnvAssignment(tokens[index]?.raw ?? '')) {
+    index += 1;
+  }
+
+  if (index <= 0 || index >= tokens.length) {
+    return trimmed;
+  }
+
+  return trimmed.slice(tokens[index]?.start ?? 0).trim();
+}
+
+function excerptShellCommand(command: string | undefined, maxLength = 88): string | undefined {
+  return excerpt(stripLeadingShellEnvironment(command), maxLength);
+}
+
 function taskById(lookups: RunPresentationLookups, taskId: string | undefined): ScheduledTaskSummary | undefined {
   if (!taskId || !lookups.tasks) {
     return undefined;
@@ -343,7 +501,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
     const agentPrompt = excerpt(readNestedSpec(run, 'agent', 'prompt') ?? readNestedCheckpoint(run, 'agent', 'prompt'));
-    const shellCommand = excerpt(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
+    const shellCommand = excerptShellCommand(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
     const taskSlug = readSpec(run, 'taskSlug') ?? readCheckpoint(run, 'taskSlug') ?? run.manifest?.source?.id;
     const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
     const summary = taskSlug && headline !== taskSlug
@@ -353,7 +511,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
   }
 
   if (run.manifest?.kind === 'raw-shell') {
-    const shellCommand = excerpt(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
+    const shellCommand = excerptShellCommand(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
     return {
       title: shellCommand ?? run.runId,
       summary: shellCommand ? 'Shell run' : sourceKindLabel(run),
