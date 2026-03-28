@@ -88,7 +88,7 @@ function SkillLinksView({ detail }: { detail: SkillDetail }) {
   );
 }
 
-function SkillWorkspace({
+export function SkillWorkspace({
   detail,
   selectedView,
   selectedItem,
