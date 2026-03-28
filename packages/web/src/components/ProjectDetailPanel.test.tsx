@@ -127,7 +127,7 @@ describe('ProjectDetailPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('renders a linear-style project detail with the document before activity, subtasks, and a right rail', () => {
+  it('renders inline-editable project fields with the document before activity, subtasks, and a right rail', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
@@ -143,6 +143,9 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('Collapse secondary sections by default');
     expect(html).toContain('Dense design notes');
     expect(html).toContain('Prototype review thread');
+    expect(html).toContain('aria-label="Project title"');
+    expect(html).toContain('name="project-status"');
+    expect(html).not.toContain('Edit project');
     expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
     expect(html).not.toContain('>Project doc<');
     expect(html.indexOf('>Document<')).toBeLessThan(html.indexOf('>Activity<'));

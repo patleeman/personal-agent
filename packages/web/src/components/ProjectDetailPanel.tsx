@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { bucketProjectStatus, formatProjectStatus, isProjectArchived } from '../contextRailProject';
@@ -6,7 +6,6 @@ import type { ProjectDetail, ProjectFile, ProjectNote, ProjectTask } from '../ty
 import {
   ProjectFileUploadForm,
   ProjectNoteEditorForm,
-  ProjectRecordEditorForm,
   ProjectTaskEditorForm,
 } from './ProjectDetailForms';
 import {
@@ -20,7 +19,9 @@ import {
   emptyNoteForm,
   emptyTaskForm,
   noteFormFromNote,
+  normalizeProjectForm,
   projectFormFromDetail,
+  projectFormsEqual,
   taskFormFromTask,
   type FileUploadState,
   type NoteFormState,
@@ -29,6 +30,7 @@ import {
   type ProjectFormState,
   type TaskFormState,
 } from './projectDetailState';
+import { MentionTextarea } from './MentionTextarea';
 import { IconButton, Pill, cx, type PillTone } from './ui';
 import { timeAgo } from '../utils';
 
@@ -39,6 +41,10 @@ const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rou
 const PROJECT_TOOLBAR_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-border-subtle bg-base/40 text-secondary hover:bg-surface hover:text-primary disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-accent/25 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_GROUP_CLASS = 'inline-flex items-center gap-1 rounded-full border border-border-subtle bg-base/30 p-1';
+const PROJECT_INLINE_TITLE_INPUT_CLASS = 'w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
+const PROJECT_INLINE_SUMMARY_CLASS = 'w-full max-w-3xl min-h-[5.5rem] resize-y rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[14px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
+const PROJECT_PROPERTY_INPUT_CLASS = 'w-full rounded-lg border border-transparent bg-transparent -mx-2 px-2 py-1 text-[13px] leading-relaxed text-primary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
+const PROJECT_PROPERTY_SELECT_CLASS = `${PROJECT_PROPERTY_INPUT_CLASS} pr-8`;
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
@@ -449,17 +455,22 @@ export function ProjectDetailPanel({
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
   const documentRecord = project.document;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
-  const projectSummary = record.summary.trim() || record.description.trim();
   const taskSummary = formatTaskSummary(project.tasks);
   const openTasks = project.tasks.filter((task) => !isTaskDone(task.status));
   const completedTasks = project.tasks.filter((task) => isTaskDone(task.status));
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const projectApiOptions = { profile: projectProfile };
-
-  const [editingProject, setEditingProject] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(() => projectFormFromDetail(project));
+  const [savedProjectForm, setSavedProjectForm] = useState<ProjectFormState>(() => projectFormFromDetail(project));
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+  const [projectSavedAt, setProjectSavedAt] = useState<number | null>(null);
+  const projectFormRef = useRef(projectForm);
+  const savedProjectFormRef = useRef(savedProjectForm);
+  const projectBusyRef = useRef(projectBusy);
+  const projectSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectSaveQueuedRef = useRef(false);
+  const projectIdRef = useRef(record.id);
 
   const [taskEditor, setTaskEditor] = useState<ProjectTaskEditorState | null>(null);
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
@@ -499,9 +510,44 @@ export function ProjectDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
-    setProjectForm(projectFormFromDetail(project));
-    setDocumentContent(documentRecord?.content ?? '');
-    setEditingProject(false);
+    projectFormRef.current = projectForm;
+  }, [projectForm]);
+
+  useEffect(() => {
+    savedProjectFormRef.current = savedProjectForm;
+  }, [savedProjectForm]);
+
+  useEffect(() => {
+    projectBusyRef.current = projectBusy;
+  }, [projectBusy]);
+
+  useEffect(() => {
+    const previousProjectId = projectIdRef.current;
+    const previousSavedProjectForm = savedProjectFormRef.current;
+    const nextProjectForm = projectFormFromDetail(project);
+
+    projectIdRef.current = record.id;
+    savedProjectFormRef.current = nextProjectForm;
+    setSavedProjectForm(nextProjectForm);
+    setProjectForm((current) => {
+      if (previousProjectId !== record.id || projectFormsEqual(current, previousSavedProjectForm)) {
+        projectFormRef.current = nextProjectForm;
+        return nextProjectForm;
+      }
+
+      return current;
+    });
+  }, [project, record.id]);
+
+  useEffect(() => {
+    if (!documentEditing) {
+      setDocumentContent(documentRecord?.content ?? '');
+    }
+  }, [documentEditing, documentRecord?.content]);
+
+  useEffect(() => {
+    clearScheduledProjectSave();
+    projectSaveQueuedRef.current = false;
     setTaskEditor(null);
     setNoteEditor(null);
     setDocumentEditing(false);
@@ -509,6 +555,7 @@ export function ProjectDetailPanel({
     setFileComposerOpen(false);
     setShowCompletedTasks(false);
     setProjectError(null);
+    setProjectSavedAt(null);
     setTaskError(null);
     setDocumentError(null);
     setNoteError(null);
@@ -521,11 +568,119 @@ export function ProjectDetailPanel({
     setRawProjectLoaded(false);
     setRawProjectContent('');
     setRawProjectError(null);
-  }, [documentRecord?.content, project]);
+  }, [record.id]);
 
-  function openProjectEditor() {
-    setEditingProject(true);
+  useEffect(() => {
+    if (projectSavedAt === null) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => setProjectSavedAt(null), 1800);
+    return () => clearTimeout(timeout);
+  }, [projectSavedAt]);
+
+  useEffect(() => () => {
+    if (projectSaveTimerRef.current) {
+      clearTimeout(projectSaveTimerRef.current);
+      projectSaveTimerRef.current = null;
+    }
+  }, []);
+
+  function clearScheduledProjectSave() {
+    if (projectSaveTimerRef.current) {
+      clearTimeout(projectSaveTimerRef.current);
+      projectSaveTimerRef.current = null;
+    }
+  }
+
+  function scheduleProjectSave(options: { immediate?: boolean } = {}) {
+    clearScheduledProjectSave();
+
+    if (options.immediate) {
+      void flushProjectSave();
+      return;
+    }
+
+    projectSaveTimerRef.current = setTimeout(() => {
+      projectSaveTimerRef.current = null;
+      void flushProjectSave();
+    }, 500);
+  }
+
+  function updateProjectFormField(patch: Partial<ProjectFormState>, options: { immediate?: boolean } = {}) {
+    const nextProjectForm = { ...projectFormRef.current, ...patch };
+    projectFormRef.current = nextProjectForm;
+    setProjectForm(nextProjectForm);
     setProjectError(null);
+    setProjectSavedAt(null);
+    scheduleProjectSave(options);
+  }
+
+  async function flushProjectSave() {
+    clearScheduledProjectSave();
+
+    if (projectBusyRef.current) {
+      projectSaveQueuedRef.current = true;
+      return;
+    }
+
+    const draftProjectForm = projectFormRef.current;
+    if (projectFormsEqual(draftProjectForm, savedProjectFormRef.current)) {
+      projectSaveQueuedRef.current = false;
+      return;
+    }
+
+    const normalizedProjectForm = normalizeProjectForm(draftProjectForm);
+    if (!normalizedProjectForm.title) {
+      setProjectError('Project title must not be empty.');
+      return;
+    }
+
+    if (!normalizedProjectForm.summary) {
+      setProjectError('Project summary must not be empty.');
+      return;
+    }
+
+    if (!normalizedProjectForm.status) {
+      setProjectError('Project status must not be empty.');
+      return;
+    }
+
+    projectBusyRef.current = true;
+    setProjectBusy(true);
+    setProjectError(null);
+
+    let saveSucceeded = false;
+
+    try {
+      await api.updateProject(record.id, {
+        title: normalizedProjectForm.title,
+        ...(record.summary.trim().length === 0 ? { description: normalizedProjectForm.summary } : {}),
+        repoRoot: normalizedProjectForm.repoRoot || null,
+        summary: normalizedProjectForm.summary,
+        status: normalizedProjectForm.status,
+      }, projectApiOptions);
+
+      savedProjectFormRef.current = normalizedProjectForm;
+      setSavedProjectForm(normalizedProjectForm);
+      setProjectSavedAt(Date.now());
+      if (projectFormsEqual(projectFormRef.current, draftProjectForm)) {
+        projectFormRef.current = normalizedProjectForm;
+        setProjectForm(normalizedProjectForm);
+      }
+      saveSucceeded = true;
+      onChanged?.();
+    } catch (error) {
+      setProjectError(error instanceof Error ? error.message : String(error));
+    } finally {
+      projectBusyRef.current = false;
+      setProjectBusy(false);
+      const shouldSaveAgain = projectSaveQueuedRef.current || !projectFormsEqual(projectFormRef.current, savedProjectFormRef.current);
+      projectSaveQueuedRef.current = false;
+      if (saveSucceeded && shouldSaveAgain) {
+        scheduleProjectSave({ immediate: true });
+      }
+    }
   }
 
   function openTaskAdd() {
@@ -550,27 +705,6 @@ export function ProjectDetailPanel({
     setNoteEditor({ mode: 'edit', noteId: note.id });
     setNoteForm(noteFormFromNote(note));
     setNoteError(null);
-  }
-
-  async function handleProjectSave(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setProjectBusy(true);
-    setProjectError(null);
-
-    try {
-      await api.updateProject(record.id, {
-        title: projectForm.title.trim(),
-        repoRoot: projectForm.repoRoot.trim() || null,
-        summary: projectForm.summary.trim(),
-        status: projectForm.status,
-      }, projectApiOptions);
-      setEditingProject(false);
-      onChanged?.();
-    } catch (error) {
-      setProjectError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setProjectBusy(false);
-    }
   }
 
   async function saveTask(event: React.FormEvent<HTMLFormElement>) {
@@ -900,6 +1034,8 @@ export function ProjectDetailPanel({
     />
   ) : null;
 
+  const projectSaveMessage = projectError ?? (projectBusy ? 'Saving…' : (projectSavedAt ? 'Saved' : null));
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
       <div className="min-w-0 space-y-6">
@@ -924,16 +1060,6 @@ export function ProjectDetailPanel({
               </IconButton>
               <IconButton
                 type="button"
-                onClick={openProjectEditor}
-                disabled={deleteBusy}
-                className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                title="Edit project"
-                aria-label="Edit project"
-              >
-                <ToolbarGlyph path="m15.232 5.232 3.536 3.536M9 11l6.232-6.232a2.5 2.5 0 0 1 3.536 3.536L12.536 14.536A4 4 0 0 1 10.707 15.707L7 17l1.293-3.707A4 4 0 0 1 9 11Z" />
-              </IconButton>
-              <IconButton
-                type="button"
                 onClick={() => setAdvancedOpen((value) => !value)}
                 disabled={deleteBusy}
                 className={PROJECT_TOOLBAR_BUTTON_CLASS}
@@ -945,37 +1071,48 @@ export function ProjectDetailPanel({
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <Pill tone={toneForProjectStatus(record.status, archived)}>
-                {formatProjectStatus(record.status)}
+              <Pill tone={toneForProjectStatus(projectForm.status, archived)}>
+                {formatProjectStatus(projectForm.status)}
               </Pill>
               <span className="text-[11px] text-dim">updated {timeAgo(record.updatedAt)}</span>
               {archived && record.archivedAt && <span className="text-[11px] text-dim">archived {timeAgo(record.archivedAt)}</span>}
+              {projectSaveMessage ? (
+                <span className={cx('text-[11px]', projectError ? 'text-danger' : 'text-dim')}>
+                  {projectSaveMessage}
+                </span>
+              ) : null}
             </div>
 
             <div className="space-y-2">
-              <h1 className="text-[32px] font-semibold leading-none tracking-tight text-primary">{record.title}</h1>
-              {projectSummary ? <p className="max-w-3xl text-[14px] leading-relaxed text-secondary">{projectSummary}</p> : null}
+              <h1 className="m-0">
+                <input
+                  aria-label="Project title"
+                  name="project-title"
+                  autoComplete="off"
+                  value={projectForm.title}
+                  onChange={(event) => updateProjectFormField({ title: event.target.value })}
+                  onBlur={() => { void flushProjectSave(); }}
+                  className={PROJECT_INLINE_TITLE_INPUT_CLASS}
+                  placeholder="Project title"
+                />
+              </h1>
+              <MentionTextarea
+                aria-label="Project summary"
+                name="project-summary"
+                autoComplete="off"
+                value={projectForm.summary}
+                onValueChange={(summary) => updateProjectFormField({ summary })}
+                onBlur={() => { void flushProjectSave(); }}
+                className={PROJECT_INLINE_SUMMARY_CLASS}
+                placeholder="Add a short project summary…"
+              />
               {record.currentFocus?.trim() ? (
                 <p className="text-[12px] text-dim">Current focus · {record.currentFocus.trim()}</p>
               ) : null}
             </div>
           </div>
-
-          {editingProject ? (
-            <div className="border-t border-border-subtle pt-5">
-              <ProjectRecordEditorForm
-                value={projectForm}
-                statuses={PROJECT_STATUSES}
-                busy={projectBusy}
-                error={projectError}
-                onChange={(patch) => setProjectForm((current) => ({ ...current, ...patch }))}
-                onSubmit={handleProjectSave}
-                onCancel={() => setEditingProject(false)}
-              />
-            </div>
-          ) : null}
         </section>
 
         <ProjectSection
@@ -991,7 +1128,7 @@ export function ProjectDetailPanel({
                 onClick={() => {
                   setDocumentError(null);
                   if (!documentEditing && documentContent.trim().length === 0) {
-                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(record.title));
+                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(projectForm.title));
                   }
                   setDocumentEditing((value) => !value);
                 }}
@@ -1005,7 +1142,7 @@ export function ProjectDetailPanel({
         >
           <ProjectDocumentContent
             document={documentRecord}
-            projectTitle={record.title}
+            projectTitle={projectForm.title || record.title}
             editing={documentEditing}
             content={documentContent}
             busy={documentBusy}
@@ -1116,11 +1253,39 @@ export function ProjectDetailPanel({
           <div className="space-y-3">
             <ProjectPropertyRow
               label="Status"
-              value={<Pill tone={toneForProjectStatus(record.status, archived)}>{formatProjectStatus(record.status)}</Pill>}
+              value={(
+                <select
+                  aria-label="Project status"
+                  name="project-status"
+                  value={projectForm.status}
+                  onChange={(event) => updateProjectFormField({ status: event.target.value }, { immediate: true })}
+                  onBlur={() => { void flushProjectSave(); }}
+                  className={PROJECT_PROPERTY_SELECT_CLASS}
+                >
+                  {PROJECT_STATUSES.map((status) => (
+                    <option key={status} value={status}>{formatProjectStatus(status)}</option>
+                  ))}
+                </select>
+              )}
             />
             <ProjectPropertyRow label="Profile" value={projectProfile} />
             <ProjectPropertyRow label="Updated" value={timeAgo(record.updatedAt)} />
-            {record.repoRoot ? <ProjectPropertyRow label="Repo root" value={<span className="font-mono break-all">{record.repoRoot}</span>} /> : null}
+            <ProjectPropertyRow
+              label="Repo root"
+              value={(
+                <input
+                  aria-label="Project repo root"
+                  name="project-repo-root"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={projectForm.repoRoot}
+                  onChange={(event) => updateProjectFormField({ repoRoot: event.target.value })}
+                  onBlur={() => { void flushProjectSave(); }}
+                  className={cx(PROJECT_PROPERTY_INPUT_CLASS, 'font-mono')}
+                  placeholder="Add repo root…"
+                />
+              )}
+            />
             {record.currentFocus?.trim() ? <ProjectPropertyRow label="Current focus" value={record.currentFocus.trim()} /> : null}
             {blockers.length > 0 ? (
               <ProjectPropertyRow

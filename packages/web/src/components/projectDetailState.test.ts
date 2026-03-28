@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectDetail } from '../types.js';
-import { buildActivityItems, summarizeActivityPreview } from './projectDetailState.js';
+import {
+  buildActivityItems,
+  normalizeProjectForm,
+  projectFormFromDetail,
+  projectFormsEqual,
+  summarizeActivityPreview,
+} from './projectDetailState.js';
 
 function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
   return {
@@ -50,6 +56,37 @@ describe('project detail timeline helpers', () => {
 
   it('returns undefined for empty activity previews', () => {
     expect(summarizeActivityPreview('   \n\n   ')).toBeUndefined();
+  });
+
+  it('uses the description as the editable summary fallback when summary is blank', () => {
+    const detail = createProjectDetail({
+      project: {
+        ...createProjectDetail().project,
+        description: 'Fallback description',
+        summary: '   ',
+      },
+    });
+
+    expect(projectFormFromDetail(detail)).toMatchObject({
+      summary: 'Fallback description',
+    });
+  });
+
+  it('normalizes project form values before comparing them', () => {
+    expect(projectFormsEqual(
+      {
+        title: ' Demo project ',
+        repoRoot: ' /tmp/demo ',
+        summary: ' Tight summary ',
+        status: ' active ',
+      },
+      normalizeProjectForm({
+        title: 'Demo project',
+        repoRoot: '/tmp/demo',
+        summary: 'Tight summary',
+        status: 'active',
+      }),
+    )).toBe(true);
   });
 
   it('orders activity newest first across timeline entries and linked conversations', () => {
