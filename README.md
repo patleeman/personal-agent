@@ -33,6 +33,8 @@ Start here:
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs
+- `docs/workspace.md` - repo-aware workspace browser and editor
+- `docs/artifacts.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
 - `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
@@ -239,6 +241,8 @@ See docs:
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs
+- `docs/workspace.md` - repo-aware workspace browser and editor
+- `docs/artifacts.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
 - `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills

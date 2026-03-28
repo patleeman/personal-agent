@@ -121,6 +121,7 @@ Usually use a scheduled task or deferred resume, depending on whether you need a
 
 - [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [Runs](./runs.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Daemon and Background Automation](./daemon.md)

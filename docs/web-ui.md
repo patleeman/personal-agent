@@ -168,6 +168,8 @@ If a deferred resume or reminder becomes ready while you already have that saved
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
 
+Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
+
 When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
 
 Conversations can also carry lightweight automation.
@@ -188,6 +190,8 @@ You can:
 - open the same workspace in VS Code when you want a fuller editor
 
 When the selected folder lives inside a git repo, the page automatically roots itself at the repo top level so the tree and changed-file list line up with git.
+
+See [Workspace](./workspace.md).
 
 ### Automation
 
@@ -221,7 +225,7 @@ From the Projects page you can:
 - start a new conversation directly from the project
 - view a combined project timeline
 
-See [Projects](./projects.md).
+See [Projects](./projects.md) and [Artifacts and Rendered Outputs](./artifacts.md).
 
 ### Scheduled
 
@@ -392,6 +396,8 @@ So, for example:
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)
+- [Workspace](./workspace.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
 - [Projects](./projects.md)
 - [Execution Targets](./execution-targets.md)
