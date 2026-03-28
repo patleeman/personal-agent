@@ -16,7 +16,7 @@ function mcpUsageText(): string {
 }
 
 function printMcpHelp(): void {
-  console.log('MCP commands');
+  console.log('MCP');
   console.log('');
   printDenseUsage('pa mcp [list|info|grep|call|auth|logout|help] [args...]');
   console.log('');

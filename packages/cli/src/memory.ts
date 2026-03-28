@@ -46,7 +46,7 @@ function isMemoryHelpToken(value: string | undefined): boolean {
 }
 
 function printMemoryHelp(): void {
-  console.log('Note node commands');
+  console.log('Memory');
   console.log('');
   printDenseUsage('pa memory [list|find|show|new|lint|help]');
   console.log('');

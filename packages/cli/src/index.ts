@@ -1216,7 +1216,7 @@ async function printCliHome(options: { includeTailHint?: boolean } = {}): Promis
 
   if (includeTailHint) {
     console.log('');
-    console.log(dim('Use `pa <command> --help` for command details.'));
+    console.log(keyValue('Help', 'pa help [command]'));
   }
 }
 
@@ -1227,7 +1227,7 @@ async function statusCommand(args: string[]): Promise<number> {
 }
 
 function printProfileHelp(): void {
-  console.log('Profile commands');
+  console.log('Profile');
   console.log('');
   printDenseUsage('pa profile [list|show|use|help]');
   console.log('');
@@ -1289,7 +1289,7 @@ interface ParsedInstallCommandArgs {
 }
 
 function printInstallHelp(): void {
-  console.log('Install packages');
+  console.log('Install');
   console.log('');
   printDenseUsage(INSTALL_COMMAND_USAGE);
   console.log('');
@@ -1411,7 +1411,6 @@ async function installCommand(args: string[]): Promise<number> {
 function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void {
   const detail = module.detail as {
     cleanedFiles?: number;
-    lastRunAt?: string;
     lastError?: string;
   } | undefined;
 
@@ -1421,16 +1420,11 @@ function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void 
       ? statusChip('active')
       : statusChip('disabled');
 
-  console.log(bullet(`PA housekeeping: ${status}`));
-  console.log(keyValue('Policy', 'Removes daemon logs older than 7 days', 4));
+  const summary = typeof detail?.cleanedFiles === 'number' && detail.cleanedFiles > 0
+    ? ` · ${detail.cleanedFiles} cleaned`
+    : '';
 
-  if (typeof detail?.cleanedFiles === 'number') {
-    console.log(keyValue('Logs removed (total)', detail.cleanedFiles, 4));
-  }
-
-  if (detail?.lastRunAt) {
-    console.log(keyValue('Last run', new Date(detail.lastRunAt).toLocaleString(), 4));
-  }
+  console.log(bullet(`Housekeeping: ${status}${summary}`));
 
   if (module.lastError || detail?.lastError) {
     console.log(`    ${uiError('Housekeeping module', module.lastError || detail?.lastError || 'Unknown error')}`);
@@ -1440,18 +1434,9 @@ function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void 
 function printTasksModuleStatus(module: DaemonStatus['modules'][0], configuredTaskDir: string): void {
   const detail = module.detail as {
     taskDir?: string;
-    stateFile?: string;
-    runsRoot?: string;
-    durableRunsRoot?: string;
     knownTasks?: number;
     parseErrors?: number;
     runningTasks?: number;
-    totalRuns?: number;
-    successfulRuns?: number;
-    failedRuns?: number;
-    skippedRuns?: number;
-    lastTickAt?: string;
-    lastRunAt?: string;
     lastError?: string;
   } | undefined;
 
@@ -1461,57 +1446,26 @@ function printTasksModuleStatus(module: DaemonStatus['modules'][0], configuredTa
       ? statusChip('active')
       : statusChip('disabled');
 
-  console.log(bullet(`Scheduled tasks: ${status}`));
-  console.log(keyValue('Task directory', detail?.taskDir ?? configuredTaskDir, 4));
-
-  if (detail?.stateFile) {
-    console.log(keyValue('Task state file', detail.stateFile, 4));
-  }
-
-  const runsRoot = detail?.durableRunsRoot ?? detail?.runsRoot;
-  if (runsRoot) {
-    console.log(keyValue('Durable runs directory', runsRoot, 4));
-  }
-
+  const parts: string[] = [];
   if (typeof detail?.knownTasks === 'number') {
-    console.log(keyValue('Discovered tasks', detail.knownTasks, 4));
+    parts.push(`${detail.knownTasks} tasks`);
+  }
+  if (typeof detail?.runningTasks === 'number' && detail.runningTasks > 0) {
+    parts.push(`${detail.runningTasks} running`);
+  }
+  if (typeof detail?.parseErrors === 'number' && detail.parseErrors > 0) {
+    parts.push(`${detail.parseErrors} parse errors`);
   }
 
-  if (typeof detail?.parseErrors === 'number') {
-    const label = detail.parseErrors > 0
-      ? `${statusChip('error')} (${detail.parseErrors})`
-      : `${statusChip('active')} (0)`;
-    console.log(keyValue('Parse errors', label, 4));
-  }
-
-  if (typeof detail?.runningTasks === 'number') {
-    console.log(keyValue('Running tasks', detail.runningTasks, 4));
-  }
-
-  if (
-    typeof detail?.successfulRuns === 'number'
-    || typeof detail?.failedRuns === 'number'
-    || typeof detail?.skippedRuns === 'number'
-  ) {
-    console.log(
-      keyValue(
-        'Run totals',
-        `ok ${detail?.successfulRuns ?? 0} | failed ${detail?.failedRuns ?? 0} | skipped ${detail?.skippedRuns ?? 0}`,
-        4,
-      ),
-    );
-  }
-
-  if (detail?.lastTickAt) {
-    console.log(keyValue('Last scheduler tick', new Date(detail.lastTickAt).toLocaleString(), 4));
-  }
-
-  if (detail?.lastRunAt) {
-    console.log(keyValue('Last completed run', new Date(detail.lastRunAt).toLocaleString(), 4));
-  }
+  console.log(bullet(`Tasks: ${status}${parts.length > 0 ? ` · ${parts.join(' · ')}` : ''}`));
 
   if (module.lastError || detail?.lastError) {
     console.log(`    ${uiError('Tasks module', module.lastError || detail?.lastError || 'Unknown error')}`);
+    return;
+  }
+
+  if (detail?.taskDir && detail.taskDir !== configuredTaskDir) {
+    console.log(keyValue('Task directory', detail.taskDir, 4));
   }
 }
 
@@ -1556,7 +1510,6 @@ async function printDaemonStatusHumanReadable(options: { showNextStep?: boolean 
     console.log(section('Daemon'));
     console.log(keyValue('Status', statusChip('stopped')));
     console.log(keyValue('Socket', daemonPaths.socketPath));
-    console.log(keyValue('Task directory', config.modules.tasks.taskDir));
     if (showNextStep) {
       console.log('');
       console.log(`  ${formatNextStep('pa daemon start')}`);
@@ -1577,7 +1530,6 @@ async function printDaemonStatusHumanReadable(options: { showNextStep?: boolean 
   console.log(keyValue('PID', status.pid));
   console.log(keyValue('Uptime', uptimeText));
   console.log(keyValue('Socket', daemonPaths.socketPath));
-  console.log(keyValue('Task directory', config.modules.tasks.taskDir));
   console.log('');
   console.log(section('Modules'));
 
@@ -1600,11 +1552,13 @@ Daemon subcommands:
 `;
 
 function printDaemonHelp(options: { title?: string; includeNextStep?: boolean } = {}): void {
-  const title = options.title ?? 'Daemon';
+  const title = options.title;
   const includeNextStep = options.includeNextStep ?? true;
 
-  console.log(title);
-  console.log('');
+  if (title) {
+    console.log(title);
+    console.log('');
+  }
   printDenseUsage('pa daemon [status|start|stop|restart|logs|service|help] [args...]');
   console.log('');
   printDenseCommandList('Commands', [
@@ -1624,7 +1578,9 @@ function printDaemonHelp(options: { title?: string; includeNextStep?: boolean } 
   }
 }
 
-function printDaemonServiceHelp(): void {
+function printDaemonServiceHelp(options: { includeNextStep?: boolean } = {}): void {
+  const includeNextStep = options.includeNextStep ?? true;
+
   console.log('Daemon service');
   console.log('');
   printDenseUsage('pa daemon service [install|status|uninstall|help]');
@@ -1635,8 +1591,10 @@ function printDaemonServiceHelp(): void {
     { usage: 'pa daemon service status', description: 'Show managed daemon service status' },
     { usage: 'pa daemon service uninstall', description: 'Stop and remove managed daemon service' },
   ]);
-  console.log('');
-  console.log(`  ${formatNextStep('pa daemon service install')}`);
+  if (includeNextStep) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa daemon service install')}`);
+  }
 }
 
 function printDaemonServiceStatus(): void {
@@ -1704,13 +1662,13 @@ async function daemonCommand(args: string[]): Promise<number> {
   if (!subcommand) {
     await printDaemonStatusHumanReadable({ showNextStep: false });
     console.log('');
-    printDaemonHelp({ title: 'Daemon commands', includeNextStep: false });
+    printDaemonHelp({ includeNextStep: false });
     return 0;
   }
 
   if (isCliHelpToken(subcommand)) {
     ensureNoExtraCommandArgs(rest, 'pa daemon help');
-    printDaemonHelp();
+    printDaemonHelp({ title: 'Daemon', includeNextStep: false });
     return 0;
   }
 
@@ -1719,7 +1677,7 @@ async function daemonCommand(args: string[]): Promise<number> {
 
     if (!rawAction || isCliHelpToken(rawAction)) {
       ensureNoExtraCommandArgs(serviceArgs, 'pa daemon service help');
-      printDaemonServiceHelp();
+      printDaemonServiceHelp({ includeNextStep: false });
       return 0;
     }
 
@@ -2665,7 +2623,7 @@ function parseTaskListOptions(args: string[]): {
 }
 
 function printTasksHelp(): void {
-  console.log('Tasks commands');
+  console.log('Tasks');
   console.log('');
   printDenseUsage('pa tasks [list|show|validate|logs|help]');
   console.log('');
@@ -3582,7 +3540,7 @@ function resolveInboxActivityEntry(state: ReturnType<typeof loadInboxState>, sel
 }
 
 function printInboxHelp(): void {
-  console.log('Inbox commands');
+  console.log('Inbox');
   console.log('');
   printDenseUsage('pa inbox [list|show|create|read|unread|delete|help] [args...]');
   console.log('');
@@ -4373,7 +4331,6 @@ async function showWebUiStatus(
   console.log(section('Web UI'));
   console.log('');
   console.log(keyValue('URL', url));
-  console.log(keyValue('Port', String(webUiOptions.port)));
   console.log(keyValue('Reachable', listening ? statusChip('running') : statusChip('stopped')));
   console.log(keyValue('Managed service', serviceSummary));
   console.log(keyValue('Tailscale Serve', config.useTailscaleServe ? 'enabled' : 'disabled'));
@@ -4423,11 +4380,13 @@ async function openWebUiCommand(args: string[]): Promise<number> {
 }
 
 function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } = {}): void {
-  const title = options.title ?? 'Web UI';
+  const title = options.title;
   const includeNextStep = options.includeNextStep ?? true;
 
-  console.log(title);
-  console.log('');
+  if (title) {
+    console.log(title);
+    console.log('');
+  }
   printDenseUsage('pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
   console.log('');
   printDenseCommandList('Commands', [
@@ -4458,7 +4417,9 @@ function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } =
   }
 }
 
-function printWebUiServiceHelp(): void {
+function printWebUiServiceHelp(options: { includeNextStep?: boolean } = {}): void {
+  const includeNextStep = options.includeNextStep ?? true;
+
   console.log('Web UI service');
   console.log('');
   printDenseUsage('pa ui service [install|status|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
@@ -4479,8 +4440,10 @@ function printWebUiServiceHelp(): void {
     { usage: '--port <port>', description: 'Override the configured web UI port' },
     { usage: '--[no-]tailscale-serve', description: 'Override Tailscale Serve for foreground and managed-service actions' },
   ]);
-  console.log('');
-  console.log(`  ${formatNextStep('pa ui install')}`);
+  if (includeNextStep) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa ui install')}`);
+  }
 }
 
 function printWebUiServiceStatus(status: WebUiServiceStatus): void {
@@ -4965,13 +4928,13 @@ async function uiCommand(args: string[]): Promise<number> {
   if (!subcommand) {
     await showWebUiStatus([], { showNextStep: false });
     console.log('');
-    printWebUiHelp({ title: 'Web UI commands', includeNextStep: false });
+    printWebUiHelp({ includeNextStep: false });
     return 0;
   }
 
   if (isCliHelpToken(subcommand)) {
     ensureNoExtraCommandArgs(rest, 'pa ui help');
-    printWebUiHelp();
+    printWebUiHelp({ title: 'Web UI', includeNextStep: false });
     return 0;
   }
 
@@ -5012,7 +4975,7 @@ async function uiCommand(args: string[]): Promise<number> {
 
     if (!action || isCliHelpToken(action)) {
       ensureNoExtraCommandArgs(serviceArgs, 'pa ui service help');
-      printWebUiServiceHelp();
+      printWebUiServiceHelp({ includeNextStep: false });
       return 0;
     }
 
@@ -5047,21 +5010,21 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'status',
       category: 'system',
       usage: 'status',
-      description: 'Show current personal-agent status and quick commands',
+      description: 'Show status',
       run: statusCommand,
     },
     {
       name: 'tui',
       category: 'chat',
       usage: 'tui [args...]',
-      description: 'Run pi with profile resources',
+      description: 'Start a chat session',
       run: runCommand,
     },
     {
       name: 'install',
       category: 'configuration',
       usage: 'install [args...]',
-      description: 'Add a Pi package source to durable pa settings',
+      description: 'Add a Pi package source',
       helpText: `\nUsage: ${INSTALL_COMMAND_USAGE}\n\n${INSTALL_COMMAND_HELP_TEXT}\n`,
       disableBuiltInHelp: true,
       run: installCommand,
@@ -5091,21 +5054,21 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'restart',
       category: 'system',
       usage: 'restart [--rebuild]',
-      description: 'Restart the daemon and managed web UI (use --rebuild to rebuild packages and blue/green redeploy the web UI)',
+      description: 'Restart daemon and web UI',
       run: restartCommand,
     },
     {
       name: 'update',
       category: 'system',
       usage: 'update [--repo-only]',
-      description: 'Pull latest git changes, refresh repo dependencies, sync pi to latest, rebuild packages, then restart background services',
+      description: 'Update repo, pi, and services',
       run: updateCommand,
     },
     {
       name: 'daemon',
       category: 'system',
       usage: 'daemon [status|start|stop|restart|logs|service|help] [args...]',
-      description: 'Manage personal-agent daemon',
+      description: 'Manage daemon',
       helpText: DAEMON_HELP_TEXT,
       disableBuiltInHelp: true,
       run: daemonCommand,
@@ -5114,7 +5077,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'tasks',
       category: 'automation',
       usage: 'tasks [list|show|validate|logs|help] [args...]',
-      description: 'Inspect and validate scheduled daemon tasks',
+      description: 'Inspect scheduled tasks',
       disableBuiltInHelp: true,
       run: tasksCommand,
     },
@@ -5122,7 +5085,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'inbox',
       category: 'data',
       usage: 'inbox [list|show|create|read|unread|delete|help] [args...]',
-      description: 'Inspect and manage activity/inbox items for the active profile',
+      description: 'Manage inbox items',
       disableBuiltInHelp: true,
       run: inboxCommand,
     },
@@ -5130,7 +5093,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'ui',
       category: 'system',
       usage: 'ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]',
-      description: 'Inspect and manage the personal agent web UI',
+      description: 'Inspect web UI',
       disableBuiltInHelp: true,
       run: uiCommand,
     },
@@ -5138,7 +5101,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'memory',
       category: 'data',
       usage: 'memory [list|find|show|new|lint|help] [args...]',
-      description: 'Inspect shared note nodes',
+      description: 'Inspect note nodes',
       disableBuiltInHelp: true,
       run: memoryCommand,
     },
@@ -5146,7 +5109,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'mcp',
       category: 'data',
       usage: 'mcp [list|info|grep|call|auth|logout|help] [args...]',
-      description: 'Inspect and call configured MCP servers natively',
+      description: 'Inspect and call MCP servers',
       disableBuiltInHelp: true,
       run: mcpCommand,
     },
@@ -5154,7 +5117,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'runs',
       category: 'automation',
       usage: 'runs [list|show|logs|start|cancel|help] [args...]',
-      description: 'Inspect and manage durable background runs',
+      description: 'Inspect background runs',
       disableBuiltInHelp: true,
       run: runsCommand,
     },
@@ -5162,7 +5125,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'targets',
       category: 'automation',
       usage: 'targets [list|show|add|update|install|delete|help] [args...]',
-      description: 'Inspect and manage execution targets',
+      description: 'Manage execution targets',
       disableBuiltInHelp: true,
       run: targetsCommand,
     },
@@ -5170,7 +5133,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'sync',
       category: 'automation',
       usage: 'sync [status|run|setup|help] [args...]',
-      description: 'Configure and run automatic git state sync',
+      description: 'Manage git sync',
       disableBuiltInHelp: true,
       run: syncCommand,
     },
@@ -5273,24 +5236,19 @@ function printRootHelp(
   if (includePreamble) {
     printDenseUsage('pa [command] [args...]');
     console.log('');
-    printDenseParagraph('Bare `pa` shows live status and quick commands.');
-    console.log('');
   }
 
-  printDenseCommandList('Commands', definitions.map((definition) => ({
-    usage: `pa ${definition.usage ?? definition.name}`,
-    description: definition.description,
-  })));
-  console.log('');
-  printDenseCommandList('Help', [
-    { usage: 'pa help [command]', description: 'Show detailed help for a command' },
+  printDenseCommandList('Commands', [
+    ...definitions.map((definition) => ({
+      usage: `pa ${definition.usage ?? definition.name}`,
+      description: definition.description,
+    })),
+    { usage: 'pa help [command]', description: 'Show command help' },
   ]);
   console.log('');
   printDenseCommandList('Global options', [
     { usage: '--plain, --no-color', description: 'Disable rich ANSI styling' },
   ]);
-  console.log('');
-  console.log(dim('Use `pa <command> --help` for command details.'));
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {

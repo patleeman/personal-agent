@@ -85,7 +85,7 @@ function printTarget(target: ExecutionTargetRecord): void {
 }
 
 function printTargetsHelp(): void {
-  console.log('Execution targets commands');
+  console.log('Targets');
   console.log('');
   printDenseUsage('pa targets [list|show|add|update|install|delete|help]');
   console.log('');

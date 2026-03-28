@@ -44,31 +44,31 @@ describe('subcommand help discoverability', () => {
   it.each([
     {
       argv: ['install', '--help'],
-      expected: ['Install packages', 'Usage: pa install <source> [--profile <name> | -l | --local]', 'pa install https://github.com/davebcn87/pi-autoresearch'],
+      expected: ['Install', 'Usage: pa install <source> [--profile <name> | -l | --local]', 'pa install https://github.com/davebcn87/pi-autoresearch'],
     },
     {
       argv: ['profile', '--help'],
-      expected: ['Profile commands', 'Usage: pa profile [list|show|use|help]', 'list'],
+      expected: ['Profile', 'Usage: pa profile [list|show|use|help]', 'list'],
     },
     {
       argv: ['tasks', '--help'],
-      expected: ['Tasks commands', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
+      expected: ['Tasks', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
     },
     {
       argv: ['memory', '--help'],
-      expected: ['Note node commands', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
+      expected: ['Memory', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
     },
     {
       argv: ['inbox', '--help'],
-      expected: ['Inbox commands', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
+      expected: ['Inbox', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
     },
     {
       argv: ['runs', '--help'],
-      expected: ['Runs commands', 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
+      expected: ['Runs', 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
     },
     {
       argv: ['targets', '--help'],
-      expected: ['Execution targets commands', 'Usage: pa targets [list|show|add|update|install|delete|help]', 'install <id> [--force] [--json]'],
+      expected: ['Targets', 'Usage: pa targets [list|show|add|update|install|delete|help]', 'install <id> [--force] [--json]'],
     },
     {
       argv: ['daemon', '--help'],

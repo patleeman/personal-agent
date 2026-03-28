@@ -120,7 +120,7 @@ function readBackgroundRunSource(taskSlug: string): { type: string; id?: string;
 }
 
 function printRunsHelp(): void {
-  console.log('Runs commands');
+  console.log('Runs');
   console.log('');
   printDenseUsage('pa runs [list|show|logs|start|cancel|help] [args...]');
   console.log('');

@@ -150,7 +150,7 @@ describe('daemon command matrix', () => {
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Daemon'))).toBe(true);
     expect(logs.some((line) => line.includes('stopped'))).toBe(true);
-    expect(logs.some((line) => line.includes('Daemon commands'))).toBe(true);
+    expect(logs.some((line) => line.includes('Usage: pa daemon'))).toBe(true);
     expect(logs.some((line) => line.includes('pa daemon start'))).toBe(true);
     expect(logs.some((line) => line.includes('pa daemon service [install|status|uninstall|help]'))).toBe(true);
 
