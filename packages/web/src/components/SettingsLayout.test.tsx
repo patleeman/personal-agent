@@ -43,12 +43,19 @@ describe('SettingsSplitLayout', () => {
     expect(html).toContain('Interface');
     expect(html).toContain('Workspace');
     expect(html).toContain('System');
+    expect(html).toContain('Web UI');
+    expect(html).toContain('Daemon');
+    expect(html).toContain('Sync');
     expect(html).toContain('Runs');
     expect(html).toContain('Scheduled tasks');
     expect(html).toContain('Capabilities');
     expect(html).toContain('Tools');
     expect(html).toContain('Instructions');
     expect(html).toContain('href="/settings?page=providers"');
+    expect(html).toContain('href="/settings?page=system"');
+    expect(html).toContain('href="/settings?page=system-web-ui"');
+    expect(html).toContain('href="/settings?page=system-daemon"');
+    expect(html).toContain('href="/settings?page=system-sync"');
     expect(html).toContain('href="/runs"');
     expect(html).toContain('href="/scheduled"');
     expect(html).toContain('href="/plans"');
@@ -60,5 +67,11 @@ describe('SettingsSplitLayout', () => {
 
     const settingsHtml = renderLayout('/settings?page=providers');
     expect(settingsHtml).toContain('class="group ui-list-row ui-list-row-selected" href="/settings?page=providers"');
+
+    const systemHtml = renderLayout('/settings?page=system');
+    expect(systemHtml).toContain('class="group ui-list-row ui-list-row-selected" href="/settings?page=system"');
+
+    const daemonHtml = renderLayout('/settings?page=system-daemon');
+    expect(daemonHtml).toContain('class="group ui-list-row ui-list-row-selected ml-3" href="/settings?page=system-daemon"');
   });
 });

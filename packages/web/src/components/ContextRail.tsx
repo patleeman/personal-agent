@@ -42,7 +42,6 @@ import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
-import { getSystemComponentFromSearch, getSystemComponentLabel } from '../systemSelection';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
@@ -72,7 +71,6 @@ import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
-import { SystemContextPanel } from './SystemContextPanel';
 import { MentionTextarea } from './MentionTextarea';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import { NotesBrowserRail } from './NotesBrowserRail';
@@ -3392,7 +3390,7 @@ function SettingsOverviewContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">What lives here</p>
-        <p className="ui-card-meta">Use Settings for stable preferences. Use System for live service state, logs, and operational debugging. Use Runs for durable background work and recovery review.</p>
+        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, and the integrated System overview. Use Runs for durable background work and recovery review.</p>
       </div>
     </div>
   );
@@ -3644,19 +3642,6 @@ export function ContextRail() {
         <RailHeader label="Runs" sub={id ?? 'workspace'} />
         <div className="min-h-0 flex-1">
           {id ? <RunContextPanel runId={id} /> : <EmptyPrompt text="Select a run to inspect logs, recovery actions, and linked resources." />}
-        </div>
-      </div>
-    );
-  }
-
-  // System
-  if (section === 'system') {
-    const componentId = getSystemComponentFromSearch(location.search);
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="System" sub={getSystemComponentLabel(componentId)} />
-        <div className="min-h-0 flex-1">
-          <SystemContextPanel componentId={componentId} />
         </div>
       </div>
     );

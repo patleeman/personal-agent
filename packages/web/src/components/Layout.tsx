@@ -452,6 +452,7 @@ export function Layout() {
     || location.pathname.startsWith('/memories')
     || location.pathname.startsWith('/projects')
     || location.pathname.startsWith('/settings')
+    || location.pathname.startsWith('/system')
     || location.pathname.startsWith('/skills')
     || location.pathname.startsWith('/workspace')
   );

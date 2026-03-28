@@ -6,7 +6,7 @@ import type { DaemonState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { useApi } from '../hooks';
-import { ErrorState, LoadingState, Pill, ToolbarButton, type PillTone } from './ui';
+import { ErrorState, LoadingState, Pill, ToolbarButton, cx, type PillTone } from './ui';
 
 type SystemPanelData =
   | { kind: 'web-ui'; data: WebUiState }
@@ -230,7 +230,7 @@ function CompanionPairingSection({ data }: { data: WebUiState }) {
     <div className="space-y-3 border-t border-border-subtle pt-4">
       <div className="space-y-1">
         <p className="ui-section-label">Remote pairing</p>
-        <p className="text-[12px] text-secondary leading-relaxed">Generate a short-lived pairing code here, or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>, then enter it on a remote desktop browser or the phone companion to mint a revocable session.</p>
+        <p className="text-[12px] leading-relaxed text-secondary">Generate a short-lived pairing code here, or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>, then enter it on a remote desktop browser or the phone companion to mint a revocable session.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <ToolbarButton onClick={() => { void createPairingCode(); }} disabled={pairingBusy}>
@@ -288,7 +288,17 @@ function CompanionPairingSection({ data }: { data: WebUiState }) {
   );
 }
 
-export function SystemContextPanel({ componentId }: { componentId: SystemComponentId }) {
+export function SystemServiceSection({
+  componentId,
+  variant = 'inline',
+  highlighted = false,
+  id,
+}: {
+  componentId: SystemComponentId;
+  variant?: 'inline' | 'panel';
+  highlighted?: boolean;
+  id?: string;
+}) {
   const {
     daemon,
     sync,
@@ -403,26 +413,132 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
     }
   }, [actionBusy, selected, setWebUi]);
 
+  const loadingLabel = `Loading ${getSystemComponentLabel(componentId).toLowerCase()}…`;
   if (!selected || !panel) {
-    return <LoadingState label={`Loading ${getSystemComponentLabel(componentId).toLowerCase()}…`} className="px-4 py-4" />;
+    if (variant === 'panel') {
+      return <LoadingState label={loadingLabel} className="px-4 py-4" />;
+    }
+
+    return (
+      <section id={id} className="scroll-mt-6 rounded-[24px] border border-border-subtle bg-surface/35 px-5 py-5">
+        <LoadingState label={loadingLabel} className="justify-start px-0 py-0" />
+      </section>
+    );
   }
 
   const lines = panel.log.lines;
   const companion = selected.kind === 'web-ui' ? buildWebUiCompanionAccessSummary(selected.data.service) : null;
 
+  if (variant === 'panel') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="shrink-0 space-y-4 px-4 py-4">
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <p className="ui-card-title">{panel.title}</p>
+                  <Pill tone={panel.tone}>{panel.status}</Pill>
+                </div>
+                <p className="ui-card-meta max-w-sm">{panel.description}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <ToolbarButton onClick={() => { void refreshSelected(); }} disabled={refreshing || actionBusy}>
+                  {refreshing ? 'Refreshing…' : '↻ Refresh'}
+                </ToolbarButton>
+                <ToolbarButton onClick={() => { void handleAction(); }} disabled={actionBusy || panel.actionDisabled}>
+                  {actionBusy ? 'Working…' : panel.actionLabel}
+                </ToolbarButton>
+              </div>
+            </div>
+
+            {panel.actionDisabledReason && (
+              <p className="ui-card-meta">{panel.actionDisabledReason}</p>
+            )}
+            <div aria-live="polite" className="space-y-1">
+              {message && <p className="text-[12px] text-secondary">{message}</p>}
+              {error && <ErrorState message={error} />}
+            </div>
+          </div>
+
+          {panel.warnings.length > 0 && (
+            <div className="space-y-2 border-t border-border-subtle pt-4">
+              <p className="ui-section-label">Warnings</p>
+              <div className="space-y-1.5">
+                {panel.warnings.map((warning) => (
+                  <p key={warning} className="text-[12px] leading-relaxed text-warning">{warning}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 border-t border-border-subtle pt-4">
+            <p className="ui-section-label">Details</p>
+            <div className="ui-detail-list">
+              {panel.details.map((detailRow) => (
+                <div key={detailRow.label} className="ui-detail-row">
+                  <span className="ui-detail-label">{detailRow.label}</span>
+                  <span className="ui-detail-value break-all">{detailRow.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {selected.kind === 'web-ui' && companion && (
+            <>
+              <div className="space-y-3 border-t border-border-subtle pt-4">
+                <div className="space-y-1">
+                  <p className="ui-section-label">Companion transport</p>
+                  <p className="text-[12px] leading-relaxed text-secondary">{companion.detail}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
+                    {selected.data.service.tailscaleServe ? 'Disable Tailnet HTTPS' : 'Enable Tailnet HTTPS'}
+                  </ToolbarButton>
+                  {selected.data.service.tailscaleUrl && (
+                    <a href={selected.data.service.tailscaleUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                      Open tailnet desktop
+                    </a>
+                  )}
+                </div>
+              </div>
+              <CompanionPairingSection data={selected.data} />
+            </>
+          )}
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-2 border-t border-border-subtle px-4 pb-4 pt-4">
+          <div className="shrink-0 space-y-1">
+            <p className="ui-section-label">Log</p>
+            <p className="break-all text-[10px] font-mono text-dim">{shortLogLabel(panel.log.path)}</p>
+          </div>
+          <pre className="min-h-0 flex-1 overflow-auto rounded-lg bg-surface/70 px-3 py-3 text-[11px] leading-relaxed whitespace-pre text-secondary">
+            {lines.length > 0 ? lines.join('\n') : panel.emptyLogLabel}
+          </pre>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-4 py-4 space-y-4">
+    <section
+      id={id}
+      className={cx(
+        'scroll-mt-6 rounded-[24px] border border-border-subtle bg-surface/35',
+        highlighted && 'border-accent/35 ring-1 ring-accent/20',
+      )}
+    >
+      <div className="space-y-4 px-5 py-5">
         <div className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <p className="ui-card-title">{panel.title}</p>
                 <Pill tone={panel.tone}>{panel.status}</Pill>
               </div>
-              <p className="ui-card-meta max-w-sm">{panel.description}</p>
+              <p className="ui-card-meta max-w-3xl">{panel.description}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <ToolbarButton onClick={() => { void refreshSelected(); }} disabled={refreshing || actionBusy}>
                 {refreshing ? 'Refreshing…' : '↻ Refresh'}
               </ToolbarButton>
@@ -432,11 +548,11 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
             </div>
           </div>
 
-          {panel.actionDisabledReason && (
-            <p className="ui-card-meta">{panel.actionDisabledReason}</p>
-          )}
-          {message && <p className="text-[12px] text-secondary">{message}</p>}
-          {error && <ErrorState message={error} />}
+          {panel.actionDisabledReason && <p className="ui-card-meta">{panel.actionDisabledReason}</p>}
+          <div aria-live="polite" className="space-y-1">
+            {message && <p className="text-[12px] text-secondary">{message}</p>}
+            {error && <ErrorState message={error} />}
+          </div>
         </div>
 
         {panel.warnings.length > 0 && (
@@ -444,7 +560,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
             <p className="ui-section-label">Warnings</p>
             <div className="space-y-1.5">
               {panel.warnings.map((warning) => (
-                <p key={warning} className="text-[12px] text-warning leading-relaxed">{warning}</p>
+                <p key={warning} className="text-[12px] leading-relaxed text-warning">{warning}</p>
               ))}
             </div>
           </div>
@@ -467,7 +583,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
             <div className="space-y-3 border-t border-border-subtle pt-4">
               <div className="space-y-1">
                 <p className="ui-section-label">Companion transport</p>
-                <p className="text-[12px] text-secondary leading-relaxed">{companion.detail}</p>
+                <p className="text-[12px] leading-relaxed text-secondary">{companion.detail}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
@@ -483,17 +599,21 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
             <CompanionPairingSection data={selected.data} />
           </>
         )}
-      </div>
 
-      <div className="min-h-0 flex-1 border-t border-border-subtle px-4 pt-4 pb-4 flex flex-col gap-2">
-        <div className="shrink-0 space-y-1">
-          <p className="ui-section-label">Log</p>
-          <p className="text-[10px] font-mono text-dim break-all">{shortLogLabel(panel.log.path)}</p>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <div className="space-y-1">
+            <p className="ui-section-label">Log</p>
+            <p className="break-all text-[10px] font-mono text-dim">{shortLogLabel(panel.log.path)}</p>
+          </div>
+          <pre className="max-h-[24rem] overflow-auto rounded-lg bg-base/80 px-3 py-3 text-[11px] leading-relaxed whitespace-pre text-secondary">
+            {lines.length > 0 ? lines.join('\n') : panel.emptyLogLabel}
+          </pre>
         </div>
-        <pre className="min-h-0 flex-1 overflow-auto rounded-lg bg-surface/70 px-3 py-3 text-[11px] leading-relaxed text-secondary whitespace-pre">
-          {lines.length > 0 ? lines.join('\n') : panel.emptyLogLabel}
-        </pre>
       </div>
-    </div>
+    </section>
   );
+}
+
+export function SystemContextPanel({ componentId }: { componentId: SystemComponentId }) {
+  return <SystemServiceSection componentId={componentId} variant="panel" />;
 }
