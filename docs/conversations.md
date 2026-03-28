@@ -15,6 +15,7 @@ A conversation is where live interaction happens:
 - file work
 - branching/forking
 - wakeups and callbacks
+- conversation artifacts
 - optional conversation-local automation
 
 The durable meaning of a conversation is usually:
@@ -168,6 +169,8 @@ Then, if needed:
 
 - [Decision Guide](./decision-guide.md)
 - [Web UI Guide](./web-ui.md)
+- [Workspace](./workspace.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)

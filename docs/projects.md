@@ -93,6 +93,8 @@ Use these for project-specific files you want to keep with the work:
 - sample data
 - generated deliverables
 
+These are durable project files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](./artifacts.md).
+
 ## Writing style
 
 Use these defaults:
@@ -172,6 +174,7 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 
 - [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)

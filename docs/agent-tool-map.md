@@ -77,5 +77,7 @@ Use the feature docs to decide whether the underlying product surface is correct
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)
+- [Workspace](./workspace.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)

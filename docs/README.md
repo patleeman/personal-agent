@@ -40,6 +40,7 @@ Those three pages should answer most agent questions quickly.
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Nodes](./nodes.md)
@@ -49,6 +50,7 @@ Those three pages should answer most agent questions quickly.
 ## Interfaces
 
 - [Web UI Guide](./web-ui.md)
+- [Workspace](./workspace.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
 
 ## Integrations and system surfaces
@@ -74,6 +76,8 @@ Those three pages should answer most agent questions quickly.
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
 | How do I automate something? | [Automation](./automation.md) | [Scheduled Tasks](./scheduled-tasks.md), [Runs](./runs.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
+| How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
+| How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Projects](./projects.md), [Web UI Guide](./web-ui.md) |
 | Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
 | How do remote execution targets work? | [Execution Targets](./execution-targets.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
@@ -83,9 +87,11 @@ Those three pages should answer most agent questions quickly.
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
+| Work on local repo files in the web UI | workspace | local filesystem / git-backed workspace state |
 | Track ongoing work across conversations | project node | `~/.local/state/personal-agent/sync/projects/**` |
 | Store durable knowledge | note node | `~/.local/state/personal-agent/sync/notes/**` |
 | Store durable behavior or preferences | `AGENTS.md`, settings, skill nodes | repo defaults + `~/.local/state/personal-agent/sync/{agents,settings,skills}/**` |
+| Render inspectable outputs in the current conversation | conversation artifact | local conversation-artifact state |
 | Notice async outcomes later without interrupting yourself | inbox/activity | local runtime inbox state |
 | Interrupt yourself later or wake a conversation back up | reminder / alert / deferred resume | local runtime alert + wakeup state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/runs/**` |

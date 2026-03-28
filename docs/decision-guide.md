@@ -31,6 +31,7 @@ If you are not sure which surface to use, start here.
 | Run something detached right now | durable background run | `daemon/runs/<run-id>/` | scheduled task |
 | Run something later or repeatedly | scheduled task | `sync/tasks/*.task.md` | run |
 | Add repeatable skill steps inside one conversation | conversation automation / todo list | conversation-local automation state | scheduled task or run |
+| Work on local repo files in the web UI | workspace | local repo/filesystem view | project docs or notes |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | project artifact directory as the first stop |
 | Keep a file with a specific project | project attachment or project artifact | `sync/projects/<id>/attachments|artifacts/` | top-level note assets |
 | Offload a conversation to another machine | execution target | machine-local execution-target config | scheduled task or run |
@@ -113,6 +114,8 @@ The docs explain the product model. `AGENTS.md` explains how this particular age
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)
+- [Workspace](./workspace.md)
+- [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Agent Tool Map](./agent-tool-map.md)
