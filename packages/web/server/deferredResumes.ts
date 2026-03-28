@@ -85,7 +85,7 @@ function createDeferredResumeId(now: Date): string {
   return `resume_${now.getTime()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function toSummary(record: DeferredResumeRecord): DeferredResumeSummary {
+export function toDeferredResumeSummary(record: DeferredResumeRecord): DeferredResumeSummary {
   return {
     id: record.id,
     sessionFile: record.sessionFile,
@@ -103,7 +103,7 @@ function toSummary(record: DeferredResumeRecord): DeferredResumeSummary {
 
 export function listDeferredResumesForSessionFile(sessionFile: string): DeferredResumeSummary[] {
   const state = loadDeferredResumeState();
-  return getSessionDeferredResumeEntries(state, sessionFile).map(toSummary);
+  return getSessionDeferredResumeEntries(state, sessionFile).map(toDeferredResumeSummary);
 }
 
 export function activateDueDeferredResumesForSessionFile(input: {
@@ -120,7 +120,7 @@ export function activateDueDeferredResumesForSessionFile(input: {
     saveDeferredResumeState(state);
   }
 
-  return activated.map(toSummary);
+  return activated.map(toDeferredResumeSummary);
 }
 
 export function completeDeferredResumeForSessionFile(input: {
@@ -135,7 +135,7 @@ export function completeDeferredResumeForSessionFile(input: {
 
   removeDeferredResume(state, input.id);
   saveDeferredResumeState(state);
-  return toSummary(record);
+  return toDeferredResumeSummary(record);
 }
 
 export function retryDeferredResumeForSessionFile(input: {
@@ -158,7 +158,7 @@ export function retryDeferredResumeForSessionFile(input: {
   }
 
   saveDeferredResumeState(state);
-  return toSummary(retried);
+  return toDeferredResumeSummary(retried);
 }
 
 export async function fireDeferredResumeNowForSessionFile(input: {
@@ -195,11 +195,12 @@ export async function fireDeferredResumeNowForSessionFile(input: {
     });
   }
 
-  return toSummary(activated);
+  return toDeferredResumeSummary(activated);
 }
 
 export async function scheduleDeferredResumeForSessionFile(input: {
   sessionFile: string;
+  conversationId?: string;
   delay?: string;
   at?: string;
   prompt?: string;
@@ -240,9 +241,9 @@ export async function scheduleDeferredResumeForSessionFile(input: {
     prompt: record.prompt,
     dueAt: record.dueAt,
     createdAt: record.createdAt,
-    conversationId: readSessionConversationId(record.sessionFile),
+    conversationId: input.conversationId?.trim() || readSessionConversationId(record.sessionFile),
   });
-  return toSummary(record);
+  return toDeferredResumeSummary(record);
 }
 
 export function createReadyDeferredResumeForSessionFile(input: {
@@ -281,7 +282,7 @@ export function createReadyDeferredResumeForSessionFile(input: {
     },
   });
   saveDeferredResumeState(state);
-  return toSummary(record);
+  return toDeferredResumeSummary(record);
 }
 
 export async function cancelDeferredResumeForSessionFile(input: {
@@ -308,5 +309,5 @@ export async function cancelDeferredResumeForSessionFile(input: {
     conversationId: readSessionConversationId(record.sessionFile),
     reason: 'Deferred resume cancelled by user.',
   });
-  return toSummary(record);
+  return toDeferredResumeSummary(record);
 }

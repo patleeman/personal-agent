@@ -151,8 +151,8 @@ function NoteWorkQueuePanel({
     <div className="rounded-2xl border border-border-subtle bg-surface/10 px-4 py-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-[13px] font-medium text-primary">Work queue</p>
-          <p className="text-[12px] text-secondary">Background note distillation runs.</p>
+          <p className="text-[13px] font-medium text-primary">Distillation runs</p>
+          <p className="text-[12px] text-secondary">Explicit note distillation and recovery runs.</p>
         </div>
         <div className="flex items-center gap-2">
           {recoverableItems.length > 0 && (
