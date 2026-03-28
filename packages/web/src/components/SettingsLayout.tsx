@@ -80,8 +80,8 @@ const SETTINGS_CONTROL_CENTER_ITEMS = [
   },
   {
     href: '/plans',
-    label: 'Capabilities',
-    summary: 'Reminder presets and reusable automation patterns.',
+    label: 'Reminder Presets',
+    summary: 'Reusable reminder presets and default automation stacks.',
   },
   {
     href: '/tools',
