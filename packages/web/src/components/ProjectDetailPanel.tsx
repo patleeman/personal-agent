@@ -9,9 +9,12 @@ import {
   ProjectTaskEditorForm,
 } from './ProjectDetailForms';
 import {
+  composeProjectDocumentContent,
   ProjectActivityContent,
   ProjectDocumentContent,
   ProjectRecordViewer,
+  projectDocumentStartsWithTitleHeading,
+  stripMatchingLeadingHeading,
 } from './ProjectDetailSections';
 import {
   buildActivityItems,
@@ -48,10 +51,6 @@ const PROJECT_PROPERTY_SELECT_CLASS = `${PROJECT_PROPERTY_INPUT_CLASS} pr-8`;
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
-
-function createDefaultProjectDocument(title: string): string {
-  return `# ${title.trim() || 'Project'}\n\n`;
-}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -478,10 +477,17 @@ export function ProjectDetailPanel({
   const [taskError, setTaskError] = useState<string | null>(null);
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
 
-  const [documentEditing, setDocumentEditing] = useState(false);
-  const [documentContent, setDocumentContent] = useState(documentRecord?.content ?? '');
+  const [documentContent, setDocumentContent] = useState(() => stripMatchingLeadingHeading(documentRecord?.content ?? '', record.title));
+  const [savedDocumentContent, setSavedDocumentContent] = useState(() => stripMatchingLeadingHeading(documentRecord?.content ?? '', record.title));
   const [documentBusy, setDocumentBusy] = useState(false);
   const [documentError, setDocumentError] = useState<string | null>(null);
+  const [documentSavedAt, setDocumentSavedAt] = useState<number | null>(null);
+  const documentContentRef = useRef(documentContent);
+  const savedDocumentContentRef = useRef(savedDocumentContent);
+  const documentBusyRef = useRef(documentBusy);
+  const documentSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const documentSaveQueuedRef = useRef(false);
+  const documentUsesTitleHeadingRef = useRef(projectDocumentStartsWithTitleHeading(documentRecord?.content ?? '', record.title));
 
   const [noteEditor, setNoteEditor] = useState<ProjectNoteEditorState | null>(null);
   const [noteForm, setNoteForm] = useState<NoteFormState>(() => emptyNoteForm());
@@ -522,13 +528,29 @@ export function ProjectDetailPanel({
   }, [projectBusy]);
 
   useEffect(() => {
+    documentContentRef.current = documentContent;
+  }, [documentContent]);
+
+  useEffect(() => {
+    savedDocumentContentRef.current = savedDocumentContent;
+  }, [savedDocumentContent]);
+
+  useEffect(() => {
+    documentBusyRef.current = documentBusy;
+  }, [documentBusy]);
+
+  useEffect(() => {
     const previousProjectId = projectIdRef.current;
     const previousSavedProjectForm = savedProjectFormRef.current;
     const nextProjectForm = projectFormFromDetail(project);
+    const nextDocumentContent = stripMatchingLeadingHeading(documentRecord?.content ?? '', record.title);
+    const previousSavedDocumentContent = savedDocumentContentRef.current;
 
     projectIdRef.current = record.id;
     savedProjectFormRef.current = nextProjectForm;
+    documentUsesTitleHeadingRef.current = projectDocumentStartsWithTitleHeading(documentRecord?.content ?? '', record.title);
     setSavedProjectForm(nextProjectForm);
+    setSavedDocumentContent(nextDocumentContent);
     setProjectForm((current) => {
       if (previousProjectId !== record.id || projectFormsEqual(current, previousSavedProjectForm)) {
         projectFormRef.current = nextProjectForm;
@@ -537,20 +559,23 @@ export function ProjectDetailPanel({
 
       return current;
     });
-  }, [project, record.id]);
+    setDocumentContent((current) => {
+      if (previousProjectId !== record.id || current === previousSavedDocumentContent) {
+        documentContentRef.current = nextDocumentContent;
+        return nextDocumentContent;
+      }
 
-  useEffect(() => {
-    if (!documentEditing) {
-      setDocumentContent(documentRecord?.content ?? '');
-    }
-  }, [documentEditing, documentRecord?.content]);
+      return current;
+    });
+  }, [documentRecord?.content, project, record.id, record.title]);
 
   useEffect(() => {
     clearScheduledProjectSave();
+    clearScheduledDocumentSave();
     projectSaveQueuedRef.current = false;
+    documentSaveQueuedRef.current = false;
     setTaskEditor(null);
     setNoteEditor(null);
-    setDocumentEditing(false);
     setFileUpload(emptyFileUploadState());
     setFileComposerOpen(false);
     setShowCompletedTasks(false);
@@ -558,6 +583,7 @@ export function ProjectDetailPanel({
     setProjectSavedAt(null);
     setTaskError(null);
     setDocumentError(null);
+    setDocumentSavedAt(null);
     setNoteError(null);
     setFileError(null);
     setConversationError(null);
@@ -579,10 +605,23 @@ export function ProjectDetailPanel({
     return () => clearTimeout(timeout);
   }, [projectSavedAt]);
 
+  useEffect(() => {
+    if (documentSavedAt === null) {
+      return undefined;
+    }
+
+    const timeout = setTimeout(() => setDocumentSavedAt(null), 1800);
+    return () => clearTimeout(timeout);
+  }, [documentSavedAt]);
+
   useEffect(() => () => {
     if (projectSaveTimerRef.current) {
       clearTimeout(projectSaveTimerRef.current);
       projectSaveTimerRef.current = null;
+    }
+    if (documentSaveTimerRef.current) {
+      clearTimeout(documentSaveTimerRef.current);
+      documentSaveTimerRef.current = null;
     }
   }, []);
 
@@ -605,6 +644,27 @@ export function ProjectDetailPanel({
       projectSaveTimerRef.current = null;
       void flushProjectSave();
     }, 500);
+  }
+
+  function clearScheduledDocumentSave() {
+    if (documentSaveTimerRef.current) {
+      clearTimeout(documentSaveTimerRef.current);
+      documentSaveTimerRef.current = null;
+    }
+  }
+
+  function scheduleDocumentSave(options: { immediate?: boolean } = {}) {
+    clearScheduledDocumentSave();
+
+    if (options.immediate) {
+      void flushDocumentSave();
+      return;
+    }
+
+    documentSaveTimerRef.current = setTimeout(() => {
+      documentSaveTimerRef.current = null;
+      void flushDocumentSave();
+    }, 900);
   }
 
   function updateProjectFormField(patch: Partial<ProjectFormState>, options: { immediate?: boolean } = {}) {
@@ -682,6 +742,85 @@ export function ProjectDetailPanel({
       }
     }
   }
+
+  function updateDocumentContent(value: string) {
+    documentContentRef.current = value;
+    setDocumentContent(value);
+    setDocumentError(null);
+    setDocumentSavedAt(null);
+  }
+
+  async function flushDocumentSave() {
+    clearScheduledDocumentSave();
+
+    if (documentBusyRef.current) {
+      documentSaveQueuedRef.current = true;
+      return;
+    }
+
+    const draftDocumentContent = documentContentRef.current;
+    if (draftDocumentContent === savedDocumentContentRef.current) {
+      documentSaveQueuedRef.current = false;
+      return;
+    }
+
+    documentBusyRef.current = true;
+    setDocumentBusy(true);
+    setDocumentError(null);
+
+    let saveSucceeded = false;
+
+    try {
+      const nextContent = composeProjectDocumentContent(
+        draftDocumentContent,
+        projectFormRef.current.title || record.title,
+        documentUsesTitleHeadingRef.current,
+      );
+      await api.saveProjectDocument(record.id, nextContent, projectApiOptions);
+      savedDocumentContentRef.current = draftDocumentContent;
+      setSavedDocumentContent(draftDocumentContent);
+      setDocumentSavedAt(Date.now());
+      saveSucceeded = true;
+      onChanged?.();
+    } catch (error) {
+      setDocumentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      documentBusyRef.current = false;
+      setDocumentBusy(false);
+      const shouldSaveAgain = documentSaveQueuedRef.current || documentContentRef.current !== savedDocumentContentRef.current;
+      documentSaveQueuedRef.current = false;
+      if (saveSucceeded && shouldSaveAgain) {
+        scheduleDocumentSave({ immediate: true });
+      }
+    }
+  }
+
+  useEffect(() => {
+    const nextSignature = documentContent.trim();
+    const savedSignature = savedDocumentContent.trim();
+    if (nextSignature.length === 0 && savedSignature.length === 0) {
+      return;
+    }
+
+    if (documentContent === savedDocumentContent || documentBusy) {
+      return;
+    }
+
+    scheduleDocumentSave();
+    return () => clearScheduledDocumentSave();
+  }, [documentBusy, documentContent, savedDocumentContent]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        void flushDocumentSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [documentContent, savedDocumentContent]);
 
   function openTaskAdd() {
     setTaskEditor({ mode: 'add' });
@@ -766,37 +905,6 @@ export function ProjectDetailPanel({
       setTaskError(error instanceof Error ? error.message : String(error));
     } finally {
       setTaskBusy(false);
-    }
-  }
-
-  async function saveDocument(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setDocumentBusy(true);
-    setDocumentError(null);
-
-    try {
-      await api.saveProjectDocument(record.id, documentContent, projectApiOptions);
-      setDocumentEditing(false);
-      onChanged?.();
-    } catch (error) {
-      setDocumentError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDocumentBusy(false);
-    }
-  }
-
-  async function regenerateDocument() {
-    setDocumentBusy(true);
-    setDocumentError(null);
-
-    try {
-      await api.regenerateProjectDocument(record.id, projectApiOptions);
-      setDocumentEditing(false);
-      onChanged?.();
-    } catch (error) {
-      setDocumentError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setDocumentBusy(false);
     }
   }
 
@@ -1117,38 +1225,22 @@ export function ProjectDetailPanel({
 
         <ProjectSection
           title="Document"
-          meta={documentRecord ? `Updated ${timeAgo(documentRecord.updatedAt)}` : 'No document yet'}
-          action={(
-            <>
-              <button type="button" onClick={() => { void regenerateDocument(); }} className={ACTION_TEXT_BUTTON_CLASS} disabled={documentBusy}>
-                {documentBusy ? 'Regenerating…' : 'Regenerate'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setDocumentError(null);
-                  if (!documentEditing && documentContent.trim().length === 0) {
-                    setDocumentContent(documentRecord?.content ?? createDefaultProjectDocument(projectForm.title));
-                  }
-                  setDocumentEditing((value) => !value);
-                }}
-                className={ACTION_TEXT_BUTTON_CLASS}
-                disabled={documentBusy}
-              >
-                {documentEditing ? 'Cancel' : (documentRecord ? 'Edit document' : 'Write document')}
-              </button>
-            </>
-          )}
+          meta={documentError
+            ? documentError
+            : documentBusy
+              ? 'Saving…'
+              : documentContent !== savedDocumentContent
+                ? 'Unsaved changes'
+                : documentRecord
+                  ? `Updated ${timeAgo(documentRecord.updatedAt)}`
+                  : (documentSavedAt ? 'Saved' : 'Start writing')}
         >
           <ProjectDocumentContent
-            document={documentRecord}
-            projectTitle={projectForm.title || record.title}
-            editing={documentEditing}
             content={documentContent}
             busy={documentBusy}
+            dirty={documentContent !== savedDocumentContent}
             error={documentError}
-            onChange={setDocumentContent}
-            onSubmit={saveDocument}
+            onChange={updateDocumentContent}
           />
         </ProjectSection>
 

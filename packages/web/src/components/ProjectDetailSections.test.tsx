@@ -33,26 +33,20 @@ describe('ProjectDetailSections markdown rendering', () => {
     expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
   });
 
-  it('strips the redundant leading project title heading from the rendered doc', () => {
+  it('renders the project document with the same note-style editor frame', () => {
     const html = renderToString(
       <ProjectDocumentContent
-        document={{
-          path: '/tmp/project/INDEX.md',
-          updatedAt: '2026-03-27T04:00:00.000Z',
-          content: '# Bloodhound prototype\n\nShip a tight prototype that proves whether proactive help feels useful.',
-        }}
-        projectTitle="Bloodhound prototype"
-        editing={false}
-        content=""
+        content={'Ship a tight prototype that proves whether proactive help feels useful.'}
         busy={false}
+        dirty={false}
         error={null}
         onChange={() => undefined}
-        onSubmit={(event) => event.preventDefault()}
       />,
     );
 
-    expect(html).not.toContain('<h1>Bloodhound prototype</h1>');
-    expect(html).toContain('Ship a tight prototype that proves whether proactive help feels useful.');
+    expect(html).toContain('ui-note-editor-frame');
+    expect(html).toContain('ui-note-editor-doc');
+    expect(html).not.toContain('For the agent (optional)');
   });
 
   it('renders activity rows without duplicating relative timestamps', () => {

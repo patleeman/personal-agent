@@ -1,8 +1,8 @@
-import { useState, type FormEventHandler, type ReactNode } from 'react';
-import type { ProjectDocumentRecord, ProjectFile, ProjectNote } from '../types';
+import { useState, type ReactNode } from 'react';
+import type { ProjectFile, ProjectNote } from '../types';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
-import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
+import { NoteEditorDocument } from './NoteEditorDocument';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import type { ProjectActivityItemShape } from './projectDetailState';
@@ -14,7 +14,32 @@ function normalizeHeadingValue(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function stripMatchingLeadingHeading(body: string, heading: string): string {
+export function projectDocumentStartsWithTitleHeading(body: string, heading: string): boolean {
+  const normalizedHeading = normalizeHeadingValue(heading);
+  if (normalizedHeading.length === 0) {
+    return false;
+  }
+
+  const lines = body.split('\n');
+  let firstContentIndex = -1;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if ((lines[index] ?? '').trim().length > 0) {
+      firstContentIndex = index;
+      break;
+    }
+  }
+
+  if (firstContentIndex < 0) {
+    return false;
+  }
+
+  const firstLine = (lines[firstContentIndex] ?? '').trim();
+  const match = firstLine.match(/^#\s+(.+)$/);
+  return Boolean(match && normalizeHeadingValue(match[1] ?? '') === normalizedHeading);
+}
+
+export function stripMatchingLeadingHeading(body: string, heading: string): string {
   const normalizedHeading = normalizeHeadingValue(heading);
   if (normalizedHeading.length === 0) {
     return body;
@@ -34,9 +59,7 @@ function stripMatchingLeadingHeading(body: string, heading: string): string {
     return body;
   }
 
-  const firstLine = (lines[firstContentIndex] ?? '').trim();
-  const match = firstLine.match(/^#\s+(.+)$/);
-  if (!match || normalizeHeadingValue(match[1] ?? '') !== normalizedHeading) {
+  if (!projectDocumentStartsWithTitleHeading(body, heading)) {
     return body;
   }
 
@@ -47,6 +70,14 @@ function stripMatchingLeadingHeading(body: string, heading: string): string {
 
   const stripped = lines.slice(bodyStart).join('\n').trim();
   return stripped.length > 0 ? stripped : body;
+}
+
+export function composeProjectDocumentContent(body: string, heading: string, preserveTitleHeading: boolean): string {
+  if (!preserveTitleHeading || body.trim().length === 0) {
+    return body;
+  }
+
+  return `# ${heading.trim() || 'Project'}\n\n${body.trim()}`;
 }
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
@@ -285,50 +316,27 @@ export function ProjectActivityContent({
 }
 
 export function ProjectDocumentContent({
-  document,
-  projectTitle,
-  editing,
   content,
-  busy,
-  error,
   onChange,
-  onSubmit,
 }: {
-  document: ProjectDocumentRecord | null;
-  projectTitle: string;
-  editing: boolean;
   content: string;
   busy: boolean;
+  dirty: boolean;
   error: string | null;
   onChange: (value: string) => void;
-  onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
-  const renderedContent = document ? stripMatchingLeadingHeading(document.content, projectTitle) : '';
-
   return (
-    <div className="max-w-5xl space-y-4">
-      {editing ? (
-        <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">
-          <RichMarkdownEditor
-            value={content}
-            onChange={onChange}
-            placeholder="Start writing…"
-          />
-          {error && <p className="text-[12px] text-danger">{error}</p>}
-          <div className="flex items-center gap-3">
-            <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save doc'}</ToolbarButton>
-          </div>
-        </form>
-      ) : document ? (
-        <ProjectMarkdown body={renderedContent} className="ui-markdown max-w-none" />
-      ) : (
-        <EmptyState
-          title="No project doc yet."
-          body="Use the main project doc for the plan, context, and anything you want to keep with the project."
-          className="max-w-3xl py-8"
-        />
-      )}
-    </div>
+    <NoteEditorDocument
+      title=""
+      onTitleChange={() => undefined}
+      description=""
+      onDescriptionChange={() => undefined}
+      body={content}
+      onBodyChange={onChange}
+      showTitle={false}
+      showDescription={false}
+      bodyPlaceholder="Start writing…"
+    />
   );
 }
 

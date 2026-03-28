@@ -13,6 +13,8 @@ export function NoteEditorDocument({
   descriptionPlaceholder = 'Tell the agent how to use this note, when to read it, or what it is for.',
   bodyPlaceholder = 'Start writing… Paste or drop images.',
   readOnly = false,
+  showTitle = true,
+  showDescription = true,
 }: {
   title: string;
   onTitleChange: (nextValue: string) => void;
@@ -25,33 +27,39 @@ export function NoteEditorDocument({
   descriptionPlaceholder?: string;
   bodyPlaceholder?: string;
   readOnly?: boolean;
+  showTitle?: boolean;
+  showDescription?: boolean;
 }) {
   return (
     <div className="ui-note-editor-frame">
       <div className="ui-note-editor-doc">
-        <input
-          value={title}
-          onChange={(event) => onTitleChange(event.target.value)}
-          placeholder={titlePlaceholder}
-          className="ui-note-title-input"
-          autoComplete="off"
-          spellCheck={false}
-          readOnly={readOnly}
-        />
+        {showTitle ? (
+          <input
+            value={title}
+            onChange={(event) => onTitleChange(event.target.value)}
+            placeholder={titlePlaceholder}
+            className="ui-note-title-input"
+            autoComplete="off"
+            spellCheck={false}
+            readOnly={readOnly}
+          />
+        ) : null}
 
         {meta ? <div className="ui-note-inline-meta">{meta}</div> : null}
 
-        <label className="ui-note-description-block">
-          <span className="ui-note-description-label">For the agent (optional)</span>
-          <textarea
-            value={description}
-            onChange={(event) => onDescriptionChange(event.target.value)}
-            placeholder={descriptionPlaceholder}
-            className="ui-note-description-input"
-            rows={2}
-            readOnly={readOnly}
-          />
-        </label>
+        {showDescription ? (
+          <label className="ui-note-description-block">
+            <span className="ui-note-description-label">For the agent (optional)</span>
+            <textarea
+              value={description}
+              onChange={(event) => onDescriptionChange(event.target.value)}
+              placeholder={descriptionPlaceholder}
+              className="ui-note-description-input"
+              rows={2}
+              readOnly={readOnly}
+            />
+          </label>
+        ) : null}
 
         <RichMarkdownEditor
           value={body}
