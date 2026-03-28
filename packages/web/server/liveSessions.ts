@@ -2473,11 +2473,13 @@ export async function promptSession(
   text: string,
   behavior?: 'steer' | 'followUp',
   images?: PromptImageAttachment[],
-  surfaceId?: string,
+  _surfaceId?: string,
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  assertSurfaceCanControl(entry, surfaceId);
+  // Prompt submission should survive quick navigation between conversations.
+  // Keep surface-gated control for takeover/abort actions, but let an already
+  // clicked send continue even if this surface disconnects a moment later.
   await runPromptOnLiveEntry(entry, text, resolvePromptBehavior(entry, behavior), images);
 }
 
@@ -2486,11 +2488,10 @@ export async function submitPromptSession(
   text: string,
   behavior?: 'steer' | 'followUp',
   images?: PromptImageAttachment[],
-  surfaceId?: string,
+  _surfaceId?: string,
 ): Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  assertSurfaceCanControl(entry, surfaceId);
 
   const normalizedBehavior = resolvePromptBehavior(entry, behavior);
   if (normalizedBehavior === 'steer' || normalizedBehavior === 'followUp') {

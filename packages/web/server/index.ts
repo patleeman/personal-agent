@@ -7308,7 +7308,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       return;
     }
 
-    const surfaceId = ensureRequestControlsLocalLiveConversation(id, req.body);
+    const surfaceId = readRequestSurfaceId(req.body);
     const isRemoteLive = isRemoteLiveSession(id);
 
     const currentProfile = getCurrentProfile();
@@ -11426,7 +11426,7 @@ companionApp.post('/api/live-sessions/:id/prompt', async (req, res) => {
       return;
     }
 
-    const surfaceId = ensureRequestControlsLocalLiveConversation(id, req.body);
+    const surfaceId = readRequestSurfaceId(req.body);
     const isRemoteLive = isRemoteLiveSession(id);
 
     const currentProfile = getCurrentProfile();
