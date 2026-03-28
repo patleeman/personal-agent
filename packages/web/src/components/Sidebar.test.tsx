@@ -12,7 +12,7 @@ import {
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from '../localSettings.js';
-import type { SessionMeta } from '../types.js';
+import type { DurableRunListResult, DurableRunRecord, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -52,6 +52,66 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   };
 }
 
+function createSubagentRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
+  return {
+    runId: 'run-subagent-123',
+    paths: {
+      root: '/tmp/runs/run-subagent-123',
+      manifestPath: '/tmp/runs/run-subagent-123/manifest.json',
+      statusPath: '/tmp/runs/run-subagent-123/status.json',
+      checkpointPath: '/tmp/runs/run-subagent-123/checkpoint.json',
+      eventsPath: '/tmp/runs/run-subagent-123/events.jsonl',
+      outputLogPath: '/tmp/runs/run-subagent-123/output.log',
+      resultPath: '/tmp/runs/run-subagent-123/result.json',
+    },
+    manifest: {
+      version: 1,
+      id: 'run-subagent-123',
+      kind: 'background-run',
+      resumePolicy: 'manual',
+      createdAt: '2026-03-16T09:30:00.000Z',
+      spec: {
+        taskSlug: 'subagent',
+      },
+      source: {
+        type: 'tool',
+        id: 'conv-123',
+      },
+    },
+    status: {
+      version: 1,
+      runId: 'run-subagent-123',
+      status: 'running',
+      createdAt: '2026-03-16T09:30:00.000Z',
+      updatedAt: '2026-03-16T09:31:00.000Z',
+      activeAttempt: 1,
+      startedAt: '2026-03-16T09:30:10.000Z',
+    },
+    checkpoint: {
+      version: 1,
+      runId: 'run-subagent-123',
+      updatedAt: '2026-03-16T09:31:00.000Z',
+      payload: {},
+    },
+    problems: [],
+    recoveryAction: 'none',
+    ...overrides,
+  };
+}
+
+function createRunList(runs: DurableRunRecord[]): DurableRunListResult {
+  return {
+    scannedAt: '2026-03-16T09:31:00.000Z',
+    runsRoot: '/tmp/runs',
+    summary: {
+      total: runs.length,
+      recoveryActions: {},
+      statuses: {},
+    },
+    runs,
+  };
+}
+
 describe('Sidebar', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
@@ -87,6 +147,7 @@ describe('Sidebar', () => {
     options?: {
       sessions?: SessionMeta[];
       liveTitles?: Map<string, string>;
+      runs?: DurableRunListResult;
     },
   ) {
     return renderToString(
@@ -111,7 +172,7 @@ describe('Sidebar', () => {
             }],
             sessions: options?.sessions ?? [createSession()],
             tasks: null,
-            runs: null,
+            runs: options?.runs ?? null,
             setActivity: () => {},
             setAlerts: () => {},
             setProjects: () => {},
@@ -188,6 +249,27 @@ describe('Sidebar', () => {
 
     expect(html).toContain('draggable="true"');
     expect(html).toContain('Drag to reorder or move between pinned and open conversations');
+  });
+
+  it('indents subagent conversations under their parent conversation', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'child-1']));
+
+    const html = renderSidebar('/inbox', {
+      sessions: [
+        createSession({ id: 'conv-123', title: 'Parent conversation' }),
+        createSession({
+          id: 'child-1',
+          file: '/tmp/child-1.jsonl',
+          title: 'Child subagent conversation',
+          sourceRunId: 'run-subagent-123',
+        }),
+      ],
+      runs: createRunList([createSubagentRun()]),
+    });
+
+    expect(html.indexOf('Parent conversation')).toBeLessThan(html.indexOf('Child subagent conversation'));
+    expect(html).toContain('Nested under Parent conversation');
+    expect(html).toContain('padding-left:14px');
   });
 
   it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
