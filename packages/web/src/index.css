@@ -187,51 +187,11 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
+    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
     @apply bg-elevated text-primary;
-  }
-
-  .ui-sidebar-resource-row {
-    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
-  }
-
-  .ui-sidebar-resource-row-active {
-    @apply text-primary;
-  }
-
-  .ui-sidebar-resource-row-note {
-    @apply hover:bg-teal/5 hover:text-primary;
-  }
-
-  .ui-sidebar-resource-row-note.ui-sidebar-resource-row-active {
-    @apply bg-teal/10;
-  }
-
-  .ui-sidebar-resource-row-project {
-    @apply border border-success/20 hover:border-success/35 hover:bg-success/5 hover:text-primary;
-  }
-
-  .ui-sidebar-resource-row-project.ui-sidebar-resource-row-active {
-    @apply border-success/45 bg-success/10;
-  }
-
-  .ui-sidebar-resource-row-skill {
-    @apply hover:bg-steel/5 hover:text-primary;
-  }
-
-  .ui-sidebar-resource-row-skill.ui-sidebar-resource-row-active {
-    @apply bg-steel/10;
-  }
-
-  .ui-sidebar-resource-row-workspace {
-    @apply hover:bg-elevated/50 hover:text-primary;
-  }
-
-  .ui-sidebar-resource-row-workspace.ui-sidebar-resource-row-active {
-    @apply bg-elevated;
   }
 
   .ui-sidebar-session-meta {
