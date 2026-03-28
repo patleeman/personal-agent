@@ -1835,15 +1835,15 @@ function wireSession(
       publishSessionMetaChanged(entry.sessionId);
     }
 
-    if (event.type === 'auto_compaction_start') {
-      entry.pendingAutoCompactionReason = event.reason;
+    if (event.type === 'compaction_start') {
+      entry.pendingAutoCompactionReason = event.reason === 'manual' ? null : event.reason;
     }
 
-    if (event.type === 'auto_compaction_end') {
-      const compactionReason = entry.pendingAutoCompactionReason;
+    if (event.type === 'compaction_end') {
+      const compactionReason = event.reason === 'manual' ? null : event.reason;
       entry.pendingAutoCompactionReason = null;
 
-      if (!event.aborted && event.result) {
+      if (compactionReason && !event.aborted && event.result) {
         entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({
           mode: 'auto',
           reason: compactionReason,
