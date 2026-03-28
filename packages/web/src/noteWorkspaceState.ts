@@ -2,11 +2,10 @@ import type { MemoryDocItem } from './types';
 import { timeAgo } from './utils';
 
 export const NOTE_ID_SEARCH_PARAM = 'note';
-export const NOTE_VIEW_SEARCH_PARAM = 'view';
-export const NOTE_ITEM_SEARCH_PARAM = 'item';
 export const NOTE_NEW_SEARCH_PARAM = 'new';
-
-export type NoteWorkspaceView = 'main' | 'references' | 'links';
+const LEGACY_NOTE_ID_SEARCH_PARAM = 'memory';
+const LEGACY_NOTE_VIEW_SEARCH_PARAM = 'view';
+const LEGACY_NOTE_ITEM_SEARCH_PARAM = 'item';
 
 export function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem[] {
   const normalized = query.trim().toLowerCase();
@@ -36,44 +35,30 @@ export function filterMemories(memories: MemoryDocItem[], query: string): Memory
   });
 }
 
-export function readNoteView(_search: string): NoteWorkspaceView {
-  return 'main';
-}
-
 export function readCreateState(search: string): boolean {
   return new URLSearchParams(search).get(NOTE_NEW_SEARCH_PARAM) === '1';
 }
 
 export function buildNoteSearch(locationSearch: string, updates: {
   memoryId?: string | null;
-  view?: NoteWorkspaceView | null;
-  item?: string | null;
   creating?: boolean | null;
 }): string {
   const params = new URLSearchParams(locationSearch);
+  const existingMemoryId = params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get(LEGACY_NOTE_ID_SEARCH_PARAM)?.trim() || '';
+
+  params.delete(LEGACY_NOTE_ID_SEARCH_PARAM);
+  params.delete(LEGACY_NOTE_VIEW_SEARCH_PARAM);
+  params.delete(LEGACY_NOTE_ITEM_SEARCH_PARAM);
+
+  if (!params.get(NOTE_ID_SEARCH_PARAM) && existingMemoryId) {
+    params.set(NOTE_ID_SEARCH_PARAM, existingMemoryId);
+  }
 
   if (updates.memoryId !== undefined) {
     if (updates.memoryId) {
       params.set(NOTE_ID_SEARCH_PARAM, updates.memoryId);
     } else {
       params.delete(NOTE_ID_SEARCH_PARAM);
-      params.delete('memory');
-    }
-  }
-
-  if (updates.view !== undefined) {
-    if (updates.view) {
-      params.set(NOTE_VIEW_SEARCH_PARAM, updates.view);
-    } else {
-      params.delete(NOTE_VIEW_SEARCH_PARAM);
-    }
-  }
-
-  if (updates.item !== undefined) {
-    if (updates.item) {
-      params.set(NOTE_ITEM_SEARCH_PARAM, updates.item);
-    } else {
-      params.delete(NOTE_ITEM_SEARCH_PARAM);
     }
   }
 

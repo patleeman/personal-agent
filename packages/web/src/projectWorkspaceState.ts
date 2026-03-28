@@ -28,13 +28,3 @@ export function buildProjectsHref(
   return projectId ? `/projects/${projectId}${search}` : `/projects${search}`;
 }
 
-export function projectViewToSectionId(view: string): string | null {
-  switch (view) {
-    case 'document': return 'project-document';
-    case 'tasks': return 'project-tasks';
-    case 'activity': return 'project-activity';
-    case 'notes': return 'project-notes';
-    case 'files': return 'project-files';
-    default: return null;
-  }
-}

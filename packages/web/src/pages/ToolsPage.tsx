@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ListLinkRow, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
@@ -17,8 +17,6 @@ import { buildToolsSearch, getToolsSelectionKey, parseToolsSelection, type Tools
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
 const PROMPT_TEXTAREA_CLASS = 'min-h-[24rem] w-full resize-y rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60';
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-
 type ToolFilter = 'active' | 'all' | 'inactive';
 type PromptInspectorView = 'prompt' | 'messages' | 'tools';
 

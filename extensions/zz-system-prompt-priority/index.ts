@@ -19,7 +19,7 @@ export function prioritizePromptSection(systemPrompt: string, prioritizedSection
 
   let remainingPrompt = normalizedPrompt;
 
-  while (true) {
+  for (;;) {
     const sectionIndex = remainingPrompt.indexOf(normalizedSection);
     if (sectionIndex < 0) {
       break;

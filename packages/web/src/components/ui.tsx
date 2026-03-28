@@ -246,20 +246,3 @@ export function ListLinkRow({
   );
 }
 
-export function ListButtonRow({
-  selected,
-  leading,
-  trailing,
-  className,
-  children,
-  type = 'button',
-  ...props
-}: BaseRowProps & ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button type={type} className={cx('w-full text-left', rowClass(selected, className))} {...props}>
-      {leading}
-      <div className="flex-1 min-w-0">{children}</div>
-      {trailing}
-    </button>
-  );
-}

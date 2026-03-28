@@ -23,7 +23,6 @@ import {
   buildNoteSearch,
   filterMemories,
   NOTE_ID_SEARCH_PARAM,
-  type NoteWorkspaceView,
   noteKindLabel,
   readCreateState,
 } from '../noteWorkspaceState';
@@ -252,8 +251,6 @@ function NotesTable({
           {memories.map((memory) => {
             const noteHref = `/notes${buildNoteSearch(locationSearch, {
               memoryId: memory.id,
-              view: 'main',
-              item: null,
               creating: false,
             })}`;
             const context = formatNoteContext(memory);
@@ -316,7 +313,7 @@ function NoteWorkspace({
   onRefetched,
 }: {
   detail: MemoryDocDetail;
-  onNavigate: (updates: { memoryId?: string | null; view?: NoteWorkspaceView | null; item?: string | null; creating?: boolean | null }, replace?: boolean) => void;
+  onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onRefetched: () => void;
 }) {
   const memory = detail.memory;
@@ -398,7 +395,7 @@ function NoteWorkspace({
       setNoteBody(editableBody);
       setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
       if (result.memory.id !== memory.id) {
-        onNavigate({ memoryId: result.memory.id, view: 'main', item: null, creating: false }, true);
+        onNavigate({ memoryId: result.memory.id, creating: false }, true);
       }
       emitMemoriesChanged();
       onRefetched();
@@ -428,7 +425,7 @@ function NoteWorkspace({
     try {
       await api.deleteNoteDoc(memory.id);
       emitMemoriesChanged();
-      onNavigate({ memoryId: null, view: 'main', item: null, creating: false }, true);
+      onNavigate({ memoryId: null, creating: false }, true);
     } catch (error) {
       setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
       setDeleteBusy(false);
@@ -510,7 +507,7 @@ function NewNoteWorkspace({
   onNavigate,
   onCreated,
 }: {
-  onNavigate: (updates: { memoryId?: string | null; view?: NoteWorkspaceView | null; item?: string | null; creating?: boolean | null }, replace?: boolean) => void;
+  onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onCreated: (detail: MemoryDocDetail) => void;
 }) {
   const [createTitle, setCreateTitle] = useState('');
@@ -536,7 +533,7 @@ function NewNoteWorkspace({
       });
       emitMemoriesChanged();
       onCreated(created);
-      onNavigate({ memoryId: created.memory.id, view: 'main', item: null, creating: false }, true);
+      onNavigate({ memoryId: created.memory.id, creating: false }, true);
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error));
       setCreating(false);
@@ -613,7 +610,7 @@ export function MemoriesPage() {
   const detailApi = useApi(detailFetcher, `note-workspace:${selectedMemoryId ?? 'none'}`);
   const selectedDetail = detailApi.data;
 
-  const navigateNotes = useCallback((updates: { memoryId?: string | null; view?: NoteWorkspaceView | null; item?: string | null; creating?: boolean | null }, replace = false) => {
+  const navigateNotes = useCallback((updates: { memoryId?: string | null; creating?: boolean | null }, replace = false) => {
     const nextSearch = buildNoteSearch(location.search, updates);
     navigate(`/notes${nextSearch}`, { replace });
   }, [location.search, navigate]);
@@ -640,7 +637,7 @@ export function MemoriesPage() {
       return;
     }
 
-    navigateNotes({ memoryId: null, view: 'main', item: null, creating: false }, true);
+    navigateNotes({ memoryId: null, creating: false }, true);
   }, [loading, memories, navigateNotes, selectedMemoryId]);
 
   useEffect(() => {

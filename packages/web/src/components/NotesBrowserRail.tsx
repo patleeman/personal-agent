@@ -201,7 +201,7 @@ export function NotesBrowserRailContent({
             <p className="ui-card-meta mt-1">Browse notes and open them in the main workspace.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link to={`/notes${buildNoteSearch(location.search, { creating: true, view: 'main', item: null })}`} className="ui-toolbar-button text-accent">
+            <Link to={`/notes${buildNoteSearch(location.search, { creating: true })}`} className="ui-toolbar-button text-accent">
               New
             </Link>
             <ToolbarButton
@@ -287,7 +287,7 @@ export function NotesBrowserRailContent({
             {filteredMemories.map((memory) => (
               <BrowserRecordRow
                 key={memory.id}
-                to={`/notes${buildNoteSearch(location.search, { memoryId: memory.id, view: 'main', item: null, creating: false })}`}
+                to={`/notes${buildNoteSearch(location.search, { memoryId: memory.id, creating: false })}`}
                 selected={memory.id === selectedMemoryId && !creating}
                 label={noteRecordLabel(memory)}
                 aside={memory.usedInLastSession ? 'Used recently' : null}

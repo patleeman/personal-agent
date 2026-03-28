@@ -150,14 +150,6 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-function MarkdownPreview({ content }: { content: string }) {
-  return (
-    <pre className="overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">
-      {content}
-    </pre>
-  );
-}
-
 function SchemaParameters({ tool }: { tool: Pick<AgentToolInfo, 'parameters'> }) {
   const parameters = getToolParameters(tool);
 

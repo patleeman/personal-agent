@@ -11,7 +11,7 @@ function normalizePromptText(text: string): string {
 function inferRepoRootFromExtension(importMetaUrl: string): string {
   let current = resolve(dirname(fileURLToPath(importMetaUrl)));
 
-  while (true) {
+  for (;;) {
     if (existsSync(join(current, 'prompt-catalog'))) {
       return current;
     }
