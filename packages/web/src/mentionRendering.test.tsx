@@ -20,9 +20,9 @@ describe('mentionRendering', () => {
       </StaticRouter>,
     );
 
-    expect(html).toContain('href="/projects/web-ui"');
-    expect(html).toContain('href="/notes?note=note-index"');
-    expect(html).toContain('href="/skills?skill=tool-agent-browser"');
+    expect(html).toContain('href="/nodes?kind=project&amp;node=web-ui"');
+    expect(html).toContain('href="/nodes?kind=note&amp;node=note-index"');
+    expect(html).toContain('href="/nodes?kind=skill&amp;node=tool-agent-browser"');
   });
 
   it('falls back to a non-link pill for ambiguous mentions', () => {
@@ -38,7 +38,7 @@ describe('mentionRendering', () => {
     );
 
     expect(html).toContain('class="ui-markdown-mention"');
-    expect(html).not.toContain('href="/projects/shared-id"');
-    expect(html).not.toContain('href="/notes?note=shared-id"');
+    expect(html).not.toContain('href="/nodes?kind=project&amp;node=shared-id"');
+    expect(html).not.toContain('href="/nodes?kind=note&amp;node=shared-id"');
   });
 });

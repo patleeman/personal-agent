@@ -25,6 +25,7 @@ import {
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
 import { buildNoteSearch, NOTE_ID_SEARCH_PARAM, readCreateState } from '../noteWorkspaceState';
+import { buildNodesHref, readSelectedNode } from '../nodeWorkspaceState';
 import { buildProjectsHref } from '../projectWorkspaceState';
 import { buildSkillsSearch, SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
@@ -50,6 +51,7 @@ const PATH = {
   alerts: 'M14.857 17.082A23.848 23.848 0 0 0 18 18.75a8.967 8.967 0 0 1-6 2.292A8.967 8.967 0 0 1 6 18.75c1.09-.36 2.14-.92 3.143-1.668M14.857 17.082a23.848 23.848 0 0 1-5.714 0M14.857 17.082A5.98 5.98 0 0 0 18 11.25V9.75a6 6 0 1 0-12 0v1.5a5.98 5.98 0 0 0 3.143 5.832M12 3v1.5',
   inbox: 'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
   conversations: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
+  nodes: 'M6 6.75h4.5v4.5H6v-4.5Zm7.5 0H18v4.5h-4.5v-4.5Zm-3.75 7.5h4.5v4.5h-4.5v-4.5Z',
   notes: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
   projects: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h12A2.25 2.25 0 0 1 20.25 6v12A2.25 2.25 0 0 1 18 20.25H6A2.25 2.25 0 0 1 3.75 18V6ZM8.25 8.25h7.5M8.25 12h7.5M8.25 15.75h4.5',
   skills: 'M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125',
@@ -537,6 +539,14 @@ export function Sidebar() {
   );
   const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get(SKILL_SEARCH_PARAM)?.trim() || null, [location.search]);
   const selectedProjectId = useMemo(() => parseSelectedProjectId(location.pathname), [location.pathname]);
+  const selectedNodesPageItem = useMemo(
+    () => location.pathname.startsWith('/nodes') ? readSelectedNode(location.search) : null,
+    [location.pathname, location.search],
+  );
+  const nodesRouteActive = useMemo(
+    () => location.pathname.startsWith('/nodes') || location.pathname.startsWith('/notes') || location.pathname.startsWith('/projects') || location.pathname.startsWith('/skills'),
+    [location.pathname],
+  );
   const selectedWorkspaceId = useMemo(
     () => location.pathname.startsWith('/workspace') ? readWorkspaceCwdFromSearch(location.search) : null,
     [location.pathname, location.search],
@@ -584,6 +594,42 @@ export function Sidebar() {
     ],
     [workspaceShelf.openIds, workspaceShelf.pinnedIds],
   );
+  const openNodes = useMemo(() => {
+    const notes = openNotes.map((item) => {
+      const note = notesById.get(item.id) ?? null;
+      return {
+        kind: 'note' as const,
+        id: item.id,
+        pinned: item.pinned,
+        title: note?.title ?? item.id,
+        meta: note?.summary || `Note · @${item.id}`,
+      };
+    });
+
+    const projectsForShelf = openProjects.map((item) => {
+      const project = projectsById.get(item.id) ?? null;
+      return {
+        kind: 'project' as const,
+        id: item.id,
+        pinned: item.pinned,
+        title: project?.title ?? item.id,
+        meta: project?.summary || project?.description || `Project · @${item.id}`,
+      };
+    });
+
+    const skills = openSkills.map((item) => {
+      const skill = skillsByName.get(item.id) ?? null;
+      return {
+        kind: 'skill' as const,
+        id: item.id,
+        pinned: item.pinned,
+        title: humanizeSkillName(item.id),
+        meta: skill?.description || `Skill · @${item.id}`,
+      };
+    });
+
+    return [...notes, ...projectsForShelf, ...skills].sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.title.localeCompare(right.title));
+  }, [notesById, openNotes, openProjects, openSkills, projectsById, skillsByName]);
   const runsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
@@ -888,22 +934,22 @@ export function Sidebar() {
 
   function handleCloseNote(noteId: string) {
     closeOpenResourceShelfItem('note', noteId);
-    if (selectedNoteId === noteId && location.pathname.startsWith('/notes')) {
-      navigate('/notes');
+    if ((selectedNoteId === noteId && location.pathname.startsWith('/notes')) || (selectedNodesPageItem?.kind === 'note' && selectedNodesPageItem.id === noteId)) {
+      navigate('/nodes');
     }
   }
 
   function handleCloseProject(projectId: string) {
     closeOpenResourceShelfItem('project', projectId);
-    if (selectedProjectId === projectId && location.pathname.startsWith('/projects')) {
-      navigate('/projects');
+    if ((selectedProjectId === projectId && location.pathname.startsWith('/projects')) || (selectedNodesPageItem?.kind === 'project' && selectedNodesPageItem.id === projectId)) {
+      navigate('/nodes');
     }
   }
 
   function handleCloseSkill(skillName: string) {
     closeOpenResourceShelfItem('skill', skillName);
-    if (selectedSkillName === skillName && location.pathname.startsWith('/skills')) {
-      navigate('/skills');
+    if ((selectedSkillName === skillName && location.pathname.startsWith('/skills')) || (selectedNodesPageItem?.kind === 'skill' && selectedNodesPageItem.id === skillName)) {
+      navigate('/nodes');
     }
   }
 
@@ -929,9 +975,7 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
-        <TopNavItem to="/notes" icon={PATH.notes} label="Notes" />
-        <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
-        <TopNavItem to="/skills" icon={PATH.skills} label="Skills" />
+        <TopNavItem to="/nodes" icon={PATH.nodes} label="Nodes" forceActive={nodesRouteActive} />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Workspace" />
       </div>
 
@@ -1072,9 +1116,9 @@ export function Sidebar() {
           })}
         </div>
 
-        {(openNotes.length > 0 || creatingNote) && (
+        {(openNodes.length > 0 || creatingNote) && (
           <>
-            <SectionHeader label="Open Notes" />
+            <SectionHeader label="Open Nodes" />
             <div className="py-1 space-y-0.5">
               {creatingNote ? (
                 <ShelfRow
@@ -1085,70 +1129,32 @@ export function Sidebar() {
                   onClose={() => navigate(`/notes${buildNoteSearch(location.search, { creating: false })}`)}
                 />
               ) : null}
-              {openNotes.map((item) => {
-                const note = notesById.get(item.id) ?? null;
-                return (
-                  <ShelfRow
-                    key={item.id}
-                    to={`/notes${buildNoteSearch('', { memoryId: item.id, creating: false })}`}
-                    active={!creatingNote && location.pathname.startsWith('/notes') && selectedNoteId === item.id}
-                    title={note?.title ?? item.id}
-                    meta={note?.summary || `@${item.id}`}
-                    pinned={item.pinned}
-                    onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('note', item.id)}
-                    onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('note', item.id) : undefined}
-                    onClose={item.pinned ? undefined : () => handleCloseNote(item.id)}
-                  />
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {openProjects.length > 0 && (
-          <>
-            <SectionHeader label="Open Projects" />
-            <div className="py-1 space-y-0.5">
-              {openProjects.map((item) => {
-                const project = projectsById.get(item.id) ?? null;
-                return (
-                  <ShelfRow
-                    key={item.id}
-                    to={buildProjectsHref(project?.profile ?? 'shared', item.id)}
-                    active={location.pathname.startsWith('/projects') && selectedProjectId === item.id}
-                    title={project?.title ?? item.id}
-                    meta={project?.summary || project?.description || `@${item.id}`}
-                    pinned={item.pinned}
-                    onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('project', item.id)}
-                    onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('project', item.id) : undefined}
-                    onClose={item.pinned ? undefined : () => handleCloseProject(item.id)}
-                  />
-                );
-              })}
-            </div>
-          </>
-        )}
-
-        {openSkills.length > 0 && (
-          <>
-            <SectionHeader label="Open Skills" />
-            <div className="py-1 space-y-0.5">
-              {openSkills.map((item) => {
-                const skill = skillsByName.get(item.id) ?? null;
-                return (
-                  <ShelfRow
-                    key={item.id}
-                    to={`/skills${buildSkillsSearch('', { skillName: item.id, view: 'definition', item: null })}`}
-                    active={location.pathname.startsWith('/skills') && selectedSkillName === item.id}
-                    title={humanizeSkillName(item.id)}
-                    meta={skill?.description || skill?.source || item.id}
-                    pinned={item.pinned}
-                    onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('skill', item.id)}
-                    onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('skill', item.id) : undefined}
-                    onClose={item.pinned ? undefined : () => handleCloseSkill(item.id)}
-                  />
-                );
-              })}
+              {openNodes.map((item) => (
+                <ShelfRow
+                  key={`${item.kind}:${item.id}`}
+                  to={buildNodesHref(item.kind, item.id)}
+                  active={
+                    (selectedNodesPageItem?.kind === item.kind && selectedNodesPageItem.id === item.id)
+                    || (item.kind === 'note' && location.pathname.startsWith('/notes') && selectedNoteId === item.id)
+                    || (item.kind === 'project' && location.pathname.startsWith('/projects') && selectedProjectId === item.id)
+                    || (item.kind === 'skill' && location.pathname.startsWith('/skills') && selectedSkillName === item.id)
+                  }
+                  title={item.title}
+                  meta={item.meta}
+                  pinned={item.pinned}
+                  onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem(item.kind, item.id)}
+                  onUnpin={item.pinned ? () => unpinOpenResourceShelfItem(item.kind, item.id) : undefined}
+                  onClose={item.pinned ? undefined : () => {
+                    if (item.kind === 'note') {
+                      handleCloseNote(item.id);
+                    } else if (item.kind === 'project') {
+                      handleCloseProject(item.id);
+                    } else {
+                      handleCloseSkill(item.id);
+                    }
+                  }}
+                />
+              ))}
             </div>
           </>
         )}

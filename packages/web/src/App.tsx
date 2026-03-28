@@ -100,6 +100,7 @@ const ConversationPage = lazy(() => import('./pages/ConversationPage').then((mod
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
+const NodesPage = lazy(() => import('./pages/NodesPage').then((module) => ({ default: module.NodesPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then((module) => ({ default: module.SkillsPage })));
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
@@ -575,6 +576,7 @@ export function App() {
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
+                      <Route path="nodes" element={suspendRoute(<NodesPage />)} />
                       <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
                       <Route path="memories" element={<LegacyNotesRouteRedirect />} />
                       <Route path="skills" element={suspendRoute(<SkillsPage />)} />
