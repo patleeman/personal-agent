@@ -81,7 +81,7 @@ const SETTINGS_CONTROL_CENTER_ITEMS = [
   {
     href: '/plans',
     label: 'Capabilities',
-    summary: 'Todo presets and reusable automation patterns.',
+    summary: 'Reminder presets and reusable automation patterns.',
   },
   {
     href: '/tools',
