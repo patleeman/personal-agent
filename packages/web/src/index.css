@@ -187,24 +187,11 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
+    @apply relative mx-1 flex items-start gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
   }
 
   .ui-sidebar-session-row-active {
-    @apply text-primary;
-  }
-
-  .ui-sidebar-session-row-conversation {
-    background-color: rgb(var(--color-accent) / 0.07);
-  }
-
-  .ui-sidebar-session-row-conversation:hover {
-    background-color: rgb(var(--color-accent) / 0.11);
-    color: rgb(var(--color-primary));
-  }
-
-  .ui-sidebar-session-row-conversation.ui-sidebar-session-row-active {
-    background-color: rgb(var(--color-accent) / 0.16);
+    @apply bg-elevated text-primary;
   }
 
   .ui-sidebar-resource-row {
@@ -216,55 +203,35 @@
   }
 
   .ui-sidebar-resource-row-note {
-    background-color: rgb(var(--color-teal) / 0.08);
-  }
-
-  .ui-sidebar-resource-row-note:hover {
-    background-color: rgb(var(--color-teal) / 0.12);
-    color: rgb(var(--color-primary));
+    @apply hover:bg-teal/5 hover:text-primary;
   }
 
   .ui-sidebar-resource-row-note.ui-sidebar-resource-row-active {
-    background-color: rgb(var(--color-teal) / 0.18);
+    @apply bg-teal/10;
   }
 
   .ui-sidebar-resource-row-project {
-    background-color: rgb(var(--color-success) / 0.08);
-  }
-
-  .ui-sidebar-resource-row-project:hover {
-    background-color: rgb(var(--color-success) / 0.12);
-    color: rgb(var(--color-primary));
+    @apply border border-success/20 hover:border-success/35 hover:bg-success/5 hover:text-primary;
   }
 
   .ui-sidebar-resource-row-project.ui-sidebar-resource-row-active {
-    background-color: rgb(var(--color-success) / 0.18);
+    @apply border-success/45 bg-success/10;
   }
 
   .ui-sidebar-resource-row-skill {
-    background-color: rgb(var(--color-steel) / 0.08);
-  }
-
-  .ui-sidebar-resource-row-skill:hover {
-    background-color: rgb(var(--color-steel) / 0.12);
-    color: rgb(var(--color-primary));
+    @apply hover:bg-steel/5 hover:text-primary;
   }
 
   .ui-sidebar-resource-row-skill.ui-sidebar-resource-row-active {
-    background-color: rgb(var(--color-steel) / 0.18);
+    @apply bg-steel/10;
   }
 
   .ui-sidebar-resource-row-workspace {
-    background-color: rgb(var(--color-border-default) / 0.14);
-  }
-
-  .ui-sidebar-resource-row-workspace:hover {
-    background-color: rgb(var(--color-border-default) / 0.22);
-    color: rgb(var(--color-primary));
+    @apply hover:bg-elevated/50 hover:text-primary;
   }
 
   .ui-sidebar-resource-row-workspace.ui-sidebar-resource-row-active {
-    background-color: rgb(var(--color-border-default) / 0.3);
+    @apply bg-elevated;
   }
 
   .ui-sidebar-session-meta {

@@ -137,7 +137,6 @@ describe('Sidebar', () => {
     expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Skills'));
     expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
-    expect(html).toContain('ui-sidebar-session-row-conversation');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Open create menu');
     expect(html).not.toContain('Alerts');
