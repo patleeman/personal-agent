@@ -146,10 +146,57 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Browse durable notes');
     expect(html).toContain('Search notes');
     expect(html).toContain('Memory index');
-    expect(html).toContain('Top-level knowledge hub.');
+    expect(html).toContain('#');
+    expect(html).toContain('notes');
+    expect(html).toContain('structure');
     expect(html).toContain('Structure note');
     expect(html).toContain('Context');
     expect(html).toContain('Updated');
+  });
+
+  it('filters the notes table by tag params in the url', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [
+          {
+            id: 'memory-index',
+            title: 'Memory index',
+            summary: 'Top-level knowledge hub.',
+            tags: ['notes', 'index', 'structure'],
+            path: '/tmp/memory-index/INDEX.md',
+            type: 'structure',
+            status: 'active',
+            role: 'structure',
+            area: 'notes',
+            updated: '2026-03-17T12:00:00.000Z',
+          },
+          {
+            id: 'quick-idea',
+            title: 'Quick idea',
+            summary: 'Short scratch note.',
+            tags: ['scratch'],
+            path: '/tmp/quick-idea/INDEX.md',
+            type: 'note',
+            status: 'active',
+            area: 'notes',
+            updated: '2026-03-18T12:00:00.000Z',
+          },
+        ],
+        memoryQueue: [],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+      replaceData: vi.fn(),
+    });
+
+    const html = renderPage('/notes?tag=structure');
+
+    expect(html).toContain('Filtered by');
+    expect(html).toContain('structure');
+    expect(html).toContain('Memory index');
+    expect(html).not.toContain('Quick idea');
   });
 
   it('renders work queue actions on the notes index page', () => {

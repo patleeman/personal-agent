@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Extension } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -12,21 +12,57 @@ import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
-import { EditorContent, useEditor } from '@tiptap/react';
-import type { MentionItem } from '../../conversationMentions';
+import { EditorContent, type Editor, useEditor } from '@tiptap/react';
+import { filterMentionItems, type MentionItem } from '../../conversationMentions';
 import { FieldsBlockExtension } from '../../editorExtensions/FieldsBlockExtension';
 import { normalizeMarkdownValue } from '../../markdownDocument';
 import { buildMentionLookup } from '../../mentionRendering';
 import { buildNodeMentionHref } from '../../nodeMentionRoutes';
 import { useNodeMentionItems } from '../../useNodeMentionItems';
-import { cx } from '../ui';
+import { Pill, cx } from '../ui';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
 
 const RICH_EDITOR_MENTION_PATTERN = /@[\w-]+/g;
 const RICH_EDITOR_MENTION_PLUGIN_KEY = new PluginKey('rich-editor-mentions');
 
+interface EditorMentionMatch {
+  query: string;
+  from: number;
+  to: number;
+}
+
 function editorValue(value: string): string {
   return normalizeMarkdownValue(value);
+}
+
+function findEditorMentionMatch(editor: Editor | null): EditorMentionMatch | null {
+  if (!editor) {
+    return null;
+  }
+
+  const { selection } = editor.state;
+  if (!selection.empty) {
+    return null;
+  }
+
+  const { $from } = selection;
+  if (!$from.parent.isTextblock) {
+    return null;
+  }
+
+  const prefix = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0');
+  const match = prefix.match(/(^|.*[\s(])(@[\w-]*)$/);
+  const query = match?.[2] ?? null;
+  if (!query) {
+    return null;
+  }
+
+  const startOffset = prefix.length - query.length;
+  return {
+    query,
+    from: $from.start() + startOffset,
+    to: selection.from,
+  };
 }
 
 function buildMentionDecorations(doc: Parameters<typeof DecorationSet.create>[0], lookup: Map<string, MentionItem[]>): DecorationSet {
@@ -136,6 +172,19 @@ export function RichMarkdownEditor({
 
   const normalizedValue = useMemo(() => editorValue(value), [value]);
   const lastValueRef = useRef(normalizedValue);
+  const [mentionMatch, setMentionMatch] = useState<EditorMentionMatch | null>(null);
+  const [mentionIdx, setMentionIdx] = useState(0);
+
+  const filteredMentionItems = useMemo(
+    () => mentionMatch ? filterMentionItems(mentionItems ?? [], mentionMatch.query) : [],
+    [mentionItems, mentionMatch],
+  );
+  const showMentionMenu = !readOnly && mentionMatch !== null && filteredMentionItems.length > 0;
+
+  const updateMentionState = useCallback((currentEditor: Editor | null) => {
+    setMentionMatch(findEditorMentionMatch(currentEditor));
+    setMentionIdx(0);
+  }, []);
 
   function handleSurfaceClick(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target instanceof HTMLElement
@@ -187,18 +236,33 @@ export function RichMarkdownEditor({
     contentType: 'markdown',
     onUpdate: ({ editor: currentEditor }) => {
       const nextValue = editorValue(currentEditor.getMarkdown());
-      if (nextValue === lastValueRef.current) {
-        return;
+      if (nextValue !== lastValueRef.current) {
+        lastValueRef.current = nextValue;
+        if (currentEditor.isFocused) {
+          onChange(nextValue);
+        }
       }
 
-      lastValueRef.current = nextValue;
-      if (!currentEditor.isFocused) {
-        return;
-      }
-
-      onChange(nextValue);
+      updateMentionState(currentEditor);
     },
-  }, [mentionLookup, placeholder, readOnly]);
+    onSelectionUpdate: ({ editor: currentEditor }) => {
+      updateMentionState(currentEditor);
+    },
+    onBlur: () => {
+      setMentionMatch(null);
+      setMentionIdx(0);
+    },
+  }, [mentionLookup, onChange, placeholder, readOnly, updateMentionState]);
+
+  const applyMention = useCallback((item: MentionItem) => {
+    if (!editor || !mentionMatch) {
+      return;
+    }
+
+    editor.chain().focus().insertContentAt({ from: mentionMatch.from, to: mentionMatch.to }, `${item.id} `).run();
+    setMentionMatch(null);
+    setMentionIdx(0);
+  }, [editor, mentionMatch]);
 
   useEffect(() => {
     if (!editor) {
@@ -223,6 +287,41 @@ export function RichMarkdownEditor({
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
+  function handleKeyDownCapture(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!showMentionMenu) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setMentionIdx((current) => current + 1);
+      return;
+    }
+
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setMentionIdx((current) => Math.max(0, current - 1));
+      return;
+    }
+
+    if ((event.key === 'Tab' || event.key === 'Enter') && !event.shiftKey) {
+      const selected = filteredMentionItems[mentionIdx % filteredMentionItems.length];
+      if (!selected) {
+        return;
+      }
+
+      event.preventDefault();
+      applyMention(selected);
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setMentionMatch(null);
+      setMentionIdx(0);
+    }
+  }
+
   return (
     <div
       className={cx(
@@ -232,8 +331,42 @@ export function RichMarkdownEditor({
         readOnly && 'ui-rich-editor-readonly',
       )}
     >
-      <div className="ui-rich-editor-surface" onClickCapture={handleSurfaceClick}>
-        <EditorContent editor={editor} className="ui-rich-editor-content" />
+      <div className="relative">
+        {showMentionMenu ? (
+          <div className="ui-menu-shell absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto">
+            <div className="px-3 pt-2 pb-1">
+              <p className="ui-section-label">Mention</p>
+            </div>
+            {filteredMentionItems.map((item, index) => (
+              <button
+                key={`${item.kind}:${item.id}`}
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  applyMention(item);
+                }}
+                className={cx(
+                  'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
+                  index === (mentionIdx % filteredMentionItems.length)
+                    ? 'bg-elevated text-primary'
+                    : 'text-secondary hover:bg-elevated/50',
+                )}
+              >
+                <Pill tone="muted">{item.kind}</Pill>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-mono text-[13px] text-accent">{item.id}</p>
+                  {(item.summary || (item.title && item.title !== item.label)) ? (
+                    <p className="mt-0.5 truncate text-[12px] text-dim/90">{item.summary || item.title}</p>
+                  ) : null}
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="ui-rich-editor-surface" onClickCapture={handleSurfaceClick} onKeyDownCapture={handleKeyDownCapture}>
+          <EditorContent editor={editor} className="ui-rich-editor-content" />
+        </div>
       </div>
     </div>
   );

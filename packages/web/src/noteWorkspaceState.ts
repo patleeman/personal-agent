@@ -1,18 +1,45 @@
 import type { MemoryDocItem } from './types';
 
 export const NOTE_ID_SEARCH_PARAM = 'note';
+export const NOTE_TAG_SEARCH_PARAM = 'tag';
 const NOTE_NEW_SEARCH_PARAM = 'new';
 const LEGACY_NOTE_ID_SEARCH_PARAM = 'memory';
 const LEGACY_NOTE_VIEW_SEARCH_PARAM = 'view';
 const LEGACY_NOTE_ITEM_SEARCH_PARAM = 'item';
 
-export function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return memories;
+function normalizeNoteTags(values: Iterable<string>): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const tag = value.trim().toLowerCase();
+    if (!tag || seen.has(tag)) {
+      continue;
+    }
+
+    seen.add(tag);
+    normalized.push(tag);
   }
 
+  return normalized;
+}
+
+export function filterMemories(memories: MemoryDocItem[], query: string, requiredTags: string[] = []): MemoryDocItem[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedTags = normalizeNoteTags(requiredTags);
+
   return memories.filter((memory) => {
+    if (normalizedTags.length > 0) {
+      const memoryTags = new Set(memory.tags.map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length > 0));
+      if (!normalizedTags.every((tag) => memoryTags.has(tag))) {
+        return false;
+      }
+    }
+
+    if (!normalizedQuery) {
+      return true;
+    }
+
     const haystack = [
       memory.id,
       memory.title,
@@ -30,7 +57,7 @@ export function filterMemories(memories: MemoryDocItem[], query: string): Memory
       .join('\n')
       .toLowerCase();
 
-    return haystack.includes(normalized);
+    return haystack.includes(normalizedQuery);
   });
 }
 
@@ -38,9 +65,26 @@ export function readCreateState(search: string): boolean {
   return new URLSearchParams(search).get(NOTE_NEW_SEARCH_PARAM) === '1';
 }
 
+export function readNoteTagFilters(search: string): string[] {
+  return normalizeNoteTags(new URLSearchParams(search).getAll(NOTE_TAG_SEARCH_PARAM));
+}
+
+export function toggleNoteTagFilter(currentTags: string[], tag: string): string[] {
+  const normalizedTag = tag.trim().toLowerCase();
+  if (!normalizedTag) {
+    return normalizeNoteTags(currentTags);
+  }
+
+  const normalizedCurrent = normalizeNoteTags(currentTags);
+  return normalizedCurrent.includes(normalizedTag)
+    ? normalizedCurrent.filter((value) => value !== normalizedTag)
+    : [...normalizedCurrent, normalizedTag];
+}
+
 export function buildNoteSearch(locationSearch: string, updates: {
   memoryId?: string | null;
   creating?: boolean | null;
+  tags?: string[] | null;
 }): string {
   const params = new URLSearchParams(locationSearch);
   const existingMemoryId = params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get(LEGACY_NOTE_ID_SEARCH_PARAM)?.trim() || '';
@@ -66,6 +110,13 @@ export function buildNoteSearch(locationSearch: string, updates: {
       params.set(NOTE_NEW_SEARCH_PARAM, '1');
     } else {
       params.delete(NOTE_NEW_SEARCH_PARAM);
+    }
+  }
+
+  if (updates.tags !== undefined) {
+    params.delete(NOTE_TAG_SEARCH_PARAM);
+    for (const tag of normalizeNoteTags(updates.tags ?? [])) {
+      params.append(NOTE_TAG_SEARCH_PARAM, tag);
     }
   }
 
