@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -47,6 +48,7 @@ vi.mock('./liveSessions.js', async (importOriginal) => ({
 import { submitRemoteExecutionRun } from './remoteExecution.js';
 
 const tempDirs: string[] = [];
+const REMOTE_EXECUTION_WORKER_PATH = fileURLToPath(new URL('./remoteExecutionWorker.mjs', import.meta.url));
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -109,6 +111,7 @@ describe('submitRemoteExecutionRun', () => {
     appendDetachedUserMessageMock.mockResolvedValue(undefined);
     startBackgroundRunMock.mockImplementation(async (input: { argv: string[]; source: { filePath: string } }) => {
       expect(input.source.filePath).toBe(actualSessionFile);
+      expect(input.argv[1]).toBe(REMOTE_EXECUTION_WORKER_PATH);
       const requestBundlePath = input.argv[2];
       const requestBundle = JSON.parse(readFileSync(requestBundlePath, 'utf-8')) as {
         conversationId: string;
