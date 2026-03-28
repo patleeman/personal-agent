@@ -122,7 +122,8 @@ describe('ui foreground launch', () => {
     expect(logs.some((line) => line.includes('Web UI'))).toBe(true);
     expect(logs.some((line) => line.includes('Managed service'))).toBe(true);
     expect(logs.some((line) => line.includes('Web UI commands'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui open [--port <port>]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui open'))).toBe(true);
+    expect(logs.some((line) => line.includes('Options:'))).toBe(true);
     expect(childProcessMocks.spawnSync).not.toHaveBeenCalledWith(process.execPath, expect.any(Array), expect.any(Object));
 
     logSpy.mockRestore();

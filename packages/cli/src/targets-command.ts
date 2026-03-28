@@ -9,7 +9,7 @@ import {
   type SaveExecutionTargetInput,
 } from '@personal-agent/core';
 import { ensureRemoteTargetInstall } from './remote-target-install.js';
-import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success } from './ui.js';
+import { bullet, dim, keyValue, printDenseCommandList, printDenseUsage, section, success } from './ui.js';
 
 function targetsUsageText(): string {
   return 'Usage: pa targets [list|show|add|update|install|delete|help] [args...]';
@@ -98,8 +98,6 @@ function printTargetsHelp(): void {
     { usage: 'delete <id> [--json]', description: 'Delete one execution target' },
     { usage: 'help', description: 'Show execution target help' },
   ]);
-  console.log('');
-  printDenseLines('Notes', [`Config file: ${resolveExecutionTargetsFilePath()}`]);
 }
 
 interface ParsedMutationOptions {

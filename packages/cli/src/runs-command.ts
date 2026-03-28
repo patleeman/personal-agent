@@ -12,7 +12,7 @@ import {
   type DurableRunStatus,
 } from '@personal-agent/daemon';
 import { readTailLines } from './file-utils.js';
-import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, statusChip } from './ui.js';
+import { bullet, dim, keyValue, printDenseCommandList, printDenseUsage, section, statusChip } from './ui.js';
 
 function runsUsageText(): string {
   return 'Usage: pa runs [list|show|logs|start|start-agent|cancel|help] [args...]';
@@ -133,8 +133,6 @@ function printRunsHelp(): void {
     { usage: 'cancel <id>', description: 'Cancel one durable background run' },
     { usage: 'help', description: 'Show runs help' },
   ]);
-  console.log('');
-  printDenseLines('Notes', [`Runs root: ${toRunsRoot()}`]);
 }
 
 export async function runsCommand(args: string[]): Promise<number> {
