@@ -16,9 +16,15 @@ import {
 import { FilePathPreformattedText } from '../filePathLinks';
 import { EmptyState } from './ui';
 
-function fileBlockedReason(detail: WorkspaceFileDetail, previewKind: WorkspaceFilePreviewKind | null): string | null {
+function fileBlockedReason(
+  detail: WorkspaceFileDetail,
+  previewKind: WorkspaceFilePreviewKind | null,
+  showDiff: boolean,
+): string | null {
   if (!detail.exists) {
-    return 'This file was deleted in the working tree. Review the diff below to inspect the removal.';
+    return showDiff
+      ? 'This file was deleted in the working tree. Review the diff below to inspect the removal.'
+      : 'This file was deleted in the working tree. Open the Changes tab to inspect the removal.';
   }
 
   if (detail.binary && !previewKind) {
@@ -113,6 +119,7 @@ export function WorkspaceFileContent({
   value,
   draftDirty = false,
   readOnly = false,
+  showDiff = true,
   onChange,
   onOpenFilePath,
 }: {
@@ -120,26 +127,27 @@ export function WorkspaceFileContent({
   value: string;
   draftDirty?: boolean;
   readOnly?: boolean;
+  showDiff?: boolean;
   onChange?: (value: string) => void;
   onOpenFilePath?: (path: string) => void;
 }) {
   const { theme } = useTheme();
   const previewKind = useMemo(() => getWorkspaceFilePreviewKind(detail.path), [detail.path]);
   const mergeOriginalContent = useMemo(
-    () => inlineDiffOriginalContent(detail, value, draftDirty),
-    [detail, draftDirty, value],
+    () => (showDiff ? inlineDiffOriginalContent(detail, value, draftDirty) : null),
+    [detail, draftDirty, showDiff, value],
   );
   const description = useMemo(
-    () => inlineDiffDescription(detail, draftDirty, mergeOriginalContent),
-    [detail, draftDirty, mergeOriginalContent],
+    () => (showDiff ? inlineDiffDescription(detail, draftDirty, mergeOriginalContent) : null),
+    [detail, draftDirty, mergeOriginalContent, showDiff],
   );
   const blockedReason = useMemo(
-    () => fileBlockedReason(detail, previewKind),
-    [detail, previewKind],
+    () => fileBlockedReason(detail, previewKind, showDiff),
+    [detail, previewKind, showDiff],
   );
   const showPreview = Boolean(detail.exists && previewKind && detail.content === null);
   const previewUrl = showPreview ? buildWorkspaceFileAssetUrl(detail.path, detail.cwd) : null;
-  const showRawDiffFallback = Boolean(detail.diff) && mergeOriginalContent === null;
+  const showRawDiffFallback = showDiff && Boolean(detail.diff) && mergeOriginalContent === null;
 
   const editorExtensions = useMemo(() => {
     const extensions: Extension[] = [editorChromeTheme(theme === 'dark'), EditorView.lineWrapping];
