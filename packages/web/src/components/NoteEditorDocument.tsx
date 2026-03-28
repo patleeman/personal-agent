@@ -1,28 +1,28 @@
 import { type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
 
 export function NoteEditorDocument({
   title,
   onTitleChange,
+  description,
+  onDescriptionChange,
   body,
   onBodyChange,
   meta,
-  inferredTags,
-  buildTagHref,
   titlePlaceholder = 'Untitled',
-  bodyPlaceholder = 'Start writing…',
+  descriptionPlaceholder = 'Tell the agent how to use this note, when to read it, or what it is for.',
+  bodyPlaceholder = 'Start writing… Paste or drop images.',
   readOnly = false,
 }: {
   title: string;
   onTitleChange: (nextValue: string) => void;
+  description: string;
+  onDescriptionChange: (nextValue: string) => void;
   body: string;
   onBodyChange: (nextValue: string) => void;
-  path: string;
   meta?: ReactNode;
-  inferredTags: string[];
-  buildTagHref?: (tag: string) => string;
   titlePlaceholder?: string;
+  descriptionPlaceholder?: string;
   bodyPlaceholder?: string;
   readOnly?: boolean;
 }) {
@@ -41,21 +41,17 @@ export function NoteEditorDocument({
 
         {meta ? <div className="ui-note-inline-meta">{meta}</div> : null}
 
-        <div className="ui-note-inline-tags" aria-label="Inferred note tags">
-          {inferredTags.map((tag) => {
-            const label = `#${tag}`;
-            const href = buildTagHref?.(tag);
-            return href ? (
-              <Link key={tag} to={href} className="ui-note-tag-link">
-                {label}
-              </Link>
-            ) : (
-              <span key={tag} className="ui-note-tag-link">
-                {label}
-              </span>
-            );
-          })}
-        </div>
+        <label className="ui-note-description-block">
+          <span className="ui-note-description-label">For the agent (optional)</span>
+          <textarea
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder={descriptionPlaceholder}
+            className="ui-note-description-input"
+            rows={2}
+            readOnly={readOnly}
+          />
+        </label>
 
         <RichMarkdownEditor
           value={body}

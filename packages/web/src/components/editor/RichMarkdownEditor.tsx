@@ -1,5 +1,6 @@
-import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Extension } from '@tiptap/core';
+import { type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Extension, type JSONContent } from '@tiptap/core';
+import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import TableCell from '@tiptap/extension-table-cell';
@@ -22,6 +23,7 @@ import { useNodeMentionItems } from '../../useNodeMentionItems';
 import { Pill, cx } from '../ui';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
 import { exitHeadingOnEnter } from './richMarkdownHeadingExit';
+import { calculateRichMarkdownMentionMenuPosition, type RichMarkdownMentionMenuPosition } from './richMarkdownMentionMenuPosition';
 
 const RICH_EDITOR_MENTION_PATTERN = /@[\w-]+/g;
 const RICH_EDITOR_MENTION_PLUGIN_KEY = new PluginKey('rich-editor-mentions');
@@ -30,6 +32,46 @@ interface EditorMentionMatch {
   query: string;
   from: number;
   to: number;
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/');
+}
+
+function normalizeImageAltText(fileName: string): string {
+  const normalized = fileName
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return normalized || 'Image';
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image.'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Failed to read image.'));
+        return;
+      }
+
+      resolve(reader.result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+function buildImageInsertContent(images: Array<{ src: string; alt: string; title?: string }>): JSONContent[] {
+  return images.flatMap((image) => [
+    {
+      type: 'image',
+      attrs: image,
+    },
+    { type: 'paragraph' },
+  ] satisfies JSONContent[]);
 }
 
 function editorValue(value: string): string {
@@ -184,8 +226,10 @@ export function RichMarkdownEditor({
 
   const normalizedValue = useMemo(() => editorValue(value), [value]);
   const lastValueRef = useRef(normalizedValue);
+  const editorShellRef = useRef<HTMLDivElement | null>(null);
   const [mentionMatch, setMentionMatch] = useState<EditorMentionMatch | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
+  const [mentionMenuPosition, setMentionMenuPosition] = useState<RichMarkdownMentionMenuPosition | null>(null);
 
   const filteredMentionItems = useMemo(
     () => mentionMatch ? filterMentionItems(mentionItems ?? [], mentionMatch.query) : [],
@@ -193,10 +237,28 @@ export function RichMarkdownEditor({
   );
   const showMentionMenu = !readOnly && mentionMatch !== null && filteredMentionItems.length > 0;
 
-  const updateMentionState = useCallback((currentEditor: Editor | null) => {
-    setMentionMatch(findEditorMentionMatch(currentEditor));
-    setMentionIdx(0);
+  const updateMentionMenuPosition = useCallback((currentEditor: Editor | null) => {
+    const editorShell = editorShellRef.current;
+    if (!currentEditor || !editorShell) {
+      return null;
+    }
+
+    try {
+      return calculateRichMarkdownMentionMenuPosition({
+        containerRect: editorShell.getBoundingClientRect(),
+        caretRect: currentEditor.view.coordsAtPos(currentEditor.state.selection.from),
+      });
+    } catch {
+      return null;
+    }
   }, []);
+
+  const updateMentionState = useCallback((currentEditor: Editor | null) => {
+    const nextMatch = findEditorMentionMatch(currentEditor);
+    setMentionMatch(nextMatch);
+    setMentionIdx(0);
+    setMentionMenuPosition(nextMatch ? updateMentionMenuPosition(currentEditor) : null);
+  }, [updateMentionMenuPosition]);
 
   function handleSurfaceClick(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target instanceof HTMLElement
@@ -227,6 +289,12 @@ export function RichMarkdownEditor({
         openOnClick: true,
         autolink: true,
         linkOnPaste: true,
+      }),
+      Image.configure({
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'ui-rich-editor-inline-image',
+        },
       }),
       Placeholder.configure({ placeholder }),
       TaskList,
@@ -264,6 +332,7 @@ export function RichMarkdownEditor({
     onBlur: () => {
       setMentionMatch(null);
       setMentionIdx(0);
+      setMentionMenuPosition(null);
     },
   }, [mentionLookup, onChange, placeholder, readOnly, updateMentionState]);
 
@@ -275,6 +344,7 @@ export function RichMarkdownEditor({
     editor.chain().focus().insertContentAt({ from: mentionMatch.from, to: mentionMatch.to }, `${item.id} `).run();
     setMentionMatch(null);
     setMentionIdx(0);
+    setMentionMenuPosition(null);
   }, [editor, mentionMatch]);
 
   useEffect(() => {
@@ -299,6 +369,77 @@ export function RichMarkdownEditor({
 
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
+
+  useEffect(() => {
+    if (!editor || !showMentionMenu) {
+      return;
+    }
+
+    const syncPosition = () => {
+      setMentionMenuPosition(updateMentionMenuPosition(editor));
+    };
+
+    syncPosition();
+    window.addEventListener('resize', syncPosition);
+    return () => {
+      window.removeEventListener('resize', syncPosition);
+    };
+  }, [editor, showMentionMenu, updateMentionMenuPosition]);
+
+  const insertImageFiles = useCallback(async (files: File[], position?: number) => {
+    if (!editor || files.length === 0) {
+      return;
+    }
+
+    const imageFiles = files.filter(isImageFile);
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    try {
+      const images = await Promise.all(imageFiles.map(async (file) => ({
+        src: await blobToDataUrl(file),
+        alt: normalizeImageAltText(file.name),
+        title: file.name.trim() || undefined,
+      })));
+
+      const selection = editor.state.selection;
+      editor.chain().focus().insertContentAt(
+        typeof position === 'number' ? { from: position, to: position } : { from: selection.from, to: selection.to },
+        buildImageInsertContent(images),
+      ).run();
+    } catch (error) {
+      console.error('Could not embed image in markdown editor.', error);
+    }
+  }, [editor]);
+
+  function handlePasteCapture(event: ReactClipboardEvent<HTMLDivElement>) {
+    const items = Array.from(event.clipboardData.items ?? []);
+    const imageFiles = items
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .flatMap((item) => {
+        const file = item.getAsFile();
+        return file ? [file] : [];
+      });
+
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    void insertImageFiles(imageFiles);
+  }
+
+  function handleDropCapture(event: ReactDragEvent<HTMLDivElement>) {
+    const imageFiles = Array.from(event.dataTransfer.files ?? []).filter(isImageFile);
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const position = editor?.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+    void insertImageFiles(imageFiles, position);
+  }
 
   function handleKeyDownCapture(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!showMentionMenu) {
@@ -332,6 +473,7 @@ export function RichMarkdownEditor({
       event.preventDefault();
       setMentionMatch(null);
       setMentionIdx(0);
+      setMentionMenuPosition(null);
     }
   }
 
@@ -344,9 +486,19 @@ export function RichMarkdownEditor({
         readOnly && 'ui-rich-editor-readonly',
       )}
     >
-      <div className="relative">
-        {showMentionMenu ? (
-          <div className="ui-menu-shell absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto">
+      <div ref={editorShellRef} className="relative">
+        {showMentionMenu && mentionMenuPosition ? (
+          <div
+            className="ui-menu-shell z-20 overflow-y-auto"
+            style={{
+              left: mentionMenuPosition.left,
+              top: mentionMenuPosition.top,
+              right: 'auto',
+              bottom: 'auto',
+              width: mentionMenuPosition.width,
+              maxHeight: mentionMenuPosition.maxHeight,
+            }}
+          >
             <div className="px-3 pt-2 pb-1">
               <p className="ui-section-label">Mention</p>
             </div>
@@ -377,7 +529,13 @@ export function RichMarkdownEditor({
           </div>
         ) : null}
 
-        <div className="ui-rich-editor-surface" onClickCapture={handleSurfaceClick} onKeyDownCapture={handleKeyDownCapture}>
+        <div
+          className="ui-rich-editor-surface"
+          onClickCapture={handleSurfaceClick}
+          onKeyDownCapture={handleKeyDownCapture}
+          onPasteCapture={handlePasteCapture}
+          onDropCapture={handleDropCapture}
+        >
           <EditorContent editor={editor} className="ui-rich-editor-content" />
         </div>
       </div>

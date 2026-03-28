@@ -7,7 +7,6 @@ export interface DistilledConversationMemoryDraft {
   title: string;
   summary: string;
   body: string;
-  tags: string[];
   userIntent: string;
   learnedPoints: string[];
   carryForwardPoints: string[];
@@ -32,7 +31,6 @@ export interface SavedDistilledConversationMemoryResult {
     id: string;
     title: string;
     summary: string;
-    tags: string[];
     path: string;
     type: string;
     status: string;
@@ -45,7 +43,6 @@ export interface SavedDistilledConversationMemoryResult {
     relativePath: string;
     title: string;
     summary: string;
-    tags: string[];
     updated: string;
   };
   disposition: 'updated-existing' | 'created-reference';
@@ -169,17 +166,6 @@ function buildIgnoredTerms(area: string | undefined): Set<string> {
   }
 
   return ignoredTerms;
-}
-
-function buildSpecificDraftTags(tags: string[], area: string | undefined): string[] {
-  const normalizedArea = normalizeTag(area ?? '');
-  const values = tags
-    .map((tag) => normalizeTag(tag))
-    .filter((tag): tag is string => Boolean(tag))
-    .filter((tag) => tag !== normalizedArea)
-    .filter((tag) => tag !== 'conversation' && tag !== 'checkpoint' && tag !== 'memory');
-
-  return [...new Set(values)];
 }
 
 function splitMarkdownFrontmatter(rawContent: string): { frontmatter: string; body: string } | null {
@@ -368,27 +354,20 @@ function findHubDoc(docs: ParsedMemoryDoc[], area: string | undefined): ParsedMe
 
 function scoreReferenceMatch(reference: ParsedMemoryReference, draft: DistilledConversationMemoryDraft, area: string | undefined): ReferenceMatch {
   const ignoredTerms = buildIgnoredTerms(area);
-  const queryText = [draft.title, draft.summary, draft.body].join('\n');
+  const queryText = [
+    draft.title,
+    draft.summary,
+    draft.body,
+    draft.userIntent,
+    ...draft.learnedPoints,
+    ...draft.carryForwardPoints,
+  ].join('\n');
   const normalizedQueryText = normalizeMatchText(queryText);
   const queryTokens = tokenizeForMatching(queryText, ignoredTerms);
-  const referenceText = [reference.id, reference.title, reference.summary, reference.tags.join(' '), reference.body].join('\n');
+  const referenceText = [reference.id, reference.title, reference.summary, reference.body].join('\n');
   const referenceTokens = tokenizeForMatching(referenceText, ignoredTerms);
-  const draftTags = buildSpecificDraftTags(draft.tags, area);
-  const referenceTags = reference.tags
-    .map((tag) => normalizeTag(tag))
-    .filter((tag): tag is string => Boolean(tag));
 
   let score = 0;
-
-  const matchedDraftTags = draftTags.filter((tag) => referenceTags.includes(tag));
-  score += matchedDraftTags.length * 4;
-
-  for (const tag of referenceTags) {
-    const phrase = tag.replace(/-/g, ' ');
-    if (phrase.length >= 4 && normalizedQueryText.includes(phrase)) {
-      score += 2;
-    }
-  }
 
   const normalizedTitle = normalizeMatchText(reference.title);
   if (normalizedTitle.length >= 8 && normalizedQueryText.includes(normalizedTitle)) {
@@ -433,8 +412,7 @@ function chooseReferenceMatch(references: ParsedMemoryReference[], draft: Distil
 }
 
 function deriveNewHubId(existingDocs: ParsedMemoryDoc[], draft: DistilledConversationMemoryDraft, area: string | undefined): string {
-  const specificTag = buildSpecificDraftTags(draft.tags, area)[0];
-  const preferred = area ?? specificTag ?? slugifyMemoryIdSegment(draft.title);
+  const preferred = area ?? slugifyMemoryIdSegment(draft.title);
   const safeBase = MEMORY_DOC_ID_PATTERN.test(preferred) ? preferred : slugifyMemoryIdSegment(draft.title);
   const existingIds = new Set(existingDocs.map((doc) => doc.id));
 
@@ -469,13 +447,10 @@ function createHubMemoryDoc(options: SaveCuratedDistilledConversationMemoryOptio
   const hubSummary = options.area
     ? `Durable note node for ${humanizeMemoryTitle(options.area)}.`
     : options.draft.summary;
-  const tags = [...new Set([
-    ...options.draft.tags.filter((tag) => tag !== 'conversation' && tag !== 'checkpoint'),
-    'structure',
-  ])];
   const metadata: Record<string, unknown> = {
     type: 'note',
     area: options.area ?? id,
+    role: 'structure',
   };
 
   mkdirSync(packagePath, { recursive: true });
@@ -485,7 +460,6 @@ function createHubMemoryDoc(options: SaveCuratedDistilledConversationMemoryOptio
     title: hubTitle,
     summary: hubSummary,
     status: 'active',
-    ...(tags.length > 0 ? { tags } : {}),
     updatedAt: options.updated,
     metadata,
   }, [
@@ -519,7 +493,6 @@ function buildReferenceMarkdown(input: {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
   updated: string;
   area?: string;
   distilledAt: string;
@@ -535,7 +508,6 @@ function buildReferenceMarkdown(input: {
     type: 'note',
     status: 'active',
     ...(input.area ? { area: input.area } : {}),
-    tags: input.tags,
     updated: input.updated,
     origin: 'conversation',
     distilled_at: input.distilledAt,
@@ -567,6 +539,7 @@ function updateReferenceMemory(options: {
   const metadata = readFrontmatterMetadata(parsed.frontmatter);
   metadata.updated = options.updated;
   metadata.title = options.reference.title;
+  delete metadata.tags;
   if (options.hub.area) {
     metadata.area = options.hub.area;
   }
@@ -595,7 +568,6 @@ function updateReferenceMemory(options: {
       id: options.hub.id,
       title: options.hub.title,
       summary: options.hub.summary,
-      tags: options.hub.tags,
       path: options.hub.filePath,
       type: options.hub.type,
       status: options.hub.status,
@@ -608,7 +580,6 @@ function updateReferenceMemory(options: {
       relativePath: options.reference.relativePath,
       title: options.reference.title,
       summary: options.reference.summary,
-      tags: options.reference.tags,
       updated: options.updated,
     },
     disposition: 'updated-existing',
@@ -625,7 +596,6 @@ function createReferenceMemory(options: SaveCuratedDistilledConversationMemoryOp
     id,
     title: options.draft.title,
     summary: options.draft.summary,
-    tags: options.draft.tags,
     updated: options.updated,
     area: options.area ?? hub.area ?? hub.id,
     distilledAt: options.distilledAt,
@@ -645,7 +615,6 @@ function createReferenceMemory(options: SaveCuratedDistilledConversationMemoryOp
       id: hub.id,
       title: hub.title,
       summary: hub.summary,
-      tags: hub.tags,
       path: hub.filePath,
       type: hub.type,
       status: hub.status,
@@ -658,7 +627,6 @@ function createReferenceMemory(options: SaveCuratedDistilledConversationMemoryOp
       relativePath,
       title: options.draft.title,
       summary: options.draft.summary,
-      tags: options.draft.tags,
       updated: options.updated,
     },
     disposition: 'created-reference',

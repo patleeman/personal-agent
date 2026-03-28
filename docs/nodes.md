@@ -146,6 +146,8 @@ Use them for:
 - distilled conversation captures
 - structure / map-of-content notes
 
+Notes may also include an optional `description` frontmatter field for agent-facing usage guidance. Use `summary` for glanceable list text and `description` to tell the agent how to use the note, when to consult it, or what role it plays.
+
 Typical layout:
 
 ```text

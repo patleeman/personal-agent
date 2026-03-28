@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildNoteSearch, filterMemories, readNoteTagFilters, toggleNoteTagFilter } from './noteWorkspaceState';
+import { buildNoteSearch, filterMemories } from './noteWorkspaceState';
 import type { MemoryDocItem } from './types';
 
 const MEMORIES: MemoryDocItem[] = [
@@ -26,22 +26,16 @@ const MEMORIES: MemoryDocItem[] = [
 ];
 
 describe('noteWorkspaceState', () => {
-  it('reads normalized tag filters from the url', () => {
-    expect(readNoteTagFilters('?tag=Structure&tag=scratch&tag=structure')).toEqual(['structure', 'scratch']);
-  });
-
-  it('builds note search params with tag filters', () => {
+  it('builds note search params without note tag filters', () => {
     expect(buildNoteSearch('?note=memory-index&foo=bar', {
       memoryId: null,
       creating: false,
-      tags: ['structure', 'notes'],
-    })).toBe('?foo=bar&tag=structure&tag=notes');
+    })).toBe('?foo=bar');
   });
 
-  it('toggles tags and combines tag filters with text filtering', () => {
-    expect(toggleNoteTagFilter(['structure'], 'notes')).toEqual(['structure', 'notes']);
-    expect(toggleNoteTagFilter(['structure', 'notes'], 'notes')).toEqual(['structure']);
-    expect(filterMemories(MEMORIES, 'memory', ['structure'])).toEqual([MEMORIES[0]]);
-    expect(filterMemories(MEMORIES, '', ['scratch'])).toEqual([MEMORIES[1]]);
+  it('filters notes by text across ids, titles, and summaries', () => {
+    expect(filterMemories(MEMORIES, 'memory')).toEqual([MEMORIES[0]]);
+    expect(filterMemories(MEMORIES, 'scratch')).toEqual([MEMORIES[1]]);
+    expect(filterMemories(MEMORIES, '')).toEqual(MEMORIES);
   });
 });

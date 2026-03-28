@@ -259,26 +259,6 @@ function mergeToolPermissions(
 }
 
 /**
- * Merge array fields using configured strategy
- */
-function mergeStringArray(
-  lower: string[] | null | undefined,
-  higher: string[] | null | undefined,
-  options: Required<MergeOptions>
-): string[] {
-  const base = lower ?? DEFAULTS.tags;
-
-  if (higher === undefined) return [...base];
-  if (higher === null) return options.nullClearsValue ? [] : [...base];
-
-  if (options.arrayStrategy === 'append') {
-    return [...base, ...higher];
-  }
-
-  return [...higher];
-}
-
-/**
  * Merge two partial profiles with precedence
  * Higher layer overrides lower layer
  */
@@ -361,9 +341,6 @@ function mergePartialProfiles(
     higher.toolPermissions,
     options.nullClearsValue
   );
-
-  // Array fields
-  result.tags = mergeStringArray(lower.tags, higher.tags, options);
   
   // Custom instructions
   if (higher.customInstructions !== undefined) {
@@ -391,7 +368,6 @@ function applyDefaults(partial: PartialProfile): ProfileData {
     privacy: mergePrivacy(undefined, partial.privacy, true),
     modelPreferences: mergeModelPreferences(undefined, partial.modelPreferences, true),
     toolPermissions: mergeToolPermissions(undefined, partial.toolPermissions, true),
-    tags: partial.tags ?? [...DEFAULTS.tags],
     customInstructions: partial.customInstructions ?? DEFAULTS.customInstructions,
   };
 }

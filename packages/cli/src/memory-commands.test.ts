@@ -112,17 +112,16 @@ Desktop operational notes.
     expect(showExitCode).toBe(0);
 
     const showPayload = JSON.parse(logs[0] as string) as {
-      doc: { id: string; title: string; tags: string[] };
+      doc: { id: string; title: string };
     };
 
     expect(showPayload.doc.id).toBe('runpod');
     expect(showPayload.doc.title).toBe('Runpod Notes');
-    expect(showPayload.doc.tags).toContain('gpu');
 
     logSpy.mockRestore();
   });
 
-  it('filters note nodes by tag/type/status/text', async () => {
+  it('filters note nodes by type/status/text', async () => {
     const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     writeFile(
@@ -182,8 +181,6 @@ Desktop Ubuntu operational notes.
     const exitCode = await runCli([
       'memory',
       'find',
-      '--tag',
-      'gpu',
       '--type',
       'reference',
       '--status',
@@ -284,8 +281,6 @@ Runpod operational notes.
       'Quick Note',
       '--summary',
       'Tracks one-off details.',
-      '--tags',
-      'notes,personal',
       '--type',
       'note',
       '--status',
@@ -304,7 +299,6 @@ Runpod operational notes.
     const payload = JSON.parse(logs[0] as string) as {
       id: string;
       filePath: string;
-      tags: string[];
       type: string;
       status: string;
       area?: string;
@@ -316,7 +310,6 @@ Runpod operational notes.
 
     expect(payload.id).toBe('quick-note');
     expect(payload.filePath).toBe(memoryPath(profilesRoot, 'quick-note'));
-    expect(payload.tags).toEqual(['notes', 'personal', 'structure']);
     expect(payload.type).toBe('note');
     expect(payload.status).toBe('active');
     expect(payload.area).toBe('notes');
@@ -331,7 +324,8 @@ Runpod operational notes.
     expect(fileContent).toContain('summary: Tracks one-off details.');
     expect(fileContent).toContain('title: Quick Note');
     expect(fileContent).toContain('area: notes');
-    expect(fileContent).toContain('structure');
+    expect(fileContent).toContain('role: structure');
+    expect(fileContent).not.toContain('tags:');
     expect(fileContent).toContain('related:');
     expect(fileContent).toContain('- personal-agent');
 
@@ -359,8 +353,6 @@ Runpod operational notes.
       'Initial Note',
       '--summary',
       'Initial summary.',
-      '--tags',
-      'notes',
       '--json',
     ])).toBe(0);
 
@@ -380,8 +372,6 @@ Runpod operational notes.
       'Updated Note',
       '--summary',
       'Updated summary.',
-      '--tags',
-      'notes',
       '--json',
     ]);
 
@@ -402,8 +392,6 @@ Runpod operational notes.
       'Updated Note',
       '--summary',
       'Updated summary.',
-      '--tags',
-      'notes',
       '--force',
       '--json',
     ]);

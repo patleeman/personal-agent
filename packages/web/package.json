@@ -30,6 +30,7 @@
     "@personal-agent/services": "*",
     "@sinclair/typebox": "^0.34.48",
     "@tiptap/core": "^3.21.0",
+    "@tiptap/extension-image": "^3.21.0",
     "@tiptap/extension-link": "^3.21.0",
     "@tiptap/extension-placeholder": "^3.21.0",
     "@tiptap/extension-table": "^3.21.0",

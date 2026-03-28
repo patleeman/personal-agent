@@ -38,7 +38,7 @@ const MEMORY_DOCS: PromptReferenceMemoryDoc[] = [
     id: 'project-state-model',
     title: 'Project State Model',
     summary: 'How projects are represented in durable artifacts.',
-    tags: ['architecture', 'projects'],
+    description: 'Use this note when the user asks how durable project state is modeled or migrated.',
     path: '/state/sync/notes/project-state-model/INDEX.md',
     updated: '2026-03-11',
   },
@@ -115,12 +115,12 @@ describe('promptReferences', () => {
     expect(context).toContain('status: disabled, running');
   });
 
-  it('builds knowledge doc context with title, summary, and tags', () => {
+  it('builds knowledge doc context with title, summary, and description', () => {
     const context = buildReferencedMemoryDocsContext(MEMORY_DOCS, '/repo');
     expect(context).toContain('Referenced note nodes:');
     expect(context).toContain('@project-state-model: Project State Model');
     expect(context).toContain('summary: How projects are represented in durable artifacts.');
-    expect(context).toContain('tags: architecture, projects');
+    expect(context).toContain('description: Use this note when the user asks how durable project state is modeled or migrated.');
   });
 
   it('builds skill and profile context with paths and descriptions', () => {

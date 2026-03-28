@@ -3,8 +3,8 @@ import {
   filterMemoryDocs,
   lintMemoryDocs,
   loadMemoryDocs,
+  normalizeCsvValues,
   resolveMemoryDocById,
-  splitMemoryTagValues,
   validateMemoryDocId,
 } from '@personal-agent/core';
 import { bullet, dim, formatHint, keyValue, printDenseCommandList, printDenseUsage, section, success, warning } from './ui.js';
@@ -18,7 +18,7 @@ function memoryListUsageText(): string {
 }
 
 function memoryFindUsageText(): string {
-  return 'Usage: pa memory find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]';
+  return 'Usage: pa memory find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]';
 }
 
 function memoryShowUsageText(): string {
@@ -26,15 +26,11 @@ function memoryShowUsageText(): string {
 }
 
 function memoryNewUsageText(): string {
-  return 'Usage: pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]';
+  return 'Usage: pa memory new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]';
 }
 
 function memoryLintUsageText(): string {
   return 'Usage: pa memory lint [--json]';
-}
-
-function formatMemoryTags(tags: string[]): string {
-  return tags.length > 0 ? tags.join(', ') : 'none';
 }
 
 function formatMemoryRelated(related: string[]): string {
@@ -52,9 +48,9 @@ function printMemoryHelp(): void {
   console.log('');
   printDenseCommandList('Commands', [
     { usage: 'list [--json]', description: 'List parsed shared note nodes' },
-    { usage: 'find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note nodes by metadata fields' },
+    { usage: 'find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note nodes by metadata fields' },
     { usage: 'show <id> [--json]', description: 'Show one note node and metadata' },
-    { usage: 'new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note node scaffold with INDEX.md frontmatter' },
+    { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note node scaffold with INDEX.md frontmatter' },
     { usage: 'lint [--json]', description: 'Validate shared note node frontmatter, duplicate ids, and broken note links' },
     { usage: 'help', description: 'Show memory help' },
   ]);
@@ -119,7 +115,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
       if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
-      console.log(keyValue('Tags', formatMemoryTags(doc.tags), 4));
       console.log(keyValue('Summary', doc.summary, 4));
       console.log(keyValue('File', doc.filePath, 4));
     }
@@ -143,34 +138,12 @@ export async function memoryCommand(args: string[]): Promise<number> {
     let roleFilter: string | undefined;
     let parentFilter: string | undefined;
     let textFilter: string | undefined;
-    const tagFilters: string[] = [];
 
     for (let index = 0; index < rest.length; index += 1) {
       const arg = rest[index] as string;
 
       if (arg === '--json') {
         jsonMode = true;
-        continue;
-      }
-
-      if (arg === '--tag') {
-        const value = rest[index + 1];
-        if (!value || value.startsWith('-')) {
-          throw new Error(memoryFindUsageText());
-        }
-
-        tagFilters.push(value.trim().toLowerCase());
-        index += 1;
-        continue;
-      }
-
-      if (arg.startsWith('--tag=')) {
-        const value = arg.slice('--tag='.length).trim();
-        if (value.length === 0) {
-          throw new Error(memoryFindUsageText());
-        }
-
-        tagFilters.push(value.toLowerCase());
         continue;
       }
 
@@ -287,7 +260,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     const loaded = loadMemoryDocs();
     const filteredDocs = filterMemoryDocs(loaded.docs, {
-      tags: tagFilters,
       type: typeFilter,
       status: statusFilter,
       area: areaFilter,
@@ -299,7 +271,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     const payload = {
       memoryDir: loaded.memoryDir,
       filters: {
-        tags: tagFilters,
         type: typeFilter ?? null,
         status: statusFilter ?? null,
         area: areaFilter ?? null,
@@ -318,7 +289,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     console.log(section('Note node search'));
     console.log(keyValue('Notes dir', loaded.memoryDir));
-    console.log(keyValue('Tag filters', tagFilters.length > 0 ? tagFilters.join(', ') : 'none'));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
     console.log(keyValue('Status filter', statusFilter ?? 'none'));
     console.log(keyValue('Area filter', areaFilter ?? 'none'));
@@ -340,7 +310,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
       if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
-      console.log(keyValue('Tags', formatMemoryTags(doc.tags), 4));
       console.log(keyValue('Summary', doc.summary, 4));
       console.log(keyValue('File', doc.filePath, 4));
     }
@@ -402,7 +371,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`));
     if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related)));
     console.log(keyValue('Updated', doc.updated));
-    console.log(keyValue('Tags', formatMemoryTags(doc.tags)));
     console.log(keyValue('Summary', doc.summary));
     console.log(keyValue('File', doc.filePath));
 
@@ -431,7 +399,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     let area: string | undefined;
     let role: string | undefined;
     let parent: string | undefined;
-    const rawTagValues: string[] = [];
     const rawRelatedValues: string[] = [];
     const positional: string[] = [];
 
@@ -592,37 +559,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
-      if (arg === '--tags' || arg === '--tag') {
-        const value = rest[index + 1];
-        if (!value || value.startsWith('-')) {
-          throw new Error(memoryNewUsageText());
-        }
-
-        rawTagValues.push(value.trim());
-        index += 1;
-        continue;
-      }
-
-      if (arg.startsWith('--tags=')) {
-        const value = arg.slice('--tags='.length).trim();
-        if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
-        }
-
-        rawTagValues.push(value);
-        continue;
-      }
-
-      if (arg.startsWith('--tag=')) {
-        const value = arg.slice('--tag='.length).trim();
-        if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
-        }
-
-        rawTagValues.push(value);
-        continue;
-      }
-
       if (arg.startsWith('-')) {
         throw new Error(memoryNewUsageText());
       }
@@ -641,12 +577,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     const id = (positional[0] as string).trim();
     validateMemoryDocId(id);
 
-    const tags = splitMemoryTagValues(rawTagValues);
-    if (tags.length === 0) {
-      throw new Error(memoryNewUsageText());
-    }
-
-    const related = splitMemoryTagValues(rawRelatedValues);
+    const related = normalizeCsvValues(rawRelatedValues);
 
     const payload = createMemoryDoc({
       id,
@@ -658,7 +589,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
       role,
       parent,
       related,
-      tags,
       force,
     });
 
@@ -676,7 +606,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     if (payload.role) console.log(keyValue('Role', payload.role));
     if (payload.parent) console.log(keyValue('Parent', `@${payload.parent}`));
     if (payload.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(payload.related)));
-    console.log(keyValue('Tags', formatMemoryTags(payload.tags)));
     console.log(keyValue('Updated', payload.updated));
 
     console.log('');

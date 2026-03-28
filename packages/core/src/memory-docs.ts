@@ -90,16 +90,6 @@ function readOptionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return [...new Set(value
-    .map((entry) => readOptionalString(entry))
-    .filter((entry): entry is string => Boolean(entry)))];
-}
-
 function extractMarkdownTitle(body: string): string | undefined {
   const match = body.match(/^#\s+(.+)$/m);
   const title = match?.[1]?.trim();
@@ -114,12 +104,17 @@ function extractFirstParagraph(body: string): string | undefined {
     .filter((paragraph) => paragraph.length > 0)
     .filter((paragraph) => !paragraph.startsWith('#'));
 
-  const first = paragraphs[0];
-  if (!first) {
-    return undefined;
+  for (const paragraph of paragraphs) {
+    const text = paragraph
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) {
+      return text;
+    }
   }
 
-  return first.replace(/\s+/g, ' ').trim() || undefined;
+  return undefined;
 }
 
 function humanizeId(value: string): string {
@@ -158,7 +153,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
     const title = readOptionalString(attributes.title) ?? extractMarkdownTitle(parsed.body) ?? humanizeId(id);
     const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(parsed.body) ?? `Durable note for ${title}.`;
     const status = readOptionalString(attributes.status) ?? 'active';
-    const tags = readStringArray(attributes.tags);
     const updatedAt = readOptionalString(attributes.updatedAt);
     const frontmatter: Record<string, unknown> = {
       ...attributes,
@@ -167,7 +161,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
       title,
       summary,
       status,
-      ...(tags.length > 0 ? { tags } : {}),
       ...(updatedAt ? { updatedAt } : {}),
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     };
@@ -200,10 +193,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
     ?? readOptionalString(attributes.area);
   const legacyRole = readOptionalString(metadata.role)
     ?? readOptionalString(attributes.role);
-  const legacyTags = [
-    ...readStringArray(metadata.tags),
-    ...readStringArray(attributes.tags),
-  ];
   const updatedAt = readOptionalString(metadata.updated)
     ?? readOptionalString(attributes.updatedAt)
     ?? readOptionalString(attributes.updated);
@@ -219,14 +208,10 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
   delete extraMetadata.tags;
   delete extraMetadata.updated;
 
-  const tags = [...new Set([
-    ...legacyTags,
-    ...(legacyRole === 'hub' || legacyRole === 'structure' ? ['structure'] : []),
-  ])];
-
   const nextMetadata: Record<string, unknown> = {
     ...(legacyType ? { type: legacyType } : {}),
     ...(legacyArea ? { area: legacyArea } : {}),
+    ...(legacyRole ? { role: legacyRole === 'hub' ? 'structure' : legacyRole } : {}),
     ...extraMetadata,
   };
 
@@ -238,7 +223,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
       title: legacyTitle,
       summary: legacySummary,
       status: legacyStatus,
-      ...(tags.length > 0 ? { tags } : {}),
       ...(updatedAt ? { updatedAt } : {}),
       ...(Object.keys(nextMetadata).length > 0 ? { metadata: nextMetadata } : {}),
     }, parsed.body.trim().length > 0 ? parsed.body : `# ${legacyTitle}\n\n${legacySummary}`),

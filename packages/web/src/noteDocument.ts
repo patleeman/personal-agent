@@ -28,17 +28,3 @@ export function stripManagedNoteHeading(content: string, title: string): string 
 export function readEditableNoteBody(content: string, title: string): string {
   return stripManagedNoteHeading(stripMarkdownFrontmatter(content), title);
 }
-
-export function inferInlineTags(content: string): string[] {
-  const matches = normalizeNewlines(content).matchAll(/(^|[^\w/])#([a-z0-9][a-z0-9-]*)\b/gi);
-  const tags = new Set<string>();
-
-  for (const match of matches) {
-    const tag = match[2]?.trim().toLowerCase();
-    if (tag) {
-      tags.add(tag);
-    }
-  }
-
-  return [...tags];
-}

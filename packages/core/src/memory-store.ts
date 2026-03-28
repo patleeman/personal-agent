@@ -22,13 +22,13 @@ export interface ParsedMemoryDoc {
   id: string;
   title: string;
   summary: string;
+  description?: string;
   type: string;
   status: string;
   area?: string;
   role?: string;
   parent?: string;
   related: string[];
-  tags: string[];
   updated: string;
   body: string;
   metadata: Record<string, unknown>;
@@ -42,7 +42,6 @@ export interface ParsedMemoryReference {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
   updated: string;
   body: string;
   metadata: Record<string, unknown>;
@@ -63,7 +62,6 @@ export interface LoadMemoryDocsResult {
 }
 
 export interface FindMemoryDocsFilters {
-  tags?: string[];
   type?: string;
   status?: string;
   area?: string;
@@ -81,7 +79,7 @@ export interface CreateMemoryDocInput {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
+  description?: string;
   type?: string;
   status?: string;
   area?: string;
@@ -98,13 +96,13 @@ export interface CreateMemoryDocResult {
   id: string;
   title: string;
   summary: string;
+  description?: string;
   type: string;
   status: string;
   area?: string;
   role?: string;
   parent?: string;
   related: string[];
-  tags: string[];
   updated: string;
   overwritten: boolean;
 }
@@ -245,12 +243,17 @@ function extractFirstParagraph(body: string): string | undefined {
     .filter((paragraph) => paragraph.length > 0)
     .filter((paragraph) => !paragraph.startsWith('#'));
 
-  const first = paragraphs[0];
-  if (!first) {
-    return undefined;
+  for (const paragraph of paragraphs) {
+    const text = paragraph
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) {
+      return text;
+    }
   }
 
-  return first.replace(/\s+/g, ' ').trim() || undefined;
+  return undefined;
 }
 
 function humanizeId(id: string): string {
@@ -273,30 +276,22 @@ function normalizeLinks(attributes: Record<string, unknown>): { parent?: string;
   };
 }
 
-function deriveType(metadata: Record<string, unknown>, tags: string[]): string {
+function deriveType(metadata: Record<string, unknown>): string {
   const explicit = readOptionalString(metadata.type);
   if (explicit) {
     return explicit;
   }
 
-  if (tags.includes('structure')) {
-    return 'structure';
-  }
-
   return 'note';
 }
 
-function deriveRole(metadata: Record<string, unknown>, tags: string[]): string | undefined {
+function deriveRole(metadata: Record<string, unknown>): string | undefined {
   const explicit = readOptionalString(metadata.role);
-  if (explicit && explicit !== 'hub') {
-    return explicit;
+  if (!explicit) {
+    return undefined;
   }
 
-  if (tags.includes('structure')) {
-    return 'structure';
-  }
-
-  return undefined;
+  return explicit === 'hub' ? 'structure' : explicit;
 }
 
 function parseNoteNode(filePath: string): ParsedMemoryDoc {
@@ -314,11 +309,11 @@ function parseNoteNode(filePath: string): ParsedMemoryDoc {
     throw new Error(`Expected kind: note, found: ${kind}`);
   }
 
-  const tags = splitMemoryTagValues(readStringArray(attributes.tags, 'Frontmatter key tags'));
   const metadata = normalizeMetadata(attributes.metadata);
   const links = normalizeLinks(attributes);
   const title = readOptionalString(attributes.title) ?? extractMarkdownTitle(section.body) ?? humanizeId(id);
   const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(section.body) ?? `Durable note for ${title}.`;
+  const description = readOptionalString(attributes.description);
   const updatedAt = readOptionalString(attributes.updatedAt)
     ?? readOptionalString(attributes.updated)
     ?? readOptionalString(metadata.updated)
@@ -336,13 +331,13 @@ function parseNoteNode(filePath: string): ParsedMemoryDoc {
     id,
     title,
     summary,
-    type: deriveType(metadata, tags),
+    ...(description ? { description } : {}),
+    type: deriveType(metadata),
     status: readOptionalString(attributes.status) ?? 'active',
     area: readOptionalString(metadata.area),
-    role: deriveRole(metadata, tags),
+    role: deriveRole(metadata),
     parent: links.parent,
     related: links.related,
-    tags,
     updated: updatedAt,
     body: section.body,
     metadata,
@@ -393,10 +388,6 @@ function parseReferenceFile(filePath: string, rootDir: string): ParsedMemoryRefe
     ?? readOptionalString(attributes.description)
     ?? extractFirstParagraph(body)
     ?? '';
-  const tags = splitMemoryTagValues([
-    ...readStringArray(attributes.tags, 'Reference tags'),
-    ...readStringArray(metadata.tags, 'Reference metadata tags'),
-  ]);
   const updated = readOptionalString(attributes.updatedAt)
     ?? readOptionalString(attributes.updated)
     ?? readOptionalString(metadata.updated)
@@ -409,7 +400,6 @@ function parseReferenceFile(filePath: string, rootDir: string): ParsedMemoryRefe
     id,
     title,
     summary,
-    tags,
     updated,
     body,
     metadata,
@@ -550,7 +540,6 @@ export function collectMemoryDocReferenceErrors(docs: ParsedMemoryDoc[]): Memory
 }
 
 export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDocsFilters = {}): ParsedMemoryDoc[] {
-  const normalizedTags = splitMemoryTagValues(filters.tags ?? []);
   const normalizedType = filters.type?.trim().toLowerCase();
   const normalizedStatus = filters.status?.trim().toLowerCase();
   const normalizedArea = filters.area?.trim().toLowerCase();
@@ -559,10 +548,6 @@ export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDoc
   const normalizedText = filters.text?.trim().toLowerCase();
 
   return docs.filter((doc) => {
-    if (normalizedTags.length > 0 && normalizedTags.some((tag) => !doc.tags.includes(tag))) {
-      return false;
-    }
-
     if (normalizedType && doc.type.toLowerCase() !== normalizedType) {
       return false;
     }
@@ -588,13 +573,13 @@ export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDoc
         doc.id,
         doc.title,
         doc.summary,
+        doc.description,
         doc.type,
         doc.status,
         doc.area,
         doc.role,
         doc.parent,
         ...doc.related,
-        ...doc.tags,
       ]
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .join('\n')
@@ -609,7 +594,7 @@ export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDoc
   });
 }
 
-export function splitMemoryTagValues(rawValues: string[]): string[] {
+export function normalizeCsvValues(rawValues: string[]): string[] {
   return [...new Set(rawValues
     .flatMap((value) => String(value).split(','))
     .map((value) => value.trim().toLowerCase())
@@ -624,7 +609,7 @@ export function buildMemoryDocTemplate(options: {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
+  description?: string;
   type?: string;
   status?: string;
   area?: string;
@@ -633,22 +618,18 @@ export function buildMemoryDocTemplate(options: {
   related?: string[];
   updated?: string;
 }): string {
-  const tags = splitMemoryTagValues(options.tags);
+  const description = options.description?.trim();
   const metadata: Record<string, unknown> = {
     ...(options.type ? { type: options.type.trim() } : {}),
     ...(options.area ? { area: options.area.trim() } : {}),
   };
   const role = options.role?.trim().toLowerCase();
-  if (role && role !== 'hub' && role !== 'structure') {
-    metadata.role = role;
+  if (role) {
+    metadata.role = role === 'hub' ? 'structure' : role;
   }
 
   const parent = options.parent?.trim();
-  const related = splitMemoryTagValues(options.related ?? []);
-  const tagsWithStructure = [...new Set([
-    ...tags,
-    ...(role === 'hub' || role === 'structure' ? ['structure'] : []),
-  ])];
+  const related = normalizeCsvValues(options.related ?? []);
   const links: Record<string, unknown> = {
     ...(parent ? { parent } : {}),
     ...(related.length > 0 ? { related } : {}),
@@ -659,8 +640,8 @@ export function buildMemoryDocTemplate(options: {
     kind: 'note',
     title: options.title,
     summary: options.summary,
+    ...(description ? { description } : {}),
     status: options.status?.trim() || 'active',
-    ...(tagsWithStructure.length > 0 ? { tags: tagsWithStructure } : {}),
     updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     ...(Object.keys(links).length > 0 ? { links } : {}),
@@ -695,7 +676,7 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     id,
     title,
     summary,
-    tags: input.tags,
+    description: input.description,
     type: input.type,
     status: input.status,
     area: input.area,
@@ -712,13 +693,13 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     id: created.id,
     title: created.title,
     summary: created.summary,
+    description: created.description,
     type: created.type,
     status: created.status,
     area: created.area,
     role: created.role,
     parent: created.parent,
     related: created.related,
-    tags: created.tags,
     updated: created.updated,
     overwritten: overwrite,
   };

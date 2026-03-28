@@ -268,36 +268,9 @@ export function buildInitialExpandedPaths(snapshot: {
   focusPath: string | null;
   changes: Array<{ relativePath: string }>;
 } | null, selectedFilePath: string | null): Set<string> {
-  if (!snapshot) {
-    return new Set();
-  }
-
-  const expanded = new Set<string>();
-  for (const node of snapshot.tree) {
-    if (node.kind === 'directory') {
-      expanded.add(node.relativePath);
-    }
-  }
-
-  for (const path of parentPaths(snapshot.focusPath)) {
-    expanded.add(path);
-  }
-
-  if (snapshot.focusPath) {
-    expanded.add(snapshot.focusPath);
-  }
-
-  for (const change of snapshot.changes) {
-    for (const path of parentPaths(change.relativePath)) {
-      expanded.add(path);
-    }
-  }
-
-  for (const path of parentPaths(selectedFilePath)) {
-    expanded.add(path);
-  }
-
-  return expanded;
+  void snapshot;
+  void selectedFilePath;
+  return new Set();
 }
 
 export function syncWorkspaceExpandedPaths(input: {

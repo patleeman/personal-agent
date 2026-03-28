@@ -36,7 +36,6 @@ export interface KnowledgeCardModel {
   recentSessionCount: number;
   usedInLastSession: boolean;
   lastUsedAt: string | null;
-  tags: string[];
   item: MemoryDocItem;
 }
 
@@ -389,7 +388,6 @@ function classifyKnowledgeItem(item: MemoryDocItem): 'patterns' | 'references' {
     item.type,
     item.title,
     item.summary,
-    ...item.tags,
   ].filter(Boolean).join(' '));
 
   if (/(pattern|heuristic|lesson|playbook|checklist|decision|architecture)/.test(haystack)) {
@@ -444,13 +442,11 @@ export function buildKnowledgeSections(data: MemoryData, query = ''): KnowledgeS
     recentSessionCount: item.recentSessionCount ?? 0,
     usedInLastSession: item.usedInLastSession ?? false,
     lastUsedAt: item.lastUsedAt ?? null,
-    tags: item.tags,
     item,
   } satisfies KnowledgeCardModel)).filter((item) => matchesQuery([
     item.title,
     item.summary,
     item.category === 'patterns' ? 'learned patterns' : 'reference materials',
-    ...item.tags,
   ], query));
 
   const sorted = sortByRecentUse(items);

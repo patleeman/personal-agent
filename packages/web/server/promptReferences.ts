@@ -15,7 +15,8 @@ export interface PromptReferenceMemoryDoc {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
+  description?: string;
+  tags?: string[];
   path: string;
   updated?: string;
 }
@@ -190,8 +191,8 @@ export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemo
       if (doc.summary) {
         lines.push(`  summary: ${doc.summary}`);
       }
-      if (doc.tags.length > 0) {
-        lines.push(`  tags: ${doc.tags.join(', ')}`);
+      if (doc.description) {
+        lines.push(`  description: ${doc.description}`);
       }
       if (doc.updated) {
         lines.push(`  updated: ${doc.updated}`);
