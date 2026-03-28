@@ -1,31 +1,28 @@
 import { type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
 
 export function NoteEditorDocument({
   title,
   onTitleChange,
-  summary,
-  onSummaryChange,
   body,
   onBodyChange,
   meta,
   inferredTags,
+  buildTagHref,
   titlePlaceholder = 'Untitled',
-  summaryPlaceholder = 'Optional one-line summary for search and browsing.',
   bodyPlaceholder = 'Start writing…',
   readOnly = false,
 }: {
   title: string;
   onTitleChange: (nextValue: string) => void;
-  summary: string;
-  onSummaryChange: (nextValue: string) => void;
   body: string;
   onBodyChange: (nextValue: string) => void;
   path: string;
   meta?: ReactNode;
   inferredTags: string[];
+  buildTagHref?: (tag: string) => string;
   titlePlaceholder?: string;
-  summaryPlaceholder?: string;
   bodyPlaceholder?: string;
   readOnly?: boolean;
 }) {
@@ -44,28 +41,23 @@ export function NoteEditorDocument({
 
         {meta ? <div className="ui-note-inline-meta">{meta}</div> : null}
 
-        <div className="ui-note-properties" aria-label="Note properties">
-          <div className="ui-note-property-row">
-            <span className="ui-note-property-label">Summary</span>
-            <input
-              value={summary}
-              onChange={(event) => onSummaryChange(event.target.value)}
-              placeholder={summaryPlaceholder}
-              className="ui-note-property-input"
-              autoComplete="off"
-              spellCheck
-              readOnly={readOnly}
-            />
+        {inferredTags.length > 0 ? (
+          <div className="ui-note-inline-tags" aria-label="Inferred note tags">
+            {inferredTags.map((tag) => {
+              const label = `#${tag}`;
+              const href = buildTagHref?.(tag);
+              return href ? (
+                <Link key={tag} to={href} className="ui-note-tag-link">
+                  {label}
+                </Link>
+              ) : (
+                <span key={tag} className="ui-note-tag-link">
+                  {label}
+                </span>
+              );
+            })}
           </div>
-          <div className="ui-note-property-row">
-            <span className="ui-note-property-label">Tags</span>
-            <div className="ui-note-property-value">
-              {inferredTags.length > 0
-                ? inferredTags.map((tag) => `#${tag}`).join(' · ')
-                : 'Inline tags are inferred from the note body. Use #tag while writing.'}
-            </div>
-          </div>
-        </div>
+        ) : null}
 
         <RichMarkdownEditor
           value={body}

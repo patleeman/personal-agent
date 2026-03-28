@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
@@ -25,6 +25,8 @@ import {
   NOTE_ID_SEARCH_PARAM,
   noteKindLabel,
   readCreateState,
+  readNoteTagFilters,
+  toggleNoteTagFilter,
 } from '../noteWorkspaceState';
 import { inferInlineTags, readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
@@ -220,11 +222,29 @@ function formatNoteContext(memory: MemoryDocItem): { primary: string; secondary:
   const primary = memory.area?.trim()
     || memory.status?.trim()
     || '—';
-  const tagList = memory.tags.filter((tag) => tag.trim().length > 0);
+  const secondary = memory.parent?.trim()
+    ? `parent @${memory.parent.trim()}`
+    : memory.role?.trim() || null;
   return {
     primary,
-    secondary: tagList.length > 0 ? tagList.join(', ') : null,
+    secondary,
   };
+}
+
+function buildSingleTagNotesHref(locationSearch: string, tag: string): string {
+  return `/notes${buildNoteSearch(locationSearch, {
+    memoryId: null,
+    creating: false,
+    tags: [tag],
+  })}`;
+}
+
+function buildToggledTagNotesHref(locationSearch: string, tag: string): string {
+  return `/notes${buildNoteSearch(locationSearch, {
+    memoryId: null,
+    creating: false,
+    tags: toggleNoteTagFilter(readNoteTagFilters(locationSearch), tag),
+  })}`;
 }
 
 function NotesTable({
@@ -235,6 +255,7 @@ function NotesTable({
   locationSearch: string;
 }) {
   const navigate = useNavigate();
+  const activeTags = useMemo(() => new Set(readNoteTagFilters(locationSearch)), [locationSearch]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border-subtle bg-surface/10">
@@ -269,7 +290,7 @@ function NotesTable({
                 }}
               >
                 <td className="px-4 py-3">
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         to={noteHref}
@@ -280,7 +301,25 @@ function NotesTable({
                       </Link>
                       {memory.usedInLastSession ? <span className="text-[11px] text-accent">Used recently</span> : null}
                     </div>
-                    <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{memory.summary || 'No summary yet.'}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {memory.tags.length > 0 ? memory.tags.map((tag) => {
+                        const tagActive = activeTags.has(tag.trim().toLowerCase());
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`ui-note-tag-link ${tagActive ? 'border-accent/45 bg-accent/12 text-accent' : ''}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              navigate(buildToggledTagNotesHref(locationSearch, tag));
+                            }}
+                          >
+                            #{tag}
+                          </button>
+                        );
+                      }) : <span className="text-[11px] text-dim">No tags</span>}
+                    </div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                       <span className="font-mono">@{memory.id}</span>
                       {memory.path ? (
@@ -295,7 +334,7 @@ function NotesTable({
                 <td className="px-3 py-3 text-[12px] text-secondary">{noteKindLabel(memory)}</td>
                 <td className="px-3 py-3">
                   <div className="text-[12px] text-primary">{context.primary}</div>
-                  <div className="mt-0.5 text-[11px] text-dim">{context.secondary || 'No tags'}</div>
+                  <div className="mt-0.5 text-[11px] text-dim">{context.secondary || '—'}</div>
                 </td>
                 <td className="px-4 py-3 text-[12px] text-secondary">{memory.updated ? timeAgo(memory.updated) : '—'}</td>
               </tr>
@@ -309,37 +348,85 @@ function NotesTable({
 
 function NoteWorkspace({
   detail,
+  locationSearch,
   onNavigate,
   onRefetched,
 }: {
   detail: MemoryDocDetail;
+  locationSearch: string;
   onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onRefetched: () => void;
 }) {
   const memory = detail.memory;
   const [savedNoteTitle, setSavedNoteTitle] = useState(memory.title);
-  const [savedNoteSummary, setSavedNoteSummary] = useState(memory.summary);
   const [savedNoteBody, setSavedNoteBody] = useState(normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)));
   const [noteTitle, setNoteTitle] = useState(memory.title);
-  const [noteSummary, setNoteSummary] = useState(memory.summary);
   const [noteBody, setNoteBody] = useState(normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)));
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger' | 'warning'; text: string } | null>(null);
-  const dirty = noteTitle !== savedNoteTitle || noteSummary !== savedNoteSummary || noteBody !== savedNoteBody;
-  const inferredTags = useMemo(() => inferInlineTags(`${noteSummary}\n${noteBody}`), [noteBody, noteSummary]);
+  const lastAutoSaveSignatureRef = useRef<string | null>(null);
+  const dirty = noteTitle !== savedNoteTitle || noteBody !== savedNoteBody;
+  const inferredTags = useMemo(() => inferInlineTags(noteBody), [noteBody]);
 
   useEffect(() => {
     const editableBody = normalizeMarkdownValue(readEditableNoteBody(detail.content, detail.memory.title));
     setSavedNoteTitle(detail.memory.title);
-    setSavedNoteSummary(detail.memory.summary);
     setSavedNoteBody(editableBody);
     setNoteTitle(detail.memory.title);
-    setNoteSummary(detail.memory.summary);
     setNoteBody(editableBody);
+    setSaveState('idle');
     setNotice(null);
-  }, [detail.content, detail.memory.summary, detail.memory.title]);
+    lastAutoSaveSignatureRef.current = null;
+  }, [detail.content, detail.memory.title]);
+
+  const handleSave = useCallback(async (options: { automated?: boolean } = {}) => {
+    if (saveBusy || !dirty) {
+      return false;
+    }
+
+    const nextTitle = noteTitle.trim();
+    if (nextTitle.length === 0) {
+      if (!options.automated) {
+        setNotice({ tone: 'warning', text: 'Add a title before saving.' });
+      }
+      return false;
+    }
+
+    setSaveBusy(true);
+    setSaveState('idle');
+    if (!options.automated) {
+      setNotice(null);
+    }
+
+    try {
+      const result = await api.saveNoteDoc(memory.id, {
+        title: nextTitle,
+        body: noteBody,
+      });
+      const editableBody = normalizeMarkdownValue(readEditableNoteBody(result.content, result.memory.title));
+      setSavedNoteTitle(result.memory.title);
+      setSavedNoteBody(editableBody);
+      setNoteTitle(result.memory.title);
+      setNoteBody(editableBody);
+      setSaveState('saved');
+      setNotice(options.automated ? null : { tone: 'accent', text: `Saved @${result.memory.id}.` });
+      if (result.memory.id !== memory.id) {
+        onNavigate({ memoryId: result.memory.id, creating: false }, true);
+      }
+      emitMemoriesChanged();
+      onRefetched();
+      return true;
+    } catch (error) {
+      setSaveState('error');
+      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
+      return false;
+    } finally {
+      setSaveBusy(false);
+    }
+  }, [dirty, memory.id, noteBody, noteTitle, onNavigate, onRefetched, saveBusy]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -355,6 +442,21 @@ function NoteWorkspace({
   }, [dirty]);
 
   useEffect(() => {
+    const nextTitle = noteTitle.trim();
+    const autoSaveSignature = `${nextTitle}\u0000${noteBody}`;
+    if (!dirty || saveBusy || deleteBusy || startBusy || nextTitle.length === 0 || lastAutoSaveSignatureRef.current === autoSaveSignature) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      lastAutoSaveSignatureRef.current = autoSaveSignature;
+      void handleSave({ automated: true });
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [deleteBusy, dirty, handleSave, noteBody, noteTitle, saveBusy, startBusy]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -364,50 +466,12 @@ function NoteWorkspace({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
-
-  async function handleSave() {
-    if (saveBusy || !dirty) {
-      return;
-    }
-
-    const nextTitle = noteTitle.trim();
-    if (nextTitle.length === 0) {
-      setNotice({ tone: 'warning', text: 'Add a title before saving.' });
-      return;
-    }
-
-    setSaveBusy(true);
-    setNotice(null);
-
-    try {
-      const result = await api.saveNoteDoc(memory.id, {
-        title: nextTitle,
-        summary: noteSummary.trim() || undefined,
-        body: noteBody,
-      });
-      const editableBody = normalizeMarkdownValue(readEditableNoteBody(result.content, result.memory.title));
-      setSavedNoteTitle(result.memory.title);
-      setSavedNoteSummary(result.memory.summary);
-      setSavedNoteBody(editableBody);
-      setNoteTitle(result.memory.title);
-      setNoteSummary(result.memory.summary);
-      setNoteBody(editableBody);
-      setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
-      if (result.memory.id !== memory.id) {
-        onNavigate({ memoryId: result.memory.id, creating: false }, true);
-      }
-      emitMemoriesChanged();
-      onRefetched();
-    } catch (error) {
-      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
-    } finally {
-      setSaveBusy(false);
-    }
-  }
+  }, [handleSave]);
 
   function handleReload() {
     setNotice(null);
+    setSaveState('idle');
+    lastAutoSaveSignatureRef.current = null;
     onRefetched();
   }
 
@@ -456,12 +520,20 @@ function NoteWorkspace({
       meta={(
         <>
           <span>{noteKindLabel(memory)}</span>
-          {dirty && (
+          {(saveBusy || dirty || saveState === 'saved' || saveState === 'error') ? (
             <>
               <span className="opacity-40">·</span>
-              <span className="text-warning">Unsaved changes</span>
+              {saveBusy ? (
+                <span className="text-accent">Saving…</span>
+              ) : dirty ? (
+                <span className="text-warning">{noteTitle.trim().length === 0 ? 'Title required to save' : 'Unsaved changes'}</span>
+              ) : saveState === 'error' ? (
+                <span className="text-danger">Autosave failed</span>
+              ) : (
+                <span className="text-dim">All changes saved</span>
+              )}
             </>
-          )}
+          ) : null}
         </>
       )}
       actions={(
@@ -470,7 +542,7 @@ function NoteWorkspace({
             Reload
           </ToolbarButton>
           <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy || noteTitle.trim().length === 0}>
-            {saveBusy ? 'Saving…' : 'Save'}
+            {saveBusy ? 'Saving…' : 'Save now'}
           </ToolbarButton>
           <ToolbarButton onClick={() => { void handleStartConversation(); }} disabled={startBusy} className="text-accent">
             {startBusy ? 'Starting…' : 'Chat about note'}
@@ -485,12 +557,11 @@ function NoteWorkspace({
       <NoteEditorDocument
         title={noteTitle}
         onTitleChange={setNoteTitle}
-        summary={noteSummary}
-        onSummaryChange={setNoteSummary}
         body={noteBody}
         onBodyChange={setNoteBody}
         path={memory.path}
         inferredTags={inferredTags}
+        buildTagHref={(tag) => buildSingleTagNotesHref(locationSearch, tag)}
         meta={(
           <>
             <span className="font-mono">@{memory.id}</span>
@@ -504,22 +575,25 @@ function NoteWorkspace({
 }
 
 function NewNoteWorkspace({
+  locationSearch,
   onNavigate,
   onCreated,
 }: {
+  locationSearch: string;
   onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onCreated: (detail: MemoryDocDetail) => void;
 }) {
   const [createTitle, setCreateTitle] = useState('');
-  const [createSummary, setCreateSummary] = useState('');
   const [createBody, setCreateBody] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const inferredTags = useMemo(() => inferInlineTags(`${createSummary}\n${createBody}`), [createBody, createSummary]);
+  const lastAutoCreateSignatureRef = useRef<string | null>(null);
+  const inferredTags = useMemo(() => inferInlineTags(createBody), [createBody]);
+  const hasDraftContent = createTitle.trim().length > 0 || createBody.trim().length > 0;
 
-  async function handleCreateNote() {
+  const handleCreateNote = useCallback(async () => {
     if (creating || createTitle.trim().length === 0) {
-      return;
+      return false;
     }
 
     setCreating(true);
@@ -528,20 +602,47 @@ function NewNoteWorkspace({
     try {
       const created = await api.createNoteDoc({
         title: createTitle.trim(),
-        summary: createSummary.trim() || undefined,
         body: createBody,
       });
       emitMemoriesChanged();
       onCreated(created);
       onNavigate({ memoryId: created.memory.id, creating: false }, true);
+      return true;
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
       setCreating(false);
+    }
+  }, [createBody, createTitle, creating, onCreated, onNavigate]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasDraftContent) {
+        return;
+      }
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasDraftContent]);
+
+  useEffect(() => {
+    const nextTitle = createTitle.trim();
+    const autoCreateSignature = `${nextTitle}\u0000${createBody}`;
+    if (creating || nextTitle.length === 0 || lastAutoCreateSignatureRef.current === autoCreateSignature) {
       return;
     }
 
-    setCreating(false);
-  }
+    const timeoutId = window.setTimeout(() => {
+      lastAutoCreateSignatureRef.current = autoCreateSignature;
+      void handleCreateNote();
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [createBody, createTitle, creating, handleCreateNote]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -553,26 +654,30 @@ function NewNoteWorkspace({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [handleCreateNote]);
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
         <ToolbarButton onClick={() => { void handleCreateNote(); }} disabled={creating || createTitle.trim().length === 0} className="text-accent">
-          {creating ? 'Creating…' : 'Create note'}
+          {creating ? 'Creating…' : 'Create now'}
         </ToolbarButton>
       </div>
       {createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
       <NoteEditorDocument
         title={createTitle}
         onTitleChange={setCreateTitle}
-        summary={createSummary}
-        onSummaryChange={setCreateSummary}
         body={createBody}
         onBodyChange={setCreateBody}
         path="untitled.md"
         inferredTags={inferredTags}
-        meta={<span>Draft note</span>}
+        buildTagHref={(tag) => buildSingleTagNotesHref(locationSearch, tag)}
+        meta={(
+          <>
+            <span>Draft note</span>
+            <span>{createTitle.trim().length === 0 ? 'Autosaves once it has a title' : 'Autosaves automatically'}</span>
+          </>
+        )}
         titlePlaceholder="Untitled note"
       />
     </div>
@@ -595,7 +700,8 @@ export function MemoriesPage() {
   const memories = data?.memories ?? [];
   const memoryQueue = queueState.data?.memoryQueue ?? data?.memoryQueue ?? [];
   const [query, setQuery] = useState('');
-  const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
+  const activeTagFilters = useMemo(() => readNoteTagFilters(location.search), [location.search]);
+  const filteredMemories = useMemo(() => filterMemories(memories, query, activeTagFilters), [activeTagFilters, memories, query]);
   const selectedMemoryId = useMemo(() => {
     const params = new URLSearchParams(location.search);
     return params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
@@ -610,7 +716,7 @@ export function MemoriesPage() {
   const detailApi = useApi(detailFetcher, `note-workspace:${selectedMemoryId ?? 'none'}`);
   const selectedDetail = detailApi.data;
 
-  const navigateNotes = useCallback((updates: { memoryId?: string | null; creating?: boolean | null }, replace = false) => {
+  const navigateNotes = useCallback((updates: { memoryId?: string | null; creating?: boolean | null; tags?: string[] | null }, replace = false) => {
     const nextSearch = buildNoteSearch(location.search, updates);
     navigate(`/notes${nextSearch}`, { replace });
   }, [location.search, navigate]);
@@ -662,6 +768,7 @@ export function MemoriesPage() {
               />
             </PageHeader>
             <NewNoteWorkspace
+              locationSearch={location.search}
               onNavigate={navigateNotes}
               onCreated={(created) => {
                 replaceData({
@@ -688,6 +795,7 @@ export function MemoriesPage() {
             <div className="mx-auto w-full max-w-[1440px]">
               <NoteWorkspace
                 detail={selectedDetail}
+                locationSearch={location.search}
                 onNavigate={navigateNotes}
                 onRefetched={() => {
                   void detailApi.refetch({ resetLoading: false });
@@ -737,7 +845,7 @@ export function MemoriesPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-[12px] text-secondary">
-              {query.trim() ? `Showing ${filteredMemories.length} of ${memories.length} notes.` : `${memories.length} notes.`}
+              {query.trim() || activeTagFilters.length > 0 ? `Showing ${filteredMemories.length} of ${memories.length} notes.` : `${memories.length} notes.`}
             </div>
             <input
               value={query}
@@ -749,6 +857,25 @@ export function MemoriesPage() {
               spellCheck={false}
             />
           </div>
+
+          {activeTagFilters.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="ui-section-label">Filtered by</span>
+              {activeTagFilters.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className="ui-note-tag-link border-accent/45 bg-accent/12 text-accent"
+                  onClick={() => navigateNotes({ memoryId: null, creating: false, tags: activeTagFilters.filter((value) => value !== tag) })}
+                >
+                  #{tag} ×
+                </button>
+              ))}
+              <ToolbarButton onClick={() => navigateNotes({ memoryId: null, creating: false, tags: [] })}>
+                Clear tags
+              </ToolbarButton>
+            </div>
+          ) : null}
 
           {loading && !data ? <LoadingState label="Loading notes…" className="min-h-[18rem]" /> : null}
           {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} /> : null}
@@ -766,7 +893,7 @@ export function MemoriesPage() {
             <EmptyState
               className="min-h-[18rem]"
               title="No matching notes"
-              body="Try a broader search across titles, summaries, and tags."
+              body="Try a broader search across titles, ids, and tags."
             />
           ) : null}
 
