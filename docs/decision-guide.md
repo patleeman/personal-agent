@@ -111,6 +111,7 @@ The docs explain the product model. `AGENTS.md` explains how this particular age
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)

@@ -188,14 +188,15 @@ After this page:
 
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
-3. [Agent Tool Map](./agent-tool-map.md)
-4. [Conversations](./conversations.md)
-5. [Automation](./automation.md)
-6. [Web UI Guide](./web-ui.md)
-7. [Sync Guide](./sync.md)
-8. [Projects](./projects.md)
-9. [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
-10. [Scheduled Tasks](./scheduled-tasks.md)
+3. [Knowledge Management System](./knowledge-system.md)
+4. [Agent Tool Map](./agent-tool-map.md)
+5. [Conversations](./conversations.md)
+6. [Automation](./automation.md)
+7. [Web UI Guide](./web-ui.md)
+8. [Sync Guide](./sync.md)
+9. [Projects](./projects.md)
+10. [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+11. [Scheduled Tasks](./scheduled-tasks.md)
 
 ## If something fails
 

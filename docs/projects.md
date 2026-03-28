@@ -173,6 +173,7 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)

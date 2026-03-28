@@ -30,6 +30,7 @@ Start here:
 - `docs/getting-started.md` - first-run setup
 - `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs
@@ -238,6 +239,7 @@ See docs:
 - `docs/getting-started.md` - first-run setup
 - `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs

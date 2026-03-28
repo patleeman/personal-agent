@@ -6,6 +6,8 @@ A profile is not just a name. It is the durable resource bundle the agent runs w
 
 See [Nodes](./nodes.md) for the canonical on-disk node spec.
 
+If you want the single conceptual overview of notes, skills, projects, and `AGENTS.md` as one memory system, start with [Knowledge Management System](./knowledge-system.md).
+
 If you need Patrick-specific preferences or standing behavior, the active profile's `AGENTS.md` is the canonical home. Use this page to understand how that fits with notes, skills, projects, and layered resources.
 
 ## The layer model
@@ -280,6 +282,7 @@ Conversation-local bindings belong in local runtime state.
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
 - [How personal-agent works](./how-it-works.md)

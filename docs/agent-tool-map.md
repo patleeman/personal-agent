@@ -74,6 +74,7 @@ Use this page to choose a tool.
 Use the feature docs to decide whether the underlying product surface is correct:
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)

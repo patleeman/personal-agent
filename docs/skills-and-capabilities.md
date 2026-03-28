@@ -94,6 +94,7 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
