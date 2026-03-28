@@ -24,7 +24,7 @@ import {
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
-import { buildNoteSearch, NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
+import { buildNoteSearch, NOTE_ID_SEARCH_PARAM, readCreateState } from '../noteWorkspaceState';
 import { buildProjectsHref } from '../projectWorkspaceState';
 import { buildSkillsSearch, SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
@@ -521,6 +521,10 @@ export function Sidebar() {
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
   const selectedNoteId = useMemo(() => new URLSearchParams(location.search).get(NOTE_ID_SEARCH_PARAM)?.trim() || null, [location.search]);
+  const creatingNote = useMemo(
+    () => location.pathname.startsWith('/notes') && readCreateState(location.search),
+    [location.pathname, location.search],
+  );
   const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get(SKILL_SEARCH_PARAM)?.trim() || null, [location.search]);
   const selectedProjectId = useMemo(() => parseSelectedProjectId(location.pathname), [location.pathname]);
   const selectedWorkspaceId = useMemo(
@@ -1029,17 +1033,26 @@ export function Sidebar() {
           })}
         </div>
 
-        {openNotes.length > 0 && (
+        {(openNotes.length > 0 || creatingNote) && (
           <>
             <SectionHeader label="Open Notes" />
             <div className="py-1 space-y-0.5">
+              {creatingNote ? (
+                <ShelfRow
+                  to={`/notes${buildNoteSearch(location.search, { creating: true })}`}
+                  active
+                  title="new note"
+                  meta="Draft note"
+                  onClose={() => navigate(`/notes${buildNoteSearch(location.search, { creating: false })}`)}
+                />
+              ) : null}
               {openNotes.map((item) => {
                 const note = notesById.get(item.id) ?? null;
                 return (
                   <ShelfRow
                     key={item.id}
                     to={`/notes${buildNoteSearch('', { memoryId: item.id, creating: false })}`}
-                    active={location.pathname.startsWith('/notes') && selectedNoteId === item.id}
+                    active={!creatingNote && location.pathname.startsWith('/notes') && selectedNoteId === item.id}
                     title={note?.title ?? item.id}
                     meta={note?.summary || `@${item.id}`}
                     pinned={item.pinned}

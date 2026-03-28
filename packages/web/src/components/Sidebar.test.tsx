@@ -208,6 +208,15 @@ describe('Sidebar', () => {
     expect(html).toContain('repo');
   });
 
+  it('shows a draft note row in the sidebar while creating a new note', () => {
+    const html = renderSidebar('/notes?new=1');
+
+    expect(html).toContain('Open Notes');
+    expect(html).toContain('new note');
+    expect(html).toContain('Draft note');
+    expect(html).toContain('href="/notes?new=1"');
+  });
+
   it('keeps the workspace nav simple on workspace routes', () => {
     const html = renderSidebar('/workspace/changes?cwd=/tmp/repo');
 
