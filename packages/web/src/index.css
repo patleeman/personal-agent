@@ -380,11 +380,11 @@
   }
 
   .ui-note-inline-tags {
-    @apply flex flex-wrap items-center gap-2;
+    @apply flex min-h-[1.75rem] items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap;
   }
 
   .ui-note-tag-link {
-    @apply inline-flex items-center rounded-full border border-border-subtle bg-surface/35 px-2.5 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-accent;
+    @apply inline-flex shrink-0 items-center rounded-full border border-border-subtle bg-surface/35 px-2.5 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-accent;
   }
 
   .ui-note-editor-shell {
