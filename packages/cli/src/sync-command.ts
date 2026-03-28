@@ -31,7 +31,7 @@ import {
   startDaemonDetached,
   stopDaemonGracefully,
 } from '@personal-agent/daemon';
-import { bullet, dim, keyValue, section, success, warning } from './ui.js';
+import { dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success, warning } from './ui.js';
 
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
@@ -749,19 +749,21 @@ export async function mergeDeferredResumesFilesCommand(args: string[]): Promise<
 }
 
 function printSyncHelp(): void {
-  console.log(section('Sync commands'));
+  console.log('Sync commands');
   console.log('');
-  console.log(`Usage: pa sync [status|run|setup|help] [args...]
-
-Commands:
-  status                                      Show sync configuration and daemon sync status
-  run                                         Trigger an immediate daemon sync cycle
-  setup --repo <git-url> [--branch <name>] [--fresh|--bootstrap] [--repo-dir <path>]
-                                              Configure git sync, move profiles/pi-agent state under <state>/sync, and enable daemon auto-sync
-  help                                        Show sync help
-`);
-  console.log(bullet('Fresh mode initializes from current local state and pushes to remote.'));
-  console.log(bullet('Bootstrap mode fetches and merges from an existing remote branch.'));
+  printDenseUsage('pa sync [status|run|setup|help] [args...]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'status', description: 'Show sync configuration and daemon sync status' },
+    { usage: 'run', description: 'Trigger an immediate daemon sync cycle' },
+    { usage: 'setup --repo <git-url> [--branch <name>] [--fresh|--bootstrap] [--repo-dir <path>]', description: 'Configure git sync, move profiles/pi-agent state under <state>/sync, and enable daemon auto-sync' },
+    { usage: 'help', description: 'Show sync help' },
+  ]);
+  console.log('');
+  printDenseLines('Notes', [
+    'Fresh mode initializes from current local state and pushes to remote.',
+    'Bootstrap mode fetches and merges from an existing remote branch.',
+  ]);
 }
 
 export async function syncCommand(args: string[]): Promise<number> {

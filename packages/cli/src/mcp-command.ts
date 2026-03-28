@@ -9,46 +9,41 @@ import {
   type McpServerConfig,
 } from '@personal-agent/core';
 import { stdin as input } from 'node:process';
-import { bullet, dim, keyValue, section, success, warning as warningText } from './ui.js';
+import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success, warning as warningText } from './ui.js';
 
 function mcpUsageText(): string {
   return 'Usage: pa mcp [list|info|grep|call|auth|logout|help] [args...]';
 }
 
 function printMcpHelp(): void {
-  console.log(section('MCP commands'));
+  console.log('MCP commands');
   console.log('');
-  console.log(`Usage: pa mcp [list|info|grep|call|auth|logout|help] [args...]
-
-Commands:
-  list [--probe] [-d|--with-descriptions] [-c|--config <path>] [--json]
-                                  List configured MCP servers; use --probe to fetch tools
-  info <server> [tool] [-c|--config <path>] [--json]
-                                  Inspect one server or tool
-  grep <pattern> [-d|--with-descriptions] [-c|--config <path>] [--json]
-                                  Search tools by glob pattern (* supported)
-  call <server> <tool> [json] [-c|--config <path>] [--json]
-                                  Call one MCP tool (reads stdin if json is omitted)
-  auth <server> [-c|--config <path>] [--json]
-                                  Trigger OAuth / validate connectivity for one server
-  logout <server> [-c|--config <path>]
-                                  Clear stored OAuth state for one remote server
-  help                            Show MCP help
-
-Examples:
-  pa mcp
-  pa mcp list
-  pa mcp list --probe
-  pa mcp list --probe -d
-  pa mcp info atlassian
-  pa mcp info atlassian getConfluencePage
-  pa mcp info atlassian/getConfluencePage
-  pa mcp grep '*jira*'
-  pa mcp call atlassian getAccessibleAtlassianResources '{}'
-  echo '{"query":"datadog"}' | pa mcp call atlassian searchConfluenceUsingCql
-  pa mcp auth slack
-  pa mcp logout slack
-`);
+  printDenseUsage('pa mcp [list|info|grep|call|auth|logout|help] [args...]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--probe] [-d|--with-descriptions] [-c|--config <path>] [--json]', description: 'List configured MCP servers; use --probe to fetch tools' },
+    { usage: 'info <server> [tool] [-c|--config <path>] [--json]', description: 'Inspect one server or tool' },
+    { usage: 'grep <pattern> [-d|--with-descriptions] [-c|--config <path>] [--json]', description: 'Search tools by glob pattern (* supported)' },
+    { usage: 'call <server> <tool> [json] [-c|--config <path>] [--json]', description: 'Call one MCP tool (reads stdin if json is omitted)' },
+    { usage: 'auth <server> [-c|--config <path>] [--json]', description: 'Trigger OAuth / validate connectivity for one server' },
+    { usage: 'logout <server> [-c|--config <path>]', description: 'Clear stored OAuth state for one remote server' },
+    { usage: 'help', description: 'Show MCP help' },
+  ]);
+  console.log('');
+  printDenseLines('Examples', [
+    'pa mcp',
+    'pa mcp list',
+    'pa mcp list --probe',
+    'pa mcp list --probe -d',
+    'pa mcp info atlassian',
+    'pa mcp info atlassian getConfluencePage',
+    'pa mcp info atlassian/getConfluencePage',
+    "pa mcp grep '*jira*'",
+    "pa mcp call atlassian getAccessibleAtlassianResources '{}'",
+    "echo '{\"query\":\"datadog\"}' | pa mcp call atlassian searchConfluenceUsingCql",
+    'pa mcp auth slack',
+    'pa mcp logout slack',
+  ]);
 }
 
 function commandLineForServer(server: McpServerConfig): string | undefined {

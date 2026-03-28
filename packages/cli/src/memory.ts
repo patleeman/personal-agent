@@ -7,7 +7,7 @@ import {
   splitMemoryTagValues,
   validateMemoryDocId,
 } from '@personal-agent/core';
-import { bullet, dim, formatHint, keyValue, section, success, warning } from './ui.js';
+import { bullet, dim, formatHint, keyValue, printDenseCommandList, printDenseUsage, section, success, warning } from './ui.js';
 
 function memoryUsageText(): string {
   return 'Usage: pa memory [list|find|show|new|lint] [args...]';
@@ -46,23 +46,18 @@ function isMemoryHelpToken(value: string | undefined): boolean {
 }
 
 function printMemoryHelp(): void {
-  console.log(section('Note node commands'));
+  console.log('Note node commands');
   console.log('');
-  console.log(`Usage: pa memory [list|find|show|new|lint|help]
-
-Commands:
-  list [--json]
-                           List parsed shared note nodes
-  find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]
-                           Filter shared note nodes by metadata fields
-  show <id> [--json]
-                           Show one note node and metadata
-  new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]
-                           Create a new shared note node scaffold with INDEX.md frontmatter
-  lint [--json]
-                           Validate shared note node frontmatter, duplicate ids, and broken note links
-  help                     Show memory help
-`);
+  printDenseUsage('pa memory [list|find|show|new|lint|help]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--json]', description: 'List parsed shared note nodes' },
+    { usage: 'find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note nodes by metadata fields' },
+    { usage: 'show <id> [--json]', description: 'Show one note node and metadata' },
+    { usage: 'new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note node scaffold with INDEX.md frontmatter' },
+    { usage: 'lint [--json]', description: 'Validate shared note node frontmatter, duplicate ids, and broken note links' },
+    { usage: 'help', description: 'Show memory help' },
+  ]);
 }
 
 export async function memoryCommand(args: string[]): Promise<number> {
