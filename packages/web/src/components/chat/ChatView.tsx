@@ -346,15 +346,23 @@ function readSelectedTextWithinElement(element: HTMLElement | null): string {
   return normalizeReplyQuoteSelection(selection.toString());
 }
 
-function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, onSelectionGesture?: () => void) {
+type ReplySelectionGestureHandler = (scopeElement: HTMLElement) => void;
+
+function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, onSelectionGesture?: ReplySelectionGestureHandler) {
+  const handleSelectionGesture = onSelectionGesture
+    ? (event: React.SyntheticEvent<HTMLElement>) => {
+        onSelectionGesture(event.currentTarget);
+      }
+    : undefined;
+
   return {
     'data-selection-reply-scope': 'assistant-message',
     'data-message-index': typeof messageIndex === 'number' ? String(messageIndex) : undefined,
     'data-block-id': blockId,
-    onMouseUp: onSelectionGesture,
-    onPointerUp: onSelectionGesture,
-    onKeyUp: onSelectionGesture,
-    onTouchEnd: onSelectionGesture,
+    onMouseUp: handleSelectionGesture,
+    onPointerUp: handleSelectionGesture,
+    onKeyUp: handleSelectionGesture,
+    onTouchEnd: handleSelectionGesture,
   };
 }
 
@@ -1747,7 +1755,7 @@ function ErrorBlock({
   resumeTitle?: string | null;
   resumeLabel?: string;
   onOpenFilePath?: (path: string) => void;
-  onSelectionGesture?: () => void;
+  onSelectionGesture?: ReplySelectionGestureHandler;
   replySelectionActions?: ReplySelectionActions;
 }) {
   const blockId = block.id?.trim() || undefined;
@@ -2042,7 +2050,7 @@ function AssistantMessage({
   onFork?: () => Promise<void> | void;
   onRewind?: () => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
-  onSelectionGesture?: () => void;
+  onSelectionGesture?: ReplySelectionGestureHandler;
   replySelectionActions?: ReplySelectionActions;
   showCursor?: boolean;
   layout?: ChatViewLayout;
@@ -2090,7 +2098,7 @@ function ContextMessage({
   block: Extract<MessageBlock, { type: 'context' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
-  onSelectionGesture?: () => void;
+  onSelectionGesture?: ReplySelectionGestureHandler;
   replySelectionActions?: ReplySelectionActions;
 }) {
   const label = formatInjectedContextLabel(block.customType);
@@ -2154,7 +2162,7 @@ function SummaryMessage({
   block: Extract<MessageBlock, { type: 'summary' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
-  onSelectionGesture?: () => void;
+  onSelectionGesture?: ReplySelectionGestureHandler;
   replySelectionActions?: ReplySelectionActions;
 }) {
   const isCompaction = block.kind === 'compaction';
@@ -2597,6 +2605,41 @@ export const ChatView = memo(function ChatView({
     }, 140);
   }, [cancelReplySelectionClear]);
 
+  const applyReplySelectionForScope = useCallback((scopeElement: HTMLElement | null) => {
+    if (!scopeElement) {
+      scheduleReplySelectionClear();
+      return;
+    }
+
+    const text = readSelectedTextWithinElement(scopeElement);
+    if (!text) {
+      scheduleReplySelectionClear();
+      return;
+    }
+
+    const messageIndex = Number.parseInt(scopeElement.dataset.messageIndex ?? '', 10);
+    if (!Number.isFinite(messageIndex)) {
+      scheduleReplySelectionClear();
+      return;
+    }
+
+    cancelReplySelectionClear();
+
+    const blockId = scopeElement.dataset.blockId?.trim() || undefined;
+    setReplySelection((current) => {
+      if (
+        current
+        && current.text === text
+        && current.messageIndex === messageIndex
+        && current.blockId === blockId
+      ) {
+        return current;
+      }
+
+      return { text, messageIndex, blockId };
+    });
+  }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
+
   const syncReplySelectionFromSelection = useCallback(() => {
     if (typeof window === 'undefined') {
       scheduleReplySelectionClear();
@@ -2616,36 +2659,10 @@ export const ChatView = memo(function ChatView({
       return;
     }
 
-    const text = readSelectedTextWithinElement(startScope);
-    if (!text) {
-      scheduleReplySelectionClear();
-      return;
-    }
+    applyReplySelectionForScope(startScope);
+  }, [applyReplySelectionForScope, scheduleReplySelectionClear]);
 
-    const messageIndex = Number.parseInt(startScope.dataset.messageIndex ?? '', 10);
-    if (!Number.isFinite(messageIndex)) {
-      scheduleReplySelectionClear();
-      return;
-    }
-
-    cancelReplySelectionClear();
-
-    const blockId = startScope.dataset.blockId?.trim() || undefined;
-    setReplySelection((current) => {
-      if (
-        current
-        && current.text === text
-        && current.messageIndex === messageIndex
-        && current.blockId === blockId
-      ) {
-        return current;
-      }
-
-      return { text, messageIndex, blockId };
-    });
-  }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
-
-  const scheduleReplySelectionSync = useCallback(() => {
+  const scheduleReplySelectionSync = useCallback((scopeElement?: HTMLElement | null) => {
     if (typeof window === 'undefined' || !onReplyToSelection) {
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
@@ -2653,21 +2670,30 @@ export const ChatView = memo(function ChatView({
       return;
     }
 
+    const sync = () => {
+      if (scopeElement) {
+        applyReplySelectionForScope(scopeElement);
+        return;
+      }
+
+      syncReplySelectionFromSelection();
+    };
+
     clearScheduledReplySelectionSync();
 
     replySelectionSyncFrameRef.current = window.requestAnimationFrame(() => {
       replySelectionSyncFrameRef.current = null;
-      syncReplySelectionFromSelection();
+      sync();
     });
 
     for (const delayMs of [40, 120, 240]) {
       const timeoutId = window.setTimeout(() => {
         replySelectionSyncTimeoutRefs.current = replySelectionSyncTimeoutRefs.current.filter((currentId) => currentId !== timeoutId);
-        syncReplySelectionFromSelection();
+        sync();
       }, delayMs);
       replySelectionSyncTimeoutRefs.current.push(timeoutId);
     }
-  }, [cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection]);
+  }, [applyReplySelectionForScope, cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
@@ -2680,24 +2706,44 @@ export const ChatView = memo(function ChatView({
     const fallbackIntervalId = window.setInterval(() => {
       syncReplySelectionFromSelection();
     }, 180);
+    const handleDocumentReplySelectionSync = () => {
+      scheduleReplySelectionSync();
+    };
+    const handleFocus = () => {
+      scheduleReplySelectionSync();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        scheduleReplySelectionSync();
+        return;
+      }
 
-    document.addEventListener('selectionchange', scheduleReplySelectionSync);
-    document.addEventListener('mouseup', scheduleReplySelectionSync);
-    document.addEventListener('pointerup', scheduleReplySelectionSync);
-    document.addEventListener('keyup', scheduleReplySelectionSync);
-    document.addEventListener('touchend', scheduleReplySelectionSync);
+      scheduleReplySelectionClear();
+    };
+
+    document.addEventListener('selectionchange', handleDocumentReplySelectionSync);
+    document.addEventListener('mouseup', handleDocumentReplySelectionSync);
+    document.addEventListener('pointerup', handleDocumentReplySelectionSync);
+    document.addEventListener('keyup', handleDocumentReplySelectionSync);
+    document.addEventListener('touchend', handleDocumentReplySelectionSync);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus);
 
     return () => {
       window.clearInterval(fallbackIntervalId);
-      document.removeEventListener('selectionchange', scheduleReplySelectionSync);
-      document.removeEventListener('mouseup', scheduleReplySelectionSync);
-      document.removeEventListener('pointerup', scheduleReplySelectionSync);
-      document.removeEventListener('keyup', scheduleReplySelectionSync);
-      document.removeEventListener('touchend', scheduleReplySelectionSync);
+      document.removeEventListener('selectionchange', handleDocumentReplySelectionSync);
+      document.removeEventListener('mouseup', handleDocumentReplySelectionSync);
+      document.removeEventListener('pointerup', handleDocumentReplySelectionSync);
+      document.removeEventListener('keyup', handleDocumentReplySelectionSync);
+      document.removeEventListener('touchend', handleDocumentReplySelectionSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
     };
-  }, [cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionSync, syncReplySelectionFromSelection]);
+  }, [cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionClear, scheduleReplySelectionSync, syncReplySelectionFromSelection]);
 
   const handleReplySelection = useCallback(async () => {
     if (!replySelection || !onReplyToSelection) {
