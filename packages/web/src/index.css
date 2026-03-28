@@ -368,7 +368,7 @@
   }
 
   .ui-note-editor-doc {
-    @apply mx-auto flex w-full max-w-4xl flex-col gap-5 px-8 py-8;
+    @apply mx-auto flex w-full max-w-4xl flex-col gap-3 px-8 py-6;
   }
 
   .ui-note-title-input {
@@ -380,7 +380,7 @@
   }
 
   .ui-note-inline-tags {
-    @apply flex min-h-[1.75rem] items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap;
+    @apply flex min-h-[1.5rem] items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap;
   }
 
   .ui-note-tag-link {
@@ -392,7 +392,7 @@
   }
 
   .ui-note-rich-editor {
-    @apply mt-1;
+    @apply mt-0;
   }
 
   .ui-rich-editor {
@@ -567,6 +567,41 @@
 
   .ui-rich-editor-mention-link {
     cursor: pointer;
+  }
+
+  .ui-note-rich-editor .ProseMirror {
+    @apply min-h-[18rem] pt-1 pb-4;
+  }
+
+  .ui-note-rich-editor .ProseMirror h1 {
+    @apply mt-0.5 mb-2;
+  }
+
+  .ui-note-rich-editor .ProseMirror h2 {
+    @apply mt-3 mb-1.5;
+  }
+
+  .ui-note-rich-editor .ProseMirror h3 {
+    @apply mt-2.5 mb-1.5;
+  }
+
+  .ui-note-rich-editor .ProseMirror h4,
+  .ui-note-rich-editor .ProseMirror h5,
+  .ui-note-rich-editor .ProseMirror h6 {
+    @apply mt-2 mb-1;
+  }
+
+  .ui-note-rich-editor .ProseMirror p {
+    @apply my-1.5 leading-7;
+  }
+
+  .ui-note-rich-editor .ProseMirror ul,
+  .ui-note-rich-editor .ProseMirror ol,
+  .ui-note-rich-editor .ProseMirror blockquote,
+  .ui-note-rich-editor .ProseMirror pre,
+  .ui-note-rich-editor .ProseMirror table,
+  .ui-note-rich-editor .ProseMirror hr {
+    @apply my-2;
   }
 
   .ui-rich-editor .ProseMirror .is-empty::before {
