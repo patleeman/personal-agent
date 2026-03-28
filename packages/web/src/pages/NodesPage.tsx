@@ -535,63 +535,72 @@ function SelectedNodeView({
     return (
       <div className="space-y-3">
         <ErrorState message={`Failed to load node: ${error ?? `@${selection.id} not found.`}`} />
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to overview</Link>
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
       </div>
     );
   }
 
   if (detail.kind === 'note') {
     return (
-      <NoteWorkspace
-        detail={detail.detail}
-        onNavigate={(updates, replace) => {
-          const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
-          navigate(`/nodes${buildNodesSearch(baseSearch, {
-            kind: nextMemoryId ? 'note' : null,
-            nodeId: nextMemoryId ?? null,
-          })}`, { replace });
-        }}
-        onRefetched={onRefreshAll}
-        onSaved={() => {
-          void Promise.resolve(onRefreshAll());
-        }}
-      />
+      <div className="space-y-4">
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
+        <NoteWorkspace
+          detail={detail.detail}
+          onNavigate={(updates, replace) => {
+            const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
+            navigate(`/nodes${buildNodesSearch(baseSearch, {
+              kind: nextMemoryId ? 'note' : null,
+              nodeId: nextMemoryId ?? null,
+            })}`, { replace });
+          }}
+          onRefetched={onRefreshAll}
+          onSaved={() => {
+            void Promise.resolve(onRefreshAll());
+          }}
+        />
+      </div>
     );
   }
 
   if (detail.kind === 'skill') {
     return (
-      <SkillWorkspace
-        detail={detail.detail}
-        selectedView={readSkillView(locationSearch)}
-        selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
-        locationSearch={locationSearch}
-        onNavigate={(updates, replace) => {
-          const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
-          const nextSkillSearch = buildSkillsSearch(locationSearch, updates);
-          navigate(`/nodes${buildNodesSearch(nextSkillSearch, {
-            kind: nextSkillName ? 'skill' : null,
-            nodeId: nextSkillName ?? null,
-          })}`, { replace });
-        }}
-        onRefetched={onRefreshAll}
-      />
+      <div className="space-y-4">
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
+        <SkillWorkspace
+          detail={detail.detail}
+          selectedView={readSkillView(locationSearch)}
+          selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
+          locationSearch={locationSearch}
+          onNavigate={(updates, replace) => {
+            const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
+            const nextSkillSearch = buildSkillsSearch(locationSearch, updates);
+            navigate(`/nodes${buildNodesSearch(nextSkillSearch, {
+              kind: nextSkillName ? 'skill' : null,
+              nodeId: nextSkillName ?? null,
+            })}`, { replace });
+          }}
+          onRefetched={onRefreshAll}
+        />
+      </div>
     );
   }
 
   return (
-    <ProjectDetailPanel
-      project={detail.detail}
-      activeProfile={currentProfile ?? undefined}
-      onChanged={() => {
-        emitProjectsChanged();
-        onRefreshAll();
-      }}
-      onDeleted={() => {
-        emitProjectsChanged();
-        navigate(overviewHref);
-      }}
-    />
+    <div className="space-y-4">
+      <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
+      <ProjectDetailPanel
+        project={detail.detail}
+        activeProfile={currentProfile ?? undefined}
+        onChanged={() => {
+          emitProjectsChanged();
+          onRefreshAll();
+        }}
+        onDeleted={() => {
+          emitProjectsChanged();
+          navigate(overviewHref);
+        }}
+      />
+    </div>
   );
 }
 
@@ -782,6 +791,26 @@ export function NodesPage() {
     }
   }, [location.search, navigate, nodes, selected]);
 
+  if (selected) {
+    return (
+      <div className="min-h-0 flex h-full flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="mx-auto w-full max-w-[1440px]">
+            <SelectedNodeView
+              selection={selected}
+              detail={detailApi.data ?? null}
+              loading={detailApi.loading}
+              error={detailApi.error}
+              locationSearch={location.search}
+              currentProfile={currentProfile}
+              onRefreshAll={() => { void refreshAll(); }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <BrowserSplitLayout
       storageKey={NODES_BROWSER_WIDTH_STORAGE_KEY}
@@ -810,37 +839,21 @@ export function NodesPage() {
       browserLabel="Knowledge browser"
     >
       <div className="min-w-0 min-h-0 flex flex-1 flex-col overflow-hidden">
-        {!selected ? (
-          <>
-            <PageHeader>
-              <PageHeading
-                title="Knowledge Base"
-                meta={pageMeta}
-              />
-            </PageHeader>
-            <KnowledgeLandingView
-              nodes={nodes}
-              filteredNodes={filteredNodes}
-              counts={counts}
-              filter={filter}
-              query={query}
-              loading={dataLoading}
-              error={combinedError}
-            />
-          </>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-            <SelectedNodeView
-              selection={selected}
-              detail={detailApi.data ?? null}
-              loading={detailApi.loading}
-              error={detailApi.error}
-              locationSearch={location.search}
-              currentProfile={currentProfile}
-              onRefreshAll={() => { void refreshAll(); }}
-            />
-          </div>
-        )}
+        <PageHeader>
+          <PageHeading
+            title="Knowledge Base"
+            meta={pageMeta}
+          />
+        </PageHeader>
+        <KnowledgeLandingView
+          nodes={nodes}
+          filteredNodes={filteredNodes}
+          counts={counts}
+          filter={filter}
+          query={query}
+          loading={dataLoading}
+          error={combinedError}
+        />
       </div>
     </BrowserSplitLayout>
   );
