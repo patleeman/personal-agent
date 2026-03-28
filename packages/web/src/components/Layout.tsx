@@ -10,6 +10,8 @@ import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
+import { useSessionStream } from '../hooks/useSessionStream';
+import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../liveSessionWarmth';
 import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -190,10 +192,9 @@ function useViewportWidth() {
 }
 
 const OPEN_TAB_WARM_TAIL_BLOCKS = 400;
-const OPEN_TAB_WARM_BOOT_DELAY_MS = 2_500;
-const OPEN_TAB_WARM_START_DELAY_MS = 1_500;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 150;
-const OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS = 1;
+const OPEN_TAB_WARM_BOOT_DELAY_MS = 750;
+const OPEN_TAB_WARM_START_DELAY_MS = 150;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 75;
 
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
@@ -202,31 +203,21 @@ function getActiveConversationId(pathname: string): string | null {
     : null;
 }
 
-function buildWarmConversationSignature(session: {
-  file: string;
-  messageCount: number;
-  lastActivityAt?: string;
-  isRunning?: boolean;
-} | null | undefined): string {
-  if (!session) {
-    return 'missing';
-  }
+function WarmLiveConversationSubscription({ sessionId }: { sessionId: string }) {
+  useSessionStream(sessionId, {
+    tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS,
+    registerSurface: false,
+  });
 
-  return [
-    session.file,
-    session.messageCount,
-    session.lastActivityAt ?? '',
-    session.isRunning ? 'running' : 'idle',
-  ].join('|');
+  return null;
 }
 
-function useWarmOpenConversationTabs(pathname: string): void {
+function useWarmOpenConversationTabs(pathname: string): string[] {
   const { versions } = useAppEvents();
   const { sessions } = useAppData();
   const [layout, setLayout] = useState(() => readConversationLayout());
   const [warmingEnabled, setWarmingEnabled] = useState(false);
   const activeConversationId = getActiveConversationId(pathname);
-  const sessionSignaturesRef = useRef(new Map<string, string>());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -269,29 +260,18 @@ function useWarmOpenConversationTabs(pathname: string): void {
   );
 
   useEffect(() => {
-    const openIdSet = new Set(openConversationIds);
-    for (const cachedId of [...sessionSignaturesRef.current.keys()]) {
-      if (!openIdSet.has(cachedId)) {
-        sessionSignaturesRef.current.delete(cachedId);
+    const openConversationIdSet = new Set(openConversationIds);
+    for (const sessionId of listWarmLiveSessionStateIds()) {
+      if (!openConversationIdSet.has(sessionId) || sessionsById.get(sessionId)?.isLive !== true) {
+        clearWarmLiveSessionState(sessionId);
       }
     }
-  }, [openConversationIds]);
+  }, [openConversationIds, sessionsById]);
 
   useEffect(() => {
     const idsToWarm = openConversationIds
       .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
-      .filter((conversationId) => {
-        const nextSignature = buildWarmConversationSignature(sessionsById.get(conversationId) ?? null);
-        const previousSignature = sessionSignaturesRef.current.get(conversationId);
-        if (previousSignature === nextSignature) {
-          return false;
-        }
-
-        sessionSignaturesRef.current.set(conversationId, nextSignature);
-        return true;
-      })
-      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
 
     if (!warmingEnabled || idsToWarm.length === 0) {
       return;
@@ -346,8 +326,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
 
     const idsToWarm = openConversationIds
       .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
-      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
     if (idsToWarm.length === 0) {
       return;
     }
@@ -384,8 +363,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
 
     const idsToWarm = openConversationIds
       .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
-      .slice(0, OPEN_TAB_WARM_MAX_CONVERSATIONS_PER_PASS);
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
     if (idsToWarm.length === 0) {
       return;
     }
@@ -408,11 +386,17 @@ function useWarmOpenConversationTabs(pathname: string): void {
       window.clearTimeout(timer);
     };
   }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.automation, warmingEnabled]);
+
+  return warmingEnabled
+    ? openConversationIds
+        .filter((conversationId) => conversationId !== activeConversationId)
+        .filter((conversationId) => sessionsById.get(conversationId)?.isLive === true)
+    : [];
 }
 
 export function Layout() {
   const location = useLocation();
-  useWarmOpenConversationTabs(location.pathname);
+  const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
   const railMinWidth = 160;
@@ -484,6 +468,10 @@ export function Layout() {
           ) : null}
         </RouteContentBoundary>
       </div>
+
+      {warmLiveConversationIds.map((conversationId) => (
+        <WarmLiveConversationSubscription key={conversationId} sessionId={conversationId} />
+      ))}
 
       <AlertToaster />
       <CommandPalette />
