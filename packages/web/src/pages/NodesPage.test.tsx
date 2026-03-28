@@ -13,6 +13,61 @@ vi.mock('../hooks', () => ({
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
+function createProjectDetail() {
+  return {
+    profile: 'assistant',
+    project: {
+      id: 'active-project',
+      createdAt: '2026-03-16T10:00:00.000Z',
+      updatedAt: '2026-03-16T12:00:00.000Z',
+      title: 'Active project',
+      description: 'Still being worked on.',
+      repoRoot: '/Users/patrick/workingdir/personal-agent',
+      summary: 'In progress.',
+      requirements: {
+        goal: 'Ship the work.',
+        acceptanceCriteria: [],
+      },
+      status: 'active',
+      blockers: [],
+      currentFocus: 'Tighten the project workspace.',
+      recentProgress: [],
+      plan: {
+        milestones: [],
+        tasks: [],
+      },
+    },
+    taskCount: 1,
+    noteCount: 0,
+    fileCount: 0,
+    attachmentCount: 0,
+    artifactCount: 0,
+    tasks: [
+      {
+        id: 'ship-work',
+        status: 'doing',
+        title: 'Ship the work',
+      },
+    ],
+    document: {
+      path: '/tmp/active-project/INDEX.md',
+      updatedAt: '2026-03-16T11:30:00.000Z',
+      content: '# Active project\n\nStill being worked on.',
+    },
+    notes: [],
+    files: [],
+    attachments: [],
+    artifacts: [],
+    linkedConversations: [],
+    links: {
+      outgoing: [],
+      incoming: [],
+      unresolved: [],
+    },
+    timeline: [],
+  };
+}
+
 describe('NodesPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
@@ -140,19 +195,20 @@ describe('NodesPage', () => {
 
     expect(html).toContain('Knowledge Base');
     expect(html).toContain('Browse notes, projects, and skills together');
-    expect(html).toContain('3 nodes.');
-    expect(html).toContain('Notes (');
-    expect(html).toContain('Projects (');
-    expect(html).toContain('Skills (');
+    expect(html).toContain('Select a node');
+    expect(html).toContain('3 nodes · 1 notes · 1 projects · 1 skills');
+    expect(html).toContain('Overview');
+    expect(html).toContain('Notes');
+    expect(html).toContain('Projects');
+    expect(html).toContain('Skills');
     expect(html).toContain('Recently updated');
-    expect(html).toContain('Group by type');
     expect(html).toContain('Search knowledge');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
     expect(html).toContain('Agent Browser');
   });
 
-  it('renders the selected note in the shared node workspace', () => {
+  it('renders the selected note in the dedicated note workspace', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
       if (key === 'nodes-memory') {
         return {
@@ -246,15 +302,89 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=note&node=memory-index');
 
+    expect(html).toContain('Knowledge Base');
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
-    expect(html).toContain('For the agent');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
-    expect(html).toContain('Back to table');
-    expect(html).toContain('Open dedicated page');
+    expect(html).toContain('Save now');
+    expect(html).toContain('Chat about note');
+    expect(html).toContain('Delete note');
     expect(html).toContain('Properties');
     expect(html).toContain('References');
     expect(html).toContain('Relationships');
     expect(html).toContain('overview.md');
+    expect(html).not.toContain('Open dedicated page');
+  });
+
+  it('renders the selected project with the dedicated project detail page', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'nodes-memory') {
+        return {
+          data: {
+            profile: 'assistant',
+            agentsMd: [],
+            skills: [],
+            memoryDocs: [],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key == null) {
+        return {
+          data: {
+            currentProfile: 'assistant',
+            profiles: ['assistant'],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'nodes-projects:assistant') {
+        return {
+          data: [createProjectDetail().project],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'nodes-detail:project:active-project:assistant') {
+        return {
+          data: {
+            kind: 'project',
+            detail: createProjectDetail(),
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderPage('/nodes?kind=project&node=active-project');
+
+    expect(html).toContain('Knowledge Base');
+    expect(html).toContain('Active project');
+    expect(html).toContain('Document');
+    expect(html).toContain('Tasks');
+    expect(html).toContain('Properties');
+    expect(html).not.toContain('Open dedicated page');
   });
 });

@@ -336,7 +336,7 @@ function NoteReferenceList({
   );
 }
 
-function NoteWorkspace({
+export function NoteWorkspace({
   detail,
   onNavigate,
   onRefetched,

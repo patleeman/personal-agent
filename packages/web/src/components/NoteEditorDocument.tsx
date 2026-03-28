@@ -15,6 +15,7 @@ export function NoteEditorDocument({
   readOnly = false,
   showTitle = true,
   showDescription = true,
+  documentClassName,
 }: {
   title: string;
   onTitleChange: (nextValue: string) => void;
@@ -29,10 +30,11 @@ export function NoteEditorDocument({
   readOnly?: boolean;
   showTitle?: boolean;
   showDescription?: boolean;
+  documentClassName?: string;
 }) {
   return (
     <div className="ui-note-editor-frame">
-      <div className="ui-note-editor-doc">
+      <div className={documentClassName ? `ui-note-editor-doc ${documentClassName}` : 'ui-note-editor-doc'}>
         {showTitle ? (
           <input
             value={title}
