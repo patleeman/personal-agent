@@ -18,6 +18,8 @@ function createTempDir(prefix: string): string {
 describe('web UI config', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.PA_WEB_COMPANION_PORT;
+    delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
   });
 
   afterEach(async () => {
