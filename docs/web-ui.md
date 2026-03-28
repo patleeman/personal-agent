@@ -167,6 +167,7 @@ If execution targets are configured, the draft conversation empty state lets you
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
+That includes conservative self-distill wakeups when the agent explicitly decided the conversation may deserve a later durable review.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -271,7 +272,7 @@ See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), an
 The Notes page is a user-facing browser for:
 
 - shared global note nodes
-- node distillation work that is still running or needs attention
+- explicit node distillation or recovery work that is still running or needs attention
 
 It is meant to answer:
 

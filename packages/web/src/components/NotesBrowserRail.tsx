@@ -245,8 +245,8 @@ export function NotesBrowserRailContent({
           <div className="space-y-2 border-b border-border-subtle pb-4">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="ui-section-label">Work queue</p>
-                <p className="ui-card-meta mt-1">Background note distillation runs.</p>
+                <p className="ui-section-label">Distillation runs</p>
+                <p className="ui-card-meta mt-1">Explicit note distillation and recovery runs.</p>
               </div>
               {recoverableQueueItems.length > 0 && (
                 <ToolbarButton

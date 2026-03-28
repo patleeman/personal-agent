@@ -172,7 +172,8 @@ This is the part that makes the system feel alive instead of static.
 
 ### Conversation → note
 
-When a conversation produces reusable knowledge, distill it into a note.
+When a conversation clearly produces reusable knowledge, distill it into a note.
+Keep raw conversations raw by default. Do not passively mine every transcript; let the agent explicitly decide when durable value exists, and use a conservative self-distill wakeup when that review should happen later.
 
 ### Conversation → project
 
@@ -193,6 +194,7 @@ If a note grows active status, blockers, and next steps, it probably wants to be
 ### Project → note
 
 If project-specific material becomes generally reusable knowledge, distill it into a note.
+That same high bar applies here too: prefer a small explicit durable update over broad transcript-to-note dumping.
 
 That movement is normal. The system should stay sparse, but it does evolve.
 

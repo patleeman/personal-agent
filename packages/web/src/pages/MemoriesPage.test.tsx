@@ -225,7 +225,7 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('Work queue');
+    expect(html).toContain('Distillation runs');
     expect(html).toContain('Retry');
     expect(html).toContain('Recover');
     expect(html).toContain('Refactor memory pipeline');
