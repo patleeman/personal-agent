@@ -138,19 +138,21 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes');
 
-    expect(html).toContain('Browse nodes');
-    expect(html).toContain('Notes, projects, and skills in one place');
-    expect(html).toContain('All (3)');
-    expect(html).toContain('Notes (1)');
-    expect(html).toContain('Projects (1)');
-    expect(html).toContain('Skills (1)');
+    expect(html).toContain('Knowledge Base');
+    expect(html).toContain('Browse notes, projects, and skills together');
+    expect(html).toContain('3 nodes.');
+    expect(html).toContain('Notes (');
+    expect(html).toContain('Projects (');
+    expect(html).toContain('Skills (');
+    expect(html).toContain('Recently updated');
+    expect(html).toContain('Group by type');
+    expect(html).toContain('Search knowledge');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
     expect(html).toContain('Agent Browser');
-    expect(html).toContain('Select a node');
   });
 
-  it('renders the selected note in the shared inspector', () => {
+  it('renders the selected note in the shared node workspace', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
       if (key === 'nodes-memory') {
         return {
@@ -248,8 +250,11 @@ describe('NodesPage', () => {
     expect(html).toContain('Top-level knowledge hub.');
     expect(html).toContain('For the agent');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
+    expect(html).toContain('Back to table');
     expect(html).toContain('Open dedicated page');
+    expect(html).toContain('Properties');
     expect(html).toContain('References');
+    expect(html).toContain('Relationships');
     expect(html).toContain('overview.md');
   });
 });

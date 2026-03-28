@@ -47,9 +47,9 @@ export function NodeWorkspaceShell({
   inspector?: ReactNode;
   compactTitle?: boolean;
 }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border-subtle pb-4">
+  const mainContent = (
+    <div className="min-w-0 space-y-6">
+      <div className="border-b border-border-subtle pb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
             {eyebrow && <p className="ui-section-label">{eyebrow}</p>}
@@ -75,13 +75,62 @@ export function NodeWorkspaceShell({
         {notice && <div className="mt-3">{notice}</div>}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+      {children}
+    </div>
+  );
 
-      {inspector && (
-        <div className="shrink-0 border-t border-border-subtle pt-4">
-          <div className="space-y-4">{inspector}</div>
+  if (!inspector) {
+    return mainContent;
+  }
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
+      {mainContent}
+      <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+        {inspector}
+      </aside>
+    </div>
+  );
+}
+
+export function NodeRailSection({
+  title,
+  meta,
+  action,
+  children,
+}: {
+  title: ReactNode;
+  meta?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2.5 border-t border-border-subtle pt-3 first:border-t-0 first:pt-0">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[13px] font-semibold text-primary">{title}</h3>
+          {meta ? <p className="mt-0.5 text-[11px] text-secondary">{meta}</p> : null}
         </div>
-      )}
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+export function NodePropertyList({
+  items,
+}: {
+  items: Array<{ label: string; value: ReactNode }>;
+}) {
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={typeof item.label === 'string' ? item.label : String(item.label)} className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{item.label}</p>
+          <div className="text-[13px] leading-relaxed text-primary">{item.value}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -147,5 +196,5 @@ export function NodeActionButton({ children, ...props }: ComponentProps<typeof T
 }
 
 export function NodeWorkspaceBody({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={cx('h-full overflow-y-auto px-6 py-6', className)}>{children}</div>;
+  return <div className={cx('px-6 py-6', className)}>{children}</div>;
 }

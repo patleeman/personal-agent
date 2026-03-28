@@ -16,6 +16,8 @@ import {
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
 import {
   NodePrimaryToolbar,
+  NodePropertyList,
+  NodeRailSection,
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
@@ -29,6 +31,7 @@ import {
 import { readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
@@ -309,6 +312,30 @@ function NotesTable({
   );
 }
 
+function NoteReferenceList({
+  references,
+}: {
+  references: Array<{ title: string; summary: string; relativePath: string }>;
+}) {
+  if (references.length === 0) {
+    return <p className="text-[12px] text-secondary">No supporting references yet.</p>;
+  }
+
+  return (
+    <div className="space-y-px">
+      {references.map((reference) => (
+        <div key={reference.relativePath} className="ui-list-row -mx-1 px-2 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-medium text-primary">{reference.title}</p>
+            <p className="mt-0.5 text-[11px] text-dim">{reference.relativePath}</p>
+            {reference.summary ? <p className="mt-1 text-[12px] leading-relaxed text-secondary">{reference.summary}</p> : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NoteWorkspace({
   detail,
   onNavigate,
@@ -479,7 +506,9 @@ function NoteWorkspace({
 
   return (
     <NodeWorkspaceShell
+      eyebrow="Notes"
       title={`@${memory.id}`}
+      summary={memory.summary}
       compactTitle
       meta={(
         <>
@@ -517,6 +546,29 @@ function NoteWorkspace({
         </NodePrimaryToolbar>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
+      inspector={(
+        <>
+          <NodeRailSection title="Properties">
+            <NodePropertyList items={[
+              { label: 'ID', value: <span className="font-mono text-[12px]">{memory.id}</span> },
+              { label: 'Kind', value: noteKindLabel(memory) },
+              { label: 'Status', value: memory.status ?? 'active' },
+              { label: 'Updated', value: memory.updated ? timeAgo(memory.updated) : '—' },
+              { label: 'Path', value: <span className="break-all font-mono text-[12px]">{memory.path}</span> },
+            ]} />
+          </NodeRailSection>
+          <NodeRailSection title="References" meta={`${detail.references.length}`}>
+            <NoteReferenceList references={detail.references} />
+          </NodeRailSection>
+          <NodeRailSection title="Relationships">
+            <div className="space-y-4">
+              <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+              <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+              <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+            </div>
+          </NodeRailSection>
+        </>
+      )}
     >
       <NoteEditorDocument
         title={noteTitle}
@@ -529,7 +581,6 @@ function NoteWorkspace({
           <>
             <span className="font-mono">@{memory.id}</span>
             {memory.updated && <span>updated {timeAgo(memory.updated)}</span>}
-            <span>{memory.path}</span>
           </>
         )}
       />

@@ -15,9 +15,9 @@ import {
 } from '../components/ui';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import {
-  NodeInspectorSection,
-  NodeMetadataList,
   NodePrimaryToolbar,
+  NodePropertyList,
+  NodeRailSection,
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
@@ -324,30 +324,30 @@ function SkillWorkspace({
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
         <>
-          <NodeInspectorSection title="Metadata">
-            <NodeMetadataList items={[
+          <NodeRailSection title="Properties">
+            <NodePropertyList items={[
               { label: 'Name', value: detail.skill.name },
               { label: 'Source', value: detail.skill.source },
               { label: 'Usage', value: formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently') },
             ]} />
-          </NodeInspectorSection>
-          <NodeInspectorSection title="Description">
-            <p className="text-[13px] leading-relaxed text-secondary">{detail.skill.description}</p>
-          </NodeInspectorSection>
-          <NodeInspectorSection title="Relationships">
+          </NodeRailSection>
+          <NodeRailSection title="Description">
+            <p className="text-[12px] leading-relaxed text-secondary">{detail.skill.description}</p>
+          </NodeRailSection>
+          <NodeRailSection title="Relationships">
             <div className="space-y-4">
               <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
               <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
               <UnresolvedNodeLinks ids={detail.links?.unresolved} />
             </div>
-          </NodeInspectorSection>
+          </NodeRailSection>
           <details className="ui-disclosure">
             <summary className="ui-disclosure-summary">
               <span>Advanced</span>
               <span className="ui-disclosure-meta">Source details</span>
             </summary>
             <div className="ui-disclosure-body">
-              <NodeMetadataList items={[
+              <NodePropertyList items={[
                 { label: 'Path', value: <span className="break-all font-mono text-[12px]">{selectedPath}</span> },
               ]} />
             </div>
