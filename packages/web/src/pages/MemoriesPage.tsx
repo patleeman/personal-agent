@@ -407,18 +407,14 @@ function NoteWorkspace({
         title: nextTitle,
         body: noteBody,
       });
-      const editableBody = normalizeMarkdownValue(readEditableNoteBody(result.content, result.memory.title));
-      setSavedNoteTitle(result.memory.title);
-      setSavedNoteBody(editableBody);
-      setNoteTitle(result.memory.title);
-      setNoteBody(editableBody);
+      setSavedNoteTitle(noteTitle);
+      setSavedNoteBody(noteBody);
       setSaveState('saved');
       setNotice(null);
       if (result.memory.id !== memory.id) {
         onNavigate({ memoryId: result.memory.id, creating: false }, true);
       }
-      emitMemoriesChanged();
-      onRefetched();
+      emitMemoriesChanged({ memoryId: memory.id, suppressOpenDetailRefresh: true });
       return true;
     } catch (error) {
       setSaveState('error');
@@ -723,9 +719,10 @@ export function MemoriesPage() {
   }, [location.search, navigate]);
 
   useEffect(() => {
-    function handleMemoriesChanged() {
+    function handleMemoriesChanged(event: Event) {
+      const detail = (event as CustomEvent<{ memoryId?: string; suppressOpenDetailRefresh?: boolean }>).detail;
       void refetch({ resetLoading: false });
-      if (selectedMemoryId) {
+      if (selectedMemoryId && !(detail?.suppressOpenDetailRefresh && detail.memoryId === selectedMemoryId)) {
         void detailApi.refetch({ resetLoading: false });
       }
       void queueState.refetch({ resetLoading: false });
