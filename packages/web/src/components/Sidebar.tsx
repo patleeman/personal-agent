@@ -1,4 +1,4 @@
-import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
@@ -62,6 +62,69 @@ const PATH = {
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/plans', '/tools', '/instructions'] as const;
+
+type PointerPosition = { x: number; y: number };
+
+let lastSidebarPointerPosition: PointerPosition | null = null;
+let sidebarPointerTrackingAttached = false;
+
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+function recordSidebarPointerPosition(event: PointerEvent) {
+  lastSidebarPointerPosition = { x: event.clientX, y: event.clientY };
+}
+
+function clearSidebarPointerPosition() {
+  lastSidebarPointerPosition = null;
+}
+
+function ensureSidebarPointerTracking() {
+  if (sidebarPointerTrackingAttached || typeof window === 'undefined') {
+    return;
+  }
+  window.addEventListener('pointermove', recordSidebarPointerPosition, { passive: true });
+  window.addEventListener('pointerleave', clearSidebarPointerPosition);
+  window.addEventListener('blur', clearSidebarPointerPosition);
+  sidebarPointerTrackingAttached = true;
+}
+
+function elementContainsPointer(element: HTMLElement, point: PointerPosition): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+  const hoveredElement = document.elementFromPoint(point.x, point.y);
+  if (hoveredElement && element.contains(hoveredElement)) {
+    return true;
+  }
+  const bounds = element.getBoundingClientRect();
+  return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
+}
+
+function useSidebarRowHover<T extends HTMLElement>() {
+  const hoverRef = useRef<T | null>(null);
+  const [hovered, setHovered] = useState(false);
+
+  useEffect(() => {
+    ensureSidebarPointerTracking();
+  }, []);
+
+  useIsomorphicLayoutEffect(() => {
+    const element = hoverRef.current;
+    const point = lastSidebarPointerPosition;
+    if (!element || !point) {
+      return;
+    }
+    const nextHovered = elementContainsPointer(element, point);
+    setHovered((current) => (current === nextHovered ? current : nextHovered));
+  });
+
+  return {
+    hoverRef,
+    hovered,
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+  };
+}
 
 function matchesSettingsRoute(pathname: string): boolean {
   return SETTINGS_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
@@ -146,19 +209,20 @@ function ShelfRow({
   onUnpin?: () => void;
   onClose?: () => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLAnchorElement>();
 
   const showTrailingControls = hovered || pinned;
 
   return (
     <Link
+      ref={hoverRef}
       to={to}
       className={[
         'ui-sidebar-session-row select-none',
         active && 'ui-sidebar-session-row-active',
       ].filter(Boolean).join(' ')}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
       <div className={[
@@ -251,7 +315,7 @@ function OpenConversationRow({
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLAnchorElement>();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
 
   const showTrailingControls = hovered || pinned;
@@ -275,6 +339,7 @@ function OpenConversationRow({
         />
       ) : null}
       <Link
+        ref={hoverRef}
         to={`/conversations/${session.id}`}
         draggable={false}
         className={[
@@ -282,8 +347,8 @@ function OpenConversationRow({
           active && 'ui-sidebar-session-row-active',
           canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
         ].filter(Boolean).join(' ')}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
         title={canDrag ? 'Drag to reorder or move between pinned and open conversations' : undefined}
       >
         <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
