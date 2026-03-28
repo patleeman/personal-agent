@@ -620,4 +620,20 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).not.toMatch(/content-visibility/i);
   });
+
+  it('positions the windowing badge below sticky history controls when given a top offset', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: Array.from({ length: 96 }, (_, index) => ({
+        type: 'text' as const,
+        ts: `2026-03-11T18:01:${String(index).padStart(2, '0')}.000Z`,
+        text: `Windowed block ${index + 1}`,
+      })),
+      performanceMode: 'aggressive',
+      scrollContainerRef: { current: null },
+      windowingBadgeTopOffset: 56,
+    }));
+
+    expect(html).toContain('windowing');
+    expect(html).toContain('style="top:56px"');
+  });
 });

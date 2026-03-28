@@ -2292,6 +2292,7 @@ const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
 };
 
 const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
+const CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX = 12;
 
 interface ChatRenderChunk {
   key: string;
@@ -2436,6 +2437,7 @@ interface ChatViewProps {
   resumeConversationBusy?: boolean;
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
+  windowingBadgeTopOffset?: number;
 }
 
 export const ChatView = memo(function ChatView({
@@ -2463,6 +2465,7 @@ export const ChatView = memo(function ChatView({
   resumeConversationBusy = false,
   resumeConversationTitle,
   resumeConversationLabel = 'resume',
+  windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
@@ -3005,7 +3008,10 @@ export const ChatView = memo(function ChatView({
     : messages.length;
   const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
   const windowingBadge = shouldWindowTranscript ? (
-    <div className="sticky top-3 z-10 mb-3 flex justify-end pointer-events-none">
+    <div
+      className="sticky z-10 mb-3 flex justify-end pointer-events-none"
+      style={{ top: `${Math.max(0, windowingBadgeTopOffset)}px` }}
+    >
       <div className="inline-flex min-h-[2rem] items-center gap-2 rounded-lg border border-border-subtle bg-surface/88 px-3 py-1.5 text-[10px] text-secondary shadow-sm backdrop-blur">
         <span className="font-medium uppercase tracking-[0.16em] text-primary/85">windowing</span>
         <span>{formatWindowingCount(messages.length)} loaded</span>
