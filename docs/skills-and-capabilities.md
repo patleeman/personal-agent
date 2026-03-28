@@ -93,7 +93,9 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
-- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [How personal-agent works](./how-it-works.md)
 - [Web UI Guide](./web-ui.md)

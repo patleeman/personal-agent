@@ -186,12 +186,16 @@ pa tasks validate --all
 
 After this page:
 
-1. [How personal-agent works](./how-it-works.md)
-2. [Web UI Guide](./web-ui.md)
-3. [Sync Guide](./sync.md)
-4. [Projects](./projects.md)
-5. [Profiles, Memory, and Skills](./profiles-memory-skills.md)
-6. [Scheduled Tasks](./scheduled-tasks.md)
+1. [Decision Guide](./decision-guide.md)
+2. [How personal-agent works](./how-it-works.md)
+3. [Agent Tool Map](./agent-tool-map.md)
+4. [Conversations](./conversations.md)
+5. [Automation](./automation.md)
+6. [Web UI Guide](./web-ui.md)
+7. [Sync Guide](./sync.md)
+8. [Projects](./projects.md)
+9. [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+10. [Scheduled Tasks](./scheduled-tasks.md)
 
 ## If something fails
 

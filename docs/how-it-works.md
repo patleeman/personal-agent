@@ -10,6 +10,8 @@ The core idea is simple:
 
 This page is the main mental model for both users and agents.
 
+If you need a faster routing layer first, read [Decision Guide](./decision-guide.md). If you need the live-tool mapping, read [Agent Tool Map](./agent-tool-map.md).
+
 ## The two kinds of state
 
 ### Shared defaults + mutable profile state
@@ -121,7 +123,7 @@ Use them for:
 
 Note nodes are not the same as project nodes.
 
-See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
 ### Scheduled task
 
@@ -222,10 +224,16 @@ That is the intended shape of the product.
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Agent Tool Map](./agent-tool-map.md)
 - [Getting Started](./getting-started.md)
+- [Conversations](./conversations.md)
+- [Async Attention and Wakeups](./async-attention.md)
+- [Automation](./automation.md)
 - [Web UI Guide](./web-ui.md)
 - [Inbox and Activity](./inbox.md)
 - [Projects](./projects.md)
-- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
+- [Runs](./runs.md)
 - [Sync Guide](./sync.md)

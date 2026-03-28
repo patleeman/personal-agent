@@ -100,6 +100,14 @@ Prefer `INDEX.md` for:
 - links to related nodes
 - durable prose
 
+### Writing style
+
+- Use stable slugs for ids and human-readable titles for display.
+- Keep `summary` to one sentence.
+- Lead with a plain-English opening that says what the node is and why it matters.
+- Keep `INDEX.md` high-signal; move long detail into supporting files when the node kind has them.
+- Avoid placeholder sections, empty structure pages, and duplicate nodes for the same topic.
+
 ## `state.yaml`
 
 `state.yaml` is optional.
@@ -146,6 +154,8 @@ notes/<id>/
 ```
 
 A structure note is still `kind: note`.
+
+Use structure notes sparingly. Only create them when they genuinely organize multiple living notes. Avoid empty hub pages that just point at a project or skill that should be the canonical home.
 
 Use tags or metadata instead of inventing extra kinds. For example:
 
@@ -388,6 +398,7 @@ Use stable ids, paths, timestamps, and summaries instead.
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
 - [Projects](./projects.md)
-- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [How personal-agent works](./how-it-works.md)

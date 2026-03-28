@@ -366,3 +366,10 @@ In practice, that means:
 - **standalone async work becomes activity**
 - **async work tied to a dormant conversation surfaces the conversation**
 - **alerts/notifications are the interrupt layer, not the durable record itself**
+
+## Related docs
+
+- [Async Attention and Wakeups](./async-attention.md)
+- [Alerts and Reminders](./alerts.md)
+- [Conversations](./conversations.md)
+- [Scheduled Tasks](./scheduled-tasks.md)

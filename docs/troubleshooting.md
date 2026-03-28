@@ -198,7 +198,7 @@ pa inbox list --unread
 
 If you expected a task result, verify the task actually ran.
 
-## Memory packages fail to parse
+## Note nodes fail to parse
 
 Run:
 
@@ -209,10 +209,10 @@ pa memory lint
 Common problems:
 
 - missing YAML frontmatter
-- missing required keys
-- invalid `updated` date format
+- missing required keys such as `id`, `kind`, `title`, or `summary`
 - duplicate ids
 - empty body
+- stale old-format content that still assumes `MEMORY.md` or legacy metadata fields
 
 ## `pa update` fails
 

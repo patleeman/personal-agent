@@ -223,6 +223,10 @@ pa tasks validate --all
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Automation](./automation.md)
+- [Async Attention and Wakeups](./async-attention.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Inbox and Activity](./inbox.md)
 - [Projects](./projects.md)
+- [Runs](./runs.md)

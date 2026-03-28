@@ -98,7 +98,7 @@ Common durable roots:
 - `tasks/`
 - `projects/`
 
-See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
 ## Layering and precedence
 
@@ -146,7 +146,7 @@ Canonical state-home layout:
 │   ├── settings/
 │   ├── models/
 │   ├── skills/
-│   ├── memory/
+│   ├── notes/
 │   ├── tasks/
 │   ├── projects/
 │   └── pi-agent/
@@ -284,8 +284,10 @@ For most setups:
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
 - [Getting Started](./getting-started.md)
-- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Execution Targets](./execution-targets.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
 - [Troubleshooting](./troubleshooting.md)

@@ -174,6 +174,8 @@ Conversations can also carry lightweight automation.
 That automation is an ordered todo list of skill steps for that conversation.
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
+See [Conversations](./conversations.md) and [Automation](./automation.md).
+
 ### Workspace
 
 The Workspace page is a local file browser and editor for the current codebase.
@@ -200,6 +202,8 @@ You can:
 - apply presets into a live conversation
 
 The per-conversation automation panel shows the current todo list, active item, review state, and whether automation is enabled.
+
+See [Automation](./automation.md).
 
 ### Projects
 
@@ -256,7 +260,7 @@ The advanced pages still exist for subsystem-specific setup and controls:
 - **Sync** — first-time setup, repo configuration, conflict visibility, and manual sync runs
 - **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
 
-See [Daemon and Background Automation](./daemon.md) and [Sync Guide](./sync.md).
+See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), and [Execution Targets](./execution-targets.md).
 
 ### Notes
 
@@ -270,7 +274,7 @@ It is meant to answer:
 - what durable notes and references does this profile know?
 - which note nodes were recently updated or used?
 
-See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
 ### Tools
 
@@ -284,6 +288,8 @@ You can:
 - review tool schemas and parameters in the detail rail
 - add Pi package sources to any profile or the local overlay
 - inspect dependent CLI tools and configured MCP servers
+
+See [MCP](./mcp.md).
 
 ### Settings
 
@@ -382,8 +388,14 @@ So, for example:
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Conversations](./conversations.md)
+- [Async Attention and Wakeups](./async-attention.md)
+- [Automation](./automation.md)
 - [How personal-agent works](./how-it-works.md)
 - [Projects](./projects.md)
+- [Execution Targets](./execution-targets.md)
+- [MCP](./mcp.md)
 - [Inbox and Activity](./inbox.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
