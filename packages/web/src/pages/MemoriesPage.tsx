@@ -559,20 +559,13 @@ function NewNoteWorkspace({
   });
 
   return (
-    <NodeWorkspaceShell
-      title="New note"
-      compactTitle
-      meta={<span>Draft</span>}
-      actions={(
-        <NodePrimaryToolbar>
-          <ToolbarButton onClick={() => { void handleCreateNote(); }} disabled={creating || createTitle.trim().length === 0} className="text-accent">
-            {creating ? 'Creating…' : 'Create note'}
-          </ToolbarButton>
-          <ToolbarButton onClick={() => onNavigate({ creating: false })}>Cancel</ToolbarButton>
-        </NodePrimaryToolbar>
-      )}
-      notice={createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
-    >
+    <div className="space-y-4">
+      <div className="flex items-center justify-end gap-2">
+        <ToolbarButton onClick={() => { void handleCreateNote(); }} disabled={creating || createTitle.trim().length === 0} className="text-accent">
+          {creating ? 'Creating…' : 'Create note'}
+        </ToolbarButton>
+      </div>
+      {createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
       <NoteEditorDocument
         title={createTitle}
         onTitleChange={setCreateTitle}
@@ -585,7 +578,7 @@ function NewNoteWorkspace({
         meta={<span>Draft note</span>}
         titlePlaceholder="Untitled note"
       />
-    </NodeWorkspaceShell>
+    </div>
   );
 }
 
