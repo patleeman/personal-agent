@@ -23,10 +23,15 @@ export default defineConfig({
     coverage: {
       include: [
         'packages/*/src/**/*.ts',
+        'packages/web/src/**/*.tsx',
+        'packages/web/server/**/*.ts',
+        'extensions/**/*.ts',
       ],
       exclude: [
         '**/*.test.ts',
         '**/*.spec.ts',
+        '**/*.test.tsx',
+        '**/*.spec.tsx',
         '**/node_modules/**',
         '**/dist/**',
         'packages/**/src/**/types.ts',

@@ -593,7 +593,7 @@ export function Sidebar() {
         id: 'note',
         label: 'New note',
         description: 'Create a durable note node.',
-        to: `/notes${buildNoteSearch('', { view: 'main', item: null, creating: true })}`,
+        to: `/notes${buildNoteSearch('', { creating: true })}`,
         icon: PATH.notes,
       },
       {
@@ -1038,7 +1038,7 @@ export function Sidebar() {
                 return (
                   <ShelfRow
                     key={item.id}
-                    to={`/notes${buildNoteSearch('', { memoryId: item.id, view: 'main', item: null, creating: false })}`}
+                    to={`/notes${buildNoteSearch('', { memoryId: item.id, creating: false })}`}
                     active={location.pathname.startsWith('/notes') && selectedNoteId === item.id}
                     title={note?.title ?? item.id}
                     meta={note?.summary || `@${item.id}`}

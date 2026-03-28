@@ -10,7 +10,7 @@
     "build": "npm run build:ts && npm run build:web",
     "build:ts": "tsc --build --force && node scripts/verify-build-artifacts.mjs",
     "build:web": "npm --prefix packages/web run build",
-    "lint": "eslint packages --ext .ts",
+    "lint": "eslint packages extensions --ext .ts,.tsx",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
     "run": "node packages/cli/dist/index.js run",

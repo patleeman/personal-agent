@@ -82,22 +82,6 @@ function toneForProjectStatus(status: string, archived: boolean): PillTone {
   return 'teal';
 }
 
-function toneForTaskStatus(status: string): PillTone {
-  switch (status) {
-    case 'doing':
-    case 'in_progress':
-      return 'accent';
-    case 'blocked':
-    case 'paused':
-      return 'warning';
-    case 'done':
-    case 'completed':
-      return 'success';
-    default:
-      return 'muted';
-  }
-}
-
 function isTaskDone(status: string): boolean {
   return status === 'done' || status === 'completed';
 }
