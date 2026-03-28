@@ -29,10 +29,6 @@ export function CompanionMemoryDetailPage() {
   const memory = data?.memory ?? null;
   const tags = memory?.tags.filter((tag) => tag.trim().length > 0) ?? [];
   const meta = [
-    memory?.status,
-    memory?.type,
-    memory?.role,
-    memory?.area,
     memory?.updated ? `updated ${timeAgo(memory.updated)}` : null,
     memory ? `@${memory.id}` : null,
   ].filter((value): value is string => Boolean(value));

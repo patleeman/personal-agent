@@ -149,7 +149,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('#');
     expect(html).toContain('notes');
     expect(html).toContain('structure');
-    expect(html).toContain('Structure note');
+    expect(html).toContain('Note');
     expect(html).toContain('Context');
     expect(html).toContain('Updated');
   });

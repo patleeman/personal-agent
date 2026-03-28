@@ -44,11 +44,6 @@ export function filterMemories(memories: MemoryDocItem[], query: string, require
       memory.id,
       memory.title,
       memory.summary,
-      memory.type,
-      memory.status,
-      memory.area,
-      memory.role,
-      memory.parent,
       memory.searchText,
       ...(memory.related ?? []),
       ...memory.tags,
@@ -124,23 +119,7 @@ export function buildNoteSearch(locationSearch: string, updates: {
   return next ? `?${next}` : '';
 }
 
-export function noteKindLabel(memory: MemoryDocItem): string {
-  const tags = new Set(memory.tags.map((tag) => tag.trim().toLowerCase()));
-  const type = memory.type?.trim().toLowerCase();
-  const role = memory.role?.trim().toLowerCase();
-
-  if (role === 'structure' || type === 'structure' || tags.has('structure')) {
-    return 'Structure note';
-  }
-
-  if (type === 'reference' || tags.has('reference')) {
-    return 'Reference note';
-  }
-
-  if (type === 'project' || tags.has('project')) {
-    return 'Project note';
-  }
-
+export function noteKindLabel(_memory: MemoryDocItem): string {
   return 'Note';
 }
 

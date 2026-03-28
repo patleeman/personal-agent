@@ -352,12 +352,12 @@ function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<Command
   });
 
   return orderedMemories.map((memory, index) => {
-    const metaParts = [memory.type ?? 'memory'];
+    const metaParts = ['note'];
     if (memory.updated) {
       metaParts.push(timeAgo(memory.updated));
     }
     if (memory.tags.length > 0) {
-      metaParts.push(memory.tags.join(', '));
+      metaParts.push(memory.tags.map((tag) => `#${tag}`).join(', '));
     }
 
     return {
@@ -370,8 +370,6 @@ function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<Command
         memory.id,
         memory.title,
         memory.summary,
-        memory.type ?? '',
-        memory.status ?? '',
         memory.searchText ?? '',
         'start',
         'conversation',

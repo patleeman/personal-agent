@@ -332,7 +332,7 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('Browse notes and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Project note');
+    expect(html).toContain('Note');
     expect(html).toContain('1 notes.');
     expect(html).not.toContain('Note info');
     expect(html).not.toContain('INDEX.md');
@@ -450,7 +450,7 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('Browse notes and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Project note');
+    expect(html).toContain('Note');
     expect(html).toContain('1 notes.');
     expect(html).not.toContain('INDEX.md');
   });
