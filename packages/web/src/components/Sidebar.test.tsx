@@ -82,7 +82,13 @@ describe('Sidebar', () => {
     vi.useRealTimers();
   });
 
-  function renderSidebar(pathname = '/inbox') {
+  function renderSidebar(
+    pathname = '/inbox',
+    options?: {
+      sessions?: SessionMeta[];
+      liveTitles?: Map<string, string>;
+    },
+  ) {
     return renderToString(
       <MemoryRouter initialEntries={[pathname]}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
@@ -103,7 +109,7 @@ describe('Sidebar', () => {
               plan: { milestones: [], tasks: [] },
               profile: 'assistant',
             }],
-            sessions: [createSession()],
+            sessions: options?.sessions ?? [createSession()],
             tasks: null,
             runs: null,
             setActivity: () => {},
@@ -113,7 +119,7 @@ describe('Sidebar', () => {
             setTasks: () => {},
             setRuns: () => {},
           }}>
-            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+            <LiveTitlesContext.Provider value={{ titles: options?.liveTitles ?? new Map(), setTitle: () => {} }}>
               <Sidebar />
             </LiveTitlesContext.Provider>
           </AppDataContext.Provider>
@@ -153,6 +159,22 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
     expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps live title overrides scoped to the matching conversation id', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'conv-456']));
+
+    const html = renderSidebar('/inbox', {
+      sessions: [
+        createSession({ id: 'conv-123', title: 'First conversation' }),
+        createSession({ id: 'conv-456', title: 'Second conversation' }),
+      ],
+      liveTitles: new Map([['conv-123', 'Fresh live title']]),
+    });
+
+    expect(html).toContain('Fresh live title');
+    expect(html).toContain('Second conversation');
+    expect((html.match(/Fresh live title/g) ?? []).length).toBe(1);
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {

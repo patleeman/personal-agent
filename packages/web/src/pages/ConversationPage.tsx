@@ -1370,9 +1370,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [openArtifact, realMessages]);
 
   const { titles, setTitle: pushTitle } = useLiveTitles();
-  useEffect(() => {
-    if (id && stream.title) pushTitle(id, stream.title);
-  }, [id, stream.title, pushTitle]);
 
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
