@@ -413,7 +413,7 @@ function NoteWorkspace({
       setNoteTitle(result.memory.title);
       setNoteBody(editableBody);
       setSaveState('saved');
-      setNotice(options.automated ? null : { tone: 'accent', text: `Saved @${result.memory.id}.` });
+      setNotice(null);
       if (result.memory.id !== memory.id) {
         onNavigate({ memoryId: result.memory.id, creating: false }, true);
       }

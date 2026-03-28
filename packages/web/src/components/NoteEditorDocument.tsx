@@ -41,23 +41,21 @@ export function NoteEditorDocument({
 
         {meta ? <div className="ui-note-inline-meta">{meta}</div> : null}
 
-        {inferredTags.length > 0 ? (
-          <div className="ui-note-inline-tags" aria-label="Inferred note tags">
-            {inferredTags.map((tag) => {
-              const label = `#${tag}`;
-              const href = buildTagHref?.(tag);
-              return href ? (
-                <Link key={tag} to={href} className="ui-note-tag-link">
-                  {label}
-                </Link>
-              ) : (
-                <span key={tag} className="ui-note-tag-link">
-                  {label}
-                </span>
-              );
-            })}
-          </div>
-        ) : null}
+        <div className="ui-note-inline-tags" aria-label="Inferred note tags">
+          {inferredTags.map((tag) => {
+            const label = `#${tag}`;
+            const href = buildTagHref?.(tag);
+            return href ? (
+              <Link key={tag} to={href} className="ui-note-tag-link">
+                {label}
+              </Link>
+            ) : (
+              <span key={tag} className="ui-note-tag-link">
+                {label}
+              </span>
+            );
+          })}
+        </div>
 
         <RichMarkdownEditor
           value={body}
