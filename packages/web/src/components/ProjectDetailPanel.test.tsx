@@ -138,7 +138,6 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('Start conversation');
     expect(html).toContain('Activity');
     expect(html).toContain('Tasks');
-    expect(html).toContain('Document');
     expect(html).toContain('1 open · 0 done');
     expect(html).toContain('Collapse secondary sections by default');
     expect(html).toContain('Dense design notes');
@@ -148,10 +147,12 @@ describe('ProjectDetailPanel', () => {
     expect(html).not.toContain('Edit project');
     expect(html).not.toContain('Regenerate');
     expect(html).not.toContain('Edit document');
+    expect(html).not.toContain('Current focus · Tighten the main project workspace.');
     expect(html).toContain('ui-note-editor-frame');
     expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
+    expect(html).not.toContain('<h2 class="text-[20px] font-semibold tracking-tight text-primary">Document</h2>');
     expect(html).not.toContain('>Project doc<');
-    expect(html.indexOf('>Document<')).toBeLessThan(html.indexOf('>Activity<'));
+    expect(html.indexOf('ui-note-editor-frame')).toBeLessThan(html.indexOf('>Activity<'));
   });
 
   it('merges linked conversations into the visible activity stream', () => {
