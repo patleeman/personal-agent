@@ -2473,7 +2473,7 @@ export const ChatView = memo(function ChatView({
   const [replyMenu, setReplyMenu] = useState<ReplySelectionMenuState | null>(null);
   const replyMenuRef = useRef<HTMLDivElement>(null);
   const replyMenuSyncFrameRef = useRef<number | null>(null);
-  const replyMenuSyncTimeoutRef = useRef<number | null>(null);
+  const replyMenuSyncTimeoutRefs = useRef<number[]>([]);
   const replyMenuClearTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -2565,9 +2565,11 @@ export const ChatView = memo(function ChatView({
       replyMenuSyncFrameRef.current = null;
     }
 
-    if (replyMenuSyncTimeoutRef.current !== null) {
-      window.clearTimeout(replyMenuSyncTimeoutRef.current);
-      replyMenuSyncTimeoutRef.current = null;
+    if (replyMenuSyncTimeoutRefs.current.length > 0) {
+      for (const timeoutId of replyMenuSyncTimeoutRefs.current) {
+        window.clearTimeout(timeoutId);
+      }
+      replyMenuSyncTimeoutRefs.current = [];
     }
   }, []);
 
@@ -2670,10 +2672,14 @@ export const ChatView = memo(function ChatView({
       replyMenuSyncFrameRef.current = null;
       syncReplyMenuFromSelection();
     });
-    replyMenuSyncTimeoutRef.current = window.setTimeout(() => {
-      replyMenuSyncTimeoutRef.current = null;
-      syncReplyMenuFromSelection();
-    }, 40);
+
+    for (const delayMs of [40, 120, 240]) {
+      const timeoutId = window.setTimeout(() => {
+        replyMenuSyncTimeoutRefs.current = replyMenuSyncTimeoutRefs.current.filter((currentId) => currentId !== timeoutId);
+        syncReplyMenuFromSelection();
+      }, delayMs);
+      replyMenuSyncTimeoutRefs.current.push(timeoutId);
+    }
   }, [cancelReplyMenuClear, clearScheduledReplyMenuSync, onReplyToSelection, syncReplyMenuFromSelection]);
 
   useEffect(() => {
