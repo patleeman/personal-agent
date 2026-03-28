@@ -568,13 +568,6 @@ export const api = {
     del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),
   skillDetail: (name: string, options?: { profile?: string }) =>
     get<SkillDetail>(withViewProfile(`/skills/${encodeURIComponent(name)}`, options?.profile)),
-  conversationNodeDistillStatus: (id: string) =>
-    get<{ conversationId: string; running: boolean; runId: string | null; status: string | null }>(`/conversations/${encodeURIComponent(id)}/notes/status`),
-  createConversationNote: (
-    id: string,
-    input: { title?: string; summary?: string; anchorMessageId?: string; tags?: string[] },
-  ) =>
-    post<{ conversationId: string; accepted: boolean; runId: string; running: boolean; status: string }>(`/conversations/${encodeURIComponent(id)}/notes`, input),
   startNoteConversation: (memoryId: string, input?: { cwd?: string }) =>
     post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/notes/${encodeURIComponent(memoryId)}/start`, input ?? {}),
   addConversationProject: (id: string, projectId: string) =>
