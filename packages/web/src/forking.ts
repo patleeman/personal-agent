@@ -51,6 +51,21 @@ export function buildConversationComposerStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:composer`;
 }
 
+export function clearConversationComposerDraft(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  if (!sessionId || !storage) {
+    return;
+  }
+
+  try {
+    storage.removeItem(buildConversationComposerStorageKey(sessionId));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export function persistForkPromptDraft(
   sessionId: string,
   prompt: string,
@@ -64,7 +79,7 @@ export function persistForkPromptDraft(
 
   try {
     if (prompt.length === 0) {
-      storage.removeItem(key);
+      clearConversationComposerDraft(sessionId, storage);
       return;
     }
 

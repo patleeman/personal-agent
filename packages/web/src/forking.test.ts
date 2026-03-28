@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from './reloadState';
 import type { MessageBlock } from './types';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
+import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
   const data = new Map<string, string>();
@@ -66,6 +66,18 @@ describe('resolveSessionEntryIdFromBlockId', () => {
 describe('buildConversationComposerStorageKey', () => {
   it('uses the conversation composer reload-state key', () => {
     expect(buildConversationComposerStorageKey('fork-123')).toBe('pa:reload:conversation:fork-123:composer');
+  });
+});
+
+describe('clearConversationComposerDraft', () => {
+  it('removes the stored composer draft for a conversation', () => {
+    const storage = createStorage();
+    const key = buildConversationComposerStorageKey('session-123');
+
+    storage.setItem(key, JSON.stringify('Existing draft'));
+    clearConversationComposerDraft('session-123', storage);
+
+    expect(storage.getItem(key)).toBeNull();
   });
 });
 
