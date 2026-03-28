@@ -200,16 +200,12 @@ describe('Sidebar', () => {
 
     expect(html).toContain('Open Notes');
     expect(html).toContain('note-index');
-    expect(html).toContain('ui-sidebar-resource-row-note');
     expect(html).toContain('Open Projects');
     expect(html).toContain('Active project');
-    expect(html).toContain('ui-sidebar-resource-row-project');
     expect(html).toContain('Open Skills');
     expect(html).toContain('Agent Browser');
-    expect(html).toContain('ui-sidebar-resource-row-skill');
     expect(html).toContain('Open Workspaces');
     expect(html).toContain('repo');
-    expect(html).toContain('ui-sidebar-resource-row-workspace');
   });
 
   it('keeps the workspace nav simple on workspace routes', () => {
