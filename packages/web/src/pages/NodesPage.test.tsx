@@ -307,9 +307,10 @@ describe('NodesPage', () => {
     expect(html).toContain('Top-level knowledge hub.');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
     expect(html).toContain('Back to table');
-    expect(html).toContain('Save now');
-    expect(html).toContain('Chat about note');
-    expect(html).toContain('Delete note');
+    expect(html).toContain('aria-label="Reload note"');
+    expect(html).toContain('aria-label="Save note now"');
+    expect(html).toContain('aria-label="Chat about note"');
+    expect(html).toContain('aria-label="Delete note"');
     expect(html).toContain('Properties');
     expect(html).toContain('References');
     expect(html).toContain('Relationships');
@@ -383,8 +384,9 @@ describe('NodesPage', () => {
 
     expect(html).not.toContain('Refresh knowledge base');
     expect(html).toContain('Active project');
-    expect(html).toContain('Back to table');
-    expect(html).toContain('Document');
+    expect(html).toContain('aria-label="Back to table"');
+    expect(html).not.toContain('>Back to table<');
+    expect(html).not.toContain('>Document<');
     expect(html).toContain('Tasks');
     expect(html).toContain('Properties');
     expect(html).not.toContain('Open dedicated page');

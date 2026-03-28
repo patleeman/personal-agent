@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { bucketProjectStatus, formatProjectStatus, isProjectArchived } from '../contextRailProject';
+import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
 import type { ProjectDetail, ProjectFile, ProjectNote, ProjectTask } from '../types';
 import {
   ProjectFileUploadForm,
@@ -34,7 +34,7 @@ import {
   type TaskFormState,
 } from './projectDetailState';
 import { MentionTextarea } from './MentionTextarea';
-import { IconButton, Pill, cx, type PillTone } from './ui';
+import { IconButton, cx } from './ui';
 import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
@@ -44,6 +44,7 @@ const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rou
 const PROJECT_TOOLBAR_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-border-subtle bg-base/40 text-secondary hover:bg-surface hover:text-primary disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-accent/25 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_GROUP_CLASS = 'inline-flex items-center gap-1 rounded-full border border-border-subtle bg-base/30 p-1';
+const PROJECT_BACK_LINK_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-base/40 text-secondary transition-colors hover:bg-surface hover:text-primary';
 const PROJECT_INLINE_TITLE_INPUT_CLASS = 'w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
 const PROJECT_INLINE_SUMMARY_CLASS = 'w-full max-w-3xl min-h-[5.5rem] resize-y rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[14px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
 const PROJECT_PROPERTY_INPUT_CLASS = 'w-full rounded-lg border border-transparent bg-transparent -mx-2 px-2 py-1 text-[13px] leading-relaxed text-primary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
@@ -68,23 +69,6 @@ function fileToBase64(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
-}
-
-function toneForProjectStatus(status: string, archived: boolean): PillTone {
-  if (archived) {
-    return 'muted';
-  }
-
-  const bucket = bucketProjectStatus(status);
-  if (bucket === 'paused') {
-    return 'warning';
-  }
-
-  if (bucket === 'done') {
-    return 'success';
-  }
-
-  return 'teal';
 }
 
 function isTaskDone(status: string): boolean {
@@ -438,11 +422,15 @@ function ProjectConversationList({
 export function ProjectDetailPanel({
   project,
   activeProfile,
+  backHref,
+  backLabel = 'Back',
   onChanged,
   onDeleted,
 }: {
   project: ProjectDetail;
   activeProfile?: string;
+  backHref?: string;
+  backLabel?: string;
   onChanged?: () => void;
   onDeleted?: (projectId: string) => void;
 }) {
@@ -1143,98 +1131,94 @@ export function ProjectDetailPanel({
   ) : null;
 
   const projectSaveMessage = projectError ?? (projectBusy ? 'Saving…' : (projectSavedAt ? 'Saved' : null));
+  const documentSaveMessage = documentError
+    ?? (documentBusy
+      ? 'Saving…'
+      : documentContent !== savedDocumentContent
+        ? 'Unsaved changes'
+        : (documentSavedAt ? 'Saved' : null));
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
       <div className="min-w-0 space-y-6">
         <section className="space-y-4 pb-1">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
-              <span>Projects</span>
-              <span className="opacity-40">›</span>
-              <span className="font-mono text-secondary">{record.id}</span>
+            <div className="flex min-w-0 items-center gap-3">
+              {backHref ? (
+                <Link to={backHref} className={PROJECT_BACK_LINK_CLASS} aria-label={backLabel} title={backLabel}>
+                  <ToolbarGlyph path="M15.25 18 8.75 12l6.5-6" />
+                </Link>
+              ) : null}
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-dim">
+                <span>Projects</span>
+                <span className="opacity-40">›</span>
+                <span className="font-mono text-secondary">{record.id}</span>
+              </div>
             </div>
 
-            <div className={PROJECT_TOOLBAR_GROUP_CLASS}>
-              <IconButton
-                type="button"
-                onClick={() => { void startConversationFromProject(); }}
-                disabled={conversationBusy || deleteBusy || !canStartConversation}
-                className={PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS}
-                title="Start conversation"
-                aria-label="Start conversation"
-              >
-                <ToolbarGlyph path="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z" />
-              </IconButton>
-              <IconButton
-                type="button"
-                onClick={() => setAdvancedOpen((value) => !value)}
-                disabled={deleteBusy}
-                className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                title={advancedOpen ? 'Hide more' : 'More'}
-                aria-label={advancedOpen ? 'Hide more' : 'More'}
-              >
-                <ToolbarGlyph path="M12 6.5h.01M12 12h.01M12 17.5h.01" />
-              </IconButton>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Pill tone={toneForProjectStatus(projectForm.status, archived)}>
-                {formatProjectStatus(projectForm.status)}
-              </Pill>
-              <span className="text-[11px] text-dim">updated {timeAgo(record.updatedAt)}</span>
-              {archived && record.archivedAt && <span className="text-[11px] text-dim">archived {timeAgo(record.archivedAt)}</span>}
+            <div className="flex items-center gap-3">
               {projectSaveMessage ? (
                 <span className={cx('text-[11px]', projectError ? 'text-danger' : 'text-dim')}>
                   {projectSaveMessage}
                 </span>
               ) : null}
+              <div className={PROJECT_TOOLBAR_GROUP_CLASS}>
+                <IconButton
+                  type="button"
+                  onClick={() => { void startConversationFromProject(); }}
+                  disabled={conversationBusy || deleteBusy || !canStartConversation}
+                  className={PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS}
+                  title="Start conversation"
+                  aria-label="Start conversation"
+                >
+                  <ToolbarGlyph path="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z" />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => setAdvancedOpen((value) => !value)}
+                  disabled={deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={advancedOpen ? 'Hide more' : 'More'}
+                  aria-label={advancedOpen ? 'Hide more' : 'More'}
+                >
+                  <ToolbarGlyph path="M12 6.5h.01M12 12h.01M12 17.5h.01" />
+                </IconButton>
+              </div>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <h1 className="m-0">
-                <input
-                  aria-label="Project title"
-                  name="project-title"
-                  autoComplete="off"
-                  value={projectForm.title}
-                  onChange={(event) => updateProjectFormField({ title: event.target.value })}
-                  onBlur={() => { void flushProjectSave(); }}
-                  className={PROJECT_INLINE_TITLE_INPUT_CLASS}
-                  placeholder="Project title"
-                />
-              </h1>
-              <MentionTextarea
-                aria-label="Project summary"
-                name="project-summary"
+          <div className="space-y-2">
+            <h1 className="m-0">
+              <input
+                aria-label="Project title"
+                name="project-title"
                 autoComplete="off"
-                value={projectForm.summary}
-                onValueChange={(summary) => updateProjectFormField({ summary })}
+                value={projectForm.title}
+                onChange={(event) => updateProjectFormField({ title: event.target.value })}
                 onBlur={() => { void flushProjectSave(); }}
-                className={PROJECT_INLINE_SUMMARY_CLASS}
-                placeholder="Add a short project summary…"
+                className={PROJECT_INLINE_TITLE_INPUT_CLASS}
+                placeholder="Project title"
               />
-              {record.currentFocus?.trim() ? (
-                <p className="text-[12px] text-dim">Current focus · {record.currentFocus.trim()}</p>
-              ) : null}
-            </div>
+            </h1>
+            <MentionTextarea
+              aria-label="Project summary"
+              name="project-summary"
+              autoComplete="off"
+              value={projectForm.summary}
+              onValueChange={(summary) => updateProjectFormField({ summary })}
+              onBlur={() => { void flushProjectSave(); }}
+              className={PROJECT_INLINE_SUMMARY_CLASS}
+              placeholder="Add a short project summary…"
+            />
           </div>
         </section>
 
-        <ProjectSection
-          title="Document"
-          meta={documentError
-            ? documentError
-            : documentBusy
-              ? 'Saving…'
-              : documentContent !== savedDocumentContent
-                ? 'Unsaved changes'
-                : documentRecord
-                  ? `Updated ${timeAgo(documentRecord.updatedAt)}`
-                  : (documentSavedAt ? 'Saved' : 'Start writing')}
-        >
+        <section className="space-y-3 border-t border-border-subtle pt-6">
+          {documentSaveMessage ? (
+            <p className={cx('text-[12px]', documentError ? 'text-danger' : 'text-secondary')}>
+              {documentSaveMessage}
+            </p>
+          ) : null}
           <ProjectDocumentContent
             content={documentContent}
             busy={documentBusy}
@@ -1242,7 +1226,7 @@ export function ProjectDetailPanel({
             error={documentError}
             onChange={updateDocumentContent}
           />
-        </ProjectSection>
+        </section>
 
         <ProjectSection
           title="Activity"

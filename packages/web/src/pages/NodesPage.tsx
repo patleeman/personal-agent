@@ -544,21 +544,20 @@ function SelectedNodeView({
   }
 
   return (
-    <div className="space-y-4">
-      <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
-      <ProjectDetailPanel
-        project={detail.detail}
-        activeProfile={currentProfile ?? undefined}
-        onChanged={() => {
-          emitProjectsChanged();
-          onRefreshAll();
-        }}
-        onDeleted={() => {
-          emitProjectsChanged();
-          navigate(overviewHref);
-        }}
-      />
-    </div>
+    <ProjectDetailPanel
+      project={detail.detail}
+      activeProfile={currentProfile ?? undefined}
+      backHref={overviewHref}
+      backLabel="Back to table"
+      onChanged={() => {
+        emitProjectsChanged();
+        onRefreshAll();
+      }}
+      onDeleted={() => {
+        emitProjectsChanged();
+        navigate(overviewHref);
+      }}
+    />
   );
 }
 
