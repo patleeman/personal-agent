@@ -167,7 +167,7 @@ If execution targets are configured, the draft conversation empty state lets you
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
-That includes conservative self-distill wakeups when the agent explicitly decided the conversation may deserve a later durable review.
+That can include conservative background self-distill wakeups scheduled when you close a conversation and the system wants one last high-bar durable review for that same thread.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -209,6 +209,19 @@ You can:
 The per-conversation automation panel shows the current todo list, active item, review state, and whether automation is enabled.
 
 See [Automation](./automation.md).
+
+### Nodes
+
+The Nodes page is the shared browser for notes, projects, and skills.
+
+It is meant to make the knowledge system feel like one surface with type-specific filters instead of three unrelated product areas.
+
+From the Nodes page you can:
+
+- browse notes, projects, and skills together
+- filter by node type without leaving the page
+- inspect shared node metadata and backlinks in one place
+- open the dedicated note, project, or skill workspace only when you need type-specific editing
 
 ### Projects
 
@@ -269,15 +282,11 @@ See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), an
 
 ### Notes
 
-The Notes page is a user-facing browser for:
+The Notes page is now the dedicated note workspace.
 
-- shared global note nodes
-- explicit node distillation or recovery work that is still running or needs attention
+Use it when you want note-specific editing, note creation, or explicit note-distillation and recovery work that is still running or needs attention.
 
-It is meant to answer:
-
-- what durable notes and references does this profile know?
-- which note nodes were recently updated or used?
+The broader shared browser for notes, projects, and skills now lives on the Nodes page.
 
 See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 

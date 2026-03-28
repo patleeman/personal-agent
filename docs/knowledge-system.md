@@ -173,7 +173,7 @@ This is the part that makes the system feel alive instead of static.
 ### Conversation → note
 
 When a conversation clearly produces reusable knowledge, distill it into a note.
-Keep raw conversations raw by default. Do not passively mine every transcript; let the agent explicitly decide when durable value exists, and use a conservative self-distill wakeup when that review should happen later.
+Keep raw conversations raw by default. Do not passively mine every transcript. In the web UI, closing a conversation can schedule one conservative background self-distill pass for that same thread, with a high bar and a no-op default.
 
 ### Conversation → project
 

@@ -1,12 +1,19 @@
-import { existsSync } from 'node:fs';
 import {
   getConversationProjectLink,
+  getSessionDeferredResumeEntries,
+  listDeferredResumeRecords,
   loadDeferredResumeState,
   readSessionConversationId,
+  removeDeferredResume,
   resolveDeferredResumeStateFile,
+  saveDeferredResumeState,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
-import { isConversationMemoryDistillRecoveryTitle } from './conversationMemoryMaintenance.js';
+import {
+  cancelDeferredResumeConversationRun,
+  loadDaemonConfig,
+  resolveDaemonPaths,
+} from '@personal-agent/daemon';
 import {
   scheduleDeferredResumeForSessionFile,
   toDeferredResumeSummary,
@@ -14,9 +21,8 @@ import {
 } from './deferredResumes.js';
 
 export const CONVERSATION_SELF_DISTILL_SOURCE_KIND = 'conversation-self-distill';
-export const DEFAULT_CONVERSATION_SELF_DISTILL_DELAY = '2h';
-export const CONVERSATION_SELF_DISTILL_TITLE = 'Self-distill durable follow-up';
-const AUTOMATIC_SELF_DISTILL_PROJECT_LINK_COUNT = 1;
+export const DEFAULT_CONVERSATION_SELF_DISTILL_DELAY = '60s';
+export const CONVERSATION_SELF_DISTILL_TITLE = 'Background durable review after close';
 
 export interface ScheduleConversationSelfDistillWakeupInput {
   profile: string;
@@ -30,22 +36,6 @@ export interface ScheduleConversationSelfDistillWakeupInput {
 export interface ScheduleConversationSelfDistillWakeupResult {
   resume: DeferredResumeSummary;
   deduped: boolean;
-}
-
-export interface MaybeScheduleAutomaticConversationSelfDistillWakeupInput {
-  profile: string;
-  conversationId: string;
-  sessionFile?: string;
-  title?: string;
-  stateRoot?: string;
-  now?: Date;
-}
-
-export interface MaybeScheduleAutomaticConversationSelfDistillWakeupResult {
-  scheduled: boolean;
-  deduped: boolean;
-  reason: 'scheduled' | 'deduped' | 'missing-session-file' | 'recovery-conversation' | 'not-eligible';
-  resume?: DeferredResumeSummary;
 }
 
 function resolveConversationId(input: Pick<ScheduleConversationSelfDistillWakeupInput, 'conversationId' | 'sessionFile'>): string {
@@ -62,33 +52,80 @@ function resolveConversationId(input: Pick<ScheduleConversationSelfDistillWakeup
   throw new Error('Self-distill wakeup requires a persisted conversation id.');
 }
 
+function resolveDaemonRoot(): string {
+  return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
+}
+
+export function isConversationSelfDistillSource(source: { kind?: string } | undefined | null): boolean {
+  return source?.kind === CONVERSATION_SELF_DISTILL_SOURCE_KIND;
+}
+
+export function resolveConversationSelfDistillConversationId(record: Pick<DeferredResumeRecord, 'sessionFile' | 'source'>): string | undefined {
+  const sourceConversationId = record.source?.id?.trim();
+  if (sourceConversationId) {
+    return sourceConversationId;
+  }
+
+  return readSessionConversationId(record.sessionFile)?.trim() || undefined;
+}
+
+export function listConversationSelfDistillWakeupRecords(options: {
+  stateRoot?: string;
+  sessionFile?: string;
+  conversationId?: string;
+} = {}): DeferredResumeRecord[] {
+  const state = loadDeferredResumeState(resolveDeferredResumeStateFile(options.stateRoot));
+  const sessionFile = options.sessionFile?.trim();
+  const conversationId = options.conversationId?.trim();
+
+  return listDeferredResumeRecords(state).filter((record) => {
+    if (!isConversationSelfDistillSource(record.source)) {
+      return false;
+    }
+
+    if (sessionFile && record.sessionFile !== sessionFile) {
+      return false;
+    }
+
+    if (!conversationId) {
+      return true;
+    }
+
+    return resolveConversationSelfDistillConversationId(record) === conversationId;
+  });
+}
+
 function findExistingConversationSelfDistillWakeup(input: {
+  sessionFile: string;
   conversationId: string;
   stateRoot?: string;
 }): DeferredResumeRecord | undefined {
-  const state = loadDeferredResumeState(resolveDeferredResumeStateFile(input.stateRoot));
-  return Object.values(state.resumes)
-    .find((entry) => entry.source?.kind === CONVERSATION_SELF_DISTILL_SOURCE_KIND && entry.source?.id === input.conversationId);
+  return listConversationSelfDistillWakeupRecords({
+    stateRoot: input.stateRoot,
+    sessionFile: input.sessionFile,
+    conversationId: input.conversationId,
+  })[0];
 }
 
 function buildConversationSelfDistillPrompt(relatedProjectIds: string[]): string {
   const lines = [
-    'Review the recent progress in this conversation with a high bar for durable updates.',
-    'Keep raw conversations raw unless this thread clearly produced durable value that should outlive the conversation.',
-    'Default to no durable change.',
+    'This conversation was just closed in the web UI.',
+    'Take one beat now and decide whether anything from this thread is worth writing down durably.',
+    'Keep raw conversations raw by default.',
     '',
-    'Do exactly one of these:',
-    '- no durable update',
-    '- update an existing note node or create a new note node for clearly reusable knowledge',
-    '- update linked project state or project notes when the conversation materially changed status, blockers, decisions, or next steps',
+    'If nothing clearly deserves a durable update, reply exactly: No durable update needed.',
+    '',
+    'Allowed durable outcomes:',
+    '- create or update a shared note node for reusable knowledge that should outlive this conversation',
+    '- update an already-linked project when this conversation materially changed its status, blockers, decisions, or next steps',
     relatedProjectIds.length > 0
       ? `Currently linked projects: ${relatedProjectIds.map((projectId) => `@${projectId}`).join(', ')}`
       : 'No projects are currently linked to this conversation.',
     '',
+    'Do not create a new project from this pass.',
     'Do not edit AGENTS.md or create/update skills unless the user explicitly asked for that in this conversation.',
-    'If you create or update a note, check for an existing matching note node first so you do not duplicate durable knowledge.',
+    'If the durable value is already captured elsewhere, do nothing.',
     'Prefer the smallest durable change that preserves the value.',
-    'Reply briefly with either "No durable update needed." or the durable change you made.',
   ];
 
   return lines.join('\n');
@@ -99,6 +136,7 @@ export async function scheduleConversationSelfDistillWakeup(
 ): Promise<ScheduleConversationSelfDistillWakeupResult> {
   const conversationId = resolveConversationId(input);
   const existing = findExistingConversationSelfDistillWakeup({
+    sessionFile: input.sessionFile,
     conversationId,
     stateRoot: input.stateRoot,
   });
@@ -124,7 +162,7 @@ export async function scheduleConversationSelfDistillWakeup(
     title: CONVERSATION_SELF_DISTILL_TITLE,
     notify: 'none',
     requireAck: false,
-    autoResumeIfOpen: true,
+    autoResumeIfOpen: false,
     source: {
       kind: CONVERSATION_SELF_DISTILL_SOURCE_KIND,
       id: conversationId,
@@ -138,52 +176,40 @@ export async function scheduleConversationSelfDistillWakeup(
   };
 }
 
-export async function maybeScheduleAutomaticConversationSelfDistillWakeup(
-  input: MaybeScheduleAutomaticConversationSelfDistillWakeupInput,
-): Promise<MaybeScheduleAutomaticConversationSelfDistillWakeupResult> {
-  const sessionFile = input.sessionFile?.trim();
-  if (!sessionFile || !existsSync(sessionFile)) {
-    return {
-      scheduled: false,
-      deduped: false,
-      reason: 'missing-session-file',
-    };
+export async function cancelConversationSelfDistillWakeups(input: {
+  sessionFile: string;
+  conversationId?: string;
+  stateRoot?: string;
+}): Promise<string[]> {
+  const conversationId = input.conversationId?.trim() || readSessionConversationId(input.sessionFile)?.trim() || undefined;
+  const stateFile = resolveDeferredResumeStateFile(input.stateRoot);
+  const state = loadDeferredResumeState(stateFile);
+  const matching = getSessionDeferredResumeEntries(state, input.sessionFile)
+    .filter((record) => isConversationSelfDistillSource(record.source))
+    .filter((record) => !conversationId || resolveConversationSelfDistillConversationId(record) === conversationId);
+
+  if (matching.length === 0) {
+    return [];
   }
 
-  if (isConversationMemoryDistillRecoveryTitle(input.title)) {
-    return {
-      scheduled: false,
-      deduped: false,
-      reason: 'recovery-conversation',
-    };
+  for (const record of matching) {
+    removeDeferredResume(state, record.id);
   }
+  saveDeferredResumeState(state, stateFile);
 
-  const relatedProjectIds = getConversationProjectLink({
-    stateRoot: input.stateRoot,
-    profile: input.profile,
-    conversationId: input.conversationId,
-  })?.relatedProjectIds ?? [];
+  const daemonRoot = resolveDaemonRoot();
+  await Promise.allSettled(matching.map((record) => cancelDeferredResumeConversationRun({
+    daemonRoot,
+    deferredResumeId: record.id,
+    sessionFile: record.sessionFile,
+    prompt: record.prompt,
+    dueAt: record.dueAt,
+    createdAt: record.createdAt,
+    readyAt: record.readyAt,
+    cancelledAt: new Date().toISOString(),
+    conversationId: resolveConversationSelfDistillConversationId(record),
+    reason: 'Conversation self-distill wakeup cancelled because the conversation became visible again.',
+  })));
 
-  if (relatedProjectIds.length !== AUTOMATIC_SELF_DISTILL_PROJECT_LINK_COUNT) {
-    return {
-      scheduled: false,
-      deduped: false,
-      reason: 'not-eligible',
-    };
-  }
-
-  const scheduled = await scheduleConversationSelfDistillWakeup({
-    stateRoot: input.stateRoot,
-    profile: input.profile,
-    sessionFile,
-    conversationId: input.conversationId,
-    now: input.now,
-  });
-
-  return {
-    scheduled: true,
-    deduped: scheduled.deduped,
-    reason: scheduled.deduped ? 'deduped' : 'scheduled',
-    resume: scheduled.resume,
-  };
+  return matching.map((record) => record.id);
 }
