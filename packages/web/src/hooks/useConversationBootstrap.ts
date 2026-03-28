@@ -82,10 +82,15 @@ export function fetchConversationBootstrapCached(
   return request;
 }
 
-export function buildConversationBootstrapVersionKey(input: { sessionsVersion: number }): string {
+export function buildConversationBootstrapVersionKey(input: {
+  sessionsVersion: number;
+  sessionFilesVersion: number;
+}): string {
   // Bootstrap is only the conversation-open fast path. The page/rail keep projects,
   // execution, and other side-panel data incremental with their own invalidations.
-  return String(input.sessionsVersion);
+  // Session detail still rides through bootstrap, so session-file invalidations must
+  // bust the cache alongside the session list snapshot version.
+  return `${input.sessionsVersion}:${input.sessionFilesVersion}`;
 }
 
 export function useConversationBootstrap(
@@ -93,7 +98,10 @@ export function useConversationBootstrap(
   options?: { tailBlocks?: number; versionKey?: string },
 ) {
   const { versions } = useAppEvents();
-  const versionKey = options?.versionKey ?? buildConversationBootstrapVersionKey({ sessionsVersion: versions.sessions });
+  const versionKey = options?.versionKey ?? buildConversationBootstrapVersionKey({
+    sessionsVersion: versions.sessions,
+    sessionFilesVersion: versions.sessionFiles,
+  });
   const [data, setData] = useState<ConversationBootstrapState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

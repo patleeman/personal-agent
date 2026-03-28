@@ -946,8 +946,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     data: conversationBootstrap,
     loading: conversationBootstrapLoading,
   } = useConversationBootstrap(id, { tailBlocks: historicalTailBlocks });
-  const bootstrapSessionDetail = id && conversationBootstrap?.sessionDetail?.meta.id === id
-    ? conversationBootstrap.sessionDetail
+  const visibleConversationBootstrap = id && conversationBootstrap?.conversationId === id
+    ? conversationBootstrap
+    : null;
+  const bootstrapSessionDetail = id && visibleConversationBootstrap?.sessionDetail?.meta.id === id
+    ? visibleConversationBootstrap.sessionDetail
     : null;
   const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);
 
@@ -978,13 +981,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (conversationBootstrap?.liveSession.live) {
+    if (visibleConversationBootstrap?.liveSession.live) {
       setConfirmedLive(true);
-      setLiveSessionHasPendingHiddenTurn(conversationBootstrap.liveSession.hasPendingHiddenTurn === true);
+      setLiveSessionHasPendingHiddenTurn(visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true);
       return;
     }
 
-    if (conversationBootstrap?.liveSession.live === false || sessionSnapshot?.isLive === false) {
+    if (visibleConversationBootstrap?.liveSession.live === false || sessionSnapshot?.isLive === false) {
       setConfirmedLive(false);
       setLiveSessionHasPendingHiddenTurn(false);
       return;
@@ -1016,7 +1019,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [conversationBootstrap?.liveSession, id, sessionSnapshot, sessionsLoaded]);
+  }, [visibleConversationBootstrap?.liveSession, id, sessionSnapshot, sessionsLoaded]);
 
   const isLiveSession = resolveConversationLiveSession({
     streamBlockCount: stream.blocks.length,
@@ -1603,7 +1606,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
   const conversationBootstrapPendingContext = Boolean(id)
     && conversationBootstrapLoading
-    && !conversationBootstrap;
+    && !visibleConversationBootstrap;
 
   useEffect(() => {
     setPendingAssistantStatusLabel(null);
@@ -1695,7 +1698,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const conversationProjects = (conversationProjectsData?.conversationId === id
     ? conversationProjectsData
     : null)
-    ?? conversationBootstrap?.projects
+    ?? visibleConversationBootstrap?.projects
     ?? (id ? conversationProjectsCache.get(id) ?? null : null);
   const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
 
@@ -1921,12 +1924,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ? null
     : (conversationExecutionState.data?.conversationId === id
         ? conversationExecutionState.data
-        : (conversationBootstrap?.execution ?? null));
+        : (visibleConversationBootstrap?.execution ?? null));
   const remoteConversationConnection = draft
     ? null
     : (remoteConversationConnectionState.data?.conversationId === id
         ? remoteConversationConnectionState.data
-        : (conversationBootstrap?.remoteConnection ?? null));
+        : (visibleConversationBootstrap?.remoteConnection ?? null));
 
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId

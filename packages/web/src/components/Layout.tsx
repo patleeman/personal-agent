@@ -309,7 +309,10 @@ function useWarmOpenConversationTabs(pathname: string): void {
             fetchConversationBootstrapCached(
               conversationId,
               { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-              buildConversationBootstrapVersionKey({ sessionsVersion: versions.sessions }),
+              buildConversationBootstrapVersionKey({
+                sessionsVersion: versions.sessions,
+                sessionFilesVersion: versions.sessionFiles,
+              }),
             ),
             prefetchConversationRailData({
               conversationId,
@@ -334,7 +337,7 @@ function useWarmOpenConversationTabs(pathname: string): void {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.projects, versions.runs, versions.sessions, versions.workspace, warmingEnabled]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.projects, versions.runs, versions.sessionFiles, versions.sessions, versions.workspace, warmingEnabled]);
 
   useEffect(() => {
     if (!warmingEnabled || (versions.executionTargets === 0 && versions.runs === 0)) {
