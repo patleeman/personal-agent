@@ -360,6 +360,22 @@ export async function waitForSurfaceRegistration(input: {
   return input.hasSurface();
 }
 
+export async function retryLiveSessionActionAfterTakeover<T>(input: {
+  attemptAction: () => Promise<T>;
+  takeOverSessionControl: () => Promise<unknown>;
+}): Promise<T> {
+  try {
+    return await input.attemptAction();
+  } catch (error) {
+    if (!isLiveSessionControlError(error)) {
+      throw error;
+    }
+  }
+
+  await input.takeOverSessionControl();
+  return input.attemptAction();
+}
+
 export async function submitLivePromptWithControlRetry(input: {
   attemptPrompt: () => Promise<void>;
   waitForSurfaceRegistration: () => Promise<boolean>;
