@@ -127,12 +127,65 @@ function PinnedIndicator() {
   );
 }
 
+type ShelfRowVariant = 'note' | 'project' | 'skill' | 'workspace';
+
+function ShelfRowChrome({ variant, emphasized }: { variant: ShelfRowVariant; emphasized: boolean }) {
+  if (variant === 'note') {
+    return (
+      <span
+        aria-hidden="true"
+        className={[
+          'pointer-events-none absolute bottom-1.5 left-3 right-3 h-px rounded-full transition-colors',
+          emphasized ? 'bg-teal/60' : 'bg-teal/25',
+        ].join(' ')}
+      />
+    );
+  }
+
+  if (variant === 'skill') {
+    const bracketClass = emphasized ? 'border-steel/60' : 'border-steel/25';
+    return (
+      <>
+        <span
+          aria-hidden="true"
+          className={[
+            'pointer-events-none absolute bottom-1.5 left-2.5 top-1.5 w-2 rounded-l-md border-l border-t border-b transition-colors',
+            bracketClass,
+          ].join(' ')}
+        />
+        <span
+          aria-hidden="true"
+          className={[
+            'pointer-events-none absolute bottom-1.5 right-2.5 top-1.5 w-2 rounded-r-md border-r border-t border-b transition-colors',
+            bracketClass,
+          ].join(' ')}
+        />
+      </>
+    );
+  }
+
+  if (variant === 'workspace') {
+    return (
+      <span
+        aria-hidden="true"
+        className={[
+          'pointer-events-none absolute bottom-2 right-2.5 top-2 w-px rounded-full transition-colors',
+          emphasized ? 'bg-border-default' : 'bg-border-subtle',
+        ].join(' ')}
+      />
+    );
+  }
+
+  return null;
+}
+
 function ShelfRow({
   to,
   active,
   title,
   meta,
   pinned,
+  variant,
   onPin,
   onUnpin,
   onClose,
@@ -142,6 +195,7 @@ function ShelfRow({
   title: string;
   meta?: string;
   pinned?: boolean;
+  variant: ShelfRowVariant;
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
@@ -154,13 +208,14 @@ function ShelfRow({
     <Link
       to={to}
       className={[
-        'ui-sidebar-session-row select-none',
-        active && 'ui-sidebar-session-row-active',
+        'ui-sidebar-resource-row select-none',
+        `ui-sidebar-resource-row-${variant}`,
+        active && 'ui-sidebar-resource-row-active',
       ].filter(Boolean).join(' ')}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
+      <ShelfRowChrome variant={variant} emphasized={active || hovered} />
       <div className={[
         'min-w-0 flex-1',
         showTrailingControls && 'pr-11',
@@ -978,6 +1033,7 @@ export function Sidebar() {
                     title={note?.title ?? item.id}
                     meta={note?.summary || `@${item.id}`}
                     pinned={item.pinned}
+                    variant="note"
                     onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('note', item.id)}
                     onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('note', item.id) : undefined}
                     onClose={item.pinned ? undefined : () => handleCloseNote(item.id)}
@@ -1002,6 +1058,7 @@ export function Sidebar() {
                     title={project?.title ?? item.id}
                     meta={project?.summary || project?.description || `@${item.id}`}
                     pinned={item.pinned}
+                    variant="project"
                     onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('project', item.id)}
                     onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('project', item.id) : undefined}
                     onClose={item.pinned ? undefined : () => handleCloseProject(item.id)}
@@ -1026,6 +1083,7 @@ export function Sidebar() {
                     title={humanizeSkillName(item.id)}
                     meta={skill?.description || skill?.source || item.id}
                     pinned={item.pinned}
+                    variant="skill"
                     onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('skill', item.id)}
                     onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('skill', item.id) : undefined}
                     onClose={item.pinned ? undefined : () => handleCloseSkill(item.id)}
@@ -1048,6 +1106,7 @@ export function Sidebar() {
                   title={baseName(item.id)}
                   meta={item.id}
                   pinned={item.pinned}
+                  variant="workspace"
                   onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('workspace', item.id)}
                   onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('workspace', item.id) : undefined}
                   onClose={item.pinned ? undefined : () => handleCloseWorkspace(item.id)}
