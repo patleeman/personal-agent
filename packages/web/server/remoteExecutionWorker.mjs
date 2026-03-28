@@ -1,12 +1,14 @@
 #!/usr/bin/env node
+/* eslint-env node */
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
-const REMOTE_EXECUTION_RESULT_FILE = 'remote-execution.json';
-const REMOTE_EXECUTION_SESSION_FILE = 'remote-session.jsonl';
-const LOCAL_PA_CLI_PATH = join(process.cwd(), 'packages', 'cli', 'dist', 'index.js');
+export const REMOTE_EXECUTION_RESULT_FILE = 'remote-execution.json';
+export const REMOTE_EXECUTION_SESSION_FILE = 'remote-session.jsonl';
+export const LOCAL_PA_CLI_PATH = fileURLToPath(new URL('../../cli/dist/index.js', import.meta.url));
 
 function quoteShellArg(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -154,7 +156,7 @@ async function ensureRemoteTargetInstalled(target) {
   return JSON.parse(stdout);
 }
 
-function buildRemoteRunCommand(bundle, remoteTempDir, remotePaCommand) {
+export function buildRemoteRunCommand(bundle, remoteTempDir, remotePaCommand) {
   const remoteSessionsDir = `${remoteTempDir}/sessions`;
   const remoteBootstrapPath = `${remoteTempDir}/bootstrap-session.jsonl`;
   const profileArg = bundle.target.profile ? ` --profile ${quoteShellArg(bundle.target.profile)}` : '';
@@ -173,8 +175,7 @@ function buildRemoteRunCommand(bundle, remoteTempDir, remotePaCommand) {
   };
 }
 
-async function main() {
-  const bundlePath = process.argv[2];
+export async function runRemoteExecutionWorker(bundlePath = process.argv[2]) {
   if (!bundlePath) {
     throw new Error('Expected the remote execution request bundle path as argv[2].');
   }
@@ -233,7 +234,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+const moduleFilePath = resolve(fileURLToPath(import.meta.url));
+const entryFilePath = process.argv[1] ? resolve(process.argv[1]) : null;
+
+if (entryFilePath === moduleFilePath) {
+  runRemoteExecutionWorker().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

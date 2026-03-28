@@ -2,6 +2,7 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } fr
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SessionManager, type SessionEntry } from '@mariozechner/pi-coding-agent';
 import {
   appendDurableRunEvent,
@@ -40,7 +41,7 @@ export const REMOTE_EXECUTION_RUN_SOURCE_TYPE = 'conversation-remote-run';
 const REMOTE_EXECUTION_RESULT_FILE = 'remote-execution.json';
 const REMOTE_EXECUTION_SESSION_FILE = 'remote-session.jsonl';
 const REMOTE_EXECUTION_IMPORT_CUSTOM_TYPE = 'remote_run_import';
-const REMOTE_EXECUTION_WORKER_PATH = join(process.cwd(), 'packages', 'web', 'server', 'remoteExecutionWorker.mjs');
+const REMOTE_EXECUTION_WORKER_PATH = fileURLToPath(new URL('./remoteExecutionWorker.mjs', import.meta.url));
 
 export type RemoteRunImportStatus = 'not_ready' | 'ready' | 'imported' | 'failed';
 
