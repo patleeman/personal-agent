@@ -21,6 +21,7 @@ import { buildNodeMentionHref } from '../../nodeMentionRoutes';
 import { useNodeMentionItems } from '../../useNodeMentionItems';
 import { Pill, cx } from '../ui';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
+import { exitHeadingOnEnter } from './richMarkdownHeadingExit';
 
 const RICH_EDITOR_MENTION_PATTERN = /@[\w-]+/g;
 const RICH_EDITOR_MENTION_PLUGIN_KEY = new PluginKey('rich-editor-mentions');
@@ -102,6 +103,17 @@ function buildMentionDecorations(doc: Parameters<typeof DecorationSet.create>[0]
   });
 
   return DecorationSet.create(doc, decorations);
+}
+
+function createHeadingExitExtension(): Extension {
+  return Extension.create({
+    name: 'richEditorHeadingExit',
+    addKeyboardShortcuts() {
+      return {
+        Enter: () => exitHeadingOnEnter(this.editor),
+      };
+    },
+  });
 }
 
 function createMentionLinkExtension(lookup: Map<string, MentionItem[]>): Extension {
@@ -224,6 +236,7 @@ export function RichMarkdownEditor({
       TableHeader,
       TableCell,
       FieldsBlockExtension,
+      createHeadingExitExtension(),
       createMentionLinkExtension(mentionLookup),
       Markdown.configure({
         markedOptions: {
