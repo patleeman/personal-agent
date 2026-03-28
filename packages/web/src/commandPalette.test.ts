@@ -34,13 +34,13 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     action: { kind: 'restore' },
   },
   {
-    id: 'memory:ship',
-    section: 'notes',
+    id: 'node:ship',
+    section: 'nodes',
     title: 'Ship candidate',
     subtitle: 'ready to branch',
-    keywords: ['memory-123', 'release'],
+    keywords: ['memory-123', 'release', 'note'],
     order: 1,
-    action: { kind: 'notes' },
+    action: { kind: 'node' },
   },
   {
     id: 'task:nightly',
@@ -52,12 +52,12 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     action: { kind: 'task' },
   },
   {
-    id: 'project:apollo',
-    section: 'projects',
+    id: 'node:apollo',
+    section: 'nodes',
     title: 'Apollo migration',
     subtitle: 'Move jobs onto the new worker stack',
-    keywords: ['apollo-migration', 'in_progress'],
-    order: 1,
+    keywords: ['apollo-migration', 'in_progress', 'project'],
+    order: 2,
     action: { kind: 'project' },
   },
 ];
@@ -75,16 +75,16 @@ describe('command palette search', () => {
     const results = searchCommandPaletteItems(ITEMS, { query: 'ship release', scope: 'all' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('notes');
-    expect(results[0]?.items[0]?.id).toBe('memory:ship');
+    expect(results[0]?.section).toBe('nodes');
+    expect(results[0]?.items[0]?.id).toBe('node:ship');
   });
 
   it('filters to the requested scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'projects' });
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'nodes' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('projects');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['project:apollo']);
+    expect(results[0]?.section).toBe('nodes');
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['node:ship', 'node:apollo']);
   });
 
   it('keeps section order when query is empty', () => {
@@ -94,9 +94,8 @@ describe('command palette search', () => {
       'nav',
       'open',
       'archived',
-      'notes',
+      'nodes',
       'tasks',
-      'projects',
     ]);
   });
 });

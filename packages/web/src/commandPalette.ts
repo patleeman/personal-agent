@@ -1,6 +1,6 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'notes' | 'tasks' | 'projects';
+export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'nodes' | 'tasks';
 export type CommandPaletteScope = 'all' | CommandPaletteSection;
 
 export interface CommandPaletteItem<TAction = unknown> {
@@ -30,18 +30,16 @@ export const COMMAND_PALETTE_SECTION_ORDER: CommandPaletteSection[] = [
   'nav',
   'open',
   'archived',
-  'notes',
+  'nodes',
   'tasks',
-  'projects',
 ];
 
 export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, string> = {
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  notes: 'Notes',
+  nodes: 'Nodes',
   tasks: 'Scheduled tasks',
-  projects: 'Projects',
 };
 
 export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
@@ -49,18 +47,16 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'notes', label: 'Notes' },
+  { value: 'nodes', label: 'Nodes' },
   { value: 'tasks', label: 'Scheduled' },
-  { value: 'projects', label: 'Projects' },
 ];
 
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   nav: 12,
   open: 12,
   archived: 8,
-  notes: 8,
+  nodes: 12,
   tasks: 8,
-  projects: 8,
 };
 
 function tokenizeQuery(query: string): string[] {
