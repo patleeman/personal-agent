@@ -25,6 +25,26 @@ export function getConversationBottomScrollTop(
   return Math.max(0, metrics.scrollHeight - metrics.clientHeight);
 }
 
+export function getConversationPrependRestoreScrollTop(
+  metrics: {
+    previousScrollHeight: number;
+    previousScrollTop: number;
+    nextScrollHeight: number;
+    nextClientHeight: number;
+    stickToBottom: boolean;
+  },
+): number {
+  if (metrics.stickToBottom) {
+    return getConversationBottomScrollTop({
+      scrollHeight: metrics.nextScrollHeight,
+      clientHeight: metrics.nextClientHeight,
+    });
+  }
+
+  const delta = metrics.nextScrollHeight - metrics.previousScrollHeight;
+  return metrics.previousScrollTop + Math.max(0, delta);
+}
+
 export function isConversationScrolledToBottom(
   metrics: ConversationScrollMetrics,
   thresholdPx = DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX,

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getConversationBottomScrollTop,
   getConversationInitialScrollKey,
+  getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
@@ -50,6 +51,26 @@ describe('conversation scroll helpers', () => {
       scrollTop: 760,
       clientHeight: 400,
     })).toBe(false);
+  });
+
+  it('keeps prepended history pinned to the latest message when the view was already at the bottom', () => {
+    expect(getConversationPrependRestoreScrollTop({
+      previousScrollHeight: 1200,
+      previousScrollTop: 800,
+      nextScrollHeight: 1800,
+      nextClientHeight: 400,
+      stickToBottom: true,
+    })).toBe(1400);
+  });
+
+  it('preserves the viewport position when prepended history loads above a scrolled-up view', () => {
+    expect(getConversationPrependRestoreScrollTop({
+      previousScrollHeight: 1200,
+      previousScrollTop: 280,
+      nextScrollHeight: 1800,
+      nextClientHeight: 400,
+      stickToBottom: false,
+    })).toBe(880);
   });
 
   it('returns a stable tail key for in-place streaming text updates', () => {
