@@ -48,7 +48,7 @@ describe('SettingsSplitLayout', () => {
     expect(html).toContain('Sync');
     expect(html).toContain('Runs');
     expect(html).toContain('Scheduled tasks');
-    expect(html).toContain('Capabilities');
+    expect(html).toContain('Reminder Presets');
     expect(html).toContain('Tools');
     expect(html).toContain('Instructions');
     expect(html).toContain('href="/settings?page=providers"');
