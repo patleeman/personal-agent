@@ -11,6 +11,7 @@ import {
   removePendingQueueItem,
   resolveEffectiveSessionStreamSubscriptionId,
   resolveSessionStreamSubscriptionId,
+  retryLiveSessionActionAfterTakeover,
   selectVisibleStreamState,
   shouldReplaceOptimisticUserBlock,
   shouldRetrySessionStreamAfterError,
@@ -120,6 +121,37 @@ describe('waitForSurfaceRegistration', () => {
 
     await vi.advanceTimersByTimeAsync(125);
     await expect(waiting).resolves.toBe(false);
+  });
+});
+
+describe('retryLiveSessionActionAfterTakeover', () => {
+  it('retries generic live-session actions after taking over on control errors', async () => {
+    const attemptAction = vi.fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new Error('This conversation is controlled by another surface. Take over here to continue.'))
+      .mockResolvedValueOnce('ok');
+    const takeOver = vi.fn(async () => undefined);
+
+    await expect(retryLiveSessionActionAfterTakeover({
+      attemptAction,
+      takeOverSessionControl: takeOver,
+    })).resolves.toBe('ok');
+
+    expect(attemptAction).toHaveBeenCalledTimes(2);
+    expect(takeOver).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry unrelated live-session action failures', async () => {
+    const error = new Error('provider unavailable');
+    const attemptAction = vi.fn<() => Promise<void>>().mockRejectedValueOnce(error);
+    const takeOver = vi.fn(async () => undefined);
+
+    await expect(retryLiveSessionActionAfterTakeover({
+      attemptAction,
+      takeOverSessionControl: takeOver,
+    })).rejects.toBe(error);
+
+    expect(attemptAction).toHaveBeenCalledTimes(1);
+    expect(takeOver).not.toHaveBeenCalled();
   });
 });
 
