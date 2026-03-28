@@ -1,5 +1,5 @@
 import { useId, useMemo, type ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkDirective from 'remark-directive';
 import remarkGfm from 'remark-gfm';
@@ -75,6 +75,14 @@ function fieldsDirectivePlugin() {
   };
 }
 
+function allowInlineImageDataUrls(url: string, key: string): string {
+  if (key === 'src' && /^data:image\//i.test(url)) {
+    return url;
+  }
+
+  return defaultUrlTransform(url);
+}
+
 function normalizeFieldsBlockValue(value: unknown): FieldsBlockItem[] {
   if (!Array.isArray(value)) {
     return [];
@@ -148,6 +156,7 @@ export function RichMarkdownRenderer({
       <ReactMarkdown
         remarkPlugins={[remarkDirective, fieldsDirectivePlugin, remarkGfm, remarkBreaks]}
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
+        urlTransform={allowInlineImageDataUrls}
         components={{
           code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
           h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentionLinks(children, { lookup: mentionLookup, surface })}</h1>,
