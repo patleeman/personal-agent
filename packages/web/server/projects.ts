@@ -16,6 +16,7 @@ import {
   listProjectFiles,
   listProjectNotes,
   readProjectDocument,
+  saveProjectBrief,
   type ProjectDocumentRecord,
   type ProjectFileRecord,
   type ProjectNoteRecord,
@@ -421,9 +422,8 @@ export function readProjectDetailFromProject(options: {
 
 export function createProjectRecord(input: CreateProjectRecordInput): ProjectDetail {
   const title = readRequiredString(input.title, 'Project title');
-  const initialDocument = readOptionalString(input.documentContent)
-    ?? readOptionalString(input.description)
-    ?? title;
+  const description = readOptionalString(input.description) ?? title;
+  const documentContent = readOptionalString(input.documentContent);
   const projectId = readOptionalString(input.projectId)
     ?? generateUniqueId(title, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
 
@@ -432,56 +432,77 @@ export function createProjectRecord(input: CreateProjectRecordInput): ProjectDet
     profile: input.profile,
     projectId,
     title,
-    description: initialDocument,
+    description,
   });
 
   const { paths, project } = readProjectRecord({ ...input, projectId });
   const updatedProject: ProjectDocument = {
     ...project,
     title,
-    description: initialDocument,
+    description,
     repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot),
-    summary: readOptionalString(input.summary) ?? initialDocument,
-    status: readOptionalString(input.status) ?? 'active',
-    updatedAt: nowIso(),
-    plan: {
-      ...project.plan,
-      milestones: [],
-      currentMilestoneId: undefined,
-      tasks: project.plan.tasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: task.status,
-      })),
+    summary: readOptionalString(input.summary) ?? description,
+    requirements: {
+      goal: readOptionalString(input.goal) ?? description,
+      acceptanceCriteria: input.acceptanceCriteria !== undefined
+        ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
+        : project.requirements.acceptanceCriteria,
     },
+    status: readOptionalString(input.status) ?? 'active',
+    blockers: readStringList(input.blockers, 'Project blockers'),
+    currentFocus: readOptionalString(input.currentFocus),
+    recentProgress: readStringList(input.recentProgress, 'Project recentProgress'),
+    planSummary: readOptionalString(input.planSummary),
+    completionSummary: readOptionalString(input.completionSummary),
+    updatedAt: nowIso(),
   };
 
   writeProject(paths.projectFile, updatedProject);
+  if (documentContent) {
+    saveProjectBrief({
+      repoRoot: input.repoRoot,
+      profile: input.profile,
+      projectId,
+      content: documentContent,
+    });
+  }
+
   return readProjectDetailFromProject({ ...input, projectId });
 }
 
 export function updateProjectRecord(input: UpdateProjectRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
 
+  const currentMilestoneId = input.currentMilestoneId !== undefined
+    ? readOptionalString(input.currentMilestoneId)
+    : project.plan.currentMilestoneId;
+
   const updatedProject: ProjectDocument = {
     ...project,
     ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Project title') } : {}),
+    ...(input.description !== undefined ? { description: readRequiredString(input.description, 'Project description') } : {}),
     ...(input.projectRepoRoot !== undefined ? { repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot) } : {}),
     ...(input.summary !== undefined ? { summary: readRequiredString(input.summary, 'Project summary') } : {}),
+    requirements: {
+      goal: input.goal !== undefined ? readRequiredString(input.goal, 'Project goal') : project.requirements.goal,
+      acceptanceCriteria: input.acceptanceCriteria !== undefined
+        ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
+        : project.requirements.acceptanceCriteria,
+    },
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Project status') } : {}),
+    ...(input.currentFocus !== undefined ? { currentFocus: readOptionalString(input.currentFocus) } : {}),
+    ...(input.blockers !== undefined ? { blockers: readStringList(input.blockers, 'Project blockers') } : {}),
+    ...(input.recentProgress !== undefined ? { recentProgress: readStringList(input.recentProgress, 'Project recentProgress') } : {}),
+    ...(input.planSummary !== undefined ? { planSummary: readOptionalString(input.planSummary) } : {}),
+    ...(input.completionSummary !== undefined ? { completionSummary: readOptionalString(input.completionSummary) } : {}),
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
-      milestones: [],
-      currentMilestoneId: input.currentMilestoneId !== undefined ? readOptionalString(input.currentMilestoneId) : undefined,
-      tasks: (project.plan.tasks ?? []).map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: task.status,
-      })),
+      currentMilestoneId,
     },
   };
 
+  assertMilestoneExists(updatedProject, currentMilestoneId);
   writeProject(paths.projectFile, updatedProject);
   return readProjectDetailFromProject(input);
 }
@@ -585,10 +606,13 @@ export function updateProjectMilestone(input: UpdateProjectMilestoneInput): Proj
 export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
   const title = readRequiredString(input.title, 'Task title');
+  const milestoneId = readOptionalString(input.milestoneId);
+  assertMilestoneExists(project, milestoneId);
   const existingTasks = sortProjectTasks(project.plan.tasks ?? []).map((task) => ({
     id: task.id,
     title: task.title,
     status: task.status,
+    ...(task.milestoneId ? { milestoneId: task.milestoneId } : {}),
   }));
   const taskId = readOptionalString(input.taskId)
     ?? generateUniqueId(title, existingTasks.map((task) => task.id), 'task');
@@ -603,6 +627,7 @@ export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): Pr
       id: taskId,
       status: readRequiredString(input.status, 'Task status'),
       title,
+      milestoneId,
     }),
   ];
 
@@ -611,8 +636,6 @@ export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): Pr
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
-      milestones: [],
-      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });
@@ -629,16 +652,20 @@ export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): Pr
   }
 
   const existingTask = project.plan.tasks[taskIndex] as ProjectTaskDocument;
+  const milestoneId = input.milestoneId !== undefined ? readOptionalString(input.milestoneId) : existingTask.milestoneId;
+  assertMilestoneExists(project, milestoneId);
   const updatedTask: ProjectTaskDocument = {
     id: existingTask.id,
     title: input.title !== undefined ? readRequiredString(input.title, 'Task title') : existingTask.title,
     status: input.status !== undefined ? readRequiredString(input.status, 'Task status') : existingTask.status,
+    ...(milestoneId ? { milestoneId } : {}),
   };
 
   const nextTasks = [...project.plan.tasks].map((task) => ({
     id: task.id,
     title: task.title,
     status: task.status,
+    ...(task.milestoneId ? { milestoneId: task.milestoneId } : {}),
   }));
   nextTasks[taskIndex] = updatedTask;
 
@@ -647,8 +674,6 @@ export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): Pr
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
-      milestones: [],
-      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });
@@ -739,6 +764,7 @@ export function moveProjectTaskRecord(input: MoveProjectTaskRecordInput): Projec
     id: task.id,
     title: task.title,
     status: task.status,
+    ...(task.milestoneId ? { milestoneId: task.milestoneId } : {}),
   }));
   const taskIndex = tasks.findIndex((entry) => entry.id === input.taskId);
 
@@ -753,8 +779,6 @@ export function moveProjectTaskRecord(input: MoveProjectTaskRecordInput): Projec
     updatedAt: nowIso(),
     plan: {
       ...project.plan,
-      milestones: [],
-      currentMilestoneId: undefined,
       tasks: nextTasks,
     },
   });

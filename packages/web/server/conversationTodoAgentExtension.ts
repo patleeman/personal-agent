@@ -73,10 +73,6 @@ function buildTodoListPayload(document: ReturnType<typeof loadConversationAutoma
   };
 }
 
-function formatTodoList(document: ReturnType<typeof loadConversationAutomationState>['document']): string {
-  return JSON.stringify(buildTodoListPayload(document), null, 2);
-}
-
 function buildItemIdHelp(document: ReturnType<typeof loadConversationAutomationState>['document']): string {
   if (document.items.length === 0) {
     return 'No todo items exist. Use {"action":"add",...} to create one.';

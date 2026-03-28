@@ -60,7 +60,7 @@ describe('project artifacts', () => {
     });
   });
 
-  it('formats project yaml as the new minimal state record', () => {
+  it('formats project yaml as the canonical state record', () => {
     const document: ProjectDocument = {
       id: 'artifact-model',
       ownerProfile: 'assistant',
@@ -100,20 +100,34 @@ describe('project artifacts', () => {
     expect(yaml).toContain('status: active');
     expect(yaml).toContain('plan:');
     expect(yaml).toContain('tasks:');
-    expect(yaml).not.toContain('requirements:');
-    expect(yaml).not.toContain('planSummary:');
-    expect(yaml).not.toContain('completionSummary:');
-    expect(yaml).not.toContain('milestones:');
-    expect(yaml).not.toContain('milestoneId:');
+    expect(yaml).toContain('requirements:');
+    expect(yaml).toContain('planSummary: Land the schema first, then wire the CLI surface around it.');
+    expect(yaml).toContain('completionSummary: Not complete yet. The schema is stable and the CLI work is next.');
+    expect(yaml).toContain('milestones:');
+    expect(yaml).toContain('milestoneId: schema');
 
     expect(parseProject(yaml, document)).toMatchObject({
       archivedAt: '2026-03-10T14:00:00.000Z',
       repoRoot: '/Users/patrick/workingdir/personal-agent',
       status: 'active',
+      requirements: {
+        goal: 'Create a durable artifact model that stays easy to inspect and edit.',
+        acceptanceCriteria: [
+          'Projects serialize cleanly to YAML.',
+          'Agents can recover the state without reading the whole repo.',
+        ],
+      },
+      currentFocus: 'Build the CLI inbox surface.',
+      blockers: ['Need to settle the activity entry shape'],
+      recentProgress: ['Added project scaffold', 'Added path helpers'],
+      planSummary: 'Land the schema first, then wire the CLI surface around it.',
+      completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
       plan: {
-        milestones: [],
+        milestones: [
+          { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
+        ],
         tasks: [
-          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing' },
+          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing', milestoneId: 'schema' },
         ],
       },
     });
@@ -142,7 +156,7 @@ status: created
     });
   });
 
-  it('writes and reads simplified project files', () => {
+  it('writes and reads canonical project files', () => {
     const dir = createTempDir();
     const path = join(dir, 'state.yaml');
     const document = createInitialProject({
@@ -157,7 +171,7 @@ status: created
 
     expect(readFileSync(path, 'utf-8')).toContain('status: active');
     expect(readFileSync(path, 'utf-8')).toContain('plan:');
-    expect(readFileSync(path, 'utf-8')).not.toContain('requirements:');
+    expect(readFileSync(path, 'utf-8')).toContain('requirements:');
     expect(readFileSync(join(dir, 'INDEX.md'), 'utf-8')).toContain('kind: project');
     expect(readProject(path)).toMatchObject({
       id: 'artifact-model',

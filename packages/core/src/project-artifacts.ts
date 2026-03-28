@@ -255,13 +255,30 @@ function parseProjectRequirements(object: Record<string, unknown>, label: string
 }
 
 function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
+  const milestones = plan.milestones.map((milestone, index) => ({
+    id: assertNonEmptyText(milestone.id, `Project milestone[${index}] id`),
+    title: assertNonEmptyText(milestone.title, `Project milestone[${index}] title`),
+    status: assertNonEmptyText(milestone.status, `Project milestone[${index}] status`),
+    ...(normalizeOptionalText(milestone.summary, `Project milestone[${index}] summary`)
+      ? { summary: normalizeOptionalText(milestone.summary, `Project milestone[${index}] summary`) }
+      : {}),
+  }));
   const tasks = plan.tasks.map((task, index) => ({
     id: assertNonEmptyText(task.id, `Project task[${index}] id`),
     status: assertNonEmptyText(task.status, `Project task[${index}] status`),
     title: assertNonEmptyText(task.title, `Project task[${index}] title`),
+    ...(normalizeOptionalText(task.milestoneId, `Project task[${index}] milestoneId`)
+      ? { milestoneId: normalizeOptionalText(task.milestoneId, `Project task[${index}] milestoneId`) }
+      : {}),
   }));
 
+  validateProjectPlan(milestones, tasks, normalizeOptionalText(plan.currentMilestoneId, 'Project plan currentMilestoneId'), 'Project plan');
+
   return {
+    ...(normalizeOptionalText(plan.currentMilestoneId, 'Project plan currentMilestoneId')
+      ? { currentMilestoneId: normalizeOptionalText(plan.currentMilestoneId, 'Project plan currentMilestoneId') }
+      : {}),
+    milestones,
     tasks,
   };
 }
@@ -306,15 +323,33 @@ export function createInitialProject(input: {
 
 function formatProjectState(document: ProjectDocument): Record<string, unknown> {
   const plan = formatProjectPlan(document.plan);
+  const archivedAt = normalizeOptionalText(document.archivedAt, 'Project archivedAt');
+  const repoRoot = normalizeOptionalText(document.repoRoot, 'Project repoRoot');
+  const currentFocus = normalizeOptionalText(document.currentFocus, 'Project currentFocus');
+  const planSummary = normalizeOptionalText(document.planSummary, 'Project planSummary');
+  const completionSummary = normalizeOptionalText(document.completionSummary, 'Project completionSummary');
 
   return {
-    ...(normalizeOptionalText(document.archivedAt, 'Project archivedAt')
-      ? { archivedAt: normalizeOptionalText(document.archivedAt, 'Project archivedAt') }
-      : {}),
-    ...(normalizeOptionalText(document.repoRoot, 'Project repoRoot')
-      ? { repoRoot: normalizeOptionalText(document.repoRoot, 'Project repoRoot') }
-      : {}),
+    id: assertNonEmptyText(document.id, 'Project id'),
+    ownerProfile: assertNonEmptyText(document.ownerProfile, 'Project ownerProfile'),
+    createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
+    updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    ...(archivedAt ? { archivedAt } : {}),
+    title: assertNonEmptyText(document.title, 'Project title'),
+    description: assertNonEmptyText(document.description, 'Project description'),
+    ...(repoRoot ? { repoRoot } : {}),
+    summary: assertNonEmptyText(document.summary, 'Project summary'),
+    requirements: {
+      goal: assertNonEmptyText(document.requirements.goal, 'Project requirements.goal'),
+      acceptanceCriteria: document.requirements.acceptanceCriteria.map((criterion, index) =>
+        assertNonEmptyText(criterion, `Project requirements.acceptanceCriteria[${index}]`)),
+    },
     status: assertNonEmptyText(document.status, 'Project status'),
+    blockers: document.blockers.map((blocker, index) => assertNonEmptyText(blocker, `Project blockers[${index}]`)),
+    ...(currentFocus ? { currentFocus } : {}),
+    recentProgress: document.recentProgress.map((entry, index) => assertNonEmptyText(entry, `Project recentProgress[${index}]`)),
+    ...(planSummary ? { planSummary } : {}),
+    ...(completionSummary ? { completionSummary } : {}),
     plan,
   };
 }

@@ -214,7 +214,7 @@ function parseSyncModuleDetail(value: unknown): SyncModuleRuntimeDetail | undefi
   };
 }
 
-function readSyncGitSummary(repoDir: string, remote: string): SyncGitSummary {
+function readSyncGitSummary(repoDir: string): SyncGitSummary {
   const normalizedRepoDir = repoDir.trim();
   if (normalizedRepoDir.length === 0) {
     return {
@@ -314,7 +314,7 @@ function buildWarnings(input: {
 
 export async function readSyncState(): Promise<SyncStateSnapshot> {
   const config = readSyncConfig();
-  const git = readSyncGitSummary(config.repoDir, config.remote);
+  const git = readSyncGitSummary(config.repoDir);
   const daemon = await readSyncDaemonSummary();
 
   const daemonPaths = resolveDaemonPaths(loadDaemonConfig().ipc.socketPath);

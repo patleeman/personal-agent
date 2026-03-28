@@ -180,11 +180,6 @@ function buildUserMessage(text: string) {
   };
 }
 
-function readConversationIdFromSessionFile(sessionFile: string): string {
-  const manager = SessionManager.open(sessionFile);
-  return manager.getSessionId();
-}
-
 function appendLocalUserMessage(sessionFile: string, text: string): void {
   const normalized = text.trim();
   if (!normalized) {
@@ -410,7 +405,7 @@ function createSshRpcClient(options: {
   child.stderr.on('data', (chunk) => { stderr += chunk; });
   child.stdout.on('data', (chunk) => {
     stdoutBuffer += chunk;
-    while (true) {
+    for (;;) {
       const newlineIndex = stdoutBuffer.indexOf('\n');
       if (newlineIndex === -1) {
         break;

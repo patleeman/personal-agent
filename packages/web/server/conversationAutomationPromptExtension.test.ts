@@ -8,6 +8,8 @@ import { createConversationAutomationTodoItem, writeConversationAutomationState 
 import { createConversationAutomationPromptExtension } from './conversationAutomationPromptExtension.js';
 
 const tempDirs: string[] = [];
+type PromptHandlerResult = { systemPrompt?: string; message?: unknown; messages?: unknown[] } | undefined;
+type PromptHandler = (event: unknown, ctx: unknown) => PromptHandlerResult;
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -16,14 +18,14 @@ function createTempDir(prefix: string): string {
 }
 
 function registerHandlers(stateRoot: string, settingsFile?: string) {
-  const handlers: Record<string, ((event: any, ctx: any) => any) | undefined> = {};
+  const handlers: Record<string, PromptHandler | undefined> = {};
 
   createConversationAutomationPromptExtension({
     stateRoot,
     settingsFile,
     getCurrentProfile: () => 'datadog',
   })({
-    on: (event: string, registered: (event: any, ctx: any) => any) => {
+    on: (event: string, registered: PromptHandler) => {
       handlers[event] = registered;
     },
   } as unknown as ExtensionAPI);

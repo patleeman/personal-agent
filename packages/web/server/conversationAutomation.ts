@@ -99,10 +99,6 @@ function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
 }
 
-function readBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
-}
-
 function normalizeOptionalText(value: unknown): string | undefined {
   const normalized = readNonEmptyString(value);
   return normalized || undefined;
@@ -723,10 +719,6 @@ export function getConversationAutomationState(options: ResolveConversationAutom
   }
 
   return readConversationAutomationDocument(path, options.conversationId);
-}
-
-function hasOpenConversationAutomationItems(items: ConversationAutomationTodoItem[]): boolean {
-  return items.some((item) => item.status === 'pending' || item.status === 'running' || item.status === 'waiting');
 }
 
 export function writeConversationAutomationState(options: {

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
 import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
-import type { WorkspaceChangeKind, WorkspaceGitDraftSource } from './workspaceBrowser.js';
+import type { WorkspaceGitDraftSource } from './workspaceBrowser.js';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.4';

@@ -106,7 +106,7 @@ describe('project editing helpers', () => {
     });
 
     expect(detail.project.title).toBe('Artifact model');
-    expect(detail.project.description).toBe('The storage model is taking shape.');
+    expect(detail.project.description).toBe('Build the artifact model');
     expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
     expect(detail.project.summary).toBe('The storage model is taking shape.');
     expect(detail.project.status).toBe('active');

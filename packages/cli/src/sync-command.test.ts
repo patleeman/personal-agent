@@ -178,7 +178,7 @@ describe('sync deferred resumes merge command', () => {
     expect(exitCode).toBe(0);
 
     expect(JSON.parse(readFileSync(currentPath, 'utf-8'))).toEqual({
-      version: 2,
+      version: 3,
       resumes: {
         'resume-1': {
           id: 'resume-1',
@@ -188,6 +188,12 @@ describe('sync deferred resumes merge command', () => {
           createdAt: '2026-03-12T11:55:00.000Z',
           attempts: 1,
           status: 'scheduled',
+          kind: 'continue',
+          delivery: {
+            alertLevel: 'none',
+            autoResumeIfOpen: true,
+            requireAck: false,
+          },
         },
         'resume-2': {
           id: 'resume-2',
@@ -197,6 +203,12 @@ describe('sync deferred resumes merge command', () => {
           createdAt: '2026-03-12T12:50:00.000Z',
           attempts: 0,
           status: 'scheduled',
+          kind: 'continue',
+          delivery: {
+            alertLevel: 'none',
+            autoResumeIfOpen: true,
+            requireAck: false,
+          },
         },
       },
     });

@@ -643,10 +643,16 @@ export function buildMemoryDocTemplate(options: {
     metadata.role = role;
   }
 
+  const parent = options.parent?.trim();
+  const related = splitMemoryTagValues(options.related ?? []);
   const tagsWithStructure = [...new Set([
     ...tags,
     ...(role === 'hub' || role === 'structure' ? ['structure'] : []),
   ])];
+  const links: Record<string, unknown> = {
+    ...(parent ? { parent } : {}),
+    ...(related.length > 0 ? { related } : {}),
+  };
 
   return stringifyFrontmatter({
     id: options.id,
@@ -657,6 +663,7 @@ export function buildMemoryDocTemplate(options: {
     ...(tagsWithStructure.length > 0 ? { tags: tagsWithStructure } : {}),
     updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    ...(Object.keys(links).length > 0 ? { links } : {}),
   }, `# ${options.title}\n\n${options.summary}`);
 }
 

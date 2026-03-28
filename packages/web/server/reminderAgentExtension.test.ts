@@ -103,7 +103,7 @@ describe('reminder agent extension', () => {
     await registeredTool.execute(
       'tool-1',
       {
-        at: '2026-03-27T09:00:00-04:00',
+        at: '2030-03-27T09:00:00-04:00',
         prompt: 'Check the prod train.',
       },
       undefined,
@@ -117,7 +117,7 @@ describe('reminder agent extension', () => {
 
     const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
     const storedReminder = Object.values(state.resumes)[0];
-    expect(storedReminder?.dueAt).toBe('2026-03-27T13:00:00.000Z');
+    expect(storedReminder?.dueAt).toBe('2030-03-27T13:00:00.000Z');
   });
 
   it('requires a persisted session file', async () => {

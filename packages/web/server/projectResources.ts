@@ -426,10 +426,6 @@ export function uploadProjectFile(options: ResolveProjectResourceOptions & {
   return listProjectFiles(options).find((file) => file.id === fileId) as ProjectFileRecord;
 }
 
-export function readProjectFileRecord(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact'; fileId: string }): ProjectFileRecord | null {
-  return listProjectFiles(options).find((file) => file.id === options.fileId) ?? null;
-}
-
 export function readProjectFileDownload(options: ResolveProjectResourceOptions & { kind?: 'attachment' | 'artifact'; fileId: string }): {
   file: ProjectFileRecord;
   filePath: string;
@@ -439,7 +435,8 @@ export function readProjectFileDownload(options: ResolveProjectResourceOptions &
     throw new Error(`Project file not found: ${options.fileId}`);
   }
 
-  const { entryDir: _entryDir, ...file } = record;
+  const { entryDir, ...file } = record;
+  void entryDir;
   return {
     file,
     filePath: record.path,
