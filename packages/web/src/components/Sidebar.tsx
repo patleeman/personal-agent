@@ -35,6 +35,7 @@ import {
   unpinOpenResourceShelfItem,
 } from '../openResourceShelves';
 import { humanizeSkillName } from '../memoryOverview';
+import { buildNestedSessionRows } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -293,6 +294,8 @@ function OpenConversationRow({
   canDrag = false,
   isDragging = false,
   dropPosition = null,
+  depth = 0,
+  nestedUnderTitle,
   onPin,
   onUnpin,
   onClose,
@@ -307,6 +310,8 @@ function OpenConversationRow({
   canDrag?: boolean;
   isDragging?: boolean;
   dropPosition?: OpenConversationDropPosition | null;
+  depth?: number;
+  nestedUnderTitle?: string;
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
@@ -319,10 +324,15 @@ function OpenConversationRow({
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
 
   const showTrailingControls = hovered || pinned;
+  const rowTitle = [
+    depth > 0 && nestedUnderTitle ? `Nested under ${nestedUnderTitle}` : undefined,
+    canDrag ? 'Drag to reorder or move between pinned and open conversations' : undefined,
+  ].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
 
   return (
     <div
       className="relative"
+      style={depth > 0 ? { paddingLeft: `${depth * 14}px` } : undefined}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragOver={canDrag ? onDragOver : undefined}
@@ -349,7 +359,7 @@ function OpenConversationRow({
         ].filter(Boolean).join(' ')}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
-        title={canDrag ? 'Drag to reorder or move between pinned and open conversations' : undefined}
+        title={rowTitle}
       >
         <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
         <div className={[
@@ -465,7 +475,7 @@ function buildWorkspaceHref(cwd: string): string {
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, alerts, projects } = useAppData();
+  const { activity, alerts, projects, runs } = useAppData();
   const { data: status } = useApi(api.status);
   const { data: notesData } = useApi(api.notes);
   const { data: memoryData } = useApi(api.memory);
@@ -573,6 +583,26 @@ export function Sidebar() {
       ...workspaceShelf.openIds.map((id) => ({ id, pinned: false })),
     ],
     [workspaceShelf.openIds, workspaceShelf.pinnedIds],
+  );
+  const runsById = useMemo(
+    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
+    [runs],
+  );
+  const pinnedSessionRows = useMemo(
+    () => buildNestedSessionRows(pinnedSessions, runsById),
+    [pinnedSessions, runsById],
+  );
+  const openSessionRows = useMemo(
+    () => buildNestedSessionRows(visibleConversationTabs, runsById),
+    [runsById, visibleConversationTabs],
+  );
+  const pinnedSessionsById = useMemo(
+    () => new Map(pinnedSessions.map((session) => [session.id, session] as const)),
+    [pinnedSessions],
+  );
+  const openSessionsById = useMemo(
+    () => new Map(visibleConversationTabs.map((session) => [session.id, session] as const)),
+    [visibleConversationTabs],
   );
 
   const activeAlertCount = alerts?.activeCount ?? 0;
@@ -972,10 +1002,12 @@ export function Sidebar() {
             />
           ) : null}
 
-          {pinnedSessions.map((session) => {
-            const dropPosition = dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+          {pinnedSessionRows.map(({ session, depth, parentSessionId }) => {
+            const canDrag = depth === 0;
+            const dropPosition = canDrag && dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
               ? dropTarget.position
               : null;
+            const nestedUnderTitle = parentSessionId ? pinnedSessionsById.get(parentSessionId)?.title : undefined;
 
             return (
               <OpenConversationRow
@@ -983,14 +1015,16 @@ export function Sidebar() {
                 session={session}
                 active={location.pathname === `/conversations/${session.id}`}
                 pinned
-                canDrag
-                isDragging={draggingSessionId === session.id}
+                canDrag={canDrag}
+                isDragging={canDrag && draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                depth={depth}
+                nestedUnderTitle={nestedUnderTitle}
                 onUnpin={() => handleUnpinConversation(session.id)}
-                onDragStart={(event) => handleTabDragStart('pinned', session.id, event)}
-                onDragOver={(event) => handleTabDragOver('pinned', session.id, event)}
-                onDrop={(event) => handleTabDrop('pinned', session.id, event)}
-                onDragEnd={() => clearDragState()}
+                onDragStart={canDrag ? (event) => handleTabDragStart('pinned', session.id, event) : undefined}
+                onDragOver={canDrag ? (event) => handleTabDragOver('pinned', session.id, event) : undefined}
+                onDrop={canDrag ? (event) => handleTabDrop('pinned', session.id, event) : undefined}
+                onDragEnd={canDrag ? () => clearDragState() : undefined}
               />
             );
           })}
@@ -1008,26 +1042,31 @@ export function Sidebar() {
             <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
           ) : null}
 
-          {visibleConversationTabs.map((session) => {
+          {openSessionRows.map(({ session, depth, parentSessionId }) => {
             const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-            const dropPosition = !isDraftTab && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+            const canDrag = !isDraftTab && depth === 0;
+            const dropPosition = canDrag && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
               ? dropTarget.position
               : null;
+            const nestedUnderTitle = parentSessionId ? openSessionsById.get(parentSessionId)?.title : undefined;
+
             return (
               <OpenConversationRow
                 key={session.id}
                 session={session}
                 active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
                 pinned={false}
-                canDrag={!isDraftTab}
-                isDragging={!isDraftTab && draggingSessionId === session.id}
+                canDrag={canDrag}
+                isDragging={canDrag && draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                depth={depth}
+                nestedUnderTitle={nestedUnderTitle}
                 onPin={isDraftTab ? undefined : () => handlePinConversation(session.id)}
                 onClose={isDraftTab ? handleCloseDraftTab : () => handleCloseConversation(session.id)}
-                onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart('open', session.id, event)}
-                onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver('open', session.id, event)}
-                onDrop={isDraftTab ? undefined : (event) => handleTabDrop('open', session.id, event)}
-                onDragEnd={isDraftTab ? undefined : () => clearDragState()}
+                onDragStart={canDrag ? (event) => handleTabDragStart('open', session.id, event) : undefined}
+                onDragOver={canDrag ? (event) => handleTabDragOver('open', session.id, event) : undefined}
+                onDrop={canDrag ? (event) => handleTabDrop('open', session.id, event) : undefined}
+                onDragEnd={canDrag ? () => clearDragState() : undefined}
               />
             );
           })}
