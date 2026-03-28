@@ -77,4 +77,26 @@ describe('ProjectDetailSections markdown rendering', () => {
     expect(html).toContain('2:15p');
     expect(html).not.toContain('ago');
   });
+
+  it('shows a compact recent slice of activity before older events', () => {
+    const html = renderToString(
+      <ProjectActivityContent
+        items={Array.from({ length: 7 }, (_, index) => ({
+          id: `timeline:document:${index + 1}`,
+          kind: 'timeline' as const,
+          entry: {
+            id: `document:${index + 1}`,
+            kind: 'document',
+            createdAt: `2026-03-27T14:1${index}:00`,
+            title: `Activity item ${index + 1}`,
+          },
+        }))}
+      />,
+    );
+
+    expect(html).toContain('Activity item 1');
+    expect(html).toContain('Activity item 6');
+    expect(html).not.toContain('Activity item 7');
+    expect(html).toContain('Show 1 older event');
+  });
 });
