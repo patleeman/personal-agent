@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
   getConversationBottomScrollTop,
+  getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
@@ -45,6 +46,7 @@ export function useConversationScroll({
     conversationId: string;
     scrollHeight: number;
     scrollTop: number;
+    stickToBottom: boolean;
   } | null>(null);
   const bottomScrollAnimationFrameRef = useRef(0);
   const smoothBottomScrollTimeoutRef = useRef<number | null>(null);
@@ -216,6 +218,7 @@ export function useConversationScroll({
       conversationId,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
+      stickToBottom: scrollPinnedToBottomRef.current,
     };
   }, [conversationId, scrollRef]);
 
@@ -251,10 +254,27 @@ export function useConversationScroll({
       return;
     }
 
-    const delta = el.scrollHeight - pendingRestore.scrollHeight;
-    el.scrollTop = pendingRestore.scrollTop + Math.max(0, delta);
+    el.scrollTop = getConversationPrependRestoreScrollTop({
+      previousScrollHeight: pendingRestore.scrollHeight,
+      previousScrollTop: pendingRestore.scrollTop,
+      nextScrollHeight: el.scrollHeight,
+      nextClientHeight: el.clientHeight,
+      stickToBottom: pendingRestore.stickToBottom,
+    });
+    scrollPinnedToBottomRef.current = pendingRestore.stickToBottom;
     pendingPrependRestoreRef.current = null;
-  }, [conversationId, messages, prependRestoreKey, scrollRef]);
+
+    if (pendingRestore.stickToBottom) {
+      settleBottomScroll();
+      return;
+    }
+
+    setAtBottom(isConversationScrolledToBottom({
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight,
+    }));
+  }, [conversationId, messages, prependRestoreKey, scrollRef, settleBottomScroll]);
 
   useLayoutEffect(() => {
     // Only restart the open-scroll loop when the conversation/scroll phase changes
