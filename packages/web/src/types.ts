@@ -190,7 +190,7 @@ export interface ProjectTask {
   milestoneId?: string;
 }
 
-export interface ProjectBrief {
+export interface ProjectDocumentRecord {
   path: string;
   content: string;
   updatedAt: string;
@@ -249,8 +249,7 @@ export interface ProjectDetail {
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
-  document: ProjectBrief | null;
-  brief: ProjectBrief | null;
+  document: ProjectDocumentRecord | null;
   notes: ProjectNote[];
   files: ProjectFile[];
   attachments: ProjectFile[];

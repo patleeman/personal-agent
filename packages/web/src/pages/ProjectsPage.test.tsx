@@ -160,7 +160,7 @@ describe('ProjectsPage', () => {
     );
 
     expect(html).toContain('New project');
-    expect(html).toContain('Create a durable project with a title, summary, repo root, and an optional starting brief.');
+    expect(html).toContain('Create a durable project with a title, summary, repo root, and an optional starting document.');
     expect(html).toContain('Create project');
     expect(html).toContain('Back to projects');
   });
@@ -188,7 +188,6 @@ describe('ProjectsPage', () => {
               requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
               plan: { milestones: [], tasks: [] },
             },
-            brief: null,
             document: null,
             tasks: [],
             notes: [],

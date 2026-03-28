@@ -361,7 +361,7 @@ import {
   exportProjectSharePackage,
 } from './projectPackages.js';
 import { readNodeLinks, type NodeLinkKind } from './nodeLinks.js';
-import { generateProjectBrief } from './projectBriefs.js';
+import { generateProjectDocument } from './projectDocuments.js';
 import {
   acknowledgeAlertForProfile,
   dismissAlertForProfile,
@@ -9073,7 +9073,7 @@ app.post('/api/projects/:id/document/regenerate', async (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const detail = readProjectDetailForProfile(req.params.id, profile);
-    const generatedDocument = await generateProjectBrief({
+    const generatedDocument = await generateProjectDocument({
       detail,
       linkedConversations: detail.linkedConversations,
       activityEntries: listActivityForProfile(profile).filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),

@@ -62,7 +62,7 @@ describe('companion resource detail pages', () => {
         attachmentCount: 0,
         artifactCount: 0,
         tasks: [{ id: 'todo', title: 'Manage conversation todos', status: 'in_progress' }],
-        brief: { content: '## Brief\n\nShip the phone companion.', updatedAt: '2026-03-25T00:00:00.000Z' },
+        document: { content: '## Document\n\nShip the phone companion.', updatedAt: '2026-03-25T00:00:00.000Z' },
         notes: [{ id: 'note-1', title: 'Next step', kind: 'note', body: 'Validate on mobile.', updatedAt: '2026-03-25T00:00:00.000Z' }],
         attachments: [],
         artifacts: [],
@@ -99,6 +99,7 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('Continuous conversations');
     expect(html).toContain('Definition of done');
     expect(html).toContain('Validate the last mile on mobile.');
+    expect(html).toContain('Ship the phone companion.');
     expect(html).toContain('Companion todo session');
     expect(html).toContain('/app/conversations/conv-123');
     expect(html).toContain('Linked from');

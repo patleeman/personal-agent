@@ -86,7 +86,7 @@ describe('resolveProjectPaths', () => {
 
     expect(paths.projectDir).toBe(join(repo, 'sync', 'projects', 'artifact-model'));
     expect(paths.projectFile).toBe(join(paths.projectDir, 'state.yaml'));
-    expect(paths.briefFile).toBe(join(paths.projectDir, 'INDEX.md'));
+    expect(paths.documentFile).toBe(join(paths.projectDir, 'INDEX.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
     expect(paths.notesDir).toBe(join(paths.projectDir, 'notes'));
     expect(paths.attachmentsDir).toBe(join(paths.projectDir, 'attachments'));
@@ -197,7 +197,7 @@ describe('createProjectScaffold', () => {
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
-    const indexFile = readFileSync(result.paths.briefFile, 'utf-8');
+    const indexFile = readFileSync(result.paths.documentFile, 'utf-8');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
     expect(projectFile).toContain('milestones: []');
     expect(indexFile).toContain('id: artifact-model');
@@ -261,7 +261,7 @@ describe('createProjectScaffold', () => {
 
     expect(second.paths.projectDir).toBe(first.paths.projectDir);
     const projectFile = readFileSync(second.paths.projectFile, 'utf-8');
-    const indexFile = readFileSync(second.paths.briefFile, 'utf-8');
+    const indexFile = readFileSync(second.paths.documentFile, 'utf-8');
     expect(projectFile).toContain('description: Updated objective');
     expect(indexFile).toContain('updatedAt: 2026-03-10T13:00:00.000Z');
   });

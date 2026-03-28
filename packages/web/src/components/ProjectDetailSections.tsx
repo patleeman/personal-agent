@@ -1,5 +1,5 @@
 import { useState, type FormEventHandler, type ReactNode } from 'react';
-import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
+import type { ProjectDocumentRecord, ProjectFile, ProjectNote } from '../types';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
 import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
@@ -294,7 +294,7 @@ export function ProjectDocumentContent({
   onChange,
   onSubmit,
 }: {
-  document: ProjectBrief | null;
+  document: ProjectDocumentRecord | null;
   projectTitle: string;
   editing: boolean;
   content: string;
@@ -329,39 +329,6 @@ export function ProjectDocumentContent({
         />
       )}
     </div>
-  );
-}
-
-export function ProjectHandoffDocContent({
-  brief,
-  projectTitle,
-  editing,
-  content,
-  busy,
-  error,
-  onChange,
-  onSubmit,
-}: {
-  brief: ProjectBrief | null;
-  projectTitle: string;
-  editing: boolean;
-  content: string;
-  busy: boolean;
-  error: string | null;
-  onChange: (value: string) => void;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-}) {
-  return (
-    <ProjectDocumentContent
-      document={brief}
-      projectTitle={projectTitle}
-      editing={editing}
-      content={content}
-      busy={busy}
-      error={error}
-      onChange={onChange}
-      onSubmit={onSubmit}
-    />
   );
 }
 

@@ -54,17 +54,6 @@ Ship a tight prototype that proves whether proactive help feels useful.
 
 - Push secondary detail behind explicit reveals.`,
     },
-    brief: {
-      path: '/tmp/bloodhound-prototype/INDEX.md',
-      updatedAt: '2026-03-24T09:30:00.000Z',
-      content: `# Bloodhound prototype
-
-Ship a tight prototype that proves whether proactive help feels useful.
-
-## Plan
-
-- Push secondary detail behind explicit reveals.`,
-    },
     notes: [
       {
         id: 'note-1',
@@ -138,7 +127,7 @@ describe('ProjectDetailPanel', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('renders a linear-style project detail with the brief before activity, subtasks, and a right rail', () => {
+  it('renders a linear-style project detail with the document before activity, subtasks, and a right rail', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectDetailPanel project={createProjectDetail()} activeProfile="datadog" />
@@ -149,14 +138,14 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('Start conversation');
     expect(html).toContain('Activity');
     expect(html).toContain('Tasks');
-    expect(html).toContain('Brief');
+    expect(html).toContain('Document');
     expect(html).toContain('1 open · 0 done');
     expect(html).toContain('Collapse secondary sections by default');
     expect(html).toContain('Dense design notes');
     expect(html).toContain('Prototype review thread');
     expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
     expect(html).not.toContain('>Project doc<');
-    expect(html.indexOf('>Brief<')).toBeLessThan(html.indexOf('>Activity<'));
+    expect(html.indexOf('>Document<')).toBeLessThan(html.indexOf('>Activity<'));
   });
 
   it('merges linked conversations into the visible activity stream', () => {

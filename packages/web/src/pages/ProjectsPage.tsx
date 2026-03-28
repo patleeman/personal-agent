@@ -162,7 +162,7 @@ function CreateProjectPanel({
         <div className="space-y-1">
           <h2 className="text-[20px] font-semibold tracking-tight text-primary">New project</h2>
           <p className="ui-card-meta max-w-2xl">
-            Create a durable project with a title, summary, repo root, and an optional starting brief.
+            Create a durable project with a title, summary, repo root, and an optional starting document.
           </p>
         </div>
 
@@ -201,7 +201,7 @@ function CreateProjectPanel({
           </div>
 
           <div className="space-y-1.5">
-            <label className="ui-card-meta" htmlFor="project-document">Starting brief</label>
+            <label className="ui-card-meta" htmlFor="project-document">Starting document</label>
             <RichMarkdownEditor
               value={documentContent}
               onChange={setDocumentContent}
@@ -536,7 +536,7 @@ export function ProjectsPage() {
             >
               <PageHeading
                 title="Projects"
-                meta="Create a new project and keep the durable brief, tasks, notes, and files together."
+                meta="Create a new project and keep the durable document, tasks, notes, and files together."
               />
             </PageHeader>
             <CreateProjectPanel

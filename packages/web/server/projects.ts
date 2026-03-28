@@ -50,7 +50,6 @@ export interface ProjectDetail {
   artifactCount: number;
   tasks: ProjectTaskDocument[];
   document: ProjectDocumentRecord | null;
-  brief: ProjectDocumentRecord | null;
   notes: ProjectNoteRecord[];
   files: ProjectFileRecord[];
   attachments: ProjectFileRecord[];
@@ -410,7 +409,6 @@ export function readProjectDetailFromProject(options: {
     artifactCount: artifacts.length,
     tasks,
     document,
-    brief: document,
     notes,
     files,
     attachments,

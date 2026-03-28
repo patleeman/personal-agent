@@ -53,7 +53,7 @@ export function ProjectOverviewPanel({
     ? `/projects/${encodeURIComponent(record.id)}?viewProfile=${encodeURIComponent(record.profile)}`
     : `/projects/${encodeURIComponent(record.id)}`;
   const isArchived = isProjectArchived(record);
-  const documentRecord = project.document ?? project.brief;
+  const documentRecord = project.document;
   const taskCount = project.taskCount ?? project.tasks.length;
   const noteCount = project.noteCount ?? project.notes.length;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));

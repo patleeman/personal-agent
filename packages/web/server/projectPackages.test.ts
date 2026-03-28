@@ -249,7 +249,7 @@ describe('project share packages', () => {
     expect(pkg.project.plan.tasks[0]?.id).toBe('export-package');
     expect('repoRoot' in pkg.project).toBe(false);
 
-    expect(pkg.brief?.content).toContain('Portable handoff package');
+    expect(pkg.document?.content).toContain('Portable handoff package');
     expect(pkg.notes).toEqual([
       expect.objectContaining({
         title: 'Packaging decision',
