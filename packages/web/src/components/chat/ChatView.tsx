@@ -1859,7 +1859,7 @@ function ReplySelectionInlineActions({ onReply, onCopy }: ReplySelectionActions)
         onMouseDown={suppressPointerDown}
         onPointerDown={suppressPointerDown}
         onClick={onReply}
-        className="ui-action-button text-[11px] text-accent"
+        className="ui-message-action-button text-accent"
       >
         ↩ reply selection
       </button>
@@ -1868,7 +1868,7 @@ function ReplySelectionInlineActions({ onReply, onCopy }: ReplySelectionActions)
         onMouseDown={suppressPointerDown}
         onPointerDown={suppressPointerDown}
         onClick={onCopy}
-        className="ui-action-button text-[11px]"
+        className="ui-message-action-button"
       >
         ⎘ copy selection
       </button>
@@ -1956,12 +1956,12 @@ function MsgActions({
   }
 
   return (
-    <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
+    <div className={`flex items-center gap-0 opacity-0 transition-opacity motion-reduce:transition-none group-hover:opacity-100 group-focus-within:opacity-100 ${isUser ? 'justify-start' : 'justify-end'}`}>
       {canCopy && (
         <button
           type="button"
           onClick={() => { void handleCopy(); }}
-          className={cx('ui-action-button', copyState === 'copied' && 'text-accent', copyState === 'failed' && 'text-danger')}
+          className={cx('ui-message-action-button', copyState === 'copied' && 'text-accent', copyState === 'failed' && 'text-danger')}
           title={copyState === 'failed' ? 'Copy to clipboard failed' : 'Copy this assistant message to the clipboard'}
         >
           {copyState === 'copied' ? '⎘ copied' : copyState === 'failed' ? '⎘ copy failed' : '⎘ copy'}
@@ -1971,7 +1971,7 @@ function MsgActions({
         <button
           type="button"
           onClick={() => { void handleRewind(); }}
-          className={cx('ui-action-button', isRewinding && 'text-accent')}
+          className={cx('ui-message-action-button', isRewinding && 'text-accent')}
           title={isUser ? 'Rewind into a new conversation from this prompt' : 'Rewind into a new conversation from the prompt that led here'}
           disabled={isRewinding}
         >
@@ -1982,7 +1982,7 @@ function MsgActions({
         <button
           type="button"
           onClick={() => { void handleFork(); }}
-          className={cx('ui-action-button', isForking && 'text-accent')}
+          className={cx('ui-message-action-button', isForking && 'text-accent')}
           title="Fork into a new conversation from here"
           disabled={isForking}
         >
