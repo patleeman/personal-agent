@@ -35,6 +35,11 @@ describe('layout sizing helpers', () => {
       initialMainWidthRatio: 0.7,
     });
 
+    expect(getRailLayoutPrefs('/nodes')).toEqual({
+      storageKey: 'pa:rail-width:nodes',
+      initialMainWidthRatio: 0.7,
+    });
+
     expect(getRailLayoutPrefs('/skills')).toEqual({
       storageKey: 'pa:rail-width:skills',
       initialWidth: 460,
@@ -82,6 +87,14 @@ describe('layout sizing helpers', () => {
 
     expect(getRailInitialWidth({
       pathname: '/notes',
+      viewportWidth: 700,
+      sidebarWidth: 224,
+      railMinWidth: 160,
+      railMaxWidth: 160,
+    })).toBe(160);
+
+    expect(getRailInitialWidth({
+      pathname: '/nodes',
       viewportWidth: 700,
       sidebarWidth: 224,
       railMinWidth: 160,

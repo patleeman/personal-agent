@@ -193,10 +193,8 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Notes'));
-    expect(html.indexOf('Notes')).toBeLessThan(html.indexOf('Projects'));
-    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Skills'));
-    expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Nodes'));
+    expect(html.indexOf('Nodes')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Open create menu');
@@ -272,7 +270,7 @@ describe('Sidebar', () => {
     expect(html).toContain('padding-left:14px');
   });
 
-  it('renders grouped open shelves for notes, projects, skills, and workspaces', () => {
+  it('renders grouped open shelves for nodes and workspaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['tool-agent-browser']));
@@ -280,11 +278,9 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/inbox');
 
-    expect(html).toContain('Open Notes');
+    expect(html).toContain('Open Nodes');
     expect(html).toContain('note-index');
-    expect(html).toContain('Open Projects');
     expect(html).toContain('Active project');
-    expect(html).toContain('Open Skills');
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Open Workspaces');
     expect(html).toContain('repo');
@@ -293,7 +289,7 @@ describe('Sidebar', () => {
   it('shows a draft note row in the sidebar while creating a new note', () => {
     const html = renderSidebar('/notes?new=1');
 
-    expect(html).toContain('Open Notes');
+    expect(html).toContain('Open Nodes');
     expect(html).toContain('new note');
     expect(html).toContain('Draft note');
     expect(html).toContain('href="/notes?new=1"');

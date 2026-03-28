@@ -153,12 +153,21 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/workspace/changes' },
     },
     {
+      id: 'nav:nodes',
+      section: 'nav',
+      title: 'Nodes',
+      subtitle: 'Browse notes, projects, and skills together',
+      keywords: ['knowledge', 'nodes', 'notes', 'projects', 'skills'],
+      order: 4,
+      action: { kind: 'navigate', to: '/nodes' },
+    },
+    {
       id: 'nav:projects',
       section: 'nav',
       title: 'Projects',
       subtitle: 'Browse durable work hubs and plans',
       keywords: ['knowledge', 'workspaces', 'milestones', 'tasks'],
-      order: 4,
+      order: 5,
       action: { kind: 'navigate', to: '/projects' },
     },
     {
@@ -167,7 +176,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Notes',
       subtitle: 'Browse durable note nodes',
       keywords: ['memory', 'knowledge', 'distilled', 'references'],
-      order: 5,
+      order: 6,
       action: { kind: 'navigate', to: '/notes' },
     },
     {
@@ -176,7 +185,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Skills',
       subtitle: 'Browse reusable workflows',
       keywords: ['knowledge', 'skills', 'workflows', 'procedures'],
-      order: 6,
+      order: 7,
       action: { kind: 'navigate', to: '/skills' },
     },
     {

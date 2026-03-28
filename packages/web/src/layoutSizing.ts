@@ -29,6 +29,7 @@ export function getRailPageKey(pathname: string): string {
     case 'inbox':
     case 'system':
     case 'skills':
+    case 'nodes':
     case 'instructions':
     case 'plans':
     case 'tools':
@@ -97,6 +98,7 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         initialWidth: 380,
       };
     case 'notes':
+    case 'nodes':
     case 'tools':
     case 'plans':
       return {
