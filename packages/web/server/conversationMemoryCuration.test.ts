@@ -47,7 +47,6 @@ Keep the memory surface aligned with the right-rail-first web UI layout.
 
 At this checkpoint, the user intent was: tighten the memory browser around hubs, browsing, and a resizable right rail.
 `,
-    tags: ['conversation', 'checkpoint', 'personal-agent', 'web-ui'],
     userIntent: 'tighten the memory browser around hubs, browsing, and a resizable right rail.',
     learnedPoints: ['The right rail should stay visible and resizable.', 'Memory management should reuse the page-shell/list/right-rail pattern.'],
     carryForwardPoints: ['Keep the surface inbox-first and conversation-first.', 'Avoid nested bordered containers.'],
@@ -66,13 +65,11 @@ kind: note
 title: Personal-agent knowledge hub
 summary: Hub doc.
 status: active
-tags:
-  - personal-agent
-  - structure
 updatedAt: 2026-03-18
 metadata:
   type: project
   area: personal-agent
+  role: structure
 ---
 
 # Personal-agent knowledge hub
@@ -85,10 +82,6 @@ name: web-ui
 description: Durable UX preferences for the web app.
 metadata:
   title: Personal-agent web UI preferences
-  tags:
-    - personal-agent
-    - web-ui
-    - ux
   updated: 2026-03-18
 ---
 
@@ -147,13 +140,11 @@ kind: note
 title: Personal-agent knowledge hub
 summary: Hub doc.
 status: active
-tags:
-  - personal-agent
-  - structure
 updatedAt: 2026-03-18
 metadata:
   type: project
   area: personal-agent
+  role: structure
 ---
 
 # Personal-agent knowledge hub
@@ -177,7 +168,6 @@ Track deployment timings and release checks.
         title: 'General personal-agent follow-up',
         summary: 'Loose follow-up that should stay in the package until curated further.',
         body: '# General personal-agent follow-up\n\nLoose follow-up that should stay in the package until curated further.\n',
-        tags: ['conversation', 'checkpoint', 'personal-agent'],
         userIntent: 'capture a broad follow-up inside the package without picking an existing reference.',
         learnedPoints: ['There are a few follow-ups to sort out later.'],
         carryForwardPoints: ['Curate this into a more specific reference later.'],
@@ -214,7 +204,6 @@ Track deployment timings and release checks.
       draft: buildDraft({
         title: 'Runpod provisioning notes',
         summary: 'Capture a new Runpod memory area.',
-        tags: ['conversation', 'checkpoint', 'runpod', 'gpu'],
       }),
       updated: '2026-03-19',
       distilledAt: '2026-03-19T12:00:00.000Z',
@@ -228,7 +217,7 @@ Track deployment timings and release checks.
 
     expect(result.disposition).toBe('created-reference');
     expect(result.memory.id).toBe('runpod');
-    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('structure');
+    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('role: structure');
     expect(result.reference.relativePath).toBe('references/runpod-provisioning-notes.md');
   });
 });

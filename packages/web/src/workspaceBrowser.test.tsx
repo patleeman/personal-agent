@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { buildWorkspacePath, buildWorkspaceSearch, filterWorkspaceTree, readWorkspaceModeFromPathname, syncWorkspaceExpandedPaths, WorkspaceWordDiffView } from './workspaceBrowser';
+import { buildInitialExpandedPaths, buildWorkspacePath, buildWorkspaceSearch, filterWorkspaceTree, readWorkspaceModeFromPathname, syncWorkspaceExpandedPaths, WorkspaceWordDiffView } from './workspaceBrowser';
 import type { WorkspaceTreeNode } from './types';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -84,6 +84,18 @@ describe('filterWorkspaceTree', () => {
         children: [expect.objectContaining({ relativePath: 'src/index.ts' })],
       }),
     ]);
+  });
+});
+
+describe('buildInitialExpandedPaths', () => {
+  it('starts with all directories collapsed', () => {
+    const next = buildInitialExpandedPaths({
+      tree: TREE,
+      focusPath: 'src/prompts',
+      changes: [{ relativePath: 'src/index.ts' }],
+    }, 'src/prompts/prompt.md');
+
+    expect([...next]).toEqual([]);
   });
 });
 

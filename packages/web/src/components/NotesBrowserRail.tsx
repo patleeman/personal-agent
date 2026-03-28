@@ -11,7 +11,6 @@ import {
   NOTE_ID_SEARCH_PARAM,
   noteKindLabel,
   readCreateState,
-  readNoteTagFilters,
 } from '../noteWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -144,8 +143,7 @@ export function NotesBrowserRailContent({
   const [queueNotice, setQueueNotice] = useState<string | null>(null);
   const memories = data?.memories ?? [];
   const memoryQueue = queueData?.memoryQueue ?? data?.memoryQueue ?? [];
-  const activeTagFilters = useMemo(() => readNoteTagFilters(location.search), [location.search]);
-  const filteredMemories = useMemo(() => filterMemories(memories, query, activeTagFilters), [activeTagFilters, memories, query]);
+  const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
   const recoverableQueueItems = useMemo(
     () => memoryQueue.filter((item) => canRetryMemoryWorkItem(item)),
     [memoryQueue],
@@ -229,21 +227,8 @@ export function NotesBrowserRailContent({
           spellCheck={false}
         />
         <p className="ui-card-meta">
-          {query.trim() || activeTagFilters.length > 0 ? `Showing ${filteredMemories.length} of ${memories.length}.` : `${memories.length} notes.`}
+          {query.trim() ? `Showing ${filteredMemories.length} of ${memories.length}.` : `${memories.length} notes.`}
         </p>
-        {activeTagFilters.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {activeTagFilters.map((tag) => (
-              <Link
-                key={tag}
-                to={`/notes${buildNoteSearch(location.search, { memoryId: null, creating: false, tags: activeTagFilters.filter((value) => value !== tag) })}`}
-                className="ui-note-tag-link border-accent/45 bg-accent/12 text-accent"
-              >
-                #{tag} ×
-              </Link>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -293,7 +278,7 @@ export function NotesBrowserRailContent({
           <EmptyState
             className="py-8"
             title={memories.length === 0 ? 'No notes yet' : 'No matches'}
-            body={memories.length === 0 ? 'Create a note to start building durable context.' : 'Try a broader search across titles, ids, and tags.'}
+            body={memories.length === 0 ? 'Create a note to start building durable context.' : 'Try a broader search across titles, ids, and summaries.'}
           />
         ) : null}
 
@@ -307,7 +292,7 @@ export function NotesBrowserRailContent({
                 label={noteRecordLabel(memory)}
                 aside={memory.usedInLastSession ? 'Used recently' : null}
                 heading={memory.title}
-                summary={memory.tags.length > 0 ? memory.tags.map((tag) => `#${tag}`).join(' · ') : `@${memory.id}`}
+                summary={memory.summary || `@${memory.id}`}
                 meta={(
                   <>
                     <span className="font-mono">@{memory.id}</span>

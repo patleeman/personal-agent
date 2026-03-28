@@ -41,7 +41,6 @@ function MemoriesSection({
             memory.updated ? `updated ${timeAgo(memory.updated)}` : null,
             `@${memory.id}`,
           ].filter((value): value is string => Boolean(value));
-          const tags = memory.tags.slice(0, 3).join(' · ');
 
           return (
             <BrowserRecordRow
@@ -50,7 +49,7 @@ function MemoriesSection({
               label={memory.status === 'archived' ? 'Archived note' : 'Note'}
               heading={memory.title}
               summary={memory.summary || '(no summary)'}
-              meta={tags ? `${meta.join(' · ')} · ${tags}` : meta.join(' · ')}
+              meta={meta.join(' · ')}
               className="py-3.5"
               titleClassName="text-[15px]"
               summaryClassName="text-[13px]"

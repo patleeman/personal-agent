@@ -227,40 +227,6 @@ describe('mergeProfiles', () => {
     });
   });
   
-  describe('array merge semantics', () => {
-    it('should replace arrays by default', () => {
-      const result = mergeProfiles({
-        shared: basePartial({ tags: ['shared-a', 'shared-b'] }),
-        datadog: { tags: ['dd-a'] },
-        local: { tags: ['local-a'] },
-      });
-
-      expect(result.tags).toEqual(['local-a']);
-    });
-
-    it('should append arrays when arrayStrategy=append', () => {
-      const result = mergeProfiles(
-        {
-          shared: basePartial({ tags: ['shared-a'] }),
-          datadog: { tags: ['dd-a'] },
-          local: { tags: ['local-a'] },
-        },
-        { arrayStrategy: 'append' }
-      );
-
-      expect(result.tags).toEqual(['shared-a', 'dd-a', 'local-a']);
-    });
-
-    it('should clear arrays with null when nullClearsValue=true', () => {
-      const result = mergeProfiles({
-        shared: basePartial({ tags: ['shared-a'] }),
-        datadog: { tags: null },
-      });
-
-      expect(result.tags).toEqual([]);
-    });
-  });
-
   describe('null/undefined handling', () => {
     it('should treat undefined as "not set" (keeps lower value)', () => {
       const result = mergeProfiles({
@@ -326,7 +292,6 @@ describe('mergeProfiles', () => {
         analytics: true,
         shareUsage: false,
       });
-      expect(result.tags).toEqual([]);
     });
     
     it('should apply defaults for empty input', () => {
@@ -478,15 +443,6 @@ describe('mergeProfiles', () => {
       ).toThrow('[shared] notifications: Expected object');
     });
 
-    it('should throw on non-string tags entries', () => {
-      expect(() =>
-        mergeProfiles({
-          shared: basePartial({
-            tags: ['valid', 123 as unknown as string],
-          }),
-        })
-      ).toThrow('[shared] tags[1]: Expected string, got number');
-    });
   });
   
   describe('edge cases', () => {

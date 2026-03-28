@@ -35,4 +35,16 @@ describe('RichMarkdownRenderer', () => {
     expect(html).toContain('Hello');
     expect(html).not.toContain('title: Test');
   });
+
+  it('renders inline markdown images', () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <RichMarkdownRenderer content={'Before\n\n![Architecture diagram](data:image/png;base64,abc123)\n\nAfter'} />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('<img');
+    expect(html).toContain('alt="Architecture diagram"');
+    expect(html).toContain('src="data:image/png;base64,abc123"');
+  });
 });

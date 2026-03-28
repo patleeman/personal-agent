@@ -7,7 +7,6 @@ interface DistillConversationMemoryRunPayload {
   checkpointId?: string;
   title?: string;
   summary?: string;
-  tags?: string[];
   mode?: 'manual' | 'auto';
   trigger?: 'manual' | 'turn_end' | 'auto_compaction_end';
   emitActivity?: boolean;
@@ -67,14 +66,6 @@ export function parseDistillConversationMemoryRunArgs(argv: string[]): ParsedArg
         ? { trigger: payload.trigger }
         : {}),
       ...(typeof payload.emitActivity === 'boolean' ? { emitActivity: payload.emitActivity } : {}),
-      ...(Array.isArray(payload.tags)
-        ? {
-            tags: payload.tags
-              .filter((tag): tag is string => typeof tag === 'string')
-              .map((tag) => tag.trim())
-              .filter((tag) => tag.length > 0),
-          }
-        : {}),
     },
   };
 }
@@ -93,7 +84,6 @@ async function runDistillation(args: ParsedArgs, fetchImpl: typeof fetch): Promi
       summary: args.payload.summary,
       anchorMessageId: args.payload.anchorMessageId,
       checkpointId: args.payload.checkpointId,
-      tags: args.payload.tags,
       mode: args.payload.mode,
       trigger: args.payload.trigger,
       emitActivity: args.payload.emitActivity ?? true,

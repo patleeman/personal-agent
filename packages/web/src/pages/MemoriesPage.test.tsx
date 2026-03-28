@@ -52,6 +52,7 @@ describe('MemoriesPage', () => {
               id: 'memory-index',
               title: 'Memory index',
               summary: 'Top-level knowledge hub.',
+              description: 'Use this note as the top-level routing document for durable memory.',
               tags: ['notes', 'index', 'structure'],
               path: '/tmp/memory-index/INDEX.md',
               type: 'structure',
@@ -84,6 +85,7 @@ describe('MemoriesPage', () => {
               id: 'memory-index',
               title: 'Memory index',
               summary: 'Top-level knowledge hub.',
+              description: 'Use this note as the top-level routing document for durable memory.',
               tags: ['notes', 'index', 'structure'],
               path: '/tmp/memory-index/INDEX.md',
               type: 'structure',
@@ -109,6 +111,8 @@ describe('MemoriesPage', () => {
 
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
+    expect(html).toContain('For the agent (optional)');
+    expect(html).toContain('Use this note as the top-level routing document for durable memory.');
     expect(html).toContain('Chat about note');
     expect(html).toContain('memory-index');
     expect(html).not.toContain('Browse durable notes');
@@ -146,15 +150,16 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Browse durable notes');
     expect(html).toContain('Search notes');
     expect(html).toContain('Memory index');
-    expect(html).toContain('#');
-    expect(html).toContain('notes');
-    expect(html).toContain('structure');
+    expect(html).toContain('font-mono');
+    expect(html).toContain('memory-index');
+    expect(html).not.toContain('#structure');
+    expect(html).not.toContain('#index');
     expect(html).toContain('Note');
     expect(html).toContain('Context');
     expect(html).toContain('Updated');
   });
 
-  it('filters the notes table by tag params in the url', () => {
+  it('ignores stale note tag params in the url', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [
@@ -193,10 +198,9 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes?tag=structure');
 
-    expect(html).toContain('Filtered by');
-    expect(html).toContain('structure');
+    expect(html).not.toContain('Filtered by');
     expect(html).toContain('Memory index');
-    expect(html).not.toContain('Quick idea');
+    expect(html).toContain('Quick idea');
   });
 
   it('renders work queue actions on the notes index page', () => {

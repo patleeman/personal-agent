@@ -2901,7 +2901,6 @@ function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Updated" value={data.memory.updated ? timeAgo(data.memory.updated) : 'unknown'} />
-          <RailMetadataRow label="Tags" value={data.memory.tags.length > 0 ? data.memory.tags.map((tag) => `#${tag}`).join(' · ') : '—'} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link to={`/notes?note=${encodeURIComponent(data.memory.id)}`} className="ui-toolbar-button">Open notes browser</Link>

@@ -45,10 +45,8 @@ id: personal-agent
 kind: note
 title: Personal-agent
 summary: Hub doc.
+description: Tell the agent to use this note for durable personal-agent architecture guidance.
 status: active
-tags:
-  - personal-agent
-  - structure
 links:
   related:
     - runpod
@@ -56,6 +54,7 @@ updatedAt: 2026-03-18
 metadata:
   type: project
   area: personal-agent
+  role: structure
 ---
 # Personal-agent
 
@@ -70,9 +69,6 @@ name: web-ui
 description: Durable UI notes.
 metadata:
   title: Web UI preferences
-  tags:
-    - personal-agent
-    - web-ui
   updated: 2026-03-18
 ---
 # Web UI preferences
@@ -100,6 +96,7 @@ Keep planning state durable.
       related: ['runpod'],
       title: 'Personal-agent',
       summary: 'Hub doc.',
+      description: 'Tell the agent to use this note for durable personal-agent architecture guidance.',
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
@@ -124,12 +121,12 @@ Keep planning state durable.
       id: 'memory-index',
       title: 'Memory index',
       summary: 'Top-level memory hub.',
+      description: 'Tell the agent to use this as the top-level routing note for shared memory.',
       type: 'index',
       status: 'active',
       area: 'notes',
       role: 'hub',
       related: ['personal-agent'],
-      tags: ['notes', 'index'],
     }, { profilesRoot });
 
     expect(created).toMatchObject({
@@ -144,6 +141,7 @@ Keep planning state durable.
     expect(fileContent).toContain('id: memory-index');
     expect(fileContent).toContain('kind: note');
     expect(fileContent).toContain('summary: Top-level memory hub.');
+    expect(fileContent).toContain('description: Tell the agent to use this as the top-level routing note for shared memory.');
     expect(fileContent).toContain('title: Memory index');
     expect(fileContent).toContain('area: notes');
     expect(fileContent).toContain('structure');
@@ -163,8 +161,6 @@ kind: note
 title: Runpod
 summary: Runpod hub.
 status: active
-tags:
-  - test
 links:
   related:
     - missing-hub

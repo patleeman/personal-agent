@@ -1191,7 +1191,6 @@ interface ConversationMemoryDistillRunInput {
   trigger: ConversationMemoryMaintenanceTrigger;
   title?: string;
   summary?: string;
-  tags?: string[];
   emitActivity?: boolean;
 }
 
@@ -1202,7 +1201,6 @@ interface ResolvedConversationMemoryDistillRunInput {
   trigger: ConversationMemoryMaintenanceTrigger;
   title?: string;
   summary?: string;
-  tags?: string[];
   emitActivity: boolean;
 }
 
@@ -1216,20 +1214,6 @@ function readOptionalRecordString(record: Record<string, unknown>, key: string):
 function readOptionalRecordBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
   const value = record[key];
   return typeof value === 'boolean' ? value : undefined;
-}
-
-function readOptionalRecordStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
-  const value = record[key];
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const normalized = value
-    .filter((entry): entry is string => typeof entry === 'string')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-
-  return normalized.length > 0 ? normalized : undefined;
 }
 
 function readConversationMemoryDistillRunInputFromRun(
@@ -1274,7 +1258,6 @@ function readConversationMemoryDistillRunInputFromRun(
     trigger,
     title: readOptionalRecordString(payload, 'title'),
     summary: readOptionalRecordString(payload, 'summary'),
-    tags: readOptionalRecordStringArray(payload, 'tags'),
     emitActivity: readOptionalRecordBoolean(payload, 'emitActivity') ?? false,
   };
 }
@@ -1317,7 +1300,6 @@ function buildConversationMemoryDistillRecoveryHiddenContext(input: {
   anchorLabel?: string;
   title?: string;
   summary?: string;
-  tags?: string[];
   error?: string;
 }): string {
   return [
@@ -1333,7 +1315,6 @@ function buildConversationMemoryDistillRecoveryHiddenContext(input: {
     input.anchorLabel ? `- anchor: ${input.anchorLabel}` : undefined,
     input.title ? `- requested title: ${input.title}` : undefined,
     input.summary ? `- requested summary: ${input.summary}` : undefined,
-    input.tags && input.tags.length > 0 ? `- requested tags: ${input.tags.join(', ')}` : undefined,
     input.error ? `- last error: ${input.error}` : undefined,
     '',
     'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable note-node update.',
@@ -1368,7 +1349,6 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
     checkpointId: input.checkpointId,
     title: input.title,
     summary: input.summary,
-    tags: input.tags,
     mode: input.mode,
     trigger: input.trigger,
     emitActivity: input.emitActivity ?? false,
@@ -1398,7 +1378,6 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
       trigger: input.trigger,
       ...(input.title ? { title: input.title } : {}),
       ...(input.summary ? { summary: input.summary } : {}),
-      ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
       emitActivity: input.emitActivity ?? false,
     },
   });
@@ -2140,7 +2119,6 @@ interface CheckpointSnapshotBuildResult {
 interface SaveDistilledConversationMemoryOptions {
   title?: string;
   summary?: string;
-  tags?: string[];
   sourceConversationTitle?: string;
   sourceCwd?: string;
   sourceProfile?: string;
@@ -2357,22 +2335,6 @@ function normalizeDistilledTag(value: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
-function buildDefaultDistilledTags(input: {
-  requestedTags?: string[];
-  relatedProjectIds: string[];
-}): string[] {
-  const tags = [
-    'conversation',
-    'checkpoint',
-    ...input.relatedProjectIds.map((projectId) => normalizeDistilledTag(projectId)).filter((value): value is string => Boolean(value)),
-    ...((Array.isArray(input.requestedTags) ? input.requestedTags : [])
-      .map((tag) => (typeof tag === 'string' ? normalizeDistilledTag(tag) : null))
-      .filter((value): value is string => Boolean(value))),
-  ];
-
-  return [...new Set(tags)].slice(0, 12);
-}
-
 function buildDefaultDistilledTitle(anchorPreview: string, anchorTimestamp: string): string {
   const normalizedPreview = normalizeDistilledText(anchorPreview, 88);
   if (normalizedPreview.length > 0 && normalizedPreview !== 'Checkpoint anchor' && !normalizedPreview.startsWith('(')) {
@@ -2474,10 +2436,6 @@ function deriveDistilledConversationMemoryDraft(options: SaveDistilledConversati
     title,
     summary: derivedSummary,
     body: `${bodyLines.join('\n')}\n`,
-    tags: buildDefaultDistilledTags({
-      requestedTags: options.tags,
-      relatedProjectIds: options.relatedProjectIds,
-    }),
     userIntent,
     learnedPoints,
     carryForwardPoints,
@@ -2491,7 +2449,6 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
     relativePath: string;
     title: string;
     summary: string;
-    tags: string[];
     updated: string;
   };
 } {
@@ -2531,7 +2488,6 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
       relativePath: string;
       title: string;
       summary: string;
-      tags: string[];
       updated: string;
     };
   };
@@ -2546,7 +2502,6 @@ interface DistillConversationMemoryNowInput {
   summary?: string;
   anchorMessageId?: string;
   checkpointId?: string;
-  tags?: string[];
   mode: ConversationMemoryMaintenanceMode;
   trigger: ConversationMemoryMaintenanceTrigger;
   emitActivity: boolean;
@@ -2596,7 +2551,6 @@ async function distillConversationMemoryNow(input: DistillConversationMemoryNowI
   const memory = saveDistilledConversationMemory({
     title: input.title,
     summary: input.summary,
-    tags: input.tags,
     sourceConversationTitle: sourceSession?.title ?? maintenanceState?.latestConversationTitle,
     sourceCwd: sourceSession?.cwd ?? maintenanceState?.latestCwd,
     sourceProfile: input.profile,
@@ -5678,7 +5632,6 @@ app.post('/api/runs/:id/node-distill/retry', async (req, res) => {
       trigger: distillInput.trigger,
       title: distillInput.title,
       summary: distillInput.summary,
-      tags: distillInput.tags,
       emitActivity: distillInput.emitActivity,
     });
 
@@ -5779,7 +5732,6 @@ app.post('/api/runs/:id/node-distill/recover-now', async (req, res) => {
       checkpointId: distillInput.checkpointId,
       title: distillInput.title,
       summary: distillInput.summary,
-      tags: distillInput.tags,
       mode: distillInput.mode,
       trigger: distillInput.trigger,
       emitActivity: distillInput.emitActivity,
@@ -5935,7 +5887,6 @@ app.post('/api/runs/:id/node-distill/recover', async (req, res) => {
         anchorLabel,
         title: distillInput.title,
         summary: distillInput.summary,
-        tags: distillInput.tags,
         error: errorMessage,
       }),
     );
@@ -6187,18 +6138,20 @@ function normalizeCreatedNoteSummary(value: unknown): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
+function normalizeCreatedNoteDescription(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim().replace(/\s+/g, ' ');
+}
+
 function normalizeNoteBody(value: unknown): string {
   if (typeof value !== 'string') {
     return '';
   }
 
   return value.replace(/\r\n/g, '\n').trim();
-}
-
-function inferNoteTagsFromBody(content: string): string[] {
-  return [...new Set(Array.from(content.matchAll(/(^|[^\w/])#([a-z0-9][a-z0-9-]*)\b/gi))
-    .map((match) => match[2]?.trim().toLowerCase() ?? '')
-    .filter((entry) => entry.length > 0))];
 }
 
 function extractNoteSummaryFromBody(content: string): string {
@@ -6209,12 +6162,17 @@ function extractNoteSummaryFromBody(content: string): string {
     .filter((paragraph) => paragraph.length > 0)
     .filter((paragraph) => !paragraph.startsWith('#'));
 
-  const first = paragraphs[0];
-  if (!first) {
-    return '';
+  for (const paragraph of paragraphs) {
+    const text = paragraph
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text) {
+      return text;
+    }
   }
 
-  return first.replace(/\s+/g, ' ').trim();
+  return '';
 }
 
 function parseNoteFrontmatterContent(rawContent: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -6257,6 +6215,8 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
   noteId: string;
   title: string;
   summary?: string;
+  description?: string;
+  descriptionProvided?: boolean;
   body: string;
 }): string {
   const title = normalizeCreatedNoteTitle(input.title);
@@ -6268,9 +6228,11 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
   const summary = normalizeCreatedNoteSummary(input.summary)
     || extractNoteSummaryFromBody(editableBody)
     || `Personal note about ${title}.`;
-  const tags = inferNoteTagsFromBody(`${summary}\n${editableBody}`);
   const parsed = parseNoteFrontmatterContent(rawContent);
-  const frontmatter: Record<string, unknown> & { tags?: string[] } = {
+  const description = input.descriptionProvided
+    ? normalizeCreatedNoteDescription(input.description)
+    : normalizeCreatedNoteDescription(parsed.frontmatter.description);
+  const frontmatter: Record<string, unknown> = {
     ...parsed.frontmatter,
     id: (typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0)
       ? parsed.frontmatter.id.trim()
@@ -6278,6 +6240,7 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
     kind: 'note',
     title,
     summary,
+    ...(description ? { description } : {}),
     status: (typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0)
       ? parsed.frontmatter.status.trim()
       : 'active',
@@ -6287,12 +6250,7 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
   delete frontmatter.links;
   delete frontmatter.parent;
   delete frontmatter.related;
-
-  if (tags.length > 0) {
-    frontmatter.tags = tags;
-  } else {
-    delete frontmatter.tags;
-  }
+  delete frontmatter.tags;
 
   const markdownBody = editableBody.length > 0 ? `# ${title}\n\n${editableBody}` : `# ${title}`;
   return stringifyNoteMarkdown(frontmatter, markdownBody);
@@ -6425,11 +6383,12 @@ app.post('/api/notes', (req, res) => {
     const summary = normalizeCreatedNoteSummary(req.body?.summary)
       || extractNoteSummaryFromBody(editableBody)
       || `Personal note about ${title}.`;
+    const description = normalizeCreatedNoteDescription(req.body?.description) || undefined;
     const created = createMemoryDoc({
       id: generateCreatedNoteId(title),
       title,
       summary,
-      tags: inferNoteTagsFromBody(`${summary}\n${editableBody}`),
+      description,
       status: 'active',
     });
 
@@ -6437,6 +6396,8 @@ app.post('/api/notes', (req, res) => {
       noteId: created.id,
       title,
       summary,
+      description,
+      descriptionProvided: Object.prototype.hasOwnProperty.call(req.body ?? {}, 'description'),
       body: editableBody,
     }), 'utf-8');
 
@@ -6473,10 +6434,11 @@ app.post('/api/notes/:memoryId', (req, res) => {
       return;
     }
 
-    const { content, title, summary, body } = req.body as {
+    const { content, title, summary, description, body } = req.body as {
       content?: string;
       title?: string;
       summary?: string;
+      description?: string;
       body?: string;
     };
 
@@ -6487,6 +6449,8 @@ app.post('/api/notes/:memoryId', (req, res) => {
         noteId: memory.id,
         title,
         summary,
+        description,
+        descriptionProvided: Object.prototype.hasOwnProperty.call(req.body ?? {}, 'description'),
         body,
       }), 'utf-8');
     } else {
@@ -6539,7 +6503,6 @@ app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
     summary,
     anchorMessageId,
     checkpointId,
-    tags,
     mode: requestedMode,
     trigger: requestedTrigger,
     emitActivity = false,
@@ -6549,7 +6512,6 @@ app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
     summary?: string;
     anchorMessageId?: string;
     checkpointId?: string;
-    tags?: string[];
     mode?: ConversationMemoryMaintenanceMode;
     trigger?: ConversationMemoryMaintenanceTrigger;
     emitActivity?: boolean;
@@ -6574,7 +6536,6 @@ app.post('/api/conversations/:id/notes/distill-now', async (req, res) => {
       summary,
       anchorMessageId,
       checkpointId: normalizedCheckpointId,
-      tags,
       mode,
       trigger,
       emitActivity,
@@ -6697,7 +6658,7 @@ app.post('/api/notes/:memoryId/start', async (req, res) => {
           id: memory.id,
           title: memory.title,
           summary: memory.summary,
-          tags: memory.tags,
+          description: memory.description,
           path: memory.path,
           updated: memory.updated,
         },
@@ -9879,7 +9840,7 @@ interface MemoryDocItem extends MemoryUsageSummary {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
+  description?: string;
   path: string;
   type?: string;
   status?: string;
@@ -9897,7 +9858,6 @@ interface MemoryReferenceItem {
   summary: string;
   path: string;
   relativePath: string;
-  tags: string[];
   updated?: string;
 }
 
@@ -10032,7 +9992,6 @@ function ensureMemoryDocsDir(): string {
 function cloneMemoryDocItem(item: MemoryDocItem): MemoryDocItem {
   return {
     ...item,
-    tags: [...item.tags],
     ...(item.related ? { related: [...item.related] } : {}),
   };
 }
@@ -10064,7 +10023,7 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
       id: doc.id,
       title: doc.title,
       summary: doc.summary,
-      tags: doc.tags,
+      description: doc.description,
       path: doc.filePath,
       type: doc.type,
       status: doc.status,
@@ -10113,7 +10072,6 @@ function buildMemoryReferenceItems(memoryPath: string): MemoryReferenceItem[] {
   return loadMemoryPackageReferences(dirname(memoryPath)).map((reference) => ({
     title: reference.title,
     summary: reference.summary,
-    tags: reference.tags,
     path: reference.filePath,
     relativePath: reference.relativePath,
     updated: reference.updated || undefined,

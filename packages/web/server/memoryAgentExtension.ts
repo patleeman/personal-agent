@@ -6,7 +6,6 @@ import {
   lintMemoryDocs,
   loadMemoryDocs,
   resolveMemoryDocById,
-  splitMemoryTagValues,
 } from '@personal-agent/core';
 
 const MEMORY_ACTION_VALUES = ['list', 'find', 'show', 'new', 'lint'] as const;
@@ -18,10 +17,10 @@ const MemoryToolParams = Type.Object({
   memoryId: Type.Optional(Type.String({ description: 'Note node id for show/new actions.' })),
   title: Type.Optional(Type.String({ description: 'Display title stored in note frontmatter for new.' })),
   summary: Type.Optional(Type.String({ description: 'Note node summary for new.' })),
-  tags: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { description: 'Tags for find/new. For find, all supplied tags must match.' })),
+  description: Type.Optional(Type.String({ description: 'Optional agent-facing guidance for how to use the note.' })),
   type: Type.Optional(Type.String({ description: 'Type filter for find or note metadata type for new.' })),
   status: Type.Optional(Type.String({ description: 'Status filter for find or note status for new.' })),
-  text: Type.Optional(Type.String({ description: 'Metadata text query for find. Matches id, title, summary, and tags.' })),
+  text: Type.Optional(Type.String({ description: 'Metadata text query for find. Matches id, title, summary, and other note metadata.' })),
   force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing note node when action=new.' })),
 });
 
@@ -32,10 +31,6 @@ function readRequiredString(value: string | undefined, label: string): string {
   }
 
   return normalized;
-}
-
-function formatMemoryTags(tags: string[]): string {
-  return tags.length > 0 ? tags.join(', ') : 'none';
 }
 
 function formatParseErrors(parseErrors: Array<{ filePath: string; error: string }>): string[] {
@@ -55,20 +50,16 @@ function formatMemorySummaryList(docs: Array<{
   type: string;
   status: string;
   updated: string;
-  tags: string[];
   summary: string;
+  description?: string;
   filePath: string;
 }>): string[] {
   return docs.flatMap((doc) => [
     `- @${doc.id} · ${doc.title} · ${doc.type} · ${doc.status} · updated ${doc.updated}`,
-    `  tags: ${formatMemoryTags(doc.tags)}`,
     `  summary: ${doc.summary}`,
+    ...(doc.description ? [`  description: ${doc.description}`] : []),
     `  file: ${doc.filePath}`,
   ]);
-}
-
-function normalizeTags(tags: string[] | undefined): string[] {
-  return splitMemoryTagValues(tags ?? []);
 }
 
 function formatMemoryPackage(doc: {
@@ -77,8 +68,8 @@ function formatMemoryPackage(doc: {
   type: string;
   status: string;
   updated: string;
-  tags: string[];
   summary: string;
+  description?: string;
   filePath: string;
   body: string;
 }): string {
@@ -88,8 +79,8 @@ function formatMemoryPackage(doc: {
     `type: ${doc.type}`,
     `status: ${doc.status}`,
     `updated: ${doc.updated}`,
-    `tags: ${formatMemoryTags(doc.tags)}`,
     `summary: ${doc.summary}`,
+    ...(doc.description ? [`description: ${doc.description}`] : []),
     `file: ${doc.filePath}`,
     '',
     doc.body,
@@ -136,9 +127,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
 
             case 'find': {
               const loaded = loadMemoryDocs();
-              const tags = normalizeTags(params.tags);
               const filteredDocs = filterMemoryDocs(loaded.docs, {
-                tags,
                 type: params.type,
                 status: params.status,
                 text: params.text,
@@ -146,7 +135,6 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
 
               const lines = [
                 'Note node search:',
-                `tags: ${tags.length > 0 ? tags.join(', ') : 'none'}`,
                 `type: ${params.type?.trim() || 'none'}`,
                 `status: ${params.status?.trim() || 'none'}`,
                 `text: ${params.text?.trim() || 'none'}`,
@@ -168,7 +156,6 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                   docCount: filteredDocs.length,
                   parseErrorCount: loaded.parseErrors.length,
                   filters: {
-                    tags,
                     type: params.type?.trim() || null,
                     status: params.status?.trim() || null,
                     text: params.text?.trim() || null,
@@ -196,7 +183,6 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                   parseErrorCount: loaded.parseErrors.length,
                   memoryId: doc.id,
                   filePath: doc.filePath,
-                  tags: doc.tags,
                   type: doc.type,
                   status: doc.status,
                   updated: doc.updated,
@@ -208,14 +194,13 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
               const memoryId = readRequiredString(params.memoryId, 'memoryId');
               const title = readRequiredString(params.title, 'title');
               const summary = readRequiredString(params.summary, 'summary');
-              const tags = normalizeTags(params.tags);
               const result = createMemoryDoc({
                 id: memoryId,
                 title,
                 summary,
+                description: params.description?.trim() || undefined,
                 type: params.type,
                 status: params.status,
-                tags,
                 force: params.force,
               });
 
@@ -227,7 +212,6 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                     `file: ${result.filePath}`,
                     `type: ${result.type}`,
                     `status: ${result.status}`,
-                    `tags: ${formatMemoryTags(result.tags)}`,
                     `updated: ${result.updated}`,
                   ].join('\n'),
                 }],
@@ -237,7 +221,6 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                   memoryId: result.id,
                   filePath: result.filePath,
                   overwritten: result.overwritten,
-                  tags: result.tags,
                   type: result.type,
                   status: result.status,
                   updated: result.updated,

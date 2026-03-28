@@ -109,35 +109,6 @@ function validateBoolean(
 }
 
 /**
- * Validate array of strings
- */
-function validateStringArray(
-  value: unknown,
-  field: string,
-  source: ProfileSource | 'merged'
-): ValidationError[] {
-  if (value === undefined || value === null) return [];
-
-  if (!Array.isArray(value)) {
-    return [{ source, field, message: 'Expected array', value }];
-  }
-
-  const errors: ValidationError[] = [];
-  for (let i = 0; i < value.length; i++) {
-    if (typeof value[i] !== 'string') {
-      errors.push({
-        source,
-        field: `${field}[${i}]`,
-        message: `Expected string, got ${typeof value[i]}`,
-        value: value[i],
-      });
-    }
-  }
-
-  return errors;
-}
-
-/**
  * Validate notification preferences
  */
 function validateNotifications(
@@ -367,7 +338,6 @@ export function validatePartialProfile(
   errors.push(...validatePrivacy(obj.privacy, 'privacy', source));
   errors.push(...validateModelPreferences(obj.modelPreferences, 'modelPreferences', source));
   errors.push(...validateToolPermissions(obj.toolPermissions, 'toolPermissions', source));
-  errors.push(...validateStringArray(obj.tags, 'tags', source));
   
   const customInstructionsError = validateString(obj.customInstructions, 'customInstructions', source, {
     max: 4000,
@@ -436,7 +406,6 @@ export function validateProfile(profile: unknown): ValidationResult {
   errors.push(...validatePrivacy(obj.privacy, 'privacy', 'merged'));
   errors.push(...validateModelPreferences(obj.modelPreferences, 'modelPreferences', 'merged'));
   errors.push(...validateToolPermissions(obj.toolPermissions, 'toolPermissions', 'merged'));
-  errors.push(...validateStringArray(obj.tags, 'tags', 'merged'));
 
   if (typeof obj.notifications !== 'object' || obj.notifications === null) {
     errors.push({ source: 'merged', field: 'notifications', message: 'Required object', value: obj.notifications });

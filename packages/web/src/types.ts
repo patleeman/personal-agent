@@ -968,7 +968,7 @@ export interface MemoryDocItem {
   id: string;
   title: string;
   summary: string;
-  tags: string[];
+  description?: string;
   path: string;
   type?: string;
   status?: string;
@@ -987,7 +987,6 @@ export interface MemoryDocItem {
 export interface MemoryReferenceItem {
   title: string;
   summary: string;
-  tags: string[];
   path: string;
   relativePath: string;
   updated?: string;

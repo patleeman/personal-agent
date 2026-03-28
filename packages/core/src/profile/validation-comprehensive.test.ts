@@ -362,29 +362,6 @@ describe('validatePartialProfile comprehensive', () => {
     });
   });
 
-  describe('tags validation', () => {
-    it('accepts valid tags array', () => {
-      const result = validatePartialProfile({ tags: ['tag1', 'tag2'] }, 'shared');
-      expect(result.valid).toBe(true);
-    });
-
-    it('rejects non-array tags', () => {
-      const result = validatePartialProfile({ tags: 'tag1' as unknown as string[] }, 'shared');
-      expect(result.valid).toBe(false);
-    });
-
-    it('rejects non-string tag entries', () => {
-      const result = validatePartialProfile({ tags: ['tag1', 123 as unknown as string] }, 'shared');
-      expect(result.valid).toBe(false);
-      expect(result.errors[0].field).toBe('tags[1]');
-    });
-
-    it('accepts empty tags array', () => {
-      const result = validatePartialProfile({ tags: [] }, 'shared');
-      expect(result.valid).toBe(true);
-    });
-  });
-
   describe('customInstructions validation', () => {
     it('accepts valid customInstructions', () => {
       const result = validatePartialProfile({ customInstructions: 'Some instructions' }, 'shared');
@@ -433,9 +410,7 @@ describe('validatePartialProfile comprehensive', () => {
       const result = validatePartialProfile({
         email: null,
         customInstructions: null,
-        tags: null as unknown as string[]
       }, 'shared');
-      // tags null check may fail, but email and customInstructions should pass
       expect(result.errors.every(e => !e.field.startsWith('email') && !e.field.startsWith('customInstructions'))).toBe(true);
     });
   });

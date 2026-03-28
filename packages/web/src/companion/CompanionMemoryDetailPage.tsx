@@ -27,7 +27,6 @@ export function CompanionMemoryDetailPage() {
   const { data, loading, refreshing, error, refetch } = useApi(fetchMemory, `companion-memory:${id ?? ''}`);
 
   const memory = data?.memory ?? null;
-  const tags = memory?.tags.filter((tag) => tag.trim().length > 0) ?? [];
   const meta = [
     memory?.updated ? `updated ${timeAgo(memory.updated)}` : null,
     memory ? `@${memory.id}` : null,
@@ -54,7 +53,6 @@ export function CompanionMemoryDetailPage() {
             <>
               <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-secondary">{memory.summary || 'No summary available.'}</p>
               <p className="mt-3 break-words text-[12px] text-dim">{meta.join(' · ')}</p>
-              {tags.length > 0 ? <p className="mt-2 break-words text-[11px] text-dim/85">{tags.join(' · ')}</p> : null}
             </>
           ) : null}
         </div>

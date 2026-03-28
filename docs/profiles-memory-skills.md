@@ -143,6 +143,8 @@ Use them for:
 
 A note node is a directory with an `INDEX.md` file. Supporting directories are freeform.
 
+Notes may also include an optional `description` field for agent-facing guidance about how the note should be used or when it should be consulted.
+
 ```text
 note-id/
 ├── INDEX.md
@@ -158,6 +160,7 @@ id: desktop-gpu-server
 kind: note
 title: Desktop GPU-enabled server notes
 summary: Reference facts for a local Ubuntu GPU-enabled server.
+description: Use this note when deciding whether local desktop compute is a better fit than renting remote GPUs.
 status: active
 tags:
   - desktop

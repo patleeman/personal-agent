@@ -46,7 +46,6 @@ export interface ProfileData {
   privacy: PrivacySettings;
   modelPreferences: ModelPreferences;
   toolPermissions: ToolPermissions;
-  tags: string[];
   customInstructions: string;
 }
 
@@ -73,7 +72,6 @@ export interface PartialProfile {
   privacy?: Partial<PrivacySettings>;
   modelPreferences?: Partial<ModelPreferences>;
   toolPermissions?: Partial<ToolPermissions>;
-  tags?: string[] | null;
   customInstructions?: string;
 }
 
@@ -136,6 +134,5 @@ export const DEFAULTS: Required<Omit<ProfileData, 'name'>> = {
     fileSystem: true,
     externalApis: false,
   },
-  tags: [],
   customInstructions: '',
 };

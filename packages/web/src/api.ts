@@ -559,11 +559,11 @@ export const api = {
   noteWorkQueue: () => get<{ memoryQueue: MemoryWorkItem[] }>('/notes/work-queue'),
   recoverFailedNodeDistills: () =>
     post<{ accepted: true; runId: string; count: number }>('/notes/recover-failed-node-distills'),
-  createNoteDoc: (input: { title: string; summary?: string; body?: string }) =>
+  createNoteDoc: (input: { title: string; summary?: string; description?: string; body?: string }) =>
     post<MemoryDocDetail>('/notes', input),
   noteDoc: (memoryId: string) =>
     get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
-  saveNoteDoc: (memoryId: string, input: { content: string } | { title: string; summary?: string; body: string }) =>
+  saveNoteDoc: (memoryId: string, input: { content: string } | { title: string; summary?: string; description?: string; body: string }) =>
     post<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`, input),
   deleteNoteDoc: (memoryId: string) =>
     del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),

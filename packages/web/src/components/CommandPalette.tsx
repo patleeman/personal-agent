@@ -356,9 +356,6 @@ function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<Command
     if (memory.updated) {
       metaParts.push(timeAgo(memory.updated));
     }
-    if (memory.tags.length > 0) {
-      metaParts.push(memory.tags.map((tag) => `#${tag}`).join(', '));
-    }
 
     return {
       id: `memory:${memory.id}`,
@@ -375,7 +372,6 @@ function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<Command
         'conversation',
         'edit',
         'markdown',
-        ...memory.tags,
       ],
       order: index,
       action: { kind: 'startMemory', memoryId: memory.id },

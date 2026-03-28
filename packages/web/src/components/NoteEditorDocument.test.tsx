@@ -6,34 +6,38 @@ import { NoteEditorDocument } from './NoteEditorDocument';
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 describe('NoteEditorDocument', () => {
-  it('keeps the tag rail mounted even when there are no inferred tags', () => {
+  it('renders note meta when provided', () => {
     const html = renderToString(
       <NoteEditorDocument
         title="Example"
         onTitleChange={() => {}}
+        description="Use this when the user asks about note routing."
+        onDescriptionChange={() => {}}
         body=""
         onBodyChange={() => {}}
-        path="example.md"
-        inferredTags={[]}
+        meta={<><span>@example</span><span>updated just now</span></>}
       />,
     );
 
-    expect(html).toContain('ui-note-inline-tags');
+    expect(html).toContain('@example');
+    expect(html).toContain('updated just now');
+    expect(html).toContain('For the agent (optional)');
+    expect(html).toContain('Use this when the user asks about note routing.');
   });
 
-  it('renders inferred tag pills in the reserved tag rail', () => {
+  it('does not render the old inline tag rail', () => {
     const html = renderToString(
       <NoteEditorDocument
         title="Example"
         onTitleChange={() => {}}
+        description=""
+        onDescriptionChange={() => {}}
         body=""
         onBodyChange={() => {}}
-        path="example.md"
-        inferredTags={['notes', 'agent']}
       />,
     );
 
-    expect(html).toContain('#notes');
-    expect(html).toContain('#agent');
+    expect(html).not.toContain('ui-note-inline-tags');
+    expect(html).not.toContain('ui-note-tag-link');
   });
 });
