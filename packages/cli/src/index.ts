@@ -113,6 +113,10 @@ import {
   formatNextStep,
   isInteractiveOutput,
   keyValue,
+  printDenseCommandList,
+  printDenseLines,
+  printDenseParagraph,
+  printDenseUsage,
   section,
   spinner,
   statusChip,
@@ -1238,16 +1242,16 @@ async function statusCommand(args: string[]): Promise<number> {
 }
 
 function printProfileHelp(): void {
-  console.log(section('Profile commands'));
+  console.log('Profile commands');
   console.log('');
-  console.log(`Usage: pa profile [list|show|use|help]
-
-Commands:
-  list           List available profiles
-  show [name]    Show profile details
-  use <name>     Set default profile
-  help           Show profile help
-`);
+  printDenseUsage('pa profile [list|show|use|help]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list', description: 'List available profiles' },
+    { usage: 'show [name]', description: 'Show profile details' },
+    { usage: 'use <name>', description: 'Set default profile' },
+    { usage: 'help', description: 'Show profile help' },
+  ]);
 }
 
 async function profileCommand(args: string[]): Promise<number> {
@@ -1300,14 +1304,24 @@ interface ParsedInstallCommandArgs {
 }
 
 function printInstallHelp(): void {
-  console.log(section('Install packages'));
+  console.log('Install packages');
   console.log('');
-  console.log(`Usage: ${INSTALL_COMMAND_USAGE}
-
-Add a Pi package source to the durable settings used by pa.
-
-${INSTALL_COMMAND_HELP_TEXT}
-`);
+  printDenseUsage(INSTALL_COMMAND_USAGE);
+  console.log('');
+  printDenseParagraph('Add a Pi package source to the durable settings used by pa.');
+  console.log('');
+  printDenseLines('Options', [
+    '--profile <name>   Install into the selected profile\'s settings.json',
+    '-l, --local        Install into the machine-local overlay settings.json',
+  ]);
+  console.log('');
+  printDenseLines('Examples', [
+    'pa install https://github.com/davebcn87/pi-autoresearch',
+    'pa install npm:@scope/package@1.2.3',
+    'pa install ./my-package',
+    'pa install --profile assistant https://github.com/user/repo',
+    'pa install --local ./my-package',
+  ]);
 }
 
 function parseInstallCommandArgs(args: string[]): ParsedInstallCommandArgs {
@@ -1604,19 +1618,20 @@ function printDaemonHelp(options: { title?: string; includeNextStep?: boolean } 
   const title = options.title ?? 'Daemon';
   const includeNextStep = options.includeNextStep ?? true;
 
-  console.log(section(title));
+  console.log(title);
   console.log('');
-  console.log('Usage: pa daemon [status|start|stop|restart|logs|service|help] [args...]');
+  printDenseUsage('pa daemon [status|start|stop|restart|logs|service|help] [args...]');
   console.log('');
-  console.log('Commands:');
-  console.log('  pa daemon                                        Show daemon status and commands');
-  console.log('  pa daemon status [--json]                        Show daemon status');
-  console.log('  pa daemon start                                  Start daemon');
-  console.log('  pa daemon stop                                   Stop daemon');
-  console.log('  pa daemon restart                                Restart daemon');
-  console.log('  pa daemon logs                                   Show daemon log file and PID');
-  console.log('  pa daemon service [install|status|uninstall|help] Manage daemon as OS user service');
-  console.log('  pa daemon help                                   Show daemon help');
+  printDenseCommandList('Commands', [
+    { usage: 'pa daemon', description: 'Show daemon status and commands' },
+    { usage: 'pa daemon status [--json]', description: 'Show daemon status' },
+    { usage: 'pa daemon start', description: 'Start daemon' },
+    { usage: 'pa daemon stop', description: 'Stop daemon' },
+    { usage: 'pa daemon restart', description: 'Restart daemon' },
+    { usage: 'pa daemon logs', description: 'Show daemon log file and PID' },
+    { usage: 'pa daemon service [install|status|uninstall|help]', description: 'Manage daemon as OS user service' },
+    { usage: 'pa daemon help', description: 'Show daemon help' },
+  ]);
 
   if (includeNextStep) {
     console.log('');
@@ -1625,15 +1640,18 @@ function printDaemonHelp(options: { title?: string; includeNextStep?: boolean } 
 }
 
 function printDaemonServiceHelp(): void {
-  console.log(section('Daemon service'));
+  console.log('Daemon service');
   console.log('');
-  console.log('Commands:');
-  console.log('  pa daemon service help         Show daemon service help');
-  console.log('  pa daemon service install      Install and start managed daemon service');
-  console.log('  pa daemon service status       Show managed daemon service status');
-  console.log('  pa daemon service uninstall    Stop and remove managed daemon service');
+  printDenseUsage('pa daemon service [install|status|uninstall|help]');
   console.log('');
-  console.log(keyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
+  printDenseCommandList('Commands', [
+    { usage: 'pa daemon service help', description: 'Show daemon service help' },
+    { usage: 'pa daemon service install', description: 'Install and start managed daemon service' },
+    { usage: 'pa daemon service status', description: 'Show managed daemon service status' },
+    { usage: 'pa daemon service uninstall', description: 'Stop and remove managed daemon service' },
+  ]);
+  console.log('');
+  printDenseLines('Notes', ['Supported platforms: macOS launchd, Linux systemd --user']);
   console.log('');
   console.log(`  ${formatNextStep('pa daemon service install')}`);
 }
@@ -2664,21 +2682,21 @@ function parseTaskListOptions(args: string[]): {
 }
 
 function printTasksHelp(): void {
-  console.log(section('Tasks commands'));
+  console.log('Tasks commands');
   console.log('');
-  console.log(`Usage: pa tasks [list|show|validate|logs|help]
-
-Commands:
-  list [--json] [--status <all|running|active|completed|disabled|pending|error>]
-                           List parsed scheduled tasks with runtime status
-  show <id> [--json]       Show one task definition and runtime state
-  validate [--all|file]    Validate task file frontmatter and prompt body
-  logs <id> [--tail <n>]   Show latest task run log (default: 80 lines)
-  help                     Show tasks help
-`);
+  printDenseUsage('pa tasks [list|show|validate|logs|help]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--json] [--status <all|running|active|completed|disabled|pending|error>]', description: 'List parsed scheduled tasks with runtime status' },
+    { usage: 'show <id> [--json]', description: 'Show one task definition and runtime state' },
+    { usage: 'validate [--all|file]', description: 'Validate task file frontmatter and prompt body' },
+    { usage: 'logs <id> [--tail <n>]', description: 'Show latest task run log (default: 80 lines)' },
+    { usage: 'help', description: 'Show tasks help' },
+  ]);
 
   const config = loadDaemonConfig();
-  console.log(keyValue('Task directory', config.modules.tasks.taskDir));
+  console.log('');
+  printDenseLines('Notes', [`Task directory: ${config.modules.tasks.taskDir}`]);
 }
 
 async function tasksCommand(args: string[]): Promise<number> {
@@ -3585,24 +3603,19 @@ function resolveInboxActivityEntry(state: ReturnType<typeof loadInboxState>, sel
 }
 
 function printInboxHelp(): void {
-  console.log(section('Inbox commands'));
+  console.log('Inbox commands');
   console.log('');
-  console.log(`Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]
-
-Commands:
-  list [--json] [--limit <count>] [--all|--read|--unread] [--activities|--conversations]
-                           List inbox items (default when no subcommand is provided)
-  show <selector> [--json] Show one inbox activity or conversation attention item
-  create <summary> [options]
-                           Create a standalone inbox activity entry
-  read <selector>... [--all] [--json]
-                           Mark inbox items as read
-  unread <selector>... [--all] [--json]
-                           Mark inbox items as unread
-  delete <activity-selector>... [--json]
-                           Delete inbox activity entries
-  help                     Show inbox help
-`);
+  printDenseUsage('pa inbox [list|show|create|read|unread|delete|help] [args...]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--json] [--limit <count>] [--all|--read|--unread] [--activities|--conversations]', description: 'List inbox items (default when no subcommand is provided)' },
+    { usage: 'show <selector> [--json]', description: 'Show one inbox activity or conversation attention item' },
+    { usage: 'create <summary> [options]', description: 'Create a standalone inbox activity entry' },
+    { usage: 'read <selector>... [--all] [--json]', description: 'Mark inbox items as read' },
+    { usage: 'unread <selector>... [--all] [--json]', description: 'Mark inbox items as unread' },
+    { usage: 'delete <activity-selector>... [--json]', description: 'Delete inbox activity entries' },
+    { usage: 'help', description: 'Show inbox help' },
+  ]);
 }
 
 async function inboxCommand(args: string[]): Promise<number> {
@@ -4434,35 +4447,28 @@ function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } =
   const title = options.title ?? 'Web UI';
   const includeNextStep = options.includeNextStep ?? true;
 
-  console.log(section(title));
+  console.log(title);
   console.log('');
-  console.log('Usage: pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
+  printDenseUsage('pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
   console.log('');
-  console.log('Commands:');
-  console.log('  pa ui                                         Show web UI status and commands');
-  console.log('  pa ui status [--port <port>]                  Show web UI status');
-  console.log('  pa ui open [--port <port>]                    Open the web UI in a browser');
-  console.log('  pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Run the web UI in the foreground');
-  console.log('  pa ui logs [--tail <count>]                   Show recent managed web UI logs');
-  console.log('  pa ui pairing-code [--port <port>]            Create a pairing code for remote desktop or companion access');
-  console.log('  pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Install and start managed web UI service');
-  console.log('  pa ui start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Start managed web UI service');
-  console.log('  pa ui stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Stop managed web UI service');
-  console.log('  pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Restart managed web UI service');
-  console.log('  pa ui rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Roll back to the inactive staged web UI slot');
-  console.log('  pa ui mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Mark the active staged web UI release as bad');
-  console.log('  pa ui uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Stop and remove managed web UI service');
-  console.log('  pa ui help                                    Show web UI help');
+  printDenseCommandList('Commands', [
+    { usage: 'pa ui', description: 'Show web UI status and commands' },
+    { usage: 'pa ui status [--port <port>]', description: 'Show web UI status' },
+    { usage: 'pa ui open [--port <port>]', description: 'Open the web UI in a browser' },
+    { usage: 'pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Run the web UI in the foreground' },
+    { usage: 'pa ui logs [--tail <count>]', description: 'Show recent managed web UI logs' },
+    { usage: 'pa ui pairing-code [--port <port>]', description: 'Create a pairing code for remote desktop or companion access' },
+    { usage: 'pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Install and start managed web UI service' },
+    { usage: 'pa ui start [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Start managed web UI service' },
+    { usage: 'pa ui stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop managed web UI service' },
+    { usage: 'pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Restart managed web UI service' },
+    { usage: 'pa ui rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Roll back to the inactive staged web UI slot' },
+    { usage: 'pa ui mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Mark the active staged web UI release as bad' },
+    { usage: 'pa ui uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop and remove managed web UI service' },
+    { usage: 'pa ui help', description: 'Show web UI help' },
+  ]);
   console.log('');
-  console.log(dim('Compatibility: `pa ui service ...` still works, but direct `pa ui <verb>` is the preferred interface.'));
+  printDenseLines('Notes', ['Compatibility: `pa ui service ...` still works, but direct `pa ui <verb>` is the preferred interface.']);
 
   if (includeNextStep) {
     console.log('');
@@ -4471,35 +4477,29 @@ function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } =
 }
 
 function printWebUiServiceHelp(): void {
-  console.log(section('Web UI service'));
+  console.log('Web UI service');
   console.log('');
-  console.log('Usage: pa ui service [install|status|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
+  printDenseUsage('pa ui service [install|status|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
   console.log('');
-  console.log('Commands:');
-  console.log('  pa ui service help                            Show web UI service help');
-  console.log('  pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Install and start managed web UI service');
-  console.log('  pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Show managed web UI service status');
-  console.log('  pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Start managed web UI service');
-  console.log('  pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Stop managed web UI service');
-  console.log('  pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Restart managed web UI service');
-  console.log('  pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Roll back to the inactive staged web UI slot');
-  console.log('  pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Mark the active staged web UI release as bad');
-  console.log('  pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Stop and remove managed web UI service');
+  printDenseCommandList('Commands', [
+    { usage: 'pa ui service help', description: 'Show web UI service help' },
+    { usage: 'pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Install and start managed web UI service' },
+    { usage: 'pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Show managed web UI service status' },
+    { usage: 'pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Start managed web UI service' },
+    { usage: 'pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop managed web UI service' },
+    { usage: 'pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Restart managed web UI service' },
+    { usage: 'pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Roll back to the inactive staged web UI slot' },
+    { usage: 'pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Mark the active staged web UI release as bad' },
+    { usage: 'pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop and remove managed web UI service' },
+  ]);
   console.log('');
-  console.log('Updates use blue/green staging automatically when the managed web UI service is installed.');
-  console.log('');
-  console.log(keyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
-  console.log(keyValue('Config file', getWebUiConfigFilePath()));
-  console.log(keyValue('Default port', String(readWebUiConfig().port)));
-  console.log(keyValue('Log file', resolveWebUiLogFile()));
+  printDenseLines('Notes', [
+    'Updates use blue/green staging automatically when the managed web UI service is installed.',
+    'Supported platforms: macOS launchd, Linux systemd --user',
+    `Config file: ${getWebUiConfigFilePath()}`,
+    `Default port: ${String(readWebUiConfig().port)}`,
+    `Log file: ${resolveWebUiLogFile()}`,
+  ]);
   console.log('');
   console.log(`  ${formatNextStep('pa ui install')}`);
 }
@@ -5285,10 +5285,6 @@ Global options:
   return program;
 }
 
-function printRootHelpEntry(usage: string, description: string): void {
-  console.log(`  ${commandText(usage)} ${dim('—')} ${description}`);
-}
-
 function printRootHelpSection(
   title: string,
   definitions: CliCommandDefinition[],
@@ -5299,10 +5295,10 @@ function printRootHelpSection(
     return;
   }
 
-  console.log(section(title));
-  for (const definition of matches) {
-    printRootHelpEntry(`pa ${definition.usage ?? definition.name}`, definition.description);
-  }
+  printDenseCommandList(title, matches.map((definition) => ({
+    usage: `pa ${definition.usage ?? definition.name}`,
+    description: definition.description,
+  })));
   console.log('');
 }
 
@@ -5313,9 +5309,9 @@ function printRootHelp(
   const includePreamble = options.includePreamble ?? true;
 
   if (includePreamble) {
-    console.log('Usage: pa [command] [args...]');
+    printDenseUsage('pa [command] [args...]');
     console.log('');
-    console.log('Bare `pa` shows live status and quick commands.');
+    printDenseParagraph('Bare `pa` shows live status and quick commands.');
     console.log('');
   }
 
@@ -5325,11 +5321,13 @@ function printRootHelp(
   printRootHelpSection('Data', definitions, 'data');
   printRootHelpSection('Configuration', definitions, 'configuration');
 
-  console.log(section('Help'));
-  printRootHelpEntry('pa help [command]', 'Show detailed help for a command');
+  printDenseCommandList('Help', [
+    { usage: 'pa help [command]', description: 'Show detailed help for a command' },
+  ]);
   console.log('');
-  console.log(section('Global options'));
-  printRootHelpEntry('--plain, --no-color', 'Disable rich ANSI styling');
+  printDenseCommandList('Global options', [
+    { usage: '--plain, --no-color', description: 'Disable rich ANSI styling' },
+  ]);
   console.log('');
   console.log(dim('Use `pa <command> --help` for command details.'));
 }

@@ -17,6 +17,8 @@ const PLAIN_SPINNER_FRAMES = ['-', '\\', '|', '/'];
 
 const SECTION_RULE_WIDTH = 44;
 const KEY_ALIGN_WIDTH = 28;
+const HELP_ALIGN_MIN_WIDTH = 18;
+const HELP_ALIGN_MAX_WIDTH = 42;
 
 function applyTone(text: string, tone: Tone): string {
   if (uiConfig.plain) {
@@ -164,6 +166,67 @@ export function bullet(message: string, indent = 2): string {
 
   const marker = applyTone('▸', 'accent');
   return `${prefix}${marker} ${message}`;
+}
+
+export interface DenseHelpEntry {
+  usage: string;
+  description?: string;
+}
+
+function resolveDenseHelpWidth(entries: DenseHelpEntry[]): number {
+  if (entries.length === 0) {
+    return HELP_ALIGN_MIN_WIDTH;
+  }
+
+  const longest = entries.reduce((max, entry) => Math.max(max, entry.usage.length), 0);
+  return Math.max(HELP_ALIGN_MIN_WIDTH, Math.min(HELP_ALIGN_MAX_WIDTH, longest + 2));
+}
+
+export function printDenseHeading(title: string): void {
+  console.log(uiConfig.plain ? `${title}:` : `${bold(title)}:`);
+}
+
+export function printDenseUsage(usage: string): void {
+  console.log(`Usage: ${command(usage)}`);
+}
+
+export function printDenseParagraph(text: string): void {
+  console.log(text);
+}
+
+export function printDenseLines(title: string, lines: string[]): void {
+  if (lines.length === 0) {
+    return;
+  }
+
+  printDenseHeading(title);
+  for (const line of lines) {
+    console.log(`  ${line}`);
+  }
+}
+
+export function printDenseCommandList(title: string, entries: DenseHelpEntry[]): void {
+  if (entries.length === 0) {
+    return;
+  }
+
+  printDenseHeading(title);
+  const width = resolveDenseHelpWidth(entries);
+
+  for (const entry of entries) {
+    if (!entry.description || entry.description.trim().length === 0) {
+      console.log(`  ${command(entry.usage)}`);
+      continue;
+    }
+
+    if (entry.usage.length > width) {
+      console.log(`  ${command(entry.usage)}`);
+      console.log(`  ${' '.repeat(width + 2)}${entry.description}`);
+      continue;
+    }
+
+    console.log(`  ${command(entry.usage.padEnd(width))}${entry.description}`);
+  }
 }
 
 export function statusChip(status: 'running' | 'stopped' | 'active' | 'completed' | 'disabled' | 'pending' | 'error'): string {

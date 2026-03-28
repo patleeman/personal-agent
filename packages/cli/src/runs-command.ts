@@ -12,7 +12,7 @@ import {
   type DurableRunStatus,
 } from '@personal-agent/daemon';
 import { readTailLines } from './file-utils.js';
-import { bullet, dim, keyValue, section, statusChip } from './ui.js';
+import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, statusChip } from './ui.js';
 
 function runsUsageText(): string {
   return 'Usage: pa runs [list|show|logs|start|start-agent|cancel|help] [args...]';
@@ -120,22 +120,21 @@ function readBackgroundRunSource(taskSlug: string): { type: string; id?: string;
 }
 
 function printRunsHelp(): void {
-  console.log(section('Runs commands'));
+  console.log('Runs commands');
   console.log('');
-  console.log(`Usage: pa runs [list|show|logs|start|cancel|help] [args...]
-
-Commands:
-  list [--json]                   List durable daemon-backed runs with recovery status
-  show <id> [--json]              Show one durable run record and recovery metadata
-  logs <id> [--tail <n>]          Show run output log (default: 80 lines)
-  start <task-slug> [--cwd <path>] [--] <command...>
-                                  Start a durable shell/background run
-  start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]
-                                  Start a durable background agent run
-  cancel <id>                     Cancel one durable background run
-  help                            Show runs help
-`);
-  console.log(keyValue('Runs root', toRunsRoot()));
+  printDenseUsage('pa runs [list|show|logs|start|cancel|help] [args...]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--json]', description: 'List durable daemon-backed runs with recovery status' },
+    { usage: 'show <id> [--json]', description: 'Show one durable run record and recovery metadata' },
+    { usage: 'logs <id> [--tail <n>]', description: 'Show run output log (default: 80 lines)' },
+    { usage: 'start <task-slug> [--cwd <path>] [--] <command...>', description: 'Start a durable shell/background run' },
+    { usage: 'start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]', description: 'Start a durable background agent run' },
+    { usage: 'cancel <id>', description: 'Cancel one durable background run' },
+    { usage: 'help', description: 'Show runs help' },
+  ]);
+  console.log('');
+  printDenseLines('Notes', [`Runs root: ${toRunsRoot()}`]);
 }
 
 export async function runsCommand(args: string[]): Promise<number> {

@@ -9,7 +9,7 @@ import {
   type SaveExecutionTargetInput,
 } from '@personal-agent/core';
 import { ensureRemoteTargetInstall } from './remote-target-install.js';
-import { bullet, dim, keyValue, section, success } from './ui.js';
+import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success } from './ui.js';
 
 function targetsUsageText(): string {
   return 'Usage: pa targets [list|show|add|update|install|delete|help] [args...]';
@@ -85,26 +85,21 @@ function printTarget(target: ExecutionTargetRecord): void {
 }
 
 function printTargetsHelp(): void {
-  console.log(section('Execution targets commands'));
+  console.log('Execution targets commands');
   console.log('');
-  console.log(`Usage: pa targets [list|show|add|update|install|delete|help]
-
-Commands:
-  list [--json]
-                           List configured execution targets
-  show <id> [--json]
-                           Show one configured execution target
-  add <id> --label <label> --ssh <destination> [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]
-                           Create a new execution target in machine-local config
-  update <id> [--label <label>] [--ssh <destination>] [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]
-                           Update an existing execution target
-  install <id> [--force] [--json]
-                           Upload or refresh the remote personal-agent runtime bundle and synced state for one target
-  delete <id> [--json]
-                           Delete one execution target
-  help                     Show execution target help
-`);
-  console.log(keyValue('Config file', resolveExecutionTargetsFilePath()));
+  printDenseUsage('pa targets [list|show|add|update|install|delete|help]');
+  console.log('');
+  printDenseCommandList('Commands', [
+    { usage: 'list [--json]', description: 'List configured execution targets' },
+    { usage: 'show <id> [--json]', description: 'Show one configured execution target' },
+    { usage: 'add <id> --label <label> --ssh <destination> [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]', description: 'Create a new execution target in machine-local config' },
+    { usage: 'update <id> [--label <label>] [--ssh <destination>] [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]', description: 'Update an existing execution target' },
+    { usage: 'install <id> [--force] [--json]', description: 'Upload or refresh the remote personal-agent runtime bundle and synced state for one target' },
+    { usage: 'delete <id> [--json]', description: 'Delete one execution target' },
+    { usage: 'help', description: 'Show execution target help' },
+  ]);
+  console.log('');
+  printDenseLines('Notes', [`Config file: ${resolveExecutionTargetsFilePath()}`]);
 }
 
 interface ParsedMutationOptions {
