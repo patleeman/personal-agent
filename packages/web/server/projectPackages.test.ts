@@ -17,7 +17,7 @@ import {
 } from './projects.js';
 import {
   createProjectNoteRecord,
-  saveProjectBrief,
+  saveProjectDocument,
   uploadProjectFile,
 } from './projectResources.js';
 import {
@@ -158,7 +158,7 @@ describe('project share packages', () => {
       milestoneId: 'handoff',
     });
 
-    saveProjectBrief({
+    saveProjectDocument({
       repoRoot,
       profile: 'datadog',
       projectId: 'shareable-work',

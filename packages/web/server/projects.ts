@@ -16,7 +16,7 @@ import {
   listProjectFiles,
   listProjectNotes,
   readProjectDocument,
-  saveProjectBrief,
+  saveProjectDocument,
   type ProjectDocumentRecord,
   type ProjectFileRecord,
   type ProjectNoteRecord,
@@ -459,7 +459,7 @@ export function createProjectRecord(input: CreateProjectRecordInput): ProjectDet
 
   writeProject(paths.projectFile, updatedProject);
   if (documentContent) {
-    saveProjectBrief({
+    saveProjectDocument({
       repoRoot: input.repoRoot,
       profile: input.profile,
       projectId,

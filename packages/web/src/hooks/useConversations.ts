@@ -17,7 +17,7 @@ import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import {
   closeConversationTab,
   moveConversationTab,
-  OPEN_SESSIONS_CHANGED_EVENT,
+  CONVERSATION_LAYOUT_CHANGED_EVENT,
   openConversationTab,
   pinConversationTab,
   readArchivedSessionIds,
@@ -74,8 +74,8 @@ export function useConversations() {
       applyLayoutState(layout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
     }
 
-    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
-    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
+    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
   }, []);
 
   useEffect(() => {

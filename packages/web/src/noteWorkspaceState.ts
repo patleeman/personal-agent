@@ -1,8 +1,7 @@
 import type { MemoryDocItem } from './types';
-import { timeAgo } from './utils';
 
 export const NOTE_ID_SEARCH_PARAM = 'note';
-export const NOTE_NEW_SEARCH_PARAM = 'new';
+const NOTE_NEW_SEARCH_PARAM = 'new';
 const LEGACY_NOTE_ID_SEARCH_PARAM = 'memory';
 const LEGACY_NOTE_VIEW_SEARCH_PARAM = 'view';
 const LEGACY_NOTE_ITEM_SEARCH_PARAM = 'item';
@@ -74,20 +73,6 @@ export function buildNoteSearch(locationSearch: string, updates: {
   return next ? `?${next}` : '';
 }
 
-export function formatReferenceCount(count: number | undefined): string {
-  const normalized = count ?? 0;
-  return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
-}
-
-export function formatRelatedCount(related: string[] | undefined): string | null {
-  const normalized = related?.length ?? 0;
-  if (normalized === 0) {
-    return null;
-  }
-
-  return `${normalized} related ${normalized === 1 ? 'node' : 'nodes'}`;
-}
-
 export function noteKindLabel(memory: MemoryDocItem): string {
   const tags = new Set(memory.tags.map((tag) => tag.trim().toLowerCase()));
   const type = memory.type?.trim().toLowerCase();
@@ -108,12 +93,3 @@ export function noteKindLabel(memory: MemoryDocItem): string {
   return 'Note';
 }
 
-export function buildNoteListMeta(memory: MemoryDocItem): string {
-  const parts = [`@${memory.id}`, noteKindLabel(memory)];
-
-  if (memory.updated) {
-    parts.push(`updated ${timeAgo(memory.updated)}`);
-  }
-
-  return parts.join(' · ');
-}

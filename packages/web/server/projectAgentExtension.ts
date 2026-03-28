@@ -26,7 +26,7 @@ import {
 import {
   createProjectNoteRecord,
   deleteProjectNoteRecord,
-  saveProjectBrief,
+  saveProjectDocument,
   updateProjectNoteRecord,
 } from './projectResources.js';
 
@@ -425,7 +425,7 @@ export function createProjectAgentExtension(options: {
             case 'save_document':
             case 'save_brief': {
               const projectId = readRequiredString(params.projectId, 'projectId');
-              const brief = saveProjectBrief({
+              const document = saveProjectDocument({
                 repoRoot: options.repoRoot,
                 profile,
                 projectId,
@@ -438,7 +438,7 @@ export function createProjectAgentExtension(options: {
                   action: params.action === 'save_document' ? 'save_document' : 'save_brief',
                   profile,
                   projectId,
-                  path: brief.path,
+                  path: document.path,
                 },
               };
             }

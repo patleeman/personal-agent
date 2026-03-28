@@ -1,6 +1,6 @@
 export const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-export const PROJECT_VIEW_QUERY_PARAM = 'view';
-export const PROJECT_NEW_QUERY_PARAM = 'new';
+const PROJECT_VIEW_QUERY_PARAM = 'view';
+const PROJECT_NEW_QUERY_PARAM = 'new';
 
 export function readProjectView(search: string): string {
   return new URLSearchParams(search).get(PROJECT_VIEW_QUERY_PARAM)?.trim() || 'document';

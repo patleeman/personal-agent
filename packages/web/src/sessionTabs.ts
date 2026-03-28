@@ -5,7 +5,6 @@ import {
 } from './localSettings';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
-export const OPEN_SESSIONS_CHANGED_EVENT = CONVERSATION_LAYOUT_CHANGED_EVENT;
 
 export type OpenConversationDropPosition = 'before' | 'after';
 export type ConversationShelf = 'open' | 'pinned';

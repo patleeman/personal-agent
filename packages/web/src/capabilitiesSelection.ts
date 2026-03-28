@@ -1,11 +1,11 @@
-export const CAPABILITIES_SECTION_QUERY_PARAM = 'section';
-export const CAPABILITIES_PRESET_QUERY_PARAM = 'preset';
-export const CAPABILITIES_TASK_QUERY_PARAM = 'task';
-export const CAPABILITIES_TOOL_QUERY_PARAM = 'tool';
+const CAPABILITIES_SECTION_QUERY_PARAM = 'section';
+const CAPABILITIES_PRESET_QUERY_PARAM = 'preset';
+const CAPABILITIES_TASK_QUERY_PARAM = 'task';
+const CAPABILITIES_TOOL_QUERY_PARAM = 'tool';
 
-export const CAPABILITIES_SECTIONS = ['overview', 'presets', 'scheduled', 'tools'] as const;
+const CAPABILITIES_SECTIONS = ['overview', 'presets', 'scheduled', 'tools'] as const;
 
-export type CapabilitySection = (typeof CAPABILITIES_SECTIONS)[number];
+type CapabilitySection = (typeof CAPABILITIES_SECTIONS)[number];
 
 const CAPABILITIES_SECTION_SET = new Set<string>(CAPABILITIES_SECTIONS);
 

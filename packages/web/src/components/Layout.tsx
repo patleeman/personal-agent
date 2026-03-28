@@ -8,7 +8,7 @@ import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
-import { OPEN_SESSIONS_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
+import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
@@ -243,8 +243,8 @@ function useWarmOpenConversationTabs(pathname: string): void {
       setLayout(readConversationLayout());
     }
 
-    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
-    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
+    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
   }, []);
 
   const openConversationIds = useMemo(() => {

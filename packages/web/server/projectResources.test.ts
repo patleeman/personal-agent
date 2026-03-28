@@ -10,9 +10,9 @@ import {
   deleteProjectNoteRecord,
   listProjectFiles,
   listProjectNotes,
-  readProjectBrief,
+  readProjectDocument,
   readProjectFileDownload,
-  saveProjectBrief,
+  saveProjectDocument,
   updateProjectNoteRecord,
   uploadProjectFile,
 } from './projectResources.js';
@@ -48,14 +48,14 @@ describe('projectResources', () => {
       description: 'Test project docs',
     });
 
-    saveProjectBrief({
+    saveProjectDocument({
       repoRoot,
       profile: 'datadog',
       projectId: 'briefs',
       content: '# Project doc\n\nA durable project note.',
     });
 
-    const brief = readProjectBrief({ repoRoot, profile: 'datadog', projectId: 'briefs' });
+    const brief = readProjectDocument({ repoRoot, profile: 'datadog', projectId: 'briefs' });
     expect(brief?.content).toContain('A durable project note.');
     expect(brief?.path).toContain('INDEX.md');
   });

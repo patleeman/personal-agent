@@ -25,9 +25,9 @@ import {
   type SessionContextUsageSnapshot,
 } from './sessionContextUsage.js';
 
-export const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
+const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
-export const DEFAULT_SESSIONS_INDEX_FILE = join(getPiAgentRuntimeDir(), 'session-meta-index.json');
+const DEFAULT_SESSIONS_INDEX_FILE = join(getPiAgentRuntimeDir(), 'session-meta-index.json');
 export const SESSIONS_INDEX_FILE = DEFAULT_SESSIONS_INDEX_FILE;
 
 // ── Raw JSONL types ────────────────────────────────────────────────────────────
