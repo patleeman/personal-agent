@@ -30,7 +30,7 @@ function createTestRepo(stateRoot?: string): string {
 
   if (stateRoot) {
     writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
   }
 
   return repo;

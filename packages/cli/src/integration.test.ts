@@ -81,7 +81,7 @@ describe('CLI main flow integration', () => {
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
     writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
@@ -107,7 +107,7 @@ describe('CLI main flow integration', () => {
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared Content\n');
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog Content\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog Content\n');
     writeFile(join(stateRoot, 'sync', 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;

@@ -15,6 +15,29 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
+async function removeTempDirs(): Promise<void> {
+  const dirs = tempDirs.splice(0);
+
+  for (const dir of dirs) {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        await rm(dir, { recursive: true, force: true });
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+
+    if (lastError) {
+      throw lastError;
+    }
+  }
+}
+
 function createTestConfig(socketPath: string, stateRoot: string): DaemonConfig {
   return {
     logLevel: 'error',
@@ -62,7 +85,7 @@ describe('runs CLI lifecycle commands', () => {
       await daemon.stop();
       daemon = null;
     }
-    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+    await removeTempDirs();
     vi.restoreAllMocks();
   });
 
