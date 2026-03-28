@@ -634,7 +634,6 @@ export function buildMemoryDocTemplate(options: {
   updated?: string;
 }): string {
   const tags = splitMemoryTagValues(options.tags);
-  const related = splitMemoryTagValues(options.related ?? []);
   const metadata: Record<string, unknown> = {
     ...(options.type ? { type: options.type.trim() } : {}),
     ...(options.area ? { area: options.area.trim() } : {}),
@@ -656,14 +655,6 @@ export function buildMemoryDocTemplate(options: {
     summary: options.summary,
     status: options.status?.trim() || 'active',
     ...(tagsWithStructure.length > 0 ? { tags: tagsWithStructure } : {}),
-    ...((options.parent || related.length > 0)
-      ? {
-          links: {
-            ...(options.parent?.trim() ? { parent: options.parent.trim() } : {}),
-            ...(related.length > 0 ? { related } : {}),
-          },
-        }
-      : {}),
     updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
     ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
   }, `# ${options.title}\n\n${options.summary}`);

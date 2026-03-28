@@ -36,9 +36,8 @@ export function filterMemories(memories: MemoryDocItem[], query: string): Memory
   });
 }
 
-export function readNoteView(search: string): NoteWorkspaceView {
-  const value = new URLSearchParams(search).get(NOTE_VIEW_SEARCH_PARAM)?.trim();
-  return value === 'references' || value === 'links' ? value : 'main';
+export function readNoteView(_search: string): NoteWorkspaceView {
+  return 'main';
 }
 
 export function readCreateState(search: string): boolean {
@@ -126,20 +125,6 @@ export function noteKindLabel(memory: MemoryDocItem): string {
 
 export function buildNoteListMeta(memory: MemoryDocItem): string {
   const parts = [`@${memory.id}`, noteKindLabel(memory)];
-
-  if (memory.parent) {
-    parts.push(`parent @${memory.parent}`);
-  }
-
-  const relatedCount = formatRelatedCount(memory.related);
-  if (relatedCount) {
-    parts.push(relatedCount);
-  }
-
-  const referenceSummary = (memory.referenceCount ?? 0) > 0 ? formatReferenceCount(memory.referenceCount) : null;
-  if (referenceSummary) {
-    parts.push(referenceSummary);
-  }
 
   if (memory.updated) {
     parts.push(`updated ${timeAgo(memory.updated)}`);

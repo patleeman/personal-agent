@@ -9,10 +9,8 @@ import {
   buildNoteSearch,
   filterMemories,
   NOTE_ID_SEARCH_PARAM,
-  NOTE_ITEM_SEARCH_PARAM,
   noteKindLabel,
   readCreateState,
-  readNoteView,
 } from '../noteWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -155,10 +153,7 @@ export function NotesBrowserRailContent({
     const params = new URLSearchParams(location.search);
     return params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
   }, [location.search]);
-  const selectedView = useMemo(() => readNoteView(location.search), [location.search]);
-  const selectedItem = useMemo(() => new URLSearchParams(location.search).get(NOTE_ITEM_SEARCH_PARAM)?.trim() || null, [location.search]);
   const creating = useMemo(() => readCreateState(location.search), [location.search]);
-  const selectedMemory = memories.find((memory) => memory.id === selectedMemoryId) ?? null;
 
   const retryMemoryWorkItem = useCallback(async (item: MemoryWorkItem) => {
     if (!canRetryMemoryWorkItem(item) || queueBusy) {
@@ -301,18 +296,6 @@ export function NotesBrowserRailContent({
                 meta={(
                   <>
                     <span className="font-mono">@{memory.id}</span>
-                    {(memory.referenceCount ?? 0) > 0 && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span>{memory.referenceCount} {(memory.referenceCount ?? 0) === 1 ? 'reference' : 'references'}</span>
-                      </>
-                    )}
-                    {(memory.related?.length ?? 0) > 0 && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span>{memory.related?.length} related {(memory.related?.length ?? 0) === 1 ? 'node' : 'nodes'}</span>
-                      </>
-                    )}
                     {memory.updated && (
                       <>
                         <span className="opacity-40">·</span>
@@ -326,37 +309,6 @@ export function NotesBrowserRailContent({
           </div>
         )}
 
-        {selectedMemory && !creating && (
-          <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Resources</p>
-            <div className="space-y-1">
-              <BrowserRecordRow
-                to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'main', item: null, creating: false })}`}
-                selected={selectedView === 'main'}
-                label="Document"
-                heading="Main"
-                summary="Primary note document"
-                meta={noteKindLabel(selectedMemory)}
-              />
-              <BrowserRecordRow
-                to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'references', item: selectedItem, creating: false })}`}
-                selected={selectedView === 'references'}
-                label="Supporting material"
-                heading="References"
-                summary="Supporting documents and research"
-                meta={`${selectedMemory.referenceCount ?? 0} ${(selectedMemory.referenceCount ?? 0) === 1 ? 'file' : 'files'}`}
-              />
-              <BrowserRecordRow
-                to={`/notes${buildNoteSearch(location.search, { memoryId: selectedMemory.id, view: 'links', item: null, creating: false })}`}
-                selected={selectedView === 'links'}
-                label="Relationships"
-                heading="Links"
-                summary="Relationships with other nodes"
-                meta="Open node graph details"
-              />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

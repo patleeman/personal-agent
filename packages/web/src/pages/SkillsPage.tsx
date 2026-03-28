@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { getKnowledgeSkillName } from '../knowledgeSelection';
-import type { SkillDetail } from '../types';
+import type { MemorySkillItem, SkillDetail } from '../types';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
-import { BrowserSplitLayout } from '../components/BrowserSplitLayout';
 import {
   EmptyState,
   ErrorState,
-  ListLinkRow,
   LoadingState,
+  PageHeader,
+  PageHeading,
   ToolbarButton,
 } from '../components/ui';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
@@ -21,20 +21,19 @@ import {
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
-import { SkillsBrowserRail } from '../components/SkillsBrowserRail';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import {
   buildSkillsSearch,
+  matchesSkill,
   readSkillView,
   SKILL_ITEM_SEARCH_PARAM,
   type SkillWorkspaceView,
   sortSkills,
 } from '../skillWorkspaceState';
-import { buildRailWidthStorageKey } from '../layoutSizing';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
-import { joinMarkdownFrontmatter, splitMarkdownFrontmatter } from '../markdownDocument';
+import { joinMarkdownFrontmatter, normalizeMarkdownValue, splitMarkdownFrontmatter } from '../markdownDocument';
 
-const SKILLS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('skills-browser');
+const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
 function SkillReferencesList({
   detail,
@@ -56,20 +55,22 @@ function SkillReferencesList({
 
   return (
     <div className="h-full overflow-y-auto px-6 py-6">
-      <div className="mx-auto max-w-4xl space-y-px">
-        {detail.references.map((reference) => (
-          <ListLinkRow
-            key={reference.path}
-            to={`/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'references', item: reference.relativePath })}`}
-            leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />}
-          >
-            <p className="ui-row-title">{reference.title}</p>
-            <p className="ui-row-summary">{reference.summary || 'Open this reference to inspect or edit it.'}</p>
-            <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-              <span>{reference.relativePath}</span>
-            </div>
-          </ListLinkRow>
-        ))}
+      <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-border-subtle bg-surface/10">
+        <div className="divide-y divide-border-subtle">
+          {detail.references.map((reference) => (
+            <Link
+              key={reference.path}
+              to={`/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'references', item: reference.relativePath })}`}
+              className="block px-4 py-3 transition-colors hover:bg-surface/35"
+            >
+              <p className="text-[14px] font-medium text-primary">{reference.title}</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{reference.summary || 'Open this reference to inspect or edit it.'}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-dim">
+                <span>{reference.relativePath}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -104,8 +105,8 @@ function SkillWorkspace({
 }) {
   const selectedReference = detail.references.find((reference) => reference.relativePath === selectedItem) ?? null;
   const initialContentParts = useMemo(() => splitMarkdownFrontmatter(detail.content), [detail.content]);
-  const [savedContent, setSavedContent] = useState(initialContentParts.body);
-  const [draft, setDraft] = useState(initialContentParts.body);
+  const [savedContent, setSavedContent] = useState(normalizeMarkdownValue(initialContentParts.body));
+  const [draft, setDraft] = useState(normalizeMarkdownValue(initialContentParts.body));
   const [selectedFrontmatter, setSelectedFrontmatter] = useState<string | null>(initialContentParts.frontmatter);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -161,8 +162,9 @@ function SkillWorkspace({
 
       if (selectedView === 'definition') {
         const parts = splitMarkdownFrontmatter(detail.content);
-        setSavedContent(parts.body);
-        setDraft(parts.body);
+        const normalizedBody = normalizeMarkdownValue(parts.body);
+        setSavedContent(normalizedBody);
+        setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
         setContentLoading(false);
@@ -181,8 +183,9 @@ function SkillWorkspace({
           return;
         }
         const parts = splitMarkdownFrontmatter(result.content);
-        setSavedContent(parts.body);
-        setDraft(parts.body);
+        const normalizedBody = normalizeMarkdownValue(parts.body);
+        setSavedContent(normalizedBody);
+        setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
       } catch (error) {
         if (cancelled) {
@@ -269,8 +272,9 @@ function SkillWorkspace({
       try {
         const result = await api.memoryFile(selectedReference.path);
         const parts = splitMarkdownFrontmatter(result.content);
-        setSavedContent(parts.body);
-        setDraft(parts.body);
+        const normalizedBody = normalizeMarkdownValue(parts.body);
+        setSavedContent(normalizedBody);
+        setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
       } catch (error) {
@@ -374,11 +378,90 @@ function SkillWorkspace({
   );
 }
 
+function skillSourceLabel(skill: MemorySkillItem): string {
+  return skill.source === 'shared' ? 'Shared' : skill.source;
+}
+
+function SkillsTable({
+  skills,
+  locationSearch,
+}: {
+  skills: MemorySkillItem[];
+  locationSearch: string;
+}) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border-subtle bg-surface/10">
+      <table className="min-w-full border-collapse text-left">
+        <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
+          <tr className="border-b border-border-subtle text-[10px] uppercase tracking-[0.14em] text-dim">
+            <th className="px-4 py-2.5 font-medium">Skill</th>
+            <th className="px-3 py-2.5 font-medium">Source</th>
+            <th className="px-3 py-2.5 font-medium">Usage</th>
+            <th className="px-4 py-2.5 font-medium">Path</th>
+          </tr>
+        </thead>
+        <tbody>
+          {skills.map((skill) => {
+            const skillHref = `/skills${buildSkillsSearch(locationSearch, { skillName: skill.name, view: 'definition', item: null })}`;
+
+            return (
+              <tr
+                key={`${skill.source}:${skill.name}`}
+                className="cursor-pointer border-b border-border-subtle align-top transition-colors hover:bg-surface/35"
+                tabIndex={0}
+                onClick={() => navigate(skillHref)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(skillHref);
+                  }
+                }}
+              >
+                <td className="px-4 py-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={skillHref}
+                        className="text-[14px] font-medium text-primary transition-colors hover:text-accent"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        {humanizeSkillName(skill.name)}
+                      </Link>
+                      {skill.usedInLastSession ? <span className="text-[11px] text-accent">Used recently</span> : null}
+                    </div>
+                    <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{skill.description}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
+                      <span className="font-mono">{skill.name}</span>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-[12px] text-secondary">{skillSourceLabel(skill)}</td>
+                <td className="px-3 py-3">
+                  <div className="text-[12px] text-primary">
+                    {formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[12px] text-secondary">
+                  <span className="break-all">{skill.path}</span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function SkillsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { data, loading, refreshing, error, refetch } = useApi(api.memory);
   const skills = useMemo(() => sortSkills(data?.skills ?? []), [data?.skills]);
+  const [query, setQuery] = useState('');
+  const filteredSkills = useMemo(() => skills.filter((skill) => matchesSkill(skill, query)), [query, skills]);
   const selectedSkillName = useMemo(() => getKnowledgeSkillName(location.search), [location.search]);
   const selectedView = useMemo(() => readSkillView(location.search), [location.search]);
   const selectedItem = useMemo(() => new URLSearchParams(location.search).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null, [location.search]);
@@ -412,62 +495,90 @@ export function SkillsPage() {
     ensureOpenResourceShelfItem('skill', selectedSkillName);
   }, [selectedSkillName]);
 
-  return (
-    <BrowserSplitLayout
-      storageKey={SKILLS_BROWSER_WIDTH_STORAGE_KEY}
-      initialWidth={320}
-      minWidth={260}
-      maxWidth={440}
-      browser={<SkillsBrowserRail />}
-      browserLabel="Skills browser"
-    >
-      <div className="min-w-0 min-h-0 flex flex-1 flex-col px-6 py-4">
-        <div className="flex items-center justify-end pb-4">
-          <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); if (selectedSkillName) { void skillDetailApi.refetch({ resetLoading: false }); } }} disabled={refreshing || skillDetailApi.refreshing}>
-            {refreshing || skillDetailApi.refreshing ? 'Refreshing…' : 'Refresh'}
-          </ToolbarButton>
+  if (selectedSkillName) {
+    return (
+      <div className="min-h-0 flex h-full flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          {skillDetailApi.loading && !skillDetailApi.data ? (
+            <LoadingState label="Loading skill…" className="h-full justify-center" />
+          ) : skillDetailApi.error || !skillDetailApi.data ? (
+            <ErrorState message={`Unable to load skill: ${skillDetailApi.error ?? 'Skill not found.'}`} />
+          ) : (
+            <div className="mx-auto w-full max-w-[1440px]">
+              <SkillWorkspace
+                detail={skillDetailApi.data}
+                selectedView={selectedView}
+                selectedItem={selectedItem}
+                locationSearch={location.search}
+                onNavigate={setSelectedSkill}
+                onRefetched={() => {
+                  void skillDetailApi.refetch({ resetLoading: false });
+                  void refetch({ resetLoading: false });
+                }}
+              />
+            </div>
+          )}
         </div>
-
-        {loading && !data ? <LoadingState label="Loading skills…" /> : null}
-        {error && !data ? <ErrorState message={`Unable to load skills: ${error}`} /> : null}
-
-        {!loading && !error && (
-          <div className="h-full min-h-0 overflow-hidden">
-            {selectedSkillName ? (
-              skillDetailApi.loading && !skillDetailApi.data ? (
-                <LoadingState label="Loading skill…" className="h-full justify-center" />
-              ) : skillDetailApi.error || !skillDetailApi.data ? (
-                <ErrorState message={`Unable to load skill: ${skillDetailApi.error ?? 'Skill not found.'}`} />
-              ) : (
-                <SkillWorkspace
-                  detail={skillDetailApi.data}
-                  selectedView={selectedView}
-                  selectedItem={selectedItem}
-                  locationSearch={location.search}
-                  onNavigate={setSelectedSkill}
-                  onRefetched={() => {
-                    void skillDetailApi.refetch({ resetLoading: false });
-                    void refetch({ resetLoading: false });
-                  }}
-                />
-              )
-            ) : skills.length === 0 ? (
-              <EmptyState
-                className="h-full"
-                title="No skills yet"
-                body="Add a skill to the active profile to make reusable workflows available to the agent."
-              />
-            ) : (
-              <EmptyState
-                className="h-full"
-                title="Select a skill"
-                body="Choose a skill from the browser on the left to open it here."
-              />
-            )}
-          </div>
-        )}
       </div>
-    </BrowserSplitLayout>
+    );
+  }
+
+  return (
+    <div className="min-h-0 flex h-full flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
+          <PageHeader
+            actions={(
+              <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </ToolbarButton>
+            )}
+          >
+            <PageHeading
+              title="Skills"
+              meta="Browse reusable workflows, then open one into the main workspace and the left sidebar shelf."
+            />
+          </PageHeader>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-[12px] text-secondary">
+              {query.trim() ? `Showing ${filteredSkills.length} of ${skills.length} skills.` : `${skills.length} skills.`}
+            </div>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search skills"
+              aria-label="Search skills"
+              className={`${INPUT_CLASS} sm:w-[22rem]`}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+
+          {loading && !data ? <LoadingState label="Loading skills…" className="min-h-[18rem]" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load skills: ${error}`} /> : null}
+
+          {!loading && !error && skills.length === 0 ? (
+            <EmptyState
+              className="min-h-[18rem]"
+              title="No skills yet"
+              body="Add a skill to the active profile to make reusable workflows available to the agent."
+            />
+          ) : null}
+
+          {!loading && !error && filteredSkills.length === 0 && skills.length > 0 ? (
+            <EmptyState
+              className="min-h-[18rem]"
+              title="No matching skills"
+              body="Try a broader search across skill names and descriptions."
+            />
+          ) : null}
+
+          {!loading && !error && filteredSkills.length > 0 ? (
+            <SkillsTable skills={filteredSkills} locationSearch={location.search} />
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
-

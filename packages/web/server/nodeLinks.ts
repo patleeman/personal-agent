@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, normalize } from 'node:path';
-import { listProjectIds, loadMemoryDocs, loadMemoryPackageReferences } from '@personal-agent/core';
+import { listProjectIds, loadMemoryDocs } from '@personal-agent/core';
 import { resolveResourceProfile } from '@personal-agent/resources';
 import { readProjectDetailFromProject, readProjectSource } from './projects.js';
 
@@ -293,24 +293,15 @@ export function buildNodeLinksFromDocuments(documents: NodeDocument[]): Map<stri
 function readNoteDocuments(profilesRoot: string): NodeDocument[] {
   const loaded = loadMemoryDocs({ profilesRoot });
 
-  return loaded.docs.map((doc) => {
-    const references = loadMemoryPackageReferences(dirname(doc.filePath));
-    return {
-      kind: 'note' as const,
-      id: doc.id,
-      title: doc.title,
-      summary: doc.summary,
-      path: doc.filePath,
-      contentParts: [
-        readFileSync(doc.filePath, 'utf-8'),
-        ...references.map((reference) => reference.body),
-      ],
-      explicitTargets: [
-        ...(doc.parent ? [{ id: doc.parent, kindHint: 'note' as const }] : []),
-        ...doc.related.map((id) => ({ id, kindHint: 'note' as const })),
-      ],
-    } satisfies NodeDocument;
-  });
+  return loaded.docs.map((doc) => ({
+    kind: 'note' as const,
+    id: doc.id,
+    title: doc.title,
+    summary: doc.summary,
+    path: doc.filePath,
+    contentParts: [readFileSync(doc.filePath, 'utf-8')],
+    explicitTargets: [],
+  } satisfies NodeDocument));
 }
 
 function readSkillDocuments(options: { repoRoot: string; profilesRoot: string; profile: string }): NodeDocument[] {

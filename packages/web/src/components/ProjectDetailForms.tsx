@@ -334,7 +334,7 @@ export function ProjectNoteEditorForm({
 
       <div className="space-y-1.5">
         <label className="ui-card-meta">Body</label>
-        <RichMarkdownEditor value={value.body} onChange={(body) => onChange({ body })} placeholder="Start writing…" />
+        <RichMarkdownEditor value={value.body} onChange={(body) => onChange({ body })} placeholder="Start writing…" variant="panel" />
       </div>
 
       {error && <p className="text-[12px] text-danger">{error}</p>}

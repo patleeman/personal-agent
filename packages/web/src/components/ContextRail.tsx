@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -2571,10 +2571,6 @@ function RailMarkdownPreview({ content, className }: { content: string; classNam
   return <RichMarkdownRenderer content={content} className={className ?? 'ui-markdown max-w-none text-[13px] leading-relaxed'} stripFrontmatter />;
 }
 
-function RailRenderedMarkdown({ content }: { content: string }) {
-  return <RichMarkdownRenderer content={content} className="ui-markdown max-w-none text-[13px] leading-relaxed" emptyText="This file has no rendered markdown yet." stripFrontmatter />;
-}
-
 function sortKnowledgeProjects(items: ProjectRecord[]): ProjectRecord[] {
   return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.title.localeCompare(right.title));
 }
@@ -2921,21 +2917,6 @@ function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
           <p className="ui-section-label">Overview</p>
           <RailMarkdownPreview content={data.content} />
         </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">References</p>
-          {data.references.length === 0 ? <p className="ui-card-meta">No package-local references yet.</p> : data.references.map((reference) => (
-            <div key={reference.path} className="space-y-0.5 rounded-lg border border-border-subtle bg-base px-3 py-2">
-              <p className="text-[12px] font-medium text-primary">{reference.title}</p>
-              <p className="ui-card-meta break-all">{reference.relativePath}</p>
-              {reference.summary && <p className="text-[12px] leading-relaxed text-secondary">{reference.summary}</p>}
-            </div>
-          ))}
-        </div>
-        <div className="space-y-4 border-t border-border-subtle pt-4">
-          <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-          <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other nodes link here yet." />
-          <UnresolvedNodeLinks ids={data.links?.unresolved} />
-        </div>
       </div>
     </div>
   );
@@ -2991,41 +2972,6 @@ function KnowledgeInstructionContext({ item }: { item: MemoryAgentsItem }) {
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Instructions</p>
         {item.content ? <RailMarkdownPreview content={item.content} /> : <p className="ui-card-meta">This source exists but no content was loaded.</p>}
-      </div>
-    </div>
-  );
-}
-
-function SkillsContextPanel() {
-  const location = useLocation();
-  const selectedSkillName = getKnowledgeSkillName(location.search);
-  const { data, loading, error } = useApi(api.memory, 'skills-rail-memory');
-  const skills = sortKnowledgeSkills(data?.skills ?? []);
-  const selectedSkill = skills.find((item) => item.name === selectedSkillName) ?? null;
-  const recentlyUsedSkills = skills.filter((item) => item.usedInLastSession || (item.recentSessionCount ?? 0) > 0);
-
-  if (selectedSkill) return <KnowledgeSkillContext skill={selectedSkill} />;
-  if (loading && !data) return <LoadingState label="Loading skills…" className="px-4 py-4" />;
-  if (error && !data) return <ErrorState message={`Failed to load skills: ${error}`} className="px-4 py-4" />;
-
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title">Skills</p>
-        <p className="ui-card-meta">Select a skill on the left to inspect its definition and usage guidance.</p>
-      </div>
-      <div className="space-y-2">
-        <RailMetadataRow label="Skills" value={skills.length} />
-        <RailMetadataRow label="Recently used" value={recentlyUsedSkills.length} />
-      </div>
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Recently used</p>
-        {recentlyUsedSkills.length === 0 ? <p className="ui-card-meta">No skills have been used recently.</p> : recentlyUsedSkills.slice(0, 5).map((skill) => (
-          <Link key={skill.name} to={`/skills?skill=${encodeURIComponent(skill.name)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-            <p className="text-[12px] font-medium text-primary">{humanizeSkillName(skill.name)}</p>
-            <p className="ui-card-meta mt-1">{formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')}</p>
-          </Link>
-        ))}
       </div>
     </div>
   );

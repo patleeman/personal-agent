@@ -43,7 +43,7 @@ describe('MemoriesPage', () => {
     );
   }
 
-  it('renders the selected note in the main workspace instead of the browse list', () => {
+  it('renders the selected note in the main workspace instead of the notes table', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
       if (key === 'note-workspace:memory-index') {
         return {
@@ -63,13 +63,7 @@ describe('MemoriesPage', () => {
               updated: '2026-03-17T12:00:00.000Z',
             },
             content: '# Memory index\n\nTop-level knowledge hub.',
-            references: [{
-              title: 'Web UI preferences',
-              summary: 'Durable UI notes.',
-              tags: ['personal-agent'],
-              path: '/tmp/memory-index/references/prefs.md',
-              relativePath: 'references/prefs.md',
-            }],
+            references: [],
             links: {
               outgoing: [],
               incoming: [],
@@ -115,26 +109,30 @@ describe('MemoriesPage', () => {
 
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
-    expect(html).toContain('Main');
-    expect(html).toContain('References (1)');
-    expect(html).toContain('Links');
     expect(html).toContain('Chat about note');
     expect(html).toContain('memory-index');
-    expect(html).toContain('Search notes');
+    expect(html).not.toContain('Browse durable notes');
+    expect(html).not.toContain('Search notes');
+    expect(html).not.toContain('References');
+    expect(html).not.toContain('Links');
   });
 
-  it('keeps queue details out of the main notes workspace', () => {
+  it('renders a notes table from the top-level notes page', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
-        memories: [],
-        memoryQueue: [{
-          conversationId: 'conv-123',
-          conversationTitle: 'Refactor memory pipeline',
-          runId: 'run-123',
-          status: 'running',
-          createdAt: '2026-03-17T12:00:00.000Z',
-          updatedAt: '2026-03-17T12:05:00.000Z',
+        memories: [{
+          id: 'memory-index',
+          title: 'Memory index',
+          summary: 'Top-level knowledge hub.',
+          tags: ['notes', 'index', 'structure'],
+          path: '/tmp/memory-index/INDEX.md',
+          type: 'structure',
+          status: 'active',
+          role: 'structure',
+          area: 'notes',
+          updated: '2026-03-17T12:00:00.000Z',
         }],
+        memoryQueue: [],
       },
       loading: false,
       refreshing: false,
@@ -145,15 +143,16 @@ describe('MemoriesPage', () => {
 
     const html = renderPage('/notes');
 
-    expect(html).toContain('Work queue');
-    expect(html).toContain('Refactor memory pipeline');
-    expect(html).toContain('run-123');
-    expect(html).toContain('No notes yet');
-    expect(html).not.toContain('Retry');
-    expect(html).not.toContain('Recover');
+    expect(html).toContain('Browse durable notes');
+    expect(html).toContain('Search notes');
+    expect(html).toContain('Memory index');
+    expect(html).toContain('Top-level knowledge hub.');
+    expect(html).toContain('Structure note');
+    expect(html).toContain('Context');
+    expect(html).toContain('Updated');
   });
 
-  it('does not render queue actions in the main notes workspace', () => {
+  it('renders work queue actions on the notes index page', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -181,7 +180,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Refactor memory pipeline');
   });
 
-  it('shows the empty workspace state when there are no notes', () => {
+  it('shows the empty notes state when there are no notes', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],

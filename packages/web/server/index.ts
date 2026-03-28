@@ -6276,6 +6276,10 @@ function buildStructuredNoteMarkdown(rawContent: string, input: {
     updatedAt: new Date().toISOString().slice(0, 10),
   };
 
+  delete frontmatter.links;
+  delete frontmatter.parent;
+  delete frontmatter.related;
+
   if (tags.length > 0) {
     frontmatter.tags = tags;
   } else {
@@ -10150,7 +10154,7 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
 
   const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
   const memoryDocs = loaded.docs.map((doc) => {
-    const searchText = includeSearchText ? extractMemorySearchText([doc.filePath, ...doc.referencePaths]) : '';
+    const searchText = includeSearchText ? extractMemorySearchText([doc.filePath]) : '';
 
     return {
       id: doc.id,
