@@ -146,6 +146,9 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('aria-label="Project title"');
     expect(html).toContain('name="project-status"');
     expect(html).not.toContain('Edit project');
+    expect(html).not.toContain('Regenerate');
+    expect(html).not.toContain('Edit document');
+    expect(html).toContain('ui-note-editor-frame');
     expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
     expect(html).not.toContain('>Project doc<');
     expect(html.indexOf('>Document<')).toBeLessThan(html.indexOf('>Activity<'));
