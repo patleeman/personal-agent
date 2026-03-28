@@ -20,7 +20,6 @@ import {
   restoreQueuedMessage,
   subscribe,
   takeOverSessionControl,
-  LiveSessionControlError,
   toSse,
   type SseEvent,
 } from './liveSessions.js';
@@ -508,7 +507,7 @@ describe('live session subscriptions', () => {
     });
   });
 
-  it('rejects prompts from mirrored surfaces', async () => {
+  it('allows prompt submissions to keep running from mirrored surfaces', async () => {
     const prompt = vi.fn(async () => {});
 
     setLiveEntry('session-prompt-control', {
@@ -545,11 +544,11 @@ describe('live session subscriptions', () => {
       },
     });
 
-    await expect(promptSession('session-prompt-control', 'blocked', undefined, undefined, 'mobile-1'))
-      .rejects.toBeInstanceOf(LiveSessionControlError);
+    await promptSession('session-prompt-control', 'from mirrored surface', undefined, undefined, 'mobile-1');
+    await promptSession('session-prompt-control', 'from controlling surface', undefined, undefined, 'desktop-1');
 
-    await promptSession('session-prompt-control', 'allowed', undefined, undefined, 'desktop-1');
-    expect(prompt).toHaveBeenCalledWith('allowed');
+    expect(prompt).toHaveBeenNthCalledWith(1, 'from mirrored surface');
+    expect(prompt).toHaveBeenNthCalledWith(2, 'from controlling surface');
   });
 
   it('merges persisted history into truncated live snapshots', () => {
@@ -1693,6 +1692,49 @@ describe('submitPromptSession', () => {
     resolvePrompt();
     await submitted.completion;
     expect(completionResolved).toBe(true);
+  });
+
+  it('keeps an already-clicked send alive after the originating surface disconnects', async () => {
+    const prompt = vi.fn(async () => undefined);
+
+    setLiveEntry('session-submit-detached-surface', {
+      sessionId: 'session-submit-detached-surface',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Detached surface prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        subscribe: () => () => {},
+        prompt,
+      },
+    });
+
+    const unsubscribe = subscribe('session-submit-detached-surface', () => {}, {
+      surface: {
+        surfaceId: 'desktop-1',
+        surfaceType: 'desktop_web',
+      },
+    });
+    expect(unsubscribe).not.toBeNull();
+    takeOverSessionControl('session-submit-detached-surface', 'desktop-1');
+    unsubscribe?.();
+
+    const submitted = await submitPromptSession(
+      'session-submit-detached-surface',
+      'send this anyway',
+      undefined,
+      undefined,
+      'desktop-1',
+    );
+
+    expect(submitted.acceptedAs).toBe('started');
+    await submitted.completion;
+    expect(prompt).toHaveBeenCalledWith('send this anyway');
   });
 });
 
