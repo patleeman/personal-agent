@@ -424,6 +424,7 @@ export function WorkspacePage() {
                 detail={fileDetail}
                 value={draftContent}
                 draftDirty={draftDirty}
+                showDiff={false}
                 onChange={setDraftContent}
                 onOpenFilePath={(nextPath) => openWorkspaceSearch({ file: nextPath })}
               />
