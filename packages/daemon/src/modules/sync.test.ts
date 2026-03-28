@@ -1,5 +1,5 @@
 import { spawnSync } from 'child_process';
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -155,6 +155,31 @@ function readInboxSummaries(stateRoot: string, profile = 'assistant'): string[] 
     .map(({ entry }) => entry.summary);
 }
 
+function initSyncRepoWithPendingChange(repoDir: string): string {
+  runGit(repoDir, ['init', '-b', 'main']);
+
+  const filePath = join(repoDir, 'profiles', 'assistant', 'agent', 'AGENTS.md');
+  mkdirSync(join(repoDir, 'profiles', 'assistant', 'agent'), { recursive: true });
+  writeFileSync(filePath, '# Assistant\n');
+  runGit(repoDir, ['add', '-A']);
+  runGit(repoDir, ['commit', '-m', 'chore: initial']);
+
+  writeFileSync(filePath, `${readFileSync(filePath, 'utf-8')}\nUpdated\n`);
+  return filePath;
+}
+
+function createGitIndexLock(repoDir: string, ageMs?: number): string {
+  const lockPath = join(repoDir, '.git', 'index.lock');
+  writeFileSync(lockPath, 'locked\n');
+
+  if (ageMs !== undefined) {
+    const timestamp = new Date(Date.now() - ageMs);
+    utimesSync(lockPath, timestamp, timestamp);
+  }
+
+  return lockPath;
+}
+
 describe('sync module', () => {
   afterEach(async () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -243,6 +268,85 @@ describe('sync module', () => {
     const summaries = readInboxSummaries(stateRoot);
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toContain('Sync setup failed');
+  });
+
+  it('waits through repeated git index lock failures before notifying or starting a resolver', async () => {
+    const stateRoot = createTempDir('sync-module-index-lock-');
+    const repoDir = stateRoot;
+    initSyncRepoWithPendingChange(repoDir);
+    createGitIndexLock(repoDir);
+
+    const fakeBin = join(stateRoot, 'bin');
+    mkdirSync(fakeBin, { recursive: true });
+    const fakePa = join(fakeBin, 'pa');
+    const argsFile = join(stateRoot, 'index-lock-resolver-args.txt');
+    writeFileSync(
+      fakePa,
+      [
+        '#!/bin/sh',
+        `printf '%s\n' "$@" > ${JSON.stringify(argsFile)}`,
+        'echo "Durable run started"',
+        'echo "Run run_sync_lock_123"',
+        'echo "Inspect pa runs show run_sync_lock_123"',
+        'exit 0',
+      ].join('\n'),
+    );
+    chmodSync(fakePa, 0o755);
+
+    const previousPath = process.env.PATH;
+    process.env.PATH = `${fakeBin}:${previousPath ?? ''}`;
+
+    try {
+      const syncConfig = createSyncConfig(repoDir, {
+        autoResolveErrorsWithAgent: true,
+      });
+      const module = createSyncModule(syncConfig);
+      const context = createContext(stateRoot, syncConfig);
+
+      await module.start(context);
+      await module.handleEvent(createEvent('timer.sync.tick'), context);
+      await module.handleEvent(createEvent('timer.sync.tick'), context);
+
+      expect(readInboxSummaries(stateRoot)).toHaveLength(0);
+      expect(existsSync(argsFile)).toBe(false);
+
+      let status = module.getStatus?.() as Record<string, unknown>;
+      expect(String(status.lastError ?? '')).toContain('retrying later');
+      expect(String(status.lastError ?? '')).toContain('attempt 2/3');
+
+      await module.handleEvent(createEvent('timer.sync.tick'), context);
+
+      const summaries = readInboxSummaries(stateRoot);
+      expect(summaries.filter((summary) => summary.includes('Sync add failed'))).toHaveLength(1);
+      expect(summaries.filter((summary) => summary.includes('Sync error resolver run started'))).toHaveLength(1);
+      expect(existsSync(argsFile)).toBe(true);
+
+      status = module.getStatus?.() as Record<string, unknown>;
+      expect(String(status.lastError ?? '')).toContain('index.lock');
+      expect(status.lastErrorResolverStartedAt).toBeTypeOf('string');
+    } finally {
+      process.env.PATH = previousPath;
+    }
+  });
+
+  it('treats stale git index locks as real sync errors immediately', async () => {
+    const stateRoot = createTempDir('sync-module-stale-index-lock-');
+    const repoDir = stateRoot;
+    initSyncRepoWithPendingChange(repoDir);
+    createGitIndexLock(repoDir, 11 * 60_000);
+
+    const syncConfig = createSyncConfig(repoDir);
+    const module = createSyncModule(syncConfig);
+    const context = createContext(stateRoot, syncConfig);
+
+    await module.start(context);
+    await module.handleEvent(createEvent('timer.sync.tick'), context);
+
+    const summaries = readInboxSummaries(stateRoot);
+    expect(summaries.filter((summary) => summary.includes('Sync add failed'))).toHaveLength(1);
+
+    const status = module.getStatus?.() as Record<string, unknown>;
+    expect(String(status.lastError ?? '')).toContain('index.lock');
   });
 
   it('starts an error resolver run for non-conflict sync failures and notifies inbox', async () => {
