@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { hostname } from 'os';
 import { join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
@@ -16,6 +16,13 @@ import { runCommand } from './command.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
+const GIT_INDEX_LOCK_NOTIFY_THRESHOLD = 3;
+const GIT_INDEX_LOCK_STALE_MS = 10 * 60_000;
+
+interface GitIndexLockDetails {
+  lockPath: string;
+  ageMs?: number;
+}
 
 interface SyncModuleState {
   running: boolean;
@@ -33,6 +40,7 @@ interface SyncModuleState {
   lastErrorResolverFingerprint?: string;
   lastNotifiedErrorFingerprint?: string;
   lastNotifiedConflictFingerprint?: string;
+  consecutiveGitIndexLockFailures: number;
 }
 
 function nowIso(): string {
@@ -55,6 +63,53 @@ function summarizeForLine(value: string, limit = 120): string {
   }
 
   return `${singleLine.slice(0, limit - 1)}…`;
+}
+
+function gitFailureMessage(result: { stdout: string; stderr: string }, fallback: string): string {
+  return result.stderr || result.stdout || fallback;
+}
+
+function parseGitIndexLockPath(message: string): string | undefined {
+  const match = message.match(/Unable to create ['"]([^'"]*index\.lock)['"]/i);
+  return match?.[1];
+}
+
+function inspectGitIndexLock(repoDir: string, message: string): GitIndexLockDetails | undefined {
+  const normalized = message.trim();
+  const mentionsIndexLock = normalized.includes('index.lock');
+  const mentionsConcurrentGit = normalized.includes('Another git process seems to be running in this repository');
+  if (!mentionsIndexLock && !mentionsConcurrentGit) {
+    return undefined;
+  }
+
+  const lockPath = parseGitIndexLockPath(normalized) ?? join(repoDir, '.git', 'index.lock');
+  let ageMs: number | undefined;
+
+  try {
+    ageMs = Math.max(0, Date.now() - statSync(lockPath).mtimeMs);
+  } catch {
+    // Ignore missing or unreadable lock metadata.
+  }
+
+  return { lockPath, ageMs };
+}
+
+function formatGitIndexLockRetryMessage(input: {
+  phase: string;
+  lockPath: string;
+  ageMs?: number;
+  attempt: number;
+}): string {
+  const details = [
+    `attempt ${Math.min(input.attempt, GIT_INDEX_LOCK_NOTIFY_THRESHOLD)}/${GIT_INDEX_LOCK_NOTIFY_THRESHOLD}`,
+    input.lockPath,
+  ];
+
+  if (input.ageMs !== undefined) {
+    details.push(`age ${Math.round(input.ageMs / 1000)}s`);
+  }
+
+  return `git index lock detected during ${input.phase}; skipping this sync cycle and retrying later (${details.join(', ')})`;
 }
 
 function normalizeConflictFingerprint(conflicts: string[]): string {
@@ -509,7 +564,59 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
   const state: SyncModuleState = {
     running: false,
     lastConflictFiles: [],
+    consecutiveGitIndexLockFailures: 0,
   };
+
+  function clearGitIndexLockFailureState(): void {
+    state.consecutiveGitIndexLockFailures = 0;
+  }
+
+  async function handleGitPhaseError(input: {
+    phase: string;
+    message: string;
+    event: DaemonEvent;
+    context: DaemonModuleContext;
+    profile: string;
+  }): Promise<void> {
+    clearGitIndexLockFailureState();
+    state.lastError = input.message;
+    input.context.logger.warn(`git sync ${input.phase} failed: ${input.message}`);
+    maybeNotifySyncError(state, input.context, config, input.profile, input.event, input.phase, input.message);
+    await maybeStartErrorResolver(input);
+  }
+
+  async function maybeHandleGitIndexLock(input: {
+    phase: string;
+    message: string;
+    event: DaemonEvent;
+    context: DaemonModuleContext;
+    profile: string;
+  }): Promise<boolean> {
+    const lock = inspectGitIndexLock(config.repoDir, input.message);
+    if (!lock) {
+      return false;
+    }
+
+    state.consecutiveGitIndexLockFailures += 1;
+
+    const isStale = lock.ageMs !== undefined && lock.ageMs >= GIT_INDEX_LOCK_STALE_MS;
+    if (!isStale && state.consecutiveGitIndexLockFailures < GIT_INDEX_LOCK_NOTIFY_THRESHOLD) {
+      state.lastError = formatGitIndexLockRetryMessage({
+        phase: input.phase,
+        lockPath: lock.lockPath,
+        ageMs: lock.ageMs,
+        attempt: state.consecutiveGitIndexLockFailures,
+      });
+      input.context.logger.info(state.lastError);
+      return true;
+    }
+
+    state.lastError = input.message;
+    input.context.logger.warn(`git sync ${input.phase} blocked by git index lock: ${summarizeForLine(input.message)}`);
+    maybeNotifySyncError(state, input.context, config, input.profile, input.event, input.phase, input.message);
+    await maybeStartErrorResolver(input);
+    return true;
+  }
 
   async function maybeStartConflictResolver(
     conflicts: string[],
@@ -652,6 +759,7 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       state.lastRunAt = startedAt;
 
       if (!existsSync(join(config.repoDir, '.git'))) {
+        clearGitIndexLockFailureState();
         state.lastError = `sync repo not initialized: ${config.repoDir}`;
         context.logger.warn(state.lastError);
         maybeNotifySyncError(state, context, config, profile, event, 'setup', state.lastError);
@@ -668,6 +776,7 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       try {
         await ensureManagedMergeHandling(config.repoDir);
       } catch (error) {
+        clearGitIndexLockFailureState();
         state.lastError = error instanceof Error ? error.message : String(error);
         context.logger.warn(`git sync repair failed: ${state.lastError}`);
         maybeNotifySyncError(state, context, config, profile, event, 'repair', state.lastError);
@@ -676,6 +785,7 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
 
       const preexistingConflicts = await listConflictedFiles(config.repoDir);
       if (preexistingConflicts.length > 0) {
+        clearGitIndexLockFailureState();
         state.lastConflictAt = startedAt;
         state.lastConflictFiles = preexistingConflicts;
         state.lastError = `sync blocked by ${preexistingConflicts.length} unresolved merge conflict(s)`;
@@ -687,12 +797,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
 
       const addResult = await runGit(config.repoDir, ['add', '-A']);
       if (addResult.code !== 0) {
-        state.lastError = addResult.stderr || addResult.stdout || 'git add failed';
-        context.logger.warn(`git sync add failed: ${state.lastError}`);
-        maybeNotifySyncError(state, context, config, profile, event, 'add', state.lastError);
-        await maybeStartErrorResolver({
+        const message = gitFailureMessage(addResult, 'git add failed');
+        if (await maybeHandleGitIndexLock({ phase: 'add', message, event, context, profile })) {
+          return;
+        }
+
+        await handleGitPhaseError({
           phase: 'add',
-          message: state.lastError,
+          message,
           event,
           context,
           profile,
@@ -700,16 +812,20 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         return;
       }
 
+      clearGitIndexLockFailureState();
+
       if (await hasStagedChanges(config.repoDir)) {
         const commitTimestamp = nowIso();
         const commitResult = await runGit(config.repoDir, ['commit', '-m', buildSyncCommitMessage(commitTimestamp)]);
         if (commitResult.code !== 0) {
-          state.lastError = commitResult.stderr || commitResult.stdout || 'git commit failed';
-          context.logger.warn(`git sync commit failed: ${state.lastError}`);
-          maybeNotifySyncError(state, context, config, profile, event, 'commit', state.lastError);
-          await maybeStartErrorResolver({
+          const message = gitFailureMessage(commitResult, 'git commit failed');
+          if (await maybeHandleGitIndexLock({ phase: 'commit', message, event, context, profile })) {
+            return;
+          }
+
+          await handleGitPhaseError({
             phase: 'commit',
-            message: state.lastError,
+            message,
             event,
             context,
             profile,
@@ -717,10 +833,12 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
           return;
         }
 
+        clearGitIndexLockFailureState();
         state.lastCommitAt = commitTimestamp;
       }
 
       if (!(await remoteExists(config.repoDir, config.remote))) {
+        clearGitIndexLockFailureState();
         state.lastError = undefined;
         state.lastConflictFiles = [];
         state.lastConflictFingerprint = undefined;
@@ -733,12 +851,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
 
       const fetchResult = await runGit(config.repoDir, ['fetch', config.remote, config.branch]);
       if (fetchResult.code !== 0) {
-        state.lastError = fetchResult.stderr || fetchResult.stdout || 'git fetch failed';
-        context.logger.warn(`git sync fetch failed: ${state.lastError}`);
-        maybeNotifySyncError(state, context, config, profile, event, 'fetch', state.lastError);
-        await maybeStartErrorResolver({
+        const message = gitFailureMessage(fetchResult, 'git fetch failed');
+        if (await maybeHandleGitIndexLock({ phase: 'fetch', message, event, context, profile })) {
+          return;
+        }
+
+        await handleGitPhaseError({
           phase: 'fetch',
-          message: state.lastError,
+          message,
           event,
           context,
           profile,
@@ -746,10 +866,18 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         return;
       }
 
+      clearGitIndexLockFailureState();
+
       const mergeResult = await runGit(config.repoDir, ['merge', '--no-edit', `${config.remote}/${config.branch}`]);
       if (mergeResult.code !== 0) {
+        const message = gitFailureMessage(mergeResult, 'git merge failed');
+        if (await maybeHandleGitIndexLock({ phase: 'merge', message, event, context, profile })) {
+          return;
+        }
+
         const conflicts = await listConflictedFiles(config.repoDir);
         if (conflicts.length > 0) {
+          clearGitIndexLockFailureState();
           state.lastConflictAt = nowIso();
           state.lastConflictFiles = conflicts;
           state.lastError = `sync blocked by ${conflicts.length} unresolved merge conflict(s)`;
@@ -759,27 +887,28 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
           return;
         }
 
-        state.lastError = mergeResult.stderr || mergeResult.stdout || 'git merge failed';
-        context.logger.warn(`git sync merge failed: ${state.lastError}`);
-        maybeNotifySyncError(state, context, config, profile, event, 'merge', state.lastError);
-        await maybeStartErrorResolver({
+        await handleGitPhaseError({
           phase: 'merge',
-          message: state.lastError,
+          message,
           event,
           context,
           profile,
         });
         return;
       }
+
+      clearGitIndexLockFailureState();
 
       const pushResult = await runGit(config.repoDir, ['push', config.remote, `HEAD:${config.branch}`]);
       if (pushResult.code !== 0) {
-        state.lastError = pushResult.stderr || pushResult.stdout || 'git push failed';
-        context.logger.warn(`git sync push failed: ${state.lastError}`);
-        maybeNotifySyncError(state, context, config, profile, event, 'push', state.lastError);
-        await maybeStartErrorResolver({
+        const message = gitFailureMessage(pushResult, 'git push failed');
+        if (await maybeHandleGitIndexLock({ phase: 'push', message, event, context, profile })) {
+          return;
+        }
+
+        await handleGitPhaseError({
           phase: 'push',
-          message: state.lastError,
+          message,
           event,
           context,
           profile,
@@ -787,6 +916,7 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         return;
       }
 
+      clearGitIndexLockFailureState();
       state.lastConflictFiles = [];
       state.lastConflictFingerprint = undefined;
       state.lastErrorResolverFingerprint = undefined;
@@ -796,16 +926,19 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       state.lastSuccessAt = nowIso();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      state.lastError = message;
-      context.logger.warn(`git sync cycle failed: ${message}`);
-      maybeNotifySyncError(state, context, config, profile, event, 'runtime', message);
-      await maybeStartErrorResolver({
-        phase: 'runtime',
-        message,
-        event,
-        context,
-        profile,
-      });
+      if (!(await maybeHandleGitIndexLock({ phase: 'runtime', message, event, context, profile }))) {
+        clearGitIndexLockFailureState();
+        state.lastError = message;
+        context.logger.warn(`git sync cycle failed: ${message}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'runtime', message);
+        await maybeStartErrorResolver({
+          phase: 'runtime',
+          message,
+          event,
+          context,
+          profile,
+        });
+      }
     } finally {
       state.running = false;
     }
