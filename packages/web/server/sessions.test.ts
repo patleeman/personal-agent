@@ -567,7 +567,7 @@ describe('sessions', () => {
           role: 'custom',
           customType: 'referenced_context',
           display: false,
-          content: [{ type: 'text', text: 'Conversation automation context:\n- Review the todo list.' }],
+          content: [{ type: 'text', text: 'Conversation automation context:\n- Review the agent reminders.' }],
         },
       },
     ]);

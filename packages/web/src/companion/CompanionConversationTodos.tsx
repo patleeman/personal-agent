@@ -156,7 +156,7 @@ export function CompanionConversationTodos({
   if (loading && !data) {
     return (
       <div className="rounded-2xl border border-border-subtle bg-surface/70 px-4 py-4">
-        <p className="text-[13px] text-dim">Loading todo list…</p>
+        <p className="text-[13px] text-dim">Loading agent reminders…</p>
       </div>
     );
   }
@@ -164,7 +164,7 @@ export function CompanionConversationTodos({
   if (error && !data) {
     return (
       <div className="rounded-2xl border border-border-subtle bg-surface/70 px-4 py-4">
-        <p className="text-[13px] text-danger">Unable to load the todo list: {error}</p>
+        <p className="text-[13px] text-danger">Unable to load agent reminders: {error}</p>
       </div>
     );
   }
@@ -221,7 +221,7 @@ export function CompanionConversationTodos({
     <section className="rounded-2xl border border-border-subtle bg-surface/70 overflow-hidden">
       <div className="flex items-start justify-between gap-3 px-4 py-3.5">
         <div className="min-w-0">
-          <p className="text-[15px] font-medium text-primary">Todo list</p>
+          <p className="text-[15px] font-medium text-primary">Agent reminders</p>
           <p className="mt-1 text-[11px] text-dim">
             {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
             <span className="mx-1.5 opacity-40">·</span>
@@ -268,7 +268,7 @@ export function CompanionConversationTodos({
           skills={data.skills}
           presets={presets}
           disabled={editingDisabled}
-          placeholder={readOnly ? 'Take over to edit the todo list from this device.' : 'Add an item… /skill:... or /preset:...'}
+          placeholder={readOnly ? 'Take over to edit the agent reminders from this device.' : 'Add a reminder… /skill:... or /preset:...'}
           onAdd={async (nextItems) => {
             setDraftItems(nextItems);
             await handleCommitItems(nextItems);

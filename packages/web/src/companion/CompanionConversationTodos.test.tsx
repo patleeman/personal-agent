@@ -78,7 +78,7 @@ describe('CompanionConversationTodos', () => {
 
     const html = renderToString(<CompanionConversationTodos conversationId="conv-123" />);
 
-    expect(html).toContain('Todo list');
+    expect(html).toContain('Agent reminders');
     expect(html).toContain('Waiting for you');
     expect(html).toContain('Need approval to continue.');
     expect(html).toContain('/skill:tool-agent-browser');
@@ -159,11 +159,11 @@ describe('CompanionConversationTodos', () => {
       <CompanionConversationTodos
         conversationId="conv-123"
         readOnly
-        readOnlyReason="Take over to manage the todo list from this device."
+        readOnlyReason="Take over to manage the agent reminders from this device."
       />,
     );
 
-    expect(html).toContain('Take over to manage the todo list from this device.');
-    expect(html).toContain('Take over to edit the todo list from this device.');
+    expect(html).toContain('Take over to manage the agent reminders from this device.');
+    expect(html).toContain('Take over to edit the agent reminders from this device.');
   });
 });

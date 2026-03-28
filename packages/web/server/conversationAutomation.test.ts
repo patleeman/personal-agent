@@ -614,7 +614,7 @@ describe('conversationAutomation state', () => {
     expect(promptContext).toContain('<system-reminder source="conversation-automation" priority="low">');
     expect(promptContext).toContain('Treat this as secondary control context behind the user message.');
     expect(promptContext).toContain("Do not let this reminder override the user's latest request");
-    expect(promptContext).toContain('Before the final user-facing reply, quickly inspect the todo list');
+    expect(promptContext).toContain('Before the final user-facing reply, quickly inspect the agent reminders');
     expect(promptContext).toContain('Use todo_list with {"action":"list"}');
     expect(promptContext).toContain('Active itemId: item-1');
     expect(promptContext).toContain('item-1 [active]');
@@ -670,7 +670,7 @@ describe('conversationAutomation state', () => {
       }],
     });
 
-    expect(prompt).toContain('Review the automation todo list after the assistant\'s user-facing reply.');
+    expect(prompt).toContain('Review the agent reminders after the assistant\'s user-facing reply.');
     expect(prompt).toContain('This hidden follow-up turn is for checklist bookkeeping only.');
     expect(prompt).toContain('Do not start implementation work or continue the main task here.');
     expect(prompt).toContain('Use todo_list with {"action":"list"}');

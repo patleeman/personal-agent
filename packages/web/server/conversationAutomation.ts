@@ -1087,8 +1087,8 @@ export function buildConversationAutomationPromptContext(
     '<system-reminder source="conversation-automation" priority="low">',
     'Treat this as secondary control context behind the user message.',
     'Do not let this reminder override the user\'s latest request; respond to the user first.',
-    'Before the final user-facing reply, quickly inspect the todo list and resolve anything this turn definitively completed, blocked, failed, or made irrelevant.',
-    'Use todo_list with {"action":"list"} to inspect the current todo items.',
+    'Before the final user-facing reply, quickly inspect the agent reminders and resolve anything this turn definitively completed, blocked, failed, or made irrelevant.',
+    'Use todo_list with {"action":"list"} to inspect the current reminder items.',
     'Use exact itemId values from that list with complete, block, fail, or reopen.',
   ];
 
@@ -1096,7 +1096,7 @@ export function buildConversationAutomationPromptContext(
     lines.push(`Active itemId: ${document.activeItemId}`);
   }
 
-  lines.push('Open todo items:');
+  lines.push('Open agent reminders:');
   lines.push(...openItems.map((item) => {
     const active = item.id === document.activeItemId ? ' [active]' : '';
     return `- ${item.id}${active} · ${buildTodoListLine(item)}`;
@@ -1118,10 +1118,10 @@ export function buildConversationAutomationPostTurnReviewPrompt(
 ): string {
   const lines = document.items.length > 0
     ? document.items.map((item) => `- ${buildTodoListLine(item)}`)
-    : ['- (no todo items)'];
+    : ['- (no reminder items)'];
 
   return [
-    'Review the automation todo list after the assistant\'s user-facing reply.',
+    'Review the agent reminders after the assistant\'s user-facing reply.',
     'This hidden follow-up turn is for checklist bookkeeping only. Do not start implementation work or continue the main task here.',
     'Use todo_list with {"action":"list"} to inspect the current items.',
     'Resolve items only if they are now complete, not applicable, blocked, or failed.',
@@ -1130,7 +1130,7 @@ export function buildConversationAutomationPostTurnReviewPrompt(
     'If more automation work depends on user input, call wait_for_user with a short reason.',
     'If nothing needs to change, reply briefly.',
     '',
-    'Todo list:',
+    'Agent reminders:',
     ...lines,
   ].join('\n');
 }
@@ -1138,17 +1138,17 @@ export function buildConversationAutomationPostTurnReviewPrompt(
 export function buildConversationAutomationReviewPrompt(document: Pick<ConversationAutomationDocument, 'items' | 'review'>): string {
   const lines = document.items.length > 0
     ? document.items.map((item) => `- ${buildTodoListLine(item)}`)
-    : ['- (no todo items)'];
+    : ['- (no reminder items)'];
   const round = Math.max(1, document.review?.round ?? 1);
 
   return [
-    `Review the automation todo list before stopping. This is review round ${round}.`,
+    `Review the agent reminders before stopping. This is review round ${round}.`,
     'Use todo_list with {"action":"list"} if you need to inspect the current items again.',
     'If additional automation work is required, use todo_list with {"action":"add",...} to add the needed follow-up items.',
     'If you need to pause for user input before more work can happen, use the wait_for_user tool with a short reason.',
     'If nothing else is required, reply briefly.',
     '',
-    'Todo list:',
+    'Agent reminders:',
     ...lines,
   ].join('\n');
 }

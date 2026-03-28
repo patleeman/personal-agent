@@ -769,7 +769,7 @@ describe('conversation automation live-session integration', () => {
     });
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_review',
-      content: expect.stringContaining('Review the automation todo list before stopping.'),
+      content: expect.stringContaining('Review the agent reminders before stopping.'),
       display: false,
       details: undefined,
     }, {
