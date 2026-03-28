@@ -169,12 +169,18 @@ describe('Sidebar', () => {
         createSession({ id: 'conv-123', title: 'First conversation' }),
         createSession({ id: 'conv-456', title: 'Second conversation' }),
       ],
-      liveTitles: new Map([['conv-123', 'Fresh live title']]),
+      liveTitles: new Map([
+        ['conv-123', 'Fresh live title A'],
+        ['conv-456', 'Fresh live title B'],
+      ]),
     });
 
-    expect(html).toContain('Fresh live title');
-    expect(html).toContain('Second conversation');
-    expect((html.match(/Fresh live title/g) ?? []).length).toBe(1);
+    expect(html).toContain('Fresh live title A');
+    expect(html).toContain('Fresh live title B');
+    expect(html).not.toContain('First conversation');
+    expect(html).not.toContain('Second conversation');
+    expect((html.match(/Fresh live title A/g) ?? []).length).toBe(1);
+    expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {
