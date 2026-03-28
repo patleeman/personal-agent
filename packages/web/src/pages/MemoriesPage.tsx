@@ -219,15 +219,16 @@ function NoteWorkQueuePanel({
 }
 
 function formatNoteContext(memory: MemoryDocItem): { primary: string; secondary: string | null } {
-  const primary = memory.area?.trim()
-    || memory.status?.trim()
-    || '—';
-  const secondary = memory.parent?.trim()
-    ? `parent @${memory.parent.trim()}`
-    : memory.role?.trim() || null;
+  const referenceCount = memory.referenceCount ?? 0;
+  const recentSessionCount = memory.recentSessionCount ?? 0;
+
   return {
-    primary,
-    secondary,
+    primary: referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Document',
+    secondary: memory.usedInLastSession
+      ? 'Used recently'
+      : recentSessionCount > 0
+        ? `${recentSessionCount} recent ${recentSessionCount === 1 ? 'chat' : 'chats'}`
+        : null,
   };
 }
 

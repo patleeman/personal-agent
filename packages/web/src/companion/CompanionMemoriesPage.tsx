@@ -39,9 +39,6 @@ function MemoriesSection({
         {memories.map((memory) => {
           const meta = [
             memory.updated ? `updated ${timeAgo(memory.updated)}` : null,
-            memory.role,
-            memory.area,
-            memory.type,
             `@${memory.id}`,
           ].filter((value): value is string => Boolean(value));
           const tags = memory.tags.slice(0, 3).join(' · ');
