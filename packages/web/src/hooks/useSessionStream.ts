@@ -251,6 +251,24 @@ export function resolveSessionStreamSubscriptionId(
   return options?.enabled === false ? null : sessionId;
 }
 
+export function resolveEffectiveSessionStreamSubscriptionId(
+  sessionId: string | null,
+  options?: { enabled?: boolean },
+  forcedSessionId?: string | null,
+): string | null {
+  const requestedSessionId = resolveSessionStreamSubscriptionId(sessionId, options);
+  if (requestedSessionId) {
+    return requestedSessionId;
+  }
+
+  const normalizedSessionId = sessionId?.trim() ?? '';
+  if (!normalizedSessionId) {
+    return null;
+  }
+
+  return forcedSessionId?.trim() === normalizedSessionId ? normalizedSessionId : null;
+}
+
 export function shouldRetrySessionStreamAfterError(status?: number): boolean {
   if (typeof status !== 'number') {
     return true;
@@ -342,10 +360,13 @@ export async function submitLivePromptWithControlRetry(input: {
 export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean }) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [connectVersion, setConnectVersion] = useState(0);
+  const [forcedSessionId, setForcedSessionId] = useState<string | null>(null);
   // Mutable refs to avoid stale closures in the SSE handler
   const blocksRef = useRef<MessageBlock[]>([]);
   const streamingRef = useRef(false);
-  const requestedSessionId = resolveSessionStreamSubscriptionId(sessionId, options);
+  const normalizedSessionId = sessionId?.trim() || null;
+  const configuredSessionId = resolveSessionStreamSubscriptionId(normalizedSessionId, options);
+  const requestedSessionId = resolveEffectiveSessionStreamSubscriptionId(normalizedSessionId, options, forcedSessionId);
   const stateSessionIdRef = useRef<string | null>(requestedSessionId);
   const surfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const surfaceType = useMemo(() => detectConversationSurfaceType(), []);
@@ -356,15 +377,40 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     presenceRef.current = state.presence;
   }, [state.presence]);
 
+  useEffect(() => {
+    if (!normalizedSessionId) {
+      setForcedSessionId(null);
+      return;
+    }
+
+    if (forcedSessionId && forcedSessionId !== normalizedSessionId) {
+      setForcedSessionId(null);
+      return;
+    }
+
+    if (configuredSessionId && forcedSessionId === configuredSessionId) {
+      setForcedSessionId(null);
+    }
+  }, [configuredSessionId, forcedSessionId, normalizedSessionId]);
+
+  const ensureRequestedSubscription = useCallback(() => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    setForcedSessionId((current) => current === normalizedSessionId ? current : normalizedSessionId);
+  }, [normalizedSessionId]);
+
   const waitForCurrentSurfaceRegistration = useCallback(() => waitForSurfaceRegistration({
     surfaceId,
     hasSurface: () => isLiveSessionSurfaceRegistered(presenceRef.current, surfaceId),
-    reconnect: sessionId
+    reconnect: normalizedSessionId
       ? () => {
+          ensureRequestedSubscription();
           setConnectVersion((current) => current + 1);
         }
       : undefined,
-  }), [sessionId, surfaceId]);
+  }), [ensureRequestedSubscription, normalizedSessionId, surfaceId]);
 
   const send = useCallback(async (
     text: string,
@@ -372,7 +418,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
   ) => {
-    if (!sessionId) return;
+    if (!normalizedSessionId) return;
+
+    ensureRequestedSubscription();
 
     let optimisticUserBlockId: string | null = null;
 
@@ -403,9 +451,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
     try {
       await submitLivePromptWithControlRetry({
-        attemptPrompt: () => api.promptSession(sessionId, text, behavior, images, attachmentRefs, surfaceId).then(() => undefined),
+        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId).then(() => undefined),
         waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
-        takeOverSessionControl: () => api.takeoverLiveSession(sessionId, surfaceId),
+        takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
       });
     } catch (error) {
       if (behavior) {
@@ -419,33 +467,36 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       }
       throw error;
     }
-  }, [sessionId, surfaceId, waitForCurrentSurfaceRegistration]);
+  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
   const abort = useCallback(async () => {
-    if (!sessionId) return;
-    await api.abortSession(sessionId, surfaceId);
-  }, [sessionId, surfaceId]);
+    if (!normalizedSessionId) return;
+    await api.abortSession(normalizedSessionId, surfaceId);
+  }, [normalizedSessionId, surfaceId]);
 
   const takeover = useCallback(async () => {
-    if (!sessionId) {
+    if (!normalizedSessionId) {
       return;
     }
+
+    ensureRequestedSubscription();
 
     const surfaceReady = await waitForCurrentSurfaceRegistration();
     if (!surfaceReady) {
       throw new Error('Unable to confirm this surface is connected yet. Try again in a moment.');
     }
 
-    await api.takeoverLiveSession(sessionId, surfaceId);
-  }, [sessionId, surfaceId, waitForCurrentSurfaceRegistration]);
+    await api.takeoverLiveSession(normalizedSessionId, surfaceId);
+  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
   const reconnect = useCallback(() => {
-    if (!sessionId) {
+    if (!normalizedSessionId) {
       return;
     }
 
+    ensureRequestedSubscription();
     setConnectVersion((current) => current + 1);
-  }, [sessionId]);
+  }, [ensureRequestedSubscription, normalizedSessionId]);
 
   useEffect(() => {
     stateSessionIdRef.current = requestedSessionId;

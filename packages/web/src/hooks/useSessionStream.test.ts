@@ -9,6 +9,7 @@ import {
   normalizePendingQueueItems,
   removeOptimisticUserBlock,
   removePendingQueueItem,
+  resolveEffectiveSessionStreamSubscriptionId,
   resolveSessionStreamSubscriptionId,
   selectVisibleStreamState,
   shouldReplaceOptimisticUserBlock,
@@ -25,6 +26,20 @@ describe('resolveSessionStreamSubscriptionId', () => {
   it('keeps the requested session id when streaming is enabled', () => {
     expect(resolveSessionStreamSubscriptionId('session-a', { enabled: true })).toBe('session-a');
     expect(resolveSessionStreamSubscriptionId('session-a')).toBe('session-a');
+  });
+});
+
+describe('resolveEffectiveSessionStreamSubscriptionId', () => {
+  it('keeps a forced subscription for the active session while the live stream is still disabled', () => {
+    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: false }, 'session-a')).toBe('session-a');
+  });
+
+  it('ignores forced subscriptions for other sessions', () => {
+    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: false }, 'session-b')).toBeNull();
+  });
+
+  it('prefers the configured live subscription when streaming is enabled', () => {
+    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: true }, 'session-a')).toBe('session-a');
   });
 });
 
