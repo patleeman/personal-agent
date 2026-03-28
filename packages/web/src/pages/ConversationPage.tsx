@@ -96,6 +96,7 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const conversationProjectsCache = new Map<string, ConversationProjectLinks>();
 
 export function shouldEnableConversationLiveStream(
@@ -4160,7 +4161,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         {hasRenderableMessages && realMessages ? (
           <>
             {showHistoricalLoadMore && (
-              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
+              <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
                 <div className="min-w-0 text-[11px] text-secondary">
                   Showing the latest <span className="font-medium text-primary">{realMessages.length}</span> of{' '}
                   <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
@@ -4199,6 +4200,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationBusy={resumeConversationBusy}
               resumeConversationTitle={conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
+              windowingBadgeTopOffset={showHistoricalLoadMore ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
           </>
         ) : showConversationLoadingState ? (

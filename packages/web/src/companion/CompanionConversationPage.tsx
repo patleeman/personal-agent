@@ -97,6 +97,7 @@ const COMPANION_TOUCH_BUTTON_STYLE = {
 } as const;
 const INITIAL_COMPANION_HISTORICAL_TAIL_BLOCKS = 400;
 const COMPANION_HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const COMPANION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 48;
 const COMPANION_HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 900;
 
 type CompanionTaskIndicatorTone = 'accent' | 'warning' | 'dim';
@@ -971,7 +972,7 @@ export function CompanionConversationPage() {
       <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto py-3 sm:py-4">
         <div className="mx-auto w-full max-w-4xl">
           {historicalHasOlderBlocks && messages.length > 0 ? (
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-base/95 px-3 py-2 backdrop-blur sm:px-4">
+            <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-base/95 px-3 py-2 backdrop-blur sm:px-4">
               <div className="min-w-0 text-[11px] text-secondary">
                 Showing the latest <span className="font-medium text-primary">{messages.length}</span> of{' '}
                 <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
@@ -1001,6 +1002,7 @@ export function CompanionConversationPage() {
               askUserQuestionDisplayMode="composer"
               onOpenArtifact={openArtifact}
               activeArtifactId={selectedArtifactId}
+              windowingBadgeTopOffset={historicalHasOlderBlocks ? COMPANION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
           )}
         </div>
