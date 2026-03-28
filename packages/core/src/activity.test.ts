@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from 'fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -111,6 +111,28 @@ describe('activity storage', () => {
     expect(entries.map((entry) => entry.entry.id)).toEqual(['newer', 'older']);
     expect(entries[0]?.path).toBe(newerPath);
     expect(entries[1]?.path).toBe(olderPath);
+  });
+
+  it('ignores malformed activity entries', () => {
+    const stateRoot = createTempStateRoot();
+
+    writeProfileActivityEntry({
+      stateRoot,
+      profile: 'datadog',
+      entry: createProjectActivityEntry({
+        id: 'valid',
+        createdAt: '2026-03-10T12:00:00.000Z',
+        profile: 'datadog',
+        kind: 'follow-up',
+        summary: 'Valid activity.',
+      }),
+    });
+
+    writeFileSync(resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'broken' }), '');
+
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+
+    expect(entries.map((entry) => entry.entry.id)).toEqual(['valid']);
   });
 
   it('returns an empty list when there is no activity dir', () => {
