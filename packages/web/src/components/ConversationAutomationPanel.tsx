@@ -226,7 +226,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   }, [automation, draftItems]);
 
   if (loading && !data) {
-    return <LoadingState label="Loading todo list…" className="py-2" />;
+    return <LoadingState label="Loading agent reminders…" className="py-2" />;
   }
 
   if (error && !data) {
@@ -322,12 +322,12 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       </div>
 
       <div className="space-y-2">
-        <p className="ui-section-label">Add item</p>
+        <p className="ui-section-label">Add reminder</p>
         <ChecklistComposer
           currentItems={draftItems}
           skills={data.skills}
           presets={presets}
-          placeholder="Add a todo item… /skill:… or /preset:…"
+          placeholder="Add a reminder… /skill:… or /preset:…"
           disabled={pendingAction !== null}
           onAdd={async (nextItems) => {
             setDraftItems(nextItems);

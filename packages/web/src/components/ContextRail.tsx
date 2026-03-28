@@ -1308,7 +1308,7 @@ function DraftConversationContextPanel() {
         />
       </Section>
 
-      <Section title="Todo list">
+      <Section title="Agent reminders">
         <ConversationAutomationPanel conversationId={DRAFT_CONVERSATION_ID} />
       </Section>
 
@@ -2051,7 +2051,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         )}
       </Section>
 
-      <Section title="Todo list">
+      <Section title="Agent reminders">
         <ConversationAutomationPanel conversationId={id} />
       </Section>
 
@@ -3064,8 +3064,8 @@ function CapabilitiesOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Todo Presets</p>
-          <p className="ui-card-meta">Select a preset on the left to inspect its ordered automation steps and defaults.</p>
+          <p className="ui-card-title">Reminder presets</p>
+          <p className="ui-card-meta">Select a preset on the left to inspect its ordered reminders and defaults.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Presets" value={presets.length} />
@@ -3359,13 +3359,13 @@ export function ContextRail() {
   // Presets
   if (section === 'plans') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Todo Presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
+      <RailHeader label="Reminder presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
           selectedPlanId || creatingPlan
             ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
-            : <EmptyPrompt text="Select a todo preset or create a new one to edit reusable todo presets." />,
-          'Loading todo presets…',
+            : <EmptyPrompt text="Select a reminder preset or create a new one to edit reusable reminder presets." />,
+          'Loading reminder presets…',
         )}
       </div>
     </div>

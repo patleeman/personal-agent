@@ -182,9 +182,9 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
     {
       id: 'nav:plans',
       section: 'nav',
-      title: 'Todo Presets',
-      subtitle: 'Browse reusable automation presets',
-      keywords: ['automation', 'presets', 'todo', 'workflow'],
+      title: 'Reminder Presets',
+      subtitle: 'Browse reusable reminder presets',
+      keywords: ['automation', 'presets', 'reminder', 'todo', 'workflow'],
       order: 7,
       action: { kind: 'navigate', to: '/plans' },
     },

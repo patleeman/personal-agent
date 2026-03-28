@@ -511,11 +511,11 @@ export function CompanionConversationPage() {
   const showStatusIndicators = orderedDeferredResumes.length > 0 || Boolean(scheduledTaskSummary.indicatorText);
   const canResumeConversation = !isLiveSession && Boolean(savedConversationSessionFile);
   const todoReadOnlyReason = !isLiveSession
-    ? 'Resume this conversation to edit the todo list from this device.'
+    ? 'Resume this conversation to edit the agent reminders from this device.'
     : controlState.needsTakeover
-      ? 'Take over to manage the todo list from this device.'
+      ? 'Take over to manage the agent reminders from this device.'
       : stream.isStreaming
-        ? 'Wait for the current turn to finish before editing the todo list.'
+        ? 'Wait for the current turn to finish before editing the agent reminders.'
         : null;
   const trimmedDraft = draft.trim();
   const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
@@ -1035,7 +1035,7 @@ export function CompanionConversationPage() {
                 <div className="min-w-0">
                   <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-dim/70">Conversation</p>
                   <h2 className="truncate text-[15px] font-medium text-primary">
-                    {selectedPanel === 'actions' ? 'Actions' : selectedPanel === 'todos' ? 'Todo list' : 'Artifacts'}
+                    {selectedPanel === 'actions' ? 'Actions' : selectedPanel === 'todos' ? 'Agent reminders' : 'Artifacts'}
                   </h2>
                 </div>
               </div>
@@ -1104,8 +1104,8 @@ export function CompanionConversationPage() {
                     className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
                   >
                     <div className="min-w-0">
-                      <p className="text-[14px] font-medium text-primary">Todo list</p>
-                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">Review, reorder, and complete the current conversation todo list.</p>
+                      <p className="text-[14px] font-medium text-primary">Agent reminders</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">Review, reorder, and manage the current reminders for the agent.</p>
                     </div>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
                       <path d="m9 6 6 6-6 6" />

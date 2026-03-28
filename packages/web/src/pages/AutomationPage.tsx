@@ -112,7 +112,7 @@ export function AutomationPage() {
         ? `defaults ${data.presetLibrary.defaultPresetIds.map((presetId) => presets.find((preset) => preset.id === presetId)?.name ?? presetId).join(', ')}`
         : 'no default presets',
     ].join(' · ')
-    : 'Reusable todo presets';
+    : 'Reusable reminder presets';
 
   return (
     <SettingsSplitLayout>
@@ -130,12 +130,12 @@ export function AutomationPage() {
           </>
         )}
       >
-        <PageHeading title="Todo Presets" meta={pageMeta} />
+        <PageHeading title="Reminder Presets" meta={pageMeta} />
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && <LoadingState label="Loading todo presets…" />}
-        {error && <ErrorState message={`Unable to load todo presets: ${error}`} />}
+        {loading && <LoadingState label="Loading reminder presets…" />}
+        {error && <ErrorState message={`Unable to load reminder presets: ${error}`} />}
 
         {!loading && !error && data && (
           <div className="space-y-5 pb-5">

@@ -210,8 +210,8 @@ export function AutomationPresetPanel({
 
       <div className="space-y-3">
         <div>
-          <p className="ui-section-label">Todo list</p>
-          <p className="mt-1 text-[12px] text-secondary">Ordered preset items for the agent.</p>
+          <p className="ui-section-label">Agent reminders</p>
+          <p className="mt-1 text-[12px] text-secondary">Ordered preset reminders for the agent.</p>
         </div>
 
         <div className="border-t border-border-subtle/70">

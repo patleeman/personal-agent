@@ -465,7 +465,7 @@ describe('chat view streaming disclosure', () => {
         type: 'context',
         ts: '2026-03-11T18:00:00.000Z',
         customType: 'referenced_context',
-        text: 'Conversation automation context:\n\n- Review the todo list before stopping.',
+        text: 'Conversation automation context:\n\n- Review the agent reminders before stopping.',
       }],
     }));
 

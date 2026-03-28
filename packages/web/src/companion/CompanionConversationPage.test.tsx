@@ -255,7 +255,7 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('Open conversation actions');
     expect(html).not.toContain('Open todo panel');
     expect(html).not.toContain('Open artifact panel');
-    expect(html).not.toContain('Todo list');
+    expect(html).not.toContain('Agent reminders');
     expect(html).not.toContain('artifacts:');
     expect(html).not.toContain('todos:');
     expect(html).toContain('artifact-action:');
@@ -294,7 +294,7 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('Actions');
     expect(html).not.toContain('Resume conversation');
     expect(html).toContain('Open conversation');
-    expect(html).toContain('Todo list');
+    expect(html).toContain('Agent reminders');
     expect(html).toContain('Artifacts');
     expect(html).toContain('Scheduled tasks');
     expect(html).not.toContain('todos:');

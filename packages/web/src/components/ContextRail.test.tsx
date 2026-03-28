@@ -338,7 +338,7 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('INDEX.md');
   });
 
-  it('shows working directory, project references, and the todo list on the draft conversation rail', () => {
+  it('shows working directory, project references, and agent reminders on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <AppDataContext.Provider value={{
@@ -360,9 +360,9 @@ describe('ContextRail run detail', () => {
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Todo list')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Agent reminders')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
-    expect(html.indexOf('Referenced projects')).toBeLessThan(html.indexOf('Todo list'));
+    expect(html.indexOf('Referenced projects')).toBeLessThan(html.indexOf('Agent reminders'));
     expect(html).toContain('No referenced projects.');
   });
 
