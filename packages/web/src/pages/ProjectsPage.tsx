@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
+import { bucketProjectStatus, formatProjectStatus, isProjectArchived, summarizeProjectPreview } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
@@ -41,11 +41,12 @@ function toneForProjectStatus(status: string, archived: boolean): 'muted' | 'war
     return 'muted';
   }
 
-  if (status === 'paused') {
+  const bucket = bucketProjectStatus(status);
+  if (bucket === 'paused') {
     return 'warning';
   }
 
-  if (status === 'done') {
+  if (bucket === 'done') {
     return 'success';
   }
 
@@ -79,7 +80,7 @@ function matchesProjectFilter(
     return false;
   }
 
-  const normalizedStatus = formatProjectStatus(project.status);
+  const normalizedStatus = bucketProjectStatus(project.status);
   if (filter === 'done') {
     return normalizedStatus === 'done';
   }
@@ -360,7 +361,7 @@ function ProjectsTable({
                   </div>
                 </td>
                 <td className="px-3 py-3">
-                  <Pill tone={toneForProjectStatus(formatProjectStatus(project.status), archived)}>
+                  <Pill tone={toneForProjectStatus(project.status, archived)}>
                     {formatProjectStatus(project.status)}
                   </Pill>
                 </td>

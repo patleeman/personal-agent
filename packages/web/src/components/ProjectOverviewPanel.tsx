@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
+import { bucketProjectStatus, formatProjectStatus, isProjectArchived } from '../contextRailProject';
 import type { ProjectDetail } from '../types';
 import { timeAgo } from '../utils';
 import { IconButton, Pill, SurfacePanel } from './ui';
@@ -106,7 +106,7 @@ export function ProjectOverviewPanel({
         )}
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-          <Pill tone={isArchived ? 'muted' : record.status === 'paused' ? 'warning' : record.status === 'done' ? 'success' : 'teal'}>
+          <Pill tone={isArchived ? 'muted' : bucketProjectStatus(record.status) === 'paused' ? 'warning' : bucketProjectStatus(record.status) === 'done' ? 'success' : 'teal'}>
             {formatProjectStatus(record.status)}
           </Pill>
           {metrics.map((part, index) => (

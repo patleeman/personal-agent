@@ -138,7 +138,7 @@ describe('deferred resume state', () => {
       resumes: Record<string, { status: string }>;
     };
 
-    expect(persisted.version).toBe(2);
+    expect(persisted.version).toBe(3);
     expect(persisted.resumes['resume-1']?.status).toBe('scheduled');
   });
 
@@ -201,7 +201,7 @@ describe('deferred resume state', () => {
     });
 
     expect(merged).toEqual({
-      version: 2,
+      version: 3,
       resumes: {
         'resume-1': {
           id: 'resume-1',
@@ -211,6 +211,12 @@ describe('deferred resume state', () => {
           createdAt: '2026-03-08T11:50:00.000Z',
           attempts: 1,
           status: 'scheduled',
+          kind: 'continue',
+          delivery: {
+            alertLevel: 'none',
+            autoResumeIfOpen: true,
+            requireAck: false,
+          },
         },
         'resume-2': {
           id: 'resume-2',
@@ -220,6 +226,12 @@ describe('deferred resume state', () => {
           createdAt: '2026-03-08T12:55:00.000Z',
           attempts: 0,
           status: 'scheduled',
+          kind: 'continue',
+          delivery: {
+            alertLevel: 'none',
+            autoResumeIfOpen: true,
+            requireAck: false,
+          },
         },
       },
     });

@@ -58,7 +58,7 @@ describe('workspace git command buffering', () => {
       changes: [],
     });
 
-    childProcessMocks.execFileSync.mockImplementation((_command, args: string[], options: { cwd?: string }) => {
+    childProcessMocks.execFileSync.mockImplementation((_command, args: string[], _options: { cwd?: string }) => {
       if (args[0] === 'status') {
         return '';
       }

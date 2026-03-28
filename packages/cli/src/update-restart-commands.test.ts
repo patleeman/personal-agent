@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { serviceMocks, daemonMocks } = vi.hoisted(() => ({
   serviceMocks: {
-    restartManagedDaemonServiceIfInstalled: vi.fn((): any => undefined),
+    restartManagedDaemonServiceIfInstalled: vi.fn((): unknown => undefined),
     restartWebUiServiceIfInstalled: vi.fn(() => undefined),
     getManagedDaemonServiceStatus: vi.fn(() => ({
       identifier: 'mock-daemon',

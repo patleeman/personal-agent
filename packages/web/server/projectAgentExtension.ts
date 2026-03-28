@@ -142,6 +142,38 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     `summary: ${project.summary}`,
   ];
 
+  if (project.description) {
+    lines.push(`description: ${project.description}`);
+  }
+
+  if (project.currentFocus) {
+    lines.push(`currentFocus: ${project.currentFocus}`);
+  }
+
+  if (project.requirements.goal) {
+    lines.push(`goal: ${project.requirements.goal}`);
+  }
+
+  if (project.requirements.acceptanceCriteria.length > 0) {
+    lines.push(`acceptanceCriteria: ${project.requirements.acceptanceCriteria.join(' | ')}`);
+  }
+
+  if (project.planSummary) {
+    lines.push(`planSummary: ${project.planSummary}`);
+  }
+
+  if (project.completionSummary) {
+    lines.push(`completionSummary: ${project.completionSummary}`);
+  }
+
+  if (project.blockers.length > 0) {
+    lines.push(`blockers: ${project.blockers.join(' | ')}`);
+  }
+
+  if (project.recentProgress.length > 0) {
+    lines.push(`recentProgress: ${project.recentProgress.join(' | ')}`);
+  }
+
   if (project.archivedAt) {
     lines.push(`archivedAt: ${project.archivedAt}`);
   }
@@ -150,6 +182,13 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     lines.push(`repoRoot: ${project.repoRoot}`);
   }
 
+  if (project.plan.currentMilestoneId) {
+    lines.push(`currentMilestoneId: ${project.plan.currentMilestoneId}`);
+  }
+
+  if (project.plan.milestones.length > 0) {
+    lines.push(`milestones: ${project.plan.milestones.map((milestone) => `${milestone.id}:${milestone.status}`).join(', ')}`);
+  }
 
   if (detail.tasks.length > 0) {
     lines.push(`tasks: ${detail.tasks.map((task) => `${task.id}:${task.status}`).join(', ')}`);
@@ -240,7 +279,14 @@ export function createProjectAgentExtension(options: {
                 description: readOptionalString(params.description) ?? readOptionalString(params.body) ?? readRequiredString(params.title, 'title'),
                 projectRepoRoot: params.projectRepoRoot,
                 summary: params.summary,
+                goal: params.goal,
+                acceptanceCriteria: params.acceptanceCriteria,
+                planSummary: params.planSummary,
+                completionSummary: params.completionSummary,
                 status: params.status,
+                currentFocus: params.currentFocus,
+                blockers: params.blockers,
+                recentProgress: params.recentProgress,
               });
               invalidateAppTopics('projects');
               return {
@@ -260,10 +306,18 @@ export function createProjectAgentExtension(options: {
                 profile,
                 projectId,
                 title: params.title,
+                description: params.description,
                 projectRepoRoot: params.projectRepoRoot,
                 summary: params.summary,
+                goal: params.goal,
+                acceptanceCriteria: params.acceptanceCriteria,
+                planSummary: params.planSummary,
+                completionSummary: params.completionSummary,
                 status: params.status,
+                currentFocus: params.currentFocus,
                 currentMilestoneId: params.currentMilestoneId,
+                blockers: params.blockers,
+                recentProgress: params.recentProgress,
               });
               invalidateAppTopics('projects');
               return {

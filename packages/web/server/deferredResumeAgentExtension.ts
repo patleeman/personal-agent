@@ -61,7 +61,10 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
             autoResumeIfOpen: params.autoResumeIfOpen,
           });
 
-          publishAppEvent({ type: 'session_meta_changed', sessionId: ctx.sessionManager.getSessionId() });
+          const sessionId = ctx.sessionManager.getSessionId?.();
+          if (sessionId) {
+            publishAppEvent({ type: 'session_meta_changed', sessionId });
+          }
           return {
             content: [{
               type: 'text' as const,

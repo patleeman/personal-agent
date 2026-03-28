@@ -22,21 +22,32 @@ export function pickAttachProjectId(
   return availableProjectIds[0] ?? '';
 }
 
-export function formatProjectStatus(status: string | undefined): string {
-  switch ((status ?? '').trim()) {
-    case 'active': return 'active';
-    case 'paused': return 'paused';
-    case 'done': return 'done';
-    case 'created': return 'active';
-    case 'in_progress': return 'active';
-    case 'blocked': return 'paused';
-    case 'completed': return 'done';
-    case 'cancelled': return 'done';
-    default: {
-      const normalized = (status ?? '').replace(/[-_]+/g, ' ').trim();
-      return normalized.length > 0 ? normalized : 'unknown';
-    }
+function normalizeStatusLabel(status: string | undefined): string {
+  return (status ?? '').replace(/[-_]+/g, ' ').trim().toLowerCase();
+}
+
+export function bucketProjectStatus(status: string | undefined): 'active' | 'paused' | 'done' | 'unknown' {
+  switch (normalizeStatusLabel(status)) {
+    case 'active':
+    case 'created':
+    case 'in progress':
+    case 'pending':
+      return 'active';
+    case 'paused':
+    case 'blocked':
+      return 'paused';
+    case 'done':
+    case 'completed':
+    case 'cancelled':
+      return 'done';
+    default:
+      return normalizeStatusLabel(status) ? 'unknown' : 'unknown';
   }
+}
+
+export function formatProjectStatus(status: string | undefined): string {
+  const normalized = normalizeStatusLabel(status);
+  return normalized.length > 0 ? normalized : 'unknown';
 }
 
 export function isProjectArchived(project: Pick<ProjectRecord, 'archivedAt'>): boolean {
@@ -76,7 +87,12 @@ export function pickCurrentMilestone(plan: ProjectPlan): ProjectMilestone | unde
   return plan.milestones[0];
 }
 
-export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'description'>): string {
+export function summarizeProjectPreview(project: Pick<ProjectRecord, 'currentFocus' | 'summary' | 'description'>): string {
+  const currentFocus = project.currentFocus?.trim();
+  if (currentFocus) {
+    return currentFocus;
+  }
+
   const summary = project.summary.trim();
   if (summary.length > 0) {
     return summary;

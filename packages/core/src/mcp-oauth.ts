@@ -376,7 +376,7 @@ async function isLockValid(lockData: { pid: number; port: number; timestamp: num
 }
 
 async function waitForAuthentication(port: number): Promise<boolean> {
-  while (true) {
+  for (;;) {
     try {
       const response = await fetch(`http://127.0.0.1:${port}/wait-for-auth`, {
         signal: AbortSignal.timeout(35_000),

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
+import { bucketProjectStatus, formatProjectStatus, isProjectArchived } from '../contextRailProject';
 import type { ProjectDetail, ProjectFile, ProjectNote, ProjectTask } from '../types';
 import {
   ProjectFileUploadForm,
@@ -70,11 +70,12 @@ function toneForProjectStatus(status: string, archived: boolean): PillTone {
     return 'muted';
   }
 
-  if (status === 'paused') {
+  const bucket = bucketProjectStatus(status);
+  if (bucket === 'paused') {
     return 'warning';
   }
 
-  if (status === 'done') {
+  if (bucket === 'done') {
     return 'success';
   }
 
@@ -962,7 +963,7 @@ export function ProjectDetailPanel({
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>
+              <Pill tone={toneForProjectStatus(record.status, archived)}>
                 {formatProjectStatus(record.status)}
               </Pill>
               <span className="text-[11px] text-dim">updated {timeAgo(record.updatedAt)}</span>
@@ -1131,7 +1132,7 @@ export function ProjectDetailPanel({
           <div className="space-y-3">
             <ProjectPropertyRow
               label="Status"
-              value={<Pill tone={toneForProjectStatus(formatProjectStatus(record.status), archived)}>{formatProjectStatus(record.status)}</Pill>}
+              value={<Pill tone={toneForProjectStatus(record.status, archived)}>{formatProjectStatus(record.status)}</Pill>}
             />
             <ProjectPropertyRow label="Profile" value={projectProfile} />
             <ProjectPropertyRow label="Updated" value={timeAgo(record.updatedAt)} />

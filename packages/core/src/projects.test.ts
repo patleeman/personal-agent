@@ -203,7 +203,7 @@ describe('createProjectScaffold', () => {
     expect(indexFile).toContain('id: artifact-model');
     expect(indexFile).toContain('ownerProfile: datadog');
     expect(indexFile).toContain('title: Artifact model');
-    expect(indexFile).toContain('summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.');
+    expect(indexFile).toContain('summary: Create a durable artifact model for ongoing work.');
   });
 
   it('rejects empty titles', () => {

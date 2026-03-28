@@ -147,8 +147,9 @@ Keep planning state durable.
     expect(fileContent).toContain('title: Memory index');
     expect(fileContent).toContain('area: notes');
     expect(fileContent).toContain('structure');
-    expect(fileContent).not.toContain('related:');
-    expect(fileContent).not.toContain('links:');
+    expect(fileContent).toContain('links:');
+    expect(fileContent).toContain('related:');
+    expect(fileContent).toContain('- personal-agent');
   });
 
   it('reports broken related references during lint', () => {

@@ -284,6 +284,8 @@ export function createProjectScaffold(
   mkdirSync(paths.tasksDir, { recursive: true });
   mkdirSync(paths.notesDir, { recursive: true });
   mkdirSync(paths.filesDir, { recursive: true });
+  mkdirSync(paths.attachmentsDir, { recursive: true });
+  mkdirSync(paths.artifactsDir, { recursive: true });
 
   writeProject(
     paths.projectFile,
