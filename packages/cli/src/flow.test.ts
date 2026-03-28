@@ -263,7 +263,7 @@ describe('CLI command flows', () => {
     expect(await runCli(['daemon', 'status'])).toBe(0);
 
     expect(logs.some((line) => line.includes('stopped'))).toBe(true);
-    expect(logs.some((line) => line.includes('Task directory'))).toBe(true);
+    expect(logs.some((line) => line.includes('Socket'))).toBe(true);
 
     logSpy.mockRestore();
   });

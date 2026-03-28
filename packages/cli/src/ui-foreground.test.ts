@@ -121,7 +121,7 @@ describe('ui foreground launch', () => {
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Web UI'))).toBe(true);
     expect(logs.some((line) => line.includes('Managed service'))).toBe(true);
-    expect(logs.some((line) => line.includes('Web UI commands'))).toBe(true);
+    expect(logs.some((line) => line.includes('Usage: pa ui'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui open'))).toBe(true);
     expect(logs.some((line) => line.includes('Options:'))).toBe(true);
     expect(childProcessMocks.spawnSync).not.toHaveBeenCalledWith(process.execPath, expect.any(Array), expect.any(Object));

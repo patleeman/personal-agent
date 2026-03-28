@@ -749,7 +749,7 @@ export async function mergeDeferredResumesFilesCommand(args: string[]): Promise<
 }
 
 function printSyncHelp(): void {
-  console.log('Sync commands');
+  console.log('Sync');
   console.log('');
   printDenseUsage('pa sync [status|run|setup|help] [args...]');
   console.log('');
