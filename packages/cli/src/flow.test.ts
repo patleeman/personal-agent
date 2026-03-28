@@ -203,6 +203,11 @@ describe('CLI command flows', () => {
     logs.length = 0;
     expect(await runCli(['--help'])).toBe(0);
     expect(logs.join('\n')).toContain('Usage: pa');
+    expect(logs.join('\n')).toContain('Chat');
+    expect(logs.join('\n')).toContain('System');
+    expect(logs.join('\n')).toContain('Automation');
+    expect(logs.join('\n')).toContain('Data');
+    expect(logs.join('\n')).toContain('Configuration');
     expect(logs.join('\n')).toContain('mcp [list|info|grep|call|auth|logout|help]');
 
     expect(await runCli(['-p', 'hello from pa'])).toBe(1);

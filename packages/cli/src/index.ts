@@ -1204,8 +1204,9 @@ function printQuickCommand(command: string, description: string): void {
   console.log(bullet(`${commandText(command)} ${dim(`— ${description}`)}`));
 }
 
-async function printCliHome(): Promise<void> {
+async function printCliHome(options: { includeTailHint?: boolean } = {}): Promise<void> {
   const snapshot = await collectCliHomeSnapshot();
+  const includeTailHint = options.includeTailHint ?? true;
 
   console.log(section('Personal Agent'));
   console.log('');
@@ -1217,14 +1218,17 @@ async function printCliHome(): Promise<void> {
   console.log(section('Core commands'));
   printQuickCommand('pa status', 'Show this summary again');
   printQuickCommand('pa tui', 'Start a chat session');
-  printQuickCommand('pa ui', 'Show web UI status');
+  printQuickCommand('pa ui', 'Show web UI status and commands');
   printQuickCommand('pa ui open', 'Open the web UI in a browser');
   printQuickCommand('pa ui foreground', 'Run the web UI in the foreground');
-  printQuickCommand('pa daemon', 'Show daemon status');
+  printQuickCommand('pa daemon', 'Show daemon status and commands');
   printQuickCommand('pa tasks list', 'Inspect scheduled tasks');
   printQuickCommand('pa runs list', 'Inspect background runs');
-  console.log('');
-  console.log(dim('Use `pa <command> --help` for command details.'));
+
+  if (includeTailHint) {
+    console.log('');
+    console.log(dim('Use `pa <command> --help` for command details.'));
+  }
 }
 
 async function statusCommand(args: string[]): Promise<number> {
@@ -1542,10 +1546,11 @@ async function printDaemonModules(
   }
 }
 
-async function printDaemonStatusHumanReadable(): Promise<void> {
+async function printDaemonStatusHumanReadable(options: { showNextStep?: boolean } = {}): Promise<void> {
   const config = loadDaemonConfig();
   const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
   const running = await pingDaemon(config);
+  const showNextStep = options.showNextStep ?? true;
 
   if (!running) {
     console.log('');
@@ -1553,8 +1558,10 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
     console.log(keyValue('Status', statusChip('stopped')));
     console.log(keyValue('Socket', daemonPaths.socketPath));
     console.log(keyValue('Task directory', config.modules.tasks.taskDir));
-    console.log('');
-    console.log(`  ${formatNextStep('pa daemon start')}`);
+    if (showNextStep) {
+      console.log('');
+      console.log(`  ${formatNextStep('pa daemon start')}`);
+    }
     return;
   }
 
@@ -1593,13 +1600,16 @@ Daemon subcommands:
   help                                          Show this daemon help
 `;
 
-function printDaemonHelp(): void {
-  console.log(section('Daemon'));
+function printDaemonHelp(options: { title?: string; includeNextStep?: boolean } = {}): void {
+  const title = options.title ?? 'Daemon';
+  const includeNextStep = options.includeNextStep ?? true;
+
+  console.log(section(title));
   console.log('');
   console.log('Usage: pa daemon [status|start|stop|restart|logs|service|help] [args...]');
   console.log('');
   console.log('Commands:');
-  console.log('  pa daemon                                        Show daemon status');
+  console.log('  pa daemon                                        Show daemon status and commands');
   console.log('  pa daemon status [--json]                        Show daemon status');
   console.log('  pa daemon start                                  Start daemon');
   console.log('  pa daemon stop                                   Stop daemon');
@@ -1607,8 +1617,11 @@ function printDaemonHelp(): void {
   console.log('  pa daemon logs                                   Show daemon log file and PID');
   console.log('  pa daemon service [install|status|uninstall|help] Manage daemon as OS user service');
   console.log('  pa daemon help                                   Show daemon help');
-  console.log('');
-  console.log(`  ${formatNextStep('pa daemon')}`);
+
+  if (includeNextStep) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa daemon')}`);
+  }
 }
 
 function printDaemonServiceHelp(): void {
@@ -1688,7 +1701,9 @@ async function daemonCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
-    await printDaemonStatusHumanReadable();
+    await printDaemonStatusHumanReadable({ showNextStep: false });
+    console.log('');
+    printDaemonHelp({ title: 'Daemon commands', includeNextStep: false });
     return 0;
   }
 
@@ -4335,19 +4350,23 @@ async function deployManagedWebUiBlueGreen(repoRoot: string, port: number, compa
   return `swapped ${deployment.activeSlot ?? 'none'} → ${nextSlot}${nextDeployment.activeRelease?.revision ? ` (${nextDeployment.activeRelease.revision})` : ''}`;
 }
 
-async function showWebUiStatus(args: string[]): Promise<void> {
+async function showWebUiStatus(
+  args: string[],
+  displayOptions: { showNextStep?: boolean } = {},
+): Promise<void> {
   const usage = 'pa ui status [--port <port>]';
   const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, usage);
   ensureNoExtraCommandArgs(parsed.rest, usage);
+  const showNextStep = displayOptions.showNextStep ?? true;
 
   const config = readWebUiConfig();
-  const options = getWebUiServiceOptions({ port: parsed.value });
-  const url = `http://localhost:${options.port}`;
-  const listening = await isLocalPortListening(options.port);
+  const webUiOptions = getWebUiServiceOptions({ port: parsed.value });
+  const url = `http://localhost:${webUiOptions.port}`;
+  const listening = await isLocalPortListening(webUiOptions.port);
   let serviceSummary = 'not installed';
 
   try {
-    const serviceStatus = getWebUiServiceStatus(options);
+    const serviceStatus = getWebUiServiceStatus(webUiOptions);
     serviceSummary = serviceStatus.installed
       ? serviceStatus.running
         ? 'installed · running'
@@ -4362,7 +4381,7 @@ async function showWebUiStatus(args: string[]): Promise<void> {
   console.log(section('Web UI'));
   console.log('');
   console.log(keyValue('URL', url));
-  console.log(keyValue('Port', String(options.port)));
+  console.log(keyValue('Port', String(webUiOptions.port)));
   console.log(keyValue('Reachable', listening ? statusChip('running') : statusChip('stopped')));
   console.log(keyValue('Managed service', serviceSummary));
   console.log(keyValue('Tailscale Serve', config.useTailscaleServe ? 'enabled' : 'disabled'));
@@ -4376,6 +4395,10 @@ async function showWebUiStatus(args: string[]): Promise<void> {
     } catch {
       // Ignore transient tailscale resolution failures in human-readable status output.
     }
+  }
+
+  if (!showNextStep) {
+    return;
   }
 
   console.log('');
@@ -4407,13 +4430,16 @@ async function openWebUiCommand(args: string[]): Promise<number> {
   return 0;
 }
 
-function printWebUiHelp(): void {
-  console.log(section('Web UI'));
+function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } = {}): void {
+  const title = options.title ?? 'Web UI';
+  const includeNextStep = options.includeNextStep ?? true;
+
+  console.log(section(title));
   console.log('');
   console.log('Usage: pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
   console.log('');
   console.log('Commands:');
-  console.log('  pa ui                                         Show web UI status');
+  console.log('  pa ui                                         Show web UI status and commands');
   console.log('  pa ui status [--port <port>]                  Show web UI status');
   console.log('  pa ui open [--port <port>]                    Open the web UI in a browser');
   console.log('  pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
@@ -4437,8 +4463,11 @@ function printWebUiHelp(): void {
   console.log('  pa ui help                                    Show web UI help');
   console.log('');
   console.log(dim('Compatibility: `pa ui service ...` still works, but direct `pa ui <verb>` is the preferred interface.'));
-  console.log('');
-  console.log(`  ${formatNextStep('pa ui')}`);
+
+  if (includeNextStep) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa ui')}`);
+  }
 }
 
 function printWebUiServiceHelp(): void {
@@ -4955,7 +4984,9 @@ async function uiCommand(args: string[]): Promise<number> {
   const directActions = ['install', 'start', 'stop', 'restart', 'rollback', 'mark-bad', 'uninstall'] as const;
 
   if (!subcommand) {
-    await showWebUiStatus([]);
+    await showWebUiStatus([], { showNextStep: false });
+    console.log('');
+    printWebUiHelp({ title: 'Web UI commands', includeNextStep: false });
     return 0;
   }
 
@@ -5019,9 +5050,12 @@ async function uiCommand(args: string[]): Promise<number> {
 
 type CommandHandler = (args: string[]) => Promise<number>;
 
+type CliCommandCategory = 'chat' | 'system' | 'automation' | 'data' | 'configuration';
+
 interface CliCommandDefinition {
   name: string;
   description: string;
+  category: CliCommandCategory;
   usage?: string;
   helpText?: string;
   disableBuiltInHelp?: boolean;
@@ -5032,18 +5066,21 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
   const definitions: CliCommandDefinition[] = [
     {
       name: 'status',
+      category: 'system',
       usage: 'status',
       description: 'Show current personal-agent status and quick commands',
       run: statusCommand,
     },
     {
       name: 'tui',
+      category: 'chat',
       usage: 'tui [args...]',
       description: 'Run pi with profile resources',
       run: runCommand,
     },
     {
       name: 'install',
+      category: 'configuration',
       usage: 'install [args...]',
       description: 'Add a Pi package source to durable pa settings',
       helpText: `\nUsage: ${INSTALL_COMMAND_USAGE}\n\n${INSTALL_COMMAND_HELP_TEXT}\n`,
@@ -5052,6 +5089,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'profile',
+      category: 'configuration',
       usage: 'profile [list|show|use|help] [args...]',
       description: 'Manage profile settings',
       disableBuiltInHelp: true,
@@ -5059,6 +5097,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'doctor',
+      category: 'system',
       usage: 'doctor [args...]',
       description: 'Validate local setup',
       run: async (args) => {
@@ -5071,18 +5110,21 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'restart',
+      category: 'system',
       usage: 'restart [--rebuild]',
       description: 'Restart the daemon and managed web UI (use --rebuild to rebuild packages and blue/green redeploy the web UI)',
       run: restartCommand,
     },
     {
       name: 'update',
+      category: 'system',
       usage: 'update [--repo-only]',
       description: 'Pull latest git changes, refresh repo dependencies, sync pi to latest, rebuild packages, then restart background services',
       run: updateCommand,
     },
     {
       name: 'daemon',
+      category: 'system',
       usage: 'daemon [status|start|stop|restart|logs|service|help] [args...]',
       description: 'Manage personal-agent daemon',
       helpText: DAEMON_HELP_TEXT,
@@ -5091,6 +5133,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'tasks',
+      category: 'automation',
       usage: 'tasks [list|show|validate|logs|help] [args...]',
       description: 'Inspect and validate scheduled daemon tasks',
       disableBuiltInHelp: true,
@@ -5098,6 +5141,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'inbox',
+      category: 'data',
       usage: 'inbox [list|show|create|read|unread|delete|help] [args...]',
       description: 'Inspect and manage activity/inbox items for the active profile',
       disableBuiltInHelp: true,
@@ -5105,6 +5149,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'ui',
+      category: 'system',
       usage: 'ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]',
       description: 'Inspect and manage the personal agent web UI',
       disableBuiltInHelp: true,
@@ -5112,6 +5157,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'memory',
+      category: 'data',
       usage: 'memory [list|find|show|new|lint|help] [args...]',
       description: 'Inspect shared note nodes',
       disableBuiltInHelp: true,
@@ -5119,6 +5165,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'mcp',
+      category: 'data',
       usage: 'mcp [list|info|grep|call|auth|logout|help] [args...]',
       description: 'Inspect and call configured MCP servers natively',
       disableBuiltInHelp: true,
@@ -5126,6 +5173,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'runs',
+      category: 'automation',
       usage: 'runs [list|show|logs|start|cancel|help] [args...]',
       description: 'Inspect and manage durable background runs',
       disableBuiltInHelp: true,
@@ -5133,6 +5181,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'targets',
+      category: 'automation',
       usage: 'targets [list|show|add|update|install|delete|help] [args...]',
       description: 'Inspect and manage execution targets',
       disableBuiltInHelp: true,
@@ -5140,6 +5189,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'sync',
+      category: 'automation',
       usage: 'sync [status|run|setup|help] [args...]',
       description: 'Configure and run automatic git state sync',
       disableBuiltInHelp: true,
@@ -5235,8 +5285,53 @@ Global options:
   return program;
 }
 
-function printRootHelp(program: Command): void {
-  process.stdout.write(`${program.helpInformation()}\n`);
+function printRootHelpEntry(usage: string, description: string): void {
+  console.log(`  ${commandText(usage)} ${dim('—')} ${description}`);
+}
+
+function printRootHelpSection(
+  title: string,
+  definitions: CliCommandDefinition[],
+  category: CliCommandCategory,
+): void {
+  const matches = definitions.filter((definition) => definition.category === category);
+  if (matches.length === 0) {
+    return;
+  }
+
+  console.log(section(title));
+  for (const definition of matches) {
+    printRootHelpEntry(`pa ${definition.usage ?? definition.name}`, definition.description);
+  }
+  console.log('');
+}
+
+function printRootHelp(
+  definitions: CliCommandDefinition[],
+  options: { includePreamble?: boolean } = {},
+): void {
+  const includePreamble = options.includePreamble ?? true;
+
+  if (includePreamble) {
+    console.log('Usage: pa [command] [args...]');
+    console.log('');
+    console.log('Bare `pa` shows live status and quick commands.');
+    console.log('');
+  }
+
+  printRootHelpSection('Chat', definitions, 'chat');
+  printRootHelpSection('System', definitions, 'system');
+  printRootHelpSection('Automation', definitions, 'automation');
+  printRootHelpSection('Data', definitions, 'data');
+  printRootHelpSection('Configuration', definitions, 'configuration');
+
+  console.log(section('Help'));
+  printRootHelpEntry('pa help [command]', 'Show detailed help for a command');
+  console.log('');
+  console.log(section('Global options'));
+  printRootHelpEntry('--plain, --no-color', 'Disable rich ANSI styling');
+  console.log('');
+  console.log(dim('Use `pa <command> --help` for command details.'));
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
@@ -5253,7 +5348,9 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     });
 
     if (parsedFlags.argv.length === 0) {
-      await printCliHome();
+      await printCliHome({ includeTailHint: false });
+      console.log('');
+      printRootHelp(definitions, { includePreamble: false });
       return 0;
     }
 
@@ -5273,7 +5370,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
         return 0;
       }
 
-      printRootHelp(program);
+      printRootHelp(definitions);
       return 0;
     }
 
