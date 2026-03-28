@@ -116,6 +116,7 @@ import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
 import { createConversationSelfDistillAgentExtension } from './conversationSelfDistillAgentExtension.js';
+import { maybeScheduleAutomaticConversationSelfDistillWakeup } from './conversationSelfDistill.js';
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
@@ -176,6 +177,7 @@ import {
   destroySession,
   branchSession,
   forkSession,
+  registerLiveSessionLifecycleHandler,
   LiveSessionControlError,
   ensureSessionSurfaceCanControl,
   takeOverSessionControl,
@@ -611,6 +613,20 @@ try {
 }
 
 void syncDaemonTaskScopeForProfile(currentProfile);
+
+registerLiveSessionLifecycleHandler((event) => {
+  return maybeScheduleAutomaticConversationSelfDistillWakeup({
+    stateRoot: getStateRoot(),
+    profile: getCurrentProfile(),
+    conversationId: event.conversationId,
+    sessionFile: event.sessionFile,
+    title: event.title,
+  }).then((result) => {
+    if (result.scheduled && result.resume) {
+      publishAppEvent({ type: 'session_meta_changed', sessionId: event.conversationId });
+    }
+  });
+});
 
 function getCurrentProfile(): string {
   return currentProfile;
@@ -1425,46 +1441,17 @@ async function maybeKickConversationMemoryFollowUp(profile: string, conversation
     return;
   }
 
-  if (isConversationMemoryDistillRecoveryTitle(state.latestConversationTitle)) {
-    return;
-  }
-
-  const existing = await readConversationMemoryDistillRunState(conversationId);
-  if (existing.running) {
-    return;
-  }
-
-  const result = await startConversationMemoryDistillRun({
-    conversationId,
-    profile,
-    checkpointId: state.latestCheckpointId,
-    mode: state.latestMode,
-    trigger: state.latestTrigger,
-    emitActivity: true,
-  });
-
-  if (!result.accepted || !result.runId) {
-    const error = result.reason ?? 'Could not start conversation node distillation.';
-    markConversationMemoryMaintenanceRunFailed({
-      profile,
-      conversationId,
-      checkpointId: state.latestCheckpointId,
-      error,
-    });
-    tryWriteConversationMemoryDistillFailureActivity({
-      profile,
-      conversationId,
-      error,
-    });
-    return;
-  }
-
-  markConversationMemoryMaintenanceRunStarted({
+  const scheduled = await maybeScheduleAutomaticConversationSelfDistillWakeup({
+    stateRoot: getStateRoot(),
     profile,
     conversationId,
-    checkpointId: state.latestCheckpointId,
-    runId: result.runId,
+    sessionFile: state.latestSessionFile,
+    title: state.latestConversationTitle,
   });
+
+  if (scheduled.scheduled && scheduled.resume) {
+    publishAppEvent({ type: 'session_meta_changed', sessionId: conversationId });
+  }
 }
 
 async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
