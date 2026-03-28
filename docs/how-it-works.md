@@ -225,6 +225,7 @@ That is the intended shape of the product.
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Agent Tool Map](./agent-tool-map.md)
 - [Getting Started](./getting-started.md)
 - [Conversations](./conversations.md)

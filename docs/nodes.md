@@ -2,6 +2,8 @@
 
 Nodes are the unified durable file model for `personal-agent`.
 
+If you want the conceptual explanation of notes, skills, projects, and `AGENTS.md` as one memory system, read [Knowledge Management System](./knowledge-system.md) first. This page is the file-model spec.
+
 They replace the old split between:
 
 - skill packages (`SKILL.md`)
@@ -399,6 +401,7 @@ Use stable ids, paths, timestamps, and summaries instead.
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [How personal-agent works](./how-it-works.md)

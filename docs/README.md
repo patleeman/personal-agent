@@ -31,9 +31,10 @@ Then start here for the operating model:
 
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
-3. [Agent Tool Map](./agent-tool-map.md)
+3. [Knowledge Management System](./knowledge-system.md)
+4. [Agent Tool Map](./agent-tool-map.md)
 
-Those three pages should answer most agent questions quickly.
+Those four pages should answer most agent questions quickly.
 
 ## Core concepts
 
@@ -41,6 +42,7 @@ Those three pages should answer most agent questions quickly.
 - [Async Attention and Wakeups](./async-attention.md)
 - [Automation](./automation.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Nodes](./nodes.md)
@@ -71,8 +73,9 @@ Those three pages should answer most agent questions quickly.
 | --- | --- | --- |
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
 | What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Nodes](./nodes.md), [Configuration](./configuration.md) |
+| How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Nodes](./nodes.md), [Projects](./projects.md) |
 | Where should ongoing work live? | [Projects](./projects.md) | [Conversations](./conversations.md) |
-| Where should durable knowledge or preferences live? | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md) | [Nodes](./nodes.md) |
+| Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Nodes](./nodes.md) |
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
 | How do I automate something? | [Automation](./automation.md) | [Scheduled Tasks](./scheduled-tasks.md), [Runs](./runs.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
