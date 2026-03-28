@@ -136,7 +136,7 @@ describe('daemon command matrix', () => {
     logSpy.mockRestore();
   });
 
-  it('shows daemon help when no subcommand is provided', async () => {
+  it('shows daemon status when no subcommand is provided', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
@@ -148,8 +148,9 @@ describe('daemon command matrix', () => {
     const exitCode = await runCli(['daemon']);
 
     expect(exitCode).toBe(0);
-    expect(logs.some((line) => line.includes('Commands:'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa daemon status [--json]'))).toBe(true);
+    expect(logs.some((line) => line.includes('Daemon'))).toBe(true);
+    expect(logs.some((line) => line.includes('stopped'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa daemon start'))).toBe(true);
 
     logSpy.mockRestore();
   });

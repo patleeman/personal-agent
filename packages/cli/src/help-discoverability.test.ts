@@ -91,12 +91,11 @@ describe('subcommand help discoverability', () => {
   });
 
   it('treats `pa help ui` as success without printing a CLI error', async () => {
-    let stdout = '';
+    const logs: string[] = [];
     const errors: string[] = [];
 
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
-      stdout += String(chunk);
-      return true;
+    vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
+      logs.push(parts.map((part) => String(part ?? '')).join(' '));
     });
     vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
       errors.push(parts.map((part) => String(part ?? '')).join(' '));
@@ -105,7 +104,7 @@ describe('subcommand help discoverability', () => {
     const exitCode = await runCli(['help', 'ui']);
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain('Usage: pa ui');
+    expect(logs.join('\n')).toContain('Usage: pa ui');
     expect(errors).toEqual([]);
   });
 });

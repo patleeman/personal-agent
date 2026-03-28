@@ -105,6 +105,7 @@ import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
   bullet,
+  command as commandText,
   configureUi,
   dim,
   error as uiError,
@@ -1122,6 +1123,116 @@ async function runCommand(args: string[]): Promise<number> {
   return runPi(parsed.profileName, parsed.piArgs);
 }
 
+interface CliHomeSnapshot {
+  profile: string;
+  daemonSummary: string;
+  webUiSummary: string;
+  tailscaleSummary: string;
+}
+
+async function collectCliHomeSnapshot(): Promise<CliHomeSnapshot> {
+  const profile = resolveProfileName();
+
+  const daemonConfig = loadDaemonConfig();
+  const daemonPaths = resolveDaemonPaths(daemonConfig.ipc.socketPath);
+  let daemonSummary = `${statusChip('stopped')} ${dim(daemonPaths.socketPath)}`;
+
+  try {
+    const daemonRunning = await pingDaemon(daemonConfig);
+    if (daemonRunning) {
+      try {
+        const daemonStatus = await getDaemonStatus(daemonConfig);
+        daemonSummary = `${statusChip('running')} pid ${daemonStatus.pid}`;
+      } catch (error) {
+        daemonSummary = `${statusChip('error')} ${(error as Error).message}`;
+      }
+    }
+  } catch (error) {
+    daemonSummary = `${statusChip('error')} ${(error as Error).message}`;
+  }
+
+  const webUiConfig = readWebUiConfig();
+  const webUiOptions = getWebUiServiceOptions({ port: webUiConfig.port });
+  const webUiUrl = `http://localhost:${webUiOptions.port}`;
+  let webUiSummary = `${statusChip('stopped')} ${webUiUrl}`;
+
+  try {
+    const serviceStatus = getWebUiServiceStatus(webUiOptions);
+    const listening = await isLocalPortListening(webUiOptions.port);
+
+    if (serviceStatus.installed && serviceStatus.running && listening) {
+      webUiSummary = `${statusChip('running')} managed · ${serviceStatus.url}`;
+    } else if (serviceStatus.installed && serviceStatus.running) {
+      webUiSummary = `${statusChip('pending')} managed service says running · port closed`;
+    } else if (serviceStatus.installed) {
+      webUiSummary = `${statusChip('stopped')} managed service installed · ${serviceStatus.url}`;
+    } else if (listening) {
+      webUiSummary = `${statusChip('running')} reachable · ${webUiUrl}`;
+    }
+  } catch (error) {
+    if (isMissingServiceManagerError(error)) {
+      const listening = await isLocalPortListening(webUiOptions.port);
+      webUiSummary = listening
+        ? `${statusChip('running')} reachable · ${webUiUrl}`
+        : `${statusChip('stopped')} ${webUiUrl}`;
+    } else {
+      webUiSummary = `${statusChip('error')} ${(error as Error).message}`;
+    }
+  }
+
+  let tailscaleSummary = webUiConfig.useTailscaleServe ? 'enabled' : 'disabled';
+  if (webUiConfig.useTailscaleServe) {
+    try {
+      const tailscaleUrl = resolveWebUiTailscaleUrl();
+      tailscaleSummary = tailscaleUrl && tailscaleUrl.trim().length > 0
+        ? `enabled · ${tailscaleUrl}`
+        : 'enabled';
+    } catch {
+      tailscaleSummary = 'enabled';
+    }
+  }
+
+  return {
+    profile,
+    daemonSummary,
+    webUiSummary,
+    tailscaleSummary,
+  };
+}
+
+function printQuickCommand(command: string, description: string): void {
+  console.log(bullet(`${commandText(command)} ${dim(`— ${description}`)}`));
+}
+
+async function printCliHome(): Promise<void> {
+  const snapshot = await collectCliHomeSnapshot();
+
+  console.log(section('Personal Agent'));
+  console.log('');
+  console.log(keyValue('Profile', snapshot.profile));
+  console.log(keyValue('Daemon', snapshot.daemonSummary));
+  console.log(keyValue('Web UI', snapshot.webUiSummary));
+  console.log(keyValue('Tailscale', snapshot.tailscaleSummary));
+  console.log('');
+  console.log(section('Core commands'));
+  printQuickCommand('pa status', 'Show this summary again');
+  printQuickCommand('pa tui', 'Start a chat session');
+  printQuickCommand('pa ui', 'Show web UI status');
+  printQuickCommand('pa ui open', 'Open the web UI in a browser');
+  printQuickCommand('pa ui foreground', 'Run the web UI in the foreground');
+  printQuickCommand('pa daemon', 'Show daemon status');
+  printQuickCommand('pa tasks list', 'Inspect scheduled tasks');
+  printQuickCommand('pa runs list', 'Inspect background runs');
+  console.log('');
+  console.log(dim('Use `pa <command> --help` for command details.'));
+}
+
+async function statusCommand(args: string[]): Promise<number> {
+  ensureNoExtraCommandArgs(args, 'pa status');
+  await printCliHome();
+  return 0;
+}
+
 function printProfileHelp(): void {
   console.log(section('Profile commands'));
   console.log('');
@@ -1485,16 +1596,19 @@ Daemon subcommands:
 function printDaemonHelp(): void {
   console.log(section('Daemon'));
   console.log('');
+  console.log('Usage: pa daemon [status|start|stop|restart|logs|service|help] [args...]');
+  console.log('');
   console.log('Commands:');
-  console.log('  pa daemon help                                   Show daemon help');
+  console.log('  pa daemon                                        Show daemon status');
   console.log('  pa daemon status [--json]                        Show daemon status');
   console.log('  pa daemon start                                  Start daemon');
   console.log('  pa daemon stop                                   Stop daemon');
   console.log('  pa daemon restart                                Restart daemon');
   console.log('  pa daemon logs                                   Show daemon log file and PID');
   console.log('  pa daemon service [install|status|uninstall|help] Manage daemon as OS user service');
+  console.log('  pa daemon help                                   Show daemon help');
   console.log('');
-  console.log(`  ${formatNextStep('pa daemon status')}`);
+  console.log(`  ${formatNextStep('pa daemon')}`);
 }
 
 function printDaemonServiceHelp(): void {
@@ -1574,7 +1688,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
-    printDaemonHelp();
+    await printDaemonStatusHumanReadable();
     return 0;
   }
 
@@ -4221,38 +4335,116 @@ async function deployManagedWebUiBlueGreen(repoRoot: string, port: number, compa
   return `swapped ${deployment.activeSlot ?? 'none'} → ${nextSlot}${nextDeployment.activeRelease?.revision ? ` (${nextDeployment.activeRelease.revision})` : ''}`;
 }
 
+async function showWebUiStatus(args: string[]): Promise<void> {
+  const usage = 'pa ui status [--port <port>]';
+  const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, usage);
+  ensureNoExtraCommandArgs(parsed.rest, usage);
+
+  const config = readWebUiConfig();
+  const options = getWebUiServiceOptions({ port: parsed.value });
+  const url = `http://localhost:${options.port}`;
+  const listening = await isLocalPortListening(options.port);
+  let serviceSummary = 'not installed';
+
+  try {
+    const serviceStatus = getWebUiServiceStatus(options);
+    serviceSummary = serviceStatus.installed
+      ? serviceStatus.running
+        ? 'installed · running'
+        : 'installed · stopped'
+      : 'not installed';
+  } catch (error) {
+    serviceSummary = isMissingServiceManagerError(error)
+      ? 'service manager unavailable'
+      : `error · ${(error as Error).message}`;
+  }
+
+  console.log(section('Web UI'));
+  console.log('');
+  console.log(keyValue('URL', url));
+  console.log(keyValue('Port', String(options.port)));
+  console.log(keyValue('Reachable', listening ? statusChip('running') : statusChip('stopped')));
+  console.log(keyValue('Managed service', serviceSummary));
+  console.log(keyValue('Tailscale Serve', config.useTailscaleServe ? 'enabled' : 'disabled'));
+
+  if (config.useTailscaleServe) {
+    try {
+      const tailscaleUrl = resolveWebUiTailscaleUrl();
+      if (tailscaleUrl && tailscaleUrl.trim().length > 0) {
+        console.log(keyValue('Tailnet URL', tailscaleUrl));
+      }
+    } catch {
+      // Ignore transient tailscale resolution failures in human-readable status output.
+    }
+  }
+
+  console.log('');
+  if (listening) {
+    console.log(`  ${formatNextStep('pa ui open')}`);
+    return;
+  }
+
+  if (serviceSummary.startsWith('installed')) {
+    console.log(`  ${formatNextStep('pa ui start')}`);
+    return;
+  }
+
+  console.log(`  ${formatNextStep('pa ui foreground')}`);
+}
+
+async function openWebUiCommand(args: string[]): Promise<number> {
+  const usage = 'pa ui open [--port <port>]';
+  const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, usage);
+  ensureNoExtraCommandArgs(parsed.rest, usage);
+
+  const url = `http://localhost:${parsed.value}`;
+  if (!await isLocalPortListening(parsed.value)) {
+    throw new Error(`Web UI is not reachable on ${url}. Start it with \`pa ui start\` or \`pa ui foreground\`.`);
+  }
+
+  openWebUiInBrowser(url);
+  console.log(success(`Opened web UI at ${url}`));
+  return 0;
+}
+
 function printWebUiHelp(): void {
   console.log(section('Web UI'));
   console.log('');
+  console.log('Usage: pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
+  console.log('');
   console.log('Commands:');
-  console.log('  pa ui help                                    Show web UI help');
-  console.log('  pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Start the web UI in the foreground');
+  console.log('  pa ui                                         Show web UI status');
+  console.log('  pa ui status [--port <port>]                  Show web UI status');
+  console.log('  pa ui open [--port <port>]                    Open the web UI in a browser');
+  console.log('  pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Run the web UI in the foreground');
   console.log('  pa ui logs [--tail <count>]                   Show recent managed web UI logs');
   console.log('  pa ui pairing-code [--port <port>]            Create a pairing code for remote desktop or companion access');
-  console.log('  pa ui service help                            Show web UI service help');
-  console.log('  pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Install and start managed web UI service');
-  console.log('  pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
-    + ' Show managed web UI service status');
-  console.log('  pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Start managed web UI service');
-  console.log('  pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Stop managed web UI service');
-  console.log('  pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Restart managed web UI service');
-  console.log('  pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Roll back to the inactive staged web UI slot');
-  console.log('  pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Mark the active staged web UI release as bad');
-  console.log('  pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+  console.log('  pa ui uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
     + ' Stop and remove managed web UI service');
+  console.log('  pa ui help                                    Show web UI help');
   console.log('');
-  console.log(`  ${formatNextStep('pa ui service install')}`);
+  console.log(dim('Compatibility: `pa ui service ...` still works, but direct `pa ui <verb>` is the preferred interface.'));
+  console.log('');
+  console.log(`  ${formatNextStep('pa ui')}`);
 }
 
 function printWebUiServiceHelp(): void {
   console.log(section('Web UI service'));
+  console.log('');
+  console.log('Usage: pa ui service [install|status|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]');
   console.log('');
   console.log('Commands:');
   console.log('  pa ui service help                            Show web UI service help');
@@ -4280,7 +4472,7 @@ function printWebUiServiceHelp(): void {
   console.log(keyValue('Default port', String(readWebUiConfig().port)));
   console.log(keyValue('Log file', resolveWebUiLogFile()));
   console.log('');
-  console.log(`  ${formatNextStep('pa ui service install')}`);
+  console.log(`  ${formatNextStep('pa ui install')}`);
 }
 
 function printWebUiServiceStatus(status: WebUiServiceStatus): void {
@@ -4330,7 +4522,7 @@ function printWebUiServiceStatus(status: WebUiServiceStatus): void {
 
   if (!status.installed) {
     console.log('');
-    console.log(`  ${formatNextStep('pa ui service install')}`);
+    console.log(`  ${formatNextStep('pa ui install')}`);
   }
 }
 
@@ -4345,7 +4537,7 @@ function showWebUiLogs(args: string[]): void {
   console.log(keyValue('Log file', logFile));
 
   if (!existsSync(logFile)) {
-    console.log(dim('No web UI log file found yet. Install and run the managed service with `pa ui service install` or start the UI and inspect stdout directly.'));
+    console.log(dim('No web UI log file found yet. Install and run the managed service with `pa ui install` or start the UI in the foreground with `pa ui foreground`.'));
     return;
   }
 
@@ -4371,7 +4563,7 @@ async function createWebUiPairingCode(port: number): Promise<{ id: string; code:
       },
     });
   } catch (error) {
-    throw new Error(`Could not reach the web UI on ${url}. Start it first with \`pa ui\` or \`pa ui service start\`.`);
+    throw new Error(`Could not reach the web UI on ${url}. Start it first with \`pa ui start\` or \`pa ui foreground\`.`);
   }
 
   if (!response.ok) {
@@ -4434,12 +4626,12 @@ function syncWebUiTailscaleServeFromCli(input: {
   }
 }
 
-async function runWebUiServiceAction(action: string, args: string[]): Promise<void> {
+async function runWebUiServiceAction(action: string, args: string[], commandPrefix = 'pa ui'): Promise<void> {
   const usage = action === 'rollback'
-    ? 'pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--reason <text>]'
+    ? `${commandPrefix} rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--reason <text>]`
     : action === 'mark-bad'
-      ? 'pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--slot <blue|green>] [--reason <text>]'
-      : `pa ui service ${action} [--port <port>] [--tailscale-serve|--no-tailscale-serve]`;
+      ? `${commandPrefix} mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--slot <blue|green>] [--reason <text>]`
+      : `${commandPrefix} ${action} [--port <port>] [--tailscale-serve|--no-tailscale-serve]`;
 
   const parsedTailscaleServe = parseBooleanOption(args, '--tailscale-serve', usage);
   const parsedPort = parseNumericOption(parsedTailscaleServe.rest, '--port', readWebUiConfig().port, usage);
@@ -4514,7 +4706,7 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
     if (service.logFile) {
       console.log(keyValue('Log file', service.logFile));
     }
-    console.log(`  ${formatNextStep('pa ui service status')}`);
+    console.log(`  ${formatNextStep(`${commandPrefix} status`)}`);
     return;
   }
 
@@ -4572,7 +4764,7 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   if (action === 'rollback') {
     const status = getWebUiServiceStatus(options);
     if (!status.installed) {
-      throw new Error('Managed web UI service is not installed. Run `pa ui service install` first.');
+      throw new Error(`Managed web UI service is not installed. Run \`${commandPrefix} install\` first.`);
     }
 
     const result = rollbackWebUiDeployment({
@@ -4658,24 +4850,22 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   if (removed.logFile) {
     console.log(keyValue('Log file', removed.logFile));
   }
-  console.log(`  ${formatNextStep('pa ui service install')}`);
+  console.log(`  ${formatNextStep(`${commandPrefix} install`)}`);
 }
 
-async function startForegroundWebUi(args: string[]): Promise<number> {
-  const parsedTailscaleServe = parseBooleanOption(args, '--tailscale-serve', 'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]');
+async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreground'): Promise<number> {
+  const usage = `${commandPrefix} [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]`;
+  const parsedTailscaleServe = parseBooleanOption(args, '--tailscale-serve', usage);
   const currentConfig = readWebUiConfig();
   const portParse = parseNumericOption(
     parsedTailscaleServe.rest,
     '--port',
     currentConfig.port,
-    'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]',
+    usage,
   );
   const openBrowser = hasOption(portParse.rest, '--open');
   const remainingArgs = portParse.rest.filter((arg) => arg !== '--open');
-  ensureNoExtraCommandArgs(
-    remainingArgs,
-    'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]',
-  );
+  ensureNoExtraCommandArgs(remainingArgs, usage);
 
   const desiredUseTailscaleServe = parsedTailscaleServe.explicit
     ? parsedTailscaleServe.value
@@ -4728,7 +4918,7 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
       }
 
       console.log(warning(`Managed web UI service is already running on ${managedStatus.url}; skipping foreground launch.`));
-      console.log(`  ${formatNextStep('pa ui service status')}`);
+      console.log(`  ${formatNextStep('pa ui status')}`);
       return 0;
     }
   } catch (error) {
@@ -4762,15 +4952,34 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
 
 async function uiCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
+  const directActions = ['install', 'start', 'stop', 'restart', 'rollback', 'mark-bad', 'uninstall'] as const;
 
   if (!subcommand) {
-    return startForegroundWebUi(args);
+    await showWebUiStatus([]);
+    return 0;
   }
 
   if (isCliHelpToken(subcommand)) {
     ensureNoExtraCommandArgs(rest, 'pa ui help');
     printWebUiHelp();
     return 0;
+  }
+
+  if (subcommand.startsWith('-')) {
+    return startForegroundWebUi(args, 'pa ui');
+  }
+
+  if (subcommand === 'status') {
+    await showWebUiStatus(rest);
+    return 0;
+  }
+
+  if (subcommand === 'open') {
+    return openWebUiCommand(rest);
+  }
+
+  if (subcommand === 'foreground') {
+    return startForegroundWebUi(rest, 'pa ui foreground');
   }
 
   if (subcommand === 'logs') {
@@ -4780,6 +4989,11 @@ async function uiCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'pairing-code') {
     await showWebUiPairingCode(rest);
+    return 0;
+  }
+
+  if (directActions.includes(subcommand as (typeof directActions)[number])) {
+    await runWebUiServiceAction(subcommand, rest);
     return 0;
   }
 
@@ -4796,11 +5010,11 @@ async function uiCommand(args: string[]): Promise<number> {
       throw new Error(`Unknown ui service subcommand: ${action}`);
     }
 
-    await runWebUiServiceAction(action, serviceArgs);
+    await runWebUiServiceAction(action, serviceArgs, 'pa ui service');
     return 0;
   }
 
-  return startForegroundWebUi(args);
+  throw new Error(`Unknown ui subcommand: ${subcommand}`);
 }
 
 type CommandHandler = (args: string[]) => Promise<number>;
@@ -4816,6 +5030,12 @@ interface CliCommandDefinition {
 
 function buildCommandDefinitions(): CliCommandDefinition[] {
   const definitions: CliCommandDefinition[] = [
+    {
+      name: 'status',
+      usage: 'status',
+      description: 'Show current personal-agent status and quick commands',
+      run: statusCommand,
+    },
     {
       name: 'tui',
       usage: 'tui [args...]',
@@ -4885,8 +5105,8 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'ui',
-      usage: 'ui [logs|service|help] [args...]',
-      description: 'Start and manage the personal agent web UI',
+      usage: 'ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help] [args...]',
+      description: 'Inspect and manage the personal agent web UI',
       disableBuiltInHelp: true,
       run: uiCommand,
     },
@@ -4983,48 +5203,6 @@ function createProgram(definitions: CliCommandDefinition[], setExitCode: (code: 
       `
 Global options:
   --plain, --no-color   Disable rich ANSI styling
-
-Examples:
-  pa
-  pa --plain tui -p "hello"
-  pa tui --profile datadog -p "hello"
-  pa tui -- --model kimi-coding/k2p5
-  pa install https://github.com/davebcn87/pi-autoresearch
-  pa install --local ./my-package
-  pa profile use datadog
-  pa profile list
-  pa doctor
-  pa doctor --json
-  pa restart
-  pa update
-  pa update --repo-only
-  pa daemon
-  pa daemon status
-  pa daemon service install
-  pa tasks list
-  pa tasks list --json --status completed
-  pa tasks validate --all
-  pa tasks logs <id> --tail 120
-  pa memory list
-  pa memory find --tag runpod --type project
-  pa memory show runpod
-  pa memory new quick-note --title "Quick Note" --summary "What this doc tracks." --tags notes
-  pa memory lint
-  pa mcp list
-  pa mcp list --probe
-  pa mcp info atlassian
-  pa runs list
-  pa runs show <id>
-  pa runs start code-review -- npm test
-  pa runs start-agent code-review --prompt "review this diff"
-  pa runs cancel <id>
-  pa targets list
-  pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
-  pa targets install gpu-box
-  pa sync status
-  pa sync setup --repo git@github.com:you/personal-agent-state.git --fresh
-  pa sync run
-
 `,
     )
     .configureOutput({
@@ -5071,14 +5249,31 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     });
 
     if (parsedFlags.argv.length === 0) {
-      await program.parseAsync(['--help'], { from: 'user' });
+      await printCliHome();
       return 0;
     }
 
-    const firstArg = parsedFlags.argv[0];
+    const [firstArg, ...restArgs] = parsedFlags.argv;
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
 
-    if (!isHelpRequest && !knownCommands.has(firstArg)) {
+    if (isHelpRequest) {
+      if (firstArg === 'help' && restArgs.length > 0) {
+        const targetCommand = restArgs[0] as string;
+
+        if (!knownCommands.has(targetCommand)) {
+          console.error(uiError('CLI error', `Unknown top-level command: ${targetCommand}`));
+          return 1;
+        }
+
+        await program.parseAsync([targetCommand, '--help'], { from: 'user' });
+        return 0;
+      }
+
+      await printCliHome();
+      return 0;
+    }
+
+    if (!knownCommands.has(firstArg)) {
       console.error(uiError('CLI error', `Unknown top-level command or option: ${firstArg}. Use 'pa tui ...' to pass arguments to Pi.`));
       return 1;
     }

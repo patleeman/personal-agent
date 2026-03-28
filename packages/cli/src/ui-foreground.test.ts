@@ -105,6 +105,27 @@ afterEach(async () => {
 });
 
 describe('ui foreground launch', () => {
+  it('shows status for bare `pa ui` instead of launching a foreground server', async () => {
+    const repoRoot = createFakeWebRepo();
+    const stateRoot = createTempDir('pa-ui-foreground-state-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['ui']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('Web UI'))).toBe(true);
+    expect(logs.some((line) => line.includes('Managed service'))).toBe(true);
+    expect(childProcessMocks.spawnSync).not.toHaveBeenCalledWith(process.execPath, expect.any(Array), expect.any(Object));
+
+    logSpy.mockRestore();
+  });
+
   it('reuses the managed web UI service instead of starting a second server on the same port', async () => {
     const repoRoot = createFakeWebRepo();
     const stateRoot = createTempDir('pa-ui-foreground-state-');
