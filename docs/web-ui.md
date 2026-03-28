@@ -116,27 +116,13 @@ Use the UI when you want:
 
 ## Main sections
 
-### Alerts
-
-The Alerts page shows the sparse, interrupting async items that still need acknowledgement.
-
-Typical examples:
-
-- reminders
-- approval-needed wakeups
-- scheduled-task callbacks linked back to a conversation
-- high-signal blocked or failed async work
-
-The UI also shows active disruptive alerts as floating in-app cards so they are harder to miss than inbox items.
-
-See [Alerts and Reminders](./alerts.md).
-
 ### Inbox
 
 The Inbox page shows:
 
 - standalone inbox activity
 - archived conversations that need attention
+- active alerts that still need acknowledgement
 
 Typical examples:
 
@@ -144,6 +130,13 @@ Typical examples:
 - deferred resume activity
 - background failures
 - conversations resurfaced by linked background work
+- reminders
+- approval-needed wakeups
+- scheduled-task callbacks linked back to a conversation
+
+The UI also shows active disruptive alerts as floating in-app cards so they are harder to miss than inbox items outside the inbox page.
+
+See [Alerts and Reminders](./alerts.md).
 
 You can:
 

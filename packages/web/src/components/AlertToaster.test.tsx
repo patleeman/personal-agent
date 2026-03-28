@@ -64,6 +64,7 @@ describe('AlertToaster', () => {
     );
 
     expect(html).toContain('Enable browser notifications');
+    expect(html).not.toContain('Open alerts');
     expect(html).toContain('Snooze 15m');
     expect(html).toContain('Acknowledge');
   });

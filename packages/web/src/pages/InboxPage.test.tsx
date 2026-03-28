@@ -121,7 +121,6 @@ describe('InboxPage', () => {
     expect(html).toContain('Verification failed for web UI deploy');
     expect(html).toContain('Active alerts');
     expect(html).toContain('Follow up now');
-    expect(html).toContain('Open alerts');
     expect(html).toContain('Clear inbox');
     expect(html).toContain('title="Start a new conversation from this inbox item"');
     expect(html).toContain('Follow up on failed verification');
