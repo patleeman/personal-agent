@@ -304,11 +304,6 @@ export function InboxPage() {
                 </button>
               </div>
             )}
-            {(alerts?.entries.length ?? 0) > 0 && (
-              <Link to="/alerts" className="ui-toolbar-button text-[11px]">
-                Alert history
-              </Link>
-            )}
             {allItems.length > 0 && (
               <ToolbarButton
                 onClick={() => { void clearInbox(); }}
@@ -357,7 +352,6 @@ export function InboxPage() {
                 <p className="ui-section-label">Active alerts</p>
                 <p className="ui-card-meta">Interrupting reminders and callbacks stay visible here until you acknowledge or dismiss them.</p>
               </div>
-              <Link to="/alerts" className="ui-toolbar-button shrink-0">Open alerts</Link>
             </div>
             <div className="divide-y divide-border-subtle">
               {activeAlerts.map((entry) => {

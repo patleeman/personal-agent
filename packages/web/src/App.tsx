@@ -97,7 +97,6 @@ function sortSessionMetas(items: SessionMeta[]): SessionMeta[] {
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const AlertsPage = lazy(() => import('./pages/AlertsPage').then((module) => ({ default: module.AlertsPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
@@ -569,7 +568,6 @@ export function App() {
                       <Route path="workspace" element={<WorkspaceRouteRedirect />} />
                       <Route path="workspace/files" element={suspendRoute(<WorkspacePage />)} />
                       <Route path="workspace/changes" element={suspendRoute(<WorkspaceChangesPage />)} />
-                      <Route path="alerts" element={suspendRoute(<AlertsPage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />

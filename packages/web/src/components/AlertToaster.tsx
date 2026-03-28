@@ -44,7 +44,7 @@ export function AlertToaster() {
   const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermissionState>(() => readNotificationPermission());
   const previousActiveAlertIdsRef = useRef<Set<string>>(new Set());
   const visibleAlerts = useMemo(() => {
-    if (location.pathname.startsWith('/alerts')) {
+    if (location.pathname.startsWith('/inbox')) {
       return [];
     }
 
@@ -137,7 +137,7 @@ export function AlertToaster() {
           if (entry.conversationId) {
             window.location.href = `/conversations/${encodeURIComponent(entry.conversationId)}`;
           } else {
-            window.location.href = '/alerts';
+            window.location.href = '/inbox';
           }
         };
       }
@@ -167,7 +167,6 @@ export function AlertToaster() {
             >
               Enable browser alerts
             </button>
-            <Link to="/alerts" className="ui-action-button">Open alerts</Link>
           </div>
         </div>
       ) : null}
