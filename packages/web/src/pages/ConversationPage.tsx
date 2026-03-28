@@ -870,35 +870,6 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
   });
 }
 
-function buildDistilledMemoryTitleFromBlock(block: MessageBlock): string {
-  const fallback = 'Conversation memory';
-
-  if (block.type === 'tool_use') {
-    return `After ${block.tool}`;
-  }
-
-  if (block.type === 'image') {
-    return block.alt?.trim() ? `After ${block.alt.trim()}` : fallback;
-  }
-
-  const text = block.type === 'error'
-    ? block.message
-    : (
-      block.type === 'user'
-      || block.type === 'text'
-      || block.type === 'thinking'
-    )
-      ? block.text
-      : '';
-
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return fallback;
-  }
-
-  return normalized.length > 80 ? `${normalized.slice(0, 79).trimEnd()}…` : normalized;
-}
-
 function hasBlockingOverlayOpen(): boolean {
   if (typeof document === 'undefined') {
     return false;
@@ -1647,7 +1618,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [stream.isStreaming]);
 
   const prevStreamingRef = useRef(false);
-  const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
+  const { data: memoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
   const executionTargetsState = useApi(api.executionTargets);
   const conversationExecutionState = useApi(
@@ -3302,36 +3273,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
 
-  const saveMemoryFromMessage = useCallback(async (block: MessageBlock, messageIndex: number) => {
-    if (draft || !id) {
-      showNotice('danger', 'Distilling memory requires an existing conversation.', 4000);
-      return;
-    }
-
-    const anchorMessageId = block.id?.trim();
-    if (!anchorMessageId) {
-      showNotice('danger', 'Unable to resolve where to anchor this distillation.', 4000);
-      return;
-    }
-
-    try {
-      const result = await api.createConversationNote(id, {
-        title: buildDistilledMemoryTitleFromBlock(block),
-        anchorMessageId,
-      });
-
-      if (result.accepted) {
-        showNotice('accent', `Queued node distillation from conversation up to message ${messageIndex + 1}.`);
-      } else {
-        showNotice('danger', 'Unable to queue node distillation right now.', 4000);
-      }
-
-      await refetchMemoryData({ resetLoading: false });
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
-  }, [draft, id, refetchMemoryData, showNotice]);
-
   async function removeReferencedProject(projectId: string) {
     if (draft) {
       const nextProjectIds = draftAttachedProjectIds.filter((id) => id !== projectId);
@@ -4239,7 +4180,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               focusMessageIndex={requestedFocusMessageIndex}
               isStreaming={stream.isStreaming}
               pendingStatusLabel={pendingAssistantStatusLabel}
-              onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
               onReplyToSelection={handleReplyToSelection}
@@ -4357,7 +4297,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     connectRemoteConversation,
     resumeConversation,
     resumeConversationBusy,
-    saveMemoryFromMessage,
     selectedArtifactId,
     selectedExecutionTargetId,
     selectedRunId,
