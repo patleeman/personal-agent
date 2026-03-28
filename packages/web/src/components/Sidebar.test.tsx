@@ -193,15 +193,15 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Nodes'));
-    expect(html.indexOf('Nodes')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Knowledge Base'));
+    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Open create menu');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
-    expect(html).not.toContain('Knowledge Base');
+    expect(html).toContain('Knowledge Base');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');

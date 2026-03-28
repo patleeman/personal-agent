@@ -5,21 +5,50 @@ import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import { PROJECTS_CHANGED_EVENT } from '../projectEvents';
-import { PageHeader, PageHeading, BrowserRecordRow, EmptyState, ErrorState, LoadingState, Pill, ToolbarButton, SurfacePanel, cx } from '../components/ui';
-import { humanizeSkillName, formatUsageLabel } from '../memoryOverview';
-import type { MemoryData, MemoryDocDetail, MemoryDocItem, MemorySkillItem, NodeLinkKind, ProjectDetail, ProjectRecord, SkillDetail } from '../types';
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  PageHeading,
+  SectionLabel,
+  ToolbarButton,
+} from '../components/ui';
+import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
+import type {
+  MemoryData,
+  MemoryDocDetail,
+  MemoryDocItem,
+  MemorySkillItem,
+  NodeLinkKind,
+  ProjectDetail,
+  ProjectRecord,
+  SkillDetail,
+} from '../types';
 import { buildNoteSearch } from '../noteWorkspaceState';
+import { buildNodesSearch, readNodeBrowserFilter, readSelectedNode, type NodeBrowserFilter } from '../nodeWorkspaceState';
+import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { buildProjectsHref } from '../projectWorkspaceState';
 import { buildSkillsSearch } from '../skillWorkspaceState';
-import { buildNodesHref, buildNodesSearch, readNodeBrowserFilter, readSelectedNode, type NodeBrowserFilter } from '../nodeWorkspaceState';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
-import { timeAgo } from '../utils';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
-import { NodeInspectorSection, NodeMetadataList, NodePrimaryToolbar, NodeWorkspaceBody, NodeWorkspaceShell } from '../components/NodeWorkspace';
-import { readEditableNoteBody } from '../noteDocument';
+import {
+  NodeInspectorSection,
+  NodePrimaryToolbar,
+  NodePropertyList,
+  NodeRailSection,
+  NodeWorkspaceBody,
+  NodeWorkspaceShell,
+} from '../components/NodeWorkspace';
 import { splitMarkdownFrontmatter } from '../markdownDocument';
+import { readEditableNoteBody } from '../noteDocument';
+import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
+const NODE_KIND_ORDER: NodeLinkKind[] = ['note', 'project', 'skill'];
+
+type NodeBrowserSort = 'updated' | 'title';
+type NodeBrowserGroup = 'none' | 'type';
 
 type UnifiedNodeItem = {
   kind: NodeLinkKind;
@@ -27,7 +56,10 @@ type UnifiedNodeItem = {
   title: string;
   summary: string;
   sortAt: string | null;
+  contextPrimary: string;
+  contextSecondary: string | null;
   metaParts: string[];
+  searchParts: string[];
   record: MemoryDocItem | MemorySkillItem | ProjectRecord;
 };
 
@@ -47,15 +79,34 @@ function kindLabel(kind: NodeLinkKind): string {
   }
 }
 
-function kindTone(kind: NodeLinkKind): 'accent' | 'teal' | 'warning' {
+function pluralKindLabel(kind: NodeLinkKind): string {
   switch (kind) {
     case 'note':
-      return 'accent';
+      return 'Notes';
     case 'project':
-      return 'teal';
+      return 'Projects';
     case 'skill':
-      return 'warning';
+      return 'Skills';
   }
+}
+
+function humanizeStatus(status: string): string {
+  const normalized = status.replace(/[_-]+/g, ' ').trim();
+  if (!normalized) {
+    return 'Unknown';
+  }
+
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function summarizeRepoRoot(repoRoot: string | undefined): string | null {
+  const normalized = repoRoot?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized.replace(/\\/g, '/').split('/').filter(Boolean);
+  return segments.at(-1) ?? normalized;
 }
 
 function projectTaskSummary(project: ProjectRecord): string {
@@ -94,10 +145,19 @@ function buildUnifiedNodes(memoryData: MemoryData | null, projects: ProjectRecor
     title: memory.title,
     summary: memory.summary,
     sortAt: memory.updated ?? memory.lastUsedAt ?? null,
+    contextPrimary: summarizeNoteContext(memory),
+    contextSecondary: memory.status ?? 'active',
     metaParts: [
       `@${memory.id}`,
-      summarizeNoteContext(memory),
       ...(memory.path ? [memory.path] : []),
+    ],
+    searchParts: [
+      memory.id,
+      memory.title,
+      memory.summary,
+      summarizeNoteContext(memory),
+      memory.status ?? 'active',
+      memory.path ?? '',
     ],
     record: memory,
   }));
@@ -108,34 +168,58 @@ function buildUnifiedNodes(memoryData: MemoryData | null, projects: ProjectRecor
     title: humanizeSkillName(skill.name),
     summary: skill.description,
     sortAt: skill.lastUsedAt ?? null,
-    metaParts: [
-      `@${skill.name}`,
+    contextPrimary: skill.source,
+    contextSecondary: formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently'),
+    metaParts: [`@${skill.name}`],
+    searchParts: [
+      skill.name,
+      humanizeSkillName(skill.name),
+      skill.description,
       skill.source,
       formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently'),
     ],
     record: skill,
   }));
 
-  const projectItems = (projects ?? []).map((project) => ({
-    kind: 'project' as const,
-    id: project.id,
-    title: project.title,
-    summary: project.summary || project.description,
-    sortAt: project.updatedAt,
-    metaParts: [
-      `@${project.id}`,
-      project.status,
-      projectTaskSummary(project),
-      ...(project.profile ? [project.profile] : []),
-    ],
-    record: project,
-  }));
-
-  return [...projectItems, ...noteItems, ...skillItems].sort((left, right) => {
-    const leftSort = left.sortAt ?? '';
-    const rightSort = right.sortAt ?? '';
-    return rightSort.localeCompare(leftSort) || left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+  const projectItems = (projects ?? []).map((project) => {
+    const repoLabel = summarizeRepoRoot(project.repoRoot);
+    return {
+      kind: 'project' as const,
+      id: project.id,
+      title: project.title,
+      summary: project.summary || project.description,
+      sortAt: project.updatedAt,
+      contextPrimary: humanizeStatus(project.status),
+      contextSecondary: [projectTaskSummary(project), project.profile ?? null].filter(Boolean).join(' · '),
+      metaParts: [
+        `@${project.id}`,
+        ...(repoLabel ? [repoLabel] : []),
+      ],
+      searchParts: [
+        project.id,
+        project.title,
+        project.summary || project.description,
+        project.status,
+        project.currentFocus ?? '',
+        project.profile ?? '',
+        repoLabel ?? '',
+        projectTaskSummary(project),
+      ],
+      record: project,
+    };
   });
+
+  return [...noteItems, ...projectItems, ...skillItems];
+}
+
+function compareNodeItems(left: UnifiedNodeItem, right: UnifiedNodeItem, sort: NodeBrowserSort): number {
+  if (sort === 'title') {
+    return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+  }
+
+  const leftSort = left.sortAt ?? '';
+  const rightSort = right.sortAt ?? '';
+  return rightSort.localeCompare(leftSort) || left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
 }
 
 function matchesFilter(item: UnifiedNodeItem, filter: NodeBrowserFilter, query: string): boolean {
@@ -148,12 +232,7 @@ function matchesFilter(item: UnifiedNodeItem, filter: NodeBrowserFilter, query: 
     return true;
   }
 
-  return [
-    item.id,
-    item.title,
-    item.summary,
-    ...item.metaParts,
-  ].join('\n').toLowerCase().includes(normalizedQuery);
+  return item.searchParts.join('\n').toLowerCase().includes(normalizedQuery);
 }
 
 function summarizeDetailContent(kind: NodeLinkKind, content: string, title: string): string | null {
@@ -228,147 +307,257 @@ function ProjectConversationList({
   );
 }
 
-function NodesBrowser({
+function KnowledgeBaseTable({
   items,
-  filter,
-  query,
   locationSearch,
-  refreshing,
-  onFilterChange,
-  onQueryChange,
-  onRefresh,
-  selected,
 }: {
   items: UnifiedNodeItem[];
-  filter: NodeBrowserFilter;
-  query: string;
   locationSearch: string;
-  refreshing: boolean;
-  onFilterChange: (next: NodeBrowserFilter) => void;
-  onQueryChange: (next: string) => void;
-  onRefresh: () => void;
-  selected: { kind: NodeLinkKind; id: string } | null;
 }) {
-  const counts = useMemo(() => ({
-    all: items.length,
-    note: items.filter((item) => item.kind === 'note').length,
-    project: items.filter((item) => item.kind === 'project').length,
-    skill: items.filter((item) => item.kind === 'skill').length,
-  }), [items]);
-
-  const filterTabs: Array<{ id: NodeBrowserFilter; label: string }> = [
-    { id: 'all', label: `All (${counts.all})` },
-    { id: 'note', label: `Notes (${counts.note})` },
-    { id: 'project', label: `Projects (${counts.project})` },
-    { id: 'skill', label: `Skills (${counts.skill})` },
-  ];
+  const navigate = useNavigate();
 
   return (
-    <SurfacePanel muted className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl">
-      <div className="border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="text-[15px] font-medium text-primary">Browse nodes</p>
-            <p className="text-[12px] leading-relaxed text-secondary">Notes, projects, and skills in one place. Type is a filter, not a page boundary.</p>
-          </div>
-          <ToolbarButton onClick={onRefresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</ToolbarButton>
-        </div>
-        <div className="mt-4 space-y-3">
-          <div className="ui-segmented-control" role="tablist" aria-label="Node type filter">
-            {filterTabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onFilterChange(tab.id)}
-                className={cx('ui-segmented-button', filter === tab.id && 'ui-segmented-button-active')}
+    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-border-subtle bg-surface/10">
+      <table className="min-w-full border-collapse text-left">
+        <thead className="sticky top-0 z-10 bg-base/95 backdrop-blur">
+          <tr className="border-b border-border-subtle text-[10px] uppercase tracking-[0.14em] text-dim">
+            <th className="px-4 py-2.5 font-medium">Node</th>
+            <th className="px-3 py-2.5 font-medium">Type</th>
+            <th className="px-3 py-2.5 font-medium">Context</th>
+            <th className="px-4 py-2.5 font-medium">Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const nodeHref = `/nodes${buildNodesSearch(locationSearch, {
+              kind: item.kind,
+              nodeId: item.id,
+            })}`;
+
+            return (
+              <tr
+                key={`${item.kind}:${item.id}`}
+                className="cursor-pointer border-b border-border-subtle align-top transition-colors hover:bg-surface/35"
+                tabIndex={0}
+                onClick={() => navigate(nodeHref)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(nodeHref);
+                  }
+                }}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search nodes…"
-            aria-label="Search nodes"
-            className={INPUT_CLASS}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {items.length === 0 ? (
-          <EmptyState
-            className="min-h-[16rem]"
-            title="No matching nodes"
-            body={query.trim() ? 'Try a broader search across ids, titles, and summaries.' : 'Create a note or project, or add a skill, to start building the shared node layer.'}
-          />
-        ) : (
-          <div className="space-y-px">
-            {items.map((item) => {
-              const href = `/nodes${buildNodesSearch(locationSearch, {
-                filter,
-                kind: item.kind,
-                nodeId: item.id,
-              })}`;
-              const selectedRow = selected?.kind === item.kind && selected?.id === item.id;
-
-              return (
-                <BrowserRecordRow
-                  key={`${item.kind}:${item.id}`}
-                  to={href}
-                  selected={selectedRow}
-                  label={<Pill tone={kindTone(item.kind)}>{kindLabel(item.kind)}</Pill>}
-                  aside={item.sortAt ? timeAgo(item.sortAt) : '—'}
-                  heading={item.title}
-                  summary={item.summary}
-                  meta={(
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-dim">
+                <td className="px-4 py-3">
+                  <div className="space-y-1.5">
+                    <Link
+                      to={nodeHref}
+                      className="text-[14px] font-medium text-primary transition-colors hover:text-accent"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {item.title}
+                    </Link>
+                    {item.summary ? <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{item.summary}</p> : null}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                       {item.metaParts.map((part, index) => (
-                        <span key={`${item.kind}:${item.id}:${index}`} className={index === 0 ? 'font-mono text-accent' : undefined}>{part}</span>
+                        <span key={`${item.kind}:${item.id}:${index}`} className={index === 0 ? 'font-mono' : undefined}>
+                          {part}
+                        </span>
                       ))}
                     </div>
-                  )}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </SurfacePanel>
+                  </div>
+                </td>
+                <td className="px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-secondary">{kindLabel(item.kind)}</td>
+                <td className="px-3 py-3">
+                  <div className="text-[12px] text-primary">{item.contextPrimary}</div>
+                  <div className="mt-0.5 text-[11px] text-dim">{item.contextSecondary || '—'}</div>
+                </td>
+                <td className="px-4 py-3 text-[12px] text-secondary">{item.sortAt ? timeAgo(item.sortAt) : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function NodeDetailInspector({
+function NoteWorkspaceContent({ detail }: { detail: MemoryDocDetail }) {
+  const preview = summarizeDetailContent('note', detail.content, detail.memory.title);
+
+  return (
+    <div className="space-y-6">
+      {detail.memory.description ? (
+        <NodeInspectorSection title="For the agent">
+          <p className="text-[13px] leading-relaxed text-secondary">{detail.memory.description}</p>
+        </NodeInspectorSection>
+      ) : null}
+
+      {preview ? (
+        <NodeInspectorSection title="Preview">
+          <p className="text-[13px] leading-relaxed text-secondary">{preview}</p>
+        </NodeInspectorSection>
+      ) : null}
+    </div>
+  );
+}
+
+function NoteWorkspaceInspector({ detail }: { detail: MemoryDocDetail }) {
+  return (
+    <>
+      <NodeRailSection title="Properties">
+        <NodePropertyList items={[
+          { label: 'ID', value: <span className="font-mono text-[12px]">{detail.memory.id}</span> },
+          { label: 'Kind', value: 'Note' },
+          { label: 'Context', value: summarizeNoteContext(detail.memory) },
+          { label: 'Status', value: detail.memory.status ?? 'active' },
+          { label: 'Updated', value: detail.memory.updated ? timeAgo(detail.memory.updated) : '—' },
+          { label: 'Path', value: <span className="break-all font-mono text-[12px]">{detail.memory.path}</span> },
+        ]} />
+      </NodeRailSection>
+      <NodeRailSection title="References" meta={`${detail.references.length}`}>
+        <ReferenceList references={detail.references} />
+      </NodeRailSection>
+      <NodeRailSection title="Relationships">
+        <div className="space-y-4">
+          <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+          <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+          <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+        </div>
+      </NodeRailSection>
+    </>
+  );
+}
+
+function SkillWorkspaceContent({ detail }: { detail: SkillDetail }) {
+  const preview = summarizeDetailContent('skill', detail.content, humanizeSkillName(detail.skill.name));
+
+  return (
+    <div className="space-y-6">
+      {preview ? (
+        <NodeInspectorSection title="Definition preview">
+          <p className="text-[13px] leading-relaxed text-secondary">{preview}</p>
+        </NodeInspectorSection>
+      ) : null}
+    </div>
+  );
+}
+
+function SkillWorkspaceInspector({ detail }: { detail: SkillDetail }) {
+  return (
+    <>
+      <NodeRailSection title="Properties">
+        <NodePropertyList items={[
+          { label: 'Name', value: detail.skill.name },
+          { label: 'Kind', value: 'Skill' },
+          { label: 'Source', value: detail.skill.source },
+          { label: 'Usage', value: formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently') },
+          { label: 'Path', value: <span className="break-all font-mono text-[12px]">{detail.skill.path}</span> },
+        ]} />
+      </NodeRailSection>
+      <NodeRailSection title="References" meta={`${detail.references.length}`}>
+        <ReferenceList references={detail.references} />
+      </NodeRailSection>
+      <NodeRailSection title="Relationships">
+        <div className="space-y-4">
+          <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
+          <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
+          <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+        </div>
+      </NodeRailSection>
+    </>
+  );
+}
+
+function ProjectWorkspaceContent({ detail }: { detail: ProjectDetail }) {
+  return (
+    <div className="space-y-6">
+      {detail.project.currentFocus ? (
+        <NodeInspectorSection title="Current focus">
+          <p className="text-[13px] leading-relaxed text-secondary">{detail.project.currentFocus}</p>
+        </NodeInspectorSection>
+      ) : null}
+
+      {detail.project.blockers.length > 0 ? (
+        <NodeInspectorSection title="Blockers">
+          <ul className="space-y-2 text-[13px] leading-relaxed text-secondary">
+            {detail.project.blockers.map((blocker) => <li key={blocker}>• {blocker}</li>)}
+          </ul>
+        </NodeInspectorSection>
+      ) : null}
+
+      {detail.project.recentProgress.length > 0 ? (
+        <NodeInspectorSection title="Recent progress">
+          <ul className="space-y-2 text-[13px] leading-relaxed text-secondary">
+            {detail.project.recentProgress.map((entry) => <li key={entry}>• {entry}</li>)}
+          </ul>
+        </NodeInspectorSection>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectWorkspaceInspector({ detail }: { detail: ProjectDetail }) {
+  return (
+    <>
+      <NodeRailSection title="Properties">
+        <NodePropertyList items={[
+          { label: 'ID', value: <span className="font-mono text-[12px]">{detail.project.id}</span> },
+          { label: 'Kind', value: 'Project' },
+          { label: 'Status', value: humanizeStatus(detail.project.status) },
+          { label: 'Tasks', value: projectTaskSummary(detail.project) },
+          { label: 'Profile', value: detail.profile },
+          { label: 'Updated', value: timeAgo(detail.project.updatedAt) },
+          { label: 'Repo root', value: detail.project.repoRoot ? <span className="break-all font-mono text-[12px]">{detail.project.repoRoot}</span> : '—' },
+        ]} />
+      </NodeRailSection>
+      <NodeRailSection title="Linked conversations" meta={`${detail.linkedConversations.length}`}>
+        <ProjectConversationList conversations={detail.linkedConversations} />
+      </NodeRailSection>
+      <NodeRailSection title="Relationships">
+        <div className="space-y-4">
+          <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This project does not reference other nodes yet." />
+          <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this project yet." />
+          <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+        </div>
+      </NodeRailSection>
+    </>
+  );
+}
+
+function SelectedNodeWorkspace({
   selected,
   detail,
   loading,
   error,
+  refreshing,
+  locationSearch,
+  onRefresh,
 }: {
   selected: UnifiedNodeItem | null;
   detail: SelectedNodeDetail | null;
   loading: boolean;
   error: string | null;
+  refreshing: boolean;
+  locationSearch: string;
+  onRefresh: () => void;
 }) {
+  const backHref = `/nodes${buildNodesSearch(locationSearch, { kind: null, nodeId: null })}`;
+
   if (!selected) {
-    return (
-      <SurfacePanel muted className="flex h-full min-h-0 items-center justify-center rounded-2xl px-8 py-10">
-        <EmptyState
-          title="Select a node"
-          body="Browse notes, projects, and skills together, then inspect one here without bouncing between separate knowledge surfaces."
-        />
-      </SurfacePanel>
-    );
+    return <ErrorState message="Node not found." className="min-h-[18rem]" />;
   }
 
   if (loading && !detail) {
-    return <LoadingState label="Loading node…" className="h-full justify-center" />;
+    return <LoadingState label="Loading node…" className="min-h-[18rem]" />;
   }
 
   if (error || !detail) {
-    return <ErrorState message={`Failed to load node: ${error ?? 'Node not found.'}`} />;
+    return (
+      <div className="space-y-3">
+        <ErrorState message={`Failed to load node: ${error ?? 'Node not found.'}`} />
+        <Link to={backHref} className="ui-toolbar-button inline-flex">Back to table</Link>
+      </div>
+    );
   }
 
   const dedicatedHref = detail.kind === 'note'
@@ -389,148 +578,52 @@ function NodeDetailInspector({
       : detail.detail.project.summary || detail.detail.project.description;
   const meta = detail.kind === 'note'
     ? [
+        kindLabel('note'),
         `@${detail.detail.memory.id}`,
-        detail.detail.memory.path,
         detail.detail.memory.updated ? `updated ${timeAgo(detail.detail.memory.updated)}` : null,
       ]
     : detail.kind === 'skill'
       ? [
+          kindLabel('skill'),
           `@${detail.detail.skill.name}`,
-          detail.detail.skill.source,
-          detail.detail.skill.path,
+          formatUsageLabel(detail.detail.skill.recentSessionCount, detail.detail.skill.lastUsedAt, detail.detail.skill.usedInLastSession, 'Not used recently'),
         ]
       : [
+          kindLabel('project'),
           `@${detail.detail.project.id}`,
-          detail.detail.profile,
-          detail.detail.project.repoRoot ?? null,
-          `updated ${timeAgo(detail.detail.project.updatedAt)}`,
+          humanizeStatus(detail.detail.project.status),
+          detail.detail.project.updatedAt ? `updated ${timeAgo(detail.detail.project.updatedAt)}` : null,
         ];
 
-  const contentPreview = detail.kind === 'note'
-    ? summarizeDetailContent('note', detail.detail.content, detail.detail.memory.title)
-    : detail.kind === 'skill'
-      ? summarizeDetailContent('skill', detail.detail.content, title)
-      : null;
-
   return (
-    <SurfacePanel muted className="h-full min-h-0 overflow-hidden rounded-2xl px-6 py-6">
-      <NodeWorkspaceShell
-        eyebrow={<Pill tone={kindTone(detail.kind)}>{kindLabel(detail.kind)}</Pill>}
-        title={title}
-        summary={summary}
-        meta={meta.filter(Boolean).map((item) => <span key={item as string}>{item}</span>)}
-        actions={(
-          <NodePrimaryToolbar>
-            <Link to={dedicatedHref} className="ui-toolbar-button">Open dedicated page</Link>
-          </NodePrimaryToolbar>
-        )}
-        compactTitle={false}
-      >
-        <NodeWorkspaceBody className="px-0 py-6">
-          <div className="space-y-6">
-            {detail.kind === 'note' ? (
-              <>
-                {detail.detail.memory.description ? (
-                  <NodeInspectorSection title="For the agent">
-                    <p className="text-[13px] leading-relaxed text-secondary">{detail.detail.memory.description}</p>
-                  </NodeInspectorSection>
-                ) : null}
-                {contentPreview ? (
-                  <NodeInspectorSection title="Preview">
-                    <p className="text-[13px] leading-relaxed text-secondary">{contentPreview}</p>
-                  </NodeInspectorSection>
-                ) : null}
-                <NodeInspectorSection title="Metadata">
-                  <NodeMetadataList items={[
-                    { label: 'Kind', value: kindLabel('note') },
-                    { label: 'Context', value: summarizeNoteContext(detail.detail.memory) },
-                    { label: 'Status', value: detail.detail.memory.status ?? 'active' },
-                  ]} />
-                </NodeInspectorSection>
-                <NodeInspectorSection title="References" meta={`${detail.detail.references.length}`}>
-                  <ReferenceList references={detail.detail.references} />
-                </NodeInspectorSection>
-                <NodeInspectorSection title="Links">
-                  <div className="space-y-4">
-                    <NodeLinkList title="Links to" items={detail.detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-                    <NodeLinkList title="Linked from" items={detail.detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
-                    <UnresolvedNodeLinks ids={detail.detail.links?.unresolved} />
-                  </div>
-                </NodeInspectorSection>
-              </>
-            ) : null}
-
-            {detail.kind === 'skill' ? (
-              <>
-                {contentPreview ? (
-                  <NodeInspectorSection title="Preview">
-                    <p className="text-[13px] leading-relaxed text-secondary">{contentPreview}</p>
-                  </NodeInspectorSection>
-                ) : null}
-                <NodeInspectorSection title="Metadata">
-                  <NodeMetadataList items={[
-                    { label: 'Kind', value: kindLabel('skill') },
-                    { label: 'Source', value: detail.detail.skill.source },
-                    { label: 'Usage', value: formatUsageLabel(detail.detail.skill.recentSessionCount, detail.detail.skill.lastUsedAt, detail.detail.skill.usedInLastSession, 'Not used recently') },
-                  ]} />
-                </NodeInspectorSection>
-                <NodeInspectorSection title="References" meta={`${detail.detail.references.length}`}>
-                  <ReferenceList references={detail.detail.references} />
-                </NodeInspectorSection>
-                <NodeInspectorSection title="Links">
-                  <div className="space-y-4">
-                    <NodeLinkList title="Links to" items={detail.detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
-                    <NodeLinkList title="Linked from" items={detail.detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
-                    <UnresolvedNodeLinks ids={detail.detail.links?.unresolved} />
-                  </div>
-                </NodeInspectorSection>
-              </>
-            ) : null}
-
-            {detail.kind === 'project' ? (
-              <>
-                <NodeInspectorSection title="Metadata">
-                  <NodeMetadataList items={[
-                    { label: 'Kind', value: kindLabel('project') },
-                    { label: 'Status', value: detail.detail.project.status },
-                    { label: 'Tasks', value: projectTaskSummary(detail.detail.project) },
-                  ]} />
-                </NodeInspectorSection>
-                {detail.detail.project.currentFocus ? (
-                  <NodeInspectorSection title="Current focus">
-                    <p className="text-[13px] leading-relaxed text-secondary">{detail.detail.project.currentFocus}</p>
-                  </NodeInspectorSection>
-                ) : null}
-                {detail.detail.project.blockers.length > 0 ? (
-                  <NodeInspectorSection title="Blockers">
-                    <ul className="space-y-2 text-[13px] leading-relaxed text-secondary">
-                      {detail.detail.project.blockers.map((blocker) => <li key={blocker}>• {blocker}</li>)}
-                    </ul>
-                  </NodeInspectorSection>
-                ) : null}
-                {detail.detail.project.recentProgress.length > 0 ? (
-                  <NodeInspectorSection title="Recent progress">
-                    <ul className="space-y-2 text-[13px] leading-relaxed text-secondary">
-                      {detail.detail.project.recentProgress.map((entry) => <li key={entry}>• {entry}</li>)}
-                    </ul>
-                  </NodeInspectorSection>
-                ) : null}
-                <NodeInspectorSection title="Linked conversations" meta={`${detail.detail.linkedConversations.length}`}>
-                  <ProjectConversationList conversations={detail.detail.linkedConversations} />
-                </NodeInspectorSection>
-                <NodeInspectorSection title="Links">
-                  <div className="space-y-4">
-                    <NodeLinkList title="Links to" items={detail.detail.links?.outgoing} surface="main" emptyText="This project does not reference other nodes yet." />
-                    <NodeLinkList title="Linked from" items={detail.detail.links?.incoming} surface="main" emptyText="No other nodes link to this project yet." />
-                    <UnresolvedNodeLinks ids={detail.detail.links?.unresolved} />
-                  </div>
-                </NodeInspectorSection>
-              </>
-            ) : null}
-          </div>
-        </NodeWorkspaceBody>
-      </NodeWorkspaceShell>
-    </SurfacePanel>
+    <NodeWorkspaceShell
+      eyebrow="Knowledge Base"
+      title={title}
+      summary={summary}
+      meta={meta.filter(Boolean).map((item) => <span key={item as string}>{item}</span>)}
+      actions={(
+        <NodePrimaryToolbar>
+          <Link to={backHref} className="ui-toolbar-button">Back to table</Link>
+          <ToolbarButton onClick={onRefresh} disabled={refreshing}>{refreshing ? 'Refreshing…' : 'Refresh'}</ToolbarButton>
+          <Link to={dedicatedHref} className="ui-toolbar-button">Open dedicated page</Link>
+        </NodePrimaryToolbar>
+      )}
+      inspector={(
+        <>
+          {detail.kind === 'note' ? <NoteWorkspaceInspector detail={detail.detail} /> : null}
+          {detail.kind === 'skill' ? <SkillWorkspaceInspector detail={detail.detail} /> : null}
+          {detail.kind === 'project' ? <ProjectWorkspaceInspector detail={detail.detail} /> : null}
+        </>
+      )}
+    >
+      <NodeWorkspaceBody className="px-0 py-0">
+        <div className="mx-auto max-w-4xl">
+          {detail.kind === 'note' ? <NoteWorkspaceContent detail={detail.detail} /> : null}
+          {detail.kind === 'skill' ? <SkillWorkspaceContent detail={detail.detail} /> : null}
+          {detail.kind === 'project' ? <ProjectWorkspaceContent detail={detail.detail} /> : null}
+        </div>
+      </NodeWorkspaceBody>
+    </NodeWorkspaceShell>
   );
 }
 
@@ -545,6 +638,8 @@ export function NodesPage() {
     profileState ? `nodes-projects:${profileState.currentProfile}` : 'nodes-projects:pending',
   );
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<NodeBrowserSort>('updated');
+  const [group, setGroup] = useState<NodeBrowserGroup>('none');
 
   const filter = useMemo(() => readNodeBrowserFilter(location.search), [location.search]);
   const selected = useMemo(() => readSelectedNode(location.search), [location.search]);
@@ -552,13 +647,31 @@ export function NodesPage() {
   const projects = currentProfile && projectSnapshot ? projectSnapshot : (projectsApi.data ?? null);
   const nodes = useMemo(() => buildUnifiedNodes(memoryApi.data ?? null, projects), [memoryApi.data, projects]);
   const filteredNodes = useMemo(
-    () => nodes.filter((item) => matchesFilter(item, filter, query)),
-    [filter, nodes, query],
+    () => nodes.filter((item) => matchesFilter(item, filter, query)).sort((left, right) => compareNodeItems(left, right, sort)),
+    [filter, nodes, query, sort],
   );
   const selectedNode = useMemo(
     () => selected ? nodes.find((item) => item.kind === selected.kind && item.id === selected.id) ?? null : null,
     [nodes, selected],
   );
+  const counts = useMemo(() => ({
+    all: nodes.length,
+    note: nodes.filter((item) => item.kind === 'note').length,
+    project: nodes.filter((item) => item.kind === 'project').length,
+    skill: nodes.filter((item) => item.kind === 'skill').length,
+  }), [nodes]);
+  const groupedNodes = useMemo(() => {
+    if (group === 'none') {
+      return [];
+    }
+
+    return NODE_KIND_ORDER
+      .map((kind) => ({
+        kind,
+        items: filteredNodes.filter((item) => item.kind === kind),
+      }))
+      .filter((entry) => entry.items.length > 0);
+  }, [filteredNodes, group]);
 
   const detailApi = useApi(async () => {
     if (!selected) {
@@ -625,53 +738,118 @@ export function NodesPage() {
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <div className="mx-auto flex w-full max-w-[1540px] flex-col gap-5">
-          <PageHeader
-            actions={(
-              <div className="flex flex-wrap items-center gap-2">
-                <Link to="/notes" className="ui-toolbar-button">Notes workspace</Link>
-                <Link to="/projects" className="ui-toolbar-button">Projects workspace</Link>
-                <Link to="/skills" className="ui-toolbar-button">Skills workspace</Link>
-              </div>
-            )}
-          >
-            <PageHeading
-              title="Nodes"
-              meta="Browse notes, projects, and skills together, then open the dedicated workspace only when you need type-specific editing."
+        <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
+          {selected ? (
+            <SelectedNodeWorkspace
+              selected={selectedNode}
+              detail={detailApi.data ?? null}
+              loading={detailApi.loading}
+              error={detailApi.error}
+              refreshing={memoryApi.refreshing || projectsApi.refreshing || detailApi.refreshing}
+              locationSearch={location.search}
+              onRefresh={() => { void refreshAll(); }}
             />
-          </PageHeader>
-
-          {memoryApi.loading && !memoryApi.data && !projects ? (
-            <LoadingState label="Loading nodes…" className="min-h-[18rem]" />
-          ) : memoryApi.error ? (
-            <ErrorState message={`Unable to load nodes: ${memoryApi.error}`} />
           ) : (
-            <div className="grid min-h-0 gap-6 xl:grid-cols-[minmax(22rem,34rem)_minmax(0,1fr)]">
-              <div className="min-h-[28rem] xl:min-h-[calc(100vh-14rem)]">
-                <NodesBrowser
-                  items={filteredNodes}
-                  filter={filter}
-                  query={query}
-                  locationSearch={location.search}
-                  refreshing={memoryApi.refreshing || projectsApi.refreshing || detailApi.refreshing}
-                  onFilterChange={(next) => navigate(`/nodes${buildNodesSearch(location.search, { filter: next })}`, { replace: true })}
-                  onQueryChange={setQuery}
-                  onRefresh={() => { void refreshAll(); }}
-                  selected={selected}
+            <>
+              <PageHeader
+                actions={(
+                  <ToolbarButton onClick={() => { void refreshAll(); }} disabled={memoryApi.refreshing || projectsApi.refreshing}>
+                    {memoryApi.refreshing || projectsApi.refreshing ? 'Refreshing…' : 'Refresh'}
+                  </ToolbarButton>
+                )}
+              >
+                <PageHeading
+                  title="Knowledge Base"
+                  meta="Browse notes, projects, and skills together, then open the one you want to work on."
+                />
+              </PageHeader>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] text-secondary">
+                    {query.trim() ? `Showing ${filteredNodes.length} of ${nodes.length} nodes.` : `${nodes.length} nodes.`}
+                  </span>
+                  <select
+                    value={filter}
+                    onChange={(event) => navigate(`/nodes${buildNodesSearch(location.search, { filter: event.target.value as NodeBrowserFilter })}`, { replace: true })}
+                    aria-label="Filter nodes by type"
+                    className={SELECT_CLASS}
+                  >
+                    <option value="all">All nodes ({counts.all})</option>
+                    <option value="note">Notes ({counts.note})</option>
+                    <option value="project">Projects ({counts.project})</option>
+                    <option value="skill">Skills ({counts.skill})</option>
+                  </select>
+                  <select
+                    value={sort}
+                    onChange={(event) => setSort(event.target.value as NodeBrowserSort)}
+                    aria-label="Sort nodes"
+                    className={SELECT_CLASS}
+                  >
+                    <option value="updated">Recently updated</option>
+                    <option value="title">Title</option>
+                  </select>
+                  <select
+                    value={group}
+                    onChange={(event) => setGroup(event.target.value as NodeBrowserGroup)}
+                    aria-label="Group nodes"
+                    className={SELECT_CLASS}
+                  >
+                    <option value="none">Ungrouped</option>
+                    <option value="type">Group by type</option>
+                  </select>
+                </div>
+
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search knowledge"
+                  aria-label="Search knowledge"
+                  className={`${INPUT_CLASS} sm:w-[22rem]`}
+                  autoComplete="off"
+                  spellCheck={false}
                 />
               </div>
-              <div className="min-h-[28rem] xl:min-h-[calc(100vh-14rem)]">
-                <NodeDetailInspector
-                  selected={selectedNode}
-                  detail={detailApi.data ?? null}
-                  loading={detailApi.loading}
-                  error={detailApi.error}
+
+              {memoryApi.loading && !memoryApi.data && !projects ? <LoadingState label="Loading knowledge base…" className="min-h-[18rem]" /> : null}
+              {memoryApi.error && !memoryApi.data ? <ErrorState message={`Unable to load knowledge base: ${memoryApi.error}`} /> : null}
+
+              {!memoryApi.loading && !memoryApi.error && nodes.length === 0 ? (
+                <EmptyState
+                  className="min-h-[18rem]"
+                  title="No nodes yet"
+                  body="Create a note or project, or add a skill, to start building the shared knowledge base."
                 />
-              </div>
-            </div>
+              ) : null}
+
+              {!memoryApi.loading && !memoryApi.error && filteredNodes.length === 0 && nodes.length > 0 ? (
+                <EmptyState
+                  className="min-h-[18rem]"
+                  title="No matching nodes"
+                  body="Try a broader search or another type filter."
+                />
+              ) : null}
+
+              {!memoryApi.loading && !memoryApi.error && filteredNodes.length > 0 ? (
+                group === 'type' ? (
+                  <div className="space-y-5">
+                    {groupedNodes.map((entry) => (
+                      <div key={entry.kind} className="space-y-2">
+                        <SectionLabel label={pluralKindLabel(entry.kind)} count={entry.items.length} />
+                        <KnowledgeBaseTable items={entry.items} locationSearch={location.search} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <KnowledgeBaseTable items={filteredNodes} locationSearch={location.search} />
+                )
+              ) : null}
+            </>
           )}
         </div>
       </div>
     </div>
   );
 }
+
+export default NodesPage;

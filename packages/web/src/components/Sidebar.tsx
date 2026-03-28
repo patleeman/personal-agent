@@ -975,7 +975,7 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
-        <TopNavItem to="/nodes" icon={PATH.nodes} label="Nodes" forceActive={nodesRouteActive} />
+        <TopNavItem to="/nodes" icon={PATH.nodes} label="Knowledge Base" forceActive={nodesRouteActive} />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Workspace" />
       </div>
 

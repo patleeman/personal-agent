@@ -115,10 +115,11 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
     expect(html).toContain('Chat about note');
     expect(html).toContain('memory-index');
+    expect(html).toContain('Properties');
+    expect(html).toContain('References');
+    expect(html).toContain('Relationships');
     expect(html).not.toContain('Browse durable notes');
     expect(html).not.toContain('Search notes');
-    expect(html).not.toContain('References');
-    expect(html).not.toContain('Links');
   });
 
   it('renders a notes table from the top-level notes page', () => {

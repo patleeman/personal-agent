@@ -155,9 +155,9 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
     {
       id: 'nav:nodes',
       section: 'nav',
-      title: 'Nodes',
+      title: 'Knowledge Base',
       subtitle: 'Browse notes, projects, and skills together',
-      keywords: ['knowledge', 'nodes', 'notes', 'projects', 'skills'],
+      keywords: ['knowledge', 'knowledge base', 'nodes', 'notes', 'projects', 'skills'],
       order: 4,
       action: { kind: 'navigate', to: '/nodes' },
     },

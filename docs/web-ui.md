@@ -210,18 +210,18 @@ The per-conversation automation panel shows the current todo list, active item, 
 
 See [Automation](./automation.md).
 
-### Nodes
+### Knowledge Base (`/nodes`)
 
-The Nodes page is the shared browser for notes, projects, and skills.
+The Knowledge Base page is the shared browser for notes, projects, and skills.
 
-It is meant to make the knowledge system feel like one surface with type-specific filters instead of three unrelated product areas.
+It is meant to make the knowledge system feel like one surface with a normal table-first browse flow instead of three unrelated product areas.
 
-From the Nodes page you can:
+From the Knowledge Base page you can:
 
-- browse notes, projects, and skills together
-- filter by node type without leaving the page
-- inspect shared node metadata and backlinks in one place
-- open the dedicated note, project, or skill workspace only when you need type-specific editing
+- browse notes, projects, and skills together in one table
+- filter, sort, and group without leaving the page
+- open any row into a shared node workspace with the main content in the center and metadata on the right
+- hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
 
 ### Projects
 
