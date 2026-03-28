@@ -2746,8 +2746,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const resumed = await api.resumeSession(savedConversationSessionFile);
     setConfirmedLive(true);
     streamReconnect();
+    await streamTakeover();
     return resumed.id;
-  }, [id, isLiveSession, savedConversationSessionFile, streamReconnect]);
+  }, [id, isLiveSession, savedConversationSessionFile, streamReconnect, streamTakeover]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
