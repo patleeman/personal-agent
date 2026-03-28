@@ -352,11 +352,13 @@ function NoteWorkspace({
   locationSearch,
   onNavigate,
   onRefetched,
+  onSaved,
 }: {
   detail: MemoryDocDetail;
   locationSearch: string;
   onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onRefetched: () => void;
+  onSaved: (detail: MemoryDocDetail) => void;
 }) {
   const memory = detail.memory;
   const [savedNoteTitle, setSavedNoteTitle] = useState(memory.title);
@@ -414,7 +416,7 @@ function NoteWorkspace({
       if (result.memory.id !== memory.id) {
         onNavigate({ memoryId: result.memory.id, creating: false }, true);
       }
-      emitMemoriesChanged({ memoryId: memory.id, suppressOpenDetailRefresh: true });
+      onSaved(result);
       return true;
     } catch (error) {
       setSaveState('error');
@@ -423,7 +425,7 @@ function NoteWorkspace({
     } finally {
       setSaveBusy(false);
     }
-  }, [dirty, memory.id, noteBody, noteTitle, onNavigate, onRefetched, saveBusy]);
+  }, [dirty, memory.id, noteBody, noteTitle, onNavigate, onSaved, onRefetched, saveBusy]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -799,6 +801,12 @@ export function MemoriesPage() {
                   void detailApi.refetch({ resetLoading: false });
                   void refetch({ resetLoading: false });
                   void queueState.refetch({ resetLoading: false });
+                }}
+                onSaved={(savedDetail) => {
+                  replaceData({
+                    memories: memories.map((memory) => (memory.id === savedDetail.memory.id ? savedDetail.memory : memory)),
+                    memoryQueue,
+                  });
                 }}
               />
             </div>

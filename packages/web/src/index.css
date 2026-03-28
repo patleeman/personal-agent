@@ -368,7 +368,7 @@
   }
 
   .ui-note-editor-doc {
-    @apply mx-auto flex w-full max-w-4xl flex-col gap-3 px-8 py-6;
+    @apply mx-auto flex w-full max-w-4xl flex-col gap-2 px-8 pt-3 pb-4;
   }
 
   .ui-note-title-input {
@@ -376,15 +376,15 @@
   }
 
   .ui-note-inline-meta {
-    @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-dim;
+    @apply flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] text-dim;
   }
 
   .ui-note-inline-tags {
-    @apply flex min-h-[1.5rem] items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap;
+    @apply flex min-h-[1.1rem] items-center gap-1.5 overflow-x-auto overflow-y-hidden whitespace-nowrap;
   }
 
   .ui-note-tag-link {
-    @apply inline-flex shrink-0 items-center rounded-full border border-border-subtle bg-surface/35 px-2.5 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-accent;
+    @apply inline-flex shrink-0 items-center rounded-full border border-border-subtle bg-surface/35 px-2 py-0.5 text-[10px] font-medium text-secondary transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-accent;
   }
 
   .ui-note-editor-shell {
@@ -570,29 +570,33 @@
   }
 
   .ui-note-rich-editor .ProseMirror {
-    @apply min-h-[18rem] pt-1 pb-4;
+    @apply min-h-[14rem] pt-0 pb-3;
+  }
+
+  .ui-note-rich-editor .ProseMirror > *:first-child {
+    @apply mt-0;
   }
 
   .ui-note-rich-editor .ProseMirror h1 {
-    @apply mt-0.5 mb-2;
+    @apply mt-0 mb-1.5;
   }
 
   .ui-note-rich-editor .ProseMirror h2 {
-    @apply mt-3 mb-1.5;
+    @apply mt-2.5 mb-1;
   }
 
   .ui-note-rich-editor .ProseMirror h3 {
-    @apply mt-2.5 mb-1.5;
+    @apply mt-2 mb-1;
   }
 
   .ui-note-rich-editor .ProseMirror h4,
   .ui-note-rich-editor .ProseMirror h5,
   .ui-note-rich-editor .ProseMirror h6 {
-    @apply mt-2 mb-1;
+    @apply mt-1.5 mb-1;
   }
 
   .ui-note-rich-editor .ProseMirror p {
-    @apply my-1.5 leading-7;
+    @apply my-1 leading-7;
   }
 
   .ui-note-rich-editor .ProseMirror ul,
@@ -601,7 +605,7 @@
   .ui-note-rich-editor .ProseMirror pre,
   .ui-note-rich-editor .ProseMirror table,
   .ui-note-rich-editor .ProseMirror hr {
-    @apply my-2;
+    @apply my-1.5;
   }
 
   .ui-rich-editor .ProseMirror .is-empty::before {
