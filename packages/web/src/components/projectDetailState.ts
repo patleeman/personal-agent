@@ -58,9 +58,28 @@ export function projectFormFromDetail(project: ProjectDetail): ProjectFormState 
   return {
     title: project.project.title,
     repoRoot: project.project.repoRoot ?? '',
-    summary: project.project.summary,
+    summary: project.project.summary.trim() || project.project.description,
     status: project.project.status,
   };
+}
+
+export function normalizeProjectForm(form: ProjectFormState): ProjectFormState {
+  return {
+    title: form.title.trim(),
+    repoRoot: form.repoRoot.trim(),
+    summary: form.summary.trim(),
+    status: form.status.trim(),
+  };
+}
+
+export function projectFormsEqual(left: ProjectFormState, right: ProjectFormState): boolean {
+  const normalizedLeft = normalizeProjectForm(left);
+  const normalizedRight = normalizeProjectForm(right);
+
+  return normalizedLeft.title === normalizedRight.title
+    && normalizedLeft.repoRoot === normalizedRight.repoRoot
+    && normalizedLeft.summary === normalizedRight.summary
+    && normalizedLeft.status === normalizedRight.status;
 }
 
 export function emptyMilestoneForm(): MilestoneFormState {

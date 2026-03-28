@@ -129,12 +129,14 @@ describe('project editing helpers', () => {
       profile: 'datadog',
       projectId: 'artifact-model',
       title: 'Durable artifact model',
+      description: 'Keep the durable record editable in place.',
       summary: 'state.yaml is now canonical.',
       projectRepoRoot: '../workspace/artifact-model',
       status: 'paused',
     });
 
     expect(detail.project.title).toBe('Durable artifact model');
+    expect(detail.project.description).toBe('Keep the durable record editable in place.');
     expect(detail.project.summary).toBe('state.yaml is now canonical.');
     expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
     expect(detail.project.status).toBe('paused');

@@ -8983,6 +8983,7 @@ app.patch('/api/projects/:id', (req, res) => {
     const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
+      description?: string;
       repoRoot?: string | null;
       summary?: string;
       status?: string;
@@ -8994,6 +8995,7 @@ app.patch('/api/projects/:id', (req, res) => {
       profile,
       projectId: req.params.id,
       title: body.title,
+      description: body.description,
       projectRepoRoot: body.repoRoot,
       summary: body.summary,
       status: body.status,

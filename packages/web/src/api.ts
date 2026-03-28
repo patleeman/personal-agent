@@ -202,6 +202,7 @@ export const api = {
   }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile('/projects', options?.profile), input),
   updateProject: (id: string, patchBody: {
     title?: string;
+    description?: string;
     repoRoot?: string | null;
     summary?: string;
     status?: string;
