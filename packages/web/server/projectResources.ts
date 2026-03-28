@@ -243,9 +243,6 @@ export function saveProjectDocument(options: ResolveProjectResourceOptions & { c
   return readProjectDocument(options) as ProjectDocumentRecord;
 }
 
-export const readProjectBrief = readProjectDocument;
-export const saveProjectBrief = saveProjectDocument;
-
 export function listProjectNotes(options: ResolveProjectResourceOptions): ProjectNoteRecord[] {
   const notesDir = resolveNotesDir(options);
   if (!existsSync(notesDir)) {

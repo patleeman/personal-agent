@@ -1,12 +1,12 @@
-export const KNOWLEDGE_SECTION_QUERY_PARAM = 'section';
-export const KNOWLEDGE_PROJECT_QUERY_PARAM = 'project';
-export const KNOWLEDGE_NOTE_QUERY_PARAM = 'note';
-export const KNOWLEDGE_SKILL_QUERY_PARAM = 'skill';
-export const KNOWLEDGE_INSTRUCTION_QUERY_PARAM = 'instruction';
+const KNOWLEDGE_SECTION_QUERY_PARAM = 'section';
+const KNOWLEDGE_PROJECT_QUERY_PARAM = 'project';
+const KNOWLEDGE_NOTE_QUERY_PARAM = 'note';
+const KNOWLEDGE_SKILL_QUERY_PARAM = 'skill';
+const KNOWLEDGE_INSTRUCTION_QUERY_PARAM = 'instruction';
 
-export const KNOWLEDGE_SECTIONS = ['overview', 'projects', 'notes', 'skills', 'instructions'] as const;
+const KNOWLEDGE_SECTIONS = ['overview', 'projects', 'notes', 'skills', 'instructions'] as const;
 
-export type KnowledgeSection = (typeof KNOWLEDGE_SECTIONS)[number];
+type KnowledgeSection = (typeof KNOWLEDGE_SECTIONS)[number];
 
 const KNOWLEDGE_SECTION_SET = new Set<string>(KNOWLEDGE_SECTIONS);
 
