@@ -129,56 +129,6 @@ function PinnedIndicator() {
 
 type ShelfRowVariant = 'note' | 'project' | 'skill' | 'workspace';
 
-function ShelfRowChrome({ variant, emphasized }: { variant: ShelfRowVariant; emphasized: boolean }) {
-  if (variant === 'note') {
-    return (
-      <span
-        aria-hidden="true"
-        className={[
-          'pointer-events-none absolute bottom-1.5 left-3 right-3 h-px rounded-full transition-colors',
-          emphasized ? 'bg-teal/60' : 'bg-teal/25',
-        ].join(' ')}
-      />
-    );
-  }
-
-  if (variant === 'skill') {
-    const bracketClass = emphasized ? 'border-steel/60' : 'border-steel/25';
-    return (
-      <>
-        <span
-          aria-hidden="true"
-          className={[
-            'pointer-events-none absolute bottom-1.5 left-2.5 top-1.5 w-2 rounded-l-md border-l border-t border-b transition-colors',
-            bracketClass,
-          ].join(' ')}
-        />
-        <span
-          aria-hidden="true"
-          className={[
-            'pointer-events-none absolute bottom-1.5 right-2.5 top-1.5 w-2 rounded-r-md border-r border-t border-b transition-colors',
-            bracketClass,
-          ].join(' ')}
-        />
-      </>
-    );
-  }
-
-  if (variant === 'workspace') {
-    return (
-      <span
-        aria-hidden="true"
-        className={[
-          'pointer-events-none absolute bottom-2 right-2.5 top-2 w-px rounded-full transition-colors',
-          emphasized ? 'bg-border-default' : 'bg-border-subtle',
-        ].join(' ')}
-      />
-    );
-  }
-
-  return null;
-}
-
 function ShelfRow({
   to,
   active,
@@ -215,7 +165,6 @@ function ShelfRow({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <ShelfRowChrome variant={variant} emphasized={active || hovered} />
       <div className={[
         'min-w-0 flex-1',
         showTrailingControls && 'pr-11',
@@ -333,7 +282,7 @@ function OpenConversationRow({
         to={`/conversations/${session.id}`}
         draggable={false}
         className={[
-          'ui-sidebar-session-row select-none',
+          'ui-sidebar-session-row ui-sidebar-session-row-conversation select-none',
           active && 'ui-sidebar-session-row-active',
           canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
         ].filter(Boolean).join(' ')}
