@@ -309,11 +309,6 @@ function getElementFromNode(node: Node | null): HTMLElement | null {
   return node.parentElement;
 }
 
-function isNodeWithinElement(element: HTMLElement, node: Node | null): boolean {
-  const elementNode = getElementFromNode(node);
-  return Boolean(elementNode && element.contains(elementNode));
-}
-
 function findSelectionReplyScopeElement(node: Node | null): HTMLElement | null {
   return getElementFromNode(node)?.closest('[data-selection-reply-scope="assistant-message"]') ?? null;
 }
@@ -328,22 +323,49 @@ function findSelectionReplyScopeElements(selection: Selection, range: Range): { 
   };
 }
 
-function readSelectedTextWithinElement(element: HTMLElement | null): string {
-  if (!element || typeof window === 'undefined') {
+function readSelectedTextWithinElement(element: HTMLElement | null, selectionRange?: Range | null): string {
+  if (!element || typeof window === 'undefined' || typeof document === 'undefined') {
     return '';
   }
 
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+  const range = selectionRange ?? (() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return null;
+    }
+
+    return selection.getRangeAt(0);
+  })();
+
+  if (!range) {
     return '';
   }
 
-  const range = selection.getRangeAt(0);
-  if (!isNodeWithinElement(element, range.startContainer) || !isNodeWithinElement(element, range.endContainer)) {
+  const scopeRange = document.createRange();
+  scopeRange.selectNodeContents(element);
+
+  if (
+    range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0
+    || range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
+  ) {
     return '';
   }
 
-  return normalizeReplyQuoteSelection(selection.toString());
+  const intersection = document.createRange();
+
+  if (range.compareBoundaryPoints(Range.START_TO_START, scopeRange) <= 0) {
+    intersection.setStart(scopeRange.startContainer, scopeRange.startOffset);
+  } else {
+    intersection.setStart(range.startContainer, range.startOffset);
+  }
+
+  if (range.compareBoundaryPoints(Range.END_TO_END, scopeRange) >= 0) {
+    intersection.setEnd(scopeRange.endContainer, scopeRange.endOffset);
+  } else {
+    intersection.setEnd(range.endContainer, range.endOffset);
+  }
+
+  return normalizeReplyQuoteSelection(intersection.toString());
 }
 
 type ReplySelectionGestureHandler = (scopeElement: HTMLElement) => void;
@@ -2605,13 +2627,15 @@ export const ChatView = memo(function ChatView({
     }, 140);
   }, [cancelReplySelectionClear]);
 
-  const applyReplySelectionForScope = useCallback((scopeElement: HTMLElement | null) => {
+  const lastReplySelectionScopeRef = useRef<HTMLElement | null>(null);
+
+  const applyReplySelectionForScope = useCallback((scopeElement: HTMLElement | null, selectionRange?: Range | null) => {
     if (!scopeElement) {
       scheduleReplySelectionClear();
       return;
     }
 
-    const text = readSelectedTextWithinElement(scopeElement);
+    const text = readSelectedTextWithinElement(scopeElement, selectionRange);
     if (!text) {
       scheduleReplySelectionClear();
       return;
@@ -2624,6 +2648,7 @@ export const ChatView = memo(function ChatView({
     }
 
     cancelReplySelectionClear();
+    lastReplySelectionScopeRef.current = scopeElement;
 
     const blockId = scopeElement.dataset.blockId?.trim() || undefined;
     setReplySelection((current) => {
@@ -2640,7 +2665,7 @@ export const ChatView = memo(function ChatView({
     });
   }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
 
-  const syncReplySelectionFromSelection = useCallback(() => {
+  const syncReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null) => {
     if (typeof window === 'undefined') {
       scheduleReplySelectionClear();
       return;
@@ -2654,12 +2679,18 @@ export const ChatView = memo(function ChatView({
 
     const range = selection.getRangeAt(0);
     const { startScope, endScope } = findSelectionReplyScopeElements(selection, range);
-    if (!startScope || startScope !== endScope) {
+    const commonScope = findSelectionReplyScopeElement(range.commonAncestorContainer);
+    const candidates = [scopeHint ?? null, startScope, endScope, commonScope, lastReplySelectionScopeRef.current]
+      .filter((scope): scope is HTMLElement => Boolean(scope))
+      .filter((scope, index, list) => list.indexOf(scope) === index);
+
+    const matches = candidates.filter((scope) => readSelectedTextWithinElement(scope, range).length > 0);
+    if (matches.length !== 1) {
       scheduleReplySelectionClear();
       return;
     }
 
-    applyReplySelectionForScope(startScope);
+    applyReplySelectionForScope(matches[0], range);
   }, [applyReplySelectionForScope, scheduleReplySelectionClear]);
 
   const scheduleReplySelectionSync = useCallback((scopeElement?: HTMLElement | null) => {
@@ -2671,12 +2702,7 @@ export const ChatView = memo(function ChatView({
     }
 
     const sync = () => {
-      if (scopeElement) {
-        applyReplySelectionForScope(scopeElement);
-        return;
-      }
-
-      syncReplySelectionFromSelection();
+      syncReplySelectionFromSelection(scopeElement);
     };
 
     clearScheduledReplySelectionSync();
