@@ -44,14 +44,21 @@ export function useConversationScroll({
     scrollHeight: number;
     scrollTop: number;
   } | null>(null);
+  const hasMessages = (messages?.length ?? 0) > 0;
 
   useLayoutEffect(() => {
     pendingPrependRestoreRef.current = null;
     completedInitialScrollKeyRef.current = null;
     streamingTailAutoScrollKeyRef.current = null;
     scrollPinnedToBottomRef.current = true;
+
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+
     setAtBottom(true);
-  }, [conversationId]);
+  }, [conversationId, scrollRef]);
 
   const syncScrollStateFromDom = useCallback(() => {
     const el = scrollRef.current;
@@ -140,7 +147,10 @@ export function useConversationScroll({
   }, [conversationId, messages, prependRestoreKey, scrollRef]);
 
   useLayoutEffect(() => {
-    if (!initialScrollKey || !messages?.length || !scrollRef.current || sessionLoading) {
+    // Only restart the open-scroll loop when the conversation/scroll phase changes
+    // or the transcript flips from empty to non-empty. Streaming updates should
+    // extend the existing loop, not restart it every time the tail grows.
+    if (!initialScrollKey || !hasMessages || !scrollRef.current || sessionLoading) {
       return;
     }
 
@@ -184,7 +194,7 @@ export function useConversationScroll({
         window.cancelAnimationFrame(animationFrame);
       }
     };
-  }, [initialScrollKey, messages, scrollRef, sessionLoading]);
+  }, [hasMessages, initialScrollKey, scrollRef, sessionLoading]);
 
   useLayoutEffect(() => {
     const tailBlock = messages?.[messages.length - 1];
