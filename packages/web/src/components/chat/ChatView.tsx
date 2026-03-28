@@ -1848,7 +1848,12 @@ function ReplySelectionInlineActions({ onReply, onCopy }: ReplySelectionActions)
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="Selected text actions">
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      role="toolbar"
+      aria-label="Selected text actions"
+      data-reply-selection-actions="true"
+    >
       <button
         type="button"
         onMouseDown={suppressPointerDown}
@@ -2617,20 +2622,29 @@ export const ChatView = memo(function ChatView({
     }
   }, []);
 
+  const lastReplySelectionScopeRef = useRef<HTMLElement | null>(null);
+
+  const clearReplySelection = useCallback(() => {
+    lastReplySelectionScopeRef.current = null;
+    setReplySelection((current) => (current ? null : current));
+  }, []);
+
   const scheduleReplySelectionClear = useCallback(() => {
-    if (typeof window === 'undefined') {
-      setReplySelection((current) => (current ? null : current));
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      clearReplySelection();
+      return;
+    }
+
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) {
       return;
     }
 
     cancelReplySelectionClear();
     replySelectionClearTimeoutRef.current = window.setTimeout(() => {
       replySelectionClearTimeoutRef.current = null;
-      setReplySelection((current) => (current ? null : current));
+      clearReplySelection();
     }, 140);
-  }, [cancelReplySelectionClear]);
-
-  const lastReplySelectionScopeRef = useRef<HTMLElement | null>(null);
+  }, [cancelReplySelectionClear, clearReplySelection]);
 
   const applyReplySelectionForScope = useCallback((scopeElement: HTMLElement | null, selectionRange?: Range | null) => {
     if (!scopeElement) {
@@ -2700,7 +2714,7 @@ export const ChatView = memo(function ChatView({
     if (typeof window === 'undefined' || !onReplyToSelection) {
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
-      setReplySelection((current) => (current ? null : current));
+      clearReplySelection();
       return;
     }
 
@@ -2722,13 +2736,13 @@ export const ChatView = memo(function ChatView({
       }, delayMs);
       replySelectionSyncTimeoutRefs.current.push(timeoutId);
     }
-  }, [applyReplySelectionForScope, cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection]);
+  }, [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, syncReplySelectionFromSelection]);
 
   useEffect(() => {
     if (typeof document === 'undefined' || typeof window === 'undefined' || !onReplyToSelection) {
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
-      setReplySelection(null);
+      clearReplySelection();
       return;
     }
 
@@ -2744,10 +2758,7 @@ export const ChatView = memo(function ChatView({
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         scheduleReplySelectionSync();
-        return;
       }
-
-      scheduleReplySelectionClear();
     };
 
     document.addEventListener('selectionchange', handleDocumentReplySelectionSync);
@@ -2772,25 +2783,67 @@ export const ChatView = memo(function ChatView({
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
     };
-  }, [cancelReplySelectionClear, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionClear, scheduleReplySelectionSync, syncReplySelectionFromSelection]);
+  }, [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionSync, syncReplySelectionFromSelection]);
+
+  useEffect(() => {
+    if (!replySelection || typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      const element = target instanceof HTMLElement ? target : target.parentElement;
+      if (
+        element?.closest('[data-reply-selection-actions="true"]')
+        || element?.closest('[data-selection-reply-scope="assistant-message"]')
+      ) {
+        return;
+      }
+
+      cancelReplySelectionClear();
+      clearReplySelection();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      cancelReplySelectionClear();
+      clearReplySelection();
+      clearWindowSelection();
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [cancelReplySelectionClear, clearReplySelection, replySelection]);
 
   const handleReplySelection = useCallback(async () => {
     if (!replySelection || !onReplyToSelection) {
       return;
     }
 
-    setReplySelection(null);
+    clearReplySelection();
     clearWindowSelection();
     await onReplyToSelection({
       text: replySelection.text,
       messageIndex: replySelection.messageIndex,
       blockId: replySelection.blockId,
     });
-  }, [onReplyToSelection, replySelection]);
+  }, [clearReplySelection, onReplyToSelection, replySelection]);
 
   const handleCopyReplySelection = useCallback(async () => {
     if (!replySelection || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-      setReplySelection(null);
+      clearReplySelection();
       clearWindowSelection();
       return;
     }
@@ -2799,9 +2852,9 @@ export const ChatView = memo(function ChatView({
       await navigator.clipboard.writeText(replySelection.text);
     } finally {
       clearWindowSelection();
-      setReplySelection(null);
+      clearReplySelection();
     }
-  }, [replySelection]);
+  }, [clearReplySelection, replySelection]);
 
   const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
     const isTailItem = itemIndex === renderItems.length - 1;
