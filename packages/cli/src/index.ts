@@ -105,7 +105,6 @@ import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
   bullet,
-  command as commandText,
   configureUi,
   dim,
   error as uiError,
@@ -1204,10 +1203,6 @@ async function collectCliHomeSnapshot(): Promise<CliHomeSnapshot> {
   };
 }
 
-function printQuickCommand(command: string, description: string): void {
-  console.log(bullet(`${commandText(command)} ${dim(`— ${description}`)}`));
-}
-
 async function printCliHome(options: { includeTailHint?: boolean } = {}): Promise<void> {
   const snapshot = await collectCliHomeSnapshot();
   const includeTailHint = options.includeTailHint ?? true;
@@ -1218,16 +1213,6 @@ async function printCliHome(options: { includeTailHint?: boolean } = {}): Promis
   console.log(keyValue('Daemon', snapshot.daemonSummary));
   console.log(keyValue('Web UI', snapshot.webUiSummary));
   console.log(keyValue('Tailscale', snapshot.tailscaleSummary));
-  console.log('');
-  console.log(section('Core commands'));
-  printQuickCommand('pa status', 'Show this summary again');
-  printQuickCommand('pa tui', 'Start a chat session');
-  printQuickCommand('pa ui', 'Show web UI status and commands');
-  printQuickCommand('pa ui open', 'Open the web UI in a browser');
-  printQuickCommand('pa ui foreground', 'Run the web UI in the foreground');
-  printQuickCommand('pa daemon', 'Show daemon status and commands');
-  printQuickCommand('pa tasks list', 'Inspect scheduled tasks');
-  printQuickCommand('pa runs list', 'Inspect background runs');
 
   if (includeTailHint) {
     console.log('');
@@ -1650,8 +1635,6 @@ function printDaemonServiceHelp(): void {
     { usage: 'pa daemon service status', description: 'Show managed daemon service status' },
     { usage: 'pa daemon service uninstall', description: 'Stop and remove managed daemon service' },
   ]);
-  console.log('');
-  printDenseLines('Notes', ['Supported platforms: macOS launchd, Linux systemd --user']);
   console.log('');
   console.log(`  ${formatNextStep('pa daemon service install')}`);
 }
@@ -2693,10 +2676,6 @@ function printTasksHelp(): void {
     { usage: 'logs <id> [--tail <n>]', description: 'Show latest task run log (default: 80 lines)' },
     { usage: 'help', description: 'Show tasks help' },
   ]);
-
-  const config = loadDaemonConfig();
-  console.log('');
-  printDenseLines('Notes', [`Task directory: ${config.modules.tasks.taskDir}`]);
 }
 
 async function tasksCommand(args: string[]): Promise<number> {
@@ -4453,22 +4432,25 @@ function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } =
   console.log('');
   printDenseCommandList('Commands', [
     { usage: 'pa ui', description: 'Show web UI status and commands' },
-    { usage: 'pa ui status [--port <port>]', description: 'Show web UI status' },
-    { usage: 'pa ui open [--port <port>]', description: 'Open the web UI in a browser' },
-    { usage: 'pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Run the web UI in the foreground' },
+    { usage: 'pa ui status', description: 'Show web UI status' },
+    { usage: 'pa ui open', description: 'Open the web UI in a browser' },
+    { usage: 'pa ui foreground [--open]', description: 'Run the web UI in the foreground' },
     { usage: 'pa ui logs [--tail <count>]', description: 'Show recent managed web UI logs' },
-    { usage: 'pa ui pairing-code [--port <port>]', description: 'Create a pairing code for remote desktop or companion access' },
-    { usage: 'pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Install and start managed web UI service' },
-    { usage: 'pa ui start [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Start managed web UI service' },
-    { usage: 'pa ui stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop managed web UI service' },
-    { usage: 'pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Restart managed web UI service' },
-    { usage: 'pa ui rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Roll back to the inactive staged web UI slot' },
-    { usage: 'pa ui mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Mark the active staged web UI release as bad' },
-    { usage: 'pa ui uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop and remove managed web UI service' },
+    { usage: 'pa ui pairing-code', description: 'Create a pairing code for remote desktop or companion access' },
+    { usage: 'pa ui install', description: 'Install and start managed web UI service' },
+    { usage: 'pa ui start', description: 'Start managed web UI service' },
+    { usage: 'pa ui stop', description: 'Stop managed web UI service' },
+    { usage: 'pa ui restart', description: 'Restart managed web UI service' },
+    { usage: 'pa ui rollback', description: 'Roll back to the inactive staged web UI slot' },
+    { usage: 'pa ui mark-bad', description: 'Mark the active staged web UI release as bad' },
+    { usage: 'pa ui uninstall', description: 'Stop and remove managed web UI service' },
     { usage: 'pa ui help', description: 'Show web UI help' },
   ]);
   console.log('');
-  printDenseLines('Notes', ['Compatibility: `pa ui service ...` still works, but direct `pa ui <verb>` is the preferred interface.']);
+  printDenseCommandList('Options', [
+    { usage: '--port <port>', description: 'Override the configured web UI port' },
+    { usage: '--[no-]tailscale-serve', description: 'Override Tailscale Serve for foreground and managed-service actions' },
+  ]);
 
   if (includeNextStep) {
     console.log('');
@@ -4483,22 +4465,19 @@ function printWebUiServiceHelp(): void {
   console.log('');
   printDenseCommandList('Commands', [
     { usage: 'pa ui service help', description: 'Show web UI service help' },
-    { usage: 'pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Install and start managed web UI service' },
-    { usage: 'pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Show managed web UI service status' },
-    { usage: 'pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Start managed web UI service' },
-    { usage: 'pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop managed web UI service' },
-    { usage: 'pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Restart managed web UI service' },
-    { usage: 'pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Roll back to the inactive staged web UI slot' },
-    { usage: 'pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Mark the active staged web UI release as bad' },
-    { usage: 'pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]', description: 'Stop and remove managed web UI service' },
+    { usage: 'pa ui service install', description: 'Install and start managed web UI service' },
+    { usage: 'pa ui service status', description: 'Show managed web UI service status' },
+    { usage: 'pa ui service start', description: 'Start managed web UI service' },
+    { usage: 'pa ui service stop', description: 'Stop managed web UI service' },
+    { usage: 'pa ui service restart', description: 'Restart managed web UI service' },
+    { usage: 'pa ui service rollback', description: 'Roll back to the inactive staged web UI slot' },
+    { usage: 'pa ui service mark-bad', description: 'Mark the active staged web UI release as bad' },
+    { usage: 'pa ui service uninstall', description: 'Stop and remove managed web UI service' },
   ]);
   console.log('');
-  printDenseLines('Notes', [
-    'Updates use blue/green staging automatically when the managed web UI service is installed.',
-    'Supported platforms: macOS launchd, Linux systemd --user',
-    `Config file: ${getWebUiConfigFilePath()}`,
-    `Default port: ${String(readWebUiConfig().port)}`,
-    `Log file: ${resolveWebUiLogFile()}`,
+  printDenseCommandList('Options', [
+    { usage: '--port <port>', description: 'Override the configured web UI port' },
+    { usage: '--[no-]tailscale-serve', description: 'Override Tailscale Serve for foreground and managed-service actions' },
   ]);
   console.log('');
   console.log(`  ${formatNextStep('pa ui install')}`);
@@ -5285,23 +5264,6 @@ Global options:
   return program;
 }
 
-function printRootHelpSection(
-  title: string,
-  definitions: CliCommandDefinition[],
-  category: CliCommandCategory,
-): void {
-  const matches = definitions.filter((definition) => definition.category === category);
-  if (matches.length === 0) {
-    return;
-  }
-
-  printDenseCommandList(title, matches.map((definition) => ({
-    usage: `pa ${definition.usage ?? definition.name}`,
-    description: definition.description,
-  })));
-  console.log('');
-}
-
 function printRootHelp(
   definitions: CliCommandDefinition[],
   options: { includePreamble?: boolean } = {},
@@ -5315,12 +5277,11 @@ function printRootHelp(
     console.log('');
   }
 
-  printRootHelpSection('Chat', definitions, 'chat');
-  printRootHelpSection('System', definitions, 'system');
-  printRootHelpSection('Automation', definitions, 'automation');
-  printRootHelpSection('Data', definitions, 'data');
-  printRootHelpSection('Configuration', definitions, 'configuration');
-
+  printDenseCommandList('Commands', definitions.map((definition) => ({
+    usage: `pa ${definition.usage ?? definition.name}`,
+    description: definition.description,
+  })));
+  console.log('');
   printDenseCommandList('Help', [
     { usage: 'pa help [command]', description: 'Show detailed help for a command' },
   ]);

@@ -31,7 +31,7 @@ import {
   startDaemonDetached,
   stopDaemonGracefully,
 } from '@personal-agent/daemon';
-import { dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success, warning } from './ui.js';
+import { dim, keyValue, printDenseCommandList, printDenseUsage, section, success, warning } from './ui.js';
 
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
@@ -758,11 +758,6 @@ function printSyncHelp(): void {
     { usage: 'run', description: 'Trigger an immediate daemon sync cycle' },
     { usage: 'setup --repo <git-url> [--branch <name>] [--fresh|--bootstrap] [--repo-dir <path>]', description: 'Configure git sync, move profiles/pi-agent state under <state>/sync, and enable daemon auto-sync' },
     { usage: 'help', description: 'Show sync help' },
-  ]);
-  console.log('');
-  printDenseLines('Notes', [
-    'Fresh mode initializes from current local state and pushes to remote.',
-    'Bootstrap mode fetches and merges from an existing remote branch.',
   ]);
 }
 

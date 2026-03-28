@@ -18,12 +18,14 @@ describe('ui command help', () => {
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Usage: pa ui'))).toBe(true);
     expect(logs.some((line) => line.includes('Commands:'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui status [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui open [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui foreground [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('Compatibility: `pa ui service ...` still works'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui status'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui open'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui foreground [--open]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui install'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui restart'))).toBe(true);
+    expect(logs.some((line) => line.includes('Options:'))).toBe(true);
+    expect(logs.some((line) => line.includes('--port <port>'))).toBe(true);
+    expect(logs.some((line) => line.includes('--[no-]tailscale-serve'))).toBe(true);
 
     logSpy.mockRestore();
   });
@@ -68,11 +70,12 @@ describe('ui command help', () => {
 
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Web UI service'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service mark-bad [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('Supported platforms'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service install'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service restart'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service rollback'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service mark-bad'))).toBe(true);
+    expect(logs.some((line) => line.includes('Options:'))).toBe(true);
+    expect(logs.some((line) => line.includes('--port <port>'))).toBe(true);
 
     logSpy.mockRestore();
   });

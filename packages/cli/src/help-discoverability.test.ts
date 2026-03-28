@@ -76,7 +76,7 @@ describe('subcommand help discoverability', () => {
     },
     {
       argv: ['daemon', 'service', '--help'],
-      expected: ['Daemon service', 'pa daemon service install', 'Supported platforms'],
+      expected: ['Daemon service', 'pa daemon service install', 'pa daemon service uninstall'],
     },
   ])('shows useful help for $argv', async ({ argv, expected }) => {
     const logs = captureLogs();

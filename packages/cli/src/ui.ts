@@ -18,7 +18,8 @@ const PLAIN_SPINNER_FRAMES = ['-', '\\', '|', '/'];
 const SECTION_RULE_WIDTH = 44;
 const KEY_ALIGN_WIDTH = 28;
 const HELP_ALIGN_MIN_WIDTH = 18;
-const HELP_ALIGN_MAX_WIDTH = 42;
+const HELP_ALIGN_MAX_WIDTH = 34;
+const HELP_CONTINUATION_INDENT = '      ';
 
 function applyTone(text: string, tone: Tone): string {
   if (uiConfig.plain) {
@@ -221,7 +222,7 @@ export function printDenseCommandList(title: string, entries: DenseHelpEntry[]):
 
     if (entry.usage.length > width) {
       console.log(`  ${command(entry.usage)}`);
-      console.log(`  ${' '.repeat(width + 2)}${entry.description}`);
+      console.log(`${HELP_CONTINUATION_INDENT}${entry.description}`);
       continue;
     }
 
