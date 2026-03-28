@@ -1,6 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import {
-  getDurableAgentsDir as getCanonicalDurableAgentsDir,
   getDurableModelsDir as getCanonicalDurableModelsDir,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableSettingsDir as getCanonicalDurableSettingsDir,
@@ -260,6 +259,11 @@ export function resolveProfileSettingsFilePath(profileName: string, options: Res
   return join(getSettingsRoot(options), settingsFileNameForProfile(profileName || 'shared'));
 }
 
+export function resolveProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
+  validateProfileName(profileName || 'shared');
+  return join(getProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
+}
+
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
   const settings = readSettingsObject(settingsPath);
   const value = settings.packages;
@@ -382,10 +386,6 @@ function getSyncRootFromProfilesRoot(profilesRoot: string): string {
   return dirname(resolve(profilesRoot));
 }
 
-function getAgentsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableAgentsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
-}
-
 function getSettingsRoot(options: ResolveProfileOptions = {}): string {
   return getCanonicalDurableSettingsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
@@ -458,7 +458,6 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   if (
     repoDefaultsAgentDir
-    || rootHasSharedDurableResources(getAgentsRoot(options), ['.md'])
     || rootHasSharedDurableResources(getSettingsRoot(options), ['.json'])
     || rootHasSharedDurableResources(getModelsRoot(options), ['.json'])
     || existsSync(getSkillsRoot(options))
@@ -784,13 +783,13 @@ export function resolveResourceProfile(
   const localBase = resolveLocalProfileDir(options);
   const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
 
-  const agentsRoot = getAgentsRoot(options);
   const settingsRoot = getSettingsRoot(options);
   const modelsRoot = getModelsRoot(options);
   const skillsRoot = getSkillsRoot(options);
 
-  const durableAgentsFiles = collectScopedFiles(agentsRoot, ['.md'], profileName, knownProfiles)
-    .filter((filePath) => basename(filePath) !== 'SYSTEM.md' && basename(filePath) !== 'APPEND_SYSTEM.md');
+  const durableAgentFile = profileName === 'shared'
+    ? undefined
+    : existingFile(resolveProfileAgentFilePath(profileName, options));
   const durableSettingsFiles = collectScopedFiles(settingsRoot, ['.json'], profileName, knownProfiles);
   const durableModelsFiles = collectScopedFiles(modelsRoot, ['.json'], profileName, knownProfiles);
   const durableSkillDirs = collectScopedSkillDirs(skillsRoot, profileName, knownProfiles);
@@ -802,7 +801,7 @@ export function resolveResourceProfile(
   }
 
   if (
-    durableAgentsFiles.length > 0
+    Boolean(durableAgentFile)
     || durableSettingsFiles.length > 0
     || durableModelsFiles.length > 0
     || durableSkillDirs.length > 0
@@ -860,7 +859,7 @@ export function resolveResourceProfile(
     themeEntries,
     agentsFiles: dedupe([
       ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'AGENTS.md'),
-      ...durableAgentsFiles,
+      ...(durableAgentFile ? [durableAgentFile] : []),
       ...collectLayerFiles(localLayers, 'AGENTS.md'),
     ]),
     appendSystemFiles: collectLayerFiles(layers.filter((layer) => layer.name !== 'durable'), 'APPEND_SYSTEM.md'),

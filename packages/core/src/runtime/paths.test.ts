@@ -14,7 +14,6 @@ import {
   getDurableSessionsDir,
   getDurableConversationAttentionDir,
   getDurableProfilesDir,
-  getDurableAgentsDir,
   getDurableSettingsDir,
   getDurableModelsDir,
   getDurableSkillsDir,
@@ -104,7 +103,6 @@ describe('profile and config path helpers', () => {
     expect(getDurableSessionsDir()).toBe('/runtime/state/sync/pi-agent/sessions');
     expect(getDurableConversationAttentionDir()).toBe('/runtime/state/sync/pi-agent/state/conversation-attention');
     expect(getDurableProfilesDir()).toBe('/runtime/state/sync/profiles');
-    expect(getDurableAgentsDir()).toBe('/runtime/state/sync/agents');
     expect(getDurableSettingsDir()).toBe('/runtime/state/sync/settings');
     expect(getDurableModelsDir()).toBe('/runtime/state/sync/models');
     expect(getDurableSkillsDir()).toBe('/runtime/state/sync/skills');

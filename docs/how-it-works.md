@@ -25,7 +25,7 @@ Common repo-managed examples:
 Mutable durable resources default to the synced durable-state home:
 
 - `~/.local/state/personal-agent/sync/profiles/*.json`
-- `~/.local/state/personal-agent/sync/agents/**`
+- `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md`
 - `~/.local/state/personal-agent/sync/settings/**`
 - `~/.local/state/personal-agent/sync/models/**`
 - `~/.local/state/personal-agent/sync/skills/**`
@@ -114,7 +114,7 @@ Nodes are the unified durable file model for notes, projects, and skills.
 
 Use them for:
 
-- durable behavior fragments in `sync/agents/**`
+- profile behavior files in `sync/profiles/<profile>/agent/AGENTS.md`
 - reusable workflow skill nodes in `sync/skills/**`
 - durable note nodes in `sync/notes/<note-id>/INDEX.md` plus package-local `references/`
 - structured project nodes in `sync/projects/<project-id>/{INDEX.md,state.yaml}`
