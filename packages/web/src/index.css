@@ -142,6 +142,10 @@
     @apply inline-flex select-none items-center gap-1 rounded-md border border-border-subtle bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-border-default hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
   }
 
+  .ui-message-action-button {
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[10px] font-medium text-dim transition-colors hover:border-border-subtle hover:bg-surface/45 hover:text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
   .ui-action-button.text-accent,
   .ui-action-button.text-accent:hover,
   .ui-action-button.text-accent:focus-visible {
@@ -151,6 +155,18 @@
   .ui-action-button.text-danger,
   .ui-action-button.text-danger:hover,
   .ui-action-button.text-danger:focus-visible {
+    color: rgb(var(--color-danger));
+  }
+
+  .ui-message-action-button.text-accent,
+  .ui-message-action-button.text-accent:hover,
+  .ui-message-action-button.text-accent:focus-visible {
+    color: rgb(var(--color-accent));
+  }
+
+  .ui-message-action-button.text-danger,
+  .ui-message-action-button.text-danger:hover,
+  .ui-message-action-button.text-danger:focus-visible {
     color: rgb(var(--color-danger));
   }
 
