@@ -26,13 +26,18 @@ A personal application layer over Pi that keeps:
 
 Start here:
 
-- `docs/README.md` - user-facing docs map
+- `docs/README.md` - agent/operator docs map
 - `docs/getting-started.md` - first-run setup
+- `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/agent-tool-map.md` - product concepts mapped to live agent tools
+- `docs/conversations.md` - conversation model, wakeups, and references
+- `docs/automation.md` - automation surfaces and tradeoffs
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
-- `docs/profiles-memory-skills.md` - profiles, memory, and skills
+- `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
 - `docs/scheduled-tasks.md` - scheduled tasks and daemon automation
+- `docs/runs.md` - durable background runs
 - `docs/troubleshooting.md` - common failures and fixes
 
 ## Installation (from source)
@@ -219,7 +224,7 @@ Profile resources resolve from:
 
 - `defaults/agent` for repo-managed shared default profile files
 - repo built-ins from `extensions/` and `themes/`
-- synced durable roots under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,memory,tasks,projects}`
+- synced durable roots under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,notes,tasks,projects}`
 
 Optional local overlay:
 
@@ -227,13 +232,18 @@ Optional local overlay:
 
 See docs:
 
-- `docs/README.md` - user-facing docs map
+- `docs/README.md` - agent/operator docs map
 - `docs/getting-started.md` - first-run setup
+- `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/agent-tool-map.md` - product concepts mapped to live agent tools
+- `docs/conversations.md` - conversation model, wakeups, and references
+- `docs/automation.md` - automation surfaces and tradeoffs
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
-- `docs/profiles-memory-skills.md` - profiles, memory, and skills
+- `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
 - `docs/skills-and-capabilities.md` - skills and runtime capabilities
 - `docs/daemon.md` - daemon and background automation
 - `docs/scheduled-tasks.md` - scheduled tasks
+- `docs/runs.md` - durable background runs
 - `docs/troubleshooting.md` - debugging and recovery

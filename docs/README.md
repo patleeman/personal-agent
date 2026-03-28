@@ -1,74 +1,108 @@
 # personal-agent docs
 
-This folder is the user-facing guide to `personal-agent`.
+This folder is the agent and operator guide to `personal-agent`.
 
-It explains how to use the system and how to think about its durable features:
+Its job is to explain:
 
-- conversations
-- inbox/activity
-- nodes (notes, projects, skills)
-- scheduled tasks
-- daemon-backed background work
-- git-backed cross-machine sync
-- profiles and shared behavior
+- how to think about each durable surface
+- when to use each feature
+- where the durable record lives
+- which interface or tool to reach for
 
-These docs intentionally focus on product behavior and daily use. They are not package-level development docs.
+This is no longer just a user-facing tour. It is the operating manual for agents working inside `personal-agent`.
+
+## Source of truth boundaries
+
+Use the docs for product behavior and feature semantics.
+
+Use these other places for adjacent concerns:
+
+- active profile `AGENTS.md` — Patrick-specific preferences, durable behavior, standing instructions
+- repo `AGENTS.md` — repo-specific development rules
+- skill nodes under `sync/skills/` — reusable workflows and procedures
+- tool schemas / runtime prompt material — exact tool arguments and live agent capabilities
+- `nodes.md`, `configuration.md`, and task docs — on-disk format and config details
 
 ## Start here
 
-1. [Getting Started](./getting-started.md)
+If you are setting up `personal-agent` from scratch, read [Getting Started](./getting-started.md) first.
+
+Then start here for the operating model:
+
+1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
-3. [Web UI Guide](./web-ui.md)
-4. [Command-Line Guide (`pa`)](./command-line.md)
+3. [Agent Tool Map](./agent-tool-map.md)
 
-## Durable features
+Those three pages should answer most agent questions quickly.
 
+## Core concepts
+
+- [Conversations](./conversations.md)
+- [Async Attention and Wakeups](./async-attention.md)
+- [Automation](./automation.md)
+- [Projects](./projects.md)
+- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Nodes](./nodes.md)
+- [Scheduled Tasks](./scheduled-tasks.md)
+- [Runs](./runs.md)
+
+## Interfaces
+
+- [Web UI Guide](./web-ui.md)
+- [Command-Line Guide (`pa`)](./command-line.md)
+
+## Integrations and system surfaces
+
+- [Execution Targets](./execution-targets.md)
+- [MCP](./mcp.md)
 - [Alerts and Reminders](./alerts.md)
 - [Inbox and Activity](./inbox.md)
-- [Nodes](./nodes.md)
-- [Projects](./projects.md)
-- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Sync Guide (`pa sync`)](./sync.md)
-- [Skills and Runtime Capabilities](./skills-and-capabilities.md)
-
-## Reference
-
 - [Configuration](./configuration.md)
 - [Troubleshooting](./troubleshooting.md)
-- [Scheduled task example](./examples/scheduled-task.task.md)
+- [Skills and Runtime Capabilities](./skills-and-capabilities.md)
+
+## One place to go by question
+
+| Question | Start here | Then go deeper in |
+| --- | --- | --- |
+| What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
+| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Nodes](./nodes.md), [Configuration](./configuration.md) |
+| Where should ongoing work live? | [Projects](./projects.md) | [Conversations](./conversations.md) |
+| Where should durable knowledge or preferences live? | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md) | [Nodes](./nodes.md) |
+| How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
+| How do I automate something? | [Automation](./automation.md) | [Scheduled Tasks](./scheduled-tasks.md), [Runs](./runs.md) |
+| How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
+| Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
+| How do remote execution targets work? | [Execution Targets](./execution-targets.md) | [Command-Line Guide (`pa`)](./command-line.md) |
+| How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 
 ## Durable surfaces at a glance
 
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
-| Work interactively with the agent right now | conversation / live session | local runtime session state (optionally replicated via sync) |
-| Interrupt yourself later for a reminder or callback | alert + conversation wakeup | local runtime alert state + local deferred-resume state |
-| Notice something that happened asynchronously later without interrupting yourself | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
-| Track long-running work, briefs, notes, files, blockers, and next steps across conversations | project node | `~/.local/state/personal-agent/sync/projects/<projectId>/{INDEX.md,state.yaml}` + sibling project resources |
-| Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, note nodes, skill nodes | shared repo defaults + synced durable resources under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,notes}/**` |
+| Work interactively with the agent right now | conversation / live session | local runtime session state |
+| Track ongoing work across conversations | project node | `~/.local/state/personal-agent/sync/projects/**` |
+| Store durable knowledge | note node | `~/.local/state/personal-agent/sync/notes/**` |
+| Store durable behavior or preferences | `AGENTS.md`, settings, skill nodes | repo defaults + `~/.local/state/personal-agent/sync/{agents,settings,skills}/**` |
+| Notice async outcomes later without interrupting yourself | inbox/activity | local runtime inbox state |
+| Interrupt yourself later or wake a conversation back up | reminder / alert / deferred resume | local runtime alert + wakeup state |
+| Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/runs/**` |
 | Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/tasks/*.task.md` + local daemon state |
-| Keep durable state in sync across machines | sync (`pa sync`) | git remote + `~/.local/state/personal-agent/sync/**` |
+| Keep durable state aligned across machines | sync (`pa sync`) | git-backed sync repo under `~/.local/state/personal-agent/sync/**` |
 
 ## Read this if you are an agent
 
-The most important model is:
+The highest-value rules are:
 
-- keep shared defaults in repo-managed profile files
-- keep mutable durable/runtime state under `~/.local/state/personal-agent`
-- use the right durable surface for the job
-
-In practice:
-
-- use **projects** for ongoing tracked work
-- use **note nodes** for durable knowledge hubs and references
-- use **skills** for reusable workflows
-- use **inbox activity** for asynchronous outcomes worth noticing later
-- use **scheduled tasks** for unattended automation
-- do **not** store conversation/session ids in portable durable files
-
-See [How personal-agent works](./how-it-works.md) for the full mental model.
+- use the smallest correct durable surface
+- keep conversations for active work, not durable storage
+- use projects for tracked work, notes for reusable knowledge, and skills for reusable procedures
+- use activity for passive async attention and reminders/alerts for interrupting attention
+- use scheduled tasks for later/scheduled automation and runs for detached work started now
+- keep conversation ids and other machine-local bindings out of portable durable files
+- prefer dedicated agent tools over shelling out to `pa` when those tools are available
 
 ## Pi-specific docs
 

@@ -1,10 +1,12 @@
-# Profiles, Notes, and Skills
+# Profiles, AGENTS, Notes, and Skills
 
 Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a synced durable resource store.
 
 A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based synced resources plus machine-local overlays.
 
 See [Nodes](./nodes.md) for the canonical on-disk node spec.
+
+If you need Patrick-specific preferences or standing behavior, the active profile's `AGENTS.md` is the canonical home. Use this page to understand how that fits with notes, skills, projects, and layered resources.
 
 ## The layer model
 
@@ -123,7 +125,7 @@ Alongside node fields such as:
 - `title`
 - `summary`
 
-## Note nodes: durable knowledge hubs
+## Note nodes: durable knowledge and reference nodes
 
 Notes are durable knowledge nodes.
 
@@ -135,7 +137,7 @@ Use them for:
 - architecture notes
 - decision summaries
 - distilled conversation captures
-- structure notes / maps of content
+- structure notes / maps of content when they genuinely help
 
 A note node is a directory with an `INDEX.md` file. Supporting directories are freeform.
 
@@ -150,24 +152,26 @@ Typical note-node frontmatter:
 
 ```md
 ---
-id: personal-agent
+id: desktop-gpu-server
 kind: note
-title: Personal-agent knowledge hub
-summary: Durable knowledge hub for personal-agent architecture, UI decisions, and workflows.
+title: Desktop GPU-enabled server notes
+summary: Reference facts for a local Ubuntu GPU-enabled server.
 status: active
 tags:
-  - personal-agent
-  - architecture
-  - structure
-updatedAt: 2026-03-26
+  - desktop
+  - gpu
+  - ubuntu
+updatedAt: 2026-03-28
 metadata:
-  area: personal-agent
-  type: note
+  area: compute
+  type: reference
 ---
 ```
 
 Use tag `structure` when a note mostly organizes other notes.
 There is no separate hub kind.
+
+Do not create empty hub or index notes by default. If a topic already has a real project or skill home, put the content there instead of duplicating it as a top-level note.
 
 ## Project nodes
 
@@ -207,6 +211,18 @@ A good rule:
 - if it is reusable knowledge, store it in a note node
 - if it is about one piece of ongoing work, store it in a project node
 - if it is an async event worth noticing, surface it in the inbox
+- if it already has a project or skill home, do not also keep it as a duplicate top-level note
+
+## Writing style for notes and projects
+
+Use these defaults for durable node prose:
+
+- keep ids stable and slug-like, but make titles human-readable
+- keep `summary` to one sentence
+- start `INDEX.md` with a plain-English opening
+- keep overview docs high-signal and move long detail into `references/` or project `notes/`
+- avoid placeholder sections, stale scaffolding, and empty structure pages
+- update or remove stale text instead of letting it linger
 
 ## Commands you will use
 
@@ -263,9 +279,12 @@ Conversation-local bindings belong in local runtime state.
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
 - [How personal-agent works](./how-it-works.md)
 - [Projects](./projects.md)
+- [Conversations](./conversations.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Inbox and Activity](./inbox.md)
 - [Skills and Runtime Capabilities](./skills-and-capabilities.md)

@@ -214,7 +214,7 @@ pa memory new note-index --title "Note index" --summary "Top-level note table of
 pa memory lint
 ```
 
-See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
 ### `pa mcp [list|info|grep|call|auth|logout]`
 
@@ -235,6 +235,8 @@ pa mcp logout slack
 ```
 
 `pa mcp list` is config-only by default. Use `--probe` to connect to servers and fetch tool metadata.
+
+See [MCP](./mcp.md).
 
 Native remote MCP config example:
 
@@ -278,6 +280,8 @@ pa runs cancel <id>
 
 Use this as the main control surface for detached local background work.
 
+See [Runs](./runs.md).
+
 ### `pa targets [list|show|add|update|install|delete|help]`
 
 Inspect and manage machine-local execution targets for remote conversation offload.
@@ -297,6 +301,8 @@ pa targets delete gpu-box
 
 Targets are stored in `~/.local/state/personal-agent/config/execution-targets.json` by default.
 Use this when you want your local agent to configure remote SSH destinations without hand-editing the System page form.
+
+See [Execution Targets](./execution-targets.md).
 
 ### `pa sync [status|run|setup|help]`
 
@@ -419,8 +425,15 @@ Or set:
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Agent Tool Map](./agent-tool-map.md)
 - [Getting Started](./getting-started.md)
 - [How personal-agent works](./how-it-works.md)
+- [Conversations](./conversations.md)
+- [Automation](./automation.md)
+- [Runs](./runs.md)
+- [Execution Targets](./execution-targets.md)
+- [MCP](./mcp.md)
 - [Web UI Guide](./web-ui.md)
 - [Sync Guide](./sync.md)
 - [Configuration](./configuration.md)
