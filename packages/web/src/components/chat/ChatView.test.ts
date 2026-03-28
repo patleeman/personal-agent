@@ -476,6 +476,44 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('marks assistant-facing transcript blocks as reply-selectable scopes', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'text',
+          id: 'assistant-1',
+          ts: '2026-03-11T18:00:00.000Z',
+          text: 'Assistant reply body.',
+        },
+        {
+          type: 'context',
+          id: 'context-1',
+          ts: '2026-03-11T18:01:00.000Z',
+          customType: 'referenced_context',
+          text: 'Injected context body.',
+        },
+        {
+          type: 'summary',
+          id: 'summary-1',
+          ts: '2026-03-11T18:02:00.000Z',
+          kind: 'branch',
+          title: 'Branch summary',
+          text: 'Summary body.',
+        },
+      ],
+      onReplyToSelection: () => undefined,
+    }));
+
+    const scopeMatches = html.match(/data-selection-reply-scope="assistant-message"/g) ?? [];
+    expect(scopeMatches).toHaveLength(3);
+    expect(html).toContain('data-message-index="0"');
+    expect(html).toContain('data-message-index="1"');
+    expect(html).toContain('data-message-index="2"');
+    expect(html).toContain('data-block-id="assistant-1"');
+    expect(html).toContain('data-block-id="context-1"');
+    expect(html).toContain('data-block-id="summary-1"');
+  });
+
   it('renders specific compaction kinds when the summary title provides one', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

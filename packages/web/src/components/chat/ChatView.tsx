@@ -367,6 +367,18 @@ function readSelectionRect(range: Range, scopeElement?: HTMLElement | null): DOM
   return null;
 }
 
+function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, onSelectionGesture?: () => void) {
+  return {
+    'data-selection-reply-scope': 'assistant-message',
+    'data-message-index': typeof messageIndex === 'number' ? String(messageIndex) : undefined,
+    'data-block-id': blockId,
+    onMouseUp: onSelectionGesture,
+    onPointerUp: onSelectionGesture,
+    onKeyUp: onSelectionGesture,
+    onTouchEnd: onSelectionGesture,
+  };
+}
+
 function formatSummaryPreviewLine(line: string) {
   if (/^#{1,6}\s+/.test(line)) {
     return line.replace(/^#{1,6}\s+/, '');
@@ -1740,24 +1752,31 @@ function ResumeConversationAction({
 
 function ErrorBlock({
   block,
+  messageIndex,
   onResume,
   resumeBusy,
   resumeTitle,
   resumeLabel,
   onOpenFilePath,
+  onSelectionGesture,
 }: {
   block: Extract<MessageBlock, { type: 'error' }>;
+  messageIndex?: number;
   onResume?: () => Promise<void> | void;
   resumeBusy?: boolean;
   resumeTitle?: string | null;
   resumeLabel?: string;
   onOpenFilePath?: (path: string) => void;
+  onSelectionGesture?: () => void;
 }) {
+  const blockId = block.id?.trim() || undefined;
+  const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
+
   return (
     <SurfacePanel className="border-danger/30 bg-danger/5 px-3 py-2.5 text-[12px] font-mono flex gap-2 items-start">
       <span className="text-danger font-bold shrink-0 mt-0.5 select-none">✕</span>
       <div className="flex-1 min-w-0 space-y-2">
-        <div>
+        <div {...replySelectionScopeProps}>
           {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
           <span className="text-danger/85 leading-relaxed">{renderFilePathTextFragments(block.message, { onOpenFilePath, keyPrefix: 'error' })}</span>
         </div>
@@ -2068,6 +2087,7 @@ function AssistantMessage({
 }) {
   const shouldShowCursor = showCursor || !!block.streaming;
   const blockId = block.id?.trim() || undefined;
+  const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
   return (
     <div className={cx('group flex items-start', layout === 'companion' ? 'gap-2.5' : 'gap-3')}>
@@ -2076,13 +2096,7 @@ function AssistantMessage({
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
         <div
-          data-selection-reply-scope="assistant-message"
-          data-message-index={typeof messageIndex === 'number' ? String(messageIndex) : undefined}
-          data-block-id={blockId}
-          onMouseUp={onSelectionGesture}
-          onPointerUp={onSelectionGesture}
-          onKeyUp={onSelectionGesture}
-          onTouchEnd={onSelectionGesture}
+          {...replySelectionScopeProps}
           className="ui-message-card-assistant text-primary space-y-1"
         >
           {renderText(block.text, { onOpenFilePath })}
@@ -2104,12 +2118,18 @@ function AssistantMessage({
 
 function ContextMessage({
   block,
+  messageIndex,
   onOpenFilePath,
+  onSelectionGesture,
 }: {
   block: Extract<MessageBlock, { type: 'context' }>;
+  messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
+  onSelectionGesture?: () => void;
 }) {
   const label = formatInjectedContextLabel(block.customType);
+  const blockId = block.id?.trim() || undefined;
+  const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
   return (
     <div className="group">
@@ -2122,7 +2142,7 @@ function ContextMessage({
           <span className="flex-1" />
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
         </div>
-        <div className="pt-2 text-primary">
+        <div {...replySelectionScopeProps} className="pt-2 text-primary">
           {renderText(block.text, { onOpenFilePath })}
         </div>
       </div>
@@ -2154,10 +2174,14 @@ function resolveCompactionSummaryDetail(title: string | undefined): string {
 
 function SummaryMessage({
   block,
+  messageIndex,
   onOpenFilePath,
+  onSelectionGesture,
 }: {
   block: Extract<MessageBlock, { type: 'summary' }>;
+  messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
+  onSelectionGesture?: () => void;
 }) {
   const isCompaction = block.kind === 'compaction';
   const label = isCompaction ? resolveCompactionSummaryLabel(block.title) : block.title || 'Branch summary';
@@ -2178,6 +2202,8 @@ function SummaryMessage({
     [block.text, isCompaction],
   );
   const [expanded, setExpanded] = useState(() => !isCompaction);
+  const blockId = block.id?.trim() || undefined;
+  const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
   return (
     <div className="group">
@@ -2192,13 +2218,15 @@ function SummaryMessage({
               <span className="flex-1" />
               <p className="ui-message-meta">{timeAgo(block.ts)}</p>
             </div>
-            <p className="text-[12px] leading-relaxed text-secondary">{detail}</p>
-            <div className="text-primary">
-              {shouldCollapse && !expanded ? (
-                <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
-              ) : (
-                renderText(block.text, { onOpenFilePath })
-              )}
+            <div {...replySelectionScopeProps} className="space-y-3">
+              <p className="text-[12px] leading-relaxed text-secondary">{detail}</p>
+              <div className="text-primary">
+                {shouldCollapse && !expanded ? (
+                  <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
+                ) : (
+                  renderText(block.text, { onOpenFilePath })
+                )}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               {shouldCollapse && (
@@ -2837,9 +2865,9 @@ export const ChatView = memo(function ChatView({
             />
           );
         case 'context':
-          return <ContextMessage block={block} onOpenFilePath={onOpenFilePath} />;
+          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplyMenuSync : undefined} />;
         case 'summary':
-          return <SummaryMessage block={block} onOpenFilePath={onOpenFilePath} />;
+          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplyMenuSync : undefined} />;
         case 'thinking':
           return <ThinkingBlock block={block} autoOpen={autoOpen} />;
         case 'tool_use':
@@ -2868,11 +2896,13 @@ export const ChatView = memo(function ChatView({
           return (
             <ErrorBlock
               block={block}
+              messageIndex={absoluteIndex}
               onResume={isTailItem ? onResumeConversation : undefined}
               resumeBusy={resumeConversationBusy}
               resumeTitle={resumeConversationTitle}
               resumeLabel={resumeConversationLabel}
               onOpenFilePath={onOpenFilePath}
+              onSelectionGesture={onReplyToSelection ? scheduleReplyMenuSync : undefined}
             />
           );
         default:
