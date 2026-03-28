@@ -115,8 +115,12 @@ import {
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
-import { createConversationSelfDistillAgentExtension } from './conversationSelfDistillAgentExtension.js';
-import { maybeScheduleAutomaticConversationSelfDistillWakeup } from './conversationSelfDistill.js';
+import {
+  cancelConversationSelfDistillWakeups,
+  listConversationSelfDistillWakeupRecords,
+  resolveConversationSelfDistillConversationId,
+  scheduleConversationSelfDistillWakeup,
+} from './conversationSelfDistill.js';
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
@@ -177,7 +181,6 @@ import {
   destroySession,
   branchSession,
   forkSession,
-  registerLiveSessionLifecycleHandler,
   LiveSessionControlError,
   ensureSessionSurfaceCanControl,
   takeOverSessionControl,
@@ -614,20 +617,6 @@ try {
 
 void syncDaemonTaskScopeForProfile(currentProfile);
 
-registerLiveSessionLifecycleHandler((event) => {
-  return maybeScheduleAutomaticConversationSelfDistillWakeup({
-    stateRoot: getStateRoot(),
-    profile: getCurrentProfile(),
-    conversationId: event.conversationId,
-    sessionFile: event.sessionFile,
-    title: event.title,
-  }).then((result) => {
-    if (result.scheduled && result.resume) {
-      publishAppEvent({ type: 'session_meta_changed', sessionId: event.conversationId });
-    }
-  });
-});
-
 function getCurrentProfile(): string {
   return currentProfile;
 }
@@ -728,10 +717,6 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createDeferredResumeAgentExtension(),
-    createConversationSelfDistillAgentExtension({
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
     createReminderAgentExtension(),
   ];
 }
@@ -1433,25 +1418,6 @@ async function startConversationMemoryDistillBatchRecoveryRun(input: { profile: 
       totalRuns: runIds.length,
     },
   });
-}
-
-async function maybeKickConversationMemoryFollowUp(profile: string, conversationId: string): Promise<void> {
-  const state = readConversationMemoryMaintenanceState({ profile, conversationId });
-  if (!state || state.status !== 'pending' || !state.autoPromotionEligible) {
-    return;
-  }
-
-  const scheduled = await maybeScheduleAutomaticConversationSelfDistillWakeup({
-    stateRoot: getStateRoot(),
-    profile,
-    conversationId,
-    sessionFile: state.latestSessionFile,
-    title: state.latestConversationTitle,
-  });
-
-  if (scheduled.scheduled && scheduled.resume) {
-    publishAppEvent({ type: 'session_meta_changed', sessionId: conversationId });
-  }
 }
 
 async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
@@ -2492,16 +2458,13 @@ async function distillConversationMemoryNow(input: DistillConversationMemoryNowI
     : undefined;
 
   if (normalizedCheckpointId) {
-    const state = markConversationMemoryMaintenanceRunCompleted({
+    markConversationMemoryMaintenanceRunCompleted({
       profile: input.profile,
       conversationId: input.conversationId,
       checkpointId: normalizedCheckpointId,
       memoryId: memory.id,
       referencePath: memory.reference.relativePath,
     });
-    if (input.mode === 'auto' && state.status === 'pending') {
-      await maybeKickConversationMemoryFollowUp(input.profile, input.conversationId);
-    }
   }
 
   return {
@@ -2666,6 +2629,210 @@ function readProjectDetailForProfile(projectId: string, profile = getCurrentProf
 
 let processingDeferredResumes = false;
 
+interface BackgroundConversationPromptTarget {
+  conversationId: string;
+  sessionFile: string;
+  cwd: string;
+  title?: string;
+  isStreaming: boolean;
+  remote: boolean;
+}
+
+async function resolveBackgroundConversationPromptTarget(
+  conversationId: string,
+  sessionFile: string,
+): Promise<BackgroundConversationPromptTarget> {
+  const remoteMeta = getRemoteLiveSessionMeta(conversationId);
+  if (remoteMeta) {
+    return {
+      conversationId,
+      sessionFile: remoteMeta.sessionFile,
+      cwd: remoteMeta.cwd,
+      title: remoteMeta.title,
+      isStreaming: remoteMeta.isStreaming,
+      remote: true,
+    };
+  }
+
+  const localEntry = liveRegistry.get(conversationId);
+  if (localEntry?.session.sessionFile) {
+    return {
+      conversationId,
+      sessionFile: localEntry.session.sessionFile,
+      cwd: localEntry.cwd,
+      title: localEntry.title,
+      isStreaming: localEntry.session.isStreaming,
+      remote: false,
+    };
+  }
+
+  const targetBinding = getConversationExecutionTarget({
+    profile: getCurrentProfile(),
+    conversationId,
+  });
+
+  if (targetBinding) {
+    await resumeRemoteLiveSession({
+      profile: getCurrentProfile(),
+      conversationId,
+      localSessionFile: sessionFile,
+      targetId: targetBinding.targetId,
+    });
+
+    const resumedRemoteMeta = getRemoteLiveSessionMeta(conversationId);
+    if (!resumedRemoteMeta) {
+      throw new Error(`Could not resume remote conversation ${conversationId}.`);
+    }
+
+    return {
+      conversationId,
+      sessionFile: resumedRemoteMeta.sessionFile,
+      cwd: resumedRemoteMeta.cwd,
+      title: resumedRemoteMeta.title,
+      isStreaming: resumedRemoteMeta.isStreaming,
+      remote: true,
+    };
+  }
+
+  const resumed = await resumeLocalSession(sessionFile, {
+    ...buildLiveSessionResourceOptions(),
+    extensionFactories: buildLiveSessionExtensionFactories(),
+  });
+  const resumedEntry = liveRegistry.get(resumed.id);
+  if (!resumedEntry?.session.sessionFile) {
+    throw new Error(`Could not resume local conversation ${conversationId}.`);
+  }
+
+  return {
+    conversationId: resumed.id,
+    sessionFile: resumedEntry.session.sessionFile,
+    cwd: resumedEntry.cwd,
+    title: resumedEntry.title,
+    isStreaming: resumedEntry.session.isStreaming,
+    remote: false,
+  };
+}
+
+async function processClosedConversationSelfDistillWakeups(now: Date, daemonRoot: string): Promise<string[]> {
+  const visibleConversationIds = readVisibleWorkspaceConversationIdSet();
+  const changedConversationIds = new Set<string>();
+
+  for (const record of listConversationSelfDistillWakeupRecords({ stateRoot: getStateRoot() })) {
+    const conversationId = resolveConversationSelfDistillConversationId(record);
+    if (!conversationId || visibleConversationIds.has(conversationId) || isLocalLive(conversationId) || isRemoteLiveSession(conversationId)) {
+      continue;
+    }
+
+    let readyEntry = record.status === 'ready'
+      ? toDeferredResumeSummary(record)
+      : undefined;
+
+    if (!readyEntry && record.status === 'scheduled' && Date.parse(record.dueAt) <= now.getTime()) {
+      readyEntry = await fireDeferredResumeNowForSessionFile({
+        sessionFile: record.sessionFile,
+        id: record.id,
+        at: now,
+      });
+    }
+
+    if (!readyEntry || readyEntry.status !== 'ready') {
+      continue;
+    }
+
+    let promptTarget: BackgroundConversationPromptTarget | null = null;
+    try {
+      promptTarget = await resolveBackgroundConversationPromptTarget(conversationId, readyEntry.sessionFile);
+      await syncWebLiveConversationRun({
+        conversationId: promptTarget.conversationId,
+        sessionFile: promptTarget.sessionFile,
+        cwd: promptTarget.cwd,
+        title: promptTarget.title,
+        profile: getCurrentProfile(),
+        state: 'running',
+        pendingOperation: {
+          type: 'prompt',
+          text: readyEntry.prompt,
+          ...(promptTarget.isStreaming ? { behavior: 'followUp' as const } : {}),
+          enqueuedAt: now.toISOString(),
+        },
+      });
+
+      if (promptTarget.remote) {
+        await submitRemoteLiveSessionPrompt({
+          conversationId: promptTarget.conversationId,
+          text: readyEntry.prompt,
+          ...(promptTarget.isStreaming ? { behavior: 'followUp' as const } : {}),
+        });
+      } else {
+        await promptLocalSession(
+          promptTarget.conversationId,
+          readyEntry.prompt,
+          promptTarget.isStreaming ? 'followUp' : undefined,
+        );
+      }
+
+      const completedEntry = completeDeferredResumeForSessionFile({
+        sessionFile: readyEntry.sessionFile,
+        id: readyEntry.id,
+      });
+      if (!completedEntry) {
+        continue;
+      }
+
+      changedConversationIds.add(promptTarget.conversationId);
+      await completeDeferredResumeConversationRun({
+        daemonRoot,
+        deferredResumeId: completedEntry.id,
+        sessionFile: completedEntry.sessionFile,
+        prompt: completedEntry.prompt,
+        dueAt: completedEntry.dueAt,
+        createdAt: completedEntry.createdAt,
+        readyAt: completedEntry.readyAt,
+        completedAt: new Date().toISOString(),
+        conversationId: promptTarget.conversationId,
+        cwd: promptTarget.cwd,
+      });
+    } catch (error) {
+      if (promptTarget) {
+        await syncWebLiveConversationRun({
+          conversationId: promptTarget.conversationId,
+          sessionFile: promptTarget.sessionFile,
+          cwd: promptTarget.cwd,
+          title: promptTarget.title,
+          profile: getCurrentProfile(),
+          state: 'failed',
+          lastError: (error as Error).message,
+        });
+      }
+
+      const retryDueAt = new Date(Date.now() + DEFERRED_RESUME_RETRY_DELAY_MS).toISOString();
+      const retriedEntry = retryDeferredResumeForSessionFile({
+        sessionFile: readyEntry.sessionFile,
+        id: readyEntry.id,
+        dueAt: retryDueAt,
+      });
+      if (retriedEntry) {
+        changedConversationIds.add(conversationId);
+        await markDeferredResumeConversationRunRetryScheduled({
+          daemonRoot,
+          deferredResumeId: retriedEntry.id,
+          sessionFile: retriedEntry.sessionFile,
+          prompt: retriedEntry.prompt,
+          dueAt: retriedEntry.dueAt,
+          createdAt: retriedEntry.createdAt,
+          retryAt: retriedEntry.dueAt,
+          conversationId,
+          cwd: promptTarget?.cwd,
+          lastError: (error as Error).message,
+        });
+      }
+      logWarn(`Conversation self-distill delivery failed for ${conversationId}: ${(error as Error).message}`);
+    }
+  }
+
+  return [...changedConversationIds];
+}
+
 async function flushLiveDeferredResumes(): Promise<void> {
   if (processingDeferredResumes) {
     return;
@@ -2674,14 +2841,10 @@ async function flushLiveDeferredResumes(): Promise<void> {
   processingDeferredResumes = true;
 
   try {
-    // Server-side deferred resume delivery only injects prompts into conversations that are
-    // already live. The web client may auto-resume an open saved conversation first, then
-    // call back into this same flush path to deliver the due prompts.
+    // Server-side deferred resume delivery injects prompts into already-live conversations
+    // immediately. Close-triggered self-distill wakeups also use this loop to resume a closed
+    // conversation in the background when the wakeup becomes due.
     const liveSessions = listAllLiveSessions().filter((session) => session.sessionFile);
-    if (liveSessions.length === 0) {
-      return;
-    }
-
     const now = new Date();
     const daemonRoot = resolveDaemonRoot();
     let mutated = false;
@@ -2807,6 +2970,14 @@ async function flushLiveDeferredResumes(): Promise<void> {
           logWarn(`Deferred resume delivery failed for ${session.id}: ${(error as Error).message}`);
           break;
         }
+      }
+    }
+
+    const closedConversationIds = await processClosedConversationSelfDistillWakeups(now, daemonRoot);
+    if (closedConversationIds.length > 0) {
+      mutated = true;
+      for (const conversationId of closedConversationIds) {
+        mutatedConversationIds.add(conversationId);
       }
     }
 
@@ -4724,7 +4895,84 @@ function handleOpenConversationLayoutReadRequest(_req: express.Request, res: exp
   }
 }
 
-function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
+function listWorkspaceConversationIds(saved: ReturnType<typeof readSavedWebUiPreferences>): string[] {
+  return [...new Set([...saved.openConversationIds, ...saved.pinnedConversationIds])];
+}
+
+function resolveConversationSelfDistillTitle(conversationId: string): string | undefined {
+  return liveRegistry.get(conversationId)?.title
+    ?? listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.title;
+}
+
+function readVisibleWorkspaceConversationIdSet(): Set<string> {
+  return new Set(listWorkspaceConversationIds(readSavedWebUiPreferences(SETTINGS_FILE)));
+}
+
+async function reconcileConversationSelfDistillWakeupsForLayoutChange(
+  previous: ReturnType<typeof readSavedWebUiPreferences>,
+  next: ReturnType<typeof readSavedWebUiPreferences>,
+): Promise<string[]> {
+  const previousWorkspaceIds = new Set(listWorkspaceConversationIds(previous));
+  const nextWorkspaceIds = new Set(listWorkspaceConversationIds(next));
+  const reopenedConversationIds = [...nextWorkspaceIds].filter((id) => !previousWorkspaceIds.has(id));
+  const closedConversationIds = [...previousWorkspaceIds].filter((id) => !nextWorkspaceIds.has(id));
+  const changedConversationIds = new Set<string>();
+
+  for (const conversationId of reopenedConversationIds) {
+    const sessionFile = resolveConversationSessionFile(conversationId);
+    if (!sessionFile || !existsSync(sessionFile)) {
+      continue;
+    }
+
+    try {
+      const cancelledIds = await cancelConversationSelfDistillWakeups({
+        stateRoot: getStateRoot(),
+        sessionFile,
+        conversationId,
+      });
+      if (cancelledIds.length > 0) {
+        changedConversationIds.add(conversationId);
+      }
+    } catch (error) {
+      logWarn('failed to cancel conversation self-distill wakeup after reopen', {
+        conversationId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  for (const conversationId of closedConversationIds) {
+    const sessionFile = resolveConversationSessionFile(conversationId);
+    if (!sessionFile || !existsSync(sessionFile)) {
+      continue;
+    }
+
+    if (isConversationMemoryDistillRecoveryTitle(resolveConversationSelfDistillTitle(conversationId))) {
+      continue;
+    }
+
+    try {
+      const scheduled = await scheduleConversationSelfDistillWakeup({
+        stateRoot: getStateRoot(),
+        profile: getCurrentProfile(),
+        sessionFile,
+        conversationId,
+      });
+      if (scheduled.resume) {
+        changedConversationIds.add(conversationId);
+      }
+    } catch (error) {
+      logWarn('failed to schedule conversation self-distill wakeup after close', {
+        conversationId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return [...changedConversationIds];
+}
+
+async function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
   try {
     const { sessionIds, pinnedSessionIds, archivedSessionIds } = req.body as {
       sessionIds?: string[];
@@ -4752,6 +5000,7 @@ function handleOpenConversationLayoutWriteRequest(req: express.Request, res: exp
       return;
     }
 
+    const previous = readSavedWebUiPreferences(SETTINGS_FILE);
     const saved = persistSettingsWrite(
       (settingsFile) => writeSavedWebUiPreferences({
         openConversationIds: sessionIds,
@@ -4760,6 +5009,11 @@ function handleOpenConversationLayoutWriteRequest(req: express.Request, res: exp
       }, settingsFile),
       { runtimeSettingsFile: SETTINGS_FILE },
     );
+
+    const changedConversationIds = await reconcileConversationSelfDistillWakeupsForLayoutChange(previous, saved);
+    if (changedConversationIds.length > 0) {
+      publishConversationSessionMetaChanged(...changedConversationIds);
+    }
 
     res.json({
       ok: true,

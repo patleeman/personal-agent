@@ -3,9 +3,8 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { acknowledgeAlert, getAlert, type DeferredResumeRecord } from '@personal-agent/core';
+import { acknowledgeAlert, getAlert, listProfileActivityEntries, type DeferredResumeRecord } from '@personal-agent/core';
 import { buildDeferredResumeAlertId, surfaceReadyDeferredResume } from './conversation-wakeups.js';
-
 const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
@@ -19,6 +18,42 @@ afterEach(async () => {
 });
 
 describe('conversation wakeups', () => {
+  it('suppresses inbox activity and alerts for quiet internal wakeups', () => {
+    const stateRoot = createTempDir('pa-wakeup-state-');
+    const repoRoot = createTempDir('pa-wakeup-repo-');
+    const record: DeferredResumeRecord = {
+      id: 'resume_quiet',
+      sessionFile: '/tmp/sessions/conv-quiet.jsonl',
+      prompt: 'Take one beat and decide whether anything is worth writing down durably.',
+      dueAt: '2026-03-26T14:00:00.000Z',
+      createdAt: '2026-03-26T13:00:00.000Z',
+      attempts: 0,
+      status: 'ready',
+      kind: 'continue',
+      title: 'Background durable review after close',
+      delivery: {
+        alertLevel: 'none',
+        autoResumeIfOpen: false,
+        requireAck: false,
+      },
+      source: {
+        kind: 'conversation-self-distill',
+        id: 'conv-quiet',
+      },
+      readyAt: '2026-03-26T14:00:00.000Z',
+    };
+
+    expect(surfaceReadyDeferredResume({
+      entry: record,
+      repoRoot,
+      profile: 'shared',
+      stateRoot,
+      conversationId: 'conv-quiet',
+    })).toEqual({});
+    expect(listProfileActivityEntries({ stateRoot, repoRoot, profile: 'shared' })).toEqual([]);
+    expect(getAlert({ stateRoot, profile: 'shared', alertId: 'wakeup-resume_quiet' })).toBeUndefined();
+  });
+
   it('reactivates an acknowledged wakeup alert when the same wakeup becomes ready again later', () => {
     const stateRoot = createTempDir('pa-wakeup-state-');
     const repoRoot = createTempDir('pa-wakeup-repo-');
