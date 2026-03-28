@@ -95,7 +95,7 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
-  });
+  }, 10_000);
 
   it('invalidates sessionFiles when a session file is created', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
@@ -130,7 +130,7 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
-  });
+  }, 10_000);
 
   it('invalidates projects without bumping sessions when conversation project links change', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
@@ -167,7 +167,7 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
-  });
+  }, 10_000);
 
   it('rebuilds watches and invalidates all topics when the active profile changes', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');

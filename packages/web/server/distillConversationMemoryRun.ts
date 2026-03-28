@@ -19,6 +19,10 @@ interface ParsedArgs {
   payload: DistillConversationMemoryRunPayload;
 }
 
+interface DistillConversationMemoryRunOptions {
+  fetchImpl?: typeof fetch;
+}
+
 function readArgValue(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
   if (index < 0) {
@@ -28,13 +32,13 @@ function readArgValue(args: string[], flag: string): string | undefined {
   return args[index + 1];
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+export function parseDistillConversationMemoryRunArgs(argv: string[]): ParsedArgs {
   const portRaw = readArgValue(argv, '--port');
   const profile = readArgValue(argv, '--profile')?.trim();
   const payloadBase64 = readArgValue(argv, '--payload');
 
   if (!portRaw || !profile || !payloadBase64) {
-    throw new Error('Usage: distillConversationNodeRun --port <port> --profile <profile> --payload <base64url-json>');
+    throw new Error('Usage: distillConversationMemoryRun --port <port> --profile <profile> --payload <base64url-json>');
   }
 
   const port = Number.parseInt(portRaw, 10);
@@ -75,9 +79,9 @@ function parseArgs(argv: string[]): ParsedArgs {
   };
 }
 
-async function runDistillation(args: ParsedArgs): Promise<void> {
+async function runDistillation(args: ParsedArgs, fetchImpl: typeof fetch): Promise<void> {
   const origin = `http://127.0.0.1:${args.port}`;
-  const response = await fetch(`${origin}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/notes/distill-now`, {
+  const response = await fetchImpl(`${origin}/api/conversations/${encodeURIComponent(args.payload.conversationId)}/notes/distill-now`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -115,9 +119,13 @@ async function runDistillation(args: ParsedArgs): Promise<void> {
   console.log(`distill completed disposition=${disposition} noteId=${noteId} title=${noteTitle}`);
 }
 
-export async function runDistillConversationMemoryCli(argv: string[] = process.argv.slice(2)): Promise<number> {
-  const args = parseArgs(argv);
-  await runDistillation(args);
+export async function runDistillConversationMemoryCli(
+  argv: string[] = process.argv.slice(2),
+  options: DistillConversationMemoryRunOptions = {},
+): Promise<number> {
+  const args = parseDistillConversationMemoryRunArgs(argv);
+  const fetchImpl = options.fetchImpl ?? fetch;
+  await runDistillation(args, fetchImpl);
   return 0;
 }
 
