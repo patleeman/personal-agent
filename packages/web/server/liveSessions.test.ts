@@ -368,6 +368,66 @@ describe('live session subscriptions', () => {
     });
   });
 
+  it('hands control to the newest surface of the same type automatically', () => {
+    setLiveEntry('session-same-surface-control', {
+      sessionId: 'session-same-surface-control',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Controlled conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+      },
+    });
+
+    subscribe('session-same-surface-control', () => {}, {
+      surface: {
+        surfaceId: 'desktop-1',
+        surfaceType: 'desktop_web',
+      },
+    });
+
+    const secondDesktopEvents: SseEvent[] = [];
+    subscribe('session-same-surface-control', (event) => {
+      secondDesktopEvents.push(event);
+    }, {
+      surface: {
+        surfaceId: 'desktop-2',
+        surfaceType: 'desktop_web',
+      },
+    });
+
+    expect(secondDesktopEvents.at(-1)).toEqual({
+      type: 'presence_state',
+      state: {
+        surfaces: [
+          {
+            surfaceId: 'desktop-1',
+            surfaceType: 'desktop_web',
+            connectedAt: expect.any(String),
+          },
+          {
+            surfaceId: 'desktop-2',
+            surfaceType: 'desktop_web',
+            connectedAt: expect.any(String),
+          },
+        ],
+        controllerSurfaceId: 'desktop-2',
+        controllerSurfaceType: 'desktop_web',
+        controllerAcquiredAt: expect.any(String),
+      },
+    });
+  });
+
   it('rejects prompts from mirrored surfaces', async () => {
     const prompt = vi.fn(async () => {});
 

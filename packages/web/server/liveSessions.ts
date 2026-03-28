@@ -1646,7 +1646,12 @@ function registerLiveSurface(entry: LiveEntry, input: {
     connections: 1,
   });
 
-  if (!entry.controllerSurfaceId) {
+  const currentController = entry.controllerSurfaceId
+    ? presenceBySurfaceId.get(entry.controllerSurfaceId) ?? null
+    : null;
+  const shouldAdoptController = !currentController || currentController.surfaceType === input.surfaceType;
+
+  if (shouldAdoptController && entry.controllerSurfaceId !== surfaceId) {
     entry.controllerSurfaceId = surfaceId;
     entry.controllerAcquiredAt = new Date().toISOString();
   }
