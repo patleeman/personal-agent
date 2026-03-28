@@ -1,107 +1,111 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef } from 'react';
+import { Extension } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import TaskItem from '@tiptap/extension-task-item';
-import TaskList from '@tiptap/extension-task-list';
-import { Table } from '@tiptap/extension-table';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
+import TaskItem from '@tiptap/extension-task-item';
+import TaskList from '@tiptap/extension-task-list';
+import { Table } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
+import StarterKit from '@tiptap/starter-kit';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { EditorContent, useEditor } from '@tiptap/react';
+import type { MentionItem } from '../../conversationMentions';
 import { FieldsBlockExtension } from '../../editorExtensions/FieldsBlockExtension';
 import { normalizeMarkdownValue } from '../../markdownDocument';
+import { buildMentionLookup } from '../../mentionRendering';
+import { buildNodeMentionHref } from '../../nodeMentionRoutes';
+import { useNodeMentionItems } from '../../useNodeMentionItems';
+import { cx } from '../ui';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
-import { ToolbarButton, cx } from '../ui';
+
+const RICH_EDITOR_MENTION_PATTERN = /@[\w-]+/g;
+const RICH_EDITOR_MENTION_PLUGIN_KEY = new PluginKey('rich-editor-mentions');
 
 function editorValue(value: string): string {
   return normalizeMarkdownValue(value);
 }
 
-function Toolbar({
-  editor,
-  readOnly,
-}: {
-  editor: ReturnType<typeof useEditor>;
-  readOnly: boolean;
-}) {
-  if (!editor || readOnly) {
-    return null;
-  }
+function buildMentionDecorations(doc: Parameters<typeof DecorationSet.create>[0], lookup: Map<string, MentionItem[]>): DecorationSet {
+  const decorations: Decoration[] = [];
 
-  const buttonClass = (active = false) => cx('ui-rich-editor-button', active && 'ui-rich-editor-button-active');
-
-  function setLink() {
-    const previousHref = editor.getAttributes('link').href as string | undefined;
-    const href = window.prompt('Link URL', previousHref ?? 'https://');
-    if (href === null) {
+  doc.descendants((node, position) => {
+    if (!node.isText || !node.text) {
       return;
     }
 
-    if (href.trim().length === 0) {
-      editor.chain().focus().unsetLink().run();
-      return;
+    RICH_EDITOR_MENTION_PATTERN.lastIndex = 0;
+    let match: RegExpExecArray | null = null;
+    while ((match = RICH_EDITOR_MENTION_PATTERN.exec(node.text)) !== null) {
+      const mention = match[0];
+      const start = match.index;
+      const previous = start > 0 ? node.text[start - 1] : '';
+      if (previous && /[\w./+-]/.test(previous)) {
+        continue;
+      }
+
+      const matches = lookup.get(mention) ?? [];
+      const resolvedItem = matches.length === 1 ? matches[0] : null;
+      const href = resolvedItem ? buildNodeMentionHref(resolvedItem, 'main') : null;
+      decorations.push(
+        Decoration.inline(position + start, position + start + mention.length, {
+          nodeName: href ? 'a' : 'span',
+          class: href ? 'ui-rich-editor-mention ui-rich-editor-mention-link' : 'ui-rich-editor-mention',
+          ...(href ? {
+            href,
+            'data-rich-editor-mention-href': href,
+            rel: 'noreferrer',
+            title: `Open ${mention}`,
+          } : {}),
+        }),
+      );
     }
+  });
 
-    editor.chain().focus().extendMarkRange('link').setLink({ href: href.trim() }).run();
-  }
+  return DecorationSet.create(doc, decorations);
+}
 
-  return (
-    <div className="ui-rich-editor-toolbar" role="toolbar" aria-label="Formatting">
-      <ToolbarButton className={buttonClass(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()} aria-label="Bold">
-        Bold
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()} aria-label="Italic">
-        Italic
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('strike'))} onClick={() => editor.chain().focus().toggleStrike().run()} aria-label="Strike">
-        Strike
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('code'))} onClick={() => editor.chain().focus().toggleCode().run()} aria-label="Inline code">
-        Code
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('heading', { level: 1 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} aria-label="Heading 1">
-        H1
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('heading', { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} aria-label="Heading 2">
-        H2
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('heading', { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} aria-label="Heading 3">
-        H3
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()} aria-label="Bullet list">
-        Bullets
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()} aria-label="Ordered list">
-        Numbers
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('taskList'))} onClick={() => editor.chain().focus().toggleTaskList().run()} aria-label="Task list">
-        Tasks
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('blockquote'))} onClick={() => editor.chain().focus().toggleBlockquote().run()} aria-label="Blockquote">
-        Quote
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('codeBlock'))} onClick={() => editor.chain().focus().toggleCodeBlock().run()} aria-label="Code block">
-        Code block
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('link'))} onClick={setLink} aria-label="Link">
-        Link
-      </ToolbarButton>
-      <ToolbarButton className={buttonClass(editor.isActive('fieldsBlock'))} onClick={() => editor.chain().focus().insertFieldsBlock().run()} aria-label="Insert fields">
-        Fields
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run()} aria-label="Insert table">
-        Table
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().chain().focus().undo().run()} aria-label="Undo">
-        Undo
-      </ToolbarButton>
-      <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().chain().focus().redo().run()} aria-label="Redo">
-        Redo
-      </ToolbarButton>
-    </div>
-  );
+function createMentionLinkExtension(lookup: Map<string, MentionItem[]>): Extension {
+  return Extension.create({
+    name: 'richEditorMentionLinks',
+    addProseMirrorPlugins() {
+      return [
+        new Plugin({
+          key: RICH_EDITOR_MENTION_PLUGIN_KEY,
+          props: {
+            decorations: (state) => buildMentionDecorations(state.doc, lookup),
+            handleClick: (view, _position, event) => {
+              const eventTarget = event.target instanceof HTMLElement
+                ? event.target
+                : event.target instanceof Node
+                  ? event.target.parentElement
+                  : null;
+              if (!eventTarget) {
+                return false;
+              }
+
+              const target = eventTarget.closest<HTMLElement>('[data-rich-editor-mention-href]');
+              const href = target?.dataset.richEditorMentionHref;
+              if (!target || !href) {
+                return false;
+              }
+
+              event.preventDefault();
+              if (event.metaKey || event.ctrlKey) {
+                window.open(href, '_blank', 'noopener');
+              } else {
+                window.location.assign(href);
+              }
+              return true;
+            },
+          },
+        }),
+      ];
+    },
+  });
 }
 
 export function RichMarkdownEditor({
@@ -110,16 +114,21 @@ export function RichMarkdownEditor({
   placeholder = 'Start writing…',
   className,
   readOnly = false,
+  variant = 'document',
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
   readOnly?: boolean;
+  variant?: 'document' | 'panel';
 }) {
+  const { data: mentionItems } = useNodeMentionItems();
+  const mentionLookup = useMemo(() => buildMentionLookup(mentionItems ?? []), [mentionItems]);
+
   if (typeof window === 'undefined') {
     return (
-      <div className={cx('ui-rich-editor', className)}>
+      <div className={cx('ui-rich-editor', variant === 'panel' ? 'ui-rich-editor-panel' : 'ui-rich-editor-document', className)}>
         <RichMarkdownRenderer content={value} emptyText={placeholder} />
       </div>
     );
@@ -127,6 +136,24 @@ export function RichMarkdownEditor({
 
   const normalizedValue = useMemo(() => editorValue(value), [value]);
   const lastValueRef = useRef(normalizedValue);
+
+  function handleSurfaceClick(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target instanceof HTMLElement
+      ? event.target.closest<HTMLElement>('[data-rich-editor-mention-href]')
+      : null;
+    const href = target?.dataset.richEditorMentionHref;
+    if (!target || !href) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.metaKey || event.ctrlKey) {
+      window.open(href, '_blank', 'noopener');
+    } else {
+      window.location.assign(href);
+    }
+  }
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -136,7 +163,7 @@ export function RichMarkdownEditor({
         heading: { levels: [1, 2, 3] },
       }),
       Link.configure({
-        openOnClick: false,
+        openOnClick: true,
         autolink: true,
         linkOnPaste: true,
       }),
@@ -148,6 +175,7 @@ export function RichMarkdownEditor({
       TableHeader,
       TableCell,
       FieldsBlockExtension,
+      createMentionLinkExtension(mentionLookup),
       Markdown.configure({
         markedOptions: {
           gfm: true,
@@ -164,9 +192,13 @@ export function RichMarkdownEditor({
       }
 
       lastValueRef.current = nextValue;
+      if (!currentEditor.isFocused) {
+        return;
+      }
+
       onChange(nextValue);
     },
-  }, [placeholder, readOnly]);
+  }, [mentionLookup, placeholder, readOnly]);
 
   useEffect(() => {
     if (!editor) {
@@ -192,9 +224,15 @@ export function RichMarkdownEditor({
   }, [editor, readOnly]);
 
   return (
-    <div className={cx('ui-rich-editor', className, readOnly && 'ui-rich-editor-readonly')}>
-      <Toolbar editor={editor} readOnly={readOnly} />
-      <div className="ui-rich-editor-surface">
+    <div
+      className={cx(
+        'ui-rich-editor',
+        variant === 'panel' ? 'ui-rich-editor-panel' : 'ui-rich-editor-document',
+        className,
+        readOnly && 'ui-rich-editor-readonly',
+      )}
+    >
+      <div className="ui-rich-editor-surface" onClickCapture={handleSurfaceClick}>
         <EditorContent editor={editor} className="ui-rich-editor-content" />
       </div>
     </div>

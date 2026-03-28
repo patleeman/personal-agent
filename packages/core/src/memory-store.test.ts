@@ -136,7 +136,6 @@ Keep planning state durable.
       id: 'memory-index',
       area: 'notes',
       role: 'structure',
-      related: ['personal-agent'],
       overwritten: false,
     });
 
@@ -148,8 +147,8 @@ Keep planning state durable.
     expect(fileContent).toContain('title: Memory index');
     expect(fileContent).toContain('area: notes');
     expect(fileContent).toContain('structure');
-    expect(fileContent).toContain('related:');
-    expect(fileContent).toContain('- personal-agent');
+    expect(fileContent).not.toContain('related:');
+    expect(fileContent).not.toContain('links:');
   });
 
   it('reports broken related references during lint', () => {

@@ -159,8 +159,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
     const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(parsed.body) ?? `Durable note for ${title}.`;
     const status = readOptionalString(attributes.status) ?? 'active';
     const tags = readStringArray(attributes.tags);
-    const related = readStringArray((attributes.links as Record<string, unknown> | undefined)?.related);
-    const parent = readOptionalString((attributes.links as Record<string, unknown> | undefined)?.parent);
     const updatedAt = readOptionalString(attributes.updatedAt);
     const frontmatter: Record<string, unknown> = {
       ...attributes,
@@ -170,17 +168,12 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
       summary,
       status,
       ...(tags.length > 0 ? { tags } : {}),
-      ...((parent || related.length > 0)
-        ? {
-            links: {
-              ...(parent ? { parent } : {}),
-              ...(related.length > 0 ? { related } : {}),
-            },
-          }
-        : {}),
       ...(updatedAt ? { updatedAt } : {}),
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     };
+    delete frontmatter.links;
+    delete frontmatter.parent;
+    delete frontmatter.related;
     return {
       id,
       content: stringifyMarkdown(frontmatter, parsed.body.trim().length > 0 ? parsed.body : `# ${title}\n\n${summary}`),
@@ -207,12 +200,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
     ?? readOptionalString(attributes.area);
   const legacyRole = readOptionalString(metadata.role)
     ?? readOptionalString(attributes.role);
-  const legacyParent = readOptionalString(metadata.parent)
-    ?? readOptionalString(attributes.parent);
-  const legacyRelated = [
-    ...readStringArray(metadata.related),
-    ...readStringArray(attributes.related),
-  ];
   const legacyTags = [
     ...readStringArray(metadata.tags),
     ...readStringArray(attributes.tags),
@@ -252,14 +239,6 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
       summary: legacySummary,
       status: legacyStatus,
       ...(tags.length > 0 ? { tags } : {}),
-      ...((legacyParent || legacyRelated.length > 0)
-        ? {
-            links: {
-              ...(legacyParent ? { parent: legacyParent } : {}),
-              ...(legacyRelated.length > 0 ? { related: legacyRelated } : {}),
-            },
-          }
-        : {}),
       ...(updatedAt ? { updatedAt } : {}),
       ...(Object.keys(nextMetadata).length > 0 ? { metadata: nextMetadata } : {}),
     }, parsed.body.trim().length > 0 ? parsed.body : `# ${legacyTitle}\n\n${legacySummary}`),

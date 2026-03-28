@@ -4,7 +4,6 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { COMPANION_NOTES_PATH } from './routes';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -34,7 +33,6 @@ export function CompanionMemoryDetailPage() {
     memory?.type,
     memory?.role,
     memory?.area,
-    typeof memory?.referenceCount === 'number' ? `${memory.referenceCount} ${memory.referenceCount === 1 ? 'reference' : 'references'}` : null,
     memory?.updated ? `updated ${timeAgo(memory.updated)}` : null,
     memory ? `@${memory.id}` : null,
   ].filter((value): value is string => Boolean(value));
@@ -78,40 +76,6 @@ export function CompanionMemoryDetailPage() {
                 <CompanionMarkdown content={data.content} stripFrontmatter />
               </Section>
 
-              <Section title="References">
-                {data.references.length > 0 ? (
-                  <div className="space-y-2">
-                    {data.references.map((reference) => (
-                      <div key={reference.path} className="rounded-xl bg-base/65 px-3 py-3">
-                        <p className="text-[14px] font-medium text-primary">{reference.title}</p>
-                        <p className="mt-1 text-[13px] leading-relaxed text-secondary">{reference.summary || 'No summary available.'}</p>
-                        <p className="mt-2 break-words text-[11px] text-dim">
-                          {reference.updated ? `updated ${timeAgo(reference.updated)} · ` : ''}
-                          {reference.relativePath}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[13px] text-dim">No references attached to this note node.</p>
-                )}
-              </Section>
-
-              <Section title="Relationships">
-                <NodeLinkList
-                  title="Links to"
-                  items={data.links?.outgoing}
-                  surface="companion"
-                  emptyText="This note does not reference other nodes yet."
-                />
-                <NodeLinkList
-                  title="Linked from"
-                  items={data.links?.incoming}
-                  surface="companion"
-                  emptyText="No other nodes link here yet."
-                />
-                <UnresolvedNodeLinks ids={data.links?.unresolved} />
-              </Section>
             </div>
           ) : null}
         </div>

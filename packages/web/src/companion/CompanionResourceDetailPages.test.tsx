@@ -106,7 +106,7 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('@missing-node');
   });
 
-  it('renders memory detail with markdown content and references', () => {
+  it('renders memory detail with inline zettelkasten links', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memory: {
@@ -122,7 +122,7 @@ describe('companion resource detail pages', () => {
           referenceCount: 1,
           updated: '2026-03-25T00:00:00.000Z',
         },
-        content: '# Memory index\n\n## Role\n- Keep the overview current.',
+        content: '# Memory index\n\nSee @continuous-conversations for the active project thread.\n\n## Role\n- Keep the overview current.',
         references: [{
           title: 'Reference doc',
           summary: 'Supporting material.',
@@ -154,10 +154,9 @@ describe('companion resource detail pages', () => {
 
     expect(html).toContain('Memory index');
     expect(html).toContain('Role');
-    expect(html).toContain('Reference doc');
-    expect(html).toContain('references/doc.md');
-    expect(html).toContain('Relationships');
-    expect(html).toContain('/app/projects/continuous-conversations');
+    expect(html).toContain('@continuous-conversations');
+    expect(html).not.toContain('Reference doc');
+    expect(html).not.toContain('Relationships');
   });
 
   it('renders skill detail with invocation guidance and markdown content', () => {

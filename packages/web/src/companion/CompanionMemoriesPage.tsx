@@ -21,11 +21,6 @@ function sortCompanionMemories(memories: MemoryDocItem[]): MemoryDocItem[] {
   });
 }
 
-function formatReferenceCount(count: number | undefined): string {
-  const value = count ?? 0;
-  return `${value} ${value === 1 ? 'reference' : 'references'}`;
-}
-
 function MemoriesSection({
   title,
   memories,
@@ -43,7 +38,6 @@ function MemoriesSection({
       <div className="mt-2 space-y-2 px-4">
         {memories.map((memory) => {
           const meta = [
-            formatReferenceCount(memory.referenceCount),
             memory.updated ? `updated ${timeAgo(memory.updated)}` : null,
             memory.role,
             memory.area,

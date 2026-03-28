@@ -132,7 +132,7 @@ describe('companion resource pages', () => {
     expect(html).toContain('Notes');
     expect(html).toContain('Memory index');
     expect(html).toContain('Old memory');
-    expect(html).toContain('2 references');
+    expect(html).not.toContain('2 references');
     expect(html).toContain('@memory-index');
     expect(html).toContain('Archived');
     expect(html).toContain('/app/notes/memory-index');
