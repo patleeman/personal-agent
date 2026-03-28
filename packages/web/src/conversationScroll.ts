@@ -19,11 +19,17 @@ export function getConversationInitialScrollKey(
   return `${conversationId}:${options.isLiveSession && !options.hasLiveSnapshot ? 'provisional' : 'settled'}`;
 }
 
+export function getConversationBottomScrollTop(
+  metrics: Pick<ConversationScrollMetrics, 'scrollHeight' | 'clientHeight'>,
+): number {
+  return Math.max(0, metrics.scrollHeight - metrics.clientHeight);
+}
+
 export function isConversationScrolledToBottom(
   metrics: ConversationScrollMetrics,
   thresholdPx = DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX,
 ): boolean {
-  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight < thresholdPx;
+  return getConversationBottomScrollTop(metrics) - metrics.scrollTop < thresholdPx;
 }
 
 export function getConversationTailBlockKey(block: MessageBlock | null | undefined): string | null {
