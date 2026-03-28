@@ -3207,6 +3207,95 @@ const companionAuthExchangeRateLimit = createInMemoryRateLimit({
   message: 'Too many pairing attempts. Try again in a minute.',
 });
 
+type AlertRoutesRegistrar = Pick<ReturnType<typeof express>, 'get' | 'post'>;
+
+function registerAlertRoutes(router: AlertRoutesRegistrar): void {
+  router.get('/api/alerts', (_req, res) => {
+    try {
+      res.json(getAlertSnapshotForProfile(getCurrentProfile()));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/alerts/:id', (req, res) => {
+    try {
+      const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
+      if (!alert) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+
+      res.json(alert);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/alerts/:id/ack', (req, res) => {
+    try {
+      const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
+      if (!alert) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+
+      invalidateAppTopics('alerts');
+      res.json({ ok: true, alert });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/alerts/:id/dismiss', (req, res) => {
+    try {
+      const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
+      if (!alert) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+
+      invalidateAppTopics('alerts');
+      res.json({ ok: true, alert });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/alerts/:id/snooze', async (req, res) => {
+    try {
+      const { delay, at } = req.body as { delay?: string; at?: string };
+      const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
+      if (!result) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+
+      invalidateAppTopics('alerts', 'sessions', 'runs');
+      res.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ error: message });
+    }
+  });
+}
+
 startAppEventMonitor({
   repoRoot: REPO_ROOT,
   sessionsDir: SESSIONS_DIR,
@@ -3735,90 +3824,7 @@ app.post('/api/web-ui/service/uninstall', (_req, res) => {
 
 // ── Alerts / Activity / Inbox ───────────────────────────────────────────────
 
-app.get('/api/alerts', (_req, res) => {
-  try {
-    res.json(getAlertSnapshotForProfile(getCurrentProfile()));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/alerts/:id', (req, res) => {
-  try {
-    const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    res.json(alert);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/alerts/:id/ack', (req, res) => {
-  try {
-    const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts');
-    res.json({ ok: true, alert });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/alerts/:id/dismiss', (req, res) => {
-  try {
-    const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts');
-    res.json({ ok: true, alert });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/alerts/:id/snooze', async (req, res) => {
-  try {
-    const { delay, at } = req.body as { delay?: string; at?: string };
-    const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
-    if (!result) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts', 'sessions', 'runs');
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(400).json({ error: message });
-  }
-});
+registerAlertRoutes(app);
 
 app.post('/api/inbox/clear', (_req, res) => {
   try {
@@ -10652,90 +10658,7 @@ companionApp.get('/api/events', (req, res) => {
   });
 });
 
-companionApp.get('/api/alerts', (_req, res) => {
-  try {
-    res.json(getAlertSnapshotForProfile(getCurrentProfile()));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.get('/api/alerts/:id', (req, res) => {
-  try {
-    const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    res.json(alert);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.post('/api/alerts/:id/ack', (req, res) => {
-  try {
-    const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts');
-    res.json({ ok: true, alert });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.post('/api/alerts/:id/dismiss', (req, res) => {
-  try {
-    const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
-    if (!alert) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts');
-    res.json({ ok: true, alert });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.post('/api/alerts/:id/snooze', async (req, res) => {
-  try {
-    const { delay, at } = req.body as { delay?: string; at?: string };
-    const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
-    if (!result) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    invalidateAppTopics('alerts', 'sessions', 'runs');
-    res.json({ ok: true, ...result });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(400).json({ error: message });
-  }
-});
+registerAlertRoutes(companionApp);
 
 companionApp.post('/api/inbox/clear', (_req, res) => {
   try {
