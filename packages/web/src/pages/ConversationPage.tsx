@@ -3268,7 +3268,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ? 'Resuming interrupted turn…'
           : result.usedFallbackPrompt
             ? 'Resuming with a follow-up prompt…'
-            : 'Conversation resumed. Send a follow-up to continue.',
+            : 'Conversation resumed.',
       );
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);

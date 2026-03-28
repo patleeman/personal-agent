@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { getDurableSessionsDir } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  canInjectResumeFallbackPrompt,
   ensureSessionFileExists,
   getLiveSessions,
   isPlaceholderConversationTitle,
@@ -66,6 +67,85 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('canInjectResumeFallbackPrompt', () => {
+  it('returns true for an idle session with no queued work', () => {
+    setLiveEntry('session-idle-resume-fallback', {
+      sessionId: 'session-idle-resume-fallback',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Idle resume fallback',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        isStreaming: false,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+      },
+    });
+
+    expect(canInjectResumeFallbackPrompt('session-idle-resume-fallback')).toBe(true);
+  });
+
+  it('returns false while the session is streaming', () => {
+    setLiveEntry('session-streaming-resume-fallback', {
+      sessionId: 'session-streaming-resume-fallback',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Streaming resume fallback',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        isStreaming: true,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+      },
+    });
+
+    expect(canInjectResumeFallbackPrompt('session-streaming-resume-fallback')).toBe(false);
+  });
+
+  it('returns false when a hidden turn is pending', () => {
+    setLiveEntry('session-hidden-resume-fallback', {
+      sessionId: 'session-hidden-resume-fallback',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Hidden resume fallback',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingHiddenTurnCustomTypes: ['conversation_automation_post_turn_review'],
+      session: {
+        isStreaming: false,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+      },
+    });
+
+    expect(canInjectResumeFallbackPrompt('session-hidden-resume-fallback')).toBe(false);
+  });
+
+  it('returns false when follow-up work is already queued', () => {
+    setLiveEntry('session-queued-resume-fallback', {
+      sessionId: 'session-queued-resume-fallback',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Queued resume fallback',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        isStreaming: false,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => ['already queued'],
+      },
+    });
+
+    expect(canInjectResumeFallbackPrompt('session-queued-resume-fallback')).toBe(false);
+  });
 });
 
 describe('reloadAllLiveSessionAuth', () => {

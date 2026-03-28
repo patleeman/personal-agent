@@ -164,6 +164,7 @@ import {
   submitPromptSession as submitLocalPromptSession,
   restoreQueuedMessage,
   queuePromptContext,
+  canInjectResumeFallbackPrompt,
   appendVisibleCustomMessage,
   kickConversationAutomation,
   compactSession,
@@ -6908,6 +6909,15 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
 
     if (isLocalLive(conversationId)) {
       const liveEntry = liveRegistry.get(conversationId);
+      const shouldInjectFallbackPrompt = canInjectResumeFallbackPrompt(conversationId);
+      const fallbackPendingOperation = shouldInjectFallbackPrompt
+        ? {
+            type: 'prompt' as const,
+            text: resumeFallbackPrompt,
+            enqueuedAt: new Date().toISOString(),
+          }
+        : null;
+
       if (liveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
           conversationId,
@@ -6916,40 +6926,38 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
           title: liveEntry.title,
           profile: getCurrentProfile(),
           state: 'running',
-          pendingOperation: {
-            type: 'prompt',
-            text: resumeFallbackPrompt,
-            enqueuedAt: new Date().toISOString(),
-          },
+          pendingOperation: fallbackPendingOperation,
         });
       }
 
-      promptLocalSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
-        if (liveEntry?.session.sessionFile) {
-          await syncWebLiveConversationRun({
-            conversationId,
-            sessionFile: liveEntry.session.sessionFile,
-            cwd: liveEntry.cwd,
-            title: liveEntry.title,
-            profile: getCurrentProfile(),
-            state: 'failed',
-            lastError: error instanceof Error ? error.message : String(error),
-          });
-        }
+      if (shouldInjectFallbackPrompt) {
+        promptLocalSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
+          if (liveEntry?.session.sessionFile) {
+            await syncWebLiveConversationRun({
+              conversationId,
+              sessionFile: liveEntry.session.sessionFile,
+              cwd: liveEntry.cwd,
+              title: liveEntry.title,
+              profile: getCurrentProfile(),
+              state: 'failed',
+              lastError: error instanceof Error ? error.message : String(error),
+            });
+          }
 
-        logError('conversation recovery error', {
-          sessionId: conversationId,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
+          logError('conversation recovery error', {
+            sessionId: conversationId,
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
         });
-      });
+      }
 
       res.json({
         conversationId,
         live: true,
         recovered: true,
         replayedPendingOperation: false,
-        usedFallbackPrompt: true,
+        usedFallbackPrompt: shouldInjectFallbackPrompt,
       });
       return;
     }
@@ -6999,13 +7007,17 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
       return;
     }
 
-    const recoveryOperation = pendingOperation ?? {
-      type: 'prompt' as const,
-      text: resumeFallbackPrompt,
-      enqueuedAt: new Date().toISOString(),
-    };
+    const shouldInjectFallbackPrompt = !pendingOperation
+      && (!resumedEntry || canInjectResumeFallbackPrompt(resumed.id));
+    const recoveryOperation = pendingOperation ?? (shouldInjectFallbackPrompt
+      ? {
+          type: 'prompt' as const,
+          text: resumeFallbackPrompt,
+          enqueuedAt: new Date().toISOString(),
+        }
+      : null);
     const replayedPendingOperation = Boolean(pendingOperation);
-    const usedFallbackPrompt = !pendingOperation;
+    const usedFallbackPrompt = shouldInjectFallbackPrompt;
 
     await syncWebLiveConversationRun({
       conversationId: resumed.id,
@@ -7017,32 +7029,34 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
       pendingOperation: recoveryOperation,
     });
 
-    for (const message of recoveryOperation.contextMessages ?? []) {
-      await queuePromptContext(resumed.id, message.customType, message.content);
+    if (recoveryOperation) {
+      for (const message of recoveryOperation.contextMessages ?? []) {
+        await queuePromptContext(resumed.id, message.customType, message.content);
+      }
+
+      promptLocalSession(
+        resumed.id,
+        recoveryOperation.text,
+        recoveryOperation.behavior,
+        recoveryOperation.images,
+      ).catch(async (error) => {
+        await syncWebLiveConversationRun({
+          conversationId: resumed.id,
+          sessionFile,
+          cwd: effectiveCwd,
+          title: effectiveTitle,
+          profile: effectiveProfile,
+          state: 'failed',
+          lastError: error instanceof Error ? error.message : String(error),
+        });
+
+        logError('conversation recovery error', {
+          sessionId: resumed.id,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      });
     }
-
-    promptLocalSession(
-      resumed.id,
-      recoveryOperation.text,
-      recoveryOperation.behavior,
-      recoveryOperation.images,
-    ).catch(async (error) => {
-      await syncWebLiveConversationRun({
-        conversationId: resumed.id,
-        sessionFile,
-        cwd: effectiveCwd,
-        title: effectiveTitle,
-        profile: effectiveProfile,
-        state: 'failed',
-        lastError: error instanceof Error ? error.message : String(error),
-      });
-
-      logError('conversation recovery error', {
-        sessionId: resumed.id,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    });
 
     res.json({
       conversationId: resumed.id,
