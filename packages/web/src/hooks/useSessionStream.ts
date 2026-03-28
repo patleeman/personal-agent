@@ -14,6 +14,7 @@ import type {
   SseEvent,
 } from '../types';
 import { api } from '../api';
+import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { parseSkillBlock } from '../skillBlock';
 
@@ -277,6 +278,31 @@ export function shouldRetrySessionStreamAfterError(status?: number): boolean {
   return status >= 500;
 }
 
+export function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
+  return state.hasSnapshot
+    || state.blocks.length > 0
+    || state.isStreaming
+    || state.error !== null
+    || state.title !== null
+    || state.tokens !== null
+    || state.cost !== null
+    || state.contextUsage !== null
+    || state.pendingQueue.steering.length > 0
+    || state.pendingQueue.followUp.length > 0
+    || state.presence.surfaces.length > 0
+    || state.presence.controllerSurfaceId !== null
+    || state.presence.controllerSurfaceType !== null
+    || state.presence.controllerAcquiredAt !== null;
+}
+
+function readSeededSessionStreamState(sessionId: string | null): StreamState {
+  if (!sessionId) {
+    return INITIAL_STREAM_STATE;
+  }
+
+  return readWarmLiveSessionState(sessionId) ?? INITIAL_STREAM_STATE;
+}
+
 export function isLiveSessionSurfaceRegistered(presence: LiveSessionPresenceState, surfaceId: string): boolean {
   const normalizedSurfaceId = surfaceId.trim();
   if (!normalizedSurfaceId) {
@@ -357,19 +383,20 @@ export async function submitLivePromptWithControlRetry(input: {
   await input.attemptPrompt();
 }
 
-export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean }) {
-  const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
+export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean; registerSurface?: boolean }) {
+  const normalizedSessionId = sessionId?.trim() || null;
+  const [state, setState] = useState<StreamState>(() => readSeededSessionStreamState(normalizedSessionId));
   const [connectVersion, setConnectVersion] = useState(0);
   const [forcedSessionId, setForcedSessionId] = useState<string | null>(null);
   // Mutable refs to avoid stale closures in the SSE handler
-  const blocksRef = useRef<MessageBlock[]>([]);
-  const streamingRef = useRef(false);
-  const normalizedSessionId = sessionId?.trim() || null;
+  const blocksRef = useRef<MessageBlock[]>(state.blocks);
+  const streamingRef = useRef(state.isStreaming);
   const configuredSessionId = resolveSessionStreamSubscriptionId(normalizedSessionId, options);
   const requestedSessionId = resolveEffectiveSessionStreamSubscriptionId(normalizedSessionId, options, forcedSessionId);
   const stateSessionIdRef = useRef<string | null>(requestedSessionId);
   const surfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const surfaceType = useMemo(() => detectConversationSurfaceType(), []);
+  const registerSurface = options?.registerSurface !== false;
 
   const presenceRef = useRef<LiveSessionPresenceState>(createEmptyLiveSessionPresenceState());
 
@@ -500,10 +527,19 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
   useEffect(() => {
     stateSessionIdRef.current = requestedSessionId;
-    blocksRef.current = [];
-    streamingRef.current = false;
-    setState(INITIAL_STREAM_STATE);
+    const seededState = readSeededSessionStreamState(requestedSessionId);
+    blocksRef.current = seededState.blocks;
+    streamingRef.current = seededState.isStreaming;
+    setState(seededState);
   }, [requestedSessionId]);
+
+  useEffect(() => {
+    if (!requestedSessionId || !shouldPersistWarmLiveSessionState(state)) {
+      return;
+    }
+
+    writeWarmLiveSessionState(requestedSessionId, state);
+  }, [requestedSessionId, state]);
 
   useEffect(() => {
     if (!requestedSessionId) return;
@@ -516,8 +552,10 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
         params.set('tailBlocks', String(options.tailBlocks));
       }
-      params.set('surfaceId', surfaceId);
-      params.set('surfaceType', surfaceType);
+      if (registerSurface) {
+        params.set('surfaceId', surfaceId);
+        params.set('surfaceType', surfaceType);
+      }
       const query = params.toString();
       es = new EventSource(`/api/live-sessions/${requestedSessionId}/events${query ? `?${query}` : ''}`);
 
@@ -537,7 +575,10 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
           .then((response) => {
             if (!closed && (response.ok || shouldRetrySessionStreamAfterError(response.status))) {
               setTimeout(connect, 2_000);
+              return;
             }
+
+            clearWarmLiveSessionState(requestedSessionId);
           })
           .catch(() => {
             if (!closed && shouldRetrySessionStreamAfterError()) {
@@ -553,7 +594,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       closed = true;
       es?.close();
     };
-  }, [connectVersion, options?.tailBlocks, requestedSessionId, surfaceId, surfaceType]);
+  }, [connectVersion, options?.tailBlocks, registerSurface, requestedSessionId, surfaceId, surfaceType]);
 
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
