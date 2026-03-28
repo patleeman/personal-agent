@@ -8,7 +8,8 @@ import { type ThemePreference, useTheme } from '../theme';
 import type { CodexPlanUsageState, ModelState, ProviderAuthSummary, ProviderOAuthLoginState, ProviderOAuthLoginStreamEvent } from '../types';
 import { useLocation } from 'react-router-dom';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
-import { readSettingsPageId, SettingsSplitLayout } from '../components/SettingsLayout';
+import { getSettingsPage, readSettingsPageId, SettingsSplitLayout } from '../components/SettingsLayout';
+import { SystemSettingsContent } from '../components/SystemSettingsContent';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
@@ -186,16 +187,29 @@ export function SettingsPage() {
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
   const activePageId = useMemo(() => readSettingsPageId(location.search), [location.search]);
-  const activePage = useMemo(
-    () => SETTINGS_PAGE_ITEMS.find((page) => page.id === activePageId) ?? SETTINGS_PAGE_ITEMS[0],
-    [activePageId],
-  );
+  const activePage = useMemo(() => getSettingsPage(activePageId), [activePageId]);
+  const activeSystemComponent = useMemo(() => {
+    switch (activePageId) {
+      case 'system-web-ui':
+        return 'web-ui' as const;
+      case 'system-daemon':
+        return 'daemon' as const;
+      case 'system-sync':
+        return 'sync' as const;
+      default:
+        return null;
+    }
+  }, [activePageId]);
 
-  const pageMeta = [
-    `theme ${theme}`,
-    profileState ? `profile ${profileState.currentProfile}` : null,
-    modelState?.currentModel ? `model ${modelState.currentModel}` : null,
-  ].filter(Boolean).join(' · ');
+  const pageMeta = activePageId.startsWith('system')
+    ? ''
+    : [
+      `theme ${theme}`,
+      profileState ? `profile ${profileState.currentProfile}` : null,
+      modelState?.currentModel ? `model ${modelState.currentModel}` : null,
+    ].filter(Boolean).join(' · ');
+
+  const headingMeta = [activePage.summary, pageMeta].filter(Boolean).join(' · ');
 
   const groupedModels = useMemo(
     () => groupModelsByProvider(modelState?.models ?? []),
@@ -592,7 +606,7 @@ export function SettingsPage() {
   return (
     <SettingsSplitLayout>
       <div className="flex h-full min-h-0 flex-col">
-        <PageHeader actions={<ToolbarButton onClick={() => {
+        <PageHeader actions={activePageId.startsWith('system') ? null : <ToolbarButton onClick={() => {
           void Promise.all([
             refetchProfiles({ resetLoading: false }),
             refetchModels({ resetLoading: false }),
@@ -605,13 +619,13 @@ export function SettingsPage() {
           ]);
         }}>↻ Refresh</ToolbarButton>}>
           <PageHeading
-            title="Settings"
-            meta={[activePage.label, pageMeta].filter(Boolean).join(' · ') || 'Stable preferences, provider credentials, and interface reset tools.'}
+            title={activePage.label}
+            meta={headingMeta || 'Stable preferences, provider credentials, and interface reset tools.'}
           />
         </PageHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="max-w-5xl pb-6">
+          <div className={cx(activePageId.startsWith('system') ? 'max-w-6xl' : 'max-w-5xl', 'pb-6')}>
             <section className={cx('space-y-4', activePageId !== 'appearance' && 'hidden')}>
               <SectionLabel label="Appearance" />
 
@@ -1120,6 +1134,10 @@ export function SettingsPage() {
                 </button>
               </div>
             </div>
+          </section>
+
+          <section className={cx('space-y-5', !activePageId.startsWith('system') && 'hidden')}>
+            <SystemSettingsContent componentId={activeSystemComponent ?? undefined} />
           </section>
 
           <section className={cx('space-y-4', activePageId !== 'workspace' && 'hidden')}>

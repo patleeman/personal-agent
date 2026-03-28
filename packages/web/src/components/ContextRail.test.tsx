@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppDataContext, SystemStatusContext } from '../contexts.js';
+import { AppDataContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
@@ -338,64 +338,6 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Links');
     expect(html).not.toContain('Note info');
     expect(html).not.toContain('INDEX.md');
-  });
-
-  it('renders system details and logs in the context rail on the system page', () => {
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/system?component=daemon']}>
-        <AppDataContext.Provider value={{
-          activity: null,
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setActivity: vi.fn(),
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
-          <SystemStatusContext.Provider value={{
-            daemon: {
-              warnings: [],
-              service: {
-                platform: 'launchd',
-                identifier: 'io.test.daemon',
-                manifestPath: '/tmp/io.test.daemon.plist',
-                installed: true,
-                running: true,
-              },
-              runtime: {
-                running: true,
-                socketPath: '/tmp/personal-agentd.sock',
-                pid: 123,
-                startedAt: '2026-03-18T17:00:00.000Z',
-                moduleCount: 4,
-                queueDepth: 0,
-                maxQueueDepth: 1000,
-              },
-              log: {
-                path: '/tmp/daemon.log',
-                lines: ['daemon ready'],
-              },
-            },
-            sync: null,
-            webUi: null,
-            setDaemon: vi.fn(),
-            setSync: vi.fn(),
-            setWebUi: vi.fn(),
-          }}>
-            <ContextRail />
-          </SystemStatusContext.Provider>
-        </AppDataContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('System');
-    expect(html).toContain('Daemon');
-    expect(html).toContain('Restart daemon');
-    expect(html).toContain('Log');
-    expect(html).toContain('daemon ready');
   });
 
   it('shows working directory, project references, and the todo list on the draft conversation rail', () => {
