@@ -302,10 +302,11 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=note&node=memory-index');
 
-    expect(html).toContain('Knowledge Base');
+    expect(html).not.toContain('Refresh knowledge base');
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
+    expect(html).toContain('Back to table');
     expect(html).toContain('Save now');
     expect(html).toContain('Chat about note');
     expect(html).toContain('Delete note');
@@ -380,10 +381,110 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=project&node=active-project');
 
-    expect(html).toContain('Knowledge Base');
+    expect(html).not.toContain('Refresh knowledge base');
     expect(html).toContain('Active project');
+    expect(html).toContain('Back to table');
     expect(html).toContain('Document');
     expect(html).toContain('Tasks');
+    expect(html).toContain('Properties');
+    expect(html).not.toContain('Open dedicated page');
+  });
+
+  it('renders the selected skill without the embedded knowledge browser', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'nodes-memory') {
+        return {
+          data: {
+            profile: 'assistant',
+            agentsMd: [],
+            skills: [{
+              source: 'shared',
+              name: 'tool-agent-browser',
+              description: 'Automate browsers and Electron apps with agent-browser.',
+              path: '/tmp/tool-agent-browser/INDEX.md',
+              recentSessionCount: 2,
+              lastUsedAt: '2026-03-27T12:00:00.000Z',
+              usedInLastSession: true,
+            }],
+            memoryDocs: [],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key == null) {
+        return {
+          data: {
+            currentProfile: 'assistant',
+            profiles: ['assistant'],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'nodes-projects:assistant') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'nodes-detail:skill:tool-agent-browser:assistant') {
+        return {
+          data: {
+            kind: 'skill',
+            detail: {
+              skill: {
+                source: 'shared',
+                name: 'tool-agent-browser',
+                description: 'Automate browsers and Electron apps with agent-browser.',
+                path: '/tmp/tool-agent-browser/INDEX.md',
+                recentSessionCount: 2,
+                lastUsedAt: '2026-03-27T12:00:00.000Z',
+                usedInLastSession: true,
+              },
+              content: '---\ntitle: Agent Browser\n---\n\n# Agent Browser\n\nAutomate browsers.',
+              references: [],
+              links: {
+                outgoing: [],
+                incoming: [],
+                unresolved: [],
+              },
+            },
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderPage('/nodes?kind=skill&node=tool-agent-browser');
+
+    expect(html).not.toContain('Refresh knowledge base');
+    expect(html).toContain('Back to table');
+    expect(html).toContain('Agent Browser');
+    expect(html).toContain('Reload');
+    expect(html).toContain('Save');
+    expect(html).toContain('Definition');
     expect(html).toContain('Properties');
     expect(html).not.toContain('Open dedicated page');
   });
