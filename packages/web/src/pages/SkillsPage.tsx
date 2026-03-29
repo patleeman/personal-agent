@@ -539,7 +539,7 @@ export function SkillWorkspace({
       ) : !isDocumentReady ? (
         <LoadingState label="Loading skill…" className="h-full justify-center" />
       ) : (
-        <div className="space-y-3 px-6 py-2">
+        <div className="max-w-4xl space-y-3">
           {selectedReference ? (
             <div className="space-y-1 border-b border-border-subtle pb-4">
               {documentLabel ? <p className="text-[16px] font-medium text-primary">{documentLabel}</p> : null}

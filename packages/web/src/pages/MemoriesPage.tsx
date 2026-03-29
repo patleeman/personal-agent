@@ -578,7 +578,7 @@ export function NoteWorkspace({
         />
       )}
       titleAs="div"
-      summaryClassName="max-w-none"
+      summaryClassName="max-w-4xl"
       summary={(
         <textarea
           ref={noteDescriptionRef}
@@ -650,7 +650,7 @@ export function NoteWorkspace({
         </>
       )}
     >
-      <div className="px-6 pt-2">
+      <div className="max-w-4xl">
         <NoteEditorDocument
           title={noteTitle}
           onTitleChange={setNoteTitle}

@@ -335,7 +335,8 @@ export function ProjectDocumentContent({
       onBodyChange={onChange}
       showTitle={false}
       showDescription={false}
-      documentClassName="max-w-none px-0 pt-0 pb-0 gap-0"
+      frameClassName="ui-note-editor-frame-embedded"
+      documentClassName="px-0 pt-0 pb-0 gap-0"
       bodyPlaceholder="Start writing…"
     />
   );

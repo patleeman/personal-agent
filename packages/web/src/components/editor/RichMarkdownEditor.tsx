@@ -1,4 +1,4 @@
-import { type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent as ReactChangeEvent, type ClipboardEvent as ReactClipboardEvent, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Extension, type JSONContent } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
@@ -11,9 +11,10 @@ import TaskList from '@tiptap/extension-task-list';
 import { Table } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view';
+import { type EditorState, Plugin, PluginKey } from '@tiptap/pm/state';
 import { EditorContent, type Editor, useEditor } from '@tiptap/react';
+import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
 import { filterMentionItems, type MentionItem } from '../../conversationMentions';
 import { FieldsBlockExtension } from '../../editorExtensions/FieldsBlockExtension';
 import { normalizeMarkdownValue } from '../../markdownDocument';
@@ -30,6 +31,11 @@ const RICH_EDITOR_MENTION_PLUGIN_KEY = new PluginKey('rich-editor-mentions');
 
 interface EditorMentionMatch {
   query: string;
+  from: number;
+  to: number;
+}
+
+interface EditorSelectionRange {
   from: number;
   to: number;
 }
@@ -72,6 +78,86 @@ function buildImageInsertContent(images: Array<{ src: string; alt: string; title
     },
     { type: 'paragraph' },
   ] satisfies JSONContent[]);
+}
+
+function currentSelectionRange(editor: Editor): EditorSelectionRange {
+  return {
+    from: editor.state.selection.from,
+    to: editor.state.selection.to,
+  };
+}
+
+function shouldShowFormattingBubbleMenu({
+  editor,
+  element,
+  view,
+  state,
+  from,
+  to,
+}: {
+  editor: Editor;
+  element: HTMLElement;
+  view: EditorView;
+  state: EditorState;
+  from: number;
+  to: number;
+}): boolean {
+  const isChildOfMenu = typeof document !== 'undefined' && element.contains(document.activeElement);
+  const hasEditorFocus = view.hasFocus() || isChildOfMenu;
+  if (!hasEditorFocus || !editor.isEditable || from === to) {
+    return false;
+  }
+
+  return state.doc.textBetween(from, to, ' ', ' ').trim().length > 0;
+}
+
+function shouldShowInsertFloatingMenu({
+  editor,
+  view,
+  state,
+}: {
+  editor: Editor;
+  view: EditorView;
+  state: EditorState;
+}): boolean {
+  if (!view.hasFocus() || !editor.isEditable || !state.selection.empty) {
+    return false;
+  }
+
+  const { $anchor } = state.selection;
+  if ($anchor.depth !== 1 || !$anchor.parent.isTextblock || $anchor.parent.type.spec.code) {
+    return false;
+  }
+
+  return !$anchor.parent.textContent && $anchor.parent.childCount === 0;
+}
+
+function InlineMenuButton({
+  label,
+  title,
+  active = false,
+  onPress,
+}: {
+  label: string;
+  title: string;
+  active?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
+      onClick={onPress}
+      className={cx('ui-rich-editor-inline-button', active && 'ui-rich-editor-inline-button-active')}
+    >
+      {label}
+    </button>
+  );
 }
 
 function editorValue(value: string): string {
@@ -227,6 +313,8 @@ export function RichMarkdownEditor({
   const normalizedValue = useMemo(() => editorValue(value), [value]);
   const lastValueRef = useRef(normalizedValue);
   const editorShellRef = useRef<HTMLDivElement | null>(null);
+  const imagePickerRef = useRef<HTMLInputElement | null>(null);
+  const pendingImageInsertRangeRef = useRef<EditorSelectionRange | null>(null);
   const [mentionMatch, setMentionMatch] = useState<EditorMentionMatch | null>(null);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [mentionMenuPosition, setMentionMenuPosition] = useState<RichMarkdownMentionMenuPosition | null>(null);
@@ -347,6 +435,110 @@ export function RichMarkdownEditor({
     setMentionMenuPosition(null);
   }, [editor, mentionMatch]);
 
+  const appendInlineMenuTo = useCallback(() => document.body, []);
+
+  const runEditorCommand = useCallback((command: (currentEditor: Editor) => boolean) => {
+    if (!editor) {
+      return;
+    }
+
+    command(editor);
+  }, [editor]);
+
+  const insertImageFiles = useCallback(async (files: File[], targetRange?: EditorSelectionRange) => {
+    if (!editor || files.length === 0) {
+      return;
+    }
+
+    const imageFiles = files.filter(isImageFile);
+    if (imageFiles.length === 0) {
+      return;
+    }
+
+    try {
+      const images = await Promise.all(imageFiles.map(async (file) => ({
+        src: await blobToDataUrl(file),
+        alt: normalizeImageAltText(file.name),
+        title: file.name.trim() || undefined,
+      })));
+
+      const selectionRange = targetRange ?? currentSelectionRange(editor);
+      editor.chain().focus().insertContentAt(selectionRange, buildImageInsertContent(images)).run();
+    } catch (error) {
+      console.error('Could not embed image in markdown editor.', error);
+    }
+  }, [editor]);
+
+  const openImagePicker = useCallback(() => {
+    if (!editor) {
+      return;
+    }
+
+    pendingImageInsertRangeRef.current = currentSelectionRange(editor);
+    imagePickerRef.current?.click();
+  }, [editor]);
+
+  const handleImageInputChange = useCallback((event: ReactChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const selectionRange = pendingImageInsertRangeRef.current ?? (editor ? currentSelectionRange(editor) : null);
+    pendingImageInsertRangeRef.current = null;
+    event.target.value = '';
+
+    if (files.length === 0) {
+      return;
+    }
+
+    void insertImageFiles(files, selectionRange ?? undefined);
+  }, [editor, insertImageFiles]);
+
+  const bubbleMenu = editor ? (
+    <BubbleMenu
+      editor={editor}
+      updateDelay={0}
+      shouldShow={shouldShowFormattingBubbleMenu}
+      appendTo={appendInlineMenuTo}
+      options={{
+        strategy: 'fixed',
+        placement: 'top',
+        offset: 10,
+      }}
+    >
+      <div className="ui-rich-editor-inline-menu" role="toolbar" aria-label="Text formatting">
+        <InlineMenuButton label="B" title="Bold" active={editor.isActive('bold')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleBold().run())} />
+        <InlineMenuButton label="I" title="Italic" active={editor.isActive('italic')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleItalic().run())} />
+        <InlineMenuButton label="Code" title="Inline code" active={editor.isActive('code')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleCode().run())} />
+        <span className="ui-rich-editor-inline-divider" aria-hidden="true" />
+        <InlineMenuButton label="H2" title="Heading" active={editor.isActive('heading', { level: 2 })} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleHeading({ level: 2 }).run())} />
+        <InlineMenuButton label="List" title="Bullet list" active={editor.isActive('bulletList')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleBulletList().run())} />
+        <InlineMenuButton label="Task" title="Task list" active={editor.isActive('taskList')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleTaskList().run())} />
+        <InlineMenuButton label="Quote" title="Block quote" active={editor.isActive('blockquote')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleBlockquote().run())} />
+      </div>
+    </BubbleMenu>
+  ) : null;
+
+  const floatingMenu = editor ? (
+    <FloatingMenu
+      editor={editor}
+      updateDelay={0}
+      shouldShow={shouldShowInsertFloatingMenu}
+      appendTo={appendInlineMenuTo}
+      options={{
+        strategy: 'fixed',
+        placement: 'right-start',
+        offset: 12,
+      }}
+    >
+      <div className="ui-rich-editor-inline-menu ui-rich-editor-inline-menu-insert" role="toolbar" aria-label="Insert and block formatting">
+        <InlineMenuButton label="Image" title="Insert image" onPress={openImagePicker} />
+        <span className="ui-rich-editor-inline-divider" aria-hidden="true" />
+        <InlineMenuButton label="H2" title="Heading" active={editor.isActive('heading', { level: 2 })} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleHeading({ level: 2 }).run())} />
+        <InlineMenuButton label="List" title="Bullet list" active={editor.isActive('bulletList')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleBulletList().run())} />
+        <InlineMenuButton label="Task" title="Task list" active={editor.isActive('taskList')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleTaskList().run())} />
+        <InlineMenuButton label="Quote" title="Block quote" active={editor.isActive('blockquote')} onPress={() => runEditorCommand((currentEditor) => currentEditor.chain().focus().toggleBlockquote().run())} />
+      </div>
+    </FloatingMenu>
+  ) : null;
+
   useEffect(() => {
     if (!editor) {
       return;
@@ -386,33 +578,6 @@ export function RichMarkdownEditor({
     };
   }, [editor, showMentionMenu, updateMentionMenuPosition]);
 
-  const insertImageFiles = useCallback(async (files: File[], position?: number) => {
-    if (!editor || files.length === 0) {
-      return;
-    }
-
-    const imageFiles = files.filter(isImageFile);
-    if (imageFiles.length === 0) {
-      return;
-    }
-
-    try {
-      const images = await Promise.all(imageFiles.map(async (file) => ({
-        src: await blobToDataUrl(file),
-        alt: normalizeImageAltText(file.name),
-        title: file.name.trim() || undefined,
-      })));
-
-      const selection = editor.state.selection;
-      editor.chain().focus().insertContentAt(
-        typeof position === 'number' ? { from: position, to: position } : { from: selection.from, to: selection.to },
-        buildImageInsertContent(images),
-      ).run();
-    } catch (error) {
-      console.error('Could not embed image in markdown editor.', error);
-    }
-  }, [editor]);
-
   function handlePasteCapture(event: ReactClipboardEvent<HTMLDivElement>) {
     const items = Array.from(event.clipboardData.items ?? []);
     const imageFiles = items
@@ -438,7 +603,7 @@ export function RichMarkdownEditor({
 
     event.preventDefault();
     const position = editor?.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
-    void insertImageFiles(imageFiles, position);
+    void insertImageFiles(imageFiles, typeof position === 'number' ? { from: position, to: position } : undefined);
   }
 
   function handleKeyDownCapture(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -487,6 +652,16 @@ export function RichMarkdownEditor({
       )}
     >
       <div ref={editorShellRef} className="relative">
+        <input
+          ref={imagePickerRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="sr-only"
+          onChange={handleImageInputChange}
+        />
+        {bubbleMenu}
+        {floatingMenu}
         {showMentionMenu && mentionMenuPosition ? (
           <div
             className="ui-menu-shell z-20 overflow-y-auto"

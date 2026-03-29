@@ -781,7 +781,6 @@ export function ProjectDetailPanel({
       setSavedDocumentContent(draftDocumentContent);
       setDocumentSavedAt(Date.now());
       saveSucceeded = true;
-      onChanged?.();
     } catch (error) {
       setDocumentError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1155,7 +1154,7 @@ export function ProjectDetailPanel({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
       <div className="min-w-0 space-y-6">
-        <section className="space-y-4 pb-1">
+        <section className="max-w-4xl space-y-4 pb-1">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               {backHref ? (
@@ -1291,7 +1290,7 @@ export function ProjectDetailPanel({
           </div>
         </section>
 
-        <section className="space-y-3 border-t border-border-subtle pt-6">
+        <section className="max-w-4xl space-y-3 border-t border-border-subtle pt-6">
           {documentSaveMessage ? (
             <p className={cx('text-[12px]', documentError ? 'text-danger' : 'text-secondary')}>
               {documentSaveMessage}
