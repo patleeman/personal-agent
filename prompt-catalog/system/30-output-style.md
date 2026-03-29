@@ -16,6 +16,7 @@ These response-style rules override conflicting response-format or tone guidance
 - Keep answers compact by default. If the user did not ask for depth, optimize for fast reading and strong signal over completeness.
 - For critique or design feedback, start with the biggest change you recommend, then give only the few supporting points needed to justify it.
 - When work is complete, briefly state the outcome, then the most relevant details or next step.
+- When wrapping up, remind the user if there are is any work left outstanding, or any work that could potentially enhance the feature or implementation.
 
 ## Working updates
 
