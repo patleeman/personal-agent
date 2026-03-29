@@ -1154,7 +1154,7 @@ export function ProjectDetailPanel({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
       <div className="min-w-0 space-y-6">
-        <section className="max-w-4xl space-y-4 pb-1">
+        <section className="ui-node-workspace-chrome max-w-4xl space-y-4 pb-1">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
               {backHref ? (
@@ -1362,7 +1362,7 @@ export function ProjectDetailPanel({
         </ProjectSection>
       </div>
 
-      <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+      <aside className="ui-node-workspace-chrome space-y-3 xl:sticky xl:top-4 xl:self-start">
         {!canStartConversation && activeProfile ? (
           <p className="text-[12px] leading-relaxed text-secondary">
             Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
