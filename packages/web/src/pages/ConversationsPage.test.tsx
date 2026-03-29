@@ -90,8 +90,7 @@ describe('ConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('surfaces active/review conversation work, including archived conversations still running, in the all view', () => {
-    const openSession = vi.fn();
+  it('shows one open list plus archived conversations in the all view', () => {
     vi.mocked(useConversations).mockReturnValue({
       pinnedIds: [],
       openIds: ['open-1'],
@@ -101,10 +100,11 @@ describe('ConversationsPage', () => {
         createSession({ id: 'conv-123', title: 'Needs review conversation' }),
         createSession({ id: 'archived-running', title: 'Archived but still running', isRunning: true }),
       ],
-      openSession,
       closeSession: vi.fn(),
       pinSession: vi.fn(),
       unpinSession: vi.fn(),
+      archiveSession: vi.fn(),
+      restoreSession: vi.fn(),
       refetch: vi.fn(),
       loading: false,
     } as never);
@@ -157,12 +157,12 @@ describe('ConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Conversation runs');
+    expect(html).toContain('Open conversations');
+    expect(html).toContain('Archived conversations');
     expect(html).toContain('Needs review conversation');
-    expect(html).toContain('Needs review');
-    expect(html).toContain('archived');
+    expect(html).toContain('1 linked run needs review');
     expect(html).toContain('Archived but still running');
-    expect(html).toContain('Still running after you archived it.');
+    expect(html).not.toContain('Conversation runs');
     expect(html).toContain('max-w-[1120px]');
     expect(html).not.toContain('aria-label="Conversation context"');
   });
@@ -177,10 +177,11 @@ describe('ConversationsPage', () => {
         createSession({ id: 'conv-123', title: 'Needs review conversation' }),
         createSession({ id: 'archived-running', title: 'Archived but still running', isRunning: true }),
       ],
-      openSession: vi.fn(),
       closeSession: vi.fn(),
       pinSession: vi.fn(),
       unpinSession: vi.fn(),
+      archiveSession: vi.fn(),
+      restoreSession: vi.fn(),
       refetch: vi.fn(),
       loading: false,
     } as never);
@@ -233,8 +234,8 @@ describe('ConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Needs review');
-    expect(html).toContain('Archived');
+    expect(html).toContain('Open conversations');
+    expect(html).toContain('Archived conversations');
     expect(html).not.toContain('Conversation runs');
     expect(html).not.toContain('Needs review conversation');
     expect(html).not.toContain('Archived but still running');

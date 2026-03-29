@@ -16,7 +16,7 @@ import {
 import { sessionNeedsAttention } from '../sessionIndicators';
 import type { DurableRunRecord, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
-import { EmptyState, LoadingState, PageHeader, PageHeading, Pill, SectionLabel, ToolbarButton, cx, type PillTone } from '../components/ui';
+import { EmptyState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx, type PillTone } from '../components/ui';
 
 type ConversationFilter = 'open' | 'attention' | 'archived' | 'all';
 type ConversationSection = 'pinned' | 'open' | 'archived';
@@ -135,12 +135,78 @@ function sortSessions(items: SessionMeta[]): SessionMeta[] {
   });
 }
 
-function sectionDotClass(session: SessionMeta, section: ConversationSection): string {
-  if (sessionNeedsAttention(session)) {
+type ConversationLinkState = {
+  needsReviewCount: number;
+  activeCount: number;
+};
+
+function linkedRunNeedsReview(session: SessionMeta, linkedState: ConversationLinkState | undefined): boolean {
+  return sessionNeedsAttention(session) || (linkedState?.needsReviewCount ?? 0) > 0;
+}
+
+function linkedRunIsActive(session: SessionMeta, linkedState: ConversationLinkState | undefined): boolean {
+  return session.isRunning || (linkedState?.activeCount ?? 0) > 0;
+}
+
+function linkedRunReviewLabel(count: number): string {
+  return `${count} linked run${count === 1 ? '' : 's'} ${count === 1 ? 'needs' : 'need'} review`;
+}
+
+function linkedRunActiveLabel(count: number): string {
+  return `${count} linked run${count === 1 ? '' : 's'} active`;
+}
+
+function buildConversationLinkStates(items: ConversationWorkItem[]): Map<string, ConversationLinkState> {
+  const states = new Map<string, ConversationLinkState>();
+
+  for (const item of items) {
+    const current = states.get(item.conversationId) ?? { needsReviewCount: 0, activeCount: 0 };
+    if (item.needsReview) {
+      current.needsReviewCount += 1;
+    }
+    if (item.active) {
+      current.activeCount += 1;
+    }
+    states.set(item.conversationId, current);
+  }
+
+  return states;
+}
+
+function filterSessions(
+  items: SessionMeta[],
+  query: string,
+  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>,
+  options: {
+    attentionOnly?: boolean;
+    excludedSessionIds?: ReadonlySet<string>;
+  } = {},
+): SessionMeta[] {
+  const matched = sortSessions(items).filter((session) => matchesConversation(session, query));
+
+  if (!options.attentionOnly) {
+    return matched;
+  }
+
+  return matched.filter((session) => {
+    if (options.excludedSessionIds?.has(session.id)) {
+      return false;
+    }
+
+    return linkedRunNeedsReview(session, conversationLinkStates.get(session.id));
+  });
+}
+
+function sectionDotClass(
+  session: SessionMeta,
+  section: ConversationSection,
+  linkedState: ConversationLinkState | undefined,
+): string {
+  if (linkedRunNeedsReview(session, linkedState)) {
     return 'bg-warning';
   }
 
-  if (session.isRunning) {
+  if (linkedRunIsActive(session, linkedState)) {
     return 'bg-accent animate-pulse';
   }
 
@@ -155,13 +221,29 @@ function formatSessionTimestamp(session: SessionMeta): string {
   return timeAgo(session.lastActivityAt ?? session.timestamp);
 }
 
-function sectionMeta(session: SessionMeta): string {
+function sectionMeta(
+  session: SessionMeta,
+  section: ConversationSection,
+  linkedState: ConversationLinkState | undefined,
+): string {
   const parts: string[] = [];
 
-  if (session.isRunning) {
-    parts.push('running');
-  } else if (sessionNeedsAttention(session)) {
+  if (section === 'pinned') {
+    parts.push('pinned');
+  }
+
+  if (sessionNeedsAttention(session)) {
     parts.push('review');
+  }
+
+  if ((linkedState?.needsReviewCount ?? 0) > 0) {
+    parts.push(linkedRunReviewLabel(linkedState?.needsReviewCount ?? 0));
+  }
+
+  if (session.isRunning && (linkedState?.activeCount ?? 0) === 0) {
+    parts.push('running');
+  } else if ((linkedState?.activeCount ?? 0) > 0) {
+    parts.push(linkedRunActiveLabel(linkedState?.activeCount ?? 0));
   }
 
   if (session.model) {
@@ -296,67 +378,115 @@ function readConversationIdFromRun(run: DurableRunRecord, lookups: RunPresentati
   return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
-function workItemMatches(item: ConversationWorkItem, query: string): boolean {
-  const normalized = normalizeQuery(query);
-  if (!normalized) {
-    return true;
-  }
+type ConversationListEntry = {
+  session: SessionMeta;
+  section: ConversationSection;
+};
 
-  return item.searchText.includes(normalized);
+function buildConversationEntries(sessions: SessionMeta[], section: ConversationSection): ConversationListEntry[] {
+  return sessions.map((session) => ({ session, section }));
 }
 
-function filterConversationWorkItems(items: ConversationWorkItem[], filter: ConversationFilter, query: string): ConversationWorkItem[] {
-  const matched = items.filter((item) => workItemMatches(item, query));
+function ConversationRows({
+  entries,
+  conversationLinkStates,
+  onOpen,
+  onPin,
+  onUnpin,
+  onClose,
+  onMarkRead,
+  busyId,
+}: {
+  entries: ConversationListEntry[];
+  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>;
+  onOpen: (sessionId: string, options?: { restore?: boolean }) => void;
+  onPin: (sessionId: string) => void;
+  onUnpin: (sessionId: string) => void;
+  onClose: (sessionId: string) => void;
+  onMarkRead: (sessionId: string) => void;
+  busyId: string | null;
+}) {
+  return (
+    <div className="space-y-0.5">
+      {entries.map(({ session, section }) => {
+        const archived = section === 'archived';
+        const linkedState = conversationLinkStates.get(session.id);
+        const meta = sectionMeta(session, section, linkedState);
 
-  if (filter === 'attention') {
-    return matched.filter((item) => item.needsReview);
-  }
-
-  if (filter === 'archived') {
-    return matched.filter((item) => item.workspace === 'archived');
-  }
-
-  if (filter === 'open') {
-    return matched.filter((item) => item.workspace === 'pinned' || item.workspace === 'open');
-  }
-
-  return matched;
-}
-
-function filterSectionSessions(
-  section: ConversationSection,
-  items: SessionMeta[],
-  filter: ConversationFilter,
-  query: string,
-  explicitlyArchivedIdSet: ReadonlySet<string> = new Set(),
-): SessionMeta[] {
-  const matched = sortSessions(items).filter((session) => matchesConversation(session, query));
-
-  if (filter === 'all') {
-    return matched;
-  }
-
-  if (filter === 'attention') {
-    return matched.filter((session) => {
-      if (!sessionNeedsAttention(session)) {
-        return false;
-      }
-
-      return section !== 'archived' || !explicitlyArchivedIdSet.has(session.id);
-    });
-  }
-
-  if (filter === 'archived') {
-    return section === 'archived' ? matched : [];
-  }
-
-  return section === 'archived' ? [] : matched;
+        return (
+          <ListActionRow
+            key={session.id}
+            onClick={() => onOpen(session.id, archived ? { restore: true } : undefined)}
+            leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sectionDotClass(session, section, linkedState)}`} />}
+            timestamp={formatSessionTimestamp(session)}
+            actions={(
+              <>
+                {linkedRunNeedsReview(session, linkedState) ? (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={() => onMarkRead(session.id)}
+                    disabled={busyId === session.id}
+                    title="Mark as reviewed"
+                  >
+                    {busyId === session.id ? '…' : 'read'}
+                  </button>
+                ) : null}
+                {archived ? (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={() => onOpen(session.id, { restore: true })}
+                    title="Restore conversation"
+                  >
+                    restore
+                  </button>
+                ) : section === 'pinned' ? (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={() => onUnpin(session.id)}
+                    title="Move back to open conversations"
+                  >
+                    unpin
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={() => onPin(session.id)}
+                    title="Pin conversation"
+                  >
+                    pin
+                  </button>
+                )}
+                {!archived ? (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={() => onClose(session.id)}
+                    title="Archive conversation from the workspace"
+                  >
+                    close
+                  </button>
+                ) : null}
+              </>
+            )}
+          >
+            <p className="ui-row-title break-words">{session.title}</p>
+            <p className="ui-row-summary">{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</p>
+            {meta ? <p className="ui-row-meta break-words">{meta}</p> : null}
+          </ListActionRow>
+        );
+      })}
+    </div>
+  );
 }
 
 function SectionBlock({
   label,
-  sessions,
-  section,
+  entries,
+  conversationLinkStates,
   onOpen,
   onPin,
   onUnpin,
@@ -365,8 +495,8 @@ function SectionBlock({
   busyId,
 }: {
   label: string;
-  sessions: SessionMeta[];
-  section: ConversationSection;
+  entries: ConversationListEntry[];
+  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>;
   onOpen: (sessionId: string, options?: { restore?: boolean }) => void;
   onPin: (sessionId: string) => void;
   onUnpin: (sessionId: string) => void;
@@ -374,135 +504,102 @@ function SectionBlock({
   onMarkRead: (sessionId: string) => void;
   busyId: string | null;
 }) {
-  if (sessions.length === 0) {
+  if (entries.length === 0) {
     return null;
   }
 
   return (
     <section className="space-y-1">
-      <SectionLabel label={label} count={sessions.length} className="px-3 pb-1" />
-      <div className="space-y-0.5">
-        {sessions.map((session) => {
-          const archived = section === 'archived';
-          const meta = sectionMeta(session);
-
-          return (
-            <ListActionRow
-              key={session.id}
-              onClick={() => onOpen(session.id, archived ? { restore: true } : undefined)}
-              leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sectionDotClass(session, section)}`} />}
-              timestamp={formatSessionTimestamp(session)}
-              actions={(
-                <>
-                  {sessionNeedsAttention(session) && (
-                    <button
-                      type="button"
-                      className={INLINE_ACTION_CLASS}
-                      onClick={() => onMarkRead(session.id)}
-                      disabled={busyId === session.id}
-                      title="Mark as reviewed"
-                    >
-                      {busyId === session.id ? '…' : 'read'}
-                    </button>
-                  )}
-                  {archived ? (
-                    <button
-                      type="button"
-                      className={INLINE_ACTION_CLASS}
-                      onClick={() => onOpen(session.id, { restore: true })}
-                      title="Restore conversation"
-                    >
-                      restore
-                    </button>
-                  ) : section === 'pinned' ? (
-                    <button
-                      type="button"
-                      className={INLINE_ACTION_CLASS}
-                      onClick={() => onUnpin(session.id)}
-                      title="Move back to open conversations"
-                    >
-                      unpin
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={INLINE_ACTION_CLASS}
-                      onClick={() => onPin(session.id)}
-                      title="Pin conversation"
-                    >
-                      pin
-                    </button>
-                  )}
-                  {!archived ? (
-                    <button
-                      type="button"
-                      className={INLINE_ACTION_CLASS}
-                      onClick={() => onClose(session.id)}
-                      title="Archive conversation from the workspace"
-                    >
-                      close
-                    </button>
-                  ) : null}
-                </>
-              )}
-            >
-              <p className="ui-row-title break-words">{session.title}</p>
-              <p className="ui-row-summary">{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</p>
-              {meta ? <p className="ui-row-meta break-words">{meta}</p> : null}
-            </ListActionRow>
-          );
-        })}
-      </div>
+      <SectionLabel label={label} count={entries.length} className="px-3 pb-1" />
+      <ConversationRows
+        entries={entries}
+        conversationLinkStates={conversationLinkStates}
+        onOpen={onOpen}
+        onPin={onPin}
+        onUnpin={onUnpin}
+        onClose={onClose}
+        onMarkRead={onMarkRead}
+        busyId={busyId}
+      />
     </section>
   );
 }
 
-function ConversationWorkBlock({
-  items,
+function ArchivedSection({
+  entries,
+  expanded,
+  collapsible,
+  onToggle,
+  conversationLinkStates,
   onOpen,
+  onPin,
+  onUnpin,
+  onClose,
   onMarkRead,
-  busyRunId,
+  busyId,
 }: {
-  items: ConversationWorkItem[];
-  onOpen: (item: ConversationWorkItem) => void;
-  onMarkRead: (runId: string) => void;
-  busyRunId: string | null;
+  entries: ConversationListEntry[];
+  expanded: boolean;
+  collapsible: boolean;
+  onToggle: () => void;
+  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>;
+  onOpen: (sessionId: string, options?: { restore?: boolean }) => void;
+  onPin: (sessionId: string) => void;
+  onUnpin: (sessionId: string) => void;
+  onClose: (sessionId: string) => void;
+  onMarkRead: (sessionId: string) => void;
+  busyId: string | null;
 }) {
-  if (items.length === 0) {
+  if (entries.length === 0) {
     return null;
+  }
+
+  if (!collapsible) {
+    return (
+      <SectionBlock
+        label="Archived conversations"
+        entries={entries}
+        conversationLinkStates={conversationLinkStates}
+        onOpen={onOpen}
+        onPin={onPin}
+        onUnpin={onUnpin}
+        onClose={onClose}
+        onMarkRead={onMarkRead}
+        busyId={busyId}
+      />
+    );
   }
 
   return (
     <section className="space-y-1">
-      <SectionLabel label="Conversation runs" count={items.length} className="px-3 pb-1" />
-      <div className="space-y-0.5">
-        {items.map((item) => (
-          <ListActionRow
-            key={item.key}
-            onClick={() => onOpen(item)}
-            leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone === 'danger' ? 'bg-danger' : item.tone === 'warning' ? 'bg-warning' : item.tone === 'accent' ? 'bg-accent animate-pulse' : item.tone === 'success' ? 'bg-success' : 'bg-border-default'}`} />}
-            timestamp={item.timestampLabel}
-            actions={item.needsReview && item.runId ? (
-              <button
-                type="button"
-                className={INLINE_ACTION_CLASS}
-                onClick={() => onMarkRead(item.runId as string)}
-                disabled={busyRunId === item.runId}
-                title="Mark run as reviewed"
-              >
-                {busyRunId === item.runId ? '…' : 'read'}
-              </button>
-            ) : undefined}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="ui-row-title break-words">{item.title}</p>
-              <Pill tone={item.tone}>{item.statusLabel}</Pill>
-            </div>
-            {item.summary ? <p className="ui-row-summary">{item.summary}</p> : null}
-            {item.meta ? <p className="ui-row-meta break-words">{item.meta}</p> : null}
-          </ListActionRow>
-        ))}
-      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls="archived-conversations-list"
+        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors hover:bg-surface/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+      >
+        <div className="flex items-center gap-2">
+          <span className="ui-section-label">Archived conversations</span>
+          <span className="ui-section-count">{entries.length}</span>
+        </div>
+        <span className="text-[11px] text-dim">{expanded ? 'Hide' : 'Show'}</span>
+      </button>
+
+      {expanded ? (
+        <div id="archived-conversations-list">
+          <ConversationRows
+            entries={entries}
+            conversationLinkStates={conversationLinkStates}
+            onOpen={onOpen}
+            onPin={onPin}
+            onUnpin={onUnpin}
+            onClose={onClose}
+            onMarkRead={onMarkRead}
+            busyId={busyId}
+          />
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -517,7 +614,6 @@ export function ConversationsPage() {
     pinnedSessions,
     tabs,
     archivedSessions,
-    openSession,
     pinSession,
     unpinSession,
     archiveSession,
@@ -529,9 +625,9 @@ export function ConversationsPage() {
   const filter = parseConversationFilter(searchParams.get('filter'));
   const [query, setQuery] = useState('');
   const [busyConversationId, setBusyConversationId] = useState<string | null>(null);
-  const [busyRunId, setBusyRunId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [archivedExpanded, setArchivedExpanded] = useState(filter === 'all' || filter === 'archived');
 
   useEffect(() => {
     if (runs !== null) {
@@ -554,18 +650,14 @@ export function ConversationsPage() {
     };
   }, [runs, setRuns]);
 
+  useEffect(() => {
+    setArchivedExpanded(filter === 'all' || filter === 'archived');
+  }, [filter]);
+
   const archivedConversationIdSet = useMemo(
     () => new Set(archivedConversationIds),
     [archivedConversationIds],
   );
-  const pinned = useMemo(() => filterSectionSessions('pinned', pinnedSessions, filter, query), [filter, pinnedSessions, query]);
-  const open = useMemo(() => filterSectionSessions('open', tabs, filter, query), [filter, query, tabs]);
-  const archived = useMemo(
-    () => filterSectionSessions('archived', archivedSessions, filter, query, archivedConversationIdSet),
-    [archivedConversationIdSet, archivedSessions, filter, query],
-  );
-
-  const totalVisible = pinned.length + open.length + archived.length;
   const totalAttention = useMemo(
     () => [
       ...pinnedSessions,
@@ -691,9 +783,36 @@ export function ConversationsPage() {
 
     return [...sortedRunItems, ...archivedRunningItems];
   }, [archivedConversationIdSet, archivedSessions, lookups, openIdSet, pinnedIdSet, runs?.runs, sessionsById]);
-  const visibleConversationWorkItems = useMemo(
-    () => filterConversationWorkItems(conversationWorkItems, filter, query),
-    [conversationWorkItems, filter, query],
+  const conversationLinkStates = useMemo(
+    () => buildConversationLinkStates(conversationWorkItems),
+    [conversationWorkItems],
+  );
+  const pinnedVisible = useMemo(
+    () => filterSessions(pinnedSessions, query, conversationLinkStates, { attentionOnly: filter === 'attention' }),
+    [conversationLinkStates, filter, pinnedSessions, query],
+  );
+  const openVisible = useMemo(
+    () => filterSessions(tabs, query, conversationLinkStates, { attentionOnly: filter === 'attention' }),
+    [conversationLinkStates, filter, query, tabs],
+  );
+  const archivedVisible = useMemo(
+    () => filter === 'attention'
+      ? filterSessions(archivedSessions, query, conversationLinkStates, { attentionOnly: true, excludedSessionIds: archivedConversationIdSet })
+      : filterSessions(archivedSessions, query, conversationLinkStates),
+    [archivedConversationIdSet, archivedSessions, conversationLinkStates, filter, query],
+  );
+  const openEntries = useMemo(
+    () => filter === 'archived'
+      ? []
+      : [
+          ...buildConversationEntries(pinnedVisible, 'pinned'),
+          ...buildConversationEntries(openVisible, 'open'),
+        ],
+    [filter, openVisible, pinnedVisible],
+  );
+  const archivedEntries = useMemo(
+    () => buildConversationEntries(archivedVisible, 'archived'),
+    [archivedVisible],
   );
   const conversationRunReviewCount = useMemo(
     () => conversationWorkItems.filter((item) => item.needsReview).length,
@@ -703,9 +822,10 @@ export function ConversationsPage() {
     () => new Set(conversationWorkItems.filter((item) => item.workspace === 'archived' && item.active).map((item) => item.conversationId)).size,
     [conversationWorkItems],
   );
-  const hasVisibleConversationWork = visibleConversationWorkItems.length > 0;
-  const hasVisibleContent = totalVisible > 0 || hasVisibleConversationWork;
-  const visibleItemCount = totalVisible + visibleConversationWorkItems.length;
+  const archivedCollapsible = filter === 'open' || filter === 'attention';
+  const showArchivedRows = !archivedCollapsible || archivedExpanded;
+  const hasVisibleContent = openEntries.length > 0 || archivedEntries.length > 0;
+  const visibleItemCount = openEntries.length + (showArchivedRows ? archivedEntries.length : 0);
   const hasWorkspaceConversations = pinnedSessions.length + tabs.length + archivedSessions.length > 0;
   const filteredEmptyState = emptyStateCopy(filter, hasWorkspaceConversations);
 
@@ -715,15 +835,6 @@ export function ConversationsPage() {
     }
     navigate(`/conversations/${encodeURIComponent(sessionId)}`);
   }, [navigate, restoreSession]);
-
-  const handleOpenWorkItem = useCallback((item: ConversationWorkItem) => {
-    if (item.workspace === 'archived' || item.workspace === 'unknown') {
-      openSession(item.conversationId);
-    }
-
-    const search = item.runId ? `?run=${encodeURIComponent(item.runId)}` : '';
-    navigate(`/conversations/${encodeURIComponent(item.conversationId)}${search}`);
-  }, [navigate, openSession]);
 
   const handleMarkRead = useCallback(async (sessionId: string) => {
     if (busyConversationId) {
@@ -741,23 +852,6 @@ export function ConversationsPage() {
       setBusyConversationId(null);
     }
   }, [busyConversationId, refetch]);
-
-  const handleMarkRunRead = useCallback(async (runId: string) => {
-    if (busyRunId) {
-      return;
-    }
-
-    setBusyRunId(runId);
-    setPageError(null);
-    try {
-      await api.markDurableRunAttentionRead(runId);
-      setRuns(await api.runs());
-    } catch (error) {
-      setPageError(error instanceof Error ? error.message : 'Could not mark the run as reviewed.');
-    } finally {
-      setBusyRunId(null);
-    }
-  }, [busyRunId, setRuns]);
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) {
@@ -862,62 +956,37 @@ export function ConversationsPage() {
                   className="py-10"
                   title={query.trim() ? 'No conversations match that search.' : filteredEmptyState.title}
                   body={query.trim()
-                    ? 'Try a broader search across titles, IDs, cwd, model names, and linked run details.'
+                    ? 'Try a broader search across titles, IDs, cwd, and model names.'
                     : filteredEmptyState.body}
                   action={<ToolbarButton onClick={() => navigate('/conversations/new')}>Start a conversation</ToolbarButton>}
                 />
               ) : (
                 <div className="space-y-5">
-                  {visibleConversationWorkItems.length > 0 ? (
-                    <ConversationWorkBlock
-                      items={visibleConversationWorkItems}
-                      onOpen={handleOpenWorkItem}
-                      onMarkRead={handleMarkRunRead}
-                      busyRunId={busyRunId}
-                    />
-                  ) : null}
+                  <SectionBlock
+                    label="Open conversations"
+                    entries={openEntries}
+                    conversationLinkStates={conversationLinkStates}
+                    onOpen={handleOpen}
+                    onPin={pinSession}
+                    onUnpin={unpinSession}
+                    onClose={archiveSession}
+                    onMarkRead={handleMarkRead}
+                    busyId={busyConversationId}
+                  />
 
-                  {filter !== 'archived' ? (
-                    <SectionBlock
-                      label="Pinned"
-                      sessions={pinned}
-                      section="pinned"
-                      onOpen={handleOpen}
-                      onPin={pinSession}
-                      onUnpin={unpinSession}
-                      onClose={archiveSession}
-                      onMarkRead={handleMarkRead}
-                      busyId={busyConversationId}
-                    />
-                  ) : null}
-
-                  {filter !== 'archived' ? (
-                    <SectionBlock
-                      label="Open"
-                      sessions={open}
-                      section="open"
-                      onOpen={handleOpen}
-                      onPin={pinSession}
-                      onUnpin={unpinSession}
-                      onClose={archiveSession}
-                      onMarkRead={handleMarkRead}
-                      busyId={busyConversationId}
-                    />
-                  ) : null}
-
-                  {filter === 'attention' || filter === 'archived' || filter === 'all' ? (
-                    <SectionBlock
-                      label="Archived"
-                      sessions={archived}
-                      section="archived"
-                      onOpen={handleOpen}
-                      onPin={pinSession}
-                      onUnpin={unpinSession}
-                      onClose={archiveSession}
-                      onMarkRead={handleMarkRead}
-                      busyId={busyConversationId}
-                    />
-                  ) : null}
+                  <ArchivedSection
+                    entries={archivedEntries}
+                    expanded={showArchivedRows}
+                    collapsible={archivedCollapsible}
+                    onToggle={() => setArchivedExpanded((current) => !current)}
+                    conversationLinkStates={conversationLinkStates}
+                    onOpen={handleOpen}
+                    onPin={pinSession}
+                    onUnpin={unpinSession}
+                    onClose={archiveSession}
+                    onMarkRead={handleMarkRead}
+                    busyId={busyConversationId}
+                  />
                 </div>
               )}
             </>
