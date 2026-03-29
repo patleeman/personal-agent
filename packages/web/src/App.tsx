@@ -117,6 +117,7 @@ const CompanionTasksPage = lazy(() => import('./companion/CompanionTasksPage').t
 const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDetailPage').then((module) => ({ default: module.CompanionTaskDetailPage })));
 const CompanionSystemPage = lazy(() => import('./companion/CompanionSystemPage').then((module) => ({ default: module.CompanionSystemPage })));
 const CompanionKnowledgePage = lazy(() => import('./companion/CompanionKnowledgePage').then((module) => ({ default: module.CompanionKnowledgePage })));
+const CompanionQuickNotePage = lazy(() => import('./companion/CompanionQuickNotePage').then((module) => ({ default: module.CompanionQuickNotePage })));
 const CompanionProjectsPage = lazy(() => import('./companion/CompanionProjectsPage').then((module) => ({ default: module.CompanionProjectsPage })));
 const CompanionProjectDetailPage = lazy(() => import('./companion/CompanionProjectDetailPage').then((module) => ({ default: module.CompanionProjectDetailPage })));
 const CompanionMemoriesPage = lazy(() => import('./companion/CompanionMemoriesPage').then((module) => ({ default: module.CompanionMemoriesPage })));
@@ -554,6 +555,7 @@ export function App() {
                       <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
                       <Route path="knowledge" element={suspendRoute(<CompanionKnowledgePage />)} />
+                      <Route path="capture" element={suspendRoute(<CompanionQuickNotePage />)} />
                       <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
                       <Route path="notes" element={suspendRoute(<CompanionMemoriesPage />)} />
