@@ -71,6 +71,13 @@ function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | n
     return null;
   }
 
+  const slashIndex = modelId.indexOf('/');
+  if (slashIndex > 0 && slashIndex < modelId.length - 1) {
+    const provider = modelId.slice(0, slashIndex);
+    const id = modelId.slice(slashIndex + 1);
+    return models.find((candidate) => candidate.provider === provider && candidate.id === id) ?? null;
+  }
+
   return models.find((candidate) => candidate.id === modelId) ?? null;
 }
 

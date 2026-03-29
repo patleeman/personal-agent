@@ -1092,12 +1092,14 @@ export {
   collectSkillModelPresetHints,
   findMatchingModelPreset,
   formatModelPresetModelArgument,
+  listModelPresetTargets,
   readModelPresetLibrary,
   resolveModelPreset,
   type ModelPresetLibrary,
   type ModelPresetSkillHint,
   type ModelPresetThinkingLevel,
   type ResolvedModelPreset,
+  type ResolvedModelPresetTarget,
 } from './modelPresets.js';
 export {
   composePromptCatalogDirectory,

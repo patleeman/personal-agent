@@ -3,12 +3,16 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { appendFileSync, existsSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
 } from '@personal-agent/core';
+import {
+  listModelPresetTargets,
+  resolveModelPreset,
+} from '@personal-agent/resources';
 import {
   AgentSession,
   AuthStorage,
@@ -247,6 +251,64 @@ function makeAuth() {
 
 function makeRegistry(auth: AuthStorage) {
   return createRuntimeModelRegistry(auth);
+}
+
+function readRuntimeSettingsObject(): Record<string, unknown> {
+  if (!existsSync(SETTINGS_FILE)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+async function resolveDefaultModelPresetSelection(modelRegistry: ModelRegistry): Promise<{
+  model: string;
+  thinkingLevel: string;
+} | null> {
+  const settings = readRuntimeSettingsObject();
+  const presetId = typeof settings.defaultModelPreset === 'string' ? settings.defaultModelPreset.trim() : '';
+  if (!presetId) {
+    return null;
+  }
+
+  const preset = resolveModelPreset(settings, presetId);
+  if (!preset) {
+    return null;
+  }
+
+  for (const target of listModelPresetTargets(preset)) {
+    const model = modelRegistry.getAvailable().find((candidate) => {
+      if (target.provider) {
+        return candidate.provider === target.provider && candidate.id === target.model;
+      }
+
+      return candidate.id === target.model;
+    });
+    if (!model) {
+      continue;
+    }
+
+    const authResult = await modelRegistry.getApiKeyAndHeaders(model);
+    if (!authResult.ok) {
+      continue;
+    }
+
+    return {
+      model: target.model,
+      thinkingLevel: target.thinkingLevel,
+    };
+  }
+
+  return null;
 }
 
 interface ToolPatchableSessionInternals {
@@ -2198,12 +2260,28 @@ export async function createSession(
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
-  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
+  const resolvedDefaultPreset = options.initialModel === undefined && options.initialThinkingLevel === undefined
+    ? await resolveDefaultModelPresetSelection(modelRegistry)
+    : null;
+
+  if (
+    options.initialModel !== undefined
+    || options.initialThinkingLevel !== undefined
+    || resolvedDefaultPreset !== null
+  ) {
     applyConversationModelPreferencesToLiveSession(
       session,
       {
-        ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
-        ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
+        ...(options.initialModel !== undefined
+          ? { model: options.initialModel }
+          : resolvedDefaultPreset?.model
+            ? { model: resolvedDefaultPreset.model }
+            : {}),
+        ...(options.initialThinkingLevel !== undefined
+          ? { thinkingLevel: options.initialThinkingLevel }
+          : resolvedDefaultPreset?.thinkingLevel
+            ? { thinkingLevel: resolvedDefaultPreset.thinkingLevel }
+            : {}),
       },
       {
         currentModel: session.model?.id ?? '',

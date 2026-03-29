@@ -9,11 +9,13 @@ const {
   resolveModelPresetMock,
   findMatchingModelPresetMock,
   formatModelPresetModelArgumentMock,
+  listModelPresetTargetsMock,
 } = vi.hoisted(() => ({
   readModelPresetLibraryMock: vi.fn(),
   resolveModelPresetMock: vi.fn(),
   findMatchingModelPresetMock: vi.fn(),
   formatModelPresetModelArgumentMock: vi.fn(),
+  listModelPresetTargetsMock: vi.fn(),
 }));
 
 vi.mock('@personal-agent/resources', () => ({
@@ -21,6 +23,7 @@ vi.mock('@personal-agent/resources', () => ({
   resolveModelPreset: resolveModelPresetMock,
   findMatchingModelPreset: findMatchingModelPresetMock,
   formatModelPresetModelArgument: formatModelPresetModelArgumentMock,
+  listModelPresetTargets: listModelPresetTargetsMock,
 }));
 
 const PRESET = {
@@ -30,6 +33,7 @@ const PRESET = {
   model: 'gpt-5.1-codex-mini',
   modelRef: 'openai-codex/gpt-5.1-codex-mini',
   thinkingLevel: 'off',
+  fallbacks: [],
   goodFor: ['checkpoint'],
   avoidFor: ['ambiguous debugging'],
   instructionAddendum: 'Move quickly and escalate if the task gets messy.',
@@ -48,6 +52,7 @@ beforeEach(() => {
   resolveModelPresetMock.mockReset();
   findMatchingModelPresetMock.mockReset();
   formatModelPresetModelArgumentMock.mockReset();
+  listModelPresetTargetsMock.mockReset();
 
   readModelPresetLibraryMock.mockReturnValue({
     defaultPresetId: 'cheap-ops',
@@ -56,6 +61,16 @@ beforeEach(() => {
   resolveModelPresetMock.mockReturnValue(PRESET);
   findMatchingModelPresetMock.mockReturnValue(PRESET);
   formatModelPresetModelArgumentMock.mockImplementation((preset: { modelRef: string; thinkingLevel?: string }) => preset.thinkingLevel ? `${preset.modelRef}:${preset.thinkingLevel}` : preset.modelRef);
+  listModelPresetTargetsMock.mockImplementation((preset: typeof PRESET) => [
+    {
+      provider: preset.provider,
+      model: preset.model,
+      modelRef: preset.modelRef,
+      thinkingLevel: preset.thinkingLevel,
+      kind: 'primary',
+    },
+    ...preset.fallbacks,
+  ]);
 });
 
 afterEach(() => {
@@ -110,6 +125,7 @@ function createToolContext() {
     },
     modelRegistry: {
       getAvailable: () => [{ provider: 'openai-codex', id: 'gpt-5.1-codex-mini' }],
+      getApiKeyAndHeaders: async () => ({ ok: true }),
     },
   };
 }
@@ -155,6 +171,57 @@ describe('model preset extension', () => {
       presetId: 'cheap-ops',
       modelRef: 'openai-codex/gpt-5.1-codex-mini',
       thinkingLevel: 'off',
+      usedFallback: false,
+    });
+  });
+
+  it('uses a fallback target when the primary model is unavailable', async () => {
+    const fallbackPreset = {
+      ...PRESET,
+      fallbacks: [{
+        provider: 'desktop',
+        model: 'qwen-reap',
+        modelRef: 'desktop/qwen-reap',
+        thinkingLevel: 'medium',
+        kind: 'fallback' as const,
+      }],
+    };
+    resolveModelPresetMock.mockReturnValue(fallbackPreset);
+    listModelPresetTargetsMock.mockReturnValue([
+      {
+        provider: fallbackPreset.provider,
+        model: fallbackPreset.model,
+        modelRef: fallbackPreset.modelRef,
+        thinkingLevel: fallbackPreset.thinkingLevel,
+        kind: 'primary',
+      },
+      ...fallbackPreset.fallbacks,
+    ]);
+
+    const { tool, setModel, setThinkingLevel } = registerExtension();
+    const result = await tool.execute(
+      'tool-1',
+      { action: 'set', presetId: 'cheap-ops' },
+      undefined,
+      undefined,
+      {
+        ...createToolContext(),
+        modelRegistry: {
+          getAvailable: () => [{ provider: 'desktop', id: 'qwen-reap' }],
+          getApiKeyAndHeaders: async () => ({ ok: true }),
+        },
+      },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(setModel).toHaveBeenCalledWith({ provider: 'desktop', id: 'qwen-reap' });
+    expect(setThinkingLevel).toHaveBeenCalledWith('medium');
+    expect(result.content[0]?.text).toContain('selected target: desktop/qwen-reap:medium (fallback)');
+    expect(result.details).toMatchObject({
+      presetId: 'cheap-ops',
+      modelRef: 'desktop/qwen-reap',
+      thinkingLevel: 'medium',
+      usedFallback: true,
     });
   });
 });
