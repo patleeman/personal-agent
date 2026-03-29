@@ -22,7 +22,7 @@ function createTempDir(): string {
 }
 
 describe('readProviderAuthState', () => {
-  it('returns state for a missing auth file', () => {
+  it('returns built-in Pi API-key providers for a missing auth file', () => {
     const dir = createTempDir();
     const authFile = join(dir, 'auth.json');
 
@@ -30,7 +30,17 @@ describe('readProviderAuthState', () => {
 
     expect(state.authFile).toBe(authFile);
     expect(Array.isArray(state.providers)).toBe(true);
-    expect(state.providers.length).toBeGreaterThan(0);
+
+    const openai = state.providers.find((entry) => entry.id === 'openai');
+    expect(openai).toMatchObject({
+      id: 'openai',
+      authType: 'none',
+      hasStoredCredential: false,
+      apiKeySupported: true,
+    });
+
+    expect(state.providers.some((entry) => entry.id === 'anthropic')).toBe(true);
+    expect(state.providers.some((entry) => entry.id === 'openrouter')).toBe(true);
   });
 });
 
@@ -52,6 +62,7 @@ describe('setProviderApiKey', () => {
       id: 'custom-test-provider',
       authType: 'api_key',
       hasStoredCredential: true,
+      apiKeySupported: false,
       modelCount: 0,
     });
   });

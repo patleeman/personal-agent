@@ -1,5 +1,5 @@
 import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
-import type { OAuthPrompt } from '@mariozechner/pi-ai';
+import type { KnownProvider, OAuthPrompt } from '@mariozechner/pi-ai';
 import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
@@ -9,6 +9,7 @@ export interface ProviderAuthSummary {
   modelCount: number;
   authType: ProviderAuthType;
   hasStoredCredential: boolean;
+  apiKeySupported: boolean;
   oauthSupported: boolean;
   oauthProviderName: string;
   oauthUsesCallbackServer: boolean;
@@ -53,6 +54,27 @@ interface ProviderOAuthLoginRun extends ProviderOAuthLoginState {
   pendingInput: PendingOAuthInput | null;
 }
 
+const BUILT_IN_API_KEY_PROVIDERS: KnownProvider[] = [
+  'anthropic',
+  'azure-openai-responses',
+  'openai',
+  'google',
+  'mistral',
+  'groq',
+  'cerebras',
+  'xai',
+  'openrouter',
+  'vercel-ai-gateway',
+  'zai',
+  'opencode',
+  'opencode-go',
+  'huggingface',
+  'kimi-coding',
+  'minimax',
+  'minimax-cn',
+];
+
+const BUILT_IN_API_KEY_PROVIDER_SET = new Set<string>(BUILT_IN_API_KEY_PROVIDERS);
 const OAUTH_LOGIN_RETENTION_MS = 30 * 60_000;
 const oauthLoginRuns = new Map<string, ProviderOAuthLoginRun>();
 const oauthLoginListeners = new Map<string, Set<(state: ProviderOAuthLoginState) => void>>();
@@ -163,6 +185,7 @@ export function readProviderAuthState(authFile: string): ProviderAuthState {
   const oauthProvidersById = new Map(authStorage.getOAuthProviders().map((provider) => [provider.id, provider]));
 
   const providers = new Set<string>([
+    ...BUILT_IN_API_KEY_PROVIDER_SET,
     ...modelCounts.keys(),
     ...authStorage.list(),
     ...oauthProvidersById.keys(),
@@ -179,6 +202,7 @@ export function readProviderAuthState(authFile: string): ProviderAuthState {
         modelCount: modelCounts.get(provider) ?? 0,
         authType,
         hasStoredCredential,
+        apiKeySupported: BUILT_IN_API_KEY_PROVIDER_SET.has(provider),
         oauthSupported: oauthProvider !== undefined,
         oauthProviderName: oauthProvider?.name ?? '',
         oauthUsesCallbackServer: Boolean(oauthProvider?.usesCallbackServer),
