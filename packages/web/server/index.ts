@@ -71,6 +71,11 @@ import {
   subscribeProviderOAuthLogins,
 } from './providerAuth.js';
 import { readCodexPlanUsage } from './codexUsage.js';
+import {
+  applyConversationModelPreferencesToSessionManager,
+  readConversationModelPreferenceSnapshot,
+  resolveConversationModelPreferenceState,
+} from './conversationModelPreferences.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import {
@@ -185,6 +190,10 @@ import {
   ensureSessionSurfaceCanControl,
   takeOverSessionControl,
   registry as liveRegistry,
+} from './liveSessions.js';
+import {
+  getAvailableModelObjects,
+  updateLiveSessionModelPreferences,
 } from './liveSessions.js';
 import {
   abortRemoteLiveSession,
@@ -1965,6 +1974,26 @@ function resolveConversationSessionFile(conversationId: string): string | undefi
 
   const snapshotSessionFile = listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file?.trim();
   return snapshotSessionFile || undefined;
+}
+
+async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
+  const profile = getCurrentProfile();
+  const binding = readRemoteConversationBindingForConversation({ profile, conversationId });
+  if (binding) {
+    await syncRemoteConversationMirror({ profile, conversationId });
+  }
+
+  const sessionFile = resolveConversationSessionFile(conversationId);
+  if (!sessionFile || !existsSync(sessionFile)) {
+    return null;
+  }
+
+  const sessionManager = SessionManager.open(sessionFile);
+  return resolveConversationModelPreferenceState(
+    readConversationModelPreferenceSnapshot(sessionManager),
+    readSavedModelPreferences(SETTINGS_FILE),
+    getAvailableModelObjects(),
+  );
 }
 
 interface ParsedSessionJsonLine {
@@ -6855,7 +6884,14 @@ app.get('/api/live-sessions', (_req, res) => {
 /** Create a new live session */
 app.post('/api/live-sessions', async (req, res) => {
   try {
-    const body = req.body as { cwd?: string; referencedProjectIds?: string[]; text?: string; targetId?: string | null };
+    const body = req.body as {
+      cwd?: string;
+      referencedProjectIds?: string[];
+      text?: string;
+      targetId?: string | null;
+      model?: string | null;
+      thinkingLevel?: string | null;
+    };
     const profile = getCurrentProfile();
     const availableProjectIds = listReferenceableProjectIds();
     const inferredReferencedProjectIds = body.text
@@ -6888,7 +6924,11 @@ app.post('/api/live-sessions', async (req, res) => {
       }
 
       const remoteCwd = resolveRemoteExecutionCwd(target, cwd);
-      const result = await createLocalMirrorSession({ remoteCwd });
+      const result = await createLocalMirrorSession({
+        remoteCwd,
+        ...(body.model !== undefined ? { initialModel: body.model } : {}),
+        ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
+      });
       setConversationExecutionTarget({
         profile,
         conversationId: result.id,
@@ -6920,6 +6960,8 @@ app.post('/api/live-sessions', async (req, res) => {
     const result = await createLocalSession(cwd, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
+      ...(body.model !== undefined ? { initialModel: body.model } : {}),
+      ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
     });
     if (referencedProjectIds.length > 0) {
       setConversationProjectLinks({
@@ -8075,6 +8117,94 @@ app.get('/api/conversations/:id/bootstrap', async (req, res) => {
     res.json(bootstrap.state);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get('/api/conversations/:id/model-preferences', async (req, res) => {
+  try {
+    const state = await readConversationModelPreferenceStateById(req.params.id);
+    if (!state) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
+  try {
+    const { model, thinkingLevel } = req.body as {
+      model?: string | null;
+      thinkingLevel?: string | null;
+      surfaceId?: string;
+    };
+
+    if (model === undefined && thinkingLevel === undefined) {
+      res.status(400).json({ error: 'model or thinkingLevel required' });
+      return;
+    }
+
+    if ((model !== undefined && model !== null && typeof model !== 'string')
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
+      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
+      return;
+    }
+
+    const profile = getCurrentProfile();
+    const input = {
+      ...(model !== undefined ? { model } : {}),
+      ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+    };
+
+    if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
+      res.status(409).json({ error: 'Per-conversation model changes are not supported for remote conversations yet.' });
+      return;
+    }
+
+    if (isLocalLive(req.params.id)) {
+      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+      const state = updateLiveSessionModelPreferences(req.params.id, input);
+      res.json(state);
+      return;
+    }
+
+    const sessionFile = resolveConversationSessionFile(req.params.id);
+    if (!sessionFile || !existsSync(sessionFile)) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const sessionManager = SessionManager.open(sessionFile);
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      input,
+      readSavedModelPreferences(SETTINGS_FILE),
+      getAvailableModelObjects(),
+    );
+
+    publishConversationSessionMetaChanged(req.params.id);
+    res.json(state);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    const status = message === 'model required'
+      || message.startsWith('Unknown model:')
+      ? 400
+      : 500;
+    res.status(status).json({ error: message });
   }
 });
 

@@ -592,6 +592,10 @@ export const api = {
     }),
   renameConversation: (id: string, name: string, surfaceId?: string) =>
     patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) }),
+  conversationModelPreferences: (id: string) =>
+    get<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`),
+  updateConversationModelPreferences: (id: string, input: { model?: string | null; thinkingLevel?: string | null }, surfaceId?: string) =>
+    patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) }),
   recoverConversation: (id: string) =>
     post<{
       conversationId: string;
@@ -601,8 +605,21 @@ export const api = {
       usedFallbackPrompt: boolean;
     }>(`/conversations/${encodeURIComponent(id)}/recover`),
 
-  createLiveSession: (cwd?: string, referencedProjectIds?: string[], text?: string, targetId?: string | null) =>
-    post<{ id: string; sessionFile: string }>('/live-sessions', { cwd, referencedProjectIds, text, targetId }),
+  createLiveSession: (
+    cwd?: string,
+    referencedProjectIds?: string[],
+    text?: string,
+    targetId?: string | null,
+    options?: { model?: string | null; thinkingLevel?: string | null },
+  ) =>
+    post<{ id: string; sessionFile: string }>('/live-sessions', {
+      cwd,
+      referencedProjectIds,
+      text,
+      targetId,
+      ...(options?.model !== undefined ? { model: options.model } : {}),
+      ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+    }),
 
   resumeSession: (sessionFile: string) =>
     post<{ id: string }>('/live-sessions/resume', { sessionFile }),

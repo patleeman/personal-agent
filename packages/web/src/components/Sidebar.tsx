@@ -12,7 +12,9 @@ import {
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
+  clearDraftConversationModel,
   clearDraftConversationProjectIds,
+  clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
@@ -891,7 +893,9 @@ export function Sidebar() {
     clearDraftConversationComposer();
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
+    clearDraftConversationModel();
     clearDraftConversationProjectIds();
+    clearDraftConversationThinkingLevel();
     setDraftComposer('');
     setDraftCwd('');
     setDraftHasAttachments(false);

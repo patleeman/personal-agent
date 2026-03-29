@@ -58,18 +58,24 @@ import {
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
+  clearDraftConversationModel,
   clearDraftConversationProjectIds,
+  clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  persistDraftConversationModel,
   persistDraftConversationProjectIds,
   persistDraftConversationExecutionTarget,
+  persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationCwd,
   readDraftConversationExecutionTarget,
+  readDraftConversationModel,
   readDraftConversationProjectIds,
+  readDraftConversationThinkingLevel,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
@@ -263,25 +269,23 @@ const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
 function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [currentModel, setCurrentModel] = useState<string>('');
-  const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+  const [defaultModel, setDefaultModel] = useState<string>('');
+  const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string>('');
 
   useEffect(() => {
     api.models()
       .then((data) => {
         setModels(data.models);
-        setCurrentModel(data.currentModel);
-        setCurrentThinkingLevel(data.currentThinkingLevel ?? '');
+        setDefaultModel(data.currentModel);
+        setDefaultThinkingLevel(data.currentThinkingLevel ?? '');
       })
       .catch(() => {});
   }, []);
 
   return {
     models,
-    currentModel,
-    currentThinkingLevel,
-    setCurrentModel,
-    setCurrentThinkingLevel,
+    defaultModel,
+    defaultThinkingLevel,
   };
 }
 
@@ -357,15 +361,15 @@ function HeaderPreferencesMenu({
   const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
 
   return (
-    <div role="dialog" aria-label="Runtime defaults" className="absolute left-0 top-full z-20 mt-2 w-[min(32rem,calc(100vw-3rem))] rounded-xl border border-border-default bg-surface shadow-xl">
+    <div role="dialog" aria-label="Conversation runtime" className="absolute left-0 top-full z-20 mt-2 w-[min(32rem,calc(100vw-3rem))] rounded-xl border border-border-default bg-surface shadow-xl">
       <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-3 py-2.5">
         <div>
-          <p className="ui-section-label">Runtime defaults</p>
+          <p className="ui-section-label">Conversation runtime</p>
           <p className="mt-1 text-[12px] text-secondary">
-            Change the saved model and thinking defaults without using slash commands.
+            Change the model and thinking level for this conversation.
           </p>
         </div>
-        <IconButton onClick={onClose} title="Close runtime defaults" aria-label="Close runtime defaults" compact>
+        <IconButton onClick={onClose} title="Close conversation runtime" aria-label="Close conversation runtime" compact>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
@@ -395,7 +399,7 @@ function HeaderPreferencesMenu({
           </select>
           <p className="text-[11px] text-dim">
             {savingPreference === 'model'
-              ? 'Saving default model…'
+              ? 'Saving model…'
               : selectedModel
                 ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
                 : 'No model selected.'}
@@ -425,7 +429,7 @@ function HeaderPreferencesMenu({
       </div>
 
       <div className="border-t border-border-subtle px-3 py-2 text-[11px] text-dim">
-        Applies to new conversations and other runs that use the saved runtime defaults.
+        Changes here only affect this conversation.
       </div>
     </div>
   );
@@ -520,7 +524,7 @@ function ContextBar({
                 onClick={() => onOpenPreferences('model')}
                 aria-haspopup="dialog"
                 aria-expanded={activePreference === 'model'}
-                title="Change the default model"
+                title="Change the model for this conversation"
                 className={cx(
                   'group -mx-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
                   activePreference === 'model' ? 'bg-surface text-primary' : 'text-dim',
@@ -545,7 +549,7 @@ function ContextBar({
               onClick={() => onOpenPreferences('thinking')}
               aria-haspopup="dialog"
               aria-expanded={activePreference === 'thinking'}
-              title="Change the default thinking level"
+              title="Change the thinking level for this conversation"
               className={cx(
                 'group -mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
                 activePreference === 'thinking' ? 'bg-surface text-primary' : 'text-primary',
@@ -1408,11 +1412,63 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Model
   const {
     models,
-    currentModel,
-    currentThinkingLevel,
-    setCurrentModel,
-    setCurrentThinkingLevel,
+    defaultModel,
+    defaultThinkingLevel,
   } = useModels();
+  const [currentModel, setCurrentModel] = useState<string>('');
+  const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+
+    const syncDraftPreferences = () => {
+      setCurrentModel(readDraftConversationModel().trim() || defaultModel);
+      setCurrentThinkingLevel(readDraftConversationThinkingLevel().trim() || defaultThinkingLevel);
+    };
+
+    syncDraftPreferences();
+    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftPreferences);
+    return () => {
+      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftPreferences);
+    };
+  }, [defaultModel, defaultThinkingLevel, draft]);
+
+  useEffect(() => {
+    if (draft) {
+      return;
+    }
+
+    if (!id) {
+      setCurrentModel(defaultModel);
+      setCurrentThinkingLevel(defaultThinkingLevel);
+      return;
+    }
+
+    let cancelled = false;
+    api.conversationModelPreferences(id)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentModel(data.currentModel || defaultModel);
+        setCurrentThinkingLevel(data.currentThinkingLevel ?? defaultThinkingLevel);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentModel(defaultModel);
+        setCurrentThinkingLevel(defaultThinkingLevel);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [defaultModel, defaultThinkingLevel, draft, id, versions.sessionFiles]);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {
@@ -2835,11 +2891,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setSavingPreference('model');
     try {
-      await api.updateModelPreferences({ model: modelId });
-      setCurrentModel(modelId);
+      if (draft) {
+        if (modelId === defaultModel) {
+          clearDraftConversationModel();
+        } else {
+          persistDraftConversationModel(modelId);
+        }
+        setCurrentModel(modelId);
+      } else if (id) {
+        if (isLiveSession && !ensureConversationCanControl('change the model')) {
+          return;
+        }
+
+        const next = await api.updateConversationModelPreferences(id, { model: modelId }, currentSurfaceId);
+        setCurrentModel(next.currentModel);
+        setCurrentThinkingLevel(next.currentThinkingLevel);
+      }
+
       const selectedModel = models.find((candidate) => candidate.id === modelId);
       if (selectedModel) {
-        showNotice('accent', `Default model set to ${selectedModel.name}`);
+        showNotice('accent', `Model set to ${selectedModel.name} for this conversation.`);
       }
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -2855,9 +2926,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setSavingPreference('thinking');
     try {
-      await api.updateModelPreferences({ thinkingLevel });
-      setCurrentThinkingLevel(thinkingLevel);
-      showNotice('accent', `Thinking level set to ${formatThinkingLevelLabel(thinkingLevel)}.`);
+      let savedThinkingLevel = thinkingLevel || defaultThinkingLevel;
+
+      if (draft) {
+        if (!thinkingLevel || thinkingLevel === defaultThinkingLevel) {
+          clearDraftConversationThinkingLevel();
+        } else {
+          persistDraftConversationThinkingLevel(thinkingLevel);
+        }
+        setCurrentThinkingLevel(savedThinkingLevel);
+      } else if (id) {
+        if (isLiveSession && !ensureConversationCanControl('change the thinking level')) {
+          return;
+        }
+
+        const next = await api.updateConversationModelPreferences(id, { thinkingLevel }, currentSurfaceId);
+        setCurrentModel(next.currentModel);
+        setCurrentThinkingLevel(next.currentThinkingLevel);
+        savedThinkingLevel = next.currentThinkingLevel;
+      }
+
+      showNotice('accent', `Thinking level set to ${formatThinkingLevelLabel(savedThinkingLevel)}.`);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -2885,7 +2974,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
       await api.destroySession(id, currentSurfaceId).catch(() => {});
       const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const { id: newId } = await api.createLiveSession(cwd);
+      const { id: newId } = await api.createLiveSession(cwd, undefined, undefined, undefined, {
+        ...(currentModel ? { model: currentModel } : {}),
+        ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+      });
       ensureConversationTabOpen(newId);
       navigate(`/conversations/${newId}`);
     } catch (error) {
@@ -3443,9 +3535,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationComposer();
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
+    clearDraftConversationModel();
     clearDraftConversationProjectIds();
+    clearDraftConversationThinkingLevel();
     setDraftExecutionTargetId(null);
     setDraftAttachedProjectIds([]);
+    setCurrentModel(defaultModel);
+    setCurrentThinkingLevel(defaultThinkingLevel);
     setInput('');
     setAttachments([]);
     setDrawingAttachments([]);
@@ -3783,7 +3879,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds, undefined, remoteTargetId);
+          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds, undefined, remoteTargetId, {
+            ...(currentModel ? { model: currentModel } : {}),
+            ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+          });
           const attachmentRefs = await persistPromptDrawings(newId);
 
           rememberComposerInput(inputSnapshot, newId);
@@ -3796,7 +3895,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
           clearDraftConversationExecutionTarget();
+          clearDraftConversationModel();
           clearDraftConversationProjectIds();
+          clearDraftConversationThinkingLevel();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
