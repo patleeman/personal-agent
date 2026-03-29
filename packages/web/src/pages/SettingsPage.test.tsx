@@ -192,6 +192,40 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.modelProviders) {
+        return buildUseApiResult({
+          profile: 'assistant',
+          filePath: '/tmp/assistant-models.json',
+          providers: [
+            {
+              id: 'desktop',
+              baseUrl: 'http://desktop:8000/v1',
+              api: 'openai-completions',
+              apiKey: 'local-dev',
+              authHeader: false,
+              headers: undefined,
+              compat: undefined,
+              modelOverrides: undefined,
+              models: [
+                {
+                  id: 'qwen-reap',
+                  name: 'Qwen REAP',
+                  api: undefined,
+                  baseUrl: undefined,
+                  reasoning: true,
+                  input: ['text'],
+                  contextWindow: 262144,
+                  maxTokens: 32768,
+                  headers: undefined,
+                  cost: undefined,
+                  compat: undefined,
+                },
+              ],
+            },
+          ],
+        });
+      }
+
       if (fetcher === api.defaultCwd) {
         return buildUseApiResult({
           currentCwd: '',
@@ -280,9 +314,12 @@ describe('SettingsPage', () => {
     expect(html).toContain('Conversation titles');
   });
 
-  it('renders the providers page with credential and plan-usage sections', () => {
+  it('renders the providers page with provider-model administration and credentials', () => {
     const html = renderPage('/settings?page=providers');
 
+    expect(html).toContain('Provider &amp; model definitions');
+    expect(html).toContain('/tmp/assistant-models.json');
+    expect(html).toContain('Configured providers');
     expect(html).toContain('Provider credentials');
     expect(html).toContain('Select a provider to manage credentials.');
     expect(html).toContain('Codex plan usage');

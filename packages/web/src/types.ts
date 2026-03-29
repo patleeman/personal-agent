@@ -1105,6 +1105,48 @@ export interface ModelState {
   models: ModelInfo[];
 }
 
+export type ModelProviderApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
+export type ModelProviderInputType = 'text' | 'image';
+
+export interface ModelProviderCostConfig {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export interface ModelProviderModelConfig {
+  id: string;
+  name?: string;
+  api?: ModelProviderApi;
+  baseUrl?: string;
+  reasoning: boolean;
+  input: ModelProviderInputType[];
+  contextWindow?: number;
+  maxTokens?: number;
+  headers?: Record<string, string>;
+  cost?: ModelProviderCostConfig;
+  compat?: Record<string, unknown>;
+}
+
+export interface ModelProviderConfig {
+  id: string;
+  baseUrl?: string;
+  api?: ModelProviderApi;
+  apiKey?: string;
+  authHeader: boolean;
+  headers?: Record<string, string>;
+  compat?: Record<string, unknown>;
+  modelOverrides?: Record<string, unknown>;
+  models: ModelProviderModelConfig[];
+}
+
+export interface ModelProviderState {
+  profile: string;
+  filePath: string;
+  providers: ModelProviderConfig[];
+}
+
 export interface DefaultCwdState {
   currentCwd: string;
   effectiveCwd: string;

@@ -60,6 +60,13 @@ import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import {
+  readModelProvidersState,
+  removeModelProvider,
+  removeModelProviderModel,
+  upsertModelProvider,
+  upsertModelProviderModel,
+} from './modelProviders.js';
+import {
   cancelProviderOAuthLogin,
   getProviderOAuthLoginState,
   readProviderAuthState,
@@ -179,6 +186,7 @@ import {
   kickConversationAutomation,
   compactSession,
   reloadSessionResources,
+  refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
   exportSessionHtml,
   renameSession,
@@ -4326,6 +4334,181 @@ app.patch('/api/models/current', (req, res) => {
     });
 
     res.json({ ok: true });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/model-providers', (_req, res) => {
+  try {
+    res.json(readModelProvidersState(currentProfile));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/model-providers/providers', (req, res) => {
+  try {
+    const {
+      provider,
+      baseUrl,
+      api,
+      apiKey,
+      authHeader,
+      headers,
+      compat,
+      modelOverrides,
+    } = req.body as {
+      provider?: string;
+      baseUrl?: string;
+      api?: string;
+      apiKey?: string;
+      authHeader?: boolean;
+      headers?: Record<string, string>;
+      compat?: Record<string, unknown>;
+      modelOverrides?: Record<string, unknown>;
+    };
+
+    if (typeof provider !== 'string' || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    const state = upsertModelProvider(currentProfile, provider, {
+      baseUrl,
+      api: api as Parameters<typeof upsertModelProvider>[2]['api'],
+      apiKey,
+      authHeader,
+      headers,
+      compat,
+      modelOverrides,
+    });
+    materializeWebProfile(currentProfile);
+    refreshAllLiveSessionModelRegistries();
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/model-providers/providers/:provider', (req, res) => {
+  try {
+    const { provider } = req.params;
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    const result = removeModelProvider(currentProfile, provider);
+    materializeWebProfile(currentProfile);
+    refreshAllLiveSessionModelRegistries();
+    res.json(result.state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/model-providers/providers/:provider/models', (req, res) => {
+  try {
+    const { provider } = req.params;
+    const {
+      modelId,
+      name,
+      api,
+      baseUrl,
+      reasoning,
+      input,
+      contextWindow,
+      maxTokens,
+      headers,
+      cost,
+      compat,
+    } = req.body as {
+      modelId?: string;
+      name?: string;
+      api?: string;
+      baseUrl?: string;
+      reasoning?: boolean;
+      input?: Array<'text' | 'image'>;
+      contextWindow?: number;
+      maxTokens?: number;
+      headers?: Record<string, string>;
+      cost?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+      };
+      compat?: Record<string, unknown>;
+    };
+
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    if (typeof modelId !== 'string' || modelId.trim().length === 0) {
+      res.status(400).json({ error: 'modelId required' });
+      return;
+    }
+
+    const state = upsertModelProviderModel(currentProfile, provider, modelId, {
+      name,
+      api: api as Parameters<typeof upsertModelProviderModel>[3]['api'],
+      baseUrl,
+      reasoning,
+      input,
+      contextWindow,
+      maxTokens,
+      headers,
+      cost,
+      compat,
+    });
+    materializeWebProfile(currentProfile);
+    refreshAllLiveSessionModelRegistries();
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/model-providers/providers/:provider/models/:modelId', (req, res) => {
+  try {
+    const { provider, modelId } = req.params;
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    if (!modelId || modelId.trim().length === 0) {
+      res.status(400).json({ error: 'modelId required' });
+      return;
+    }
+
+    const result = removeModelProviderModel(currentProfile, provider, modelId);
+    materializeWebProfile(currentProfile);
+    refreshAllLiveSessionModelRegistries();
+    res.json(result.state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

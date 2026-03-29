@@ -223,6 +223,22 @@ export function reloadAllLiveSessionAuth(): number {
   return reloadedCount;
 }
 
+export function refreshAllLiveSessionModelRegistries(): number {
+  let refreshedCount = 0;
+
+  for (const entry of registry.values()) {
+    const modelRegistry = entry.session.modelRegistry;
+    if (!modelRegistry || typeof modelRegistry.refresh !== 'function') {
+      continue;
+    }
+
+    modelRegistry.refresh();
+    refreshedCount += 1;
+  }
+
+  return refreshedCount;
+}
+
 // ── Auth / model helpers ──────────────────────────────────────────────────────
 
 function makeAuth() {

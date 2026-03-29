@@ -13,6 +13,7 @@ import {
   submitPromptSession,
   queuePromptContext,
   registry,
+  refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
   renameSession,
   resolvePersistentSessionDir,
@@ -200,6 +201,58 @@ describe('reloadAllLiveSessionAuth', () => {
     expect(reloadAllLiveSessionAuth()).toBe(2);
     expect(firstReload).toHaveBeenCalledTimes(1);
     expect(secondReload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('refreshAllLiveSessionModelRegistries', () => {
+  it('refreshes model registries for every live session that exposes one', () => {
+    const firstRefresh = vi.fn();
+    const secondRefresh = vi.fn();
+
+    setLiveEntry('session-model-1', {
+      sessionId: 'session-model-1',
+      cwd: '/tmp/workspace-a',
+      listeners: new Set(),
+      title: 'First',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        modelRegistry: {
+          refresh: firstRefresh,
+        },
+      },
+    });
+
+    setLiveEntry('session-model-2', {
+      sessionId: 'session-model-2',
+      cwd: '/tmp/workspace-b',
+      listeners: new Set(),
+      title: 'Second',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        modelRegistry: {
+          refresh: secondRefresh,
+        },
+      },
+    });
+
+    setLiveEntry('session-model-3', {
+      sessionId: 'session-model-3',
+      cwd: '/tmp/workspace-c',
+      listeners: new Set(),
+      title: 'Third',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {},
+    });
+
+    expect(refreshAllLiveSessionModelRegistries()).toBe(2);
+    expect(firstRefresh).toHaveBeenCalledTimes(1);
+    expect(secondRefresh).toHaveBeenCalledTimes(1);
   });
 });
 
