@@ -2,10 +2,11 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExecutionTargetSummary } from '../types.js';
+import type { ExecutionTargetSummary, SessionMeta } from '../types.js';
 import {
   ConversationPage,
   DraftExecutionTargetSelector,
+  mergeConversationSessionMeta,
   replaceConversationTitleInSessionList,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
@@ -133,6 +134,40 @@ describe('conversation live state helpers', () => {
     ]);
     expect(replaceConversationTitleInSessionList(sessions, 'conv-123', 'Old title')).toBe(sessions);
     expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '')).toBe(sessions);
+  });
+
+  it('preserves deferred resumes from the session snapshot when detail meta omits them', () => {
+    const snapshot: SessionMeta = {
+      id: 'conv-123',
+      file: '/tmp/conv-123.jsonl',
+      timestamp: '2026-03-29T00:00:00.000Z',
+      cwd: '/tmp',
+      cwdSlug: 'tmp',
+      model: 'gpt-test',
+      title: 'Snapshot title',
+      messageCount: 12,
+      deferredResumes: [{
+        id: 'resume-1',
+        sessionFile: '/tmp/conv-123.jsonl',
+        prompt: 'continue later',
+        dueAt: '2026-03-29T00:05:00.000Z',
+        createdAt: '2026-03-29T00:00:00.000Z',
+        attempts: 0,
+        status: 'scheduled',
+      }],
+    };
+
+    const detailMeta: SessionMeta = {
+      ...snapshot,
+      title: 'Detail title',
+      deferredResumes: undefined,
+    };
+
+    const merged = mergeConversationSessionMeta(detailMeta, snapshot);
+
+    expect(merged?.deferredResumes).toEqual(snapshot.deferredResumes);
+    expect(merged?.title).toBe('Detail title');
+    expect(merged?.file).toBe(snapshot.file);
   });
 });
 
