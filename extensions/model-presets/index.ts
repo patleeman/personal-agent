@@ -6,10 +6,12 @@ import { Type } from '@sinclair/typebox';
 import {
   findMatchingModelPreset,
   formatModelPresetModelArgument,
+  listModelPresetTargets,
   readModelPresetLibrary,
   resolveModelPreset,
   type ModelPresetLibrary,
   type ResolvedModelPreset,
+  type ResolvedModelPresetTarget,
 } from '@personal-agent/resources';
 
 const MODEL_PRESET_ACTION_VALUES = ['current', 'list', 'set'] as const;
@@ -105,6 +107,10 @@ function formatPresetSummary(preset: ResolvedModelPreset): string {
     `model: ${formatModelPresetModelArgument(preset)}`,
   ];
 
+  if (preset.fallbacks.length > 0) {
+    lines.push(`fallbacks: ${preset.fallbacks.map((fallback) => formatModelPresetModelArgument(fallback)).join(', ')}`);
+  }
+
   if (preset.goodFor.length > 0) {
     lines.push(`good for: ${preset.goodFor.join(', ')}`);
   }
@@ -114,6 +120,38 @@ function formatPresetSummary(preset: ResolvedModelPreset): string {
   }
 
   return lines.join('\n');
+}
+
+async function resolveUsablePresetTarget(
+  modelRegistry: {
+    getAvailable: () => Array<{ provider?: string; id?: string }>;
+    getApiKeyAndHeaders?: (model: { provider?: string; id?: string }) => Promise<{ ok: boolean }>;
+  },
+  preset: ResolvedModelPreset,
+): Promise<{ target: ResolvedModelPresetTarget; model: { provider?: string; id?: string } } | null> {
+  for (const target of listModelPresetTargets(preset)) {
+    const model = modelRegistry.getAvailable().find((candidate) => {
+      if (target.provider) {
+        return candidate.provider === target.provider && candidate.id === target.model;
+      }
+
+      return candidate.id === target.model;
+    });
+    if (!model) {
+      continue;
+    }
+
+    if (typeof modelRegistry.getApiKeyAndHeaders === 'function') {
+      const authResult = await modelRegistry.getApiKeyAndHeaders(model);
+      if (!authResult.ok) {
+        continue;
+      }
+    }
+
+    return { target, model };
+  }
+
+  return null;
 }
 
 function appendActivePresetInstructions(systemPrompt: string, preset: ResolvedModelPreset | null): string {
@@ -242,36 +280,36 @@ export default function modelPresetsExtension(pi: ExtensionAPI): void {
               throw new Error(`Unknown model preset: ${presetId}`);
             }
 
-            const targetModel = ctx.modelRegistry.getAvailable().find((model) => {
-              if (preset.provider) {
-                return model.provider === preset.provider && model.id === preset.model;
-              }
-
-              return model.id === preset.model;
-            });
-            if (!targetModel) {
-              throw new Error(`Configured model for preset ${preset.id} is unavailable: ${preset.modelRef}`);
+            const resolvedTarget = await resolveUsablePresetTarget(ctx.modelRegistry, preset);
+            if (!resolvedTarget) {
+              throw new Error(
+                `No configured model target for preset ${preset.id} is currently usable. Tried ${listModelPresetTargets(preset).map((target) => formatModelPresetModelArgument(target)).join(', ')}.`,
+              );
             }
 
+            const { target, model: targetModel } = resolvedTarget;
             const currentPresetId = current.matchedPreset?.id ?? null;
-            const switchedModel = current.modelRef !== preset.modelRef;
-            const switchedThinking = Boolean(preset.thinkingLevel) && current.thinkingLevel !== preset.thinkingLevel;
+            const switchedModel = current.modelRef !== target.modelRef;
+            const switchedThinking = Boolean(target.thinkingLevel) && current.thinkingLevel !== target.thinkingLevel;
 
             if (switchedModel) {
               const success = await pi.setModel(targetModel);
               if (!success) {
-                throw new Error(`Could not switch to ${preset.modelRef}. Check API key availability for that model.`);
+                throw new Error(`Could not switch to ${target.modelRef}. Check API key availability for that model.`);
               }
             }
 
-            if (preset.thinkingLevel) {
-              pi.setThinkingLevel(preset.thinkingLevel);
+            if (target.thinkingLevel) {
+              pi.setThinkingLevel(target.thinkingLevel);
             }
 
             const lines = [
               `Switched to model preset ${preset.id}.`,
               formatPresetSummary(preset),
             ];
+            if (target.kind === 'fallback') {
+              lines.push(`selected target: ${formatModelPresetModelArgument(target)} (fallback)`);
+            }
             if (preset.instructionAddendum) {
               lines.push(`guidance: ${preset.instructionAddendum}`);
             }
@@ -285,10 +323,11 @@ export default function modelPresetsExtension(pi: ExtensionAPI): void {
                 action: 'set',
                 presetId: preset.id,
                 previousPresetId: currentPresetId,
-                modelRef: preset.modelRef,
-                thinkingLevel: preset.thinkingLevel,
+                modelRef: target.modelRef,
+                thinkingLevel: target.thinkingLevel,
                 switchedModel,
                 switchedThinking,
+                usedFallback: target.kind === 'fallback',
               },
             };
           }

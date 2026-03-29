@@ -102,4 +102,28 @@ describe('conversationModelPreferences', () => {
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
+
+  it('accepts provider/model refs when switching models', () => {
+    const sessionManager = createSessionManager();
+    const models = [
+      createTestModel({ id: 'qwen-reap', provider: 'desktop', reasoning: true }),
+      createTestModel({ id: 'gpt-5.4', provider: 'openai-codex', reasoning: true }),
+    ];
+
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      { model: 'desktop/qwen-reap', thinkingLevel: 'medium' },
+      {
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+      },
+      models,
+    );
+
+    expect(state).toEqual({
+      currentModel: 'qwen-reap',
+      currentThinkingLevel: 'medium',
+    });
+    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
+  });
 });

@@ -12,6 +12,14 @@ const MODEL_PRESET_THINKING_LEVELS = new Set<ModelPresetThinkingLevel>([
   'xhigh',
 ]);
 
+export interface ResolvedModelPresetTarget {
+  provider: string;
+  model: string;
+  modelRef: string;
+  thinkingLevel: ModelPresetThinkingLevel | '';
+  kind: 'primary' | 'fallback';
+}
+
 export interface ResolvedModelPreset {
   id: string;
   description: string;
@@ -19,6 +27,7 @@ export interface ResolvedModelPreset {
   model: string;
   modelRef: string;
   thinkingLevel: ModelPresetThinkingLevel | '';
+  fallbacks: ResolvedModelPresetTarget[];
   goodFor: string[];
   avoidFor: string[];
   instructionAddendum: string;
@@ -119,6 +128,65 @@ function resolveModelReference(modelValue: string, providerValue: string): { pro
   };
 }
 
+function normalizePresetTarget(value: unknown, kind: 'primary' | 'fallback'): ResolvedModelPresetTarget | null {
+  if (typeof value === 'string') {
+    const resolved = resolveModelReference(readNonEmptyString(value), '');
+    return resolved.modelRef
+      ? {
+        provider: resolved.provider,
+        model: resolved.model,
+        modelRef: resolved.modelRef,
+        thinkingLevel: resolved.thinkingLevel,
+        kind,
+      }
+      : null;
+  }
+
+  const record = readRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const providerValue = readNonEmptyString(record.provider);
+  const modelValue = readNonEmptyString(record.model);
+  const resolved = resolveModelReference(modelValue, providerValue);
+  if (!resolved.modelRef) {
+    return null;
+  }
+
+  const explicitThinkingLevel = normalizeThinkingLevel(record.thinkingLevel);
+  return {
+    provider: resolved.provider,
+    model: resolved.model,
+    modelRef: resolved.modelRef,
+    thinkingLevel: explicitThinkingLevel || resolved.thinkingLevel,
+    kind,
+  };
+}
+
+function normalizeFallbackTargets(value: unknown): ResolvedModelPresetTarget[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => normalizePresetTarget(entry, 'fallback'))
+    .filter((entry): entry is ResolvedModelPresetTarget => entry !== null);
+}
+
+export function listModelPresetTargets(preset: Pick<ResolvedModelPreset, 'provider' | 'model' | 'modelRef' | 'thinkingLevel' | 'fallbacks'>): ResolvedModelPresetTarget[] {
+  return [
+    {
+      provider: preset.provider,
+      model: preset.model,
+      modelRef: preset.modelRef,
+      thinkingLevel: preset.thinkingLevel,
+      kind: 'primary',
+    },
+    ...preset.fallbacks,
+  ];
+}
+
 export function readModelPresetLibrary(settings: Record<string, unknown>): ModelPresetLibrary {
   const presetsValue = readRecord(settings.modelPresets);
   const presets: ResolvedModelPreset[] = [];
@@ -131,21 +199,23 @@ export function readModelPresetLibrary(settings: Record<string, unknown>): Model
       }
 
       const description = readNonEmptyString(preset.description);
-      const providerValue = readNonEmptyString(preset.provider);
-      const modelValue = readNonEmptyString(preset.model);
-      const resolvedModel = resolveModelReference(modelValue, providerValue);
-      if (!resolvedModel.modelRef) {
+      const primaryTarget = normalizePresetTarget({
+        provider: preset.provider,
+        model: preset.model,
+        thinkingLevel: preset.thinkingLevel,
+      }, 'primary');
+      if (!primaryTarget) {
         continue;
       }
 
-      const explicitThinkingLevel = normalizeThinkingLevel(preset.thinkingLevel);
       presets.push({
         id,
         description,
-        provider: resolvedModel.provider,
-        model: resolvedModel.model,
-        modelRef: resolvedModel.modelRef,
-        thinkingLevel: explicitThinkingLevel || resolvedModel.thinkingLevel,
+        provider: primaryTarget.provider,
+        model: primaryTarget.model,
+        modelRef: primaryTarget.modelRef,
+        thinkingLevel: primaryTarget.thinkingLevel,
+        fallbacks: normalizeFallbackTargets(preset.fallbacks),
         goodFor: normalizeStringList(preset.goodFor),
         avoidFor: normalizeStringList(preset.avoidFor),
         instructionAddendum: readNonEmptyString(preset.instructionAddendum),
@@ -230,22 +300,24 @@ export function findMatchingModelPreset(
   }
 
   const thinkingLevel = normalizeThinkingLevel(current.thinkingLevel ?? '');
-  const exactMatch = library.presets.find((preset) => {
-    if (preset.modelRef !== modelRef) {
+  const matchesTarget = (target: Pick<ResolvedModelPresetTarget, 'modelRef' | 'thinkingLevel'>): boolean => {
+    if (target.modelRef !== modelRef) {
       return false;
     }
 
-    if (!preset.thinkingLevel) {
+    if (!target.thinkingLevel) {
       return thinkingLevel === '';
     }
 
-    return preset.thinkingLevel === thinkingLevel;
-  });
+    return target.thinkingLevel === thinkingLevel;
+  };
+
+  const exactMatch = library.presets.find((preset) => listModelPresetTargets(preset).some(matchesTarget));
   if (exactMatch) {
     return exactMatch;
   }
 
-  return library.presets.find((preset) => preset.modelRef === modelRef && !preset.thinkingLevel) ?? null;
+  return library.presets.find((preset) => listModelPresetTargets(preset).some((target) => target.modelRef === modelRef && !target.thinkingLevel)) ?? null;
 }
 
 function extractFrontmatterBlock(content: string): string {
@@ -415,6 +487,9 @@ export function buildModelPresetSystemPrompt(
         `- ${preset.id}: ${preset.description || 'No description provided.'}`,
         `  model: ${formatModelPresetModelArgument(preset)}`,
       ];
+      if (preset.fallbacks.length > 0) {
+        summaryLines.push(`  fallbacks: ${preset.fallbacks.map((fallback) => formatModelPresetModelArgument(fallback)).join(', ')}`);
+      }
       if (preset.goodFor.length > 0) {
         summaryLines.push(`  good for: ${preset.goodFor.join(', ')}`);
       }

@@ -1,11 +1,10 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { startBackgroundRun } from '@personal-agent/daemon';
-import { formatModelPresetModelArgument } from '@personal-agent/resources';
 import { invalidateAppTopics } from './appEvents.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
-import { resolveProfileModelPreset } from './profileModelPresets.js';
+import { resolveProfileModelPresetSelection } from './profileModelPresets.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'cancel'] as const;
 
@@ -33,13 +32,13 @@ function readRequiredString(value: string | undefined, label: string): string {
   return normalized;
 }
 
-function resolveAgentRunModel(input: {
+async function resolveAgentRunModel(input: {
   model?: string;
   modelPreset?: string;
   profile: string;
   repoRoot: string;
   profilesRoot: string;
-}): string | undefined {
+}): Promise<{ model: string | undefined; usedFallback: boolean }> {
   const model = input.model?.trim();
   const modelPreset = input.modelPreset?.trim();
 
@@ -48,18 +47,24 @@ function resolveAgentRunModel(input: {
   }
 
   if (!modelPreset) {
-    return model;
+    return {
+      model,
+      usedFallback: false,
+    };
   }
 
-  const preset = resolveProfileModelPreset(input.profile, modelPreset, {
+  const selection = await resolveProfileModelPresetSelection(input.profile, modelPreset, {
     repoRoot: input.repoRoot,
     profilesRoot: input.profilesRoot,
   });
-  if (!preset) {
+  if (!selection) {
     throw new Error(`Unknown model preset: ${modelPreset}`);
   }
 
-  return formatModelPresetModelArgument(preset);
+  return {
+    model: selection.modelArgument,
+    usedFallback: selection.target.kind === 'fallback',
+  };
 }
 
 function formatRunList(result: Awaited<ReturnType<typeof listDurableRuns>>): string {
@@ -221,7 +226,7 @@ export function createRunAgentExtension(options: {
               const modelPreset = params.modelPreset?.trim();
               const profile = params.profile?.trim() || options.getCurrentProfile();
 
-              const resolvedModel = resolveAgentRunModel({
+              const resolvedModel = await resolveAgentRunModel({
                 model,
                 modelPreset,
                 profile,
@@ -235,7 +240,7 @@ export function createRunAgentExtension(options: {
                 cwd,
                 agent: {
                   prompt,
-                  ...(resolvedModel ? { model: resolvedModel } : {}),
+                  ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
                   ...(profile ? { profile } : {}),
                 },
                 source: {
@@ -263,9 +268,10 @@ export function createRunAgentExtension(options: {
                   runId: result.runId,
                   taskSlug,
                   cwd,
-                  model: resolvedModel,
+                  model: resolvedModel.model,
                   modelPreset,
                   profile,
+                  usedFallbackModel: resolvedModel.usedFallback,
                   logPath: result.logPath,
                 },
               };
