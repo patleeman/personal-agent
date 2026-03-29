@@ -93,7 +93,7 @@ Those four pages should answer most agent questions quickly.
 | Work on local repo files in the web UI | workspace | local filesystem / git-backed workspace state |
 | Track ongoing work across conversations | project node | `~/.local/state/personal-agent/sync/projects/**` |
 | Store durable knowledge | note node | `~/.local/state/personal-agent/sync/notes/**` |
-| Store durable behavior or preferences | `AGENTS.md`, settings, skill nodes | repo defaults + `~/.local/state/personal-agent/sync/{agents,settings,skills}/**` |
+| Store durable behavior or preferences | `AGENTS.md`, settings, skill nodes | repo defaults + `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md` + `sync/{agents,settings,skills}/**` |
 | Render inspectable outputs in the current conversation | conversation artifact | local conversation-artifact state |
 | Notice async outcomes later without interrupting yourself | inbox/activity | local runtime inbox state |
 | Interrupt yourself later or wake a conversation back up | reminder / alert / deferred resume | local runtime alert + wakeup state |

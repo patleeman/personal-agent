@@ -325,6 +325,7 @@ The setup command moves syncable state under `<stateRoot>/sync`, configures the 
 Synced roots include:
 
 - `profiles/*.json`
+- `profiles/<profile>/agent/AGENTS.md`
 - `agents/**`
 - `settings/**`
 - `models/**`

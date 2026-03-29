@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from './index.js';
-import { syncRepoGitattributes } from './sync-command.js';
+import { syncRepoGitattributes, syncRepoGitignore } from './sync-command.js';
 
 const tempDirs: string[] = [];
 
@@ -94,6 +94,10 @@ describe('sync conversation attention merge command', () => {
         },
       },
     });
+  });
+
+  it('syncs profile AGENTS files in the managed gitignore', () => {
+    expect(syncRepoGitignore()).toContain('!profiles/*/agent/AGENTS.md');
   });
 
   it('syncs conversation attention state with a semantic merge driver', () => {

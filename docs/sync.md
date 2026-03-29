@@ -15,6 +15,7 @@ After setup, the daemon periodically runs git sync in the background and the Web
 The managed sync repo tracks these roots:
 
 - `profiles/*.json`
+- `profiles/<profile>/agent/AGENTS.md`
 - `agents/**`
 - `settings/**`
 - `models/**`

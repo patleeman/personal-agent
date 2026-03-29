@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 import {
   createProjectActivityEntry,
   getPiAgentRuntimeDir,
+  managedSyncRepoGitignore,
+  managedSyncRepoGitattributes,
+  MANAGED_SYNC_REPO_CONVERSATION_ATTENTION_MERGE_DRIVER,
   writeProfileActivityEntry,
   type ProjectActivityEntryDocument,
 } from '@personal-agent/core';
@@ -15,7 +18,7 @@ import type { DaemonModule, DaemonModuleContext } from './types.js';
 import { runCommand } from './command.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
-const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
+const CONVERSATION_ATTENTION_MERGE_DRIVER = MANAGED_SYNC_REPO_CONVERSATION_ATTENTION_MERGE_DRIVER;
 const GIT_INDEX_LOCK_NOTIFY_THRESHOLD = 3;
 const GIT_INDEX_LOCK_STALE_MS = 10 * 60_000;
 
@@ -171,12 +174,8 @@ function buildErrorResolverPrompt(input: {
   ].join('\n');
 }
 
-function managedSyncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Durable profile definitions\n!profiles/\nprofiles/*\n!profiles/*.json\n\n# Durable kind-based resources\n!agents/\n!agents/**\n!settings/\n!settings/**\n!models/\n!models/**\n!skills/\n!skills/**\n!notes/\n!notes/**\n!tasks/\n!tasks/**\n!projects/\n!projects/**\n\n# Portable conversation state\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n!pi-agent/state/\n!pi-agent/state/conversation-attention/\n!pi-agent/state/conversation-attention/**\n\n# Never sync machine-local runtime leftovers\n.DS_Store\n**/.DS_Store\n`;
-}
-
-function managedSyncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention read-state merges semantically across machines\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n`;
+function renderManagedSyncRepoGitattributes(): string {
+  return managedSyncRepoGitattributes(CONVERSATION_ATTENTION_MERGE_DRIVER);
 }
 
 function readFileUtf8(path: string): string | undefined {
@@ -227,7 +226,7 @@ async function configureManagedMergeDrivers(repoDir: string): Promise<void> {
 async function ensureManagedMergeHandling(repoDir: string): Promise<void> {
   const managedFiles = [
     { path: join(repoDir, '.gitignore'), content: managedSyncRepoGitignore() },
-    { path: join(repoDir, '.gitattributes'), content: managedSyncRepoGitattributes() },
+    { path: join(repoDir, '.gitattributes'), content: renderManagedSyncRepoGitattributes() },
   ];
 
   for (const file of managedFiles) {
