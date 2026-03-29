@@ -22,6 +22,7 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from './appEvents.js';
 import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
+import { createRuntimeModelRegistry } from './modelRegistry.js';
 import {
   generateConversationTitle,
   hasAssistantTitleSourceMessage,
@@ -224,7 +225,7 @@ function makeAuth() {
 }
 
 function makeRegistry(auth: AuthStorage) {
-  return new ModelRegistry(auth);
+  return createRuntimeModelRegistry(auth);
 }
 
 interface ToolPatchableSessionInternals {
