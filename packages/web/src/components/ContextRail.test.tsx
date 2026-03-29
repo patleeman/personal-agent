@@ -500,9 +500,9 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('Browse reusable workflows and open them in the main workspace.');
     expect(html).toContain('TDD Feature');
-    expect(html).toContain('Definition');
-    expect(html).toContain('References');
-    expect(html).toContain('Links');
+    expect(html).toContain('Inspector');
+    expect(html).toContain('References and relationships open in the right-hand inspector instead of separate resource pages.');
+    expect(html).toContain('Editing the main skill definition.');
     expect(html).not.toContain('/tmp/tdd-feature/INDEX.md');
   });
 

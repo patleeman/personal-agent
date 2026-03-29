@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { getKnowledgeSkillName } from '../knowledgeSelection';
-import type { MemorySkillItem, SkillDetail } from '../types';
+import type { MemorySkillItem, SkillDetail, MemoryReferenceItem } from '../types';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
   EmptyState,
@@ -35,55 +35,76 @@ import { joinMarkdownFrontmatter, normalizeMarkdownValue, splitMarkdownFrontmatt
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
-function SkillReferencesList({
+function SkillFileList({
   detail,
-  locationSearch,
+  selectedReference,
+  saveBusy,
+  dirty,
+  onNavigate,
+  onSaveCurrent,
 }: {
   detail: SkillDetail;
-  locationSearch: string;
+  selectedReference: MemoryReferenceItem | null;
+  saveBusy: boolean;
+  dirty: boolean;
+  onNavigate: (updates: { skillName?: string | null; view?: SkillWorkspaceView | null; item?: string | null }, replace?: boolean) => void;
+  onSaveCurrent: () => Promise<boolean>;
 }) {
-  if (detail.references.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center px-8 py-10">
-        <EmptyState
-          title="No references yet"
-          body="This skill does not have supporting reference files yet."
-        />
-      </div>
-    );
+  const files = useMemo(() => ([
+    {
+      id: 'definition',
+      title: 'Definition',
+      summary: 'Primary skill definition and guidance.',
+      meta: 'Main skill file',
+      item: null,
+    },
+    ...detail.references.map((reference) => ({
+      id: reference.relativePath,
+      title: reference.title,
+      summary: reference.summary || 'Supporting reference file.',
+      meta: reference.relativePath,
+      item: reference.relativePath,
+    })),
+  ]), [detail.references]);
+
+  async function handleSelect(item: string | null) {
+    if ((item === null && !selectedReference) || item === selectedReference?.relativePath) {
+      return;
+    }
+
+    if (dirty && !saveBusy) {
+      const saved = await onSaveCurrent();
+      if (!saved) {
+        return;
+      }
+    }
+
+    onNavigate({ view: null, item }, false);
   }
 
   return (
-    <div className="h-full overflow-y-auto px-6 py-6">
-      <div className="mx-auto max-w-4xl overflow-hidden rounded-xl border border-border-subtle bg-surface/10">
-        <div className="divide-y divide-border-subtle">
-          {detail.references.map((reference) => (
-            <Link
-              key={reference.path}
-              to={`/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'references', item: reference.relativePath })}`}
-              className="block px-4 py-3 transition-colors hover:bg-surface/35"
-            >
-              <p className="text-[14px] font-medium text-primary">{reference.title}</p>
-              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{reference.summary || 'Open this reference to inspect or edit it.'}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-dim">
-                <span>{reference.relativePath}</span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
+    <div className="space-y-1">
+      {files.map((file) => {
+        const selected = file.item === null ? selectedReference === null : selectedReference?.relativePath === file.item;
 
-function SkillLinksView({ detail }: { detail: SkillDetail }) {
-  return (
-    <div className="h-full overflow-y-auto px-6 py-6">
-      <div className="mx-auto flex max-w-4xl flex-col gap-6">
-        <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
-        <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
-        <UnresolvedNodeLinks ids={detail.links?.unresolved} />
-      </div>
+        return (
+          <button
+            key={file.id}
+            type="button"
+            onClick={() => { void handleSelect(file.item); }}
+            disabled={saveBusy}
+            className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/60 ${selected ? 'bg-surface/40' : 'hover:bg-surface/35 disabled:hover:bg-transparent'}`}
+          >
+            <p className="text-[13px] font-medium text-primary">{file.title}</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-secondary">{file.summary}</p>
+            <p className="mt-1.5 break-all text-[11px] font-mono text-dim">{file.meta}</p>
+          </button>
+        );
+      })}
+
+      {detail.references.length === 0 ? (
+        <p className="px-3 pt-1 text-[12px] text-dim">No supporting reference files yet.</p>
+      ) : null}
     </div>
   );
 }
@@ -92,92 +113,75 @@ export function SkillWorkspace({
   detail,
   selectedView,
   selectedItem,
-  locationSearch,
   onNavigate,
   onRefetched,
 }: {
   detail: SkillDetail;
   selectedView: SkillWorkspaceView;
   selectedItem: string | null;
-  locationSearch: string;
   onNavigate: (updates: { skillName?: string | null; view?: SkillWorkspaceView | null; item?: string | null }, replace?: boolean) => void;
   onRefetched: () => void;
 }) {
   const selectedReference = detail.references.find((reference) => reference.relativePath === selectedItem) ?? null;
   const initialContentParts = useMemo(() => splitMarkdownFrontmatter(detail.content), [detail.content]);
-  const [savedContent, setSavedContent] = useState(normalizeMarkdownValue(initialContentParts.body));
-  const [draft, setDraft] = useState(normalizeMarkdownValue(initialContentParts.body));
+  const initialDefinitionBody = useMemo(() => normalizeMarkdownValue(initialContentParts.body), [initialContentParts.body]);
+  const [savedContent, setSavedContent] = useState(initialDefinitionBody);
+  const [draft, setDraft] = useState(initialDefinitionBody);
   const [selectedFrontmatter, setSelectedFrontmatter] = useState<string | null>(initialContentParts.frontmatter);
   const [contentLoading, setContentLoading] = useState(false);
+  const [loadedPath, setLoadedPath] = useState(selectedReference ? '' : detail.skill.path);
   const [contentError, setContentError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger' | 'warning'; text: string } | null>(null);
+  const lastAutoSaveSignatureRef = useRef<string | null>(null);
   const selectedPath = selectedReference?.path ?? detail.skill.path;
-  const selectedLabel = selectedReference?.title ?? humanizeSkillName(detail.skill.name);
-  const selectedSummary = selectedReference?.summary ?? detail.skill.description;
+  const isDocumentReady = loadedPath === selectedPath && !contentLoading;
   const dirty = draft !== savedContent;
-  const resourceTabs = [
-    {
-      id: 'definition',
-      label: 'Definition',
-      to: `/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'definition', item: null })}`,
-      selected: selectedView === 'definition',
-    },
-    {
-      id: 'references',
-      label: `References${detail.references.length > 0 ? ` (${detail.references.length})` : ''}`,
-      to: `/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'references', item: selectedReference?.relativePath ?? null })}`,
-      selected: selectedView === 'references',
-    },
-    {
-      id: 'links',
-      label: 'Links',
-      to: `/skills${buildSkillsSearch(locationSearch, { skillName: detail.skill.name, view: 'links', item: null })}`,
-      selected: selectedView === 'links',
-    },
-  ];
+  const documentLabel = selectedReference?.title ?? 'Main skill document';
+  const documentKindLabel = selectedReference ? 'Reference' : 'Definition';
+  const documentMeta = selectedReference?.relativePath ?? 'Main skill file';
+  const documentSummary = selectedReference?.summary || (selectedReference
+    ? 'Supporting guidance for this skill.'
+    : 'Edit the primary skill definition and guidance.');
 
   useEffect(() => {
-    if (selectedView !== 'references' || !selectedItem) {
-      return;
+    if (selectedView !== 'definition') {
+      onNavigate({ view: null }, true);
     }
+  }, [onNavigate, selectedView]);
 
-    if (!selectedReference) {
+  useEffect(() => {
+    if (selectedItem && !selectedReference) {
       onNavigate({ item: null }, true);
     }
-  }, [onNavigate, selectedItem, selectedReference, selectedView]);
+  }, [onNavigate, selectedItem, selectedReference]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadSelectedContent() {
-      if (selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
-        setSavedContent('');
-        setDraft('');
-        setSelectedFrontmatter(null);
-        setContentError(null);
-        setContentLoading(false);
-        return;
-      }
-
-      if (selectedView === 'definition') {
+      if (!selectedReference) {
         const parts = splitMarkdownFrontmatter(detail.content);
         const normalizedBody = normalizeMarkdownValue(parts.body);
+        if (cancelled) {
+          return;
+        }
         setSavedContent(normalizedBody);
         setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
         setContentLoading(false);
+        setLoadedPath(detail.skill.path);
+        setSaveState('idle');
+        setNotice(null);
+        lastAutoSaveSignatureRef.current = null;
         return;
       }
 
       setContentLoading(true);
       setContentError(null);
       try {
-        if (!selectedReference) {
-          return;
-        }
-
         const result = await api.memoryFile(selectedReference.path);
         if (cancelled) {
           return;
@@ -187,6 +191,10 @@ export function SkillWorkspace({
         setSavedContent(normalizedBody);
         setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
+        setLoadedPath(selectedReference.path);
+        setSaveState('idle');
+        setNotice(null);
+        lastAutoSaveSignatureRef.current = null;
       } catch (error) {
         if (cancelled) {
           return;
@@ -195,6 +203,7 @@ export function SkillWorkspace({
         setSelectedFrontmatter(null);
         setSavedContent('');
         setDraft('');
+        setLoadedPath(selectedReference.path);
       } finally {
         if (!cancelled) {
           setContentLoading(false);
@@ -206,13 +215,43 @@ export function SkillWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [detail.content, selectedReference, selectedView]);
+  }, [detail.content, detail.skill.path, selectedReference]);
 
-  useEffect(() => {
-    if (selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
-      return undefined;
+  const saveDocument = useCallback(async (path: string, frontmatter: string | null, body: string) => {
+    await api.memoryFileSave(path, joinMarkdownFrontmatter(frontmatter, body));
+  }, []);
+
+  const handleSave = useCallback(async (options: { automated?: boolean } = {}) => {
+    if (saveBusy || !dirty || !isDocumentReady || contentLoading || contentError) {
+      return false;
     }
 
+    const path = selectedReference?.path ?? detail.skill.path;
+    const frontmatter = selectedFrontmatter;
+    const draftToSave = draft;
+
+    setSaveBusy(true);
+    setSaveState('idle');
+    if (!options.automated) {
+      setNotice(null);
+    }
+
+    try {
+      await saveDocument(path, frontmatter, draftToSave);
+      setSavedContent(draftToSave);
+      setSaveState('saved');
+      setNotice(null);
+      return true;
+    } catch (error) {
+      setSaveState('error');
+      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
+      return false;
+    } finally {
+      setSaveBusy(false);
+    }
+  }, [contentError, contentLoading, detail.skill.path, dirty, draft, isDocumentReady, saveBusy, saveDocument, selectedFrontmatter, selectedReference]);
+
+  useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!dirty) {
         return;
@@ -223,13 +262,23 @@ export function SkillWorkspace({
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirty, selectedReference, selectedView]);
+  }, [dirty]);
 
   useEffect(() => {
-    if (selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
-      return undefined;
+    const autoSaveSignature = `${selectedPath}\u0000${draft}`;
+    if (!dirty || saveBusy || !isDocumentReady || contentError || lastAutoSaveSignatureRef.current === autoSaveSignature) {
+      return;
     }
 
+    const timeoutId = window.setTimeout(() => {
+      lastAutoSaveSignatureRef.current = autoSaveSignature;
+      void handleSave({ automated: true });
+    }, 900);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [contentError, dirty, draft, handleSave, isDocumentReady, saveBusy, selectedPath]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -239,33 +288,16 @@ export function SkillWorkspace({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  });
-
-  async function handleSave() {
-    if (saveBusy || !dirty || selectedView === 'links' || (selectedView === 'references' && !selectedReference)) {
-      return;
-    }
-
-    setSaveBusy(true);
-    setNotice(null);
-
-    try {
-      const path = selectedReference?.path ?? detail.skill.path;
-      await api.memoryFileSave(path, joinMarkdownFrontmatter(selectedFrontmatter, draft));
-      setSavedContent(draft);
-      setNotice({ tone: 'accent', text: selectedReference ? `Saved ${selectedReference.relativePath}.` : 'Saved skill definition.' });
-      onRefetched();
-    } catch (error) {
-      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
-    } finally {
-      setSaveBusy(false);
-    }
-  }
+  }, [handleSave]);
 
   async function handleReload() {
     if (contentLoading) {
       return;
     }
+
+    setNotice(null);
+    setSaveState('idle');
+    lastAutoSaveSignatureRef.current = null;
 
     if (selectedReference) {
       setContentLoading(true);
@@ -277,6 +309,7 @@ export function SkillWorkspace({
         setDraft(normalizedBody);
         setSelectedFrontmatter(parts.frontmatter);
         setContentError(null);
+        setLoadedPath(selectedReference.path);
       } catch (error) {
         setContentError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -288,37 +321,42 @@ export function SkillWorkspace({
     onRefetched();
   }
 
+  const saveStatus = !isDocumentReady
+    ? { text: 'Loading…', className: 'text-dim' }
+    : saveBusy
+      ? { text: 'Saving…', className: 'text-accent' }
+      : dirty
+        ? { text: 'Unsaved changes', className: 'text-warning' }
+        : saveState === 'error'
+          ? { text: 'Autosave failed', className: 'text-danger' }
+          : saveState === 'saved'
+            ? { text: 'All changes saved', className: 'text-dim' }
+            : { text: 'Autosave on', className: 'text-dim' };
+
   return (
     <NodeWorkspaceShell
       eyebrow="Skills"
-      title={selectedLabel}
-      summary={selectedSummary}
+      title={humanizeSkillName(detail.skill.name)}
+      summary={detail.skill.description}
       meta={(
         <>
           <span>{detail.skill.source}</span>
           <span className="opacity-40">·</span>
           <span>{formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently')}</span>
-          {dirty && (
+          {selectedReference && (
             <>
               <span className="opacity-40">·</span>
-              <span className="text-warning">Unsaved changes</span>
+              <span>Editing {selectedReference.relativePath}</span>
             </>
           )}
         </>
       )}
-      resourceTabs={resourceTabs}
       actions={(
         <NodePrimaryToolbar>
-          {(selectedView !== 'links' && !(selectedView === 'references' && !selectedReference)) && (
-            <>
-              <ToolbarButton onClick={() => { void handleReload(); }} disabled={contentLoading || saveBusy}>
-                {contentLoading ? 'Loading…' : 'Reload'}
-              </ToolbarButton>
-              <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy || contentLoading || Boolean(contentError)}>
-                {saveBusy ? 'Saving…' : 'Save'}
-              </ToolbarButton>
-            </>
-          )}
+          <span className={`text-[12px] ${saveStatus.className}`}>{saveStatus.text}</span>
+          <ToolbarButton onClick={() => { void handleReload(); }} disabled={contentLoading || saveBusy}>
+            {contentLoading ? 'Loading…' : 'Reload'}
+          </ToolbarButton>
         </NodePrimaryToolbar>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
@@ -333,6 +371,16 @@ export function SkillWorkspace({
           </NodeRailSection>
           <NodeRailSection title="Description">
             <p className="text-[12px] leading-relaxed text-secondary">{detail.skill.description}</p>
+          </NodeRailSection>
+          <NodeRailSection title="Files" meta={selectedReference ? 'References live here instead of separate pages.' : 'Use the inspector to open supporting references.'}>
+            <SkillFileList
+              detail={detail}
+              selectedReference={selectedReference}
+              saveBusy={saveBusy}
+              dirty={dirty}
+              onNavigate={onNavigate}
+              onSaveCurrent={() => handleSave()}
+            />
           </NodeRailSection>
           <NodeRailSection title="Relationships">
             <div className="space-y-4">
@@ -357,15 +405,17 @@ export function SkillWorkspace({
     >
       {contentError ? (
         <div className="p-6"><ErrorState message={`Unable to load file: ${contentError}`} /></div>
-      ) : contentLoading ? (
+      ) : !isDocumentReady ? (
         <LoadingState label="Loading skill…" className="h-full justify-center" />
-      ) : selectedView === 'references' && !selectedReference ? (
-        <SkillReferencesList detail={detail} locationSearch={locationSearch} />
-      ) : selectedView === 'links' ? (
-        <SkillLinksView detail={detail} />
       ) : (
         <div className="h-full overflow-y-auto px-6 py-6">
           <div className="mx-auto min-h-full max-w-4xl">
+            <div className="mb-4 space-y-1 border-b border-border-subtle pb-4">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
+              <h3 className="break-words text-[15px] font-medium text-primary">{documentLabel}</h3>
+              <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
+              <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{documentSummary}</p>
+            </div>
             <RichMarkdownEditor
               value={draft}
               onChange={setDraft}
@@ -404,7 +454,7 @@ function SkillsTable({
         </thead>
         <tbody>
           {skills.map((skill) => {
-            const skillHref = `/skills${buildSkillsSearch(locationSearch, { skillName: skill.name, view: 'definition', item: null })}`;
+            const skillHref = `/skills${buildSkillsSearch(locationSearch, { skillName: skill.name, view: null, item: null })}`;
 
             return (
               <tr
@@ -484,7 +534,7 @@ export function SkillsPage() {
       return;
     }
 
-    setSelectedSkill({ skillName: null, view: 'definition', item: null }, true);
+    setSelectedSkill({ skillName: null, view: null, item: null }, true);
   }, [loading, selectedSkillName, setSelectedSkill, skills]);
 
   useEffect(() => {
@@ -509,7 +559,6 @@ export function SkillsPage() {
                 detail={skillDetailApi.data}
                 selectedView={selectedView}
                 selectedItem={selectedItem}
-                locationSearch={location.search}
                 onNavigate={setSelectedSkill}
                 onRefetched={() => {
                   void skillDetailApi.refetch({ resetLoading: false });
