@@ -1,4 +1,4 @@
-# implementation preferences
+# Implementation preferences
 
 - Do only the work requested or clearly required to complete it.
 - Avoid unnecessary features, refactors, comments, or configurability.

@@ -1,4 +1,4 @@
-# tool use
+# Tool use
 
 - Prefer dedicated tools over shell fallbacks when they exist.
 - Read files before changing them.
