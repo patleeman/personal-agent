@@ -3273,8 +3273,10 @@ for (const serverApp of [app, companionApp]) {
   serverApp.use(enforceSameOriginUnsafeRequests);
 }
 
-companionApp.use('/app/api', (req, _res, next) => {
-  req.url = `/api${req.url}`;
+companionApp.use((req, _res, next) => {
+  if (req.url === '/app/api' || req.url.startsWith('/app/api/')) {
+    req.url = req.url.slice('/app'.length);
+  }
   next();
 });
 
@@ -6811,7 +6813,7 @@ app.post('/api/notes/recover-failed-node-distills', async (_req, res) => {
   }
 });
 
-app.post('/api/notes', (req, res) => {
+function handleCreateNoteRequest(req: express.Request, res: express.Response): void {
   try {
     const title = normalizeCreatedNoteTitle(req.body?.title);
     if (title.length === 0) {
@@ -6851,7 +6853,9 @@ app.post('/api/notes', (req, res) => {
     });
     res.status(500).json({ error: String(err) });
   }
-});
+}
+
+app.post('/api/notes', handleCreateNoteRequest);
 
 app.get('/api/notes/:memoryId', (req, res) => {
   try {
@@ -12354,6 +12358,8 @@ companionApp.get('/api/skills/:name', (req, res) => {
     res.status(message.startsWith('Skill not found:') || message.startsWith('Skill file not found:') ? 404 : 500).json({ error: message });
   }
 });
+
+companionApp.post('/api/notes', handleCreateNoteRequest);
 
 companionApp.get('/api/notes/:memoryId', (req, res) => {
   try {

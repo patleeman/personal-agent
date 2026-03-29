@@ -20,6 +20,7 @@ import {
   COMPANION_KNOWLEDGE_PATH,
   COMPANION_NOTES_PATH,
   COMPANION_PROJECTS_PATH,
+  COMPANION_QUICK_NOTE_PATH,
   COMPANION_SKILLS_PATH,
   COMPANION_SYSTEM_PATH,
   COMPANION_TASKS_PATH,
@@ -110,6 +111,16 @@ function ProjectsIcon({ active }: { active: boolean }) {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
       <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3l1.7 2H18a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
       <path d="M3.5 9h17" />
+    </svg>
+  );
+}
+
+function QuickNoteIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+      <path d="M6 19.5h12" />
     </svg>
   );
 }
@@ -442,6 +453,9 @@ export function CompanionLayout() {
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
 
   const showPrimaryNav = companionSession !== null && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
+  const showQuickNoteAction = companionSession !== null
+    && location.pathname !== COMPANION_QUICK_NOTE_PATH
+    && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
   const inboxBadgeCount = activity?.unreadCount ?? 0;
   const settingsBadge = (tasks ?? []).filter((task) => task.running || task.lastStatus === 'failure').length;
   const menuHasAttention = (daemon?.warnings.length ?? 0) > 0
@@ -578,6 +592,7 @@ export function CompanionLayout() {
               <DrawerSection title="Navigate">
                 <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and open tabs." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_QUICK_NOTE_PATH} label="Quick note" detail="Capture something fast from your phone into the shared notes store." Icon={QuickNoteIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_KNOWLEDGE_PATH} label="Knowledge" detail="Browse projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
@@ -635,6 +650,23 @@ export function CompanionLayout() {
               </DrawerSection>
             </div>
           </aside>
+        </div>
+      ) : null}
+
+      {showQuickNoteAction ? (
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-end px-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]">
+          <Link
+            to={COMPANION_QUICK_NOTE_PATH}
+            aria-label="Take a quick note"
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-accent px-4 py-3 text-[13px] font-medium text-accent-foreground shadow-[0_18px_40px_rgba(15,23,42,0.18)] transition-opacity hover:opacity-90"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+              <path d="M6 19.5h12" />
+            </svg>
+            <span>Quick note</span>
+          </Link>
         </div>
       ) : null}
 

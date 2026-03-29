@@ -1,6 +1,6 @@
 import { BrowserRecordRow } from '../components/ui';
 import { useAppData } from '../contexts';
-import { COMPANION_NOTES_PATH, COMPANION_PROJECTS_PATH, COMPANION_SKILLS_PATH } from './routes';
+import { COMPANION_NOTES_PATH, COMPANION_PROJECTS_PATH, COMPANION_QUICK_NOTE_PATH, COMPANION_SKILLS_PATH } from './routes';
 
 export function CompanionKnowledgePage() {
   const { projects } = useAppData();
@@ -18,6 +18,17 @@ export function CompanionKnowledgePage() {
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           <div className="space-y-2 px-4">
+            <BrowserRecordRow
+              to={COMPANION_QUICK_NOTE_PATH}
+              label="Capture"
+              heading="Quick note"
+              summary="Capture something fast from your phone and save it into the notes store."
+              meta="Phone-first note capture"
+              className="py-3.5"
+              titleClassName="text-[15px]"
+              summaryClassName="text-[13px]"
+              metaClassName="text-[11px] break-words"
+            />
             <BrowserRecordRow
               to={COMPANION_PROJECTS_PATH}
               label="Knowledge"
