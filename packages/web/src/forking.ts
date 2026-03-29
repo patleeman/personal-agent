@@ -1,5 +1,5 @@
 import { getSessionStorage, type StorageLike } from './reloadState';
-import type { MessageBlock } from './types';
+import type { DisplayBlock, MessageBlock } from './types';
 
 export interface ForkableMessageEntry {
   entryId: string;
@@ -45,6 +45,60 @@ export function resolveSessionEntryIdFromBlockId(blockId: string | undefined): s
   }
 
   return candidate;
+}
+
+export function resolveBranchEntryIdForMessage(
+  block: MessageBlock | undefined,
+  absoluteMessageIndex: number,
+  detail: { blocks: DisplayBlock[]; blockOffset: number },
+): string | null {
+  const directEntryId = resolveSessionEntryIdFromBlockId(block?.id);
+  if (directEntryId) {
+    return directEntryId;
+  }
+
+  if (!block || block.type !== 'text' || absoluteMessageIndex < 0) {
+    return null;
+  }
+
+  const targetText = block.text;
+  if (!targetText) {
+    return null;
+  }
+
+  const preferredIndex = absoluteMessageIndex - detail.blockOffset;
+  const visited = new Set<number>();
+  const searchOrder: number[] = [];
+  const pushIndex = (index: number) => {
+    if (index < 0 || index >= detail.blocks.length || visited.has(index)) {
+      return;
+    }
+    visited.add(index);
+    searchOrder.push(index);
+  };
+
+  pushIndex(preferredIndex);
+  for (let delta = 1; delta <= 4; delta += 1) {
+    pushIndex(preferredIndex + delta);
+    pushIndex(preferredIndex - delta);
+  }
+  for (let index = detail.blocks.length - 1; index >= 0; index -= 1) {
+    pushIndex(index);
+  }
+
+  for (const index of searchOrder) {
+    const candidate = detail.blocks[index];
+    if (candidate.type !== 'text' || candidate.text !== targetText) {
+      continue;
+    }
+
+    const entryId = resolveSessionEntryIdFromBlockId(candidate.id);
+    if (entryId) {
+      return entryId;
+    }
+  }
+
+  return null;
 }
 
 export function buildConversationComposerStorageKey(sessionId: string): string {

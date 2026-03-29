@@ -50,7 +50,7 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../askUserQuestions';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
 import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
@@ -2801,9 +2801,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     try {
       const liveConversationId = await ensureConversationIsLive('be forked');
-      const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
+      let entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
       if (!entryId) {
-        throw new Error('Unable to resolve the selected assistant message for branching.');
+        const detail = await api.sessionDetail(liveConversationId, {
+          tailBlocks: Math.max(realMessages.length, 1),
+        });
+        entryId = resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail);
+      }
+      if (!entryId) {
+        throw new Error('The selected assistant message is not ready to branch yet. Try again in a moment.');
       }
 
       if (!ensureConversationCanControl('branch from this message')) {
