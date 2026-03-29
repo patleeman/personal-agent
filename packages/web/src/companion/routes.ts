@@ -3,6 +3,7 @@ export const COMPANION_INBOX_PATH = '/app/inbox';
 export const COMPANION_CONVERSATIONS_PATH = '/app/conversations';
 export const COMPANION_TASKS_PATH = '/app/tasks';
 export const COMPANION_SYSTEM_PATH = '/app/system';
+export const COMPANION_KNOWLEDGE_PATH = '/app/knowledge';
 export const COMPANION_PROJECTS_PATH = '/app/projects';
 export const COMPANION_NOTES_PATH = '/app/notes';
 export const COMPANION_SKILLS_PATH = '/app/skills';
@@ -14,6 +15,7 @@ const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_TASKS_PATH,
   COMPANION_SYSTEM_PATH,
+  COMPANION_KNOWLEDGE_PATH,
   COMPANION_PROJECTS_PATH,
   COMPANION_NOTES_PATH,
   COMPANION_SKILLS_PATH,

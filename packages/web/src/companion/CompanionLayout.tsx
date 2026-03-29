@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { ErrorState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSystemStatus } from '../contexts';
@@ -17,6 +17,7 @@ import {
 import {
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_INBOX_PATH,
+  COMPANION_KNOWLEDGE_PATH,
   COMPANION_NOTES_PATH,
   COMPANION_PROJECTS_PATH,
   COMPANION_SKILLS_PATH,
@@ -113,6 +114,17 @@ function ProjectsIcon({ active }: { active: boolean }) {
   );
 }
 
+function KnowledgeIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="M12 16.5v-11l7.5 4.3-7.5 6.7Z" />
+      <path d="M4.5 11 12 6.5l7.5 4.5-7.5 4.5-7.5-4.5Z" />
+      <path d="M12 16.5v7" />
+      <path d="M7 22h10" />
+    </svg>
+  );
+}
+
 function MemoriesIcon({ active }: { active: boolean }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
@@ -127,6 +139,22 @@ function SkillsIcon({ active }: { active: boolean }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
       <path d="m12 3 1.8 4.7L18.5 9l-4 2.9 1.5 4.6L12 13.7 8 16.5l1.5-4.6L5.5 9l4.7-1.3L12 3Z" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2" />
+      <path d="M12 19v2" />
+      <path d="M3 12h2" />
+      <path d="M19 12h2" />
+      <path d="m5 5 1.4 1.4" />
+      <path d="m17.6 17.6 1.4 1.4" />
+      <path d="m19 5-1.4 1.4" />
+      <path d="m5 19 1.4-1.4" />
     </svg>
   );
 }
@@ -415,22 +443,29 @@ export function CompanionLayout() {
 
   const showPrimaryNav = companionSession !== null && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
   const inboxBadgeCount = activity?.unreadCount ?? 0;
-  const tasksBadgeCount = (tasks ?? []).filter((task) => task.running || task.lastStatus === 'failure').length;
+  const settingsBadge = (tasks ?? []).filter((task) => task.running || task.lastStatus === 'failure').length;
   const menuHasAttention = (daemon?.warnings.length ?? 0) > 0
     || (sync?.warnings.length ?? 0) > 0
     || (webUi?.warnings.length ?? 0) > 0
+    || settingsBadge > 0
     || ((runs?.summary.recoveryActions.resume ?? 0)
       + (runs?.summary.recoveryActions.rerun ?? 0)
       + (runs?.summary.recoveryActions.attention ?? 0)
       + (runs?.summary.recoveryActions.invalid ?? 0)) > 0;
-  const menuActive = !location.pathname.startsWith(COMPANION_INBOX_PATH)
-    && !location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH)
-    && !location.pathname.startsWith(COMPANION_TASKS_PATH);
+  const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
+  const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
+  const knowledgeActive = location.pathname.startsWith(COMPANION_KNOWLEDGE_PATH)
+    || location.pathname.startsWith(COMPANION_PROJECTS_PATH)
+    || location.pathname.startsWith(COMPANION_NOTES_PATH)
+    || location.pathname.startsWith(COMPANION_SKILLS_PATH);
+  const settingsActive = menuOpen
+    || location.pathname.startsWith(COMPANION_SYSTEM_PATH)
+    || location.pathname.startsWith(COMPANION_TASKS_PATH);
 
   const navItems = [
-    { to: COMPANION_INBOX_PATH, label: 'Inbox', end: false, ariaLabel: 'Open inbox', Icon: InboxIcon, badgeCount: inboxBadgeCount },
-    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', end: false, ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0 },
-    { to: COMPANION_TASKS_PATH, label: 'Tasks', end: false, ariaLabel: 'Open tasks', Icon: TasksIcon, badgeCount: tasksBadgeCount },
+    { to: COMPANION_INBOX_PATH, label: 'Inbox', ariaLabel: 'Open inbox', Icon: InboxIcon, badgeCount: inboxBadgeCount, active: inboxActive },
+    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
+    { to: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', ariaLabel: 'Open knowledge', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
   ];
 
   const handlePairDevice = useCallback(async () => {
@@ -540,14 +575,17 @@ export function CompanionLayout() {
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-0 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-              <DrawerSection title="Operational">
-                <DrawerLink to={COMPANION_SYSTEM_PATH} label="System" detail="Daemon, sync, web UI status, and safe controls." Icon={SystemIcon} onClick={() => setMenuOpen(false)} />
+              <DrawerSection title="Navigate">
+                <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and open tabs." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_KNOWLEDGE_PATH} label="Knowledge" detail="Browse projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
-              <DrawerSection title="Browse">
+              <DrawerSection title="Knowledge">
                 <DrawerLink to={COMPANION_PROJECTS_PATH} label="Projects" detail="Read current focus, blockers, notes, and linked conversations." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note nodes." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows and invoke them from chats." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note nodes and distilled references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
               <DrawerSection title="Companion">
@@ -565,11 +603,11 @@ export function CompanionLayout() {
                     </div>
                   </button>
                 ) : null}
-                {contextValue.notificationsSupported && contextValue.notificationPermission === 'default' ? (
+                {contextValue.notificationsSupported && secureContext && contextValue.notificationPermission === 'default' ? (
                   <button
                     type="button"
                     onClick={() => { void requestNotificationPermission(); }}
-                    className="flex w-full items-start gap-3 border-b border-border-subtle px-4 py-3.5 text-left transition-colors hover:bg-surface/55"
+                    className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-surface/55"
                   >
                     <span className="mt-0.5 shrink-0"><TasksIcon active /></span>
                     <div className="min-w-0 flex-1">
@@ -578,6 +616,10 @@ export function CompanionLayout() {
                     </div>
                   </button>
                 ) : null}
+              </DrawerSection>
+
+              <DrawerSection title="Operational">
+                <DrawerLink to={COMPANION_SYSTEM_PATH} label="System" detail="Daemon, sync, web UI status, and controls." Icon={SystemIcon} onClick={() => setMenuOpen(false)} />
                 <button
                   type="button"
                   onClick={() => { void handleLogout(); }}
@@ -600,36 +642,31 @@ export function CompanionLayout() {
         <nav className="shrink-0 border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2 backdrop-blur-xl">
           <div className="mx-auto grid w-full max-w-sm grid-cols-4 gap-1.5">
             {navItems.map((item) => (
-              <NavLink
+              <Link
                 key={item.to}
                 to={item.to}
-                end={item.end}
                 aria-label={item.ariaLabel}
-                className={({ isActive }) => cx(
+                className={cx(
                   'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
-                  isActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
+                  item.active ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
                 )}
               >
-                {({ isActive }) => (
-                  <>
-                    <item.Icon active={isActive} />
-                    <span className="leading-none">{item.label}</span>
-                    <BottomNavBadge count={item.badgeCount} />
-                  </>
-                )}
-              </NavLink>
+                <item.Icon active={item.active} />
+                <span className="leading-none">{item.label}</span>
+                <BottomNavBadge count={item.badgeCount} />
+              </Link>
             ))}
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
-              aria-label="Open menu"
+              aria-label="Open settings"
               className={cx(
                 'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
-                menuActive || menuOpen ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
+                settingsActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
               )}
             >
-              <MenuIcon active={menuActive || menuOpen} />
-              <span className="leading-none">Menu</span>
+              <SettingsIcon active={settingsActive} />
+              <span className="leading-none">Settings</span>
               <BottomNavBadge dot={menuHasAttention} />
             </button>
           </div>

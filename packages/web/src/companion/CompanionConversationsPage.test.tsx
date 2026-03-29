@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
+import { AppDataContext, AppEventsContext, INITIAL_APP_EVENT_VERSIONS, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
 import type { CompanionConversationListResult, SessionMeta } from '../types.js';
 import {
@@ -113,7 +113,7 @@ describe('CompanionConversationsPage', () => {
         };
       }
 
-      if (cacheKey === 'companion-conversation-list') {
+      if (typeof cacheKey === 'string' && cacheKey.startsWith('companion-conversation-list:')) {
         const data: CompanionConversationListResult = {
           live: [createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' })],
           needsReview: [createSession({ id: 'review-1', title: 'Review me', needsAttention: true, timestamp: '2026-03-24T14:00:00.000Z' })],
@@ -177,26 +177,28 @@ describe('CompanionConversationsPage', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
-          <LiveTitlesContext.Provider value={{ titles: new Map([['live-1', 'Live title from stream']]), setTitle: vi.fn() }}>
-            <AppDataContext.Provider value={{
-              activity: null,
-              projects: null,
-              sessions: null,
-              tasks: null,
-              runs: null,
-              setActivity: vi.fn(),
-              setProjects: vi.fn(),
-              setSessions: vi.fn(),
-              setTasks: vi.fn(),
-              setRuns: vi.fn(),
-            }}>
-              <Routes>
-                <Route path="/app" element={<CompanionLayout />}>
-                  <Route path="conversations" element={<CompanionConversationsPage />} />
-                </Route>
-              </Routes>
-            </AppDataContext.Provider>
-          </LiveTitlesContext.Provider>
+          <AppEventsContext.Provider value={{ versions: INITIAL_APP_EVENT_VERSIONS }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map([['live-1', 'Live title from stream']]), setTitle: vi.fn() }}>
+              <AppDataContext.Provider value={{
+                activity: null,
+                projects: null,
+                sessions: null,
+                tasks: null,
+                runs: null,
+                setActivity: vi.fn(),
+                setProjects: vi.fn(),
+                setSessions: vi.fn(),
+                setTasks: vi.fn(),
+                setRuns: vi.fn(),
+              }}>
+                <Routes>
+                  <Route path="/app" element={<CompanionLayout />}>
+                    <Route path="conversations" element={<CompanionConversationsPage />} />
+                  </Route>
+                </Routes>
+              </AppDataContext.Provider>
+            </LiveTitlesContext.Provider>
+          </AppEventsContext.Provider>
         </SseConnectionContext.Provider>
       </MemoryRouter>,
     );
@@ -204,8 +206,8 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Chats');
     expect(html).toContain('Open inbox');
     expect(html).toContain('Open chats');
-    expect(html).toContain('Open tasks');
-    expect(html).toContain('Open menu');
+    expect(html).toContain('Open knowledge');
+    expect(html).toContain('Open settings');
     expect(html).toContain('1 live · 1 open tab');
     expect(html).toContain('Live now');
     expect(html).toContain('Open tabs');
