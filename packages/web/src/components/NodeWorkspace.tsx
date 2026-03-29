@@ -63,7 +63,7 @@ export function NodeWorkspaceShell({
   const hasTopRow = Boolean(backHref || topRowContent || status || actions);
   const mainContent = (
     <div className="min-w-0 space-y-6">
-      <div className="border-b border-border-subtle pb-5">
+      <div className="ui-node-workspace-chrome border-b border-border-subtle pb-5">
         <div className="space-y-4">
           {hasTopRow ? (
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -127,7 +127,7 @@ export function NodeWorkspaceShell({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
       {mainContent}
-      <aside className="space-y-3 xl:sticky xl:top-4 xl:self-start">
+      <aside className="ui-node-workspace-chrome space-y-3 xl:sticky xl:top-4 xl:self-start">
         {inspector}
       </aside>
     </div>

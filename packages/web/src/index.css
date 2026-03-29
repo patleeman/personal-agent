@@ -403,6 +403,19 @@
     @apply w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[15px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:text-primary focus:outline-none;
   }
 
+  .ui-node-workspace-chrome {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .ui-node-workspace-chrome input,
+  .ui-node-workspace-chrome textarea,
+  .ui-node-workspace-chrome select,
+  .ui-node-workspace-chrome [contenteditable='true'] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
   .ui-note-header-textarea {
     @apply w-full min-h-[3rem] resize-none overflow-hidden border-0 bg-transparent px-0 py-1 text-[15px] leading-relaxed text-secondary outline-none placeholder:text-dim/70;
   }
