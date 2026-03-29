@@ -16,11 +16,6 @@ So each extension here uses either a top-level `*.ts` entrypoint or an `index.ts
 extensions/
 ├── _shared/
 │   └── prompt-catalog.ts
-├── exit-alias.ts
-├── memory/
-│   └── index.ts
-├── daemon-run-orchestration-prompt/
-│   └── index.ts
 ├── web-tools/
 │   └── index.ts
 └── package.json
