@@ -218,6 +218,29 @@ export function replaceConversationTitleInSessionList<T extends { id: string; ti
   return changed ? updatedSessions : sessions;
 }
 
+export function mergeConversationSessionMeta(
+  detailMeta: SessionMeta | null | undefined,
+  sessionSnapshot: SessionMeta | null | undefined,
+): SessionMeta | null {
+  if (detailMeta && sessionSnapshot && detailMeta.id === sessionSnapshot.id) {
+    return {
+      ...sessionSnapshot,
+      ...detailMeta,
+      isRunning: detailMeta.isRunning ?? sessionSnapshot.isRunning,
+      isLive: detailMeta.isLive ?? sessionSnapshot.isLive,
+      lastActivityAt: detailMeta.lastActivityAt ?? sessionSnapshot.lastActivityAt,
+      needsAttention: detailMeta.needsAttention ?? sessionSnapshot.needsAttention,
+      attentionUpdatedAt: detailMeta.attentionUpdatedAt ?? sessionSnapshot.attentionUpdatedAt,
+      attentionUnreadMessageCount: detailMeta.attentionUnreadMessageCount ?? sessionSnapshot.attentionUnreadMessageCount,
+      attentionUnreadActivityCount: detailMeta.attentionUnreadActivityCount ?? sessionSnapshot.attentionUnreadActivityCount,
+      attentionActivityIds: detailMeta.attentionActivityIds ?? sessionSnapshot.attentionActivityIds,
+      deferredResumes: detailMeta.deferredResumes ?? sessionSnapshot.deferredResumes,
+    };
+  }
+
+  return detailMeta ?? sessionSnapshot ?? null;
+}
+
 function findConversationSurface(
   presence: LiveSessionPresenceState,
   surfaceId: string | null | undefined,
@@ -1809,15 +1832,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const referencedProjectIds = draft
     ? draftAttachedProjectIds
     : (conversationProjects?.relatedProjectIds ?? []);
-  const currentSessionMeta = useMemo(() => {
-    if (!id) {
-      return null;
-    }
-
-    return visibleSessionDetail?.meta
-      ?? sessions?.find((session) => session.id === id)
-      ?? null;
-  }, [id, sessions, visibleSessionDetail]);
+  const currentSessionMeta = useMemo(
+    () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
+    [sessionSnapshot, visibleSessionDetail?.meta],
+  );
 
   useEffect(() => {
     const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
