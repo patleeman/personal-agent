@@ -399,6 +399,14 @@
     @apply w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none;
   }
 
+  .ui-node-summary-input {
+    @apply w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[15px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:text-primary focus:outline-none;
+  }
+
+  .ui-note-header-textarea {
+    @apply w-full min-h-[3rem] resize-none overflow-hidden border-0 bg-transparent px-0 py-1 text-[15px] leading-relaxed text-secondary outline-none placeholder:text-dim/70;
+  }
+
   .ui-note-title-input {
     @apply w-full border-0 bg-transparent p-0 text-[34px] font-semibold tracking-tight text-primary outline-none placeholder:text-dim;
   }

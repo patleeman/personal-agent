@@ -110,7 +110,6 @@ describe('MemoriesPage', () => {
     const html = renderPage('/notes?note=memory-index');
 
     expect(html).toContain('Memory index');
-    expect(html).toContain('For the agent');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
     expect(html).toContain('aria-label="Reload note"');
     expect(html).toContain('aria-label="Save note now"');

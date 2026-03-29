@@ -45,7 +45,7 @@ const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border
 const PROJECT_TOOLBAR_GROUP_CLASS = 'inline-flex items-center gap-1 rounded-full border border-border-subtle bg-base/30 p-1';
 const PROJECT_BACK_LINK_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-base/40 text-secondary transition-colors hover:bg-surface hover:text-primary';
 const PROJECT_INLINE_TITLE_INPUT_CLASS = 'w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
-const PROJECT_INLINE_SUMMARY_CLASS = 'w-full min-h-[5.5rem] resize-y rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[14px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
+const PROJECT_INLINE_SUMMARY_CLASS = 'ui-node-summary-input max-w-4xl min-h-[3rem] resize-none';
 const PROJECT_PROPERTY_INPUT_CLASS = 'w-full rounded-lg border border-transparent bg-transparent -mx-2 px-2 py-1 text-[13px] leading-relaxed text-primary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
 const PROJECT_PROPERTY_SELECT_CLASS = `${PROJECT_PROPERTY_INPUT_CLASS} pr-8`;
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
@@ -459,6 +459,7 @@ export function ProjectDetailPanel({
   const projectSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectSaveQueuedRef = useRef(false);
   const projectIdRef = useRef(record.id);
+  const summaryTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [taskEditor, setTaskEditor] = useState<ProjectTaskEditorState | null>(null);
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
@@ -591,6 +592,18 @@ export function ProjectDetailPanel({
     const timeout = setTimeout(() => setProjectSavedAt(null), 1800);
     return () => clearTimeout(timeout);
   }, [projectSavedAt]);
+
+  useEffect(() => {
+    const element = summaryTextareaRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    const nextHeight = Math.max(52, Math.min(element.scrollHeight, 220));
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > 220 ? 'auto' : 'hidden';
+  }, [projectForm.summary]);
 
   useEffect(() => {
     if (documentSavedAt === null) {
@@ -1264,9 +1277,11 @@ export function ProjectDetailPanel({
               />
             </h1>
             <MentionTextarea
+              ref={summaryTextareaRef}
               aria-label="Project summary"
               name="project-summary"
               autoComplete="off"
+              rows={1}
               value={projectForm.summary}
               onValueChange={(summary) => updateProjectFormField({ summary })}
               onBlur={() => { void flushProjectSave(); }}

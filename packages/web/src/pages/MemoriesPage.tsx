@@ -375,6 +375,7 @@ export function NoteWorkspace({
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger' | 'warning'; text: string } | null>(null);
   const lastAutoSaveSignatureRef = useRef<string | null>(null);
+  const noteDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const dirty = noteTitle !== savedNoteTitle || noteDescription !== savedNoteDescription || noteBody !== savedNoteBody;
 
   useEffect(() => {
@@ -474,6 +475,18 @@ export function NoteWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
 
+  useEffect(() => {
+    const element = noteDescriptionRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    const nextHeight = Math.max(52, Math.min(element.scrollHeight, 220));
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > 220 ? 'auto' : 'hidden';
+  }, [noteDescription]);
+
   function handleReload() {
     setNotice(null);
     setSaveState('idle');
@@ -567,18 +580,16 @@ export function NoteWorkspace({
       titleAs="div"
       summaryClassName="max-w-none"
       summary={(
-        <label className="block space-y-2">
-          <span className="ui-section-label">For the agent</span>
-          <textarea
-            aria-label="Note guidance for the agent"
-            name="note-description"
-            value={noteDescription}
-            onChange={(event) => setNoteDescription(event.target.value)}
-            placeholder="Tell the agent how to use this note, when to read it, or what it is for."
-            className="ui-note-description-input min-h-[7rem] text-[13px]"
-            rows={4}
-          />
-        </label>
+        <textarea
+          ref={noteDescriptionRef}
+          aria-label="Note guidance for the agent"
+          name="note-description"
+          value={noteDescription}
+          onChange={(event) => setNoteDescription(event.target.value)}
+          placeholder="Tell the agent how to use this note, when to read it, or what it is for."
+          className="ui-note-header-textarea"
+          rows={1}
+        />
       )}
       status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
