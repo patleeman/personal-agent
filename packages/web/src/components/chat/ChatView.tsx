@@ -22,6 +22,7 @@ import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { FilePathButton, FilePathPreformattedText, normalizeDetectedFilePath, renderFilePathTextFragments } from '../../filePathLinks';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
+import { getStreamingThroughputLabel } from '../../streamingThroughput';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -1513,6 +1514,10 @@ function TraceClusterBlock({
   const durationLabel = summary.durationMs && summary.durationMs > 0
     ? `${(summary.durationMs / 1000).toFixed(1)}s`
     : null;
+  const throughputLabel = useMemo(
+    () => getStreamingThroughputLabel(blocks, live),
+    [blocks, live],
+  );
   const isActive = live || summary.hasRunning;
   const title = isActive ? 'Working' : 'Internal work';
   const autoOpen = shouldAutoOpenTraceCluster(live, summary.hasRunning);
@@ -1548,6 +1553,14 @@ function TraceClusterBlock({
             <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
             <span className="flex-1" />
             {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+            {throughputLabel && (
+              <span
+                className="font-mono text-[11px] text-accent/80"
+                title="Estimated from streamed output using the same chars/4 token heuristic used elsewhere in Pi."
+              >
+                {throughputLabel}
+              </span>
+            )}
             {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
             <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
           </div>

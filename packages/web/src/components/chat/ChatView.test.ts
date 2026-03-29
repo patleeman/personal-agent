@@ -1,6 +1,6 @@
 import React, { Fragment, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageBlock } from '../../types';
 import {
   ChatView,
@@ -14,6 +14,10 @@ import {
 } from './ChatView.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('chat view streaming disclosure', () => {
   it('auto-opens running tool blocks', () => {
@@ -193,6 +197,23 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('echo step-7');
     expect(html).not.toContain('echo step-1');
     expect(html).not.toContain('echo step-2');
+  });
+
+  it('shows estimated tok/s while a thinking block is actively streaming', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-11T18:00:03.000Z'));
+
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'thinking',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'a'.repeat(48),
+      }],
+      isStreaming: true,
+    }));
+
+    expect(html).toContain('tok/s');
+    expect(html).toContain('~4.0 tok/s');
   });
 
   it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
