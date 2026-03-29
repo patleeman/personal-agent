@@ -506,7 +506,7 @@ async function applyDefaultModelArgs(
   if (!hasModel && typeof settings.defaultModelPreset === 'string' && settings.defaultModelPreset.trim().length > 0) {
     const preset = resolveModelPreset(settings, settings.defaultModelPreset);
     if (preset) {
-      const modelRegistry = new ModelRegistry(
+      const modelRegistry = ModelRegistry.create(
         AuthStorage.create(join(agentDir, 'auth.json')),
         join(agentDir, 'models.json'),
       );

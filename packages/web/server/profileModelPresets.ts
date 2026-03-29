@@ -26,7 +26,7 @@ export interface ResolvedProfileModelPresetSelection {
 }
 
 function createProfileModelRegistry(agentDir: string): ModelRegistry {
-  return new ModelRegistry(
+  return ModelRegistry.create(
     AuthStorage.create(join(getPiAgentRuntimeDir(), 'auth.json')),
     join(agentDir, 'models.json'),
   );
