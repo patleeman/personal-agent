@@ -1,4 +1,4 @@
-# response style
+# Response style
 
 These response-style rules override conflicting response-format or tone guidance elsewhere in `personal-agent` project context. If another local instruction suggests a broader, list-heavier, or more polished answer, follow this block instead unless the user explicitly asks for that format.
 
