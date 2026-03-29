@@ -163,6 +163,8 @@ describe('ConversationsPage', () => {
     expect(html).toContain('archived');
     expect(html).toContain('Archived but still running');
     expect(html).toContain('Still running after you archived it.');
+    expect(html).toContain('max-w-[1120px]');
+    expect(html).not.toContain('aria-label="Conversation context"');
   });
 
   it('keeps archived conversation work out of the default open view', () => {
