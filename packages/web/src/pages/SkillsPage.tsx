@@ -36,6 +36,27 @@ import { joinMarkdownFrontmatter, normalizeMarkdownValue, splitMarkdownFrontmatt
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
+function readFrontmatterField(frontmatter: string | null, key: string): string {
+  if (!frontmatter) {
+    return '';
+  }
+
+  const match = frontmatter.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'));
+  return match?.[1]?.trim().replace(/^['\"]|['\"]$/g, '') ?? '';
+}
+
+function writeFrontmatterField(frontmatter: string | null, key: string, value: string): string {
+  const line = `${key}: ${JSON.stringify(value)}`;
+  const normalized = frontmatter?.trimEnd() ?? '';
+  const pattern = new RegExp(`^${key}:\\s*.*$`, 'm');
+
+  if (pattern.test(normalized)) {
+    return normalized.replace(pattern, line);
+  }
+
+  return normalized.length > 0 ? `${normalized}\n${line}` : line;
+}
+
 function SkillFileList({
   detail,
   selectedReference,
@@ -130,8 +151,21 @@ export function SkillWorkspace({
   const selectedReference = detail.references.find((reference) => reference.relativePath === selectedItem) ?? null;
   const initialContentParts = useMemo(() => splitMarkdownFrontmatter(detail.content), [detail.content]);
   const initialDefinitionBody = useMemo(() => normalizeMarkdownValue(initialContentParts.body), [initialContentParts.body]);
+  const initialSkillTitle = useMemo(
+    () => readFrontmatterField(initialContentParts.frontmatter, 'title') || humanizeSkillName(detail.skill.name),
+    [detail.skill.name, initialContentParts.frontmatter],
+  );
+  const initialSkillDescription = useMemo(
+    () => readFrontmatterField(initialContentParts.frontmatter, 'description') || detail.skill.description,
+    [detail.skill.description, initialContentParts.frontmatter],
+  );
   const [savedContent, setSavedContent] = useState(initialDefinitionBody);
   const [draft, setDraft] = useState(initialDefinitionBody);
+  const [savedSkillTitle, setSavedSkillTitle] = useState(initialSkillTitle);
+  const [skillTitle, setSkillTitle] = useState(initialSkillTitle);
+  const [savedSkillDescription, setSavedSkillDescription] = useState(initialSkillDescription);
+  const [skillDescription, setSkillDescription] = useState(initialSkillDescription);
+  const [mainFrontmatter, setMainFrontmatter] = useState<string | null>(initialContentParts.frontmatter);
   const [selectedFrontmatter, setSelectedFrontmatter] = useState<string | null>(initialContentParts.frontmatter);
   const [contentLoading, setContentLoading] = useState(false);
   const [loadedPath, setLoadedPath] = useState(selectedReference ? '' : detail.skill.path);
@@ -140,9 +174,12 @@ export function SkillWorkspace({
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger' | 'warning'; text: string } | null>(null);
   const lastAutoSaveSignatureRef = useRef<string | null>(null);
+  const skillDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const selectedPath = selectedReference?.path ?? detail.skill.path;
   const isDocumentReady = loadedPath === selectedPath && !contentLoading;
-  const dirty = draft !== savedContent;
+  const headerDirty = skillTitle !== savedSkillTitle || skillDescription !== savedSkillDescription;
+  const documentDirty = draft !== savedContent;
+  const dirty = headerDirty || documentDirty;
   const documentLabel = selectedReference?.title ?? null;
   const documentKindLabel = selectedReference ? 'Reference' : 'Definition';
   const documentMeta = selectedReference?.relativePath ?? 'Main skill file';
@@ -161,6 +198,18 @@ export function SkillWorkspace({
       onNavigate({ item: null }, true);
     }
   }, [onNavigate, selectedItem, selectedReference]);
+
+  useEffect(() => {
+    const parts = splitMarkdownFrontmatter(detail.content);
+    const nextTitle = readFrontmatterField(parts.frontmatter, 'title') || humanizeSkillName(detail.skill.name);
+    const nextDescription = readFrontmatterField(parts.frontmatter, 'description') || detail.skill.description;
+
+    setMainFrontmatter(parts.frontmatter);
+    setSavedSkillTitle(nextTitle);
+    setSkillTitle(nextTitle);
+    setSavedSkillDescription(nextDescription);
+    setSkillDescription(nextDescription);
+  }, [detail.content, detail.skill.description, detail.skill.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,12 +276,19 @@ export function SkillWorkspace({
   }, []);
 
   const handleSave = useCallback(async (options: { automated?: boolean } = {}) => {
-    if (saveBusy || !dirty || !isDocumentReady || contentLoading || contentError) {
+    const canSaveVisibleDocument = !documentDirty || (isDocumentReady && !contentLoading && !contentError);
+    if (saveBusy || !dirty || !canSaveVisibleDocument) {
       return false;
     }
 
-    const path = selectedReference?.path ?? detail.skill.path;
-    const frontmatter = selectedFrontmatter;
+    const nextTitle = skillTitle.trim() || humanizeSkillName(detail.skill.name);
+    const nextDescription = skillDescription.trim();
+    const nextMainFrontmatter = writeFrontmatterField(
+      writeFrontmatterField(mainFrontmatter, 'title', nextTitle),
+      'description',
+      nextDescription,
+    );
+    const mainBody = normalizeMarkdownValue(splitMarkdownFrontmatter(detail.content).body);
     const draftToSave = draft;
 
     setSaveBusy(true);
@@ -242,8 +298,25 @@ export function SkillWorkspace({
     }
 
     try {
-      await saveDocument(path, frontmatter, draftToSave);
-      setSavedContent(draftToSave);
+      if (!selectedReference) {
+        await saveDocument(detail.skill.path, nextMainFrontmatter, draftToSave);
+      } else {
+        if (headerDirty) {
+          await saveDocument(detail.skill.path, nextMainFrontmatter, mainBody);
+        }
+
+        if (documentDirty) {
+          await saveDocument(selectedReference.path, selectedFrontmatter, draftToSave);
+        }
+      }
+
+      setMainFrontmatter(nextMainFrontmatter);
+      setSavedSkillTitle(nextTitle);
+      setSkillTitle(nextTitle);
+      setSavedSkillDescription(nextDescription);
+      if (!selectedReference || documentDirty) {
+        setSavedContent(draftToSave);
+      }
       setSaveState('saved');
       setNotice(null);
       return true;
@@ -254,7 +327,7 @@ export function SkillWorkspace({
     } finally {
       setSaveBusy(false);
     }
-  }, [contentError, contentLoading, detail.skill.path, dirty, draft, isDocumentReady, saveBusy, saveDocument, selectedFrontmatter, selectedReference]);
+  }, [contentError, contentLoading, detail.content, detail.skill.name, detail.skill.path, dirty, documentDirty, draft, headerDirty, isDocumentReady, mainFrontmatter, saveBusy, saveDocument, selectedFrontmatter, selectedReference, skillDescription, skillTitle]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -270,8 +343,9 @@ export function SkillWorkspace({
   }, [dirty]);
 
   useEffect(() => {
-    const autoSaveSignature = `${selectedPath}\u0000${draft}`;
-    if (!dirty || saveBusy || !isDocumentReady || contentError || lastAutoSaveSignatureRef.current === autoSaveSignature) {
+    const autoSaveSignature = `${skillTitle}\u0000${skillDescription}\u0000${selectedPath}\u0000${draft}`;
+    const canSaveVisibleDocument = !documentDirty || (isDocumentReady && !contentLoading && !contentError);
+    if (!dirty || saveBusy || !canSaveVisibleDocument || lastAutoSaveSignatureRef.current === autoSaveSignature) {
       return;
     }
 
@@ -281,7 +355,7 @@ export function SkillWorkspace({
     }, 900);
 
     return () => window.clearTimeout(timeoutId);
-  }, [contentError, dirty, draft, handleSave, isDocumentReady, saveBusy, selectedPath]);
+  }, [contentError, contentLoading, dirty, documentDirty, draft, handleSave, isDocumentReady, saveBusy, selectedPath, skillDescription, skillTitle]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -295,6 +369,18 @@ export function SkillWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleSave]);
 
+  useEffect(() => {
+    const element = skillDescriptionRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    const nextHeight = Math.max(48, Math.min(element.scrollHeight, 180));
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > 180 ? 'auto' : 'hidden';
+  }, [skillDescription]);
+
   async function handleReload() {
     if (contentLoading) {
       return;
@@ -302,6 +388,8 @@ export function SkillWorkspace({
 
     setNotice(null);
     setSaveState('idle');
+    setSkillTitle(savedSkillTitle);
+    setSkillDescription(savedSkillDescription);
     lastAutoSaveSignatureRef.current = null;
 
     if (selectedReference) {
@@ -355,22 +443,40 @@ export function SkillWorkspace({
       )}
       backHref={backHref}
       backLabel={backLabel}
-      title={humanizeSkillName(detail.skill.name)}
-      summary={detail.skill.description}
-      meta={(
-        <>
-          <span>{detail.skill.source}</span>
-          <span className="opacity-40">·</span>
-          <span>{formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently')}</span>
-          {selectedReference && (
-            <>
-              <span className="opacity-40">·</span>
-              <span>Editing {selectedReference.relativePath}</span>
-            </>
-          )}
-        </>
+      title={(
+        <input
+          aria-label="Skill title"
+          name="skill-title"
+          autoComplete="off"
+          spellCheck={false}
+          value={skillTitle}
+          onChange={(event) => setSkillTitle(event.target.value)}
+          className="ui-node-title-input"
+          placeholder="Skill title"
+        />
       )}
-      status={<span className={saveStatus.className}>{saveStatus.text}</span>}
+      titleAs="div"
+      summaryClassName="max-w-4xl"
+      summary={(
+        <textarea
+          ref={skillDescriptionRef}
+          aria-label="Skill description"
+          name="skill-description"
+          value={skillDescription}
+          onChange={(event) => setSkillDescription(event.target.value)}
+          placeholder="Add a short skill description…"
+          className="ui-node-summary-input min-h-[3rem] resize-none overflow-hidden"
+          rows={1}
+        />
+      )}
+      meta={selectedReference ? <span>Editing {selectedReference.relativePath}</span> : undefined}
+      status={(
+        <div className="flex items-center gap-2">
+          <span className="text-dim">{formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently')}</span>
+          <span className="opacity-40">·</span>
+          <span className={saveStatus.className}>{saveStatus.text}</span>
+        </div>
+      )}
       actions={(
         <NodeToolbarGroup>
           <NodeIconActionButton
@@ -393,7 +499,6 @@ export function SkillWorkspace({
             <NodePropertyList items={[
               { label: 'Name', value: detail.skill.name },
               { label: 'Source', value: detail.skill.source },
-              { label: 'Usage', value: formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently') },
             ]} />
           </NodeRailSection>
           <NodeRailSection title="Files" meta={selectedReference ? 'References live here instead of separate pages.' : 'Use the inspector to open supporting references.'}>
