@@ -4,23 +4,31 @@ import {
   buildDraftConversationAttachmentsStorageKey,
   buildDraftConversationComposerStorageKey,
   buildDraftConversationCwdStorageKey,
+  buildDraftConversationModelStorageKey,
   buildDraftConversationProjectsStorageKey,
   buildDraftConversationSessionMeta,
+  buildDraftConversationThinkingLevelStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
+  clearDraftConversationModel,
   clearDraftConversationProjectIds,
+  clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
   hasDraftConversationAttachments,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationCwd,
+  persistDraftConversationModel,
   persistDraftConversationProjectIds,
+  persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
+  readDraftConversationModel,
   readDraftConversationProjectIds,
+  readDraftConversationThinkingLevel,
   shouldShowDraftConversationTab,
 } from './draftConversation';
 
@@ -39,6 +47,8 @@ describe('draftConversation', () => {
     expect(buildDraftConversationCwdStorageKey()).toBe('pa:reload:conversation:draft:cwd');
     expect(buildDraftConversationProjectsStorageKey()).toBe('pa:reload:conversation:draft:projects');
     expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
+    expect(buildDraftConversationModelStorageKey()).toBe('pa:reload:conversation:draft:model');
+    expect(buildDraftConversationThinkingLevelStorageKey()).toBe('pa:reload:conversation:draft:thinking-level');
   });
 
   it('persists and reads the draft composer text', () => {
@@ -86,6 +96,44 @@ describe('draftConversation', () => {
 
     expect(readDraftConversationProjectIds(storage)).toEqual(['personal-agent', 'web-ui']);
     expect(storage.getItem(buildDraftConversationProjectsStorageKey())).toBe(JSON.stringify(['personal-agent', 'web-ui']));
+  });
+
+  it('persists and reads the draft model', () => {
+    const storage = createStorage();
+
+    persistDraftConversationModel('gpt-5.4', storage);
+
+    expect(readDraftConversationModel(storage)).toBe('gpt-5.4');
+    expect(storage.getItem(buildDraftConversationModelStorageKey())).toBe(JSON.stringify('gpt-5.4'));
+  });
+
+  it('clears the stored draft model', () => {
+    const storage = createStorage();
+
+    persistDraftConversationModel('gpt-5.4', storage);
+    clearDraftConversationModel(storage);
+
+    expect(readDraftConversationModel(storage)).toBe('');
+    expect(storage.getItem(buildDraftConversationModelStorageKey())).toBeNull();
+  });
+
+  it('persists and reads the draft thinking level', () => {
+    const storage = createStorage();
+
+    persistDraftConversationThinkingLevel('high', storage);
+
+    expect(readDraftConversationThinkingLevel(storage)).toBe('high');
+    expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBe(JSON.stringify('high'));
+  });
+
+  it('clears the stored draft thinking level', () => {
+    const storage = createStorage();
+
+    persistDraftConversationThinkingLevel('high', storage);
+    clearDraftConversationThinkingLevel(storage);
+
+    expect(readDraftConversationThinkingLevel(storage)).toBe('');
+    expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBeNull();
   });
 
   it('clears stored draft project ids', () => {

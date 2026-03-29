@@ -3,8 +3,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { getExecutionTarget, type ExecutionTargetRecord } from '@personal-agent/core';
+import {
+  applyConversationModelPreferencesToSessionManager,
+  type ConversationModelPreferenceInput,
+} from './conversationModelPreferences.js';
 import { readSessionBlocksByFile, type SessionDetail } from './sessions.js';
-import { ensureSessionFileExists, patchSessionManagerPersistence, resolvePersistentSessionDir } from './liveSessions.js';
+import { ensureSessionFileExists, getAvailableModelObjects, patchSessionManagerPersistence, resolvePersistentSessionDir } from './liveSessions.js';
 import {
   deleteRemoteConversationBinding,
   getRemoteConversationBinding,
@@ -1270,10 +1274,27 @@ export async function abortRemoteLiveSession(conversationId: string): Promise<vo
   await entry.rpc.abort();
 }
 
-export async function createLocalMirrorSession(options: { remoteCwd: string }): Promise<{ id: string; sessionFile: string }> {
+export async function createLocalMirrorSession(options: {
+  remoteCwd: string;
+  initialModel?: string | null;
+  initialThinkingLevel?: string | null;
+}): Promise<{ id: string; sessionFile: string }> {
   const sessionManager = SessionManager.create(options.remoteCwd, resolvePersistentSessionDir(options.remoteCwd));
   patchSessionManagerPersistence(sessionManager);
   ensureSessionFileExists(sessionManager);
+
+  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
+    applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      {
+        ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
+        ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
+      } satisfies ConversationModelPreferenceInput,
+      {},
+      getAvailableModelObjects(),
+    );
+  }
+
   return {
     id: sessionManager.getSessionId(),
     sessionFile: readRequiredString(sessionManager.getSessionFile(), 'local mirror sessionFile'),

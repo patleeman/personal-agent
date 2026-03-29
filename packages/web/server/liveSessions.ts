@@ -22,6 +22,11 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from './appEvents.js';
 import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
+import {
+  applyConversationModelPreferencesToLiveSession,
+  type ConversationModelPreferenceInput,
+  type ConversationModelPreferenceState,
+} from './conversationModelPreferences.js';
 import { createRuntimeModelRegistry } from './modelRegistry.js';
 import {
   generateConversationTitle,
@@ -1993,14 +1998,18 @@ export function getLiveSessions() {
   }));
 }
 
-export function getAvailableModels() {
+export function getAvailableModelObjects() {
   const auth = makeAuth();
   const registry = makeRegistry(auth);
-  return registry.getAvailable().map(m => ({
-    id:      m.id,
-    name:    m.name ?? m.id,
-    context: m.contextWindow ?? 128_000,
-    provider: (m as { provider?: string }).provider ?? '',
+  return registry.getAvailable();
+}
+
+export function getAvailableModels() {
+  return getAvailableModelObjects().map((model) => ({
+    id: model.id,
+    name: model.name ?? model.id,
+    context: model.contextWindow ?? 128_000,
+    provider: (model as { provider?: string }).provider ?? '',
   }));
 }
 
@@ -2133,6 +2142,8 @@ interface LiveSessionLoaderOptions {
   additionalSkillPaths?: string[];
   additionalPromptTemplatePaths?: string[];
   additionalThemePaths?: string[];
+  initialModel?: string | null;
+  initialThinkingLevel?: string | null;
 }
 
 async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
@@ -2155,13 +2166,14 @@ export async function createSession(
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
   const auth = makeAuth();
+  const modelRegistry = makeRegistry(auth);
   const resourceLoader = await makeLoader(cwd, options);
   const sessionManager = SessionManager.create(cwd, resolvePersistentSessionDir(cwd));
   const { session } = await createAgentSession({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
-    modelRegistry: makeRegistry(auth),
+    modelRegistry,
     resourceLoader,
     sessionManager,
   });
@@ -2169,6 +2181,21 @@ export async function createSession(
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
+
+  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
+    applyConversationModelPreferencesToLiveSession(
+      session,
+      {
+        ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
+        ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
+      },
+      {
+        currentModel: session.model?.id ?? '',
+        currentThinkingLevel: session.thinkingLevel ?? '',
+      },
+      modelRegistry.getAvailable(),
+    );
+  }
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -2631,6 +2658,27 @@ export function renameSession(sessionId: string, name: string): void {
   void syncDurableConversationRun(entry, entry.lastDurableRunState ?? (entry.session.isStreaming ? 'running' : 'waiting'), {
     force: true,
   });
+}
+
+export function updateLiveSessionModelPreferences(
+  sessionId: string,
+  input: ConversationModelPreferenceInput,
+): ConversationModelPreferenceState {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+
+  const next = applyConversationModelPreferencesToLiveSession(
+    entry.session,
+    input,
+    {
+      currentModel: entry.session.model?.id ?? '',
+      currentThinkingLevel: entry.session.thinkingLevel ?? '',
+    },
+    getAvailableModelObjects(),
+  );
+
+  publishSessionMetaChanged(sessionId);
+  return next;
 }
 
 /** Abort the current agent run. */
