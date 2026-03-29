@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from './reloadState';
 import type { MessageBlock } from './types';
-import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
+import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
   const data = new Map<string, string>();
@@ -60,6 +60,49 @@ describe('resolveSessionEntryIdFromBlockId', () => {
 
   it('returns the input unchanged when it is already a session entry id', () => {
     expect(resolveSessionEntryIdFromBlockId('entry-123')).toBe('entry-123');
+  });
+});
+
+describe('resolveBranchEntryIdForMessage', () => {
+  it('returns the direct entry id when the rendered block already has one', () => {
+    expect(resolveBranchEntryIdForMessage(
+      { type: 'text', id: 'assistant-123-x4', ts: '2026-03-29T12:00:00.000Z', text: 'Reply' },
+      7,
+      {
+        blockOffset: 0,
+        blocks: [],
+      },
+    )).toBe('assistant-123');
+  });
+
+  it('recovers the entry id from persisted session detail when the live block is missing one', () => {
+    expect(resolveBranchEntryIdForMessage(
+      { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'Latest reply' },
+      5,
+      {
+        blockOffset: 3,
+        blocks: [
+          { type: 'thinking', id: 'assistant-123-t3', ts: '2026-03-29T11:59:58.000Z', text: 'Thinking…' },
+          { type: 'tool_use', id: 'assistant-123-c4', ts: '2026-03-29T11:59:59.000Z', tool: 'todo_list', input: {}, output: '[]', toolCallId: 'tool-1' },
+          { type: 'text', id: 'assistant-123-x5', ts: '2026-03-29T12:00:01.000Z', text: 'Latest reply' },
+        ],
+      },
+    )).toBe('assistant-123');
+  });
+
+  it('falls back to a nearby matching persisted block when the expected index is off', () => {
+    expect(resolveBranchEntryIdForMessage(
+      { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'Latest reply' },
+      5,
+      {
+        blockOffset: 3,
+        blocks: [
+          { type: 'thinking', id: 'assistant-123-t3', ts: '2026-03-29T11:59:58.000Z', text: 'Thinking…' },
+          { type: 'text', id: 'assistant-999-x4', ts: '2026-03-29T11:59:59.000Z', text: 'Something else' },
+          { type: 'text', id: 'assistant-123-x5', ts: '2026-03-29T12:00:01.000Z', text: 'Latest reply' },
+        ],
+      },
+    )).toBe('assistant-123');
   });
 });
 
