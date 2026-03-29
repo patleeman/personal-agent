@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_INBOX_PATH,
+  COMPANION_KNOWLEDGE_PATH,
   COMPANION_NOTES_PATH,
   COMPANION_PROJECTS_PATH,
   COMPANION_SKILLS_PATH,
@@ -32,6 +33,7 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect(COMPANION_CONVERSATIONS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_TASKS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_SYSTEM_PATH)).toBeNull();
+    expect(resolveCompanionRouteRedirect(COMPANION_KNOWLEDGE_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_PROJECTS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_NOTES_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_SKILLS_PATH)).toBeNull();
@@ -48,6 +50,7 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/conversations/')).toBe(COMPANION_CONVERSATIONS_PATH);
     expect(resolveCompanionRouteRedirect('/app/tasks/')).toBe(COMPANION_TASKS_PATH);
     expect(resolveCompanionRouteRedirect('/app/system/')).toBe(COMPANION_SYSTEM_PATH);
+    expect(resolveCompanionRouteRedirect('/app/knowledge/')).toBe(COMPANION_KNOWLEDGE_PATH);
     expect(resolveCompanionRouteRedirect('/app/projects/')).toBe(COMPANION_PROJECTS_PATH);
     expect(resolveCompanionRouteRedirect('/app/notes/')).toBe(COMPANION_NOTES_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/')).toBe(COMPANION_SKILLS_PATH);

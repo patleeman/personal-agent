@@ -4,7 +4,7 @@ import { api } from '../api';
 import { cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
-import { type SseConnectionStatus, useLiveTitles, useSseConnection } from '../contexts';
+import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { setConversationArchivedState } from '../sessionTabs';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
@@ -760,6 +760,7 @@ function SessionSection({
 export function CompanionConversationsPage() {
   const navigate = useNavigate();
   const { titles } = useLiveTitles();
+  const { versions } = useAppEvents();
   const { status } = useSseConnection();
   const {
     installAvailable,
@@ -788,7 +789,7 @@ export function CompanionConversationsPage() {
     loading,
     error: loadError,
     replaceData,
-  } = useApi(fetchConversationList, 'companion-conversation-list');
+  } = useApi(fetchConversationList, `companion-conversation-list:${versions.sessions}`);
   const [sections, setSections] = useState<CompanionConversationListResult | null>(() => data);
 
   useEffect(() => {
@@ -977,14 +978,6 @@ export function CompanionConversationsPage() {
             {visibleError ? <p className="mt-2 text-[11px] text-danger">{visibleError}</p> : null}
           </div>
           <div className="flex items-center gap-2">
-            {notificationPermission === 'default' && notificationsSupported && secureContext ? (
-              <HeaderIconButton label="Enable alerts" onClick={() => { void requestNotificationPermission(); }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M15 18H5a1 1 0 0 1-.8-1.6l1.8-2.4V10a5 5 0 1 1 10 0v4l1.8 2.4A1 1 0 0 1 17 18Z" />
-                  <path d="M10 21a2 2 0 0 0 4 0" />
-                </svg>
-              </HeaderIconButton>
-            ) : null}
             {installAvailable ? (
               <HeaderIconButton label={installBusy ? 'Installing app' : 'Install app'} onClick={() => { void promptInstall(); }} disabled={installBusy}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

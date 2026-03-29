@@ -5014,6 +5014,7 @@ async function handleOpenConversationLayoutWriteRequest(req: express.Request, re
     if (changedConversationIds.length > 0) {
       publishConversationSessionMetaChanged(...changedConversationIds);
     }
+    invalidateAppTopics('sessions');
 
     res.json({
       ok: true,
