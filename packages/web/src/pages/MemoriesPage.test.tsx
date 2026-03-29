@@ -110,16 +110,19 @@ describe('MemoriesPage', () => {
     const html = renderPage('/notes?note=memory-index');
 
     expect(html).toContain('Memory index');
-    expect(html).toContain('Top-level knowledge hub.');
-    expect(html).toContain('For the agent (optional)');
+    expect(html).toContain('For the agent');
     expect(html).toContain('Use this note as the top-level routing document for durable memory.');
-    expect(html).toContain('Chat about note');
-    expect(html).toContain('memory-index');
+    expect(html).toContain('aria-label="Reload note"');
+    expect(html).toContain('aria-label="Save note now"');
+    expect(html).toContain('aria-label="Chat about note"');
+    expect(html).toContain('aria-label="Delete note"');
+    expect(html).toContain('/tmp/memory-index/INDEX.md');
     expect(html).toContain('Properties');
-    expect(html).toContain('References');
-    expect(html).toContain('Relationships');
+    expect(html).not.toContain('References');
+    expect(html).not.toContain('Relationships');
     expect(html).not.toContain('Browse durable notes');
     expect(html).not.toContain('Search notes');
+    expect(html).not.toContain('Back to notes');
   });
 
   it('renders a notes table from the top-level notes page', () => {

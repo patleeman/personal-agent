@@ -534,6 +534,12 @@ export function NoteWorkspace({
     ...(memory.updated ? [{ label: 'Updated', value: timeAgo(memory.updated) }] : []),
     ...(memory.path ? [{ label: 'Path', value: <span className="break-all font-mono text-[12px] leading-6 text-secondary">{memory.path}</span> }] : []),
   ];
+  const hasReferences = detail.references.length > 0;
+  const hasRelationships = Boolean(
+    (detail.links?.outgoing?.length ?? 0) > 0
+      || (detail.links?.incoming?.length ?? 0) > 0
+      || (detail.links?.unresolved?.length ?? 0) > 0,
+  );
 
   return (
     <NodeWorkspaceShell
@@ -559,6 +565,21 @@ export function NoteWorkspace({
         />
       )}
       titleAs="div"
+      summaryClassName="max-w-none"
+      summary={(
+        <label className="block space-y-2">
+          <span className="ui-section-label">For the agent</span>
+          <textarea
+            aria-label="Note guidance for the agent"
+            name="note-description"
+            value={noteDescription}
+            onChange={(event) => setNoteDescription(event.target.value)}
+            placeholder="Tell the agent how to use this note, when to read it, or what it is for."
+            className="ui-note-description-input min-h-[7rem] text-[13px]"
+            rows={4}
+          />
+        </label>
+      )}
       status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
         <NodeToolbarGroup>
@@ -597,51 +618,41 @@ export function NoteWorkspace({
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
         <>
-          <NodeRailSection title="For the agent">
-            <textarea
-              aria-label="Note guidance for the agent"
-              name="note-description"
-              value={noteDescription}
-              onChange={(event) => setNoteDescription(event.target.value)}
-              placeholder="Tell the agent how to use this note, when to read it, or what it is for."
-              className="ui-note-description-input min-h-[8rem] text-[12px]"
-              rows={6}
-            />
-          </NodeRailSection>
-
           <NodeRailSection title="Properties">
             <NodePropertyList items={noteProperties} />
           </NodeRailSection>
 
-          <NodeRailSection title="References" meta={`${detail.references.length}`}>
-            <NoteReferenceList references={detail.references} />
-          </NodeRailSection>
-          <NodeRailSection title="Relationships">
-            <div className="space-y-4">
-              <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-              <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
-              <UnresolvedNodeLinks ids={detail.links?.unresolved} />
-            </div>
-          </NodeRailSection>
+          {hasReferences ? (
+            <NodeRailSection title="References" meta={`${detail.references.length}`}>
+              <NoteReferenceList references={detail.references} />
+            </NodeRailSection>
+          ) : null}
+          {hasRelationships ? (
+            <NodeRailSection title="Relationships">
+              <div className="space-y-4">
+                <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+                <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+                <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+              </div>
+            </NodeRailSection>
+          ) : null}
         </>
       )}
     >
       <div className="px-6 pt-2">
-        <div className="mx-auto max-w-4xl">
-          <NoteEditorDocument
-            title={noteTitle}
-            onTitleChange={setNoteTitle}
-            description={noteDescription}
-            onDescriptionChange={setNoteDescription}
-            body={noteBody}
-            onBodyChange={setNoteBody}
-            showTitle={false}
-            showDescription={false}
-            frameClassName="ui-note-editor-frame-embedded"
-            documentClassName="ui-note-editor-doc-embedded"
-            bodyPlaceholder="Start writing… Paste, drop, or insert images."
-          />
-        </div>
+        <NoteEditorDocument
+          title={noteTitle}
+          onTitleChange={setNoteTitle}
+          description={noteDescription}
+          onDescriptionChange={setNoteDescription}
+          body={noteBody}
+          onBodyChange={setNoteBody}
+          showTitle={false}
+          showDescription={false}
+          frameClassName="ui-note-editor-frame-embedded"
+          documentClassName="ui-note-editor-doc-embedded"
+          bodyPlaceholder="Start writing… Paste, drop, or insert images."
+        />
       </div>
     </NodeWorkspaceShell>
   );
