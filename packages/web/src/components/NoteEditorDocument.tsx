@@ -11,10 +11,11 @@ export function NoteEditorDocument({
   meta,
   titlePlaceholder = 'Untitled',
   descriptionPlaceholder = 'Tell the agent how to use this note, when to read it, or what it is for.',
-  bodyPlaceholder = 'Start writing… Paste or drop images.',
+  bodyPlaceholder = 'Start writing… Paste, drop, or insert images.',
   readOnly = false,
   showTitle = true,
   showDescription = true,
+  frameClassName,
   documentClassName,
 }: {
   title: string;
@@ -30,10 +31,11 @@ export function NoteEditorDocument({
   readOnly?: boolean;
   showTitle?: boolean;
   showDescription?: boolean;
+  frameClassName?: string;
   documentClassName?: string;
 }) {
   return (
-    <div className="ui-note-editor-frame">
+    <div className={frameClassName ? `ui-note-editor-frame ${frameClassName}` : 'ui-note-editor-frame'}>
       <div className={documentClassName ? `ui-note-editor-doc ${documentClassName}` : 'ui-note-editor-doc'}>
         {showTitle ? (
           <input
