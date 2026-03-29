@@ -9,6 +9,10 @@ import {
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import {
+  applyDefaultModelPresetToSettings,
+  buildModelPresetSystemPrompt,
+} from './modelPresets.js';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -917,7 +921,17 @@ function readRuntimeLastChangelogVersion(settingsPath: string): string | undefin
 }
 
 function mergeMaterializedSettings(profileSettingsFiles: string[], targetSettingsPath: string): Record<string, unknown> {
-  const merged = mergeJsonFiles(profileSettingsFiles);
+  let merged: Record<string, unknown> = {};
+
+  for (const path of profileSettingsFiles) {
+    const layerSettings = readJsonFile(path);
+    merged = deepMerge(merged, layerSettings);
+    if (typeof layerSettings.defaultModelPreset === 'string' && layerSettings.defaultModelPreset.trim().length > 0) {
+      merged = applyDefaultModelPresetToSettings(merged, { overwrite: true });
+    }
+  }
+
+  merged = applyDefaultModelPresetToSettings(merged);
   const runtimeLastChangelogVersion = readRuntimeLastChangelogVersion(targetSettingsPath);
 
   if (runtimeLastChangelogVersion) {
@@ -957,10 +971,12 @@ export function materializeProfileToAgentDir(
     writtenFiles.push(targetPath);
   };
 
-  if (profile.settingsFiles.length > 0) {
-    const targetSettingsPath = join(targetDir, 'settings.json');
-    const settings = mergeMaterializedSettings(profile.settingsFiles, targetSettingsPath);
-    writeOrRemove('settings.json', JSON.stringify(settings, null, 2));
+  const materializedSettings = profile.settingsFiles.length > 0
+    ? mergeMaterializedSettings(profile.settingsFiles, join(targetDir, 'settings.json'))
+    : null;
+
+  if (materializedSettings) {
+    writeOrRemove('settings.json', JSON.stringify(materializedSettings, null, 2));
   } else {
     writeOrRemove('settings.json', undefined);
   }
@@ -987,11 +1003,15 @@ export function materializeProfileToAgentDir(
   }
 
   const generatedAppendContent = composePromptCatalogDirectory('system', { repoRoot: profile.repoRoot, separator: '\n\n' });
+  const generatedModelPresetContent = materializedSettings
+    ? buildModelPresetSystemPrompt(materializedSettings, { skillDirs: profile.skillDirs })
+    : '';
   const fileAppendContent = profile.appendSystemFiles.length > 0
     ? combineMarkdownFiles(profile.appendSystemFiles)
     : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
+    generatedModelPresetContent,
     fileAppendContent ?? '',
   ]);
 
@@ -1066,6 +1086,19 @@ export function buildPiResourceArgs(
   return args;
 }
 
+export {
+  applyDefaultModelPresetToSettings,
+  buildModelPresetSystemPrompt,
+  collectSkillModelPresetHints,
+  findMatchingModelPreset,
+  formatModelPresetModelArgument,
+  readModelPresetLibrary,
+  resolveModelPreset,
+  type ModelPresetLibrary,
+  type ModelPresetSkillHint,
+  type ModelPresetThinkingLevel,
+  type ResolvedModelPreset,
+} from './modelPresets.js';
 export {
   composePromptCatalogDirectory,
   composePromptCatalogEntries,

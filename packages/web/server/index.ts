@@ -727,7 +727,11 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createAskUserQuestionAgentExtension(),
-    createRunAgentExtension(),
+    createRunAgentExtension({
+      getCurrentProfile,
+      repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
+    }),
     createMemoryAgentExtension(),
     createArtifactAgentExtension({
       stateRoot: getStateRoot(),

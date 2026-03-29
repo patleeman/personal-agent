@@ -10,6 +10,7 @@ import {
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
+  readModelPresetLibrary,
   readPackageSourceTargetState,
   resolveLocalProfileSettingsFilePath,
   resolveResourceProfile,
@@ -148,18 +149,44 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
     writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
-    writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({
+      datadog: true,
+      defaultModelPreset: 'balanced',
+      modelPresets: {
+        balanced: {
+          description: 'Balanced default',
+          model: 'openai-codex/gpt-5.4',
+          thinkingLevel: 'high',
+          goodFor: ['most coding work'],
+        },
+        'cheap-ops': {
+          description: 'Cheaper bounded work',
+          model: 'openai-codex/gpt-5.1-codex-mini',
+          thinkingLevel: 'off',
+        },
+      },
+    }));
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `---\nname: checkpoint\ndescription: Commit and push the agent's current work.\nkind: skill\npreferredModelPreset: cheap-ops\n---\n`);
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
+    const runtimeSettings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
+    const runtimePrompt = readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8');
 
     expect(result.writtenFiles.some((path) => path.endsWith('/AGENTS.md'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/APPEND_SYSTEM.md'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
-    expect(readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8')).toContain('catalog role');
-    expect(readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8')).toContain('shared append');
+    expect(runtimePrompt).toContain('catalog role');
+    expect(runtimePrompt).toContain('shared append');
+    expect(runtimePrompt).toContain('<model-presets>');
+    expect(runtimePrompt).toContain('Default preset: balanced');
+    expect(runtimePrompt).toContain('@checkpoint: prefer cheap-ops');
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Datadog');
+    expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
+    expect(runtimeSettings.defaultProvider).toBe('openai-codex');
+    expect(runtimeSettings.defaultThinkingLevel).toBe('high');
+    expect(readModelPresetLibrary(runtimeSettings).presets).toHaveLength(2);
   });
 
   it('installs package sources into the selected durable settings file', () => {

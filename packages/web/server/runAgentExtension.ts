@@ -1,9 +1,11 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { startBackgroundRun } from '@personal-agent/daemon';
+import { formatModelPresetModelArgument } from '@personal-agent/resources';
 import { invalidateAppTopics } from './appEvents.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
+import { resolveProfileModelPreset } from './profileModelPresets.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'cancel'] as const;
 
@@ -16,6 +18,7 @@ const RunToolParams = Type.Object({
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
   prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent.' })),
   model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
+  modelPreset: Type.Optional(Type.String({ description: 'Optional named model preset for start_agent.' })),
   profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
@@ -28,6 +31,35 @@ function readRequiredString(value: string | undefined, label: string): string {
   }
 
   return normalized;
+}
+
+function resolveAgentRunModel(input: {
+  model?: string;
+  modelPreset?: string;
+  profile: string;
+  repoRoot: string;
+  profilesRoot: string;
+}): string | undefined {
+  const model = input.model?.trim();
+  const modelPreset = input.modelPreset?.trim();
+
+  if (model && modelPreset) {
+    throw new Error('Provide either model or modelPreset, not both.');
+  }
+
+  if (!modelPreset) {
+    return model;
+  }
+
+  const preset = resolveProfileModelPreset(input.profile, modelPreset, {
+    repoRoot: input.repoRoot,
+    profilesRoot: input.profilesRoot,
+  });
+  if (!preset) {
+    throw new Error(`Unknown model preset: ${modelPreset}`);
+  }
+
+  return formatModelPresetModelArgument(preset);
 }
 
 function formatRunList(result: Awaited<ReturnType<typeof listDurableRuns>>): string {
@@ -66,7 +98,11 @@ function formatRunDetail(result: NonNullable<Awaited<ReturnType<typeof getDurabl
   return lines.join('\n');
 }
 
-export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
+export function createRunAgentExtension(options: {
+  getCurrentProfile: () => string;
+  repoRoot: string;
+  profilesRoot: string;
+}): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
       name: 'run',
@@ -182,7 +218,16 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
               const model = params.model?.trim();
-              const profile = params.profile?.trim();
+              const modelPreset = params.modelPreset?.trim();
+              const profile = params.profile?.trim() || options.getCurrentProfile();
+
+              const resolvedModel = resolveAgentRunModel({
+                model,
+                modelPreset,
+                profile,
+                repoRoot: options.repoRoot,
+                profilesRoot: options.profilesRoot,
+              });
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -190,7 +235,7 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
                 cwd,
                 agent: {
                   prompt,
-                  ...(model ? { model } : {}),
+                  ...(resolvedModel ? { model: resolvedModel } : {}),
                   ...(profile ? { profile } : {}),
                 },
                 source: {
@@ -218,7 +263,8 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
                   runId: result.runId,
                   taskSlug,
                   cwd,
-                  model,
+                  model: resolvedModel,
+                  modelPreset,
                   profile,
                   logPath: result.logPath,
                 },
