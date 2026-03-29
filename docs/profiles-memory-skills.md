@@ -28,6 +28,7 @@ In addition, repo built-ins are always available from:
 The synced durable store can contain:
 
 - `profiles/*.json`
+- `profiles/<profile>/agent/AGENTS.md`
 - `agents/**`
 - `settings/**`
 - `models/**`

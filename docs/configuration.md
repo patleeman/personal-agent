@@ -90,6 +90,7 @@ Profile resources resolve from repo defaults plus synced durable roots:
 Common durable roots:
 
 - `profiles/*.json`
+- `profiles/<profile>/agent/AGENTS.md`
 - `agents/**`
 - `settings/**`
 - `models/**`
@@ -179,6 +180,7 @@ Setup enables the daemon sync module and schedules periodic background sync.
 By default, sync tracks:
 
 - `profiles/*.json`
+- `profiles/<profile>/agent/AGENTS.md`
 - `agents/**`
 - `settings/**`
 - `models/**`
