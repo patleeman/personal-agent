@@ -1,5 +1,6 @@
-import { AuthStorage, ModelRegistry, type OAuthCredential } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, type OAuthCredential } from '@mariozechner/pi-coding-agent';
 import type { OAuthPrompt } from '@mariozechner/pi-ai';
+import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
 
@@ -114,8 +115,8 @@ function normalizeProvider(provider: string): string {
   return provider.trim();
 }
 
-function readModelCounts(authStorage: AuthStorage): Map<string, number> {
-  const registry = new ModelRegistry(authStorage);
+function readModelCounts(authFile: string): Map<string, number> {
+  const registry = createModelRegistryForAuthFile(authFile);
   const counts = new Map<string, number>();
 
   for (const model of registry.getAvailable()) {
@@ -158,7 +159,7 @@ function makeAuthStorage(authFile: string): AuthStorage {
 
 export function readProviderAuthState(authFile: string): ProviderAuthState {
   const authStorage = makeAuthStorage(authFile);
-  const modelCounts = readModelCounts(authStorage);
+  const modelCounts = readModelCounts(authFile);
   const oauthProvidersById = new Map(authStorage.getOAuthProviders().map((provider) => [provider.id, provider]));
 
   const providers = new Set<string>([

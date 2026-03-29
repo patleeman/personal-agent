@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
-import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { ModelRegistry } from '@mariozechner/pi-coding-agent';
 import type { WorkspaceGitDraftSource } from './workspaceBrowser.js';
+import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.4';
@@ -194,7 +195,7 @@ export async function draftWorkspaceCommitMessage(options: {
 }): Promise<WorkspaceCommitDraftResult> {
   const fallback = buildFallbackDraft(options.draftSource);
   const settings = readDraftModelSettings(options.settingsFile);
-  const modelRegistry = new ModelRegistry(AuthStorage.create(options.authFile));
+  const modelRegistry = createModelRegistryForAuthFile(options.authFile);
   const model = resolveModel(modelRegistry, settings);
 
   if (!model) {

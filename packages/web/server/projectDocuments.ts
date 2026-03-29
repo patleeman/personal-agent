@@ -1,8 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
-import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { ModelRegistry } from '@mariozechner/pi-coding-agent';
 import { requirePromptCatalogEntry } from '@personal-agent/resources';
 import type { ProjectDetail, ProjectLinkedConversation } from './projects.js';
+import { createModelRegistryForAuthFile } from './modelRegistry.js';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.1-codex-mini';
@@ -67,7 +68,7 @@ function readProjectDocumentSettings(settingsFile: string): {
 }
 
 function makeModelRegistry(authFile: string): ModelRegistry {
-  return new ModelRegistry(AuthStorage.create(authFile));
+  return createModelRegistryForAuthFile(authFile);
 }
 
 function resolveModel(modelRegistry: ModelRegistry, settings: { provider: string; model: string }): Model<Api> | null {
