@@ -24,7 +24,7 @@ export const SETTINGS_PAGE_ITEMS = [
     id: 'providers',
     navSection: 'preferences',
     label: 'Providers',
-    summary: 'API keys, OAuth, and Codex plan usage.',
+    summary: 'Custom providers, models, API keys, OAuth, and Codex plan usage.',
   },
   {
     id: 'interface',
