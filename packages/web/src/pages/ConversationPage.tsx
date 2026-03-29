@@ -89,6 +89,7 @@ import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
+import { getStreamingThroughputLabel } from '../streamingThroughput';
 
 const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
@@ -1250,6 +1251,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const pendingAskUserQuestion = useMemo(
     () => findPendingAskUserQuestion(realMessages),
     [realMessages],
+  );
+  const streamingThroughputLabel = useMemo(
+    () => getStreamingThroughputLabel(realMessages ?? [], stream.isStreaming),
+    [realMessages, stream.isStreaming],
   );
   const pendingAskUserQuestionKey = useMemo(() => {
     if (!pendingAskUserQuestion) {
@@ -4378,9 +4383,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             ) : (
               <>
                 {stream.isStreaming && (
-                  <span className="inline-flex items-center gap-1.5 text-accent">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-accent"
+                    title={streamingThroughputLabel ? 'Estimated from streamed output using the same chars/4 token heuristic used elsewhere in Pi.' : undefined}
+                  >
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-                    running
+                    <span>running</span>
+                    {streamingThroughputLabel && <span className="font-mono text-[11px] text-accent/80">· {streamingThroughputLabel}</span>}
                   </span>
                 )}
                 {!stream.isStreaming && remoteConversationRequiresConnect && (
