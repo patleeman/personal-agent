@@ -32,6 +32,7 @@ export function NodeWorkspaceShell({
   title,
   titleAs: TitleTag = 'h1',
   summary,
+  summaryClassName,
   meta,
   status,
   resourceTabs,
@@ -48,6 +49,7 @@ export function NodeWorkspaceShell({
   title: ReactNode;
   titleAs?: ElementType;
   summary?: ReactNode;
+  summaryClassName?: string;
   meta?: ReactNode;
   status?: ReactNode;
   resourceTabs?: NodeWorkspaceTab[];
@@ -96,7 +98,7 @@ export function NodeWorkspaceShell({
 
           <div className="min-w-0 space-y-2">
             <TitleTag className={compactTitle ? 'break-words text-[15px] font-medium text-secondary' : 'break-words text-[32px] font-semibold tracking-tight text-primary'}>{title}</TitleTag>
-            {summary ? <div className="max-w-3xl text-[15px] leading-relaxed text-secondary">{summary}</div> : null}
+            {summary ? <div className={cx('text-[15px] leading-relaxed text-secondary', summaryClassName ?? 'max-w-3xl')}>{summary}</div> : null}
             {meta ? <div className="ui-card-meta flex flex-wrap items-center gap-x-2 gap-y-1">{meta}</div> : null}
           </div>
         </div>

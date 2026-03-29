@@ -313,7 +313,7 @@ describe('NodesPage', () => {
     expect(html).toContain('aria-label="Delete note"');
     expect(html).toContain('Properties');
     expect(html).toContain('References');
-    expect(html).toContain('Relationships');
+    expect(html).not.toContain('Relationships');
     expect(html).toContain('overview.md');
     expect(html).not.toContain('Open dedicated page');
   });

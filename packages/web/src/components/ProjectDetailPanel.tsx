@@ -40,13 +40,12 @@ import { timeAgo } from '../utils';
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
 const DANGER_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-danger hover:text-danger/75 transition-colors disabled:opacity-40';
 const RAIL_SECTION_CLASS = 'border-t border-border-subtle pt-3 first:border-t-0 first:pt-0';
-const RAIL_SECONDARY_BUTTON_CLASS = 'inline-flex items-center justify-center rounded-lg border border-border-default bg-base/50 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface';
 const PROJECT_TOOLBAR_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-border-subtle bg-base/40 text-secondary hover:bg-surface hover:text-primary disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_PRIMARY_BUTTON_CLASS = 'h-8 w-8 rounded-full border border-accent/25 bg-accent/10 text-accent hover:bg-accent/15 hover:text-accent disabled:cursor-default disabled:opacity-40';
 const PROJECT_TOOLBAR_GROUP_CLASS = 'inline-flex items-center gap-1 rounded-full border border-border-subtle bg-base/30 p-1';
 const PROJECT_BACK_LINK_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-base/40 text-secondary transition-colors hover:bg-surface hover:text-primary';
 const PROJECT_INLINE_TITLE_INPUT_CLASS = 'w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
-const PROJECT_INLINE_SUMMARY_CLASS = 'w-full max-w-3xl min-h-[5.5rem] resize-y rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[14px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
+const PROJECT_INLINE_SUMMARY_CLASS = 'w-full min-h-[5.5rem] resize-y rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[14px] leading-relaxed text-secondary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
 const PROJECT_PROPERTY_INPUT_CLASS = 'w-full rounded-lg border border-transparent bg-transparent -mx-2 px-2 py-1 text-[13px] leading-relaxed text-primary transition-colors placeholder:text-dim/70 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none';
 const PROJECT_PROPERTY_SELECT_CLASS = `${PROJECT_PROPERTY_INPUT_CLASS} pr-8`;
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
@@ -95,10 +94,12 @@ function summarizeConversationMeta(conversation: ProjectDetail['linkedConversati
   return conversation.isRunning ? 'Conversation running' : 'Linked conversation';
 }
 
-function ToolbarGlyph({ path }: { path: string }) {
+function ToolbarGlyph({ path }: { path: string | string[] }) {
+  const paths = Array.isArray(path) ? path : [path];
+
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={path} />
+      {paths.map((segment) => <path key={segment} d={segment} />)}
     </svg>
   );
 }
@@ -499,7 +500,6 @@ export function ProjectDetailPanel({
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
 
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -576,7 +576,6 @@ export function ProjectDetailPanel({
     setFileError(null);
     setConversationError(null);
     setArchiveError(null);
-    setAdvancedOpen(false);
     setDeleteError(null);
     setRawProjectOpen(false);
     setRawProjectLoaded(false);
@@ -1024,7 +1023,6 @@ export function ProjectDetailPanel({
       return;
     }
 
-    setAdvancedOpen(true);
     setRawProjectError(null);
     setRawProjectOpen(true);
 
@@ -1137,6 +1135,9 @@ export function ProjectDetailPanel({
       : documentContent !== savedDocumentContent
         ? 'Unsaved changes'
         : (documentSavedAt ? 'Saved' : null));
+  const showLinkedConversationsSection = project.linkedConversations.length > 0;
+  const showNotesSection = project.notes.length > 0 || noteEditor !== null || Boolean(noteError);
+  const showFilesSection = project.files.length > 0 || fileComposerOpen || Boolean(fileError);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
@@ -1175,13 +1176,75 @@ export function ProjectDetailPanel({
                 </IconButton>
                 <IconButton
                   type="button"
-                  onClick={() => setAdvancedOpen((value) => !value)}
+                  onClick={() => {
+                    if (noteEditor?.mode === 'add') {
+                      setNoteEditor(null);
+                      return;
+                    }
+                    openNoteAdd();
+                  }}
+                  disabled={noteBusy || deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={noteEditor?.mode === 'add' ? 'Cancel note' : 'Add note'}
+                  aria-label={noteEditor?.mode === 'add' ? 'Cancel note' : 'Add note'}
+                >
+                  <ToolbarGlyph path={["M12 5v14", "M5 12h14", "M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"]} />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => {
+                    setFileError(null);
+                    setFileComposerOpen((value) => !value);
+                  }}
+                  disabled={fileBusy || deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={fileComposerOpen ? 'Cancel file upload' : 'Upload file'}
+                  aria-label={fileComposerOpen ? 'Cancel file upload' : 'Upload file'}
+                >
+                  <ToolbarGlyph path={["M12 16V8", "M8.5 11.5 12 8l3.5 3.5", "M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"]} />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={downloadProjectPackage}
                   disabled={deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={advancedOpen ? 'Hide more' : 'More'}
-                  aria-label={advancedOpen ? 'Hide more' : 'More'}
+                  title="Export project"
+                  aria-label="Export project"
                 >
-                  <ToolbarGlyph path="M12 6.5h.01M12 12h.01M12 17.5h.01" />
+                  <ToolbarGlyph path={["M12 4v9", "M8.5 9.5 12 13l3.5-3.5", "M5 18.25h14"]} />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => { void toggleArchive(); }}
+                  disabled={archiveBusy || deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={archived ? 'Restore project' : 'Archive project'}
+                  aria-label={archived ? 'Restore project' : 'Archive project'}
+                >
+                  <ToolbarGlyph path={archived
+                    ? ["M7 11.5 12 7l5 4.5", "M12 7v10", "M5 19h14"]
+                    : ["M4 7.5h16v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M9 12h6"]}
+                  />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => { void toggleRawProject(); }}
+                  disabled={deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={rawProjectOpen ? 'Hide raw project YAML' : 'Show raw project YAML'}
+                  aria-label={rawProjectOpen ? 'Hide raw project YAML' : 'Show raw project YAML'}
+                >
+                  <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M10 11h4", "M10 15h4"]} />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => { void deleteProject(); }}
+                  disabled={deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={deleteBusy ? 'Deleting project' : 'Delete project'}
+                  aria-label={deleteBusy ? 'Deleting project' : 'Delete project'}
+                >
+                  <ToolbarGlyph path={["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"]} />
                 </IconButton>
               </div>
             </div>
@@ -1293,35 +1356,19 @@ export function ProjectDetailPanel({
         ) : null}
         {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
 
-        {advancedOpen ? (
-          <ProjectRailSection title="More">
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={downloadProjectPackage} className={RAIL_SECONDARY_BUTTON_CLASS}>Export</button>
-                <button type="button" onClick={() => { void toggleArchive(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={archiveBusy || deleteBusy}>
-                  {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore' : 'Archive')}
-                </button>
-                <button type="button" onClick={() => { void toggleRawProject(); }} className={RAIL_SECONDARY_BUTTON_CLASS} disabled={deleteBusy}>
-                  {rawProjectOpen ? 'Hide YAML' : 'Raw YAML'}
-                </button>
-                <button type="button" onClick={() => { void deleteProject(); }} className={DANGER_TEXT_BUTTON_CLASS} disabled={deleteBusy}>
-                  {deleteBusy ? 'Deleting…' : 'Delete project'}
-                </button>
-              </div>
-              {rawProjectOpen ? (
-                <ProjectRecordViewer
-                  repoRoot={record.repoRoot}
-                  summary={record.summary}
-                  rawProjectOpen={rawProjectOpen}
-                  rawProjectContent={rawProjectContent}
-                  rawProjectBusy={rawProjectBusy}
-                  rawProjectError={rawProjectError}
-                  onRawProjectContentChange={setRawProjectContent}
-                  onRawProjectSubmit={saveRawProject}
-                  showSummary={false}
-                />
-              ) : null}
-            </div>
+        {rawProjectOpen ? (
+          <ProjectRailSection title="state.yaml">
+            <ProjectRecordViewer
+              repoRoot={record.repoRoot}
+              summary={record.summary}
+              rawProjectOpen={rawProjectOpen}
+              rawProjectContent={rawProjectContent}
+              rawProjectBusy={rawProjectBusy}
+              rawProjectError={rawProjectError}
+              onRawProjectContentChange={setRawProjectContent}
+              onRawProjectSubmit={saveRawProject}
+              showSummary={false}
+            />
           </ProjectRailSection>
         ) : null}
 
@@ -1376,67 +1423,73 @@ export function ProjectDetailPanel({
           </div>
         </ProjectRailSection>
 
-        <ProjectRailSection
-          title="Linked conversations"
-          meta={`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`}
-        >
-          <ProjectConversationList conversations={project.linkedConversations} />
-        </ProjectRailSection>
+        {showLinkedConversationsSection ? (
+          <ProjectRailSection
+            title="Linked conversations"
+            meta={`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`}
+          >
+            <ProjectConversationList conversations={project.linkedConversations} />
+          </ProjectRailSection>
+        ) : null}
 
-        <ProjectRailSection
-          title="Notes"
-          meta={`${project.noteCount ?? project.notes.length} ${project.notes.length === 1 ? 'note' : 'notes'}`}
-          action={(
-            <button
-              type="button"
-              onClick={() => {
-                if (noteEditor?.mode === 'add') {
-                  setNoteEditor(null);
-                  return;
-                }
-                openNoteAdd();
-              }}
-              className={ACTION_TEXT_BUTTON_CLASS}
-              disabled={noteBusy}
-            >
-              {noteEditor?.mode === 'add' ? 'Cancel' : '+ Add note'}
-            </button>
-          )}
-        >
-          <ProjectNoteList
-            notes={project.notes}
-            noteEditor={noteEditor}
-            noteEditorForm={noteEditorForm}
-            noteBusy={noteBusy}
-            onEditNote={openNoteEdit}
-            onDeleteNote={(noteId) => { void deleteNote(noteId); }}
-          />
-          {noteError && !noteEditor ? <p className="mt-2 text-[12px] text-danger">{noteError}</p> : null}
-        </ProjectRailSection>
+        {showNotesSection ? (
+          <ProjectRailSection
+            title="Notes"
+            meta={`${project.noteCount ?? project.notes.length} ${project.notes.length === 1 ? 'note' : 'notes'}`}
+            action={(
+              <button
+                type="button"
+                onClick={() => {
+                  if (noteEditor?.mode === 'add') {
+                    setNoteEditor(null);
+                    return;
+                  }
+                  openNoteAdd();
+                }}
+                className={ACTION_TEXT_BUTTON_CLASS}
+                disabled={noteBusy}
+              >
+                {noteEditor?.mode === 'add' ? 'Cancel' : '+ Add note'}
+              </button>
+            )}
+          >
+            <ProjectNoteList
+              notes={project.notes}
+              noteEditor={noteEditor}
+              noteEditorForm={noteEditorForm}
+              noteBusy={noteBusy}
+              onEditNote={openNoteEdit}
+              onDeleteNote={(noteId) => { void deleteNote(noteId); }}
+            />
+            {noteError && !noteEditor ? <p className="mt-2 text-[12px] text-danger">{noteError}</p> : null}
+          </ProjectRailSection>
+        ) : null}
 
-        <ProjectRailSection
-          title="Files"
-          meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
-          action={(
-            <button
-              type="button"
-              onClick={() => {
-                setFileError(null);
-                setFileComposerOpen((value) => !value);
-              }}
-              className={ACTION_TEXT_BUTTON_CLASS}
-              disabled={fileBusy}
-            >
-              {fileComposerOpen ? 'Cancel' : 'Upload file'}
-            </button>
-          )}
-        >
-          <div className="space-y-2.5">
-            {fileUploadForm}
-            <ProjectFileList files={project.files} fileBusy={fileBusy} onDeleteFile={(file) => { void deleteFile(file); }} />
-            {fileError && !fileComposerOpen ? <p className="text-[12px] text-danger">{fileError}</p> : null}
-          </div>
-        </ProjectRailSection>
+        {showFilesSection ? (
+          <ProjectRailSection
+            title="Files"
+            meta={`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`}
+            action={(
+              <button
+                type="button"
+                onClick={() => {
+                  setFileError(null);
+                  setFileComposerOpen((value) => !value);
+                }}
+                className={ACTION_TEXT_BUTTON_CLASS}
+                disabled={fileBusy}
+              >
+                {fileComposerOpen ? 'Cancel' : 'Upload file'}
+              </button>
+            )}
+          >
+            <div className="space-y-2.5">
+              {fileUploadForm}
+              <ProjectFileList files={project.files} fileBusy={fileBusy} onDeleteFile={(file) => { void deleteFile(file); }} />
+              {fileError && !fileComposerOpen ? <p className="text-[12px] text-danger">{fileError}</p> : null}
+            </div>
+          </ProjectRailSection>
+        ) : null}
       </aside>
     </div>
   );

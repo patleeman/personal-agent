@@ -99,7 +99,7 @@ describe('SkillsPage', () => {
     expect(html).toContain('Automate browsers and Electron apps with agent-browser.');
     expect(html).toContain('Autosave on');
     expect(html).toContain('Files');
-    expect(html).toContain('Relationships');
+    expect(html).not.toContain('Relationships');
     expect(html).not.toContain('Browse reusable workflows');
     expect(html).not.toContain('Search skills');
   });

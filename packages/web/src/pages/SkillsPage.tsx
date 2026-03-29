@@ -15,9 +15,10 @@ import {
 } from '../components/ui';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import {
-  NodeMainSection,
+  NodeIconActionButton,
   NodePropertyList,
   NodeRailSection,
+  NodeToolbarGroup,
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
@@ -142,12 +143,12 @@ export function SkillWorkspace({
   const selectedPath = selectedReference?.path ?? detail.skill.path;
   const isDocumentReady = loadedPath === selectedPath && !contentLoading;
   const dirty = draft !== savedContent;
-  const documentLabel = selectedReference?.title ?? 'Main skill document';
+  const documentLabel = selectedReference?.title ?? null;
   const documentKindLabel = selectedReference ? 'Reference' : 'Definition';
   const documentMeta = selectedReference?.relativePath ?? 'Main skill file';
   const documentSummary = selectedReference?.summary || (selectedReference
     ? 'Supporting guidance for this skill.'
-    : 'Edit the primary skill definition and guidance.');
+    : null);
 
   useEffect(() => {
     if (selectedView !== 'definition') {
@@ -336,6 +337,11 @@ export function SkillWorkspace({
           : saveState === 'saved'
             ? { text: 'All changes saved', className: 'text-dim' }
             : { text: 'Autosave on', className: 'text-dim' };
+  const hasRelationships = Boolean(
+    (detail.links?.outgoing?.length ?? 0) > 0
+      || (detail.links?.incoming?.length ?? 0) > 0
+      || (detail.links?.unresolved?.length ?? 0) > 0,
+  );
 
   return (
     <NodeWorkspaceShell
@@ -366,9 +372,19 @@ export function SkillWorkspace({
       )}
       status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
-        <ToolbarButton onClick={() => { void handleReload(); }} disabled={contentLoading || saveBusy}>
-          {contentLoading ? 'Loading…' : 'Reload'}
-        </ToolbarButton>
+        <NodeToolbarGroup>
+          <NodeIconActionButton
+            onClick={() => { void handleReload(); }}
+            disabled={contentLoading || saveBusy}
+            title={contentLoading ? 'Loading skill' : 'Reload skill'}
+            aria-label={contentLoading ? 'Loading skill' : 'Reload skill'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M20 11a8 8 0 1 0 2.3 5.7" />
+              <path d="M20 4v7h-7" />
+            </svg>
+          </NodeIconActionButton>
+        </NodeToolbarGroup>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
@@ -380,9 +396,6 @@ export function SkillWorkspace({
               { label: 'Usage', value: formatUsageLabel(detail.skill.recentSessionCount, detail.skill.lastUsedAt, detail.skill.usedInLastSession, 'Not used recently') },
             ]} />
           </NodeRailSection>
-          <NodeRailSection title="Description">
-            <p className="text-[12px] leading-relaxed text-secondary">{detail.skill.description}</p>
-          </NodeRailSection>
           <NodeRailSection title="Files" meta={selectedReference ? 'References live here instead of separate pages.' : 'Use the inspector to open supporting references.'}>
             <SkillFileList
               detail={detail}
@@ -393,13 +406,15 @@ export function SkillWorkspace({
               onSaveCurrent={() => handleSave()}
             />
           </NodeRailSection>
-          <NodeRailSection title="Relationships">
-            <div className="space-y-4">
-              <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
-              <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
-              <UnresolvedNodeLinks ids={detail.links?.unresolved} />
-            </div>
-          </NodeRailSection>
+          {hasRelationships ? (
+            <NodeRailSection title="Relationships">
+              <div className="space-y-4">
+                <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
+                <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
+                <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+              </div>
+            </NodeRailSection>
+          ) : null}
           <details className="ui-disclosure">
             <summary className="ui-disclosure-summary">
               <span>Advanced</span>
@@ -419,25 +434,20 @@ export function SkillWorkspace({
       ) : !isDocumentReady ? (
         <LoadingState label="Loading skill…" className="h-full justify-center" />
       ) : (
-        <div className="space-y-6 px-6 py-2">
-          <NodeMainSection
-            title={documentLabel}
-            meta={(
-              <div className="space-y-1">
-                <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
-                <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
-                <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{documentSummary}</p>
-              </div>
-            )}
-          >
-            <div className="mx-auto max-w-4xl">
-              <RichMarkdownEditor
-                value={draft}
-                onChange={setDraft}
-                placeholder="Start writing…"
-              />
+        <div className="space-y-3 px-6 py-2">
+          {selectedReference ? (
+            <div className="space-y-1 border-b border-border-subtle pb-4">
+              {documentLabel ? <p className="text-[16px] font-medium text-primary">{documentLabel}</p> : null}
+              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
+              <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
+              {documentSummary ? <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{documentSummary}</p> : null}
             </div>
-          </NodeMainSection>
+          ) : null}
+          <RichMarkdownEditor
+            value={draft}
+            onChange={setDraft}
+            placeholder="Start writing…"
+          />
         </div>
       )}
     </NodeWorkspaceShell>
