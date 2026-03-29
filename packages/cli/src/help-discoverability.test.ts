@@ -55,8 +55,8 @@ describe('subcommand help discoverability', () => {
       expected: ['Tasks', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
     },
     {
-      argv: ['memory', '--help'],
-      expected: ['Memory', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
+      argv: ['note', '--help'],
+      expected: ['Note', 'Usage: pa note [list|find|show|new|lint|help]', 'new <id> --title <title>'],
     },
     {
       argv: ['inbox', '--help'],

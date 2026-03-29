@@ -142,7 +142,7 @@ import { createConversationAutomationPromptExtension } from './conversationAutom
 import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
-import { createMemoryAgentExtension } from './memoryAgentExtension.js';
+import { createNoteAgentExtension } from './noteAgentExtension.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import {
   saveCuratedDistilledConversationMemory,
@@ -733,7 +733,7 @@ function buildLiveSessionExtensionFactories() {
       repoRoot: REPO_ROOT,
       profilesRoot: getProfilesRoot(),
     }),
-    createMemoryAgentExtension(),
+    createNoteAgentExtension(),
     createArtifactAgentExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,

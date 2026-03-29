@@ -39,7 +39,7 @@ These commands are handled by `personal-agent` itself:
 - `pa tasks ...`
 - `pa inbox ...`
 - `pa ui ...`
-- `pa memory ...`
+- `pa note ...`
 - `pa mcp ...`
 - `pa runs ...`
 - `pa targets ...`
@@ -66,7 +66,7 @@ pa ui --open
 pa tui
 pa tui -p "hello"
 pa inbox list
-pa memory list
+pa note list
 pa mcp list
 pa tasks list
 pa targets list
@@ -200,18 +200,18 @@ pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 
 See [Web UI Guide](./web-ui.md).
 
-### `pa memory [list|find|show|new|lint]`
+### `pa note [list|find|show|new|lint]`
 
 Work with the shared global note-node store under `sync/notes/`.
 
 Examples:
 
 ```bash
-pa memory list
-pa memory find --tag structure --area personal-agent
-pa memory show quick-note
-pa memory new note-index --title "Note index" --summary "Top-level note table of contents" --tags notes,index,structure --type index --area notes
-pa memory lint
+pa note list
+pa note find --type reference --area personal-agent
+pa note show quick-note
+pa note new note-index --title "Note index" --summary "Top-level note table of contents" --type reference --area notes
+pa note lint
 ```
 
 See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
@@ -370,11 +370,11 @@ pa inbox list --unread
 ### Create and validate a note node
 
 ```bash
-pa memory new repo-notes \
+pa note new repo-notes \
   --title "Repo Notes" \
   --summary "Useful notes about this repo" \
-  --tags repo,notes
-pa memory lint
+  --type reference
+pa note lint
 ```
 
 ### Debug a scheduled task
@@ -406,7 +406,7 @@ pa doctor --json
 pa daemon status --json
 pa tasks list --json
 pa tasks show <id> --json
-pa memory list --json
+pa note list --json
 pa inbox list --json
 pa runs list --json
 ```

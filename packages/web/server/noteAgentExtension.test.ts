@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createMemoryAgentExtension } from './memoryAgentExtension.js';
+import { createNoteAgentExtension } from './noteAgentExtension.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -20,7 +20,7 @@ function writeFile(path: string, content: string): void {
 }
 
 beforeEach(() => {
-  const stateRoot = createTempDir('pa-web-memory-state-');
+  const stateRoot = createTempDir('pa-web-note-state-');
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_STATE_ROOT: stateRoot,
@@ -33,19 +33,19 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function registerMemoryTool() {
+function registerNoteTool() {
   let registeredTool:
     | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> }
     | undefined;
 
-  createMemoryAgentExtension()({
+  createNoteAgentExtension()({
     registerTool: (tool: unknown) => {
       registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> };
     },
   } as never);
 
   if (!registeredTool) {
-    throw new Error('Memory tool was not registered.');
+    throw new Error('Note tool was not registered.');
   }
 
   return registeredTool;
@@ -71,16 +71,16 @@ function createToolContext() {
   };
 }
 
-function memoryPath(memoryName: string): string {
-  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'notes', memoryName, 'INDEX.md');
+function notePath(noteId: string): string {
+  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'notes', noteId, 'INDEX.md');
 }
 
-describe('memory agent extension', () => {
+describe('note agent extension', () => {
   it('lists, finds, and shows note nodes', async () => {
-    const memoryTool = registerMemoryTool();
+    const noteTool = registerNoteTool();
 
     writeFile(
-      memoryPath('runpod'),
+      notePath('runpod'),
       `---
 id: runpod
 kind: note
@@ -100,7 +100,7 @@ Runpod operational notes.
 `,
     );
     writeFile(
-      memoryPath('desktop'),
+      notePath('desktop'),
       `---
 id: desktop
 kind: note
@@ -120,12 +120,12 @@ Desktop operational notes.
 `,
     );
 
-    const listResult = await memoryTool.execute('tool-1', { action: 'list' }, undefined, undefined, createToolContext());
+    const listResult = await noteTool.execute('tool-1', { action: 'list' }, undefined, undefined, createToolContext());
     expect(listResult.isError).not.toBe(true);
     expect(listResult.content[0]?.text).toContain('@runpod');
     expect(listResult.content[0]?.text).toContain('@desktop');
 
-    const findResult = await memoryTool.execute('tool-2', {
+    const findResult = await noteTool.execute('tool-2', {
       action: 'find',
       tags: ['gpu'],
       type: 'reference',
@@ -136,9 +136,9 @@ Desktop operational notes.
     expect(findResult.content[0]?.text).toContain('@desktop');
     expect(findResult.content[0]?.text).not.toContain('@runpod');
 
-    const showResult = await memoryTool.execute('tool-3', {
+    const showResult = await noteTool.execute('tool-3', {
       action: 'show',
-      memoryId: 'runpod',
+      noteId: 'runpod',
     }, undefined, undefined, createToolContext());
     expect(showResult.isError).not.toBe(true);
     expect(showResult.content[0]?.text).toContain('Note node @runpod');
@@ -146,11 +146,11 @@ Desktop operational notes.
   });
 
   it('creates new note nodes and requires force to overwrite', async () => {
-    const memoryTool = registerMemoryTool();
+    const noteTool = registerNoteTool();
 
-    const created = await memoryTool.execute('tool-1', {
+    const created = await noteTool.execute('tool-1', {
       action: 'new',
-      memoryId: 'quick-note',
+      noteId: 'quick-note',
       title: 'Quick Note',
       summary: 'Tracks one-off details.',
       tags: ['notes', 'personal'],
@@ -160,12 +160,12 @@ Desktop operational notes.
 
     expect(created.isError).not.toBe(true);
     expect(created.content[0]?.text).toContain('Created note node @quick-note');
-    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('id: quick-note');
-    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('summary: Tracks one-off details.');
+    expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('id: quick-note');
+    expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('summary: Tracks one-off details.');
 
-    const duplicate = await memoryTool.execute('tool-2', {
+    const duplicate = await noteTool.execute('tool-2', {
       action: 'new',
-      memoryId: 'quick-note',
+      noteId: 'quick-note',
       title: 'Updated Note',
       summary: 'Updated summary.',
       tags: ['notes'],
@@ -174,9 +174,9 @@ Desktop operational notes.
     expect(duplicate.isError).toBe(true);
     expect(duplicate.content[0]?.text).toContain('already exists');
 
-    const updated = await memoryTool.execute('tool-3', {
+    const updated = await noteTool.execute('tool-3', {
       action: 'new',
-      memoryId: 'quick-note',
+      noteId: 'quick-note',
       title: 'Updated Note',
       summary: 'Updated summary.',
       tags: ['notes'],
@@ -185,14 +185,14 @@ Desktop operational notes.
 
     expect(updated.isError).not.toBe(true);
     expect(updated.content[0]?.text).toContain('Updated note node @quick-note');
-    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('title: Updated Note');
+    expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('title: Updated Note');
   });
 
   it('reports lint issues without treating lint as a tool failure', async () => {
-    const memoryTool = registerMemoryTool();
+    const noteTool = registerNoteTool();
 
     writeFile(
-      memoryPath('runpod'),
+      notePath('runpod'),
       `---
 id: runpod
 kind: note
@@ -212,7 +212,7 @@ Runpod operational notes.
 `,
     );
     writeFile(
-      memoryPath('orphan'),
+      notePath('orphan'),
       `---
 id: orphan
 kind: note
@@ -232,9 +232,9 @@ metadata:
 Broken parent reference.
 `,
     );
-    writeFile(memoryPath('invalid'), '# Missing frontmatter\n');
+    writeFile(notePath('invalid'), '# Missing frontmatter\n');
 
-    const lintResult = await memoryTool.execute('tool-1', { action: 'lint' }, undefined, undefined, createToolContext());
+    const lintResult = await noteTool.execute('tool-1', { action: 'lint' }, undefined, undefined, createToolContext());
     expect(lintResult.isError).not.toBe(true);
     expect(lintResult.content[0]?.text).toContain('Parse errors:');
     expect(lintResult.content[0]?.text).not.toContain('Duplicate ids:');

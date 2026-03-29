@@ -93,7 +93,7 @@ import {
 } from '@personal-agent/services';
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
-import { memoryCommand } from './memory.js';
+import { noteCommand } from './note.js';
 import { mcpCommand } from './mcp-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import {
@@ -5142,12 +5142,12 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: uiCommand,
     },
     {
-      name: 'memory',
+      name: 'note',
       category: 'data',
-      usage: 'memory [list|find|show|new|lint|help] [args...]',
+      usage: 'note [list|find|show|new|lint|help] [args...]',
       description: 'Inspect note nodes',
       disableBuiltInHelp: true,
-      run: memoryCommand,
+      run: noteCommand,
     },
     {
       name: 'mcp',

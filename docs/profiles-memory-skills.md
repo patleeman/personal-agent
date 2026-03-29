@@ -243,16 +243,16 @@ pa profile use <name>
 ### Note-node commands
 
 ```bash
-pa memory list
-pa memory find --tag notes
-pa memory show <id>
-pa memory new <id> --title "..." --summary "..." --tags tag1,tag2
-pa memory lint
+pa note list
+pa note find --type reference
+pa note show <id>
+pa note new <id> --title "..." --summary "..." --type reference
+pa note lint
 ```
 
-The command name is still `pa memory`, but it now operates on shared note nodes under `sync/notes/`.
+Use `pa note` to operate on shared note nodes under `sync/notes/`.
 
-`pa memory new` scaffolds `notes/<note-id>/INDEX.md`.
+`pa note new` scaffolds `notes/<note-id>/INDEX.md`.
 
 ## Local overlay
 

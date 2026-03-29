@@ -19,11 +19,11 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-function memoryPath(profilesRoot: string, noteId: string): string {
+function notePath(profilesRoot: string, noteId: string): string {
   return join(profilesRoot, '..', 'notes', noteId, 'INDEX.md');
 }
 
-function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
+function createNoteRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
   const repoRoot = createTempDir('personal-agent-memory-repo-');
   const stateRoot = createTempDir('personal-agent-memory-state-');
   const profilesRoot = join(stateRoot, 'sync', 'profiles');
@@ -52,9 +52,9 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe('memory command', () => {
+describe('note command', () => {
   it('lists and shows shared note nodes, migrating legacy profile files', async () => {
-    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     writeFile(
       join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md'),
@@ -92,23 +92,23 @@ Desktop operational notes.
       logs.push(String(message ?? ''));
     });
 
-    const listExitCode = await runCli(['memory', 'list', '--json']);
+    const listExitCode = await runCli(['note', 'list', '--json']);
     expect(listExitCode).toBe(0);
 
     const listPayload = JSON.parse(logs[0] as string) as {
-      memoryDir: string;
+      noteDir: string;
       docs: Array<{ id: string; title: string }>;
       parseErrors: Array<unknown>;
     };
 
-    expect(listPayload.memoryDir).toBe(join(profilesRoot, '..', 'notes'));
+    expect(listPayload.noteDir).toBe(join(profilesRoot, '..', 'notes'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
-    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('id: runpod');
+    expect(readFileSync(notePath(profilesRoot, 'runpod'), 'utf-8')).toContain('id: runpod');
 
     logs.length = 0;
 
-    const showExitCode = await runCli(['memory', 'show', 'runpod', '--json']);
+    const showExitCode = await runCli(['note', 'show', 'runpod', '--json']);
     expect(showExitCode).toBe(0);
 
     const showPayload = JSON.parse(logs[0] as string) as {
@@ -122,10 +122,10 @@ Desktop operational notes.
   });
 
   it('filters note nodes by type/status/text', async () => {
-    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     writeFile(
-      memoryPath(profilesRoot, 'runpod'),
+      notePath(profilesRoot, 'runpod'),
       `---
 id: runpod
 kind: note
@@ -147,7 +147,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      memoryPath(profilesRoot, 'desktop'),
+      notePath(profilesRoot, 'desktop'),
       `---
 id: desktop
 kind: note
@@ -179,7 +179,7 @@ Desktop Ubuntu operational notes.
     });
 
     const exitCode = await runCli([
-      'memory',
+      'note',
       'find',
       '--type',
       'reference',
@@ -205,10 +205,10 @@ Desktop Ubuntu operational notes.
   });
 
   it('fails lint when docs have parse errors or broken links', async () => {
-    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     writeFile(
-      memoryPath(profilesRoot, 'runpod'),
+      notePath(profilesRoot, 'runpod'),
       `---
 id: runpod
 kind: note
@@ -229,7 +229,7 @@ Runpod operational notes.
 `,
     );
 
-    writeFile(memoryPath(profilesRoot, 'invalid'), '# Missing frontmatter\n');
+    writeFile(notePath(profilesRoot, 'invalid'), '# Missing frontmatter\n');
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -241,7 +241,7 @@ Runpod operational notes.
       logs.push(String(message ?? ''));
     });
 
-    const exitCode = await runCli(['memory', 'lint', '--json']);
+    const exitCode = await runCli(['note', 'lint', '--json']);
     expect(exitCode).toBe(1);
 
     const payload = JSON.parse(logs[0] as string) as {
@@ -260,8 +260,8 @@ Runpod operational notes.
     logSpy.mockRestore();
   });
 
-  it('creates a note node template with memory new', async () => {
-    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
+  it('creates a note node template with note new', async () => {
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -274,7 +274,7 @@ Runpod operational notes.
     });
 
     const exitCode = await runCli([
-      'memory',
+      'note',
       'new',
       'quick-note',
       '--title',
@@ -309,7 +309,7 @@ Runpod operational notes.
     };
 
     expect(payload.id).toBe('quick-note');
-    expect(payload.filePath).toBe(memoryPath(profilesRoot, 'quick-note'));
+    expect(payload.filePath).toBe(notePath(profilesRoot, 'quick-note'));
     expect(payload.type).toBe('note');
     expect(payload.status).toBe('active');
     expect(payload.area).toBe('notes');
@@ -333,7 +333,7 @@ Runpod operational notes.
   });
 
   it('requires --force to overwrite an existing note node', async () => {
-    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -346,7 +346,7 @@ Runpod operational notes.
     });
 
     expect(await runCli([
-      'memory',
+      'note',
       'new',
       'quick-note',
       '--title',
@@ -365,7 +365,7 @@ Runpod operational notes.
     });
 
     const withoutForceExitCode = await runCli([
-      'memory',
+      'note',
       'new',
       'quick-note',
       '--title',
@@ -385,7 +385,7 @@ Runpod operational notes.
     });
 
     const withForceExitCode = await runCli([
-      'memory',
+      'note',
       'new',
       'quick-note',
       '--title',

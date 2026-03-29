@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import memoryExtension, { resolveMemoryProfileContext } from './index';
+import notePolicyExtension, { resolveNoteProfileContext } from './index';
 
 const tempDirs: string[] = [];
 
@@ -37,7 +37,7 @@ afterEach(async () => {
   delete process.env.PERSONAL_AGENT_PROFILES_ROOT;
 });
 
-describe('memory extension', () => {
+describe('note policy extension', () => {
   it('injects active profile path targets, node policy instructions, and available notes', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
@@ -60,7 +60,7 @@ describe('memory extension', () => {
       },
     };
 
-    memoryExtension(pi as never);
+    notePolicyExtension(pi as never);
     expect(beforeAgentStartHandler).toBeDefined();
 
     const result = await beforeAgentStartHandler!(
@@ -98,7 +98,7 @@ describe('memory extension', () => {
       },
     };
 
-    memoryExtension(pi as never);
+    notePolicyExtension(pi as never);
 
     const result = await beforeAgentStartHandler!(
       { prompt: 'what should we retain?', systemPrompt: 'BASE_SYSTEM_PROMPT' },
@@ -132,7 +132,7 @@ describe('memory extension', () => {
       },
     };
 
-    memoryExtension(pi as never);
+    notePolicyExtension(pi as never);
 
     const slashResult = await beforeAgentStartHandler!(
       { prompt: '/model', systemPrompt: 'BASE_SYSTEM_PROMPT' },
@@ -168,7 +168,7 @@ describe('memory extension', () => {
       },
     };
 
-    memoryExtension(pi as never);
+    notePolicyExtension(pi as never);
 
     const result = await beforeAgentStartHandler!(
       { prompt: 'inspect the sync prompt behavior', systemPrompt: 'BASE_SYSTEM_PROMPT' },
@@ -179,7 +179,7 @@ describe('memory extension', () => {
     expect(result?.message).toBeUndefined();
   });
 
-  it('resolves the active memory profile context', () => {
+  it('resolves the active note profile context', () => {
     const repoRoot = createTempDir('memory-context-repo-');
     const stateRoot = createTempDir('memory-context-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -189,10 +189,10 @@ describe('memory extension', () => {
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
 
-    const context = resolveMemoryProfileContext(repoRoot);
+    const context = resolveNoteProfileContext(repoRoot);
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(context.activeAgentsFile).toBe(join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md'));
-    expect(context.activeMemoryDir).toBe(join(stateRoot, 'notes'));
+    expect(context.activeNotesDir).toBe(join(stateRoot, 'notes'));
   });
 });

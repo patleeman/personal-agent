@@ -114,7 +114,7 @@ The web UI is the easiest place to explore:
 - Projects
 - Scheduled tasks
 - Sync state
-- Memory
+- Notes
 - Settings
 
 See [Web UI Guide](./web-ui.md).
@@ -157,7 +157,7 @@ pa tui -p "Summarize my current profile"
 
 ```bash
 pa inbox list
-pa memory list
+pa note list
 pa tasks list
 ```
 
@@ -167,13 +167,13 @@ pa tasks list
 - start a new conversation
 - mention a project with `@project-id` or create one from the Projects page
 
-### Create a memory note
+### Create a note
 
 ```bash
-pa memory new quick-note \
+pa note new quick-note \
   --title "Quick note" \
   --summary "What this note is for" \
-  --tags notes
+  --type reference
 ```
 
 ### Validate scheduled tasks

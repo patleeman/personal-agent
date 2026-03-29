@@ -235,11 +235,11 @@ When an agent needs context, the intended retrieval pattern is:
 
 This is why the docs should describe these as one knowledge system rather than separate product features.
 
-## `pa memory` is only one slice of the system
+## `pa note` is only one slice of the system
 
 The old naming can be confusing.
 
-`pa memory` operates on shared **note nodes** under `sync/notes/`.
+`pa note` operates on shared **note nodes** under `sync/notes/`.
 
 That does **not** mean the whole durable memory system is only note nodes.
 
@@ -250,7 +250,7 @@ The broader memory system is:
 - skill nodes
 - project nodes
 
-`pa memory` is just the CLI surface for one part of it.
+`pa note` is just the CLI surface for one part of it.
 
 ## Writing style across the system
 
