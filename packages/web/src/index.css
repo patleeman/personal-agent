@@ -383,8 +383,20 @@
     @apply h-full overflow-y-auto;
   }
 
+  .ui-note-editor-frame-embedded {
+    @apply h-auto overflow-visible;
+  }
+
   .ui-note-editor-doc {
     @apply mx-auto flex w-full max-w-4xl flex-col gap-2 px-8 pt-3 pb-4;
+  }
+
+  .ui-note-editor-doc-embedded {
+    @apply max-w-none px-0 pt-0 pb-0;
+  }
+
+  .ui-node-title-input {
+    @apply w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none;
   }
 
   .ui-note-title-input {
@@ -453,6 +465,26 @@
 
   .ui-rich-editor-button-active {
     @apply text-primary underline decoration-accent/35 underline-offset-4;
+  }
+
+  .ui-rich-editor-inline-menu {
+    @apply z-40 flex items-center gap-1 rounded-xl border border-border-default/80 bg-surface/95 px-1.5 py-1 shadow-lg backdrop-blur-sm;
+  }
+
+  .ui-rich-editor-inline-menu-insert {
+    @apply gap-1.5;
+  }
+
+  .ui-rich-editor-inline-button {
+    @apply inline-flex min-h-[1.9rem] items-center justify-center rounded-md px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25;
+  }
+
+  .ui-rich-editor-inline-button-active {
+    @apply bg-elevated text-primary;
+  }
+
+  .ui-rich-editor-inline-divider {
+    @apply mx-0.5 h-4 w-px bg-border-subtle;
   }
 
   .ui-rich-editor-surface {

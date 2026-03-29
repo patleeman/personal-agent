@@ -15,9 +15,10 @@ import {
 } from '../components/ui';
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
 import {
-  NodePrimaryToolbar,
+  NodeIconActionButton,
   NodePropertyList,
   NodeRailSection,
+  NodeToolbarGroup,
   NodeWorkspaceShell,
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
@@ -312,6 +313,16 @@ function NotesTable({
   );
 }
 
+function NoteWorkspaceIcon({ paths }: { paths: string[] }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths.map((path) => (
+        <path key={path} d={path} />
+      ))}
+    </svg>
+  );
+}
+
 function NoteReferenceList({
   references,
 }: {
@@ -341,11 +352,15 @@ export function NoteWorkspace({
   onNavigate,
   onRefetched,
   onSaved,
+  backHref,
+  backLabel,
 }: {
   detail: MemoryDocDetail;
   onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
   onRefetched: () => void;
   onSaved: (detail: MemoryDocDetail) => void;
+  backHref?: string;
+  backLabel?: string;
 }) {
   const memory = detail.memory;
   const [savedNoteTitle, setSavedNoteTitle] = useState(memory.title);
@@ -504,59 +519,100 @@ export function NoteWorkspace({
     }
   }
 
+  const saveStatus = saveBusy
+    ? { text: 'Saving…', className: 'text-accent' }
+    : noteTitle.trim().length === 0
+      ? { text: 'Title required to save', className: 'text-warning' }
+      : dirty
+        ? { text: 'Unsaved changes', className: 'text-warning' }
+        : saveState === 'error'
+          ? { text: 'Autosave failed', className: 'text-danger' }
+          : { text: 'All changes saved', className: 'text-dim' };
+
+  const noteProperties = [
+    { label: 'Reference', value: <span className="font-mono text-[12px]">@{memory.id}</span> },
+    ...(memory.updated ? [{ label: 'Updated', value: timeAgo(memory.updated) }] : []),
+    ...(memory.path ? [{ label: 'Path', value: <span className="break-all font-mono text-[12px] leading-6 text-secondary">{memory.path}</span> }] : []),
+  ];
+
   return (
     <NodeWorkspaceShell
-      eyebrow="Notes"
-      title={`@${memory.id}`}
-      summary={memory.summary}
-      compactTitle
-      meta={(
+      breadcrumbs={(
         <>
-          <span>{noteKindLabel(memory)}</span>
-          {(saveBusy || dirty || saveState === 'saved' || saveState === 'error') ? (
-            <>
-              <span className="opacity-40">·</span>
-              {saveBusy ? (
-                <span className="text-accent">Saving…</span>
-              ) : dirty ? (
-                <span className="text-warning">{noteTitle.trim().length === 0 ? 'Title required to save' : 'Unsaved changes'}</span>
-              ) : saveState === 'error' ? (
-                <span className="text-danger">Autosave failed</span>
-              ) : (
-                <span className="text-dim">All changes saved</span>
-              )}
-            </>
-          ) : null}
+          <span>Notes</span>
+          <span className="opacity-40">›</span>
+          <span className="font-mono text-secondary">@{memory.id}</span>
         </>
       )}
+      backHref={backHref}
+      backLabel={backLabel}
+      title={(
+        <input
+          aria-label="Note title"
+          name="note-title"
+          autoComplete="off"
+          spellCheck={false}
+          value={noteTitle}
+          onChange={(event) => setNoteTitle(event.target.value)}
+          className="ui-node-title-input"
+          placeholder="Note title"
+        />
+      )}
+      titleAs="div"
+      status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
-        <NodePrimaryToolbar>
-          <ToolbarButton onClick={handleReload} disabled={saveBusy}>
-            Reload
-          </ToolbarButton>
-          <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy || noteTitle.trim().length === 0}>
-            {saveBusy ? 'Saving…' : 'Save now'}
-          </ToolbarButton>
-          <ToolbarButton onClick={() => { void handleStartConversation(); }} disabled={startBusy} className="text-accent">
-            {startBusy ? 'Starting…' : 'Chat about note'}
-          </ToolbarButton>
-          <ToolbarButton onClick={() => { void handleDelete(); }} disabled={deleteBusy} className="text-danger">
-            {deleteBusy ? 'Deleting…' : 'Delete note'}
-          </ToolbarButton>
-        </NodePrimaryToolbar>
+        <NodeToolbarGroup>
+          <NodeIconActionButton onClick={handleReload} disabled={saveBusy} title="Reload note" aria-label="Reload note">
+            <NoteWorkspaceIcon paths={["M20 11a8 8 0 1 0 2.3 5.7", "M20 4v7h-7"]} />
+          </NodeIconActionButton>
+          <NodeIconActionButton
+            onClick={() => { void handleSave(); }}
+            disabled={!dirty || saveBusy || noteTitle.trim().length === 0}
+            title={saveBusy ? 'Saving note' : 'Save note now'}
+            aria-label={saveBusy ? 'Saving note' : 'Save note now'}
+            tone={dirty || saveBusy ? 'accent' : saveState === 'error' ? 'danger' : 'default'}
+          >
+            <NoteWorkspaceIcon paths={["M5 4h11l3 3v13H5z", "M9 4v6h6V4", "M9 20v-6h6v6"]} />
+          </NodeIconActionButton>
+          <NodeIconActionButton
+            onClick={() => { void handleStartConversation(); }}
+            disabled={startBusy}
+            title={startBusy ? 'Starting chat from note' : 'Chat about note'}
+            aria-label={startBusy ? 'Starting chat from note' : 'Chat about note'}
+            tone="accent"
+          >
+            <NoteWorkspaceIcon paths={["M7 10h10", "M7 14h6", "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"]} />
+          </NodeIconActionButton>
+          <NodeIconActionButton
+            onClick={() => { void handleDelete(); }}
+            disabled={deleteBusy}
+            title={deleteBusy ? 'Deleting note' : 'Delete note'}
+            aria-label={deleteBusy ? 'Deleting note' : 'Delete note'}
+            tone="danger"
+          >
+            <NoteWorkspaceIcon paths={["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"]} />
+          </NodeIconActionButton>
+        </NodeToolbarGroup>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
         <>
-          <NodeRailSection title="Properties">
-            <NodePropertyList items={[
-              { label: 'ID', value: <span className="font-mono text-[12px]">{memory.id}</span> },
-              { label: 'Kind', value: noteKindLabel(memory) },
-              { label: 'Status', value: memory.status ?? 'active' },
-              { label: 'Updated', value: memory.updated ? timeAgo(memory.updated) : '—' },
-              { label: 'Path', value: <span className="break-all font-mono text-[12px]">{memory.path}</span> },
-            ]} />
+          <NodeRailSection title="For the agent">
+            <textarea
+              aria-label="Note guidance for the agent"
+              name="note-description"
+              value={noteDescription}
+              onChange={(event) => setNoteDescription(event.target.value)}
+              placeholder="Tell the agent how to use this note, when to read it, or what it is for."
+              className="ui-note-description-input min-h-[8rem] text-[12px]"
+              rows={6}
+            />
           </NodeRailSection>
+
+          <NodeRailSection title="Properties">
+            <NodePropertyList items={noteProperties} />
+          </NodeRailSection>
+
           <NodeRailSection title="References" meta={`${detail.references.length}`}>
             <NoteReferenceList references={detail.references} />
           </NodeRailSection>
@@ -570,20 +626,23 @@ export function NoteWorkspace({
         </>
       )}
     >
-      <NoteEditorDocument
-        title={noteTitle}
-        onTitleChange={setNoteTitle}
-        description={noteDescription}
-        onDescriptionChange={setNoteDescription}
-        body={noteBody}
-        onBodyChange={setNoteBody}
-        meta={(
-          <>
-            <span className="font-mono">@{memory.id}</span>
-            {memory.updated && <span>updated {timeAgo(memory.updated)}</span>}
-          </>
-        )}
-      />
+      <div className="px-6 pt-2">
+        <div className="mx-auto max-w-4xl">
+          <NoteEditorDocument
+            title={noteTitle}
+            onTitleChange={setNoteTitle}
+            description={noteDescription}
+            onDescriptionChange={setNoteDescription}
+            body={noteBody}
+            onBodyChange={setNoteBody}
+            showTitle={false}
+            showDescription={false}
+            frameClassName="ui-note-editor-frame-embedded"
+            documentClassName="ui-note-editor-doc-embedded"
+            bodyPlaceholder="Start writing… Paste, drop, or insert images."
+          />
+        </div>
+      </div>
     </NodeWorkspaceShell>
   );
 }

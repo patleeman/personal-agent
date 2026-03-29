@@ -500,45 +500,43 @@ function SelectedNodeView({
 
   if (detail.kind === 'note') {
     return (
-      <div className="space-y-4">
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
-        <NoteWorkspace
-          detail={detail.detail}
-          onNavigate={(updates, replace) => {
-            const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
-            navigate(`/nodes${buildNodesSearch(baseSearch, {
-              kind: nextMemoryId ? 'note' : null,
-              nodeId: nextMemoryId ?? null,
-            })}`, { replace });
-          }}
-          onRefetched={onRefreshAll}
-          onSaved={() => {
-            void Promise.resolve(onRefreshAll());
-          }}
-        />
-      </div>
+      <NoteWorkspace
+        detail={detail.detail}
+        backHref={overviewHref}
+        backLabel="Back to table"
+        onNavigate={(updates, replace) => {
+          const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
+          navigate(`/nodes${buildNodesSearch(baseSearch, {
+            kind: nextMemoryId ? 'note' : null,
+            nodeId: nextMemoryId ?? null,
+          })}`, { replace });
+        }}
+        onRefetched={onRefreshAll}
+        onSaved={() => {
+          void Promise.resolve(onRefreshAll());
+        }}
+      />
     );
   }
 
   if (detail.kind === 'skill') {
     return (
-      <div className="space-y-4">
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
-        <SkillWorkspace
-          detail={detail.detail}
-          selectedView={readSkillView(locationSearch)}
-          selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
-          onNavigate={(updates, replace) => {
-            const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
-            const nextSkillSearch = buildSkillsSearch(locationSearch, updates);
-            navigate(`/nodes${buildNodesSearch(nextSkillSearch, {
-              kind: nextSkillName ? 'skill' : null,
-              nodeId: nextSkillName ?? null,
-            })}`, { replace });
-          }}
-          onRefetched={onRefreshAll}
-        />
-      </div>
+      <SkillWorkspace
+        detail={detail.detail}
+        backHref={overviewHref}
+        backLabel="Back to table"
+        selectedView={readSkillView(locationSearch)}
+        selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
+        onNavigate={(updates, replace) => {
+          const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
+          const nextSkillSearch = buildSkillsSearch(locationSearch, updates);
+          navigate(`/nodes${buildNodesSearch(nextSkillSearch, {
+            kind: nextSkillName ? 'skill' : null,
+            nodeId: nextSkillName ?? null,
+          })}`, { replace });
+        }}
+        onRefetched={onRefreshAll}
+      />
     );
   }
 

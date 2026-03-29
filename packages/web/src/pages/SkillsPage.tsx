@@ -15,7 +15,7 @@ import {
 } from '../components/ui';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import {
-  NodePrimaryToolbar,
+  NodeMainSection,
   NodePropertyList,
   NodeRailSection,
   NodeWorkspaceShell,
@@ -115,12 +115,16 @@ export function SkillWorkspace({
   selectedItem,
   onNavigate,
   onRefetched,
+  backHref,
+  backLabel,
 }: {
   detail: SkillDetail;
   selectedView: SkillWorkspaceView;
   selectedItem: string | null;
   onNavigate: (updates: { skillName?: string | null; view?: SkillWorkspaceView | null; item?: string | null }, replace?: boolean) => void;
   onRefetched: () => void;
+  backHref?: string;
+  backLabel?: string;
 }) {
   const selectedReference = detail.references.find((reference) => reference.relativePath === selectedItem) ?? null;
   const initialContentParts = useMemo(() => splitMarkdownFrontmatter(detail.content), [detail.content]);
@@ -336,6 +340,15 @@ export function SkillWorkspace({
   return (
     <NodeWorkspaceShell
       eyebrow="Skills"
+      breadcrumbs={(
+        <>
+          <span>Skills</span>
+          <span className="opacity-40">›</span>
+          <span className="font-mono text-secondary">{detail.skill.name}</span>
+        </>
+      )}
+      backHref={backHref}
+      backLabel={backLabel}
       title={humanizeSkillName(detail.skill.name)}
       summary={detail.skill.description}
       meta={(
@@ -351,13 +364,11 @@ export function SkillWorkspace({
           )}
         </>
       )}
+      status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
-        <NodePrimaryToolbar>
-          <span className={`text-[12px] ${saveStatus.className}`}>{saveStatus.text}</span>
-          <ToolbarButton onClick={() => { void handleReload(); }} disabled={contentLoading || saveBusy}>
-            {contentLoading ? 'Loading…' : 'Reload'}
-          </ToolbarButton>
-        </NodePrimaryToolbar>
+        <ToolbarButton onClick={() => { void handleReload(); }} disabled={contentLoading || saveBusy}>
+          {contentLoading ? 'Loading…' : 'Reload'}
+        </ToolbarButton>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
       inspector={(
@@ -408,20 +419,25 @@ export function SkillWorkspace({
       ) : !isDocumentReady ? (
         <LoadingState label="Loading skill…" className="h-full justify-center" />
       ) : (
-        <div className="h-full overflow-y-auto px-6 py-6">
-          <div className="mx-auto min-h-full max-w-4xl">
-            <div className="mb-4 space-y-1 border-b border-border-subtle pb-4">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
-              <h3 className="break-words text-[15px] font-medium text-primary">{documentLabel}</h3>
-              <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
-              <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{documentSummary}</p>
+        <div className="space-y-6 px-6 py-2">
+          <NodeMainSection
+            title={documentLabel}
+            meta={(
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
+                <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
+                <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{documentSummary}</p>
+              </div>
+            )}
+          >
+            <div className="mx-auto max-w-4xl">
+              <RichMarkdownEditor
+                value={draft}
+                onChange={setDraft}
+                placeholder="Start writing…"
+              />
             </div>
-            <RichMarkdownEditor
-              value={draft}
-              onChange={setDraft}
-              placeholder="Start writing…"
-            />
-          </div>
+          </NodeMainSection>
         </div>
       )}
     </NodeWorkspaceShell>
