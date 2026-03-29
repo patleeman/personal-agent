@@ -59,6 +59,7 @@ import { shouldServeCompanionIndex } from './companionSpaIndex.js';
 import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { readSavedModelPresetPreferences, writeSavedModelPresetPreferences } from './modelPresetPreferences.js';
 import {
   readModelProvidersState,
   removeModelProvider,
@@ -4303,6 +4304,62 @@ function validateConversationAutomationWorkflowPresets(
   }
 }
 
+app.get('/api/model-presets', (_req, res) => {
+  try {
+    res.json({
+      profile: getCurrentProfile(),
+      ...readSavedModelPresetPreferences(SETTINGS_FILE),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/model-presets', (req, res) => {
+  try {
+    const { defaultPresetId, presets } = req.body as {
+      defaultPresetId?: unknown;
+      presets?: unknown;
+    };
+
+    if (typeof defaultPresetId !== 'string' && defaultPresetId !== null && defaultPresetId !== undefined) {
+      res.status(400).json({ error: 'defaultPresetId must be a string or null' });
+      return;
+    }
+
+    if (!Array.isArray(presets)) {
+      res.status(400).json({ error: 'presets must be an array' });
+      return;
+    }
+
+    const saved = persistSettingsWrite(
+      (settingsFile) => writeSavedModelPresetPreferences({
+        defaultPresetId: typeof defaultPresetId === 'string' ? defaultPresetId : '',
+        presets: presets as Parameters<typeof writeSavedModelPresetPreferences>[0]['presets'],
+      }, settingsFile),
+      {
+        localSettingsFile: getCurrentProfileSettingsFile(),
+        runtimeSettingsFile: SETTINGS_FILE,
+      },
+    );
+
+    materializeWebProfile(currentProfile);
+    refreshAllLiveSessionModelRegistries();
+    res.json({ profile: getCurrentProfile(), ...saved });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(400).json({ error: message });
+  }
+});
+
 app.get('/api/models', (_req, res) => {
   try {
     const saved = readSavedModelPreferences(SETTINGS_FILE);
@@ -4334,8 +4391,11 @@ app.patch('/api/models/current', (req, res) => {
     persistSettingsWrite((settingsFile) => {
       writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, availableModels);
     }, {
+      localSettingsFile: getCurrentProfileSettingsFile(),
       runtimeSettingsFile: SETTINGS_FILE,
     });
+
+    materializeWebProfile(currentProfile);
 
     res.json({ ok: true });
   } catch (err) {

@@ -188,6 +188,36 @@ describe('SettingsPage', () => {
               name: 'GPT-5.4',
               context: 200000,
             },
+            {
+              id: 'qwen-reap',
+              provider: 'desktop',
+              name: 'Qwen REAP',
+              context: 262144,
+            },
+          ],
+        });
+      }
+
+      if (fetcher === api.modelPresetSettings) {
+        return buildUseApiResult({
+          profile: 'assistant',
+          defaultPresetId: 'balanced',
+          presets: [
+            {
+              id: 'balanced',
+              description: 'Normal day-to-day work',
+              model: 'openai-codex/gpt-5.4',
+              thinkingLevel: 'high',
+              fallbacks: [
+                {
+                  model: 'desktop/qwen-reap',
+                  thinkingLevel: 'medium',
+                },
+              ],
+              goodFor: ['normal coding'],
+              avoidFor: ['purely mechanical chores'],
+              instructionAddendum: 'Use normal depth.',
+            },
           ],
         });
       }
@@ -261,6 +291,7 @@ describe('SettingsPage', () => {
               modelCount: 12,
               authType: 'oauth',
               hasStoredCredential: true,
+              apiKeySupported: false,
               oauthSupported: true,
               oauthProviderName: 'OpenAI',
               oauthUsesCallbackServer: true,
@@ -312,6 +343,9 @@ describe('SettingsPage', () => {
     expect(html).toContain('Default model');
     expect(html).toContain('Default working directory');
     expect(html).toContain('Conversation titles');
+    expect(html).toContain('Model presets');
+    expect(html).toContain('Default preset for new sessions');
+    expect(html).toContain('Fallback targets');
   });
 
   it('renders the providers page with provider-model administration and credentials', () => {
