@@ -87,6 +87,20 @@ describe('writeSavedModelPreferences', () => {
     });
   });
 
+  it('preserves raw model ids that already contain slashes', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+
+    writeSavedModelPreferences({ model: 'openrouter/free' }, file, [
+      { id: 'openrouter/free', provider: 'openrouter' },
+    ]);
+
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      defaultProvider: 'openrouter',
+      defaultModel: 'openrouter/free',
+    });
+  });
+
   it('clears defaultModelPreset when explicit model preferences are written', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
