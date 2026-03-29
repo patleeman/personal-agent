@@ -528,7 +528,6 @@ function SelectedNodeView({
           detail={detail.detail}
           selectedView={readSkillView(locationSearch)}
           selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
-          locationSearch={locationSearch}
           onNavigate={(updates, replace) => {
             const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
             const nextSkillSearch = buildSkillsSearch(locationSearch, updates);

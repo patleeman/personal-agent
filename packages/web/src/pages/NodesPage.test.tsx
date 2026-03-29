@@ -485,8 +485,8 @@ describe('NodesPage', () => {
     expect(html).toContain('Back to table');
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Reload');
-    expect(html).toContain('Save');
-    expect(html).toContain('Definition');
+    expect(html).toContain('Autosave on');
+    expect(html).toContain('Files');
     expect(html).toContain('Properties');
     expect(html).not.toContain('Open dedicated page');
   });

@@ -7,7 +7,6 @@ import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
   buildSkillsSearch,
   matchesSkill,
-  readSkillView,
   SKILL_ITEM_SEARCH_PARAM,
   sortSkills,
 } from '../skillWorkspaceState';
@@ -25,7 +24,6 @@ export function SkillsBrowserRail() {
   const skills = useMemo(() => sortSkills(data?.skills ?? []), [data?.skills]);
   const filteredSkills = useMemo(() => skills.filter((skill) => matchesSkill(skill, query)), [query, skills]);
   const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get('skill')?.trim() || null, [location.search]);
-  const selectedView = useMemo(() => readSkillView(location.search), [location.search]);
   const selectedItem = useMemo(() => new URLSearchParams(location.search).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null, [location.search]);
   const selectedSkill = skills.find((skill) => skill.name === selectedSkillName) ?? null;
 
@@ -56,7 +54,7 @@ export function SkillsBrowserRail() {
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
         {loading && !data ? <LoadingState label="Loading skills…" className="px-0 py-0" /> : null}
         {error && !data ? <ErrorState message={`Unable to load skills: ${error}`} className="px-0 py-0" /> : null}
 
@@ -73,7 +71,7 @@ export function SkillsBrowserRail() {
             {filteredSkills.map((skill) => (
               <BrowserRecordRow
                 key={skill.name}
-                to={`/skills${buildSkillsSearch(location.search, { skillName: skill.name, view: 'definition', item: null })}`}
+                to={`/skills${buildSkillsSearch(location.search, { skillName: skill.name, view: null, item: null })}`}
                 selected={skill.name === selectedSkillName}
                 label={skillRecordLabel(skill.source)}
                 aside={skill.usedInLastSession ? 'Used recently' : null}
@@ -99,33 +97,11 @@ export function SkillsBrowserRail() {
 
         {selectedSkill && (
           <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Resources</p>
-            <div className="space-y-1">
-              <BrowserRecordRow
-                to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'definition', item: null })}`}
-                selected={selectedView === 'definition'}
-                label="Definition"
-                heading="Main document"
-                summary="Primary skill definition and guidance"
-                meta="Edit the main skill document"
-              />
-              <BrowserRecordRow
-                to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'references', item: selectedItem })}`}
-                selected={selectedView === 'references'}
-                label="Supporting material"
-                heading="References"
-                summary="Supporting notes and examples"
-                meta="Open supporting files"
-              />
-              <BrowserRecordRow
-                to={`/skills${buildSkillsSearch(location.search, { skillName: selectedSkill.name, view: 'links', item: null })}`}
-                selected={selectedView === 'links'}
-                label="Relationships"
-                heading="Links"
-                summary="Relationships with other nodes"
-                meta="Inspect incoming and outgoing links"
-              />
-            </div>
+            <p className="ui-section-label">Inspector</p>
+            <p className="ui-card-meta">References and relationships open in the right-hand inspector instead of separate resource pages.</p>
+            <p className="ui-card-meta">
+              {selectedItem ? `Editing reference ${selectedItem}.` : 'Editing the main skill definition.'}
+            </p>
           </div>
         )}
       </div>
