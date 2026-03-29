@@ -2,6 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunAgentExtension } from './runAgentExtension.js';
 
 const {
+  formatModelPresetModelArgumentMock,
+  resolveProfileModelPresetMock,
+} = vi.hoisted(() => ({
+  formatModelPresetModelArgumentMock: vi.fn(),
+  resolveProfileModelPresetMock: vi.fn(),
+}));
+
+vi.mock('@personal-agent/resources', () => ({
+  formatModelPresetModelArgument: formatModelPresetModelArgumentMock,
+}));
+
+vi.mock('./profileModelPresets.js', () => ({
+  resolveProfileModelPreset: resolveProfileModelPresetMock,
+}));
+
+const {
   listDurableRunsMock,
   getDurableRunMock,
   getDurableRunLogMock,
@@ -37,7 +53,11 @@ function registerRunTool() {
     | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> }
     | undefined;
 
-  createRunAgentExtension()({
+  createRunAgentExtension({
+    getCurrentProfile: () => 'assistant',
+    repoRoot: '/repo',
+    profilesRoot: '/profiles',
+  })({
     registerTool: (tool: unknown) => {
       registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> };
     },
@@ -67,6 +87,8 @@ beforeEach(() => {
   cancelDurableRunMock.mockReset();
   ensureDaemonAvailableMock.mockReset();
   startBackgroundRunMock.mockReset();
+  formatModelPresetModelArgumentMock.mockReset();
+  resolveProfileModelPresetMock.mockReset();
 });
 
 afterEach(() => {
@@ -168,5 +190,57 @@ describe('run agent extension', () => {
       },
     });
     expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
+  });
+
+  it('resolves model presets for durable agent runs', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    resolveProfileModelPresetMock.mockReturnValue({
+      id: 'cheap-ops',
+      modelRef: 'openai-codex/gpt-5.1-codex-mini',
+      thinkingLevel: 'off',
+    });
+    formatModelPresetModelArgumentMock.mockReturnValue('openai-codex/gpt-5.1-codex-mini:off');
+    startBackgroundRunMock.mockResolvedValue({
+      accepted: true,
+      runId: 'run-agent-456',
+      logPath: '/tmp/run-agent-456.log',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'checkpoint',
+        prompt: 'Commit and push the current work.',
+        modelPreset: 'cheap-ops',
+      },
+      undefined,
+      undefined,
+      createToolContext('conv-agent', '/tmp/sessions/conv-agent.jsonl'),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(resolveProfileModelPresetMock).toHaveBeenCalledWith('assistant', 'cheap-ops', {
+      repoRoot: '/repo',
+      profilesRoot: '/profiles',
+    });
+    expect(startBackgroundRunMock).toHaveBeenCalledWith({
+      taskSlug: 'checkpoint',
+      cwd: '/tmp/workspace',
+      agent: {
+        prompt: 'Commit and push the current work.',
+        model: 'openai-codex/gpt-5.1-codex-mini:off',
+        profile: 'assistant',
+      },
+      source: {
+        type: 'tool',
+        id: 'conv-agent',
+        filePath: '/tmp/sessions/conv-agent.jsonl',
+      },
+      checkpointPayload: {
+        resumeParentOnExit: true,
+      },
+    });
   });
 });

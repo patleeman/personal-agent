@@ -73,6 +73,7 @@ export function writeSavedModelPreferences(
   const settings = readSettingsObject(settingsFile);
 
   if (input.model !== undefined) {
+    delete settings.defaultModelPreset;
     const resolved = resolveModelPreference(input.model ?? '', models);
     if (resolved.model) {
       settings.defaultModel = resolved.model;
@@ -88,6 +89,7 @@ export function writeSavedModelPreferences(
   }
 
   if (input.thinkingLevel !== undefined) {
+    delete settings.defaultModelPreset;
     const normalizedThinkingLevel = readNonEmptyString(input.thinkingLevel ?? '');
     if (normalizedThinkingLevel) {
       settings.defaultThinkingLevel = normalizedThinkingLevel;

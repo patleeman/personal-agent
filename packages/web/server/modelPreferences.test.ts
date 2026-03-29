@@ -86,4 +86,34 @@ describe('writeSavedModelPreferences', () => {
       defaultModel: 'claude-sonnet-4-6',
     });
   });
+
+  it('clears defaultModelPreset when explicit model preferences are written', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      defaultModelPreset: 'balanced',
+      modelPresets: {
+        balanced: {
+          model: 'openai-codex/gpt-5.4',
+          thinkingLevel: 'high',
+        },
+      },
+    }));
+
+    writeSavedModelPreferences({ model: 'gpt-5.4', thinkingLevel: 'high' }, file, [
+      { id: 'gpt-5.4', provider: 'openai-codex' },
+    ]);
+
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      modelPresets: {
+        balanced: {
+          model: 'openai-codex/gpt-5.4',
+          thinkingLevel: 'high',
+        },
+      },
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+      defaultThinkingLevel: 'high',
+    });
+  });
 });
