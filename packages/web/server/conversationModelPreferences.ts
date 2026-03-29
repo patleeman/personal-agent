@@ -71,6 +71,11 @@ function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | n
     return null;
   }
 
+  const exactMatch = models.find((candidate) => candidate.id === modelId);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
   const slashIndex = modelId.indexOf('/');
   if (slashIndex > 0 && slashIndex < modelId.length - 1) {
     const provider = modelId.slice(0, slashIndex);
@@ -78,7 +83,7 @@ function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | n
     return models.find((candidate) => candidate.provider === provider && candidate.id === id) ?? null;
   }
 
-  return models.find((candidate) => candidate.id === modelId) ?? null;
+  return null;
 }
 
 function buildResolvedState(

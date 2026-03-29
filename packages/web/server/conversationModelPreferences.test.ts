@@ -126,4 +126,28 @@ describe('conversationModelPreferences', () => {
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
+
+  it('accepts raw model ids that already contain slashes', () => {
+    const sessionManager = createSessionManager();
+    const models = [
+      createTestModel({ id: 'openrouter/free', provider: 'openrouter', reasoning: true }),
+      createTestModel({ id: 'gpt-5.4', provider: 'openai-codex', reasoning: true }),
+    ];
+
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      { model: 'openrouter/free', thinkingLevel: 'medium' },
+      {
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+      },
+      models,
+    );
+
+    expect(state).toEqual({
+      currentModel: 'openrouter/free',
+      currentThinkingLevel: 'medium',
+    });
+    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
+  });
 });

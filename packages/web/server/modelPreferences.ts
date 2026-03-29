@@ -38,6 +38,14 @@ function resolveModelPreference(model: string, models: ModelPreferenceOption[]):
     return { model: '', provider: '' };
   }
 
+  const exactMatch = models.find((candidate) => candidate.id === normalizedModel);
+  if (exactMatch) {
+    return {
+      model: exactMatch.id,
+      provider: exactMatch.provider,
+    };
+  }
+
   const slashIndex = normalizedModel.indexOf('/');
   if (slashIndex > 0 && slashIndex < normalizedModel.length - 1) {
     return {
@@ -46,10 +54,9 @@ function resolveModelPreference(model: string, models: ModelPreferenceOption[]):
     };
   }
 
-  const matchedModel = models.find((candidate) => candidate.id === normalizedModel);
   return {
     model: normalizedModel,
-    provider: matchedModel?.provider ?? '',
+    provider: '',
   };
 }
 
