@@ -11,7 +11,7 @@ It gives you one place to see:
 - scheduled tasks
 - sync state
 - daemon state
-- memory
+- notes
 - profile and model settings
 
 ## Start the UI

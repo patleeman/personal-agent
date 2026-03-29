@@ -203,7 +203,7 @@ If you expected a task result, verify the task actually ran.
 Run:
 
 ```bash
-pa memory lint
+pa note lint
 ```
 
 Common problems:
@@ -238,7 +238,7 @@ pa doctor --json
 pa daemon status --json
 pa tasks list --json
 pa inbox list --json
-pa memory list --json
+pa note list --json
 ```
 
 Useful log locations:

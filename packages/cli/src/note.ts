@@ -9,42 +9,42 @@ import {
 } from '@personal-agent/core';
 import { bullet, dim, formatHint, keyValue, printDenseCommandList, printDenseUsage, section, success, warning } from './ui.js';
 
-function memoryUsageText(): string {
-  return 'Usage: pa memory [list|find|show|new|lint] [args...]';
+function noteUsageText(): string {
+  return 'Usage: pa note [list|find|show|new|lint] [args...]';
 }
 
-function memoryListUsageText(): string {
-  return 'Usage: pa memory list [--json]';
+function noteListUsageText(): string {
+  return 'Usage: pa note list [--json]';
 }
 
-function memoryFindUsageText(): string {
-  return 'Usage: pa memory find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]';
+function noteFindUsageText(): string {
+  return 'Usage: pa note find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]';
 }
 
-function memoryShowUsageText(): string {
-  return 'Usage: pa memory show <id> [--json]';
+function noteShowUsageText(): string {
+  return 'Usage: pa note show <id> [--json]';
 }
 
-function memoryNewUsageText(): string {
-  return 'Usage: pa memory new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]';
+function noteNewUsageText(): string {
+  return 'Usage: pa note new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]';
 }
 
-function memoryLintUsageText(): string {
-  return 'Usage: pa memory lint [--json]';
+function noteLintUsageText(): string {
+  return 'Usage: pa note lint [--json]';
 }
 
-function formatMemoryRelated(related: string[]): string {
+function formatNoteRelated(related: string[]): string {
   return related.length > 0 ? related.map((value) => `@${value}`).join(', ') : 'none';
 }
 
-function isMemoryHelpToken(value: string | undefined): boolean {
+function isNoteHelpToken(value: string | undefined): boolean {
   return value === 'help' || value === '--help' || value === '-h';
 }
 
-function printMemoryHelp(): void {
-  console.log('Memory');
+function printNoteHelp(): void {
+  console.log('Note');
   console.log('');
-  printDenseUsage('pa memory [list|find|show|new|lint|help]');
+  printDenseUsage('pa note [list|find|show|new|lint|help]');
   console.log('');
   printDenseCommandList('Commands', [
     { usage: 'list [--json]', description: 'List parsed shared note nodes' },
@@ -52,24 +52,24 @@ function printMemoryHelp(): void {
     { usage: 'show <id> [--json]', description: 'Show one note node and metadata' },
     { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note node scaffold with INDEX.md frontmatter' },
     { usage: 'lint [--json]', description: 'Validate shared note node frontmatter, duplicate ids, and broken note links' },
-    { usage: 'help', description: 'Show memory help' },
+    { usage: 'help', description: 'Show note help' },
   ]);
 }
 
-export async function memoryCommand(args: string[]): Promise<number> {
+export async function noteCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
-    printMemoryHelp();
+    printNoteHelp();
     return 0;
   }
 
-  if (isMemoryHelpToken(subcommand)) {
+  if (isNoteHelpToken(subcommand)) {
     if (rest.length > 0) {
-      throw new Error(memoryUsageText());
+      throw new Error(noteUsageText());
     }
 
-    printMemoryHelp();
+    printNoteHelp();
     return 0;
   }
 
@@ -83,12 +83,12 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
-      throw new Error(memoryListUsageText());
+      throw new Error(noteListUsageText());
     }
 
     const loaded = loadMemoryDocs();
     const payload = {
-      memoryDir: loaded.memoryDir,
+      noteDir: loaded.memoryDir,
       docs: loaded.docs,
       parseErrors: loaded.parseErrors,
     };
@@ -113,7 +113,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (doc.area) console.log(keyValue('Area', doc.area, 4));
       if (doc.role) console.log(keyValue('Role', doc.role, 4));
       if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
-      if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
+      if (doc.related.length > 0) console.log(keyValue('Related', formatNoteRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
       console.log(keyValue('Summary', doc.summary, 4));
       console.log(keyValue('File', doc.filePath, 4));
@@ -150,7 +150,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--type') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         typeFilter = value.trim().toLowerCase();
@@ -161,7 +161,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--type=')) {
         const value = arg.slice('--type='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         typeFilter = value.toLowerCase();
@@ -171,7 +171,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--status') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         statusFilter = value.trim().toLowerCase();
@@ -182,7 +182,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--status=')) {
         const value = arg.slice('--status='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         statusFilter = value.toLowerCase();
@@ -191,7 +191,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg === '--area') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteFindUsageText());
         areaFilter = value.trim().toLowerCase();
         index += 1;
         continue;
@@ -199,14 +199,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--area=')) {
         const value = arg.slice('--area='.length).trim();
-        if (value.length === 0) throw new Error(memoryFindUsageText());
+        if (value.length === 0) throw new Error(noteFindUsageText());
         areaFilter = value.toLowerCase();
         continue;
       }
 
       if (arg === '--role') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteFindUsageText());
         roleFilter = value.trim().toLowerCase();
         index += 1;
         continue;
@@ -214,14 +214,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--role=')) {
         const value = arg.slice('--role='.length).trim();
-        if (value.length === 0) throw new Error(memoryFindUsageText());
+        if (value.length === 0) throw new Error(noteFindUsageText());
         roleFilter = value.toLowerCase();
         continue;
       }
 
       if (arg === '--parent') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteFindUsageText());
         parentFilter = value.trim().toLowerCase();
         index += 1;
         continue;
@@ -229,7 +229,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--parent=')) {
         const value = arg.slice('--parent='.length).trim();
-        if (value.length === 0) throw new Error(memoryFindUsageText());
+        if (value.length === 0) throw new Error(noteFindUsageText());
         parentFilter = value.toLowerCase();
         continue;
       }
@@ -237,7 +237,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--text') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         textFilter = value.trim().toLowerCase();
@@ -248,14 +248,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--text=')) {
         const value = arg.slice('--text='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryFindUsageText());
+          throw new Error(noteFindUsageText());
         }
 
         textFilter = value.toLowerCase();
         continue;
       }
 
-      throw new Error(memoryFindUsageText());
+      throw new Error(noteFindUsageText());
     }
 
     const loaded = loadMemoryDocs();
@@ -269,7 +269,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     });
 
     const payload = {
-      memoryDir: loaded.memoryDir,
+      noteDir: loaded.memoryDir,
       filters: {
         type: typeFilter ?? null,
         status: statusFilter ?? null,
@@ -308,7 +308,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (doc.area) console.log(keyValue('Area', doc.area, 4));
       if (doc.role) console.log(keyValue('Role', doc.role, 4));
       if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
-      if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
+      if (doc.related.length > 0) console.log(keyValue('Related', formatNoteRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
       console.log(keyValue('Summary', doc.summary, 4));
       console.log(keyValue('File', doc.filePath, 4));
@@ -338,21 +338,21 @@ export async function memoryCommand(args: string[]): Promise<number> {
       }
 
       if (arg.startsWith('-')) {
-        throw new Error(memoryShowUsageText());
+        throw new Error(noteShowUsageText());
       }
 
       positional.push(arg);
     }
 
     if (positional.length !== 1) {
-      throw new Error(memoryShowUsageText());
+      throw new Error(noteShowUsageText());
     }
 
     const loaded = loadMemoryDocs();
     const doc = resolveMemoryDocById(loaded.docs, positional[0] as string);
 
     const payload = {
-      memoryDir: loaded.memoryDir,
+      noteDir: loaded.memoryDir,
       doc,
       parseErrors: loaded.parseErrors,
     };
@@ -369,7 +369,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     if (doc.area) console.log(keyValue('Area', doc.area));
     if (doc.role) console.log(keyValue('Role', doc.role));
     if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`));
-    if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related)));
+    if (doc.related.length > 0) console.log(keyValue('Related', formatNoteRelated(doc.related)));
     console.log(keyValue('Updated', doc.updated));
     console.log(keyValue('Summary', doc.summary));
     console.log(keyValue('File', doc.filePath));
@@ -418,7 +418,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--title') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         title = value.trim();
@@ -429,7 +429,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--title=')) {
         const value = arg.slice('--title='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         title = value;
@@ -439,7 +439,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--summary') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         summary = value.trim();
@@ -450,7 +450,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--summary=')) {
         const value = arg.slice('--summary='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         summary = value;
@@ -460,7 +460,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--type') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         type = value.trim();
@@ -471,7 +471,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--type=')) {
         const value = arg.slice('--type='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         type = value;
@@ -481,7 +481,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg === '--status') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         status = value.trim();
@@ -492,7 +492,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       if (arg.startsWith('--status=')) {
         const value = arg.slice('--status='.length).trim();
         if (value.length === 0) {
-          throw new Error(memoryNewUsageText());
+          throw new Error(noteNewUsageText());
         }
 
         status = value;
@@ -501,7 +501,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg === '--area') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteNewUsageText());
         area = value.trim();
         index += 1;
         continue;
@@ -509,14 +509,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--area=')) {
         const value = arg.slice('--area='.length).trim();
-        if (value.length === 0) throw new Error(memoryNewUsageText());
+        if (value.length === 0) throw new Error(noteNewUsageText());
         area = value;
         continue;
       }
 
       if (arg === '--role') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteNewUsageText());
         role = value.trim();
         index += 1;
         continue;
@@ -524,14 +524,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--role=')) {
         const value = arg.slice('--role='.length).trim();
-        if (value.length === 0) throw new Error(memoryNewUsageText());
+        if (value.length === 0) throw new Error(noteNewUsageText());
         role = value;
         continue;
       }
 
       if (arg === '--parent') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteNewUsageText());
         parent = value.trim();
         index += 1;
         continue;
@@ -539,14 +539,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--parent=')) {
         const value = arg.slice('--parent='.length).trim();
-        if (value.length === 0) throw new Error(memoryNewUsageText());
+        if (value.length === 0) throw new Error(noteNewUsageText());
         parent = value;
         continue;
       }
 
       if (arg === '--related') {
         const value = rest[index + 1];
-        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        if (!value || value.startsWith('-')) throw new Error(noteNewUsageText());
         rawRelatedValues.push(value.trim());
         index += 1;
         continue;
@@ -554,24 +554,24 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg.startsWith('--related=')) {
         const value = arg.slice('--related='.length).trim();
-        if (value.length === 0) throw new Error(memoryNewUsageText());
+        if (value.length === 0) throw new Error(noteNewUsageText());
         rawRelatedValues.push(value);
         continue;
       }
 
       if (arg.startsWith('-')) {
-        throw new Error(memoryNewUsageText());
+        throw new Error(noteNewUsageText());
       }
 
       positional.push(arg);
     }
 
     if (positional.length !== 1) {
-      throw new Error(memoryNewUsageText());
+      throw new Error(noteNewUsageText());
     }
 
     if (!title || title.length === 0 || !summary || summary.length === 0) {
-      throw new Error(memoryNewUsageText());
+      throw new Error(noteNewUsageText());
     }
 
     const id = (positional[0] as string).trim();
@@ -605,7 +605,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     if (payload.area) console.log(keyValue('Area', payload.area));
     if (payload.role) console.log(keyValue('Role', payload.role));
     if (payload.parent) console.log(keyValue('Parent', `@${payload.parent}`));
-    if (payload.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(payload.related)));
+    if (payload.related.length > 0) console.log(keyValue('Related', formatNoteRelated(payload.related)));
     console.log(keyValue('Updated', payload.updated));
 
     console.log('');
@@ -624,10 +624,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
-      throw new Error(memoryLintUsageText());
+      throw new Error(noteLintUsageText());
     }
 
-    const payload = lintMemoryDocs();
+    const result = lintMemoryDocs();
+    const payload = {
+      ...result,
+      noteDir: result.memoryDir,
+    };
     const hasIssues = payload.parseErrors.length > 0 || payload.duplicateIds.length > 0 || payload.referenceErrors.length > 0;
 
     if (jsonMode) {
@@ -636,7 +640,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     console.log(section('Note node validation'));
-    console.log(keyValue('Notes dir', payload.memoryDir));
+    console.log(keyValue('Notes dir', payload.noteDir));
     console.log(keyValue('Docs parsed', payload.validDocs));
     console.log(keyValue('Parse errors', payload.parseErrors.length));
     console.log(keyValue('Duplicate ids', payload.duplicateIds.length));
@@ -666,7 +670,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (payload.referenceErrors.length > 0) {
       console.log('');
-      console.log(warning('Broken memory references'));
+      console.log(warning('Broken note references'));
       for (const issue of payload.referenceErrors) {
         console.log(keyValue('Reference', `${issue.id}.${issue.field} -> ${issue.targetId}: ${issue.error} (${issue.filePath})`, 4));
       }
@@ -675,5 +679,5 @@ export async function memoryCommand(args: string[]): Promise<number> {
     return 1;
   }
 
-  throw new Error(`${memoryUsageText()}\nUnknown memory subcommand: ${subcommand}`);
+  throw new Error(`${noteUsageText()}\nUnknown note subcommand: ${subcommand}`);
 }

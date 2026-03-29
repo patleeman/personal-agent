@@ -50,7 +50,7 @@ Most of the time, you use them indirectly rather than thinking about their sourc
 
 Examples of user-visible extension behavior in this repo:
 
-- **memory** — keeps AGENTS, skills, and note-node rules visible to the agent
+- **note-node policy** — keeps AGENTS, skills, and note-node rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
 - **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
 - **project agent extension** — manages durable project nodes and current conversation ↔ project references

@@ -10,22 +10,22 @@ import {
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
-export interface MemoryProfileLayer {
+export interface NoteProfileLayer {
   name: string;
   agentDir: string;
 }
 
-export interface MemoryProfileContext {
+export interface NoteProfileContext {
   cwd: string;
   repoRoot: string;
   requestedProfile: string;
   activeProfile: string;
   activeProfileDir: string;
-  layers: MemoryProfileLayer[];
+  layers: NoteProfileLayer[];
   activeAgentsFile?: string;
   activeSkillsDir: string;
   activeTasksDir?: string;
-  activeMemoryDir?: string;
+  activeNotesDir?: string;
 }
 
 function sanitizeProfileName(raw: string | undefined): string | undefined {
@@ -100,7 +100,7 @@ function resolveProfileDir(profilesRoot: string, profile: string): string {
   return join(profilesRoot, profile, 'agent');
 }
 
-function resolveMemoryDir(profilesRoot: string): string {
+function resolveNotesDir(profilesRoot: string): string {
   return join(dirname(profilesRoot), 'notes');
 }
 
@@ -113,7 +113,7 @@ function toDisplayPath(cwd: string, path: string): string {
   return displayed.replace(/\\/g, '/');
 }
 
-interface MemoryDefinition {
+interface NoteDefinition {
   name: string;
   description: string;
   path: string;
@@ -155,26 +155,26 @@ function parseMarkdownFrontmatter(content: string): Record<string, string> {
   return output;
 }
 
-function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[] {
-  if (!memoryDir || !existsSync(memoryDir)) {
+function listAvailableNotes(notesDir: string | undefined): NoteDefinition[] {
+  if (!notesDir || !existsSync(notesDir)) {
     return [];
   }
 
-  const entries = readdirSync(memoryDir, { withFileTypes: true });
-  const discovered: MemoryDefinition[] = [];
+  const entries = readdirSync(notesDir, { withFileTypes: true });
+  const discovered: NoteDefinition[] = [];
 
   for (const entry of entries) {
     if (!entry.isDirectory()) {
       continue;
     }
 
-    const memoryFile = join(memoryDir, entry.name, 'INDEX.md');
-    if (!existsSync(memoryFile)) {
+    const noteFile = join(notesDir, entry.name, 'INDEX.md');
+    if (!existsSync(noteFile)) {
       continue;
     }
 
     try {
-      const content = readFileSync(memoryFile, 'utf-8');
+      const content = readFileSync(noteFile, 'utf-8');
       const frontmatter = parseMarkdownFrontmatter(content);
       const kind = (frontmatter.kind ?? '').trim().toLowerCase();
       if (kind !== 'note') {
@@ -190,7 +190,7 @@ function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[
       discovered.push({
         name,
         description,
-        path: memoryFile,
+        path: noteFile,
       });
     } catch {
       // Ignore malformed note nodes in the prompt-time hint list.
@@ -200,17 +200,17 @@ function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[
   return discovered.sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function buildAvailableMemoriesSection(cwd: string, memoryDir: string | undefined): string {
-  const memories = listAvailableMemories(memoryDir);
-  if (memories.length === 0) {
+function buildAvailableNotesSection(cwd: string, notesDir: string | undefined): string {
+  const notes = listAvailableNotes(notesDir);
+  if (notes.length === 0) {
     return 'No shared note nodes found.';
   }
 
   return [
     '<available_notes>',
-    ...memories.map((memory) => [
-      `  <note id="${memory.name}" location="${toDisplayPath(cwd, memory.path)}">`,
-      `    ${memory.description}`,
+    ...notes.map((note) => [
+      `  <note id="${note.name}" location="${toDisplayPath(cwd, note.path)}">`,
+      `    ${note.description}`,
       '  </note>',
     ].join('\n')),
     '</available_notes>',
@@ -218,7 +218,7 @@ function buildAvailableMemoriesSection(cwd: string, memoryDir: string | undefine
   ].join('\n');
 }
 
-export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
+export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
   const repoRoot = resolveRepoRoot();
   const profilesRoot = resolveProfilesRoot();
   const requestedProfile = resolveRequestedProfile();
@@ -232,7 +232,7 @@ export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
     ? sharedProfileDir
     : requestedProfileDir;
 
-  const layers: MemoryProfileLayer[] = [
+  const layers: NoteProfileLayer[] = [
     { name: 'shared', agentDir: sharedProfileDir },
   ];
 
@@ -254,11 +254,11 @@ export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
     activeTasksDir: activeProfile === 'shared'
       ? undefined
       : join(activeProfileDir, 'tasks'),
-    activeMemoryDir: resolveMemoryDir(profilesRoot),
+    activeNotesDir: resolveNotesDir(profilesRoot),
   };
 }
 
-function buildMemoryTemplateVariables(options: {
+function buildNoteTemplateVariables(options: {
   cwd: string;
   repoRoot: string;
   requestedProfile: string;
@@ -267,7 +267,7 @@ function buildMemoryTemplateVariables(options: {
   activeAgentsFile?: string;
   activeSkillsDir: string;
   activeTasksDir?: string;
-  activeMemoryDir?: string;
+  activeNotesDir?: string;
 }): Record<string, string> {
   const activeProfileDirDisplay = toDisplayPath(options.cwd, options.activeProfileDir);
   const repoRootDisplay = toDisplayPath(options.cwd, options.repoRoot);
@@ -283,15 +283,15 @@ function buildMemoryTemplateVariables(options: {
     ? `- requested_profile: ${options.requestedProfile}\n- note: requested profile was missing; using "${options.activeProfile}"\n`
     : '';
 
-  const memorySection = options.activeMemoryDir
-    ? `- Shared notes dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Note node template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<note-id>', 'INDEX.md'))}`
+  const notesSection = options.activeNotesDir
+    ? `- Shared notes dir: ${toDisplayPath(options.cwd, options.activeNotesDir)}\n- Note node template: ${toDisplayPath(options.cwd, join(options.activeNotesDir, '<note-id>', 'INDEX.md'))}`
     : '- Shared notes dir: unavailable';
 
-  const memoryRetrievalSection = options.activeMemoryDir
-    ? '- Load only the AGENTS, skills, and note nodes relevant to the request.\n- Retrieval order: AGENTS.md for durable policy, skills for reusable workflows, shared note nodes for durable knowledge.\n- Prefer targeted lookup over broad scans; do not read the whole notes directory unless the task genuinely requires it.\n- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint` to inspect note nodes.\n- Find/show before new; lint after creating or heavily editing note nodes.'
+  const notesRetrievalSection = options.activeNotesDir
+    ? '- Load only the AGENTS, skills, and note nodes relevant to the request.\n- Retrieval order: AGENTS.md for durable policy, skills for reusable workflows, shared note nodes for durable knowledge.\n- Prefer targeted lookup over broad scans; do not read the whole notes directory unless the task genuinely requires it.\n- Prefer the note tool when available; otherwise use `pa note list/find/show/new/lint` to inspect note nodes.\n- Find/show before new; lint after creating or heavily editing note nodes.'
     : '- Shared note nodes are unavailable; rely on AGENTS, skills, and repo docs instead.';
 
-  const availableMemoriesSection = buildAvailableMemoriesSection(options.cwd, options.activeMemoryDir);
+  const availableNotesSection = buildAvailableNotesSection(options.cwd, options.activeNotesDir);
 
   const docsDirDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs'));
   const docsIndexDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs', 'README.md'));
@@ -304,15 +304,15 @@ function buildMemoryTemplateVariables(options: {
     agents_edit_target: activeAgentsTarget,
     skills_dir: activeSkillsDirDisplay,
     tasks_dir: activeTasksDirDisplay,
-    memory_section: memorySection,
+    memory_section: notesSection,
     docs_dir: docsDirDisplay,
     docs_index: docsIndexDisplay,
-    memory_retrieval_section: memoryRetrievalSection,
-    available_memories_section: availableMemoriesSection,
+    memory_retrieval_section: notesRetrievalSection,
+    available_memories_section: availableNotesSection,
   };
 }
 
-function buildMemoryPolicyBlock(options: {
+function buildNotePolicyBlock(options: {
   cwd: string;
   repoRoot: string;
   requestedProfile: string;
@@ -321,21 +321,21 @@ function buildMemoryPolicyBlock(options: {
   activeAgentsFile?: string;
   activeSkillsDir: string;
   activeTasksDir?: string;
-  activeMemoryDir?: string;
+  activeNotesDir?: string;
 }): string {
-  const template = requirePromptCatalogEntryFromExtension(import.meta.url, 'runtime/memory.md');
-  return renderPromptCatalogTemplate(template, buildMemoryTemplateVariables(options));
+  const template = requirePromptCatalogEntryFromExtension(import.meta.url, 'runtime/note-policy.md');
+  return renderPromptCatalogTemplate(template, buildNoteTemplateVariables(options));
 }
 
-export default function memoryExtension(pi: ExtensionAPI): void {
+export default function notePolicyExtension(pi: ExtensionAPI): void {
   pi.on('before_agent_start', async (event, ctx) => {
     const prompt = event.prompt?.trim() ?? '';
     if (prompt.length === 0 || prompt.startsWith('/')) {
       return;
     }
 
-    const context = resolveMemoryProfileContext(ctx.cwd);
-    const memoryPolicy = buildMemoryPolicyBlock({
+    const context = resolveNoteProfileContext(ctx.cwd);
+    const notePolicy = buildNotePolicyBlock({
       cwd: context.cwd,
       repoRoot: context.repoRoot,
       requestedProfile: context.requestedProfile,
@@ -344,11 +344,11 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       activeAgentsFile: context.activeAgentsFile,
       activeSkillsDir: context.activeSkillsDir,
       activeTasksDir: context.activeTasksDir,
-      activeMemoryDir: context.activeMemoryDir,
+      activeNotesDir: context.activeNotesDir,
     });
 
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${memoryPolicy}`,
+      systemPrompt: `${event.systemPrompt}\n\n${notePolicy}`,
     };
   });
 }

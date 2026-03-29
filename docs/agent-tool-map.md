@@ -19,7 +19,7 @@ Use the CLI mainly for:
 | Job | Preferred tool | Durable home | Notes |
 | --- | --- | --- | --- |
 | Track ongoing work, status, blockers, milestones, project notes | `project` | project node under `sync/projects/**` | use projects for durable tracked work |
-| Find or create durable note nodes | `memory` | note nodes under `sync/notes/**` | find/show before new |
+| Find or create durable note nodes | `note` | note nodes under `sync/notes/**` | find/show before new |
 | Create passive async attention items | `activity` | local inbox/activity state | use for async outcomes worth noticing later |
 | Schedule unattended automation | `scheduled_task` | `sync/tasks/*.task.md` + daemon state | use for later or recurring work |
 | Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
@@ -57,7 +57,7 @@ There is no dedicated `skill` CRUD tool in this environment. Edit `skills/<id>/I
 ## Quick routing rules
 
 - **project state** → `project`
-- **durable knowledge** → `memory`
+- **durable knowledge** → `note`
 - **passive async attention** → `activity`
 - **remind me later** → `reminder`
 - **continue later without asking me** → `deferred_resume`
