@@ -5236,7 +5236,7 @@ async function reconcileConversationSelfDistillWakeupsForLayoutChange(
         sessionFile,
         conversationId,
       });
-      if (scheduled.resume) {
+      if (scheduled.resume && !scheduled.deduped) {
         changedConversationIds.add(conversationId);
       }
     } catch (error) {

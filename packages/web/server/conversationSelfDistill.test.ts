@@ -21,9 +21,12 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function writeSessionFile(path: string, conversationId: string): void {
+function writeSessionFile(path: string, conversationId: string, extraLines: unknown[] = []): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify({ type: 'session', id: conversationId, timestamp: '2026-03-28T10:00:00.000Z', cwd: '/tmp/workspace' })}\n`, 'utf-8');
+  writeFileSync(path, [
+    JSON.stringify({ type: 'session', id: conversationId, timestamp: '2026-03-28T10:00:00.000Z', cwd: '/tmp/workspace' }),
+    ...extraLines.map((line) => JSON.stringify(line)),
+  ].join('\n') + '\n', 'utf-8');
 }
 
 beforeEach(() => {
@@ -66,8 +69,10 @@ describe('conversation self-distill wakeups', () => {
     });
 
     expect(first.deduped).toBe(false);
+    expect(first.alreadyOccurred).toBe(false);
     expect(second.deduped).toBe(true);
-    expect(second.resume.id).toBe(first.resume.id);
+    expect(second.alreadyOccurred).toBe(false);
+    expect(second.resume?.id).toBe(first.resume?.id);
     expect(first.resume.title).toBe(CONVERSATION_SELF_DISTILL_TITLE);
     expect(first.resume.prompt).toContain('This conversation was just closed in the web UI.');
     expect(first.resume.prompt).toContain('If nothing clearly deserves a durable update, reply exactly: No durable update needed.');
@@ -118,8 +123,41 @@ describe('conversation self-distill wakeups', () => {
       conversationId: 'conv-456',
     });
 
-    expect(cancelledIds).toEqual([scheduled.resume.id]);
+    expect(cancelledIds).toEqual([scheduled.resume?.id]);
     expect(listConversationSelfDistillWakeupRecords({ stateRoot, sessionFile })).toEqual([]);
     expect(Object.values(loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json')).resumes)).toEqual([]);
+  });
+
+  it('does not schedule another self-distill wakeup after the prompt already landed in the transcript', async () => {
+    const stateRoot = createTempDir('pa-web-self-distill-existing-prompt-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const sessionFile = join(stateRoot, 'sessions', 'conv-789.jsonl');
+    writeSessionFile(sessionFile, 'conv-789', [
+      {
+        type: 'message',
+        id: 'msg-self-distill',
+        timestamp: '2026-03-28T10:05:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'This conversation was just closed in the web UI.' },
+            { type: 'text', text: 'If nothing clearly deserves a durable update, reply exactly: No durable update needed.' },
+          ],
+        },
+      },
+    ]);
+
+    const scheduled = await scheduleConversationSelfDistillWakeup({
+      stateRoot,
+      profile: 'assistant',
+      sessionFile,
+      now: new Date('2026-03-28T10:10:00.000Z'),
+    });
+
+    expect(scheduled.deduped).toBe(true);
+    expect(scheduled.alreadyOccurred).toBe(true);
+    expect(scheduled.resume).toBeUndefined();
+    expect(listConversationSelfDistillWakeupRecords({ stateRoot, sessionFile })).toEqual([]);
   });
 });
