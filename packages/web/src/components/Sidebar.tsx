@@ -932,20 +932,20 @@ export function Sidebar() {
           <button
             onClick={handleNewConversation}
             className="ui-sidebar-nav-item mx-0 flex-1"
-            title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+            title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
-            <span className="flex-1 text-left">New chat</span>
+            <span className="flex-1 text-left">Chat</span>
           </button>
           <Link
             to={`/notes${buildNoteSearch('', { creating: true })}`}
             className="ui-sidebar-nav-item mx-0 flex-1"
-            title="New note"
+            title="Note"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
               <path d={PATH.notes} />
             </svg>
-            <span className="flex-1 text-left">New note</span>
+            <span className="flex-1 text-left">Note</span>
           </Link>
         </div>
       </div>
