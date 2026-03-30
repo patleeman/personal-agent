@@ -145,25 +145,11 @@ export async function syncConversationLayoutMerge(): Promise<ConversationLayout>
       headers: { 'Content-Type': 'application/json' },
     }).then((res) => res.json() as Promise<ConversationLayout>);
 
-    const localLayout = readConversationLayout();
+    // Server is the source of truth. localStorage is read-only cache — never written.
+    persistConversationLayoutToServer(serverLayout);
+    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: serverLayout }));
 
-    const mergedOpen = [...new Set([...localLayout.sessionIds, ...serverLayout.sessionIds])];
-    const mergedPinned = [...new Set([...localLayout.pinnedSessionIds, ...serverLayout.pinnedSessionIds])];
-    const mergedArchived = [...new Set([...localLayout.archivedSessionIds, ...serverLayout.archivedSessionIds])];
-
-    const merged: ConversationLayout = {
-      sessionIds: mergedOpen,
-      pinnedSessionIds: mergedPinned,
-      archivedSessionIds: mergedArchived,
-    };
-
-    writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, merged.sessionIds);
-    writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, merged.pinnedSessionIds);
-    writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, merged.archivedSessionIds);
-    persistConversationLayoutToServer(merged);
-    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: merged }));
-
-    return merged;
+    return serverLayout;
   } catch {
     // On network failure, fall back to local state.
     return readConversationLayout();
@@ -185,12 +171,10 @@ export async function commitConversationLayoutMerge(
       headers: { 'Content-Type': 'application/json' },
     }).then((res) => res.json() as Promise<ConversationLayout>);
 
-    const localLayout = normalizeConversationLayout(intended);
-
-    // Union: keep everything from both server and the local intended change.
-    const mergedOpen = [...new Set([...localLayout.sessionIds, ...serverLayout.sessionIds])];
-    const mergedPinned = [...new Set([...localLayout.pinnedSessionIds, ...serverLayout.pinnedSessionIds])];
-    const mergedArchived = [...new Set([...localLayout.archivedSessionIds, ...serverLayout.archivedSessionIds])];
+    // Server is the source of truth. localStorage is read-only cache — never written.
+    const mergedOpen = [...new Set([...normalizeSessionIds(intended.sessionIds ?? []), ...serverLayout.sessionIds])];
+    const mergedPinned = [...new Set([...normalizeSessionIds(intended.pinnedSessionIds ?? []), ...serverLayout.pinnedSessionIds])];
+    const mergedArchived = [...new Set([...normalizeSessionIds(intended.archivedSessionIds ?? []), ...serverLayout.archivedSessionIds])];
 
     const merged: ConversationLayout = {
       sessionIds: mergedOpen,
@@ -198,16 +182,16 @@ export async function commitConversationLayoutMerge(
       archivedSessionIds: mergedArchived,
     };
 
-    writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, merged.sessionIds);
-    writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, merged.pinnedSessionIds);
-    writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, merged.archivedSessionIds);
     persistConversationLayoutToServer(merged);
     window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: merged }));
 
     return merged;
   } catch {
-    // On network failure fall back to the local-only write.
-    return replaceConversationLayout(intended);
+    // On network failure, write directly without merging.
+    const direct: ConversationLayout = normalizeConversationLayout(intended);
+    persistConversationLayoutToServer(direct);
+    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: direct }));
+    return direct;
   }
 }
 

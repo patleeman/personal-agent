@@ -87,29 +87,31 @@ export function shouldShowCompanionConversationStatusBanner(input: {
 }
 
 /**
- * Bidirectional workspace sync for the companion.
- *
- * Fetches the server's saved workspace state, merges it with the local state
- * (union of open/pinned/archived), pushes the merged result back to the server,
- * then writes the merged layout locally.
- *
- * The companion's "In workspace" view is scoped to only the current conversation,
- * not the full web workspace, so archived and unrelated chats don't clutter it.
+ * Bidirectional sync: opening a conversation on the companion adds it to the
+ * shared web workspace so the web UI reflects it as "In workspace".
  */
 export async function syncCompanionConversationWorkspaceLayout(
   conversationId: string | null | undefined,
 ): Promise<ConversationLayout> {
   const mergedLayout = await syncConversationLayoutMerge();
 
-  // Scope workspace to only the current conversation for the companion view,
-  // so the companion doesn't inherit the full web workspace chat list.
   if (conversationId) {
     const normalized = conversationId.trim();
-    return {
-      ...mergedLayout,
-      sessionIds: mergedLayout.sessionIds.includes(normalized) ? [normalized] : [],
-      pinnedSessionIds: mergedLayout.pinnedSessionIds.includes(normalized) ? [normalized] : [],
-    };
+    if (!mergedLayout.pinnedSessionIds.includes(normalized) && !mergedLayout.sessionIds.includes(normalized)) {
+      const next: ConversationLayout = {
+        ...mergedLayout,
+        sessionIds: [...mergedLayout.sessionIds, normalized],
+      };
+
+      // Write to server so web UI picks up the change.
+      void fetch('/api/web-ui/open-conversations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      }).catch(() => { /* best-effort */ });
+
+      return next;
+    }
   }
 
   return mergedLayout;
@@ -1651,53 +1653,53 @@ export function CompanionConversationPage() {
                       className="flex-1 bg-transparent text-[16px] leading-snug text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim sm:text-sm"
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
-                    {(stream.isStreaming || composerHasContent) && (
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {stream.isStreaming ? (
-                          <button
-                            type="button"
-                            onClick={() => { void handleStop(); }}
-                            disabled={submitting}
-                            className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
-                          >
-                            <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                              <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                            </svg>
-                            Stop
-                          </button>
-                        ) : null}
-                        {composerHasContent && !stream.isStreaming ? (
-                          <button
-                            type="button"
-                            onClick={() => { void handleSend(); }}
-                            disabled={composerDisabled}
-                            className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
-                          >
-                            {submitting ? 'Sending…' : 'Send'}
-                          </button>
-                        ) : null}
-                        {composerHasContent && stream.isStreaming ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => { void handleSend('steer'); }}
-                              disabled={composerDisabled}
-                              className="ui-pill ui-pill-warning disabled:cursor-default disabled:opacity-60"
-                            >
-                              {submitting ? 'Sending…' : 'Steer'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { void handleSend('followUp'); }}
-                              disabled={composerDisabled}
-                              className="ui-pill ui-pill-teal disabled:cursor-default disabled:opacity-60"
-                            >
-                              {submitting ? 'Sending…' : 'Follow up'}
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    )}
+                  </div>
+                )}
+                {(stream.isStreaming || composerHasContent) && (
+                  <div className="flex shrink-0 items-center justify-end gap-1.5 px-1 pb-1">
+                    {stream.isStreaming ? (
+                      <button
+                        type="button"
+                        onClick={() => { void handleStop(); }}
+                        disabled={submitting}
+                        className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                          <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
+                        </svg>
+                        Stop
+                      </button>
+                    ) : null}
+                    {composerHasContent && !stream.isStreaming ? (
+                      <button
+                        type="button"
+                        onClick={() => { void handleSend(); }}
+                        disabled={composerDisabled}
+                        className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
+                      >
+                        {submitting ? 'Sending…' : 'Send'}
+                      </button>
+                    ) : null}
+                    {composerHasContent && stream.isStreaming ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { void handleSend('steer'); }}
+                          disabled={composerDisabled}
+                          className="ui-pill ui-pill-warning disabled:cursor-default disabled:opacity-60"
+                        >
+                          {submitting ? 'Sending…' : 'Steer'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void handleSend('followUp'); }}
+                          disabled={composerDisabled}
+                          className="ui-pill ui-pill-teal disabled:cursor-default disabled:opacity-60"
+                        >
+                          {submitting ? 'Sending…' : 'Follow up'}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 )}
               </div>
