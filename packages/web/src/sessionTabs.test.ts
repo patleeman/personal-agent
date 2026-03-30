@@ -259,37 +259,36 @@ describe('sessionTabs', () => {
   });
 
   describe('syncConversationLayoutMerge', () => {
-    it('fetches server state, merges with local via union, and persists back', async () => {
-      // Set up local state: open [local-1], pinned [local-pinned], archived [local-archived]
+    it('returns server state as source of truth, writes to server only (not localStorage)', async () => {
+      // localStorage has stale data
       replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: ['local-pinned'], archivedSessionIds: ['local-archived'] });
       dispatchEvent.mockReset();
 
-      // Server has: open [server-1, local-1], pinned [server-pinned, local-pinned], archived [server-archived]
+      // Server has different (authoritative) state
       fetchMock.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({
-          sessionIds: ['server-1', 'local-1'],
-          pinnedSessionIds: ['server-pinned', 'local-pinned'],
+          sessionIds: ['server-1'],
+          pinnedSessionIds: ['server-pinned'],
           archivedSessionIds: ['server-archived'],
         }),
       });
 
       const result = await syncConversationLayoutMerge();
 
-      // Union of local and server for each shelf
-      expect(result.sessionIds).toEqual(['local-1', 'server-1']);
-      expect(result.pinnedSessionIds).toEqual(['local-pinned', 'server-pinned']);
-      expect(result.archivedSessionIds).toEqual(['local-archived', 'server-archived']);
+      // Server is the source of truth — localStorage is cache only, never written
+      expect(result.sessionIds).toEqual(['server-1']);
+      expect(result.pinnedSessionIds).toEqual(['server-pinned']);
+      expect(result.archivedSessionIds).toEqual(['server-archived']);
+      expect(readOpenSessionIds()).toEqual(['local-1']); // cache untouched
+      expect(readPinnedSessionIds()).toEqual(['local-pinned']); // cache untouched
+      expect(readArchivedSessionIds()).toEqual(['local-archived']); // cache untouched
 
-      // Written to localStorage
-      expect(readOpenSessionIds()).toEqual(['local-1', 'server-1']);
-      expect(readPinnedSessionIds()).toEqual(['local-pinned', 'server-pinned']);
-      expect(readArchivedSessionIds()).toEqual(['local-archived', 'server-archived']);
-
-      // Persisted to server
+      // Persisted server state back to server (write-through)
       expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
 
-      // Dispatched event
+
+      // Dispatched event so components can refresh
       expect(dispatchEvent).toHaveBeenCalled();
     });
 
@@ -300,6 +299,7 @@ describe('sessionTabs', () => {
 
       const result = await syncConversationLayoutMerge();
 
+      // On network failure, return local state as best-effort fallback
       expect(result.sessionIds).toEqual(['local-1']);
       expect(readOpenSessionIds()).toEqual(['local-1']);
     });
@@ -325,17 +325,18 @@ describe('sessionTabs', () => {
       expect(result.pinnedSessionIds).toEqual(['server-pinned']);
       expect(result.archivedSessionIds).toEqual([]);
 
+      // Written to server only (localStorage is cache, not source of truth)
       expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
     });
 
-    it('falls back to local-only replace when fetch fails', async () => {
+    it('falls back to writing intended layout when fetch fails', async () => {
       fetchMock.mockRejectedValue(new Error('network error'));
       dispatchEvent.mockReset();
 
       const result = await commitConversationLayoutMerge({ sessionIds: ['tab-1'], pinnedSessionIds: [] });
 
       expect(result.sessionIds).toEqual(['tab-1']);
-      expect(dispatchEvent).toHaveBeenCalled(); // replaceConversationLayout dispatches
+      expect(dispatchEvent).toHaveBeenCalled();
     });
   });
 });
