@@ -1,7 +1,6 @@
 # personal-agent repo instructions
 
-This is personal software. 
-
+This is personal software, built for Patrick by Patrick.
 
 ## Development
 
@@ -20,3 +19,7 @@ This is personal software.
 - Avoid decorative pills/chips as a default treatment; use spacing, typography, and alignment for hierarchy instead.
 - Ensure consistency across pages, don't design in isolation!
 - If you modify anything in the web ui, you MUST perform a visual check before signing off on the work! Make sure there is no jank and the output looks good.
+
+# Docs are for agents
+
+The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.
