@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, useContext, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { api } from '../api';
 import { ErrorState, ToolbarButton, cx } from '../components/ui';
@@ -175,8 +175,45 @@ function SystemIcon({ active }: { active: boolean }) {
   );
 }
 
+function ChevronLeftIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
 function formatBadgeCount(count: number): string {
   return count > 99 ? '99+' : String(count);
+}
+
+const TOP_BAR_ITEMS: Array<{ pathPrefix: string; label: string; hasBack: boolean }> = [
+  { pathPrefix: COMPANION_INBOX_PATH, label: 'Inbox', hasBack: false },
+  { pathPrefix: COMPANION_CONVERSATIONS_PATH, label: 'Chats', hasBack: false },
+  { pathPrefix: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', hasBack: false },
+  { pathPrefix: COMPANION_NOTES_PATH, label: 'Notes', hasBack: true },
+  { pathPrefix: COMPANION_PROJECTS_PATH, label: 'Projects', hasBack: true },
+  { pathPrefix: COMPANION_SKILLS_PATH, label: 'Skills', hasBack: true },
+  { pathPrefix: COMPANION_SYSTEM_PATH, label: 'System', hasBack: true },
+  { pathPrefix: COMPANION_TASKS_PATH, label: 'Tasks', hasBack: true },
+];
+
+function readTopBarConfig(pathname: string): { label: string; showBack: boolean } {
+  for (const item of TOP_BAR_ITEMS) {
+    if (pathname === item.pathPrefix || pathname.startsWith(item.pathPrefix + '/')) {
+      return { label: item.label, showBack: item.hasBack };
+    }
+  }
+  return { label: '', showBack: false };
 }
 
 function BottomNavBadge({ count, dot = false }: { count?: number; dot?: boolean }) {
@@ -242,6 +279,15 @@ function DrawerLink({
 
 export function useCompanionLayoutContext() {
   return useOutletContext<CompanionLayoutContextValue>();
+}
+
+const CompanionTopBarActionContext = createContext<{
+  action: ReactNode | undefined;
+  setTopBarAction: (action: ReactNode | undefined) => void;
+}>({ action: undefined, setTopBarAction: () => {} });
+
+export function useCompanionTopBarAction() {
+  return useContext(CompanionTopBarActionContext);
 }
 
 export function CompanionLayout() {
@@ -443,6 +489,43 @@ export function CompanionLayout() {
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
 
   const showPrimaryNav = companionSession !== null && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
+  const isCapturePage = location.pathname === COMPANION_QUICK_NOTE_PATH;
+  const topBarConfig = readTopBarConfig(location.pathname);
+
+  const [topBarAction, setTopBarAction] = useState<ReactNode | undefined>();
+
+  function CompanionTopBar() {
+    return (
+      <header className="flex h-11 shrink-0 items-center border-b border-border-subtle bg-base/95 px-3 backdrop-blur-xl">
+        <div className="flex min-w-0 flex-1 items-center">
+          {topBarConfig.showBack ? (
+            <NavLink
+              to={location.pathname.split('/').slice(0, -1).join('/') || COMPANION_KNOWLEDGE_PATH}
+              end
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-secondary hover:text-primary"
+              aria-label="Go back"
+            >
+              <ChevronLeftIcon />
+            </NavLink>
+          ) : (
+            <span className="pl-1 text-[13px] font-semibold tracking-tight text-primary">{topBarConfig.label}</span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {topBarAction}
+          {!isCapturePage ? (
+            <Link
+              to={COMPANION_QUICK_NOTE_PATH}
+              aria-label="Quick note"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-secondary hover:bg-surface hover:text-primary"
+            >
+              <PlusIcon />
+            </Link>
+          ) : null}
+        </div>
+      </header>
+    );
+  }
   const inboxBadgeCount = activity?.unreadCount ?? 0;
   const settingsBadge = (tasks ?? []).filter((task) => task.running || task.lastStatus === 'failure').length;
   const menuHasAttention = (daemon?.warnings.length ?? 0) > 0
@@ -543,7 +626,10 @@ export function CompanionLayout() {
             </div>
           )
         ) : (
-          <Outlet context={contextValue} />
+          <CompanionTopBarActionContext.Provider value={{ action: topBarAction, setTopBarAction }}>
+            {!isCapturePage && topBarConfig.label ? <CompanionTopBar /> : null}
+            <Outlet context={contextValue} />
+          </CompanionTopBarActionContext.Provider>
         )}
       </div>
 

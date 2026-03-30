@@ -76,17 +76,6 @@ export function CompanionMemoriesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <h1 className="text-[22px] font-semibold tracking-tight text-primary">Notes</h1>
-          <p className="mt-1 text-[11px] text-dim">
-            {memories.length === 0
-              ? 'No note nodes yet.'
-              : `${memories.length} note nodes · ${archivedMemories.length} archived`}
-          </p>
-        </div>
-      </header>
-
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           {loading ? <p className="px-4 text-[13px] text-dim">Loading notes…</p> : null}

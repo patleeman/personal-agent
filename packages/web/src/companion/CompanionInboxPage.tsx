@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useAppEvents, useSseConnection } from '../contexts';
@@ -6,6 +6,7 @@ import { useApi } from '../hooks';
 import { kindMeta, timeAgo } from '../utils';
 import type { ActivityEntry, CompanionConversationListResult, SessionMeta } from '../types';
 import { buildCompanionConversationPath, COMPANION_INBOX_PATH } from './routes';
+import { useCompanionTopBarAction } from './CompanionLayout';
 
 type InboxItem =
   | {
@@ -135,6 +136,7 @@ export function CompanionInboxPage() {
 
   const isLoading = (activity === null || conversationsLoading) && sseStatus !== 'offline';
   const refreshError = actionError ?? conversationsError;
+  const { setTopBarAction } = useCompanionTopBarAction();
 
   const refreshInbox = useCallback(async () => {
     setRefreshingActivity(true);
@@ -251,27 +253,26 @@ export function CompanionInboxPage() {
     }
   }, [activity?.entries, setActivity]);
 
+  useEffect(() => {
+    setTopBarAction(
+      <button
+        key="refresh"
+        type="button"
+        onClick={() => { void refreshInbox(); }}
+        disabled={refreshingActivity || conversationsRefreshing}
+        className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      >
+        {refreshingActivity || conversationsRefreshing ? 'Refreshing…' : 'Refresh'}
+      </button>,
+    );
+    return () => setTopBarAction(undefined);
+  }, [conversationsRefreshing, refreshInbox, refreshingActivity, setTopBarAction]);
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[22px] font-semibold tracking-tight text-primary">Inbox</h1>
-              <p className="mt-1 text-[11px] text-dim">
-                {unreadCount} unread · {allItems.length} {allItems.length === 1 ? 'item' : 'items'}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { void refreshInbox(); }}
-              disabled={refreshingActivity || conversationsRefreshing}
-              className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              {refreshingActivity || conversationsRefreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-          <div className="mt-4 flex items-center gap-2">
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
+          <div className="mb-2 flex items-center gap-2 px-4">
             <div className="inline-flex rounded-full border border-border-subtle bg-surface p-1">
               <button
                 type="button"
@@ -313,11 +314,7 @@ export function CompanionInboxPage() {
               </button>
             ) : null}
           </div>
-        </div>
-      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           {isLoading ? <p className="px-4 text-[13px] text-dim">Loading inbox…</p> : null}
           {!isLoading && refreshError ? <p className="px-4 text-[13px] text-danger">Unable to load inbox: {refreshError}</p> : null}
           {!isLoading && !refreshError && allItems.length === 0 ? (
