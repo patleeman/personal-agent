@@ -10,7 +10,7 @@ describe('nodeLinks', () => {
         title: 'Research Index',
         summary: 'Structure note',
         path: '/tmp/research-index/INDEX.md',
-        contentParts: ['See @tool-agent-browser for validation.'],
+        contentParts: ['See @agent-browser for validation.'],
         explicitTargets: [{ id: 'paper-summary', kindHint: 'note' }],
       },
       {
@@ -24,10 +24,10 @@ describe('nodeLinks', () => {
       },
       {
         kind: 'skill',
-        id: 'tool-agent-browser',
-        title: 'Tool Agent Browser',
+        id: 'agent-browser',
+        title: 'Agent Browser',
         summary: 'Browser automation skill',
-        path: '/tmp/tool-agent-browser/INDEX.md',
+        path: '/tmp/agent-browser/INDEX.md',
         contentParts: ['Use for browser checks.'],
         explicitTargets: [],
       },
@@ -43,8 +43,8 @@ describe('nodeLinks', () => {
         },
         {
           kind: 'skill',
-          id: 'tool-agent-browser',
-          title: 'Tool Agent Browser',
+          id: 'agent-browser',
+          title: 'Agent Browser',
           summary: 'Browser automation skill',
         },
       ],
@@ -60,7 +60,7 @@ describe('nodeLinks', () => {
         summary: 'Structure note',
       },
     ]);
-    expect(links.get('skill:tool-agent-browser')?.incoming).toEqual([
+    expect(links.get('skill:agent-browser')?.incoming).toEqual([
       {
         kind: 'note',
         id: 'research-index',
@@ -79,7 +79,7 @@ describe('nodeLinks', () => {
         summary: 'Project node',
         path: '/tmp/ship-ui/INDEX.md',
         contentParts: [
-          'Project doc mentions @tool-agent-browser.',
+          'Project doc mentions @agent-browser.',
           'Decision log',
           'Follow up with @paper-summary before the rollout.',
         ],
@@ -96,10 +96,10 @@ describe('nodeLinks', () => {
       },
       {
         kind: 'skill',
-        id: 'tool-agent-browser',
-        title: 'Tool Agent Browser',
+        id: 'agent-browser',
+        title: 'Agent Browser',
         summary: 'Browser automation skill',
-        path: '/tmp/tool-agent-browser/INDEX.md',
+        path: '/tmp/agent-browser/INDEX.md',
         contentParts: ['Use for browser checks.'],
         explicitTargets: [],
       },
@@ -115,8 +115,8 @@ describe('nodeLinks', () => {
         },
         {
           kind: 'skill',
-          id: 'tool-agent-browser',
-          title: 'Tool Agent Browser',
+          id: 'agent-browser',
+          title: 'Agent Browser',
           summary: 'Browser automation skill',
         },
       ],

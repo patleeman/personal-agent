@@ -206,11 +206,11 @@ Example:
 
 ```yaml
 ---
-id: tool-agent-browser
+id: agent-browser
 kind: skill
-name: tool-agent-browser
+name: agent-browser
 description: Automate browsers and Electron apps with agent-browser.
-title: Browser automation with agent-browser
+title: agent-browser
 summary: Native and headed browser automation workflows for validation and inspection.
 ---
 ```
@@ -296,7 +296,7 @@ links:
 
 Use markdown links or plain `@id` references inside the body for narrative context.
 
-In the web UI, prose editors support `@` mention autocomplete for node cross-references. Use stable node ids such as `@node-format-migration`, `@tool-agent-browser`, or `@durable-state-model-v2` so references stay durable even if titles change.
+In the web UI, prose editors support `@` mention autocomplete for node cross-references. Use stable node ids such as `@node-format-migration`, `@agent-browser`, or `@durable-state-model-v2` so references stay durable even if titles change.
 
 The UI also computes backlinks from these durable `@id` references, so note, project, and skill detail views can show both outgoing links and linked-from context.
 

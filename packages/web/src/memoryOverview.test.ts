@@ -37,9 +37,9 @@ const MEMORY_DATA: MemoryData = {
     },
     {
       source: 'shared',
-      name: 'tool-agent-browser',
+      name: 'agent-browser',
       description: 'Drive websites and Electron apps.',
-      path: '/state/profiles/shared/agent/skills/tool-agent-browser/INDEX.md',
+      path: '/state/profiles/shared/agent/skills/agent-browser/INDEX.md',
       recentSessionCount: 2,
       lastUsedAt: '2026-03-10T12:00:00.000Z',
       usedInLastSession: false,

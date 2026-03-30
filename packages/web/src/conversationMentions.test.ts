@@ -36,10 +36,10 @@ describe('conversationMentions', () => {
         path: '/tmp/project-state-model.md',
       }],
       skills: [{
-        name: 'tool-agent-browser',
+        name: 'agent-browser',
         description: 'Automate browser flows.',
         source: 'shared',
-        path: '/tmp/tool-agent-browser/INDEX.md',
+        path: '/tmp/agent-browser/INDEX.md',
       }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
@@ -48,7 +48,7 @@ describe('conversationMentions', () => {
       'project:@web-ui',
       'task:@daily-review',
       'note:@project-state-model',
-      'skill:@tool-agent-browser',
+      'skill:@agent-browser',
       'profile:@assistant',
       'profile:@datadog',
       'profile:@shared',
@@ -74,10 +74,10 @@ describe('conversationMentions', () => {
         path: '/tmp/project-state-model.md',
       }],
       skills: [{
-        name: 'tool-agent-browser',
+        name: 'agent-browser',
         description: 'Automate browser flows.',
         source: 'shared',
-        path: '/tmp/tool-agent-browser/INDEX.md',
+        path: '/tmp/agent-browser/INDEX.md',
       }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
@@ -86,7 +86,7 @@ describe('conversationMentions', () => {
     expect(filterMentionItems(items, '@state').map((item) => item.id)).toEqual(['@project-state-model']);
     expect(filterMentionItems(items, '@stored').map((item) => item.id)).toEqual(['@project-state-model']);
     expect(filterMentionItems(items, '@assist').map((item) => item.id)).toEqual(['@assistant']);
-    expect(filterMentionItems(items, '@browser').map((item) => item.id)).toEqual(['@tool-agent-browser']);
+    expect(filterMentionItems(items, '@browser').map((item) => item.id)).toEqual(['@agent-browser']);
   });
 
   it('resolves mentioned items in encounter order', () => {
@@ -108,18 +108,18 @@ describe('conversationMentions', () => {
         path: '/tmp/project-state-model.md',
       }],
       skills: [{
-        name: 'tool-agent-browser',
+        name: 'agent-browser',
         description: 'Automate browser flows.',
         source: 'shared',
-        path: '/tmp/tool-agent-browser/INDEX.md',
+        path: '/tmp/agent-browser/INDEX.md',
       }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
-    expect(resolveMentionItems('Use @assistant with @project-state-model and @tool-agent-browser.', items).map((item) => item.id)).toEqual([
+    expect(resolveMentionItems('Use @assistant with @project-state-model and @agent-browser.', items).map((item) => item.id)).toEqual([
       '@assistant',
       '@project-state-model',
-      '@tool-agent-browser',
+      '@agent-browser',
     ]);
   });
 });

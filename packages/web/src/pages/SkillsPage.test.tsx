@@ -45,19 +45,19 @@ describe('SkillsPage', () => {
 
   it('renders the selected skill in the main workspace instead of the skills table', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'skill-workspace:tool-agent-browser') {
+      if (key === 'skill-workspace:agent-browser') {
         return {
           data: {
             skill: {
               source: 'shared',
-              name: 'tool-agent-browser',
+              name: 'agent-browser',
               description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/tool-agent-browser/INDEX.md',
+              path: '/tmp/agent-browser/INDEX.md',
               recentSessionCount: 4,
               lastUsedAt: '2026-03-27T12:00:00.000Z',
               usedInLastSession: true,
             },
-            content: '---\nname: tool-agent-browser\n---\n\n# Browser Automation\n\nUse agent-browser effectively.',
+            content: '---\nname: agent-browser\n---\n\n# agent-browser\n\nUse agent-browser effectively.',
             references: [],
             links: {
               outgoing: [],
@@ -77,9 +77,9 @@ describe('SkillsPage', () => {
           skills: [
             {
               source: 'shared',
-              name: 'tool-agent-browser',
+              name: 'agent-browser',
               description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/tool-agent-browser/INDEX.md',
+              path: '/tmp/agent-browser/INDEX.md',
               recentSessionCount: 4,
               lastUsedAt: '2026-03-27T12:00:00.000Z',
               usedInLastSession: true,
@@ -93,9 +93,9 @@ describe('SkillsPage', () => {
       };
     });
 
-    const html = renderPage('/skills?skill=tool-agent-browser');
+    const html = renderPage('/skills?skill=agent-browser');
 
-    expect(html).toContain('Browser Automation');
+    expect(html).toContain('agent-browser');
     expect(html).toContain('Automate browsers and Electron apps with agent-browser.');
     expect(html).toContain('Autosave on');
     expect(html).toContain('Files');
@@ -110,9 +110,9 @@ describe('SkillsPage', () => {
         skills: [
           {
             source: 'shared',
-            name: 'tool-agent-browser',
+            name: 'agent-browser',
             description: 'Automate browsers and Electron apps with agent-browser.',
-            path: '/tmp/tool-agent-browser/INDEX.md',
+            path: '/tmp/agent-browser/INDEX.md',
             recentSessionCount: 4,
             lastUsedAt: '2026-03-27T12:00:00.000Z',
             usedInLastSession: true,
