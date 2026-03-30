@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import {
@@ -14,6 +14,7 @@ import { timeAgo } from '../utils';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
 import { buildCompanionConversationPath, COMPANION_PROJECTS_PATH } from './routes';
+import { useCompanionTopBarAction } from './CompanionLayout';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -42,39 +43,24 @@ export function CompanionProjectDetailPage() {
   );
   const currentMilestone = project ? pickCurrentMilestone(project.plan) : undefined;
   const progress = project ? getPlanProgress(project.plan.milestones) : { done: 0, total: 0, pct: 0 };
+  const { setTopBarRightAction } = useCompanionTopBarAction();
+
+  useEffect(() => {
+    setTopBarRightAction(
+      <button
+        type="button"
+        onClick={() => { void refetch({ resetLoading: false }); }}
+        disabled={refreshing}
+        className="flex h-9 items-center rounded-full px-3 text-[12px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      >
+        {refreshing ? 'Refreshing…' : 'Refresh'}
+      </button>,
+    );
+    return () => setTopBarRightAction(undefined);
+  }, [refreshing, refetch, setTopBarRightAction]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          <div className="flex items-center justify-between gap-3">
-            <Link to={COMPANION_PROJECTS_PATH} className="text-[12px] font-medium text-accent">← Projects</Link>
-            <button
-              type="button"
-              onClick={() => { void refetch({ resetLoading: false }); }}
-              disabled={refreshing}
-              className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">assistant companion</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">{project?.title ?? 'Project'}</h1>
-          {project ? (
-            <>
-              <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-secondary">{summarizeProjectPreview(project)}</p>
-              <p className="mt-3 break-words text-[12px] text-dim">
-                {formatProjectStatus(project.status)}
-                <span className="mx-1.5 opacity-40">·</span>
-                {isProjectArchived(project) && project.archivedAt ? `archived ${timeAgo(project.archivedAt)}` : `updated ${timeAgo(project.updatedAt)}`}
-                <span className="mx-1.5 opacity-40">·</span>
-                @{project.id}
-              </p>
-            </>
-          ) : null}
-        </div>
-      </header>
-
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-6">
           {loading ? <p className="px-4 text-[13px] text-dim">Loading project…</p> : null}
