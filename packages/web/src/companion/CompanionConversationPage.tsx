@@ -87,57 +87,17 @@ export function shouldShowCompanionConversationStatusBanner(input: {
 }
 
 /**
- * Bidirectional tab sync for the companion.
+ * Bidirectional workspace sync for the companion.
  *
- * Fetches the server's saved tab state, merges it with the local state (union of
- * open/pinned/archived), pushes the merged result back to the server so the web UI
- * also sees the companion's open tabs, then writes to localStorage and returns the
- * merged layout.
+ * Fetches the server's saved workspace state, merges it with the local state
+ * (union of open/pinned/archived), pushes the merged result back to the server,
+ * then writes the merged layout locally.
  *
- * This ensures neither client can overwrite the other's tabs — both sets are kept.
+ * This keeps the companion aware of the shared workspace without automatically
+ * opening every conversation the user happens to view on mobile.
  */
-export async function syncCompanionConversationWorkspaceLayout(
-  conversationId: string | null | undefined,
-): Promise<ConversationLayout> {
-  const mergedLayout = await syncConversationLayoutMerge();
-
-  if (conversationId) {
-    const normalized = conversationId.trim();
-    if (!mergedLayout.pinnedSessionIds.includes(normalized) && !mergedLayout.sessionIds.includes(normalized)) {
-      const next: ConversationLayout = {
-        ...mergedLayout,
-        sessionIds: [...mergedLayout.sessionIds, normalized],
-      };
-
-      // Write merged + new tab to localStorage and server.
-      const { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY, ARCHIVED_SESSION_IDS_STORAGE_KEY } = await import('../localSettings');
-      const writeStored = (key: string, ids: readonly string[]) => {
-        try {
-          if (ids.length > 0) {
-            localStorage.setItem(key, JSON.stringify(ids));
-          } else {
-            localStorage.removeItem(key);
-          }
-        } catch { /* ignore */ }
-      };
-      writeStored(OPEN_SESSION_IDS_STORAGE_KEY, next.sessionIds);
-      writeStored(PINNED_SESSION_IDS_STORAGE_KEY, next.pinnedSessionIds);
-      writeStored(ARCHIVED_SESSION_IDS_STORAGE_KEY, next.archivedSessionIds);
-
-      void fetch('/api/web-ui/open-conversations', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next),
-      }).catch(() => { /* best-effort */ });
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('pa:conversation-layout-changed', { detail: next }));
-      }
-      return next;
-    }
-  }
-
-  return mergedLayout;
+export async function syncCompanionConversationWorkspaceLayout(): Promise<ConversationLayout> {
+  return syncConversationLayoutMerge();
 }
 
 const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
@@ -575,7 +535,7 @@ export function CompanionConversationPage() {
       return;
     }
 
-    void syncCompanionConversationWorkspaceLayout(id).then(replaceOpenTabs);
+    void syncCompanionConversationWorkspaceLayout().then(replaceOpenTabs);
   }, [id, replaceOpenTabs]);
 
   useEffect(() => {

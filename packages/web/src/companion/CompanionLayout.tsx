@@ -578,7 +578,7 @@ export function CompanionLayout() {
             <div className="min-h-0 flex-1 overflow-y-auto px-0 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
               <DrawerSection title="Navigate">
                 <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and open tabs." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and workspace chats." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_KNOWLEDGE_PATH} label="Knowledge" detail="Browse projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
