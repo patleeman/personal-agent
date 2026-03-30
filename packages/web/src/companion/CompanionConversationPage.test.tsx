@@ -301,10 +301,42 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('Actions');
     expect(html).not.toContain('Resume conversation');
     expect(html).toContain('Open conversation');
+    expect(html).toContain('Conversation runtime');
     expect(html).toContain('Agent reminders');
     expect(html).toContain('Artifacts');
     expect(html).toContain('Scheduled tasks');
     expect(html).not.toContain('todos:');
+  });
+
+  it('opens the runtime side panel when requested in the URL', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/app/conversations/conv-123?panel=runtime']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: vi.fn() }}>
+            <AppDataContext.Provider value={{
+              activity: null,
+              projects: null,
+              sessions: [createSession({ id: 'conv-123', title: 'Companion conversation', isLive: true })],
+              tasks: null,
+              runs: null,
+              setActivity: vi.fn(),
+              setProjects: vi.fn(),
+              setSessions: vi.fn(),
+              setTasks: vi.fn(),
+              setRuns: vi.fn(),
+            }}>
+              <Routes>
+                <Route path="/app/conversations/:id" element={<CompanionConversationPage />} />
+              </Routes>
+            </AppDataContext.Provider>
+          </LiveTitlesContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Conversation runtime');
+    expect(html).toContain('Model');
+    expect(html).toContain('Thinking');
   });
 
   it('opens the side panel for conversation todos when requested in the URL', () => {

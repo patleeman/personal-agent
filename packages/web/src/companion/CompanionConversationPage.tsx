@@ -21,11 +21,15 @@ import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCompanionSkillMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
+import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import type {
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MemoryData,
   MessageBlock,
+  ModelInfo,
+  ModelPresetState,
   PromptImageInput,
   ScheduledTaskSummary,
   SessionDetail,
@@ -287,11 +291,11 @@ function buildBannerDetail(input: {
   return 'Waiting for controller state…';
 }
 
-type CompanionConversationPanel = 'actions' | 'todos' | 'artifacts';
+type CompanionConversationPanel = 'actions' | 'runtime' | 'todos' | 'artifacts';
 
 function getCompanionConversationPanel(search: string): CompanionConversationPanel | null {
   const value = new URLSearchParams(search).get('panel');
-  return value === 'actions' || value === 'todos' || value === 'artifacts' ? value : null;
+  return value === 'actions' || value === 'runtime' || value === 'todos' || value === 'artifacts' ? value : null;
 }
 
 function setCompanionConversationPanel(search: string, panel: CompanionConversationPanel | null): string {
@@ -408,6 +412,116 @@ function CompanionSlashMenu({
   );
 }
 
+const COMPANION_RUNTIME_SELECT_CLASS = 'w-full rounded-lg border border-border-default bg-surface px-3 py-2.5 text-[13px] text-primary outline-none transition-colors focus:border-accent/60 disabled:cursor-default disabled:opacity-50';
+
+function CompanionConversationRuntimePanel({
+  models,
+  presets,
+  currentModel,
+  currentThinkingLevel,
+  loading,
+  savingPreference,
+  disabledReason,
+  onSelectModel,
+  onSelectThinkingLevel,
+}: {
+  models: ModelInfo[];
+  presets: ModelPresetState[];
+  currentModel: string;
+  currentThinkingLevel: string;
+  loading: boolean;
+  savingPreference: 'model' | 'thinking' | null;
+  disabledReason?: string | null;
+  onSelectModel: (modelId: string) => void;
+  onSelectThinkingLevel: (thinkingLevel: string) => void;
+}) {
+  const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
+  const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
+  const currentPreset = useMemo(() => {
+    if (!currentModel || !currentThinkingLevel) {
+      return null;
+    }
+
+    return presets.find((preset) => (
+      preset.model === currentModel && preset.thinkingLevel === currentThinkingLevel
+    )) ?? null;
+  }, [currentModel, currentThinkingLevel, presets]);
+  const controlsDisabled = loading || savingPreference !== null || Boolean(disabledReason);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <label className="ui-section-label" htmlFor="companion-conversation-model-preference">Model</label>
+        <select
+          id="companion-conversation-model-preference"
+          value={currentPreset ? `preset:${currentPreset.id}` : currentModel}
+          onChange={(event) => { onSelectModel(event.target.value); }}
+          disabled={controlsDisabled || (models.length === 0 && presets.length === 0)}
+          className={COMPANION_RUNTIME_SELECT_CLASS}
+        >
+          {!currentModel ? <option value="">{loading ? 'Loading models…' : 'Choose a model'}</option> : null}
+          {presets.length > 0 ? (
+            <optgroup label="Presets">
+              {presets.map((preset) => (
+                <option key={`preset:${preset.id}`} value={`preset:${preset.id}`}>
+                  {preset.id}{preset.description ? ` — ${preset.description}` : ''}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
+          {groupedModels.map(([provider, providerModels]) => (
+            <optgroup key={provider} label={provider}>
+              {providerModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name} · {formatContextWindowLabel(model.context)} ctx
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <p className="text-[12px] leading-relaxed text-secondary">
+          {savingPreference === 'model'
+            ? 'Saving model…'
+            : currentPreset
+              ? `Preset: ${currentPreset.id} · ${formatThinkingLevelLabel(currentPreset.thinkingLevel)} thinking`
+              : selectedModel
+                ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
+                : loading
+                  ? 'Loading available models…'
+                  : 'No model selected.'}
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="ui-section-label" htmlFor="companion-conversation-thinking-preference">Thinking</label>
+        <select
+          id="companion-conversation-thinking-preference"
+          value={currentThinkingLevel}
+          onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
+          disabled={controlsDisabled}
+          className={COMPANION_RUNTIME_SELECT_CLASS}
+        >
+          {THINKING_LEVEL_OPTIONS.map((option) => (
+            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+        <p className="text-[12px] leading-relaxed text-secondary">
+          {savingPreference === 'thinking'
+            ? 'Saving thinking level…'
+            : `Current thinking level: ${formatThinkingLevelLabel(currentThinkingLevel)}`}
+        </p>
+      </div>
+
+      <p className={cx(
+        'text-[12px] leading-relaxed',
+        disabledReason ? 'text-warning' : 'text-dim',
+      )}>
+        {disabledReason ?? 'Changes here only affect this conversation.'}
+      </p>
+    </div>
+  );
+}
+
 export function CompanionConversationPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -426,6 +540,12 @@ export function CompanionConversationPage() {
   const [takeoverBusy, setTakeoverBusy] = useState(false);
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [runtimeModels, setRuntimeModels] = useState<ModelInfo[]>([]);
+  const [runtimePresets, setRuntimePresets] = useState<ModelPresetState[]>([]);
+  const [currentModel, setCurrentModel] = useState('');
+  const [currentThinkingLevel, setCurrentThinkingLevel] = useState('');
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [savingRuntimePreference, setSavingRuntimePreference] = useState<'model' | 'thinking' | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [keyboardInset, setKeyboardInset] = useState(0);
@@ -504,6 +624,53 @@ export function CompanionConversationPage() {
     };
   }, [id]);
 
+  useEffect(() => {
+    if (!id) {
+      setRuntimeModels([]);
+      setRuntimePresets([]);
+      setCurrentModel('');
+      setCurrentThinkingLevel('');
+      setRuntimeLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRuntimeLoading(true);
+
+    Promise.all([
+      api.models(),
+      api.modelPresetSettings(),
+      api.conversationModelPreferences(id),
+    ]).then(([modelState, presetState, preferenceState]) => {
+      if (cancelled) {
+        return;
+      }
+
+      setRuntimeModels(modelState.models);
+      setRuntimePresets(presetState.presets);
+      setCurrentModel(preferenceState.currentModel || modelState.currentModel || '');
+      setCurrentThinkingLevel(preferenceState.currentThinkingLevel ?? modelState.currentThinkingLevel ?? '');
+    }).catch((error) => {
+      if (cancelled) {
+        return;
+      }
+
+      setRuntimeModels([]);
+      setRuntimePresets([]);
+      setCurrentModel(sessionSnapshot?.model ?? '');
+      setCurrentThinkingLevel('');
+      setActionError((current) => current ?? (error instanceof Error ? error.message : String(error)));
+    }).finally(() => {
+      if (!cancelled) {
+        setRuntimeLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, sessionSnapshot?.model]);
+
   const isLiveSession = resolveCompanionConversationLive({
     streamBlockCount: stream.blocks.length,
     isStreaming: stream.isStreaming,
@@ -545,6 +712,22 @@ export function CompanionConversationPage() {
     () => [...(sessionSnapshot?.deferredResumes ?? [])].sort(compareDeferredResumes),
     [sessionSnapshot?.deferredResumes],
   );
+  const pendingQueue = useMemo(() => ([
+    ...stream.pendingQueue.steering.map((item, index) => ({
+      id: item.id,
+      text: item.text,
+      imageCount: item.imageCount,
+      type: 'steer' as const,
+      queueIndex: index,
+    })),
+    ...stream.pendingQueue.followUp.map((item, index) => ({
+      id: item.id,
+      text: item.text,
+      imageCount: item.imageCount,
+      type: 'followUp' as const,
+      queueIndex: index,
+    })),
+  ]), [stream.pendingQueue.followUp, stream.pendingQueue.steering]);
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
   const deferredResumeIndicatorText = useMemo(
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
@@ -563,6 +746,15 @@ export function CompanionConversationPage() {
       : stream.isStreaming
         ? 'Wait for the current turn to finish before editing the agent reminders.'
         : null;
+  const runtimeReadOnlyReason = controlState.needsTakeover
+    ? 'Take over to change this conversation runtime from this device.'
+    : null;
+  const runtimeSummaryText = currentModel
+    ? `${currentModel} · ${formatThinkingLevelLabel(currentThinkingLevel)} thinking`
+    : runtimeLoading
+      ? 'Loading runtime…'
+      : 'Change model & thinking level';
+  const canQueuePrompts = stream.isStreaming;
   const trimmedDraft = draft.trim();
   const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
@@ -603,7 +795,7 @@ export function CompanionConversationPage() {
     titles.get(id ?? ''),
     sessionDetail?.meta.title ?? sessionSnapshot?.title,
   );
-  const composerDisabled = !isLiveSession || controlState.needsTakeover || stream.isStreaming || submitting;
+  const composerDisabled = !isLiveSession || controlState.needsTakeover || submitting;
   const missingConversation = Boolean(id)
     && confirmedLive === false
     && !sessionLoading
@@ -880,7 +1072,72 @@ export function CompanionConversationPage() {
     }
   }, [closePanel, id, navigate, resumeBusy, savedConversationSessionFile, selectedPanel, stream]);
 
-  const handleSend = useCallback(async () => {
+  const handleSelectRuntimeModel = useCallback(async (modelId: string) => {
+    if (!id || !modelId || savingRuntimePreference !== null) {
+      return;
+    }
+
+    if (controlState.needsTakeover) {
+      setActionError('Take over this conversation to change its model from this device.');
+      return;
+    }
+
+    setSavingRuntimePreference('model');
+    setActionError(null);
+
+    try {
+      if (modelId.startsWith('preset:')) {
+        const presetId = modelId.slice('preset:'.length);
+        const preset = runtimePresets.find((candidate) => candidate.id === presetId);
+        if (!preset) {
+          throw new Error(`Preset not found: ${presetId}`);
+        }
+
+        const next = await api.updateConversationModelPreferences(
+          id,
+          { model: preset.model, thinkingLevel: preset.thinkingLevel },
+          stream.surfaceId,
+        );
+        setCurrentModel(next.currentModel);
+        setCurrentThinkingLevel(next.currentThinkingLevel);
+        return;
+      }
+
+      const next = await api.updateConversationModelPreferences(id, { model: modelId }, stream.surfaceId);
+      setCurrentModel(next.currentModel);
+      setCurrentThinkingLevel(next.currentThinkingLevel);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRuntimePreference(null);
+    }
+  }, [controlState.needsTakeover, id, runtimePresets, savingRuntimePreference, stream.surfaceId]);
+
+  const handleSelectRuntimeThinkingLevel = useCallback(async (thinkingLevel: string) => {
+    if (!id || savingRuntimePreference !== null || thinkingLevel === currentThinkingLevel) {
+      return;
+    }
+
+    if (controlState.needsTakeover) {
+      setActionError('Take over this conversation to change its thinking level from this device.');
+      return;
+    }
+
+    setSavingRuntimePreference('thinking');
+    setActionError(null);
+
+    try {
+      const next = await api.updateConversationModelPreferences(id, { thinkingLevel }, stream.surfaceId);
+      setCurrentModel(next.currentModel);
+      setCurrentThinkingLevel(next.currentThinkingLevel);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRuntimePreference(null);
+    }
+  }, [controlState.needsTakeover, currentThinkingLevel, id, savingRuntimePreference, stream.surfaceId]);
+
+  const handleSend = useCallback(async (behavior?: 'steer' | 'followUp') => {
     const text = draft.trim();
     if (!id || (!text && attachments.length === 0) || composerDisabled) {
       if (controlState.needsTakeover) {
@@ -889,12 +1146,13 @@ export function CompanionConversationPage() {
       return;
     }
 
+    const nextBehavior = canQueuePrompts ? behavior : undefined;
     setSubmitting(true);
     setActionError(null);
 
     try {
       const promptImages = await buildCompanionPromptImages(attachments);
-      await stream.send(text, undefined, promptImages);
+      await stream.send(text, nextBehavior, promptImages);
       setDraft('');
       setAttachments([]);
     } catch (error) {
@@ -902,7 +1160,7 @@ export function CompanionConversationPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [attachments, composerDisabled, controlState.needsTakeover, draft, id, stream]);
+  }, [attachments, canQueuePrompts, composerDisabled, controlState.needsTakeover, draft, id, stream]);
 
   if (!id) {
     return (
@@ -1083,7 +1341,13 @@ export function CompanionConversationPage() {
                 <div className="min-w-0">
                   <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-dim/70">Conversation</p>
                   <h2 className="truncate text-[15px] font-medium text-primary">
-                    {selectedPanel === 'actions' ? 'Actions' : selectedPanel === 'todos' ? 'Agent reminders' : 'Artifacts'}
+                    {selectedPanel === 'actions'
+                      ? 'Actions'
+                      : selectedPanel === 'runtime'
+                        ? 'Conversation runtime'
+                        : selectedPanel === 'todos'
+                          ? 'Agent reminders'
+                          : 'Artifacts'}
                   </h2>
                 </div>
               </div>
@@ -1148,6 +1412,19 @@ export function CompanionConversationPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => openPanel('runtime')}
+                    className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium text-primary">Conversation runtime</p>
+                      <p className="mt-1 truncate text-[12px] leading-relaxed text-secondary">{runtimeSummaryText}</p>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
+                      <path d="m9 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => openPanel('todos')}
                     className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
                   >
@@ -1186,6 +1463,18 @@ export function CompanionConversationPage() {
                     </svg>
                   </Link>
                 </div>
+              ) : selectedPanel === 'runtime' ? (
+                <CompanionConversationRuntimePanel
+                  models={runtimeModels}
+                  presets={runtimePresets}
+                  currentModel={currentModel}
+                  currentThinkingLevel={currentThinkingLevel}
+                  loading={runtimeLoading}
+                  savingPreference={savingRuntimePreference}
+                  disabledReason={runtimeReadOnlyReason}
+                  onSelectModel={(modelId) => { void handleSelectRuntimeModel(modelId); }}
+                  onSelectThinkingLevel={(thinkingLevel) => { void handleSelectRuntimeThinkingLevel(thinkingLevel); }}
+                />
               ) : selectedPanel === 'todos' ? (
                 <CompanionConversationTodos
                   conversationId={id}
@@ -1205,6 +1494,31 @@ export function CompanionConversationPage() {
         style={{ paddingBottom: composerFooterPaddingBottom }}
       >
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-2.5">
+          {pendingQueue.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Queued</p>
+              <div className="space-y-2">
+                {pendingQueue.map((item) => (
+                  <div key={`${item.type}:${item.id}:${item.queueIndex}`} className="rounded-xl bg-surface px-3 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <Pill tone={item.type === 'steer' ? 'warning' : 'teal'}>
+                        {item.type === 'steer' ? 'Steer' : 'Follow up'}
+                      </Pill>
+                      <div className="min-w-0 flex-1">
+                        <p className="whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">
+                          {item.text || '(image only)'}
+                        </p>
+                        {item.imageCount > 0 ? (
+                          <p className="mt-1 text-[11px] text-dim">{item.imageCount} image{item.imageCount === 1 ? '' : 's'}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {attachments.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {attachments.map((file, index) => (
@@ -1352,7 +1666,7 @@ export function CompanionConversationPage() {
                         }
                       }}
                       placeholder={stream.isStreaming
-                        ? 'Agent responding… stop the current turn or wait before sending.'
+                        ? 'Agent responding… steer it now or queue a follow up.'
                         : 'Use / for skills · attach images from your phone.'}
                       disabled={composerDisabled}
                       rows={1}
@@ -1377,7 +1691,7 @@ export function CompanionConversationPage() {
                             Stop
                           </button>
                         ) : null}
-                        {composerHasContent ? (
+                        {composerHasContent && !stream.isStreaming ? (
                           <button
                             type="button"
                             onClick={() => { void handleSend(); }}
@@ -1386,6 +1700,26 @@ export function CompanionConversationPage() {
                           >
                             {submitting ? 'Sending…' : 'Send'}
                           </button>
+                        ) : null}
+                        {composerHasContent && stream.isStreaming ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => { void handleSend('steer'); }}
+                              disabled={composerDisabled}
+                              className="ui-pill ui-pill-warning disabled:cursor-default disabled:opacity-60"
+                            >
+                              {submitting ? 'Sending…' : 'Steer'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { void handleSend('followUp'); }}
+                              disabled={composerDisabled}
+                              className="ui-pill ui-pill-teal disabled:cursor-default disabled:opacity-60"
+                            >
+                              {submitting ? 'Sending…' : 'Follow up'}
+                            </button>
+                          </>
                         ) : null}
                       </div>
                     )}

@@ -11107,6 +11107,128 @@ companionApp.use('/api', (req, res, next) => {
   next();
 });
 
+companionApp.get('/api/model-presets', (_req, res) => {
+  try {
+    res.json({
+      profile: getCurrentProfile(),
+      ...readSavedModelPresetPreferences(SETTINGS_FILE),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/models', (_req, res) => {
+  try {
+    const saved = readSavedModelPreferences(SETTINGS_FILE);
+    const models = listAvailableModelDefinitions();
+    const currentModel = saved.currentModel || models[0]?.id || '';
+    res.json({
+      currentModel,
+      currentThinkingLevel: saved.currentThinkingLevel,
+      models,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/conversations/:id/model-preferences', async (req, res) => {
+  try {
+    const state = await readConversationModelPreferenceStateById(req.params.id);
+    if (!state) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) => {
+  try {
+    const { model, thinkingLevel } = req.body as {
+      model?: string | null;
+      thinkingLevel?: string | null;
+      surfaceId?: string;
+    };
+
+    if (model === undefined && thinkingLevel === undefined) {
+      res.status(400).json({ error: 'model or thinkingLevel required' });
+      return;
+    }
+
+    if ((model !== undefined && model !== null && typeof model !== 'string')
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
+      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
+      return;
+    }
+
+    const profile = getCurrentProfile();
+    const input = {
+      ...(model !== undefined ? { model } : {}),
+      ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+    };
+
+    if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
+      res.status(409).json({ error: 'Per-conversation model changes are not supported for remote conversations yet.' });
+      return;
+    }
+
+    if (isLocalLive(req.params.id)) {
+      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+      const state = updateLiveSessionModelPreferences(req.params.id, input);
+      res.json(state);
+      return;
+    }
+
+    const sessionFile = resolveConversationSessionFile(req.params.id);
+    if (!sessionFile || !existsSync(sessionFile)) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const sessionManager = SessionManager.open(sessionFile);
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      input,
+      readSavedModelPreferences(SETTINGS_FILE),
+      getAvailableModelObjects(),
+    );
+
+    publishConversationSessionMetaChanged(req.params.id);
+    res.json(state);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    const status = message === 'model required'
+      || message.startsWith('Unknown model:')
+      ? 400
+      : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
 companionApp.get('/api/events', (req, res) => {
   writeSseHeaders(res);
 
