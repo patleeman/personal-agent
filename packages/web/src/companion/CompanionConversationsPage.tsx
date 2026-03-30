@@ -863,6 +863,24 @@ export function CompanionConversationsPage() {
   });
   const visibleError = error ?? loadError;
 
+  const handleCreateConversation = useCallback(async () => {
+    if (creating) {
+      return;
+    }
+
+    setCreating(true);
+    setError(null);
+
+    try {
+      const { id } = await api.createLiveSession();
+      navigate(buildCompanionConversationPath(id));
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setCreating(false);
+    }
+  }, [creating, navigate]);
+
   useEffect(() => {
     setTopBarRightAction(
       <div className="flex items-center gap-1">
@@ -1020,23 +1038,7 @@ export function CompanionConversationsPage() {
     }
   }, [loadingMore, replaceData, sections]);
 
-  const handleCreateConversation = useCallback(async () => {
-    if (creating) {
-      return;
-    }
 
-    setCreating(true);
-    setError(null);
-
-    try {
-      const { id } = await api.createLiveSession();
-      navigate(buildCompanionConversationPath(id));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setCreating(false);
-    }
-  }, [creating, navigate]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
