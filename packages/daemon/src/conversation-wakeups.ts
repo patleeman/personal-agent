@@ -73,12 +73,6 @@ function buildAlertTitle(record: DeferredResumeRecord): string {
   }
 }
 
-const QUIET_DEFERRED_RESUME_SOURCE_KINDS = new Set(['conversation-self-distill']);
-
-function shouldSuppressDeferredResumeAttention(record: DeferredResumeRecord): boolean {
-  return record.source?.kind !== undefined && QUIET_DEFERRED_RESUME_SOURCE_KINDS.has(record.source.kind);
-}
-
 function buildAlertBody(record: DeferredResumeRecord): string {
   if (record.kind === 'task-callback' || record.kind === 'reminder') {
     const line = firstPromptLine(record.prompt);
@@ -143,9 +137,6 @@ export function surfaceReadyDeferredResume(input: {
   conversationId?: string;
 }): { activityId?: string; alertId?: string } {
   const conversationId = input.conversationId ?? readSessionConversationId(input.entry.sessionFile);
-  if (shouldSuppressDeferredResumeAttention(input.entry)) {
-    return {};
-  }
 
   const relatedProjectIds = conversationId
     ? (getConversationProjectLink({
