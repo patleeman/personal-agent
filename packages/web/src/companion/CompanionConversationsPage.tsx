@@ -819,24 +819,35 @@ export function CompanionConversationsPage() {
   const liveSessions = titledSections?.live ?? [];
   const needsReviewSessions = titledSections?.needsReview ?? [];
   const activeSessions = titledSections?.active ?? [];
-  // Archived section: explicitly archived sessions + all active/review sessions that aren't live.
-  const archivedSessions = useMemo(() => {
-    const archivedSet = new Set((titledSections?.archived ?? []).map((s) => s.id));
+  // Sort sessions by their position in workspaceSessionIds (matching web UI order),
+  // falling back to activity-based sort for orphaned sessions not in the workspace.
+  const orderedArchivedSessions = useMemo(() => {
+    const wsIds = titledSections?.workspaceSessionIds ?? [];
+    const wsPosition = new Map(wsIds.map((id, index) => [id, index]));
+    const explicitlyArchived = titledSections?.archived ?? [];
     const extra: SessionMeta[] = [];
     for (const session of activeSessions) {
-      if (!session.isLive && !archivedSet.has(session.id)) {
+      if (!session.isLive && !explicitlyArchived.some((s) => s.id === session.id)) {
         extra.push(session);
       }
     }
     for (const session of needsReviewSessions) {
-      if (!session.isLive && !archivedSet.has(session.id)) {
+      if (!session.isLive && !explicitlyArchived.some((s) => s.id === session.id)) {
         extra.push(session);
       }
     }
-    return [...(titledSections?.archived ?? []), ...sortCompanionSessions(extra)];
+    const inWorkspace = extra.filter((s) => wsPosition.has(s.id));
+    const orphaned = extra.filter((s) => !wsPosition.has(s.id));
+    inWorkspace.sort((a, b) => (wsPosition.get(a.id) ?? 0) - (wsPosition.get(b.id) ?? 0));
+    orphaned.sort((left, right) => {
+      const leftTs = left.lastActivityAt ?? left.timestamp;
+      const rightTs = right.lastActivityAt ?? right.timestamp;
+      return rightTs.localeCompare(leftTs);
+    });
+    return [...explicitlyArchived, ...inWorkspace, ...orphaned];
   }, [activeSessions, needsReviewSessions, titledSections]);
-  const totalConversationCount = liveSessions.length + archivedSessions.length;
-  const overviewLabel = buildCompanionOverviewLabel(liveSessions.length, archivedSessions.length);
+  const totalConversationCount = liveSessions.length + orderedArchivedSessions.length;
+  const overviewLabel = buildCompanionOverviewLabel(liveSessions.length, orderedArchivedSessions.length);
   const stateNote = buildCompanionStateNote({
     standalone,
     installAvailable,
@@ -1029,7 +1040,7 @@ export function CompanionConversationsPage() {
                 <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
               ) : null}
 
-              {archivedSessions.length > 0 ? (
+              {orderedArchivedSessions.length > 0 ? (
                 <section className="pt-5">
                   <div className="px-4">
                     <button
@@ -1040,7 +1051,7 @@ export function CompanionConversationsPage() {
                     >
                       {showArchived
                         ? 'Hide archived chats'
-                        : `Show ${archivedSessions.length} archived chat${archivedSessions.length === 1 ? '' : 's'}`}
+                        : `Show ${orderedArchivedSessions.length} archived chat${orderedArchivedSessions.length === 1 ? '' : 's'}`}
                     </button>
                   </div>
                 </section>
@@ -1049,7 +1060,7 @@ export function CompanionConversationsPage() {
               {showArchived ? (
                 <SessionSection
                   title="Archived"
-                  sessions={archivedSessions}
+                  sessions={orderedArchivedSessions}
                   workspaceSessionIds={new Set()}
                   actionBusyId={actionBusyId}
                   actionBusyKind={actionBusyKind}
@@ -1057,9 +1068,9 @@ export function CompanionConversationsPage() {
                   onSetArchived={handleSetArchived}
                   onResume={handleResumeConversation}
                   onRevealActions={setRevealedActionId}
-                  footer={archivedSessions.length > 0 ? (
+                  footer={orderedArchivedSessions.length > 0 ? (
                     <p className="text-[11px] text-dim">
-                      {archivedSessions.length} archived chat{archivedSessions.length === 1 ? '' : 's'}
+                      {orderedArchivedSessions.length} archived chat{orderedArchivedSessions.length === 1 ? '' : 's'}
                     </p>
                   ) : undefined}
                 />
