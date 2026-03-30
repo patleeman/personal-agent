@@ -72,21 +72,22 @@ describe('conversation self-distill wakeups', () => {
     expect(first.alreadyOccurred).toBe(false);
     expect(second.deduped).toBe(true);
     expect(second.alreadyOccurred).toBe(false);
-    expect(second.resume?.id).toBe(first.resume?.id);
-    expect(first.resume.title).toBe(CONVERSATION_SELF_DISTILL_TITLE);
-    expect(first.resume.prompt).toContain('This conversation was just closed in the web UI.');
-    expect(first.resume.prompt).toContain('If nothing clearly deserves a durable update, reply exactly: No durable update needed.');
-    expect(first.resume.prompt).toContain('- create or update a shared note node for reusable knowledge');
-    expect(first.resume.prompt).toContain('- update an already-linked project');
-    expect(first.resume.prompt).toContain('Do not create a new project from this pass.');
-    expect(first.resume.prompt).toContain('Do not edit AGENTS.md or create/update skills');
-    expect(first.resume.prompt).toContain('Currently linked projects: @personal-agent');
-    expect(first.resume.dueAt).toBe('2026-03-28T10:10:00.000Z');
+    expect(first.resume).toBeDefined();
+    expect(second.resume?.id).toBe(first.resume!.id);
+    expect(first.resume!.title).toBe(CONVERSATION_SELF_DISTILL_TITLE);
+    expect(first.resume!.prompt).toContain('This conversation was just closed in the web UI.');
+    expect(first.resume!.prompt).toContain('If nothing clearly deserves a durable update, reply exactly: No durable update needed.');
+    expect(first.resume!.prompt).toContain('- create or update a shared note node for reusable knowledge');
+    expect(first.resume!.prompt).toContain('- update an already-linked project');
+    expect(first.resume!.prompt).toContain('Do not create a new project from this pass.');
+    expect(first.resume!.prompt).toContain('Do not edit AGENTS.md or create/update skills');
+    expect(first.resume!.prompt).toContain('Currently linked projects: @personal-agent');
+    expect(first.resume!.dueAt).toBe('2026-03-28T10:10:00.000Z');
 
     const resumes = Object.values(loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json')).resumes);
     expect(resumes).toHaveLength(1);
     expect(resumes[0]).toMatchObject({
-      id: first.resume.id,
+      id: first.resume!.id,
       sessionFile,
       status: 'scheduled',
       title: CONVERSATION_SELF_DISTILL_TITLE,
