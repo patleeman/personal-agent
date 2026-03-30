@@ -17,6 +17,21 @@ vi.mock('../hooks', () => ({
   useApi: vi.fn(),
 }));
 
+const LOCAL_STORAGE: Record<string, string> = {};
+vi.mock('../sessionTabs', () => ({
+  readOpenSessionIds: () => JSON.parse(LOCAL_STORAGE['pa:open-session-ids'] ?? '[]'),
+  readPinnedSessionIds: () => JSON.parse(LOCAL_STORAGE['pa:pinned-session-ids'] ?? '[]'),
+  readArchivedSessionIds: () => JSON.parse(LOCAL_STORAGE['pa:archived-session-ids'] ?? '[]'),
+  commitConversationLayoutMerge: vi.fn(),
+  CONVERSATION_LAYOUT_CHANGED_EVENT: 'pa:conversation-layout-changed',
+}));
+vi.stubGlobal('localStorage', {
+  getItem: (key: string) => LOCAL_STORAGE[key] ?? null,
+  setItem: (key: string, value: string) => { LOCAL_STORAGE[key] = value; },
+  removeItem: (key: string) => { delete LOCAL_STORAGE[key]; },
+  clear: () => { Object.keys(LOCAL_STORAGE).forEach((k) => delete LOCAL_STORAGE[k]); },
+});
+
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
@@ -92,6 +107,11 @@ describe('CompanionConversationsPage', () => {
   const originalConsoleError = console.error;
 
   beforeEach(() => {
+    // Set up companion workspace: active-1 is open in the companion.
+    LOCAL_STORAGE['pa:open-session-ids'] = JSON.stringify(['active-1']);
+    LOCAL_STORAGE['pa:pinned-session-ids'] = JSON.stringify([]);
+    LOCAL_STORAGE['pa:archived-session-ids'] = JSON.stringify([]);
+
     vi.mocked(useApi).mockImplementation((_, cacheKey) => {
       if (cacheKey === 'companion-auth-session') {
         return {

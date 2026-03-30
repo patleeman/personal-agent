@@ -6,7 +6,7 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
-import { commitConversationLayoutMerge } from '../sessionTabs';
+import { commitConversationLayoutMerge, readOpenSessionIds, readPinnedSessionIds, CONVERSATION_LAYOUT_CHANGED_EVENT } from '../sessionTabs';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
@@ -718,6 +718,7 @@ function SessionSection({
   onResume,
   onRevealActions,
   footer,
+  onClearAll,
 }: {
   title: string;
   sessions: SessionMeta[];
@@ -729,6 +730,7 @@ function SessionSection({
   onResume: (session: SessionMeta) => void;
   onRevealActions: (sessionId: string | null) => void;
   footer?: ReactNode;
+  onClearAll?: () => void;
 }) {
   if (sessions.length === 0) {
     return null;
@@ -736,7 +738,18 @@ function SessionSection({
 
   return (
     <section className="pt-5 first:pt-0">
-      <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
+      <div className="flex items-center justify-between px-4">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
+        {onClearAll ? (
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="text-[11px] text-dim hover:text-danger"
+          >
+            Clear all
+          </button>
+        ) : null}
+      </div>
       <div className="mt-2 border-y border-border-subtle">
         {sessions.map((session) => (
           <CompanionConversationRow
@@ -779,6 +792,7 @@ export function CompanionConversationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [workspaceVersion, setWorkspaceVersion] = useState(0);
   const syncTimerRef = useRef<number | null>(null);
   const fetchConversationList = useCallback(
     () => api.companionConversationList({ archivedOffset: 0, archivedLimit: COMPANION_ARCHIVED_PAGE_SIZE }),
@@ -831,23 +845,38 @@ export function CompanionConversationsPage() {
   const needsReviewSessions = titledSections?.needsReview ?? [];
   const activeSessions = titledSections?.active ?? [];
   const archivedSessions = titledSections?.archived ?? [];
+  // Re-read localStorage workspace whenever the layout changes (from detail page or clear).
+  useEffect(() => {
+    const handler = () => setWorkspaceVersion((v) => v + 1);
+    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handler);
+  }, []);
+
+  // Companion's own workspace — from localStorage, not the shared web workspace.
+  const companionWorkspaceIds = useMemo(() => {
+    void workspaceVersion; // re-compute when localStorage workspace changes
+    const openIds = readOpenSessionIds();
+    const pinnedIds = readPinnedSessionIds();
+    return new Set([...openIds, ...pinnedIds]);
+  }, [sections, workspaceVersion]);
+
   const workspaceSessions = useMemo(() => {
     const nextSessions = new Map<string, SessionMeta>();
 
     for (const session of activeSessions) {
-      if (!session.isLive) {
+      if (!session.isLive && companionWorkspaceIds.has(session.id)) {
         nextSessions.set(session.id, session);
       }
     }
 
     for (const session of needsReviewSessions) {
-      if (!session.isLive && workspaceSessionIds.has(session.id)) {
+      if (!session.isLive && companionWorkspaceIds.has(session.id)) {
         nextSessions.set(session.id, session);
       }
     }
 
     return sortCompanionSessions(Array.from(nextSessions.values()));
-  }, [activeSessions, needsReviewSessions, workspaceSessionIds]);
+  }, [activeSessions, needsReviewSessions, companionWorkspaceIds]);
   const totalConversationCount = titledSections
     ? liveSessions.length + needsReviewSessions.length + activeSessions.length + titledSections.archivedTotal
     : 0;
@@ -977,6 +1006,30 @@ export function CompanionConversationsPage() {
     }
   }, [loadingMore, replaceData, sections]);
 
+  const handleClearWorkspace = useCallback(async () => {
+    if (workspaceSessions.length === 0) {
+      return;
+    }
+
+    setActionBusyId('__clear__');
+    setActionBusyKind('archive');
+    setError(null);
+    try {
+      // Clear companion's local workspace (open + pinned) without touching the web workspace.
+      const { replaceConversationLayout } = await import('../sessionTabs');
+      const nextLayout = replaceConversationLayout({ sessionIds: [], pinnedSessionIds: [] });
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('pa:conversation-layout-changed', { detail: nextLayout }));
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setActionBusyId(null);
+      setActionBusyKind(null);
+    }
+  }, [workspaceSessions.length]);
+
   const handleCreateConversation = useCallback(async () => {
     if (creating) {
       return;
@@ -1047,7 +1100,7 @@ export function CompanionConversationsPage() {
               {focusedConversationCount > 0 ? (
                 <>
                   <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
-                  <SessionSection title="In workspace" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="In workspace" sessions={workspaceSessions} workspaceSessionIds={companionWorkspaceIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} onClearAll={handleClearWorkspace} />
                 </>
               ) : (
                 <div className="px-4 pt-5">
