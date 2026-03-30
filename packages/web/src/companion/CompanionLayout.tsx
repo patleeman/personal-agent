@@ -284,7 +284,11 @@ export function useCompanionLayoutContext() {
 const CompanionTopBarActionContext = createContext<{
   action: ReactNode | undefined;
   setTopBarAction: (action: ReactNode | undefined) => void;
-}>({ action: undefined, setTopBarAction: () => {} });
+  title: string | undefined;
+  setTopBarTitle: (title: string | undefined) => void;
+  rightAction: ReactNode | undefined;
+  setTopBarRightAction: (action: ReactNode | undefined) => void;
+}>({ action: undefined, setTopBarAction: () => {}, title: undefined, setTopBarTitle: () => {}, rightAction: undefined, setTopBarRightAction: () => {} });
 
 export function useCompanionTopBarAction() {
   return useContext(CompanionTopBarActionContext);
@@ -493,8 +497,11 @@ export function CompanionLayout() {
   const topBarConfig = readTopBarConfig(location.pathname);
 
   const [topBarAction, setTopBarAction] = useState<ReactNode | undefined>();
+  const [topBarTitle, setTopBarTitle] = useState<string | undefined>();
+  const [topBarRightAction, setTopBarRightAction] = useState<ReactNode | undefined>();
 
   function CompanionTopBar() {
+    const displayTitle = topBarTitle ?? topBarConfig.label;
     return (
       <header className="flex h-11 shrink-0 items-center border-b border-border-subtle bg-base/95 px-3 backdrop-blur-xl">
         <div className="flex min-w-0 flex-1 items-center">
@@ -508,11 +515,12 @@ export function CompanionLayout() {
               <ChevronLeftIcon />
             </NavLink>
           ) : (
-            <span className="pl-1 text-[13px] font-semibold tracking-tight text-primary">{topBarConfig.label}</span>
+            <span className="pl-1 text-[13px] font-semibold tracking-tight text-primary">{displayTitle}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {topBarAction}
+          {topBarRightAction}
           {!isCapturePage ? (
             <Link
               to={COMPANION_QUICK_NOTE_PATH}
@@ -626,8 +634,8 @@ export function CompanionLayout() {
             </div>
           )
         ) : (
-          <CompanionTopBarActionContext.Provider value={{ action: topBarAction, setTopBarAction }}>
-            {!isCapturePage && topBarConfig.label ? <CompanionTopBar /> : null}
+          <CompanionTopBarActionContext.Provider value={{ action: topBarAction, setTopBarAction, title: topBarTitle, setTopBarTitle, rightAction: topBarRightAction, setTopBarRightAction }}>
+            {!isCapturePage && (topBarConfig.label || topBarTitle) ? <CompanionTopBar /> : null}
             <Outlet context={contextValue} />
           </CompanionTopBarActionContext.Provider>
         )}

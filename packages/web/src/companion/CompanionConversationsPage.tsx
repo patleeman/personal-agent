@@ -8,7 +8,7 @@ import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection
 import { useApi } from '../hooks';
 import { commitConversationLayoutMerge } from '../sessionTabs';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
-import { useCompanionLayoutContext } from './CompanionLayout';
+import { useCompanionLayoutContext, useCompanionTopBarAction } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
 function parseSessionActivityAt(session: SessionMeta): number {
@@ -761,6 +761,7 @@ export function CompanionConversationsPage() {
     notificationPermission,
     requestNotificationPermission,
   } = useCompanionLayoutContext();
+  const { setTopBarRightAction } = useCompanionTopBarAction();
   const [creating, setCreating] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [actionBusyKind, setActionBusyKind] = useState<'archive' | 'resume' | null>(null);
@@ -861,6 +862,51 @@ export function CompanionConversationsPage() {
     notificationPermission,
   });
   const visibleError = error ?? loadError;
+
+  useEffect(() => {
+    setTopBarRightAction(
+      <div className="flex items-center gap-1">
+        {installAvailable ? (
+          <button
+            type="button"
+            onClick={() => { void promptInstall(); }}
+            disabled={installBusy}
+            aria-label={installBusy ? 'Installing app' : 'Install app'}
+            title={installBusy ? 'Installing app' : 'Install app'}
+            className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+            style={COMPANION_TOUCH_BUTTON_STYLE}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 4v10" />
+              <path d="m8 10 4 4 4-4" />
+              <path d="M5 19h14" />
+            </svg>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => { void handleCreateConversation(); }}
+          disabled={creating}
+          aria-label={creating ? 'Starting conversation' : 'New conversation'}
+          title={creating ? 'Starting conversation' : 'New conversation'}
+          className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+          style={COMPANION_TOUCH_BUTTON_STYLE}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+        </button>
+      </div>,
+    );
+    return () => setTopBarRightAction(undefined);
+  }, [installAvailable, installBusy, promptInstall, creating, handleCreateConversation, setTopBarRightAction]);
+
+  useEffect(() => {
+    if (visibleError) {
+      // Errors are shown inline in content; no toast needed.
+    }
+  }, [visibleError]);
 
   /**
    * Same tab-state logic as `setConversationArchivedState` but computes the layout
@@ -994,42 +1040,19 @@ export function CompanionConversationsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl items-start justify-between gap-3 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="text-[22px] font-semibold tracking-tight text-primary">Chats</h1>
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
+          <div className="px-4 pb-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-dim/80">
                 <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass(status)}`} />
                 {formatConnectionStatus(status)}
               </span>
+              {titledSections ? <span className="text-[11px] text-dim">{overviewLabel}</span> : null}
+              {stateNote ? <span className={`text-[11px] ${stateNote.className}`}>{stateNote.text}</span> : null}
             </div>
-            <p className="mt-1 text-[11px] text-dim">{titledSections ? overviewLabel : 'Loading conversations…'}</p>
-            {stateNote ? <p className={`mt-1 text-[11px] ${stateNote.className}`}>{stateNote.text}</p> : null}
-            {visibleError ? <p className="mt-2 text-[11px] text-danger">{visibleError}</p> : null}
+            {visibleError ? <p className="mt-1 text-[11px] text-danger">{visibleError}</p> : null}
           </div>
-          <div className="flex items-center gap-2">
-            {installAvailable ? (
-              <HeaderIconButton label={installBusy ? 'Installing app' : 'Install app'} onClick={() => { void promptInstall(); }} disabled={installBusy}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 4v10" />
-                  <path d="m8 10 4 4 4-4" />
-                  <path d="M5 19h14" />
-                </svg>
-              </HeaderIconButton>
-            ) : null}
-            <HeaderIconButton label={creating ? 'Starting conversation' : 'New conversation'} onClick={() => { void handleCreateConversation(); }} disabled={creating}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-            </HeaderIconButton>
-          </div>
-        </div>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           {loading && !titledSections ? (
             <p className="px-4 text-[13px] text-dim">Loading conversations…</p>
           ) : titledSections && totalConversationCount === 0 ? (

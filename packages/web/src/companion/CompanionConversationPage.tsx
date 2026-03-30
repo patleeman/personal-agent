@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
 import { Pill, cx } from '../components/ui';
+import { useCompanionTopBarAction } from './CompanionLayout';
 import { useApi } from '../hooks';
 import { filterMentionItems, type MentionItem } from '../conversationMentions';
 import { useNodeMentionItems } from '../useNodeMentionItems';
@@ -506,6 +507,7 @@ export function CompanionConversationPage() {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const { titles } = useLiveTitles();
   const { sessions, tasks } = useAppData();
+  const { setTopBarTitle, setTopBarRightAction } = useCompanionTopBarAction();
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_COMPANION_HISTORICAL_TAIL_BLOCKS);
   const [retainedSessionDetail, setRetainedSessionDetail] = useState<SessionDetail | null>(null);
@@ -918,6 +920,39 @@ export function CompanionConversationPage() {
     });
   }, [location.pathname, location.search, navigate]);
 
+  useEffect(() => {
+    setTopBarTitle(title);
+    return () => setTopBarTitle(undefined);
+  }, [title, setTopBarTitle]);
+
+  useEffect(() => {
+    setTopBarRightAction(
+      <button
+        type="button"
+        onClick={() => openPanel('actions')}
+        aria-label="Open conversation actions"
+        className="relative flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+        style={COMPANION_TOUCH_BUTTON_STYLE}
+      >
+        {showStatusIndicators ? (
+          <span
+            aria-hidden="true"
+            className={cx(
+              'absolute right-1.5 top-1.5 h-2 w-2 rounded-full',
+              hasReadyDeferredResumes || scheduledTaskSummary.tone === 'warning' ? 'bg-warning' : 'bg-accent',
+            )}
+          />
+        ) : null}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+        </svg>
+      </button>,
+    );
+    return () => setTopBarRightAction(undefined);
+  }, [openPanel, showStatusIndicators, hasReadyDeferredResumes, scheduledTaskSummary.tone, setTopBarRightAction]);
+
   const closePanel = useCallback(() => {
     navigate({
       pathname: location.pathname,
@@ -1163,48 +1198,10 @@ export function CompanionConversationPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-4xl flex-col px-3 pb-3 pt-[calc(env(safe-area-inset-top)+0.625rem)] sm:px-4">
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2.5">
-            <Link
-              to={COMPANION_CONVERSATIONS_PATH}
-              aria-label="Back to conversations"
-              className="inline-flex h-10 select-none items-center gap-2 rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
-              style={COMPANION_TOUCH_BUTTON_STYLE}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-              <span>Chats</span>
-            </Link>
-            <div className="min-w-0 px-1 text-center">
-              <h1 className="truncate text-[16px] font-medium tracking-tight text-primary">{title}</h1>
-            </div>
-            <button
-              type="button"
-              onClick={() => openPanel('actions')}
-              aria-label="Open conversation actions"
-              className="relative inline-flex h-10 w-10 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
-              style={COMPANION_TOUCH_BUTTON_STYLE}
-            >
-              {showStatusIndicators ? (
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    'absolute right-2 top-2 h-2.5 w-2.5 rounded-full',
-                    hasReadyDeferredResumes || scheduledTaskSummary.tone === 'warning' ? 'bg-warning' : 'bg-accent',
-                  )}
-                />
-              ) : null}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M4 7h16" />
-                <path d="M4 12h16" />
-                <path d="M4 17h16" />
-              </svg>
-            </button>
-          </div>
+      {showStatusBanner || actionError || stream.error || showStatusIndicators ? (
+        <div className="border-b border-border-subtle bg-base/95 px-3 pt-[calc(env(safe-area-inset-top)+0.5rem)] pb-3 sm:px-4">
           {showStatusBanner ? (
-            <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+            <div className="rounded-xl bg-surface px-3 py-2.5">
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">{bannerTitle}</p>
               <p className="mt-1 text-[11px] leading-relaxed text-secondary">{bannerDetail}</p>
             </div>
@@ -1250,7 +1247,7 @@ export function CompanionConversationPage() {
             </div>
           ) : null}
         </div>
-      </header>
+      ) : null}
 
       <div ref={scrollRef} onScroll={handleScroll} className="min-h-0 flex-1 overflow-y-auto py-3 sm:py-4">
         <div className="mx-auto w-full max-w-4xl">
