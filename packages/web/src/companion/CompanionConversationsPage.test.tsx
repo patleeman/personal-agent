@@ -228,19 +228,18 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Open chats');
     expect(html).toContain('Open knowledge');
     expect(html).toContain('Open settings');
-    expect(html).toContain('1 live · 3 archived');
+    expect(html).toContain('3 live · 1 archived');
     expect(html).toContain('Live now');
     expect(html).not.toContain('In workspace');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Active workspace');
     expect(html).toContain('Live title from stream');
-    expect(html).not.toContain('Review me');
-    expect(html).not.toContain('Stored transcript');
+    expect(html).toContain('Review me');
+    expect(html).toContain('Stored transcript');
     expect(html).not.toContain('Archived transcript');
-    expect(html).toContain('Show 3 archived chats');
+    expect(html).toContain('Show 1 archived chat');
     expect(html).not.toContain('Load more');
     expect(html).not.toContain('Signed in on Test companion');
-    expect(html).toContain('Show 3 archived chats');
     expect(html).not.toContain('--Users-patrick-workingdir-personal-agent--');
 
   });

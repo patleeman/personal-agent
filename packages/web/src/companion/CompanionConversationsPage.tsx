@@ -819,35 +819,40 @@ export function CompanionConversationsPage() {
   const liveSessions = titledSections?.live ?? [];
   const needsReviewSessions = titledSections?.needsReview ?? [];
   const activeSessions = titledSections?.active ?? [];
+  // "Live now" shows all workspace sessions (open/pinned tabs from web UI),
+  // plus any currently streaming sessions that aren't already in the workspace.
+  const liveNowSessions = useMemo(() => {
+    const wsIds = titledSections?.workspaceSessionIds ?? [];
+    const wsSet = new Set(wsIds);
+    const inWorkspace = [...activeSessions, ...needsReviewSessions];
+    const notInWorkspace = liveSessions.filter((s) => !wsSet.has(s.id));
+    const wsPosition = new Map(wsIds.map((id, index) => [id, index]));
+    inWorkspace.sort((a, b) => (wsPosition.get(a.id) ?? 0) - (wsPosition.get(b.id) ?? 0));
+    notInWorkspace.sort((left, right) => {
+      const leftTs = left.lastActivityAt ?? left.timestamp;
+      const rightTs = right.lastActivityAt ?? right.timestamp;
+      return rightTs.localeCompare(leftTs);
+    });
+    return [...inWorkspace, ...notInWorkspace];
+  }, [activeSessions, needsReviewSessions, liveSessions, titledSections]);
   // Sort sessions by their position in workspaceSessionIds (matching web UI order),
-  // falling back to activity-based sort for orphaned sessions not in the workspace.
   const orderedArchivedSessions = useMemo(() => {
     const wsIds = titledSections?.workspaceSessionIds ?? [];
-    const wsPosition = new Map(wsIds.map((id, index) => [id, index]));
+    const wsSet = new Set(wsIds);
     const explicitlyArchived = titledSections?.archived ?? [];
-    const extra: SessionMeta[] = [];
-    for (const session of activeSessions) {
-      if (!session.isLive && !explicitlyArchived.some((s) => s.id === session.id)) {
-        extra.push(session);
-      }
-    }
-    for (const session of needsReviewSessions) {
-      if (!session.isLive && !explicitlyArchived.some((s) => s.id === session.id)) {
-        extra.push(session);
-      }
-    }
-    const inWorkspace = extra.filter((s) => wsPosition.has(s.id));
-    const orphaned = extra.filter((s) => !wsPosition.has(s.id));
-    inWorkspace.sort((a, b) => (wsPosition.get(a.id) ?? 0) - (wsPosition.get(b.id) ?? 0));
+    // Include workspace sessions that were explicitly archived, in workspace order.
+    const archivedFromWorkspace = explicitlyArchived.filter((s) => wsSet.has(s.id));
+    const orphaned = explicitlyArchived.filter((s) => !wsSet.has(s.id));
+    archivedFromWorkspace.sort((a, b) => wsIds.indexOf(a.id) - wsIds.indexOf(b.id));
     orphaned.sort((left, right) => {
       const leftTs = left.lastActivityAt ?? left.timestamp;
       const rightTs = right.lastActivityAt ?? right.timestamp;
       return rightTs.localeCompare(leftTs);
     });
-    return [...explicitlyArchived, ...inWorkspace, ...orphaned];
-  }, [activeSessions, needsReviewSessions, titledSections]);
-  const totalConversationCount = liveSessions.length + orderedArchivedSessions.length;
-  const overviewLabel = buildCompanionOverviewLabel(liveSessions.length, orderedArchivedSessions.length);
+    return [...archivedFromWorkspace, ...orphaned];
+  }, [titledSections]);
+  const totalConversationCount = liveNowSessions.length + orderedArchivedSessions.length;
+  const overviewLabel = buildCompanionOverviewLabel(liveNowSessions.length, orderedArchivedSessions.length);
   const stateNote = buildCompanionStateNote({
     standalone,
     installAvailable,
@@ -1036,8 +1041,8 @@ export function CompanionConversationsPage() {
             </div>
           ) : titledSections ? (
             <>
-              {liveSessions.length > 0 ? (
-                <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+              {liveNowSessions.length > 0 ? (
+                <SessionSection title="Live now" sessions={liveNowSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
               ) : null}
 
               {orderedArchivedSessions.length > 0 ? (
