@@ -94,7 +94,7 @@ Ship a tight prototype that proves whether proactive help feels useful.
       },
     ],
     links: {
-      outgoing: [{ kind: 'skill', id: 'tool-agent-browser', title: 'Tool Agent Browser', summary: 'Browser automation.' }],
+      outgoing: [{ kind: 'skill', id: 'agent-browser', title: 'Agent Browser', summary: 'Browser automation.' }],
       incoming: [{ kind: 'note', id: 'bloodhound-roadmap', title: 'Bloodhound roadmap', summary: 'Related note.' }],
       unresolved: ['missing-link'],
     },

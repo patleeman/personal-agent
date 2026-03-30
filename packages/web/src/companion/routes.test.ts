@@ -23,7 +23,7 @@ describe('companion route builders', () => {
     expect(buildCompanionTaskPath('task/123')).toBe('/app/tasks/task%2F123');
     expect(buildCompanionProjectPath('continuous conversations')).toBe('/app/projects/continuous%20conversations');
     expect(buildCompanionNotePath('memory/123')).toBe('/app/notes/memory%2F123');
-    expect(buildCompanionSkillPath('tool-agent-browser')).toBe('/app/skills/tool-agent-browser');
+    expect(buildCompanionSkillPath('agent-browser')).toBe('/app/skills/agent-browser');
   });
 });
 
@@ -43,7 +43,7 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123')).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations')).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/notes/memory-index')).toBeNull();
-    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser')).toBeNull();
+    expect(resolveCompanionRouteRedirect('/app/skills/agent-browser')).toBeNull();
   });
 
   it('canonicalizes trailing slashes to the supported companion routes', () => {
@@ -61,7 +61,7 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123/')).toBe('/app/tasks/task-123');
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/')).toBe('/app/projects/continuous-conversations');
     expect(resolveCompanionRouteRedirect('/app/notes/memory-index/')).toBe('/app/notes/memory-index');
-    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/')).toBe('/app/skills/tool-agent-browser');
+    expect(resolveCompanionRouteRedirect('/app/skills/agent-browser/')).toBe('/app/skills/agent-browser');
   });
 
   it('redirects unsupported companion paths back to the conversation list', () => {
@@ -70,7 +70,7 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/notes/memory-index/extra')).toBe(COMPANION_INBOX_PATH);
-    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/extra')).toBe(COMPANION_INBOX_PATH);
+    expect(resolveCompanionRouteRedirect('/app/skills/agent-browser/extra')).toBe(COMPANION_INBOX_PATH);
   });
 
   it('redirects legacy memories paths to the notes routes', () => {

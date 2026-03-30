@@ -76,7 +76,7 @@ describe('companion resource detail pages', () => {
         }],
         timeline: [],
         links: {
-          outgoing: [{ kind: 'skill', id: 'tool-agent-browser', title: 'Tool Agent Browser', summary: 'Browser automation.' }],
+          outgoing: [{ kind: 'skill', id: 'agent-browser', title: 'agent-browser', summary: 'Browser automation.' }],
           incoming: [{ kind: 'note', id: 'companion-roadmap', title: 'Companion roadmap', summary: 'Related planning note.' }],
           unresolved: ['missing-node'],
         },
@@ -164,15 +164,15 @@ describe('companion resource detail pages', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         skill: {
-          name: 'tool-agent-browser',
+          name: 'agent-browser',
           description: 'Automate browsers and Electron apps with agent-browser.',
           source: 'shared',
-          path: '/tmp/tool-agent-browser/INDEX.md',
+          path: '/tmp/agent-browser/INDEX.md',
           recentSessionCount: 1,
           lastUsedAt: '2026-03-25T00:00:00.000Z',
           usedInLastSession: true,
         },
-        content: '# Agent Browser\n\nUse this skill for browser automation.',
+        content: '# agent-browser\n\nUse this skill for browser automation.',
         links: {
           outgoing: [{ kind: 'project', id: 'continuous-conversations', title: 'Continuous conversations', summary: 'Project node.' }],
           incoming: [{ kind: 'note', id: 'memory-index', title: 'Memory index', summary: 'Top-level knowledge hub.' }],
@@ -187,16 +187,16 @@ describe('companion resource detail pages', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/app/skills/tool-agent-browser']}>
+      <MemoryRouter initialEntries={['/app/skills/agent-browser']}>
         <Routes>
           <Route path="/app/skills/:name" element={<CompanionSkillDetailPage />} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Agent Browser');
+    expect(html).toContain('agent-browser');
     expect(html).toContain('Use in conversation');
-    expect(html).toContain('tool-agent-browser');
+    expect(html).toContain('agent-browser');
     expect(html).toContain('Use this skill for browser automation.');
     expect(html).toContain('unknown-skill-ref');
     expect(html).toContain('/app/notes/memory-index');

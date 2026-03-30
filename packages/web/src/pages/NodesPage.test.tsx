@@ -123,9 +123,9 @@ describe('NodesPage', () => {
             agentsMd: [],
             skills: [{
               source: 'shared',
-              name: 'tool-agent-browser',
+              name: 'agent-browser',
               description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/tool-agent-browser/INDEX.md',
+              path: '/tmp/agent-browser/INDEX.md',
               recentSessionCount: 2,
               lastUsedAt: '2026-03-27T12:00:00.000Z',
               usedInLastSession: true,
@@ -401,9 +401,9 @@ describe('NodesPage', () => {
             agentsMd: [],
             skills: [{
               source: 'shared',
-              name: 'tool-agent-browser',
+              name: 'agent-browser',
               description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/tool-agent-browser/INDEX.md',
+              path: '/tmp/agent-browser/INDEX.md',
               recentSessionCount: 2,
               lastUsedAt: '2026-03-27T12:00:00.000Z',
               usedInLastSession: true,
@@ -440,21 +440,21 @@ describe('NodesPage', () => {
         };
       }
 
-      if (key === 'nodes-detail:skill:tool-agent-browser:assistant') {
+      if (key === 'nodes-detail:skill:agent-browser:assistant') {
         return {
           data: {
             kind: 'skill',
             detail: {
               skill: {
                 source: 'shared',
-                name: 'tool-agent-browser',
+                name: 'agent-browser',
                 description: 'Automate browsers and Electron apps with agent-browser.',
-                path: '/tmp/tool-agent-browser/INDEX.md',
+                path: '/tmp/agent-browser/INDEX.md',
                 recentSessionCount: 2,
                 lastUsedAt: '2026-03-27T12:00:00.000Z',
                 usedInLastSession: true,
               },
-              content: '---\ntitle: Agent Browser\n---\n\n# Agent Browser\n\nAutomate browsers.',
+              content: '---\ntitle: agent-browser\n---\n\n# agent-browser\n\nAutomate browsers.',
               references: [],
               links: {
                 outgoing: [],
@@ -479,11 +479,11 @@ describe('NodesPage', () => {
       };
     });
 
-    const html = renderPage('/nodes?kind=skill&node=tool-agent-browser');
+    const html = renderPage('/nodes?kind=skill&node=agent-browser');
 
     expect(html).not.toContain('Refresh knowledge base');
     expect(html).toContain('Back to table');
-    expect(html).toContain('Agent Browser');
+    expect(html).toContain('agent-browser');
     expect(html).toContain('Reload');
     expect(html).toContain('Autosave on');
     expect(html).toContain('Files');

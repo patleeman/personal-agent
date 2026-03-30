@@ -18,7 +18,7 @@ describe('shouldServeCompanionIndex', () => {
     expect(shouldServeCompanionIndex('/projects')).toBe(true);
     expect(shouldServeCompanionIndex('/notes/memory-index')).toBe(true);
     expect(shouldServeCompanionIndex('/memories/memory-index')).toBe(true);
-    expect(shouldServeCompanionIndex('/skills/tool-agent-browser')).toBe(true);
+    expect(shouldServeCompanionIndex('/skills/agent-browser')).toBe(true);
   });
 
   it('keeps non-companion routes as 404s on the companion server', () => {

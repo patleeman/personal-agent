@@ -11,18 +11,18 @@ describe('mentionRendering', () => {
     const lookup = buildMentionLookup([
       { id: '@web-ui', label: 'web-ui', kind: 'project', title: 'Web UI' },
       { id: '@note-index', label: 'note-index', kind: 'note', title: 'Note index' },
-      { id: '@tool-agent-browser', label: 'tool-agent-browser', kind: 'skill', title: 'Tool Agent Browser' },
+      { id: '@agent-browser', label: 'agent-browser', kind: 'skill', title: 'Agent Browser' },
     ]);
 
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
-        <Fragment>{renderTextWithMentionLinks('See @web-ui with @note-index and @tool-agent-browser.', { lookup, surface: 'main' })}</Fragment>
+        <Fragment>{renderTextWithMentionLinks('See @web-ui with @note-index and @agent-browser.', { lookup, surface: 'main' })}</Fragment>
       </StaticRouter>,
     );
 
     expect(html).toContain('href="/nodes?kind=project&amp;node=web-ui"');
     expect(html).toContain('href="/nodes?kind=note&amp;node=note-index"');
-    expect(html).toContain('href="/nodes?kind=skill&amp;node=tool-agent-browser"');
+    expect(html).toContain('href="/nodes?kind=skill&amp;node=agent-browser"');
   });
 
   it('falls back to a non-link pill for ambiguous mentions', () => {

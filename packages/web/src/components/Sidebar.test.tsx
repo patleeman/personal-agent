@@ -273,7 +273,7 @@ describe('Sidebar', () => {
   it('renders grouped open shelves for nodes and workspaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
-    storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['tool-agent-browser']));
+    storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
     storage.setItem(OPEN_WORKSPACE_IDS_STORAGE_KEY, JSON.stringify(['/tmp/repo']));
 
     const html = renderSidebar('/inbox');

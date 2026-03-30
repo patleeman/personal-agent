@@ -49,7 +49,7 @@ describe('CompanionConversationTodos', () => {
             {
               id: 'item-1',
               label: 'Use agent browser',
-              skillName: 'tool-agent-browser',
+              skillName: 'agent-browser',
               status: 'running',
               createdAt: '2026-03-25T00:00:00.000Z',
               updatedAt: '2026-03-25T00:05:00.000Z',
@@ -63,7 +63,7 @@ describe('CompanionConversationTodos', () => {
         },
         skills: [
           {
-            name: 'tool-agent-browser',
+            name: 'agent-browser',
             description: 'Automate browsers and Electron apps with agent-browser.',
             source: 'shared',
           },
@@ -81,7 +81,7 @@ describe('CompanionConversationTodos', () => {
     expect(html).toContain('Agent reminders');
     expect(html).toContain('Waiting for you');
     expect(html).toContain('Need approval to continue.');
-    expect(html).toContain('/skill:tool-agent-browser');
+    expect(html).toContain('/skill:agent-browser');
     expect(html).toContain('Refresh');
   });
 

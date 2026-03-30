@@ -146,10 +146,10 @@ describe('companion resource pages', () => {
         memoryDocs: [],
         skills: [
           {
-            name: 'tool-agent-browser',
+            name: 'agent-browser',
             description: 'Automate browsers and Electron apps with agent-browser.',
             source: 'shared',
-            path: '/tmp/tool-agent-browser/INDEX.md',
+            path: '/tmp/agent-browser/INDEX.md',
             recentSessionCount: 1,
             lastUsedAt: '2026-03-17T12:00:00.000Z',
             usedInLastSession: true,
@@ -169,6 +169,6 @@ describe('companion resource pages', () => {
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Triggered in last session');
     expect(html).toContain('shared');
-    expect(html).toContain('/app/skills/tool-agent-browser');
+    expect(html).toContain('/app/skills/agent-browser');
   });
 });
