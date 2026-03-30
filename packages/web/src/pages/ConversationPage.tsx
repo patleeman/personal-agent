@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetPreferencesState, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -271,6 +271,7 @@ function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [defaultModel, setDefaultModel] = useState<string>('');
   const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string>('');
+  const [presets, setPresets] = useState<ModelPresetState[]>([]);
 
   useEffect(() => {
     api.models()
@@ -282,8 +283,17 @@ function useModels() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    api.modelPresetSettings()
+      .then((data) => {
+        setPresets(data.presets);
+      })
+      .catch(() => {});
+  }, []);
+
   return {
     models,
+    presets,
     defaultModel,
     defaultThinkingLevel,
   };
@@ -348,6 +358,7 @@ function HeaderPreferencesMenu({
   onClose,
 }: {
   models: ModelInfo[];
+  presets: ModelPresetState[];
   currentModel: string;
   currentThinkingLevel: string;
   savingPreference: 'model' | 'thinking' | null;
@@ -359,6 +370,16 @@ function HeaderPreferencesMenu({
 }) {
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
+
+  // Find if current selection matches a preset
+  const currentPreset = useMemo(() => {
+    if (!currentModel || !currentThinkingLevel) {
+      return null;
+    }
+    return presets.find((p) =>
+      p.model === currentModel && p.thinkingLevel === currentThinkingLevel
+    ) ?? null;
+  }, [currentModel, currentThinkingLevel, presets]);
 
   return (
     <div role="dialog" aria-label="Conversation runtime" className="absolute left-0 top-full z-20 mt-2 w-[min(32rem,calc(100vw-3rem))] rounded-xl border border-border-default bg-surface shadow-xl">
@@ -382,11 +403,20 @@ function HeaderPreferencesMenu({
           <select
             ref={modelSelectRef}
             id="conversation-model-preference"
-            value={currentModel}
+            value={currentPreset ? `preset:${currentPreset.id}` : currentModel}
             onChange={(event) => { onSelectModel(event.target.value); }}
-            disabled={savingPreference !== null || models.length === 0}
+            disabled={savingPreference !== null || (models.length === 0 && presets.length === 0)}
             className={HEADER_PREFERENCE_SELECT_CLASS}
           >
+            {presets.length > 0 && (
+              <optgroup label="Presets">
+                {presets.map((preset) => (
+                  <option key={`preset:${preset.id}`} value={`preset:${preset.id}`}>
+                    {preset.id}{preset.description ? ` — ${preset.description}` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             {groupedModels.map(([provider, providerModels]) => (
               <optgroup key={provider} label={provider}>
                 {providerModels.map((model) => (
@@ -400,9 +430,11 @@ function HeaderPreferencesMenu({
           <p className="text-[11px] text-dim">
             {savingPreference === 'model'
               ? 'Saving model…'
-              : selectedModel
-                ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
-                : 'No model selected.'}
+              : currentPreset
+                ? `Preset: ${currentPreset.id} · ${formatThinkingLevelLabel(currentPreset.thinkingLevel)} thinking`
+                : selectedModel
+                  ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
+                  : 'No model selected.'}
           </p>
         </div>
 
@@ -1412,6 +1444,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Model
   const {
     models,
+    presets,
     defaultModel,
     defaultThinkingLevel,
   } = useModels();
@@ -2891,6 +2924,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setSavingPreference('model');
     try {
+      // Handle preset selection
+      if (modelId.startsWith('preset:')) {
+        const presetId = modelId.slice('preset:'.length);
+        const preset = presets.find((p) => p.id === presetId);
+        if (!preset) {
+          throw new Error(`Preset not found: ${presetId}`);
+        }
+
+        if (draft) {
+          persistDraftConversationModel(preset.model);
+          persistDraftConversationThinkingLevel(preset.thinkingLevel);
+          setCurrentModel(preset.model);
+          setCurrentThinkingLevel(preset.thinkingLevel);
+        } else if (id) {
+          if (isLiveSession && !ensureConversationCanControl('change the model')) {
+            return;
+          }
+
+          const next = await api.updateConversationModelPreferences(
+            id,
+            { model: preset.model, thinkingLevel: preset.thinkingLevel },
+            currentSurfaceId,
+          );
+          setCurrentModel(next.currentModel);
+          setCurrentThinkingLevel(next.currentThinkingLevel);
+        }
+
+        showNotice('accent', `Applied preset "${preset.id}" (${preset.model}, ${preset.thinkingLevel} thinking) for this conversation.`);
+        return;
+      }
+
+      // Handle regular model selection
       if (draft) {
         if (modelId === defaultModel) {
           clearDraftConversationModel();
@@ -4581,6 +4646,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             {headerPreference && (
               <HeaderPreferencesMenu
                 models={models}
+                presets={presets}
                 currentModel={currentModel}
                 currentThinkingLevel={currentThinkingLevel}
                 savingPreference={savingPreference}
