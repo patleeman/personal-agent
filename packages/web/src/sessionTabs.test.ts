@@ -6,6 +6,7 @@ import {
 } from './localSettings';
 import {
   closeConversationTab,
+  commitConversationLayoutMerge,
   ensureConversationTabOpen,
   moveConversationToSection,
   pinConversationTab,
@@ -18,6 +19,7 @@ import {
   replaceOpenConversationTabs,
   replacePinnedConversationTabs,
   setConversationArchivedState,
+  syncConversationLayoutMerge,
   unpinConversationTab,
 } from './sessionTabs';
 
@@ -254,5 +256,86 @@ describe('sessionTabs', () => {
       archivedSessionIds: ['session-3'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  describe('syncConversationLayoutMerge', () => {
+    it('fetches server state, merges with local via union, and persists back', async () => {
+      // Set up local state: open [local-1], pinned [local-pinned], archived [local-archived]
+      replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: ['local-pinned'], archivedSessionIds: ['local-archived'] });
+      dispatchEvent.mockReset();
+
+      // Server has: open [server-1, local-1], pinned [server-pinned, local-pinned], archived [server-archived]
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          sessionIds: ['server-1', 'local-1'],
+          pinnedSessionIds: ['server-pinned', 'local-pinned'],
+          archivedSessionIds: ['server-archived'],
+        }),
+      });
+
+      const result = await syncConversationLayoutMerge();
+
+      // Union of local and server for each shelf
+      expect(result.sessionIds).toEqual(['local-1', 'server-1']);
+      expect(result.pinnedSessionIds).toEqual(['local-pinned', 'server-pinned']);
+      expect(result.archivedSessionIds).toEqual(['local-archived', 'server-archived']);
+
+      // Written to localStorage
+      expect(readOpenSessionIds()).toEqual(['local-1', 'server-1']);
+      expect(readPinnedSessionIds()).toEqual(['local-pinned', 'server-pinned']);
+      expect(readArchivedSessionIds()).toEqual(['local-archived', 'server-archived']);
+
+      // Persisted to server
+      expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
+
+      // Dispatched event
+      expect(dispatchEvent).toHaveBeenCalled();
+    });
+
+    it('falls back to local state when the fetch fails', async () => {
+      replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: [] });
+      dispatchEvent.mockReset();
+      fetchMock.mockRejectedValue(new Error('network error'));
+
+      const result = await syncConversationLayoutMerge();
+
+      expect(result.sessionIds).toEqual(['local-1']);
+      expect(readOpenSessionIds()).toEqual(['local-1']);
+    });
+  });
+
+  describe('commitConversationLayoutMerge', () => {
+    it('fetches server state, applies intended change as union, and writes merged result', async () => {
+      // Server has: open [server-1], pinned [server-pinned], archived []
+      fetchMock.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          sessionIds: ['server-1'],
+          pinnedSessionIds: ['server-pinned'],
+          archivedSessionIds: [],
+        }),
+      });
+
+      // Intended: open companion-tab-1, pinned [], archived []
+      const result = await commitConversationLayoutMerge({ sessionIds: ['companion-tab-1'], pinnedSessionIds: [], archivedSessionIds: [] });
+
+      // Union: companion tab + server tabs
+      expect(result.sessionIds).toEqual(['companion-tab-1', 'server-1']);
+      expect(result.pinnedSessionIds).toEqual(['server-pinned']);
+      expect(result.archivedSessionIds).toEqual([]);
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
+    });
+
+    it('falls back to local-only replace when fetch fails', async () => {
+      fetchMock.mockRejectedValue(new Error('network error'));
+      dispatchEvent.mockReset();
+
+      const result = await commitConversationLayoutMerge({ sessionIds: ['tab-1'], pinnedSessionIds: [] });
+
+      expect(result.sessionIds).toEqual(['tab-1']);
+      expect(dispatchEvent).toHaveBeenCalled(); // replaceConversationLayout dispatches
+    });
   });
 });
