@@ -112,6 +112,7 @@ const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').t
 const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
 const CompanionInboxPage = lazy(() => import('./companion/CompanionInboxPage').then((module) => ({ default: module.CompanionInboxPage })));
 const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
+const CompanionNewConversationPage = lazy(() => import('./companion/CompanionNewConversationPage').then((module) => ({ default: module.CompanionNewConversationPage })));
 const CompanionConversationPage = lazy(() => import('./companion/CompanionConversationPage').then((module) => ({ default: module.CompanionConversationPage })));
 const CompanionTasksPage = lazy(() => import('./companion/CompanionTasksPage').then((module) => ({ default: module.CompanionTasksPage })));
 const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDetailPage').then((module) => ({ default: module.CompanionTaskDetailPage })));
@@ -550,6 +551,7 @@ export function App() {
                       <Route index element={<Navigate to="/app/inbox" replace />} />
                       <Route path="inbox" element={suspendRoute(<CompanionInboxPage />)} />
                       <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
+                      <Route path="conversations/new" element={suspendRoute(<CompanionNewConversationPage />)} />
                       <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />
                       <Route path="tasks" element={suspendRoute(<CompanionTasksPage />)} />
                       <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
