@@ -95,8 +95,7 @@ This is the right fit for:
 
 Use deferred resume when the user does **not** need a direct reminder. If the user explicitly wants "tell me later," use a reminder instead.
 
-A self-distill wakeup is a conservative deferred resume aimed back at the same conversation after you close it.
-Use it for one high-bar background review of that thread instead of passive transcript mining.
+Use deferred resume for conservative background review of a thread when needed — with a high bar and a no-op default.
 The first-pass outcomes should stay narrow: no-op, note update, or linked project update.
 
 ## Scheduled-task callbacks
@@ -129,7 +128,7 @@ Use these defaults:
 - **async work tied to a dormant conversation** surfaces the conversation
 - **user-requested tell-me-later behavior** becomes a reminder/alert
 - **agent-initiated continue-later behavior** becomes deferred resume
-- **close-triggered later durable review of one conversation** becomes a self-distill wakeup, not background transcript mining
+
 
 ## What not to do
 

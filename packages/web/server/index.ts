@@ -128,12 +128,6 @@ import {
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
-import {
-  cancelConversationSelfDistillWakeups,
-  listConversationSelfDistillWakeupRecords,
-  resolveConversationSelfDistillConversationId,
-  scheduleConversationSelfDistillWakeup,
-} from './conversationSelfDistill.js';
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
@@ -1991,7 +1985,7 @@ function resolveConversationSessionFile(conversationId: string): string | undefi
   return snapshotSessionFile || undefined;
 }
 
-async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
+async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string; presetId: string } | null> {
   const profile = getCurrentProfile();
   const binding = readRemoteConversationBindingForConversation({ profile, conversationId });
   if (binding) {
@@ -2004,10 +1998,11 @@ async function readConversationModelPreferenceStateById(conversationId: string):
   }
 
   const sessionManager = SessionManager.open(sessionFile);
+  const availableModels = getAvailableModelObjects();
   return resolveConversationModelPreferenceState(
     readConversationModelPreferenceSnapshot(sessionManager),
-    readSavedModelPreferences(SETTINGS_FILE),
-    getAvailableModelObjects(),
+    readSavedModelPreferences(SETTINGS_FILE, availableModels),
+    availableModels,
   );
 }
 
@@ -2757,126 +2752,6 @@ async function resolveBackgroundConversationPromptTarget(
   };
 }
 
-async function processClosedConversationSelfDistillWakeups(now: Date, daemonRoot: string): Promise<string[]> {
-  const visibleConversationIds = readVisibleWorkspaceConversationIdSet();
-  const changedConversationIds = new Set<string>();
-
-  for (const record of listConversationSelfDistillWakeupRecords({ stateRoot: getStateRoot() })) {
-    const conversationId = resolveConversationSelfDistillConversationId(record);
-    if (!conversationId || visibleConversationIds.has(conversationId) || isLocalLive(conversationId) || isRemoteLiveSession(conversationId)) {
-      continue;
-    }
-
-    let readyEntry = record.status === 'ready'
-      ? toDeferredResumeSummary(record)
-      : undefined;
-
-    if (!readyEntry && record.status === 'scheduled' && Date.parse(record.dueAt) <= now.getTime()) {
-      readyEntry = await fireDeferredResumeNowForSessionFile({
-        sessionFile: record.sessionFile,
-        id: record.id,
-        at: now,
-      });
-    }
-
-    if (!readyEntry || readyEntry.status !== 'ready') {
-      continue;
-    }
-
-    let promptTarget: BackgroundConversationPromptTarget | null = null;
-    try {
-      promptTarget = await resolveBackgroundConversationPromptTarget(conversationId, readyEntry.sessionFile);
-      await syncWebLiveConversationRun({
-        conversationId: promptTarget.conversationId,
-        sessionFile: promptTarget.sessionFile,
-        cwd: promptTarget.cwd,
-        title: promptTarget.title,
-        profile: getCurrentProfile(),
-        state: 'running',
-        pendingOperation: {
-          type: 'prompt',
-          text: readyEntry.prompt,
-          ...(promptTarget.isStreaming ? { behavior: 'followUp' as const } : {}),
-          enqueuedAt: now.toISOString(),
-        },
-      });
-
-      if (promptTarget.remote) {
-        await submitRemoteLiveSessionPrompt({
-          conversationId: promptTarget.conversationId,
-          text: readyEntry.prompt,
-          ...(promptTarget.isStreaming ? { behavior: 'followUp' as const } : {}),
-        });
-      } else {
-        await promptLocalSession(
-          promptTarget.conversationId,
-          readyEntry.prompt,
-          promptTarget.isStreaming ? 'followUp' : undefined,
-        );
-      }
-
-      const completedEntry = completeDeferredResumeForSessionFile({
-        sessionFile: readyEntry.sessionFile,
-        id: readyEntry.id,
-      });
-      if (!completedEntry) {
-        continue;
-      }
-
-      changedConversationIds.add(promptTarget.conversationId);
-      await completeDeferredResumeConversationRun({
-        daemonRoot,
-        deferredResumeId: completedEntry.id,
-        sessionFile: completedEntry.sessionFile,
-        prompt: completedEntry.prompt,
-        dueAt: completedEntry.dueAt,
-        createdAt: completedEntry.createdAt,
-        readyAt: completedEntry.readyAt,
-        completedAt: new Date().toISOString(),
-        conversationId: promptTarget.conversationId,
-        cwd: promptTarget.cwd,
-      });
-    } catch (error) {
-      if (promptTarget) {
-        await syncWebLiveConversationRun({
-          conversationId: promptTarget.conversationId,
-          sessionFile: promptTarget.sessionFile,
-          cwd: promptTarget.cwd,
-          title: promptTarget.title,
-          profile: getCurrentProfile(),
-          state: 'failed',
-          lastError: (error as Error).message,
-        });
-      }
-
-      const retryDueAt = new Date(Date.now() + DEFERRED_RESUME_RETRY_DELAY_MS).toISOString();
-      const retriedEntry = retryDeferredResumeForSessionFile({
-        sessionFile: readyEntry.sessionFile,
-        id: readyEntry.id,
-        dueAt: retryDueAt,
-      });
-      if (retriedEntry) {
-        changedConversationIds.add(conversationId);
-        await markDeferredResumeConversationRunRetryScheduled({
-          daemonRoot,
-          deferredResumeId: retriedEntry.id,
-          sessionFile: retriedEntry.sessionFile,
-          prompt: retriedEntry.prompt,
-          dueAt: retriedEntry.dueAt,
-          createdAt: retriedEntry.createdAt,
-          retryAt: retriedEntry.dueAt,
-          conversationId,
-          cwd: promptTarget?.cwd,
-          lastError: (error as Error).message,
-        });
-      }
-      logWarn(`Conversation self-distill delivery failed for ${conversationId}: ${(error as Error).message}`);
-    }
-  }
-
-  return [...changedConversationIds];
-}
-
 async function flushLiveDeferredResumes(): Promise<void> {
   if (processingDeferredResumes) {
     return;
@@ -2885,9 +2760,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
   processingDeferredResumes = true;
 
   try {
-    // Server-side deferred resume delivery injects prompts into already-live conversations
-    // immediately. Close-triggered self-distill wakeups also use this loop to resume a closed
-    // conversation in the background when the wakeup becomes due.
+    // Server-side deferred resume delivery injects prompts into already-live conversations.
     const liveSessions = listAllLiveSessions().filter((session) => session.sessionFile);
     const now = new Date();
     const daemonRoot = resolveDaemonRoot();
@@ -3014,14 +2887,6 @@ async function flushLiveDeferredResumes(): Promise<void> {
           logWarn(`Deferred resume delivery failed for ${session.id}: ${(error as Error).message}`);
           break;
         }
-      }
-    }
-
-    const closedConversationIds = await processClosedConversationSelfDistillWakeups(now, daemonRoot);
-    if (closedConversationIds.length > 0) {
-      mutated = true;
-      for (const conversationId of closedConversationIds) {
-        mutatedConversationIds.add(conversationId);
       }
     }
 
@@ -4372,6 +4237,7 @@ app.get('/api/models', (_req, res) => {
     res.json({
       currentModel,
       currentThinkingLevel: saved.currentThinkingLevel,
+      presetId: saved.currentPresetId,
       models,
     });
   } catch (err) {
@@ -4385,15 +4251,15 @@ app.get('/api/models', (_req, res) => {
 
 app.patch('/api/models/current', (req, res) => {
   try {
-    const { model, thinkingLevel } = req.body as { model?: string; thinkingLevel?: string };
-    if (typeof model !== 'string' && typeof thinkingLevel !== 'string') {
-      res.status(400).json({ error: 'model or thinkingLevel required' });
+    const { model, thinkingLevel, presetId } = req.body as { model?: string; thinkingLevel?: string; presetId?: string };
+    if (typeof model !== 'string' && typeof thinkingLevel !== 'string' && typeof presetId !== 'string') {
+      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
       return;
     }
 
     const availableModels = listAvailableModelDefinitions();
     persistSettingsWrite((settingsFile) => {
-      writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, availableModels);
+      writeSavedModelPreferences({ model, thinkingLevel, presetId }, settingsFile, availableModels);
     }, {
       localSettingsFile: getCurrentProfileSettingsFile(),
       runtimeSettingsFile: SETTINGS_FILE,
@@ -5179,79 +5045,6 @@ function listWorkspaceConversationIds(saved: ReturnType<typeof readSavedWebUiPre
   return [...new Set([...saved.openConversationIds, ...saved.pinnedConversationIds])];
 }
 
-function resolveConversationSelfDistillTitle(conversationId: string): string | undefined {
-  return liveRegistry.get(conversationId)?.title
-    ?? listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.title;
-}
-
-function readVisibleWorkspaceConversationIdSet(): Set<string> {
-  return new Set(listWorkspaceConversationIds(readSavedWebUiPreferences(SETTINGS_FILE)));
-}
-
-async function reconcileConversationSelfDistillWakeupsForLayoutChange(
-  previous: ReturnType<typeof readSavedWebUiPreferences>,
-  next: ReturnType<typeof readSavedWebUiPreferences>,
-): Promise<string[]> {
-  const previousWorkspaceIds = new Set(listWorkspaceConversationIds(previous));
-  const nextWorkspaceIds = new Set(listWorkspaceConversationIds(next));
-  const reopenedConversationIds = [...nextWorkspaceIds].filter((id) => !previousWorkspaceIds.has(id));
-  const closedConversationIds = [...previousWorkspaceIds].filter((id) => !nextWorkspaceIds.has(id));
-  const changedConversationIds = new Set<string>();
-
-  for (const conversationId of reopenedConversationIds) {
-    const sessionFile = resolveConversationSessionFile(conversationId);
-    if (!sessionFile || !existsSync(sessionFile)) {
-      continue;
-    }
-
-    try {
-      const cancelledIds = await cancelConversationSelfDistillWakeups({
-        stateRoot: getStateRoot(),
-        sessionFile,
-        conversationId,
-      });
-      if (cancelledIds.length > 0) {
-        changedConversationIds.add(conversationId);
-      }
-    } catch (error) {
-      logWarn('failed to cancel conversation self-distill wakeup after reopen', {
-        conversationId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  for (const conversationId of closedConversationIds) {
-    const sessionFile = resolveConversationSessionFile(conversationId);
-    if (!sessionFile || !existsSync(sessionFile)) {
-      continue;
-    }
-
-    if (isConversationMemoryDistillRecoveryTitle(resolveConversationSelfDistillTitle(conversationId))) {
-      continue;
-    }
-
-    try {
-      const scheduled = await scheduleConversationSelfDistillWakeup({
-        stateRoot: getStateRoot(),
-        profile: getCurrentProfile(),
-        sessionFile,
-        conversationId,
-      });
-      if (scheduled.resume && !scheduled.deduped) {
-        changedConversationIds.add(conversationId);
-      }
-    } catch (error) {
-      logWarn('failed to schedule conversation self-distill wakeup after close', {
-        conversationId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return [...changedConversationIds];
-}
-
 async function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
   try {
     const { sessionIds, pinnedSessionIds, archivedSessionIds } = req.body as {
@@ -5290,10 +5083,6 @@ async function handleOpenConversationLayoutWriteRequest(req: express.Request, re
       { runtimeSettingsFile: SETTINGS_FILE },
     );
 
-    const changedConversationIds = await reconcileConversationSelfDistillWakeupsForLayoutChange(previous, saved);
-    if (changedConversationIds.length > 0) {
-      publishConversationSessionMetaChanged(...changedConversationIds);
-    }
     invalidateAppTopics('sessions');
 
     res.json({
@@ -7144,6 +6933,7 @@ app.post('/api/live-sessions', async (req, res) => {
       targetId?: string | null;
       model?: string | null;
       thinkingLevel?: string | null;
+      presetId?: string | null;
     };
     const profile = getCurrentProfile();
     const availableProjectIds = listReferenceableProjectIds();
@@ -7181,6 +6971,7 @@ app.post('/api/live-sessions', async (req, res) => {
         remoteCwd,
         ...(body.model !== undefined ? { initialModel: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
+        ...(body.presetId !== undefined ? { initialPresetId: body.presetId } : {}),
       });
       setConversationExecutionTarget({
         profile,
@@ -7215,6 +7006,7 @@ app.post('/api/live-sessions', async (req, res) => {
       extensionFactories: buildLiveSessionExtensionFactories(),
       ...(body.model !== undefined ? { initialModel: body.model } : {}),
       ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
+      ...(body.presetId !== undefined ? { initialPresetId: body.presetId } : {}),
     });
     if (referencedProjectIds.length > 0) {
       setConversationProjectLinks({
@@ -8393,27 +8185,34 @@ app.get('/api/conversations/:id/model-preferences', async (req, res) => {
 
 app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
   try {
-    const { model, thinkingLevel } = req.body as {
+    const { model, thinkingLevel, presetId } = req.body as {
       model?: string | null;
       thinkingLevel?: string | null;
+      presetId?: string | null;
       surfaceId?: string;
     };
 
-    if (model === undefined && thinkingLevel === undefined) {
-      res.status(400).json({ error: 'model or thinkingLevel required' });
+    if (model === undefined && thinkingLevel === undefined && presetId === undefined) {
+      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
       return;
     }
 
     if ((model !== undefined && model !== null && typeof model !== 'string')
-      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
-      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
+      || (presetId !== undefined && presetId !== null && typeof presetId !== 'string')) {
+      res.status(400).json({ error: 'model, thinkingLevel, and presetId must be strings or null' });
       return;
     }
 
     const profile = getCurrentProfile();
-    const input = {
+    const input: {
+      model?: string | null;
+      thinkingLevel?: string | null;
+      presetId?: string | null;
+    } = {
       ...(model !== undefined ? { model } : {}),
       ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+      ...(presetId !== undefined ? { presetId } : {}),
     };
 
     if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
@@ -8423,7 +8222,8 @@ app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
 
     if (isLocalLive(req.params.id)) {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      const state = updateLiveSessionModelPreferences(req.params.id, input);
+      const availableModels = getAvailableModelObjects();
+      const state = updateLiveSessionModelPreferences(req.params.id, input, availableModels);
       res.json(state);
       return;
     }
@@ -8435,11 +8235,12 @@ app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
     }
 
     const sessionManager = SessionManager.open(sessionFile);
+    const availableModels = getAvailableModelObjects();
     const state = applyConversationModelPreferencesToSessionManager(
       sessionManager,
       input,
-      readSavedModelPreferences(SETTINGS_FILE),
-      getAvailableModelObjects(),
+      readSavedModelPreferences(SETTINGS_FILE, availableModels),
+      availableModels,
     );
 
     publishConversationSessionMetaChanged(req.params.id);
@@ -11163,27 +10964,34 @@ companionApp.get('/api/conversations/:id/model-preferences', async (req, res) =>
 
 companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) => {
   try {
-    const { model, thinkingLevel } = req.body as {
+    const { model, thinkingLevel, presetId } = req.body as {
       model?: string | null;
       thinkingLevel?: string | null;
+      presetId?: string | null;
       surfaceId?: string;
     };
 
-    if (model === undefined && thinkingLevel === undefined) {
-      res.status(400).json({ error: 'model or thinkingLevel required' });
+    if (model === undefined && thinkingLevel === undefined && presetId === undefined) {
+      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
       return;
     }
 
     if ((model !== undefined && model !== null && typeof model !== 'string')
-      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
-      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
+      || (presetId !== undefined && presetId !== null && typeof presetId !== 'string')) {
+      res.status(400).json({ error: 'model, thinkingLevel, and presetId must be strings or null' });
       return;
     }
 
     const profile = getCurrentProfile();
-    const input = {
+    const input: {
+      model?: string | null;
+      thinkingLevel?: string | null;
+      presetId?: string | null;
+    } = {
       ...(model !== undefined ? { model } : {}),
       ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+      ...(presetId !== undefined ? { presetId } : {}),
     };
 
     if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
@@ -11193,7 +11001,8 @@ companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) 
 
     if (isLocalLive(req.params.id)) {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      const state = updateLiveSessionModelPreferences(req.params.id, input);
+      const availableModels = getAvailableModelObjects();
+      const state = updateLiveSessionModelPreferences(req.params.id, input, availableModels);
       res.json(state);
       return;
     }
@@ -11205,11 +11014,12 @@ companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) 
     }
 
     const sessionManager = SessionManager.open(sessionFile);
+    const availableModels = getAvailableModelObjects();
     const state = applyConversationModelPreferencesToSessionManager(
       sessionManager,
       input,
-      readSavedModelPreferences(SETTINGS_FILE),
-      getAvailableModelObjects(),
+      readSavedModelPreferences(SETTINGS_FILE, availableModels),
+      availableModels,
     );
 
     publishConversationSessionMetaChanged(req.params.id);

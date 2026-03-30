@@ -167,7 +167,6 @@ If execution targets are configured, the draft conversation empty state lets you
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
-That can include conservative background self-distill wakeups scheduled when you close a conversation and the system wants one last high-bar durable review for that same thread.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
