@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetPreferencesState, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetPreferencesState, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -348,6 +348,7 @@ const HEADER_PREFERENCE_SELECT_CLASS = 'w-full rounded-lg border border-border-d
 
 function HeaderPreferencesMenu({
   models,
+  presets,
   currentModel,
   currentThinkingLevel,
   savingPreference,
