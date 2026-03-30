@@ -1939,6 +1939,13 @@ function listCompanionConversationSections(options?: { archivedOffset?: number; 
       continue;
     }
 
+    // If the session is in the workspace (open/pinned tab in web UI), include it
+    // in the live section so it appears in the companion's "Live now" list.
+    if (workspaceSessionIdSet.has(session.id)) {
+      active.push(session);
+      continue;
+    }
+
     if (session.isLive) {
       live.push(session);
       continue;
@@ -1946,11 +1953,6 @@ function listCompanionConversationSections(options?: { archivedOffset?: number; 
 
     if (session.needsAttention) {
       needsReview.push(session);
-      continue;
-    }
-
-    if (workspaceSessionIdSet.has(session.id)) {
-      active.push(session);
       continue;
     }
 
