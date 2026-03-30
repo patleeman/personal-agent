@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCompanionTopBarAction } from './CompanionLayout';
 import { api } from '../api';
 import { useAppData, useSseConnection, useSystemStatus } from '../contexts';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
@@ -206,6 +207,7 @@ export function CompanionSystemPage() {
   const { status: sseStatus } = useSseConnection();
   const { runs, setRuns } = useAppData();
   const { daemon, sync, webUi, setDaemon, setSync, setWebUi } = useSystemStatus();
+  const { setTopBarAction } = useCompanionTopBarAction();
   const [refreshing, setRefreshing] = useState(false);
   const [busyAction, setBusyAction] = useState<'daemon' | 'sync' | 'web-ui' | 'restart-app' | 'update-app' | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -245,6 +247,21 @@ export function CompanionSystemPage() {
       cancelled = true;
     };
   }, [runs, setRuns]);
+
+  useEffect(() => {
+    setTopBarAction(
+      <button
+        key="refresh"
+        type="button"
+        onClick={() => { void refreshAll(); }}
+        disabled={refreshing}
+        className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      >
+        {refreshing ? 'Refreshing…' : 'Refresh'}
+      </button>,
+    );
+    return () => setTopBarAction(undefined);
+  }, [refreshAll, refreshing, setTopBarAction]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -294,28 +311,6 @@ export function CompanionSystemPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[22px] font-semibold tracking-tight text-primary">System</h1>
-              <p className="mt-1 text-[11px] text-dim">
-                {sseStatus === 'open' ? 'Live updates connected' : sseStatus === 'offline' ? 'Live updates offline' : 'Connecting to live updates'}
-                {systemIssues.length > 0 ? ` · ${systemIssues.length} warning${systemIssues.length === 1 ? '' : 's'}` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { void refreshAll(); }}
-              disabled={refreshing}
-              className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </header>
-
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-6">
           {actionError ? <p className="px-4 pb-4 text-[13px] text-danger">{actionError}</p> : null}

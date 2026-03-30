@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
+import { useCompanionTopBarAction } from './CompanionLayout';
 import { formatTaskSchedule } from '../taskSchedule';
 import type { ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
@@ -55,6 +56,7 @@ function previewTaskPrompt(prompt: string): string {
 export function CompanionTasksPage() {
   const { tasks, setTasks } = useAppData();
   const { status: sseStatus } = useSseConnection();
+  const { setTopBarAction } = useCompanionTopBarAction();
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
@@ -62,6 +64,21 @@ export function CompanionTasksPage() {
   const runningCount = sortedTasks.filter((task) => task.running).length;
   const failureCount = sortedTasks.filter((task) => task.lastStatus === 'failure').length;
   const isLoading = tasks === null && sseStatus !== 'offline';
+
+  useEffect(() => {
+    setTopBarAction(
+      <button
+        key="refresh"
+        type="button"
+        onClick={() => { void refreshTasks(); }}
+        disabled={refreshing}
+        className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      >
+        {refreshing ? 'Refreshing…' : 'Refresh'}
+      </button>,
+    );
+    return () => setTopBarAction(undefined);
+  }, [refreshTasks, refreshing, setTopBarAction]);
 
   const refreshTasks = useCallback(async () => {
     setRefreshing(true);
@@ -114,29 +131,6 @@ export function CompanionTasksPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-[22px] font-semibold tracking-tight text-primary">Tasks</h1>
-              <p className="mt-1 text-[11px] text-dim">
-                {sortedTasks.length} total
-                {runningCount > 0 ? ` · ${runningCount} running` : ''}
-                {failureCount > 0 ? ` · ${failureCount} failed` : ''}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { void refreshTasks(); }}
-              disabled={refreshing}
-              className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-          </div>
-        </div>
-      </header>
-
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           {isLoading ? <p className="px-4 text-[13px] text-dim">Loading tasks…</p> : null}
