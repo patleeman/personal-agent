@@ -93,11 +93,26 @@ export function shouldShowCompanionConversationStatusBanner(input: {
  * (union of open/pinned/archived), pushes the merged result back to the server,
  * then writes the merged layout locally.
  *
- * This keeps the companion aware of the shared workspace without automatically
- * opening every conversation the user happens to view on mobile.
+ * The companion's "In workspace" view is scoped to only the current conversation,
+ * not the full web workspace, so archived and unrelated chats don't clutter it.
  */
-export async function syncCompanionConversationWorkspaceLayout(): Promise<ConversationLayout> {
-  return syncConversationLayoutMerge();
+export async function syncCompanionConversationWorkspaceLayout(
+  conversationId: string | null | undefined,
+): Promise<ConversationLayout> {
+  const mergedLayout = await syncConversationLayoutMerge();
+
+  // Scope workspace to only the current conversation for the companion view,
+  // so the companion doesn't inherit the full web workspace chat list.
+  if (conversationId) {
+    const normalized = conversationId.trim();
+    return {
+      ...mergedLayout,
+      sessionIds: mergedLayout.sessionIds.includes(normalized) ? [normalized] : [],
+      pinnedSessionIds: mergedLayout.pinnedSessionIds.includes(normalized) ? [normalized] : [],
+    };
+  }
+
+  return mergedLayout;
 }
 
 const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
@@ -535,7 +550,7 @@ export function CompanionConversationPage() {
       return;
     }
 
-    void syncCompanionConversationWorkspaceLayout().then(replaceOpenTabs);
+    void syncCompanionConversationWorkspaceLayout(id).then(replaceOpenTabs);
   }, [id, replaceOpenTabs]);
 
   useEffect(() => {
