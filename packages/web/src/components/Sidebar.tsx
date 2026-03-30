@@ -503,8 +503,6 @@ export function Sidebar() {
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
   const [draftReferencedProjectIds, setDraftReferencedProjectIds] = useState(() => readDraftConversationProjectIds());
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  const createMenuRef = useRef<HTMLDivElement | null>(null);
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -665,29 +663,7 @@ export function Sidebar() {
     }).length;
   }, [activity?.entries, archivedSessions, pinnedSessions, tabs]);
   const notificationCount = standaloneUnreadCount + activeAlertCount;
-  const createProjectHref = useMemo(
-    () => buildProjectsHref(status?.profile ?? 'shared', undefined, null, true),
-    [status?.profile],
-  );
-  const createMenuItems = useMemo(
-    () => [
-      {
-        id: 'note',
-        label: 'New note',
-        description: 'Create a durable note node.',
-        to: `/notes${buildNoteSearch('', { creating: true })}`,
-        icon: PATH.notes,
-      },
-      {
-        id: 'project',
-        label: 'New project',
-        description: `Create a project in ${status?.profile ?? 'shared'}.`,
-        to: createProjectHref,
-        icon: PATH.projects,
-      },
-    ],
-    [createProjectHref, status?.profile],
-  );
+
 
   function clearDragState() {
     setDraggingSessionId(null);
@@ -798,41 +774,7 @@ export function Sidebar() {
     });
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
-  useEffect(() => {
-    setCreateMenuOpen(false);
-  }, [location.pathname, location.search]);
-
-  useEffect(() => {
-    if (!createMenuOpen) {
-      return undefined;
-    }
-
-    function handlePointerDown(event: MouseEvent) {
-      if (!createMenuRef.current || !(event.target instanceof Node)) {
-        return;
-      }
-
-      if (!createMenuRef.current.contains(event.target)) {
-        setCreateMenuOpen(false);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setCreateMenuOpen(false);
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [createMenuOpen]);
-
   const handleNewConversation = useCallback(() => {
-    setCreateMenuOpen(false);
     navigate('/conversations/new');
   }, [navigate]);
 
@@ -986,55 +928,25 @@ export function Sidebar() {
       <div className="mx-3 border-t border-border-subtle my-2" />
 
       <div className="px-1 pb-2">
-        <div ref={createMenuRef} className="relative mx-1">
-          <div className="flex items-stretch gap-1">
-            <button
-              onClick={handleNewConversation}
-              className="ui-sidebar-nav-item mx-0 flex-1"
-              title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
-              <span className="flex-1 text-left">New chat</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setCreateMenuOpen((current) => !current)}
-              className="ui-sidebar-nav-item mx-0 shrink-0 px-2.5"
-              aria-haspopup="menu"
-              aria-expanded={createMenuOpen}
-              aria-label="Open create menu"
-              title="Open create menu"
-            >
-              <Ico d={PATH.chevronDown} size={14} />
-            </button>
-          </div>
-
-          {createMenuOpen ? (
-            <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-border-default bg-surface shadow-xl" role="menu" aria-label="Create menu">
-              <div className="border-b border-border-subtle px-3 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">Create</p>
-              </div>
-              <div className="py-1.5">
-                {createMenuItems.map((item) => (
-                  <Link
-                    key={item.id}
-                    to={item.to}
-                    role="menuitem"
-                    className="flex items-start gap-2.5 px-3 py-2 text-[13px] text-secondary transition-colors hover:bg-elevated/60 hover:text-primary"
-                    onClick={() => setCreateMenuOpen(false)}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="mt-0.5 shrink-0 opacity-70">
-                      <path d={item.icon} />
-                    </svg>
-                    <span className="min-w-0 flex-1">
-                      <span className="block font-medium text-primary">{item.label}</span>
-                      <span className="block text-[11px] text-dim">{item.description}</span>
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : null}
+        <div className="flex items-stretch gap-1 mx-1">
+          <button
+            onClick={handleNewConversation}
+            className="ui-sidebar-nav-item mx-0 flex-1"
+            title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
+            <span className="flex-1 text-left">New chat</span>
+          </button>
+          <Link
+            to={`/notes${buildNoteSearch('', { creating: true })}`}
+            className="ui-sidebar-nav-item mx-0 flex-1"
+            title="New note"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
+              <path d={PATH.notes} />
+            </svg>
+            <span className="flex-1 text-left">New note</span>
+          </Link>
         </div>
       </div>
 
