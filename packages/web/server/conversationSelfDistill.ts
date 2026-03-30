@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from 'node:fs';
 import {
   getConversationProjectLink,
   getSessionDeferredResumeEntries,
@@ -34,8 +35,9 @@ export interface ScheduleConversationSelfDistillWakeupInput {
 }
 
 export interface ScheduleConversationSelfDistillWakeupResult {
-  resume: DeferredResumeSummary;
+  resume?: DeferredResumeSummary;
   deduped: boolean;
+  alreadyOccurred: boolean;
 }
 
 function resolveConversationId(input: Pick<ScheduleConversationSelfDistillWakeupInput, 'conversationId' | 'sessionFile'>): string {
@@ -107,6 +109,71 @@ function findExistingConversationSelfDistillWakeup(input: {
   })[0];
 }
 
+const CONVERSATION_SELF_DISTILL_PROMPT_MARKERS = [
+  'This conversation was just closed in the web UI.',
+  'If nothing clearly deserves a durable update, reply exactly: No durable update needed.',
+] as const;
+
+function readConversationSelfDistillMessageText(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((part) => {
+      if (typeof part === 'string') {
+        return part;
+      }
+
+      if (!part || typeof part !== 'object') {
+        return '';
+      }
+
+      return typeof (part as { text?: unknown }).text === 'string'
+        ? (part as { text: string }).text
+        : '';
+    })
+    .filter((part) => part.length > 0)
+    .join('\n');
+}
+
+function hasConversationSelfDistillPromptOccurred(sessionFile: string): boolean {
+  if (!existsSync(sessionFile)) {
+    return false;
+  }
+
+  return readFileSync(sessionFile, 'utf-8')
+    .split('\n')
+    .some((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        return false;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed) as {
+          type?: unknown;
+          message?: {
+            role?: unknown;
+            content?: unknown;
+          };
+        };
+        if (parsed.type !== 'message' || parsed.message?.role !== 'user') {
+          return false;
+        }
+
+        const text = readConversationSelfDistillMessageText(parsed.message.content);
+        return CONVERSATION_SELF_DISTILL_PROMPT_MARKERS.every((marker) => text.includes(marker));
+      } catch {
+        return false;
+      }
+    });
+}
+
 function buildConversationSelfDistillPrompt(relatedProjectIds: string[]): string {
   const lines = [
     'This conversation was just closed in the web UI.',
@@ -145,6 +212,14 @@ export async function scheduleConversationSelfDistillWakeup(
     return {
       resume: toDeferredResumeSummary(existing),
       deduped: true,
+      alreadyOccurred: false,
+    };
+  }
+
+  if (hasConversationSelfDistillPromptOccurred(input.sessionFile)) {
+    return {
+      deduped: true,
+      alreadyOccurred: true,
     };
   }
 
@@ -173,6 +248,7 @@ export async function scheduleConversationSelfDistillWakeup(
   return {
     resume,
     deduped: false,
+    alreadyOccurred: false,
   };
 }
 
