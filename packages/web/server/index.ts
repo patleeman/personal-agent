@@ -5041,10 +5041,6 @@ function handleOpenConversationLayoutReadRequest(_req: express.Request, res: exp
   }
 }
 
-function listWorkspaceConversationIds(saved: ReturnType<typeof readSavedWebUiPreferences>): string[] {
-  return [...new Set([...saved.openConversationIds, ...saved.pinnedConversationIds])];
-}
-
 async function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
   try {
     const { sessionIds, pinnedSessionIds, archivedSessionIds } = req.body as {
