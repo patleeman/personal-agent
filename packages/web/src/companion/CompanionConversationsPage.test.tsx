@@ -173,7 +173,7 @@ describe('CompanionConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the companion chats page focused on live conversations and open tabs', () => {
+  it('keeps the companion chats page focused on live conversations and workspace chats', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -208,9 +208,9 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Open chats');
     expect(html).toContain('Open knowledge');
     expect(html).toContain('Open settings');
-    expect(html).toContain('1 live · 1 open tab');
+    expect(html).toContain('1 live · 1 workspace chat');
     expect(html).toContain('Live now');
-    expect(html).toContain('Open tabs');
+    expect(html).toContain('In workspace');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Active workspace');
     expect(html).toContain('Live title from stream');

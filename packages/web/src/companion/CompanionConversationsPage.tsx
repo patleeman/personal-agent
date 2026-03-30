@@ -80,18 +80,18 @@ const COMPANION_ARCHIVE_SYNC_DELAY_MS = 180;
 
 function buildCompanionOverviewLabel(input: {
   live: number;
-  openTabs: number;
+  workspaceChats: number;
 }): string {
-  if (input.live === 0 && input.openTabs === 0) {
-    return 'No live conversations or open tabs.';
+  if (input.live === 0 && input.workspaceChats === 0) {
+    return 'No live conversations or workspace chats.';
   }
 
   const parts: string[] = [];
   if (input.live > 0) {
     parts.push(`${input.live} live`);
   }
-  if (input.openTabs > 0) {
-    parts.push(`${input.openTabs} open tab${input.openTabs === 1 ? '' : 's'}`);
+  if (input.workspaceChats > 0) {
+    parts.push(`${input.workspaceChats} workspace chat${input.workspaceChats === 1 ? '' : 's'}`);
   }
 
   return parts.join(' · ');
@@ -854,7 +854,7 @@ export function CompanionConversationsPage() {
   const focusedConversationCount = liveSessions.length + workspaceSessions.length;
   const overviewLabel = buildCompanionOverviewLabel({
     live: liveSessions.length,
-    openTabs: workspaceSessions.length,
+    workspaceChats: workspaceSessions.length,
   });
   const stateNote = buildCompanionStateNote({
     standalone,
@@ -1047,11 +1047,11 @@ export function CompanionConversationsPage() {
               {focusedConversationCount > 0 ? (
                 <>
                   <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
-                  <SessionSection title="Open tabs" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="In workspace" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
                 </>
               ) : (
                 <div className="px-4 pt-5">
-                  <p className="text-[15px] text-primary">No live conversations or open tabs right now.</p>
+                  <p className="text-[15px] text-primary">No live conversations or workspace chats right now.</p>
                   <p className="mt-2 text-[13px] leading-relaxed text-secondary">
                     This list stays focused on live work. Review items stay in Inbox, and saved transcripts stay tucked away until you need them.
                   </p>
