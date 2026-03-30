@@ -130,6 +130,87 @@ export function syncOpenConversationTabsToServer(
   }));
 }
 
+/**
+ * Bidirectional tab sync: merges local state with the latest server state, then
+ * pushes the merged result back. Neither client can overwrite the other's tabs.
+ *
+ * For open tabs:   union of local + server
+ * For pinned tabs: union of local + server
+ * For archived:   union of local + server (archived state is per-client too)
+ */
+export async function syncConversationLayoutMerge(): Promise<ConversationLayout> {
+  try {
+    const serverLayout = await fetch('/api/web-ui/open-conversations', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    }).then((res) => res.json() as Promise<ConversationLayout>);
+
+    const localLayout = readConversationLayout();
+
+    const mergedOpen = [...new Set([...localLayout.sessionIds, ...serverLayout.sessionIds])];
+    const mergedPinned = [...new Set([...localLayout.pinnedSessionIds, ...serverLayout.pinnedSessionIds])];
+    const mergedArchived = [...new Set([...localLayout.archivedSessionIds, ...serverLayout.archivedSessionIds])];
+
+    const merged: ConversationLayout = {
+      sessionIds: mergedOpen,
+      pinnedSessionIds: mergedPinned,
+      archivedSessionIds: mergedArchived,
+    };
+
+    writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, merged.sessionIds);
+    writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, merged.pinnedSessionIds);
+    writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, merged.archivedSessionIds);
+    persistConversationLayoutToServer(merged);
+    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: merged }));
+
+    return merged;
+  } catch {
+    // On network failure, fall back to local state.
+    return readConversationLayout();
+  }
+}
+
+/**
+ * Like `replaceConversationLayout` but merge-based: reads current server state,
+ * computes the union with the intended local change, then pushes merged result to
+ * server. Use this for all companion-side tab mutations so neither client can
+ * overwrite the other's tabs.
+ */
+export async function commitConversationLayoutMerge(
+  intended: ConversationLayoutInput,
+): Promise<ConversationLayout> {
+  try {
+    const serverLayout = await fetch('/api/web-ui/open-conversations', {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    }).then((res) => res.json() as Promise<ConversationLayout>);
+
+    const localLayout = normalizeConversationLayout(intended);
+
+    // Union: keep everything from both server and the local intended change.
+    const mergedOpen = [...new Set([...localLayout.sessionIds, ...serverLayout.sessionIds])];
+    const mergedPinned = [...new Set([...localLayout.pinnedSessionIds, ...serverLayout.pinnedSessionIds])];
+    const mergedArchived = [...new Set([...localLayout.archivedSessionIds, ...serverLayout.archivedSessionIds])];
+
+    const merged: ConversationLayout = {
+      sessionIds: mergedOpen,
+      pinnedSessionIds: mergedPinned,
+      archivedSessionIds: mergedArchived,
+    };
+
+    writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, merged.sessionIds);
+    writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, merged.pinnedSessionIds);
+    writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, merged.archivedSessionIds);
+    persistConversationLayoutToServer(merged);
+    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: merged }));
+
+    return merged;
+  } catch {
+    // On network failure fall back to the local-only write.
+    return replaceConversationLayout(intended);
+  }
+}
+
 function readStoredSessionIds(storageKey: string): string[] {
   try {
     const raw = localStorage.getItem(storageKey);

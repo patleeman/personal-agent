@@ -162,8 +162,15 @@ describe('syncCompanionConversationWorkspaceLayout', () => {
     vi.unstubAllGlobals();
   });
 
-  it('opens the companion conversation in the shared workspace layout snapshot', () => {
-    expect(syncCompanionConversationWorkspaceLayout(' conv-123 ')).toEqual({
+  it('opens the companion conversation in the shared workspace layout snapshot', async () => {
+    // First call (GET): server returns empty layout; second call (PATCH): { ok: true } from default mock.
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [] }),
+      });
+
+    await expect(syncCompanionConversationWorkspaceLayout(' conv-123 ')).resolves.toEqual({
       sessionIds: ['conv-123'],
       pinnedSessionIds: [],
       archivedSessionIds: [],

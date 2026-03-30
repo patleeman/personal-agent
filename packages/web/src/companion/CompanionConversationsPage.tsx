@@ -6,7 +6,7 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
-import { setConversationArchivedState } from '../sessionTabs';
+import { commitConversationLayoutMerge } from '../sessionTabs';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
@@ -865,6 +865,36 @@ export function CompanionConversationsPage() {
   });
   const visibleError = error ?? loadError;
 
+  /**
+   * Same tab-state logic as `setConversationArchivedState` but computes the layout
+   * without writing anywhere. Used by the companion for optimistic local updates
+   * before `commitConversationLayoutMerge` pushes the merged result to the server.
+   */
+  function buildCompanionSetArchivedLayout(sessionId: string, archived: boolean) {
+    const normalizedSessionId = sessionId.trim();
+    if (!normalizedSessionId) {
+      return { sessionIds: [] as string[], pinnedSessionIds: [] as string[], archivedSessionIds: [] as string[] };
+    }
+
+    // workspaceSessionIds = open + pinned from the server's last known state.
+    const wsIds = titledSections?.workspaceSessionIds ?? [];
+    // archivedSessionIds come from the list result's archived[] items.
+    const archivedIds = (titledSections?.archived ?? []).map((s) => s.id);
+
+    const pinnedIds = wsIds; // companion list doesn't separate open/pinned; treat all as "workspace"
+    const openIds = wsIds; // same — used only to reconstruct pinned vs open
+
+    const nextPinnedSessionIds = pinnedIds.filter((id) => id !== normalizedSessionId);
+    const openWithoutSession = openIds.filter((id) => id !== normalizedSessionId);
+    const archivedWithoutSession = archivedIds.filter((id) => id !== normalizedSessionId);
+    const nextSessionIds = archived ? openWithoutSession : [...openWithoutSession, normalizedSessionId];
+    const nextArchivedSessionIds = archived
+      ? [...archivedWithoutSession, normalizedSessionId]
+      : archivedWithoutSession;
+
+    return { sessionIds: nextSessionIds, pinnedSessionIds: nextPinnedSessionIds, archivedSessionIds: nextArchivedSessionIds };
+  }
+
   const handleSetArchived = useCallback((sessionId: string, archived: boolean) => {
     if (actionBusyId) {
       return;
@@ -875,8 +905,12 @@ export function CompanionConversationsPage() {
     setActionBusyKind('archive');
     setError(null);
     try {
-      setConversationArchivedState(sessionId, archived);
+      // Build the intended layout locally for optimistic UI update.
+      const intendedLayout = buildCompanionSetArchivedLayout(sessionId, archived);
       setSections((current) => current ? setCompanionConversationArchivedStateInList(current, sessionId, archived) : current);
+
+      // Merge with server state before writing so web UI tabs are preserved.
+      void commitConversationLayoutMerge(intendedLayout);
 
       if (typeof window !== 'undefined') {
         if (syncTimerRef.current !== null) {
