@@ -2,16 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRunAgentExtension } from './runAgentExtension.js';
 
 const {
-  resolveProfileModelPresetSelectionMock,
-} = vi.hoisted(() => ({
-  resolveProfileModelPresetSelectionMock: vi.fn(),
-}));
-
-vi.mock('./profileModelPresets.js', () => ({
-  resolveProfileModelPresetSelection: resolveProfileModelPresetSelectionMock,
-}));
-
-const {
   listDurableRunsMock,
   getDurableRunMock,
   getDurableRunLogMock,
@@ -81,7 +71,6 @@ beforeEach(() => {
   cancelDurableRunMock.mockReset();
   ensureDaemonAvailableMock.mockReset();
   startBackgroundRunMock.mockReset();
-  resolveProfileModelPresetSelectionMock.mockReset();
 });
 
 afterEach(() => {
@@ -183,99 +172,5 @@ describe('run agent extension', () => {
       },
     });
     expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
-  });
-
-  it('resolves model presets for durable agent runs', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
-    resolveProfileModelPresetSelectionMock.mockResolvedValue({
-      preset: {
-        id: 'cheap-ops',
-      },
-      target: {
-        kind: 'primary',
-      },
-      modelArgument: 'openai-codex/gpt-5.1-codex-mini:off',
-    });
-    startBackgroundRunMock.mockResolvedValue({
-      accepted: true,
-      runId: 'run-agent-456',
-      logPath: '/tmp/run-agent-456.log',
-    });
-
-    const runTool = registerRunTool();
-    const result = await runTool.execute(
-      'tool-1',
-      {
-        action: 'start_agent',
-        taskSlug: 'checkpoint',
-        prompt: 'Commit and push the current work.',
-        modelPreset: 'cheap-ops',
-      },
-      undefined,
-      undefined,
-      createToolContext('conv-agent', '/tmp/sessions/conv-agent.jsonl'),
-    );
-
-    expect(result.isError).not.toBe(true);
-    expect(resolveProfileModelPresetSelectionMock).toHaveBeenCalledWith('assistant', 'cheap-ops', {
-      repoRoot: '/repo',
-      profilesRoot: '/profiles',
-    });
-    expect(startBackgroundRunMock).toHaveBeenCalledWith({
-      taskSlug: 'checkpoint',
-      cwd: '/tmp/workspace',
-      agent: {
-        prompt: 'Commit and push the current work.',
-        model: 'openai-codex/gpt-5.1-codex-mini:off',
-        profile: 'assistant',
-      },
-      source: {
-        type: 'tool',
-        id: 'conv-agent',
-        filePath: '/tmp/sessions/conv-agent.jsonl',
-      },
-      checkpointPayload: {
-        resumeParentOnExit: true,
-      },
-    });
-  });
-
-  it('marks fallback usage when the preset resolves to a fallback model', async () => {
-    ensureDaemonAvailableMock.mockResolvedValue(undefined);
-    resolveProfileModelPresetSelectionMock.mockResolvedValue({
-      preset: {
-        id: 'cheap-ops',
-      },
-      target: {
-        kind: 'fallback',
-      },
-      modelArgument: 'desktop/qwen-reap:medium',
-    });
-    startBackgroundRunMock.mockResolvedValue({
-      accepted: true,
-      runId: 'run-agent-789',
-      logPath: '/tmp/run-agent-789.log',
-    });
-
-    const runTool = registerRunTool();
-    const result = await runTool.execute(
-      'tool-1',
-      {
-        action: 'start_agent',
-        taskSlug: 'checkpoint',
-        prompt: 'Commit and push the current work.',
-        modelPreset: 'cheap-ops',
-      },
-      undefined,
-      undefined,
-      createToolContext('conv-agent', '/tmp/sessions/conv-agent.jsonl'),
-    );
-
-    expect(result.isError).not.toBe(true);
-    expect(result.details).toMatchObject({
-      model: 'desktop/qwen-reap:medium',
-      modelPreset: 'cheap-ops',
-      usedFallbackModel: true,
-    });
   });
 });

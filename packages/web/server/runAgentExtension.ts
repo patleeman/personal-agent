@@ -4,7 +4,6 @@ import { startBackgroundRun } from '@personal-agent/daemon';
 import { invalidateAppTopics } from './appEvents.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
-import { resolveProfileModelPresetSelection } from './profileModelPresets.js';
 
 const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'cancel'] as const;
 
@@ -17,7 +16,6 @@ const RunToolParams = Type.Object({
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
   prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent.' })),
   model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
-  modelPreset: Type.Optional(Type.String({ description: 'Optional named model preset for start_agent.' })),
   profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
@@ -30,41 +28,6 @@ function readRequiredString(value: string | undefined, label: string): string {
   }
 
   return normalized;
-}
-
-async function resolveAgentRunModel(input: {
-  model?: string;
-  modelPreset?: string;
-  profile: string;
-  repoRoot: string;
-  profilesRoot: string;
-}): Promise<{ model: string | undefined; usedFallback: boolean }> {
-  const model = input.model?.trim();
-  const modelPreset = input.modelPreset?.trim();
-
-  if (model && modelPreset) {
-    throw new Error('Provide either model or modelPreset, not both.');
-  }
-
-  if (!modelPreset) {
-    return {
-      model,
-      usedFallback: false,
-    };
-  }
-
-  const selection = await resolveProfileModelPresetSelection(input.profile, modelPreset, {
-    repoRoot: input.repoRoot,
-    profilesRoot: input.profilesRoot,
-  });
-  if (!selection) {
-    throw new Error(`Unknown model preset: ${modelPreset}`);
-  }
-
-  return {
-    model: selection.modelArgument,
-    usedFallback: selection.target.kind === 'fallback',
-  };
 }
 
 function formatRunList(result: Awaited<ReturnType<typeof listDurableRuns>>): string {
@@ -223,16 +186,7 @@ export function createRunAgentExtension(options: {
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
               const model = params.model?.trim();
-              const modelPreset = params.modelPreset?.trim();
               const profile = params.profile?.trim() || options.getCurrentProfile();
-
-              const resolvedModel = await resolveAgentRunModel({
-                model,
-                modelPreset,
-                profile,
-                repoRoot: options.repoRoot,
-                profilesRoot: options.profilesRoot,
-              });
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -240,7 +194,7 @@ export function createRunAgentExtension(options: {
                 cwd,
                 agent: {
                   prompt,
-                  ...(resolvedModel.model ? { model: resolvedModel.model } : {}),
+                  ...(model ? { model } : {}),
                   ...(profile ? { profile } : {}),
                 },
                 source: {
@@ -268,10 +222,8 @@ export function createRunAgentExtension(options: {
                   runId: result.runId,
                   taskSlug,
                   cwd,
-                  model: resolvedModel.model,
-                  modelPreset,
+                  model,
                   profile,
-                  usedFallbackModel: resolvedModel.usedFallback,
                   logPath: result.logPath,
                 },
               };

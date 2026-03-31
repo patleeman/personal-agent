@@ -30,7 +30,7 @@ import type {
   MemoryData,
   MessageBlock,
   ModelInfo,
-  ModelPresetState,
+
   PromptImageInput,
   ScheduledTaskSummary,
   SessionDetail,
@@ -394,7 +394,6 @@ const COMPANION_RUNTIME_SELECT_CLASS = 'w-full rounded-lg border border-border-d
 
 function CompanionConversationRuntimePanel({
   models,
-  presets,
   currentModel,
   currentThinkingLevel,
   loading,
@@ -404,7 +403,6 @@ function CompanionConversationRuntimePanel({
   onSelectThinkingLevel,
 }: {
   models: ModelInfo[];
-  presets: ModelPresetState[];
   currentModel: string;
   currentThinkingLevel: string;
   loading: boolean;
@@ -415,15 +413,6 @@ function CompanionConversationRuntimePanel({
 }) {
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
-  const currentPreset = useMemo(() => {
-    if (!currentModel || !currentThinkingLevel) {
-      return null;
-    }
-
-    return presets.find((preset) => (
-      preset.model === currentModel && preset.thinkingLevel === currentThinkingLevel
-    )) ?? null;
-  }, [currentModel, currentThinkingLevel, presets]);
   const controlsDisabled = loading || savingPreference !== null || Boolean(disabledReason);
 
   return (
@@ -432,21 +421,12 @@ function CompanionConversationRuntimePanel({
         <label className="ui-section-label" htmlFor="companion-conversation-model-preference">Model</label>
         <select
           id="companion-conversation-model-preference"
-          value={currentPreset ? `preset:${currentPreset.id}` : currentModel}
+          value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
-          disabled={controlsDisabled || (models.length === 0 && presets.length === 0)}
+          disabled={controlsDisabled || models.length === 0}
           className={COMPANION_RUNTIME_SELECT_CLASS}
         >
           {!currentModel ? <option value="">{loading ? 'Loading models…' : 'Choose a model'}</option> : null}
-          {presets.length > 0 ? (
-            <optgroup label="Presets">
-              {presets.map((preset) => (
-                <option key={`preset:${preset.id}`} value={`preset:${preset.id}`}>
-                  {preset.id}{preset.description ? ` — ${preset.description}` : ''}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
           {groupedModels.map(([provider, providerModels]) => (
             <optgroup key={provider} label={provider}>
               {providerModels.map((model) => (
@@ -460,13 +440,11 @@ function CompanionConversationRuntimePanel({
         <p className="text-[12px] leading-relaxed text-secondary">
           {savingPreference === 'model'
             ? 'Saving model…'
-            : currentPreset
-              ? `Preset: ${currentPreset.id} · ${formatThinkingLevelLabel(currentPreset.thinkingLevel)} thinking`
-              : selectedModel
-                ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
-                : loading
-                  ? 'Loading available models…'
-                  : 'No model selected.'}
+            : selectedModel
+              ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
+              : loading
+                ? 'Loading available models…'
+                : 'No model selected.'}
         </p>
       </div>
 
@@ -520,7 +498,6 @@ export function CompanionConversationPage() {
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [runtimeModels, setRuntimeModels] = useState<ModelInfo[]>([]);
-  const [runtimePresets, setRuntimePresets] = useState<ModelPresetState[]>([]);
   const [currentModel, setCurrentModel] = useState('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState('');
   const [runtimeLoading, setRuntimeLoading] = useState(false);
@@ -618,15 +595,13 @@ export function CompanionConversationPage() {
 
     Promise.all([
       api.models(),
-      api.modelPresetSettings(),
       api.conversationModelPreferences(id),
-    ]).then(([modelState, presetState, preferenceState]) => {
+    ]).then(([modelState, preferenceState]) => {
       if (cancelled) {
         return;
       }
 
       setRuntimeModels(modelState.models);
-      setRuntimePresets(presetState.presets);
       setCurrentModel(preferenceState.currentModel || modelState.currentModel || '');
       setCurrentThinkingLevel(preferenceState.currentThinkingLevel ?? modelState.currentThinkingLevel ?? '');
     }).catch((error) => {
@@ -635,7 +610,6 @@ export function CompanionConversationPage() {
       }
 
       setRuntimeModels([]);
-      setRuntimePresets([]);
       setCurrentModel(sessionSnapshot?.model ?? '');
       setCurrentThinkingLevel('');
       setActionError((current) => current ?? (error instanceof Error ? error.message : String(error)));
@@ -1098,23 +1072,6 @@ export function CompanionConversationPage() {
     setActionError(null);
 
     try {
-      if (modelId.startsWith('preset:')) {
-        const presetId = modelId.slice('preset:'.length);
-        const preset = runtimePresets.find((candidate) => candidate.id === presetId);
-        if (!preset) {
-          throw new Error(`Preset not found: ${presetId}`);
-        }
-
-        const next = await api.updateConversationModelPreferences(
-          id,
-          { model: preset.model, thinkingLevel: preset.thinkingLevel },
-          stream.surfaceId,
-        );
-        setCurrentModel(next.currentModel);
-        setCurrentThinkingLevel(next.currentThinkingLevel);
-        return;
-      }
-
       const next = await api.updateConversationModelPreferences(id, { model: modelId }, stream.surfaceId);
       setCurrentModel(next.currentModel);
       setCurrentThinkingLevel(next.currentThinkingLevel);
@@ -1123,7 +1080,7 @@ export function CompanionConversationPage() {
     } finally {
       setSavingRuntimePreference(null);
     }
-  }, [controlState.needsTakeover, id, runtimePresets, savingRuntimePreference, stream.surfaceId]);
+  }, [controlState.needsTakeover, id, savingRuntimePreference, stream.surfaceId]);
 
   const handleSelectRuntimeThinkingLevel = useCallback(async (thinkingLevel: string) => {
     if (!id || savingRuntimePreference !== null || thinkingLevel === currentThinkingLevel) {
@@ -1440,7 +1397,6 @@ export function CompanionConversationPage() {
               ) : selectedPanel === 'runtime' ? (
                 <CompanionConversationRuntimePanel
                   models={runtimeModels}
-                  presets={runtimePresets}
                   currentModel={currentModel}
                   currentThinkingLevel={currentThinkingLevel}
                   loading={runtimeLoading}
