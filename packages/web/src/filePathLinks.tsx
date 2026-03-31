@@ -201,22 +201,8 @@ export function FilePathButton({
     onOpenFilePath(path);
   }
 
-  function handleMouseDown(event: ReactMouseEvent<HTMLButtonElement>) {
-    if (event.button !== 0) {
-      return;
-    }
-
-    event.preventDefault();
-    openFilePath();
-  }
-
   function handleClick(event: ReactMouseEvent<HTMLButtonElement>) {
-    if (event.detail !== 0) {
-      event.preventDefault();
-      return;
-    }
-
-    event.preventDefault();
+    event.stopPropagation();
     openFilePath();
   }
 
@@ -226,7 +212,6 @@ export function FilePathButton({
       data-file-path-link={path}
       aria-label={`Open ${path}`}
       className={filePathButtonClassName(variant)}
-      onMouseDown={handleMouseDown}
       onClick={handleClick}
       style={{
         textDecoration: 'underline',
