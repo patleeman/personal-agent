@@ -37,11 +37,9 @@ import {
   getExtensionDependencyDirs,
   getRepoRoot,
   installPackageSource,
-  listModelPresetTargets,
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
-  resolveModelPreset,
   resolveResourceProfile,
 } from '@personal-agent/resources';
 import {
@@ -60,10 +58,6 @@ import {
   type DaemonStatus,
   type ParsedTaskDefinition,
 } from '@personal-agent/daemon';
-import {
-  AuthStorage,
-  ModelRegistry,
-} from '@mariozechner/pi-coding-agent';
 import {
   activateWebUiSlot,
   findBadWebUiRelease,
@@ -496,46 +490,12 @@ function resolveActivityProfileName(): string {
 async function applyDefaultModelArgs(
   args: string[],
   settings: Record<string, unknown>,
-  agentDir: string,
+  _agentDir: string,
 ): Promise<string[]> {
   const output = [...args];
 
   const hasModel = output.includes('--model');
   const hasThinking = output.includes('--thinking');
-
-  if (!hasModel && typeof settings.defaultModelPreset === 'string' && settings.defaultModelPreset.trim().length > 0) {
-    const preset = resolveModelPreset(settings, settings.defaultModelPreset);
-    if (preset) {
-      const modelRegistry = ModelRegistry.create(
-        AuthStorage.create(join(agentDir, 'auth.json')),
-        join(agentDir, 'models.json'),
-      );
-
-      for (const target of listModelPresetTargets(preset)) {
-        const model = modelRegistry.getAvailable().find((candidate) => {
-          if (target.provider) {
-            return candidate.provider === target.provider && candidate.id === target.model;
-          }
-
-          return candidate.id === target.model;
-        });
-        if (!model) {
-          continue;
-        }
-
-        const authResult = await modelRegistry.getApiKeyAndHeaders(model);
-        if (!authResult.ok) {
-          continue;
-        }
-
-        output.push('--model', target.modelRef);
-        if (!hasThinking && target.thinkingLevel) {
-          output.push('--thinking', target.thinkingLevel);
-        }
-        return output;
-      }
-    }
-  }
 
   const defaultProvider = settings.defaultProvider;
   const defaultModel = settings.defaultModel;

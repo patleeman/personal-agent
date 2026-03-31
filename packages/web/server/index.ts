@@ -59,7 +59,7 @@ import { shouldServeCompanionIndex } from './companionSpaIndex.js';
 import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
-import { readSavedModelPresetPreferences, writeSavedModelPresetPreferences } from './modelPresetPreferences.js';
+
 import {
   readModelProvidersState,
   removeModelProvider,
@@ -85,7 +85,7 @@ import {
   resolveConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
-import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
+import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './middleware/index.js';
 import {
   createCompanionPairingCode,
   exchangeCompanionPairingCode,
@@ -99,7 +99,19 @@ import {
   createInMemoryRateLimit,
   enforceSameOriginUnsafeRequests,
   resolveRequestOrigin,
-} from './webSecurity.js';
+} from './middleware/index.js';
+import {
+  registerAlertRoutes,
+  setAlertRoutesProfileGetter,
+  registerProfileRoutes,
+  setProfileRoutesGetters,
+  registerDaemonRoutes,
+  setDaemonRoutesProfileGetter,
+  registerTaskRoutes,
+  setTaskRoutesProfileGetter,
+  registerModelRoutes,
+  setModelRoutesGetters,
+} from './routes/index.js';
 import {
   createServiceAttentionMonitor,
   suppressMonitoredServiceAttention,
@@ -176,7 +188,6 @@ import {
   queuePromptContext,
   canInjectResumeFallbackPrompt,
   appendVisibleCustomMessage,
-  kickConversationAutomation,
   compactSession,
   reloadSessionResources,
   refreshAllLiveSessionModelRegistries,
@@ -3096,95 +3107,6 @@ const companionAuthExchangeRateLimit = createInMemoryRateLimit({
   message: 'Too many pairing attempts. Try again in a minute.',
 });
 
-type AlertRoutesRegistrar = Pick<ReturnType<typeof express>, 'get' | 'post'>;
-
-function registerAlertRoutes(router: AlertRoutesRegistrar): void {
-  router.get('/api/alerts', (_req, res) => {
-    try {
-      res.json(getAlertSnapshotForProfile(getCurrentProfile()));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.get('/api/alerts/:id', (req, res) => {
-    try {
-      const alert = getAlertForProfile(getCurrentProfile(), req.params.id);
-      if (!alert) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      res.json(alert);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/alerts/:id/ack', (req, res) => {
-    try {
-      const alert = acknowledgeAlertForProfile(getCurrentProfile(), req.params.id);
-      if (!alert) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      invalidateAppTopics('alerts');
-      res.json({ ok: true, alert });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/alerts/:id/dismiss', (req, res) => {
-    try {
-      const alert = dismissAlertForProfile(getCurrentProfile(), req.params.id);
-      if (!alert) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      invalidateAppTopics('alerts');
-      res.json({ ok: true, alert });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/alerts/:id/snooze', async (req, res) => {
-    try {
-      const { delay, at } = req.body as { delay?: string; at?: string };
-      const result = await snoozeAlertForProfile(getCurrentProfile(), req.params.id, { delay, at });
-      if (!result) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-
-      invalidateAppTopics('alerts', 'sessions', 'runs');
-      res.json({ ok: true, ...result });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(400).json({ error: message });
-    }
-  });
-}
-
 startAppEventMonitor({
   repoRoot: REPO_ROOT,
   sessionsDir: SESSIONS_DIR,
@@ -3331,34 +3253,25 @@ app.get('/api/events', (req, res) => {
   });
 });
 
-// ── Profiles ────────────────────────────────────────────────────────────────
+// ── Route Registrations ─────────────────────────────────────────────────────
 
-app.get('/api/profiles', (_req, res) => {
-  try {
-    res.json({
-      currentProfile: getCurrentProfile(),
-      profiles: listAvailableProfiles(),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
+setProfileRoutesGetters(getCurrentProfile, setCurrentProfile, listAvailableProfiles);
+registerProfileRoutes(app);
 
-app.patch('/api/profiles/current', async (req, res) => {
-  try {
-    const { profile } = req.body as { profile?: string };
-    if (!profile) { res.status(400).json({ error: 'profile required' }); return; }
-    res.json({ ok: true, currentProfile: await setCurrentProfile(profile) });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Unknown profile:') ? 400 : 500;
-    res.status(status).json({ error: message });
-  }
-});
+setDaemonRoutesProfileGetter(getCurrentProfile);
+registerDaemonRoutes(app);
+
+setTaskRoutesProfileGetter(getCurrentProfile);
+registerTaskRoutes(app);
+
+setModelRoutesGetters(
+  getCurrentProfile,
+  getCurrentProfileSettingsFile,
+  materializeWebProfile,
+  AUTH_FILE,
+  SETTINGS_FILE,
+);
+registerModelRoutes(app);
 
 // ── Status ──────────────────────────────────────────────────────────────────
 
@@ -3409,95 +3322,6 @@ app.post('/api/application/update', (_req, res) => {
         ? 400
         : 500;
     res.status(status).json({ error: message });
-  }
-});
-
-// ── Daemon ───────────────────────────────────────────────────────────────────
-
-app.get('/api/daemon', async (_req, res) => {
-  try {
-    res.json(await readDaemonState());
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/daemon/service/install', async (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('daemon');
-    const state = await installDaemonServiceAndReadState();
-    invalidateAppTopics('daemon', 'sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/daemon/service/start', async (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('daemon');
-    const state = await startDaemonServiceAndReadState();
-    invalidateAppTopics('daemon', 'sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/daemon/service/restart', async (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('daemon');
-    const state = await restartDaemonServiceAndReadState();
-    invalidateAppTopics('daemon', 'sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/daemon/service/stop', async (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('daemon');
-    const state = await stopDaemonServiceAndReadState();
-    invalidateAppTopics('daemon', 'sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/daemon/service/uninstall', async (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('daemon');
-    const state = await uninstallDaemonServiceAndReadState();
-    invalidateAppTopics('daemon', 'sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
   }
 });
 
@@ -3713,6 +3537,7 @@ app.post('/api/web-ui/service/uninstall', (_req, res) => {
 
 // ── Alerts / Activity / Inbox ───────────────────────────────────────────────
 
+setAlertRoutesProfileGetter(getCurrentProfile);
 registerAlertRoutes(app);
 
 app.post('/api/inbox/clear', (_req, res) => {
@@ -3886,567 +3711,6 @@ function listAvailableModelDefinitions() {
 
   return models;
 }
-
-    }
-
-    const items = (preset as { items?: unknown }).items;
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error('Each preset requires at least one item.');
-    }
-    validateConversationAutomationTemplateItems(items, availableSkillNames);
-  }
-
-  if (defaultPresetIds !== null && defaultPresetIds !== undefined) {
-    if (!Array.isArray(defaultPresetIds)) {
-      throw new Error('defaultPresetIds must be an array');
-    }
-
-    const seenDefaultPresetIds = new Set<string>();
-    for (const presetId of defaultPresetIds) {
-      const normalizedPresetId = typeof presetId === 'string' ? presetId.trim() : '';
-      if (!normalizedPresetId) {
-        throw new Error('Each default preset id must be a non-empty string.');
-      }
-      if (!presetIds.has(normalizedPresetId)) {
-        throw new Error(`Default preset not found: ${normalizedPresetId}`);
-      }
-      if (seenDefaultPresetIds.has(normalizedPresetId)) {
-        throw new Error(`Duplicate default preset id: ${normalizedPresetId}`);
-      }
-      seenDefaultPresetIds.add(normalizedPresetId);
-    }
-  }
-}
-
-app.get('/api/model-presets', (_req, res) => {
-  try {
-    res.json({
-      profile: getCurrentProfile(),
-      ...readSavedModelPresetPreferences(SETTINGS_FILE),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/model-presets', (req, res) => {
-  try {
-    const { defaultPresetId, presets } = req.body as {
-      defaultPresetId?: unknown;
-      presets?: unknown;
-    };
-
-    if (typeof defaultPresetId !== 'string' && defaultPresetId !== null && defaultPresetId !== undefined) {
-      res.status(400).json({ error: 'defaultPresetId must be a string or null' });
-      return;
-    }
-
-    if (!Array.isArray(presets)) {
-      res.status(400).json({ error: 'presets must be an array' });
-      return;
-    }
-
-    const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedModelPresetPreferences({
-        defaultPresetId: typeof defaultPresetId === 'string' ? defaultPresetId : '',
-        presets: presets as Parameters<typeof writeSavedModelPresetPreferences>[0]['presets'],
-      }, settingsFile),
-      {
-        localSettingsFile: getCurrentProfileSettingsFile(),
-        runtimeSettingsFile: SETTINGS_FILE,
-      },
-    );
-
-    materializeWebProfile(currentProfile);
-    refreshAllLiveSessionModelRegistries();
-    res.json({ profile: getCurrentProfile(), ...saved });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(400).json({ error: message });
-  }
-});
-
-app.get('/api/models', (_req, res) => {
-  try {
-    const saved = readSavedModelPreferences(SETTINGS_FILE);
-    const models = listAvailableModelDefinitions();
-    const modelIds = new Set(models.map((m) => m.id));
-    const currentModel = (saved.currentModel && modelIds.has(saved.currentModel)) ? saved.currentModel : (models[0]?.id || '');
-    res.json({
-      currentModel,
-      currentThinkingLevel: saved.currentThinkingLevel,
-      models,
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/models/current', (req, res) => {
-  try {
-    const { model, thinkingLevel } = req.body as { model?: string; thinkingLevel?: string };
-    if (typeof model !== 'string' && typeof thinkingLevel !== 'string') {
-      res.status(400).json({ error: 'model or thinkingLevel required' });
-      return;
-    }
-
-    const availableModels = listAvailableModelDefinitions();
-    persistSettingsWrite((settingsFile) => {
-      writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, availableModels);
-    }, {
-      localSettingsFile: getCurrentProfileSettingsFile(),
-      runtimeSettingsFile: SETTINGS_FILE,
-    });
-
-    materializeWebProfile(currentProfile);
-
-    res.json({ ok: true });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/model-providers', (_req, res) => {
-  try {
-    res.json(readModelProvidersState(currentProfile));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/model-providers/providers', (req, res) => {
-  try {
-    const {
-      provider,
-      baseUrl,
-      api,
-      apiKey,
-      authHeader,
-      headers,
-      compat,
-      modelOverrides,
-    } = req.body as {
-      provider?: string;
-      baseUrl?: string;
-      api?: string;
-      apiKey?: string;
-      authHeader?: boolean;
-      headers?: Record<string, string>;
-      compat?: Record<string, unknown>;
-      modelOverrides?: Record<string, unknown>;
-    };
-
-    if (typeof provider !== 'string' || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    const state = upsertModelProvider(currentProfile, provider, {
-      baseUrl,
-      api: api as Parameters<typeof upsertModelProvider>[2]['api'],
-      apiKey,
-      authHeader,
-      headers,
-      compat,
-      modelOverrides,
-    });
-    materializeWebProfile(currentProfile);
-    refreshAllLiveSessionModelRegistries();
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.delete('/api/model-providers/providers/:provider', (req, res) => {
-  try {
-    const { provider } = req.params;
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    const result = removeModelProvider(currentProfile, provider);
-    materializeWebProfile(currentProfile);
-    refreshAllLiveSessionModelRegistries();
-    res.json(result.state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/model-providers/providers/:provider/models', (req, res) => {
-  try {
-    const { provider } = req.params;
-    const {
-      modelId,
-      name,
-      api,
-      baseUrl,
-      reasoning,
-      input,
-      contextWindow,
-      maxTokens,
-      headers,
-      cost,
-      compat,
-    } = req.body as {
-      modelId?: string;
-      name?: string;
-      api?: string;
-      baseUrl?: string;
-      reasoning?: boolean;
-      input?: Array<'text' | 'image'>;
-      contextWindow?: number;
-      maxTokens?: number;
-      headers?: Record<string, string>;
-      cost?: {
-        input?: number;
-        output?: number;
-        cacheRead?: number;
-        cacheWrite?: number;
-      };
-      compat?: Record<string, unknown>;
-    };
-
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    if (typeof modelId !== 'string' || modelId.trim().length === 0) {
-      res.status(400).json({ error: 'modelId required' });
-      return;
-    }
-
-    const state = upsertModelProviderModel(currentProfile, provider, modelId, {
-      name,
-      api: api as Parameters<typeof upsertModelProviderModel>[3]['api'],
-      baseUrl,
-      reasoning,
-      input,
-      contextWindow,
-      maxTokens,
-      headers,
-      cost,
-      compat,
-    });
-    materializeWebProfile(currentProfile);
-    refreshAllLiveSessionModelRegistries();
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.delete('/api/model-providers/providers/:provider/models/:modelId', (req, res) => {
-  try {
-    const { provider, modelId } = req.params;
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    if (!modelId || modelId.trim().length === 0) {
-      res.status(400).json({ error: 'modelId required' });
-      return;
-    }
-
-    const result = removeModelProviderModel(currentProfile, provider, modelId);
-    materializeWebProfile(currentProfile);
-    refreshAllLiveSessionModelRegistries();
-    res.json(result.state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/default-cwd', (_req, res) => {
-  try {
-    res.json(readSavedDefaultCwdPreferences(SETTINGS_FILE, PROCESS_CWD));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/default-cwd', (req, res) => {
-  try {
-    const { cwd } = req.body as { cwd?: string | null };
-    if (cwd !== null && typeof cwd !== 'string') {
-      res.status(400).json({ error: 'cwd must be a string or null' });
-      return;
-    }
-
-    const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedDefaultCwdPreference({ cwd }, settingsFile, {
-        baseDir: PROCESS_CWD,
-        validate: true,
-      }),
-      {
-        runtimeSettingsFile: SETTINGS_FILE,
-      },
-    );
-
-    res.json(saved);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message === 'cwd required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
-      ? 400
-      : 500;
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(status).json({ error: message });
-  }
-});
-
-app.get('/api/provider-auth', (_req, res) => {
-  try {
-    res.json(readProviderAuthState(AUTH_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/provider-auth/openai-codex/usage', async (_req, res) => {
-  try {
-    res.json(await readCodexPlanUsage(AUTH_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({
-      available: true,
-      planType: null,
-      fiveHour: null,
-      weekly: null,
-      credits: null,
-      updatedAt: null,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-});
-
-app.patch('/api/provider-auth/:provider/api-key', (req, res) => {
-  try {
-    const { provider } = req.params;
-    const { apiKey } = req.body as { apiKey?: string };
-
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      res.status(400).json({ error: 'apiKey required' });
-      return;
-    }
-
-    const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
-    reloadAllLiveSessionAuth();
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.delete('/api/provider-auth/:provider', (req, res) => {
-  try {
-    const { provider } = req.params;
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    const state = removeProviderCredential(AUTH_FILE, provider);
-    reloadAllLiveSessionAuth();
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/provider-auth/:provider/oauth/start', (req, res) => {
-  try {
-    const { provider } = req.params;
-    if (!provider || provider.trim().length === 0) {
-      res.status(400).json({ error: 'provider required' });
-      return;
-    }
-
-    const login = startProviderOAuthLogin(AUTH_FILE, provider);
-    res.json(login);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
-  try {
-    const { loginId } = req.params;
-    if (!loginId || loginId.trim().length === 0) {
-      res.status(400).json({ error: 'loginId required' });
-      return;
-    }
-
-    const login = getProviderOAuthLoginState(loginId);
-    if (!login) {
-      res.status(404).json({ error: `OAuth login not found: ${loginId}` });
-      return;
-    }
-
-    res.json(login);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/provider-auth/oauth/:loginId/events', (req, res) => {
-  const loginId = req.params.loginId?.trim();
-  if (!loginId) {
-    res.status(400).json({ error: 'loginId required' });
-    return;
-  }
-
-  const initial = getProviderOAuthLoginState(loginId);
-  if (!initial) {
-    res.status(404).json({ error: `OAuth login not found: ${loginId}` });
-    return;
-  }
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-  res.write('retry: 1000\n\n');
-
-  const writeEvent = (event: { type: 'snapshot'; data: typeof initial }) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  };
-
-  writeEvent({ type: 'snapshot', data: initial });
-
-  const heartbeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
-  }, 15_000);
-  const unsubscribe = subscribeProviderOAuthLogin(loginId, (login) => {
-    writeEvent({ type: 'snapshot', data: login });
-  });
-
-  req.on('close', () => {
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
-});
-
-app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
-  try {
-    const { loginId } = req.params;
-    const { value } = req.body as { value?: string };
-
-    if (!loginId || loginId.trim().length === 0) {
-      res.status(400).json({ error: 'loginId required' });
-      return;
-    }
-
-    if (typeof value !== 'string') {
-      res.status(400).json({ error: 'value must be a string' });
-      return;
-    }
-
-    const login = submitProviderOAuthLoginInput(loginId, value);
-    res.json(login);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/provider-auth/oauth/:loginId/cancel', (req, res) => {
-  try {
-    const { loginId } = req.params;
-
-    if (!loginId || loginId.trim().length === 0) {
-      res.status(400).json({ error: 'loginId required' });
-      return;
-    }
-
-    const login = cancelProviderOAuthLogin(loginId);
-    res.json(login);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
 
 app.get('/api/conversation-titles/settings', (_req, res) => {
   try {
@@ -4823,191 +4087,6 @@ app.delete('/api/companion-auth/sessions/:sessionId', (req, res) => {
   try {
     revokeCompanionSession(req.params.sessionId);
     res.json({ ok: true, state: readCompanionAuthAdminState() });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-// ── Tasks ─────────────────────────────────────────────────────────────────────
-
-app.get('/api/tasks', (_req, res) => {
-  try {
-    res.json(listTasksForCurrentProfile());
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/tasks', (req, res) => {
-  try {
-    const body = req.body as {
-      taskId?: string;
-      enabled?: boolean;
-      cron?: string | null;
-      at?: string | null;
-      model?: string | null;
-      cwd?: string | null;
-      timeoutSeconds?: number | null;
-      prompt?: string;
-    };
-    const profile = getCurrentProfile();
-    const taskId = readRequiredTaskId(body.taskId);
-    const filePath = join(taskDirForProfile(profile), `${taskId}.task.md`);
-    const loaded = loadScheduledTasksForProfile(profile);
-
-    if (existsSync(filePath) || loaded.tasks.some((task) => task.id === taskId)) {
-      res.status(409).json({ error: `Task already exists: ${taskId}` });
-      return;
-    }
-
-    const content = buildScheduledTaskMarkdown({
-      taskId,
-      profile,
-      enabled: body.enabled ?? true,
-      cron: body.cron,
-      at: body.at,
-      model: body.model,
-      cwd: body.cwd,
-      timeoutSeconds: body.timeoutSeconds,
-      prompt: body.prompt ?? '',
-    });
-
-    validateScheduledTaskDefinition(filePath, content);
-
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, content, 'utf-8');
-    invalidateAppTopics('tasks');
-
-    const savedTask = resolveScheduledTaskForProfile(profile, taskId);
-    res.status(201).json({
-      ok: true,
-      task: buildTaskDetailResponse(savedTask.task, savedTask.runtime),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/tasks/:id', (req, res) => {
-  try {
-    const body = req.body as {
-      enabled?: boolean;
-      cron?: string | null;
-      at?: string | null;
-      model?: string | null;
-      cwd?: string | null;
-      timeoutSeconds?: number | null;
-      prompt?: string;
-    };
-    const resolvedTask = findCurrentProfileTask(req.params.id);
-    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
-
-    const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
-    const enabled = body.enabled;
-    const toggleOnly = requestedKeys.length === 1 && requestedKeys[0] === 'enabled' && typeof enabled === 'boolean';
-
-    if (toggleOnly) {
-      let content = readFileSync(resolvedTask.task.filePath, 'utf-8');
-      if (/enabled:\s*(true|false)/.test(content)) {
-        content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
-      } else {
-        content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
-      }
-      writeFileSync(resolvedTask.task.filePath, content, 'utf-8');
-      invalidateAppTopics('tasks');
-
-      const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
-      res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
-      return;
-    }
-
-    const schedule = resolvedTask.task.schedule;
-    const nextContent = buildScheduledTaskMarkdown({
-      taskId: resolvedTask.task.id,
-      profile: resolvedTask.task.profile,
-      enabled: body.enabled ?? resolvedTask.task.enabled,
-      cron: body.cron !== undefined ? body.cron : schedule.type === 'cron' ? schedule.expression : undefined,
-      at: body.at !== undefined ? body.at : schedule.type === 'at' ? schedule.at : undefined,
-      model: body.model !== undefined ? body.model : resolvedTask.task.modelRef,
-      cwd: body.cwd !== undefined ? body.cwd : resolvedTask.task.cwd,
-      timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : resolvedTask.task.timeoutSeconds,
-      prompt: body.prompt ?? resolvedTask.task.prompt,
-    });
-
-    validateScheduledTaskDefinition(resolvedTask.task.filePath, nextContent);
-
-    writeFileSync(resolvedTask.task.filePath, nextContent, 'utf-8');
-    invalidateAppTopics('tasks');
-
-    const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
-    res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/tasks/:id/log', (req, res) => {
-  try {
-    const resolvedTask = findCurrentProfileTask(req.params.id);
-    if (!resolvedTask?.runtime?.lastLogPath || !existsSync(resolvedTask.runtime.lastLogPath)) {
-      res.status(404).json({ error: 'No log available' }); return;
-    }
-    const log = readFileSync(resolvedTask.runtime.lastLogPath, 'utf-8');
-    res.json({ log, path: resolvedTask.runtime.lastLogPath });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/tasks/:id', (req, res) => {
-  try {
-    const resolvedTask = findCurrentProfileTask(req.params.id);
-    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
-
-    res.json(buildTaskDetailResponse(resolvedTask.task, resolvedTask.runtime));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-/** Run a task immediately — queues a daemon-backed durable run */
-app.post('/api/tasks/:id/run', async (req, res) => {
-  try {
-    const resolvedTask = findCurrentProfileTask(req.params.id);
-    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
-    if (!resolvedTask.task.prompt.trim()) { res.status(400).json({ error: 'Task has no prompt body' }); return; }
-
-    const result = await startScheduledTaskRun(resolvedTask.task.filePath);
-    if (!result.accepted) {
-      res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
-      return;
-    }
-
-    res.json({ ok: true, accepted: result.accepted, runId: result.runId });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -6627,7 +5706,6 @@ app.post('/api/live-sessions', async (req, res) => {
       }
 
       publishConversationSessionMetaChanged(result.id);
-      migrateDraftConversationPlan(profile, result.id);
       res.json(result);
       return;
     }
@@ -6646,7 +5724,6 @@ app.post('/api/live-sessions', async (req, res) => {
       });
       invalidateAppTopics('projects');
     }
-    migrateDraftConversationPlan(profile, result.id);
     res.json(result);
   } catch (err) {
     logError('request handler error', {
@@ -7203,15 +6280,6 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       : [];
     const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
 
-    const automationBeforePrompt = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: id,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
-      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
-    }
-
     const queuedContextBlocks = [
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
@@ -7532,9 +6600,6 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
-  }
-});
-
   }
 });
 
@@ -10328,21 +9393,6 @@ companionApp.use('/api', (req, res, next) => {
   next();
 });
 
-companionApp.get('/api/model-presets', (_req, res) => {
-  try {
-    res.json({
-      profile: getCurrentProfile(),
-      ...readSavedModelPresetPreferences(SETTINGS_FILE),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
 companionApp.get('/api/models', (_req, res) => {
   try {
     const saved = readSavedModelPreferences(SETTINGS_FILE);
@@ -11128,7 +10178,6 @@ companionApp.post('/api/live-sessions', async (req, res) => {
       });
       invalidateAppTopics('projects');
     }
-    migrateDraftConversationPlan(profile, result.id);
     res.json(result);
   } catch (err) {
     logError('request handler error', {
@@ -11330,15 +10379,6 @@ companionApp.post('/api/live-sessions/:id/prompt', async (req, res) => {
       })
       : [];
     const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
-
-    const automationBeforePrompt = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: id,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
-      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
-    }
 
     const queuedContextBlocks = [
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',

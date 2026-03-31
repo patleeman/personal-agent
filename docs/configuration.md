@@ -255,39 +255,6 @@ Example:
 
 These defaults are used when a run does not explicitly override them.
 
-You can also define named model presets in profile `settings.json` and point the current session or specific workflows at them:
-
-```json
-{
-  "defaultModelPreset": "balanced",
-  "modelPresets": {
-    "cheap-ops": {
-      "description": "Cheap, bounded low-risk work",
-      "model": "openai-codex/gpt-5.1-codex-mini",
-      "thinkingLevel": "off",
-      "fallbacks": [
-        {
-          "model": "desktop/qwen-reap",
-          "thinkingLevel": "low"
-        }
-      ]
-    },
-    "balanced": {
-      "description": "Normal day-to-day work",
-      "model": "openai-codex/gpt-5.4",
-      "thinkingLevel": "high"
-    },
-    "deep": {
-      "description": "Hard planning and ambiguous debugging",
-      "model": "openai-codex/gpt-5.4",
-      "thinkingLevel": "xhigh"
-    }
-  }
-}
-```
-
-When `defaultModelPreset` is set and the explicit `defaultModel` / `defaultProvider` / `defaultThinkingLevel` fields are absent, the runtime derives them from that preset. `fallbacks` are tried in order when the primary target is unavailable for the current profile runtime. Skills can hint a preferred preset with `preferredModelPreset` in frontmatter, and the agent can switch the live session with the `model_preset` tool.
-
 `defaultCwd` is the fallback working directory for new web conversations and other web-triggered runs when no explicit cwd is set and no single referenced project `repoRoot` applies.
 
 `webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.

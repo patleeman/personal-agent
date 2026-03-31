@@ -9,10 +9,6 @@ import {
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import {
-  applyDefaultModelPresetToSettings,
-  buildModelPresetSystemPrompt,
-} from './modelPresets.js';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -926,12 +922,8 @@ function mergeMaterializedSettings(profileSettingsFiles: string[], targetSetting
   for (const path of profileSettingsFiles) {
     const layerSettings = readJsonFile(path);
     merged = deepMerge(merged, layerSettings);
-    if (typeof layerSettings.defaultModelPreset === 'string' && layerSettings.defaultModelPreset.trim().length > 0) {
-      merged = applyDefaultModelPresetToSettings(merged, { overwrite: true });
-    }
   }
 
-  merged = applyDefaultModelPresetToSettings(merged);
   const runtimeLastChangelogVersion = readRuntimeLastChangelogVersion(targetSettingsPath);
 
   if (runtimeLastChangelogVersion) {
@@ -1003,15 +995,11 @@ export function materializeProfileToAgentDir(
   }
 
   const generatedAppendContent = composePromptCatalogDirectory('system', { repoRoot: profile.repoRoot, separator: '\n\n' });
-  const generatedModelPresetContent = materializedSettings
-    ? buildModelPresetSystemPrompt(materializedSettings, { skillDirs: profile.skillDirs })
-    : '';
   const fileAppendContent = profile.appendSystemFiles.length > 0
     ? combineMarkdownFiles(profile.appendSystemFiles)
     : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
-    generatedModelPresetContent,
     fileAppendContent ?? '',
   ]);
 
@@ -1086,21 +1074,6 @@ export function buildPiResourceArgs(
   return args;
 }
 
-export {
-  applyDefaultModelPresetToSettings,
-  buildModelPresetSystemPrompt,
-  collectSkillModelPresetHints,
-  findMatchingModelPreset,
-  formatModelPresetModelArgument,
-  listModelPresetTargets,
-  readModelPresetLibrary,
-  resolveModelPreset,
-  type ModelPresetLibrary,
-  type ModelPresetSkillHint,
-  type ModelPresetThinkingLevel,
-  type ResolvedModelPreset,
-  type ResolvedModelPresetTarget,
-} from './modelPresets.js';
 export {
   composePromptCatalogDirectory,
   composePromptCatalogEntries,

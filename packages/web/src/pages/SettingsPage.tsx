@@ -7,7 +7,6 @@ import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '..
 import { type ThemePreference, useTheme } from '../theme';
 import type {
   CodexPlanUsageState,
-  ModelPresetPreferencesState,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,
@@ -48,7 +47,6 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
-const NEW_MODEL_PRESET_ID = '__new-model-preset__';
 const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[112px] font-mono text-[12px] leading-5`;
 
 interface ProviderEditorDraft {
@@ -77,23 +75,6 @@ interface ModelEditorDraft {
   costCacheWrite: string;
   headersText: string;
   compatText: string;
-}
-
-interface ModelPresetFallbackDraft {
-  key: string;
-  model: string;
-  thinkingLevel: string;
-}
-
-interface ModelPresetDraft {
-  id: string;
-  description: string;
-  model: string;
-  thinkingLevel: string;
-  fallbacks: ModelPresetFallbackDraft[];
-  goodForText: string;
-  avoidForText: string;
-  instructionAddendum: string;
 }
 
 function formatJsonObject(value: Record<string, unknown> | Record<string, string> | undefined): string {
@@ -238,14 +219,6 @@ function formatModelSummary(model: ModelOption | null, fallback: string): string
   return `${model.id} · ${model.provider} · ${formatContextWindowLabel(model.context)} ctx`;
 }
 
-function createFallbackDraft(input?: { model?: string; thinkingLevel?: string }): ModelPresetFallbackDraft {
-  return {
-    key: Math.random().toString(16).slice(2, 10),
-    model: input?.model ?? '',
-    thinkingLevel: input?.thinkingLevel ?? '',
-  };
-}
-
 function joinStringList(values: string[]): string {
   return values.join('\n');
 }
@@ -255,19 +228,6 @@ function splitStringList(text: string): string[] {
     .split(/\r?\n|,/)
     .map((value) => value.trim())
     .filter((value): value is string => value.length > 0);
-}
-
-function createModelPresetDraft(preset: ModelPresetPreferencesState['presets'][number] | null): ModelPresetDraft {
-  return {
-    id: preset?.id ?? '',
-    description: preset?.description ?? '',
-    model: preset?.model ?? '',
-    thinkingLevel: preset?.thinkingLevel ?? '',
-    fallbacks: preset?.fallbacks.map((fallback) => createFallbackDraft(fallback)) ?? [],
-    goodForText: joinStringList(preset?.goodFor ?? []),
-    avoidForText: joinStringList(preset?.avoidFor ?? []),
-    instructionAddendum: preset?.instructionAddendum ?? '',
-  };
 }
 
 function formatModelRefLabel(modelRef: string, models: ModelOption[]): string {
@@ -356,12 +316,6 @@ export function SettingsPage() {
     refetch: refetchModels,
   } = useApi(api.models);
   const {
-    data: modelPresetState,
-    loading: modelPresetLoading,
-    error: modelPresetLoadError,
-    refetch: refetchModelPresetSettings,
-  } = useApi(api.modelPresetSettings);
-  const {
     data: modelProviderState,
     loading: modelProviderLoading,
     error: modelProviderError,
@@ -405,12 +359,6 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [selectedModelPresetId, setSelectedModelPresetId] = useState('');
-  const [modelPresetDraft, setModelPresetDraft] = useState<ModelPresetDraft>(() => createModelPresetDraft(null));
-  const [defaultPresetDraftId, setDefaultPresetDraftId] = useState('');
-  const [modelPresetAction, setModelPresetAction] = useState<'save' | 'delete' | 'default' | null>(null);
-  const [modelPresetMessage, setModelPresetMessage] = useState<string | null>(null);
-  const [modelPresetError, setModelPresetError] = useState<string | null>(null);
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
@@ -476,14 +424,6 @@ export function SettingsPage() {
     return modelState.models.find((model) => model.id === modelState.currentModel) ?? null;
   }, [modelState]);
 
-  const selectedModelPreset = useMemo(() => {
-    if (!modelPresetState || !selectedModelPresetId) {
-      return null;
-    }
-
-    return modelPresetState.presets.find((preset) => preset.id === selectedModelPresetId) ?? null;
-  }, [modelPresetState, selectedModelPresetId]);
-
   const selectedConversationTitleModel = useMemo(
     () => findModelByRef(modelState?.models ?? [], conversationTitleState?.currentModel ?? ''),
     [conversationTitleState?.currentModel, modelState?.models],
@@ -521,44 +461,12 @@ export function SettingsPage() {
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
-  const modelPresetDefaultDirty = modelPresetState
-    ? defaultPresetDraftId !== modelPresetState.defaultPresetId
-    : false;
 
   useEffect(() => {
     if (defaultCwdState) {
       setDefaultCwdDraft(defaultCwdState.currentCwd);
     }
   }, [defaultCwdState?.currentCwd]);
-
-  useEffect(() => {
-    if (!modelPresetState) {
-      return;
-    }
-
-    setDefaultPresetDraftId(modelPresetState.defaultPresetId);
-
-    if (!selectedModelPresetId) {
-      const firstPreset = modelPresetState.presets[0] ?? null;
-      setSelectedModelPresetId(firstPreset?.id ?? NEW_MODEL_PRESET_ID);
-      setModelPresetDraft(createModelPresetDraft(firstPreset));
-      return;
-    }
-
-    if (selectedModelPresetId === NEW_MODEL_PRESET_ID) {
-      return;
-    }
-
-    const nextPreset = modelPresetState.presets.find((preset) => preset.id === selectedModelPresetId) ?? null;
-    if (!nextPreset) {
-      const firstPreset = modelPresetState.presets[0] ?? null;
-      setSelectedModelPresetId(firstPreset?.id ?? NEW_MODEL_PRESET_ID);
-      setModelPresetDraft(createModelPresetDraft(firstPreset));
-      return;
-    }
-
-    setModelPresetDraft(createModelPresetDraft(nextPreset));
-  }, [modelPresetState, selectedModelPresetId]);
 
   useEffect(() => {
     if (!modelProviderState) {
@@ -721,156 +629,6 @@ export function SettingsPage() {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingPreference(null);
-    }
-  }
-
-  function handleSelectModelPreset(presetId: string) {
-    if (!modelPresetState) {
-      return;
-    }
-
-    if (presetId === NEW_MODEL_PRESET_ID) {
-      setSelectedModelPresetId(NEW_MODEL_PRESET_ID);
-      setModelPresetDraft(createModelPresetDraft(null));
-      setModelPresetError(null);
-      setModelPresetMessage(null);
-      return;
-    }
-
-    const preset = modelPresetState.presets.find((entry) => entry.id === presetId) ?? null;
-    setSelectedModelPresetId(presetId);
-    setModelPresetDraft(createModelPresetDraft(preset));
-    setModelPresetError(null);
-    setModelPresetMessage(null);
-  }
-
-  async function handleSaveModelPreset() {
-    if (!modelPresetState || modelPresetAction !== null) {
-      return;
-    }
-
-    const normalizedId = modelPresetDraft.id.trim();
-    if (!normalizedId) {
-      setModelPresetError('Preset id is required.');
-      return;
-    }
-
-    if (!modelPresetDraft.model.trim()) {
-      setModelPresetError('Primary model is required.');
-      return;
-    }
-
-    const nextPreset = {
-      id: normalizedId,
-      description: modelPresetDraft.description.trim(),
-      model: modelPresetDraft.model.trim(),
-      thinkingLevel: modelPresetDraft.thinkingLevel.trim(),
-      fallbacks: modelPresetDraft.fallbacks
-        .map((fallback) => ({
-          model: fallback.model.trim(),
-          thinkingLevel: fallback.thinkingLevel.trim(),
-        }))
-        .filter((fallback) => fallback.model.length > 0),
-      goodFor: splitStringList(modelPresetDraft.goodForText),
-      avoidFor: splitStringList(modelPresetDraft.avoidForText),
-      instructionAddendum: modelPresetDraft.instructionAddendum.trim(),
-    };
-
-    const filteredPresets = modelPresetState.presets.filter((preset) => preset.id !== selectedModelPreset?.id);
-    const duplicate = filteredPresets.some((preset) => preset.id === normalizedId);
-    if (duplicate) {
-      setModelPresetError(`Preset ${normalizedId} already exists.`);
-      return;
-    }
-
-    const nextDefaultPresetId = defaultPresetDraftId === selectedModelPreset?.id
-      ? normalizedId
-      : defaultPresetDraftId;
-
-    setModelPresetError(null);
-    setModelPresetMessage(null);
-    setModelPresetAction('save');
-
-    try {
-      const saved = await api.updateModelPresetSettings({
-        defaultPresetId: nextDefaultPresetId,
-        presets: [...filteredPresets, nextPreset].sort((left, right) => left.id.localeCompare(right.id)),
-      });
-      setSelectedModelPresetId(normalizedId);
-      setDefaultPresetDraftId(saved.defaultPresetId);
-      setModelPresetMessage(`Saved preset ${normalizedId}.`);
-      await Promise.all([
-        refetchModelPresetSettings({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-        refetchConversationTitleSettings({ resetLoading: false }),
-      ]);
-    } catch (error) {
-      setModelPresetError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setModelPresetAction(null);
-    }
-  }
-
-  async function handleDeleteModelPreset() {
-    if (!modelPresetState || !selectedModelPreset || modelPresetAction !== null) {
-      return;
-    }
-
-    setModelPresetError(null);
-    setModelPresetMessage(null);
-    setModelPresetAction('delete');
-
-    try {
-      const remainingPresets = modelPresetState.presets.filter((preset) => preset.id !== selectedModelPreset.id);
-      const nextDefaultPresetId = defaultPresetDraftId === selectedModelPreset.id ? '' : defaultPresetDraftId;
-      await api.updateModelPresetSettings({
-        defaultPresetId: nextDefaultPresetId,
-        presets: remainingPresets,
-      });
-      const nextSelectedPreset = remainingPresets[0] ?? null;
-      setSelectedModelPresetId(nextSelectedPreset?.id ?? NEW_MODEL_PRESET_ID);
-      setModelPresetDraft(createModelPresetDraft(nextSelectedPreset));
-      setDefaultPresetDraftId(nextDefaultPresetId);
-      setModelPresetMessage(`Deleted preset ${selectedModelPreset.id}.`);
-      await Promise.all([
-        refetchModelPresetSettings({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-        refetchConversationTitleSettings({ resetLoading: false }),
-      ]);
-    } catch (error) {
-      setModelPresetError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setModelPresetAction(null);
-    }
-  }
-
-  async function handleSaveDefaultPreset() {
-    if (!modelPresetState || modelPresetAction !== null) {
-      return;
-    }
-
-    setModelPresetError(null);
-    setModelPresetMessage(null);
-    setModelPresetAction('default');
-
-    try {
-      const saved = await api.updateModelPresetSettings({
-        defaultPresetId: defaultPresetDraftId,
-        presets: modelPresetState.presets,
-      });
-      setDefaultPresetDraftId(saved.defaultPresetId);
-      setModelPresetMessage(saved.defaultPresetId
-        ? `Default preset set to ${saved.defaultPresetId}.`
-        : 'Cleared the default preset.');
-      await Promise.all([
-        refetchModelPresetSettings({ resetLoading: false }),
-        refetchModels({ resetLoading: false }),
-        refetchConversationTitleSettings({ resetLoading: false }),
-      ]);
-    } catch (error) {
-      setModelPresetError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setModelPresetAction(null);
     }
   }
 
@@ -1327,7 +1085,6 @@ export function SettingsPage() {
           void Promise.all([
             refetchProfiles({ resetLoading: false }),
             refetchModels({ resetLoading: false }),
-            refetchModelPresetSettings({ resetLoading: false }),
             refetchModelProviders({ resetLoading: false }),
             refetchDefaultCwd({ resetLoading: false }),
             refetchConversationTitleSettings({ resetLoading: false }),
@@ -1433,15 +1190,6 @@ export function SettingsPage() {
                       disabled={savingPreference !== null || modelState.models.length === 0}
                       className={INPUT_CLASS}
                     >
-                      {modelPresetState && modelPresetState.presets.length > 0 && (
-                        <optgroup label="Presets">
-                          {modelPresetState.presets.map((preset) => (
-                            <option key={preset.id} value={preset.id}>
-                              {preset.id} · {preset.model} · {preset.thinkingLevel || 'unset'} thinking{preset.fallbacks.length > 0 ? ` · ${preset.fallbacks.length} fallback${preset.fallbacks.length > 1 ? 's' : ''}` : ''}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
                       {groupedModels.map(([provider, models]) => (
                         <optgroup key={provider} label={provider}>
                           {models.map((model) => (
@@ -1454,8 +1202,9 @@ export function SettingsPage() {
                     </select>
                     <p className="ui-card-meta">
                       {savingPreference === 'model'
-                        ? 'Saving default model…'
+                        ? 'Saving default model...'
                         : formatModelSummary(selectedModel, 'No model selected.')
+                      }
                     </p>
 
                     <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
@@ -1622,365 +1371,6 @@ export function SettingsPage() {
 
                 {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
               </div>
-            </div>
-
-            <div className="space-y-6 border-t border-border-subtle pt-6">
-              <div className="space-y-1">
-                <h2 className="text-[15px] font-medium text-primary">Model presets</h2>
-                <p className="ui-card-meta max-w-3xl">
-                  Presets are stored with the active profile. Switch profiles above to edit a different profile&apos;s routing defaults and fallback chains.
-                </p>
-              </div>
-
-              {(modelPresetLoading && !modelPresetState) || (modelsLoading && !modelState) ? (
-                <p className="ui-card-meta">Loading model presets…</p>
-              ) : (!modelPresetState && modelPresetLoadError) ? (
-                <p className="text-[12px] text-danger">Failed to load model presets: {modelPresetLoadError}</p>
-              ) : (!modelState && modelsError) ? (
-                <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-              ) : modelPresetState && modelState ? (
-                <div className="grid gap-8 xl:grid-cols-[260px_minmax(0,1fr)]">
-                  <div className="space-y-4 min-w-0">
-                    <div className="space-y-2">
-                      <label className="ui-card-meta" htmlFor="settings-default-model-preset">Default preset for new sessions</label>
-                      <select
-                        id="settings-default-model-preset"
-                        value={defaultPresetDraftId}
-                        onChange={(event) => {
-                          setDefaultPresetDraftId(event.target.value);
-                          setModelPresetError(null);
-                          setModelPresetMessage(null);
-                        }}
-                        disabled={modelPresetAction !== null}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">No default preset</option>
-                        {modelPresetState.presets.map((preset) => (
-                          <option key={preset.id} value={preset.id}>{preset.id}</option>
-                        ))}
-                      </select>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { void handleSaveDefaultPreset(); }}
-                          disabled={modelPresetAction !== null || !modelPresetDefaultDirty}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {modelPresetAction === 'default' ? 'Saving…' : 'Save default preset'}
-                        </button>
-                      </div>
-                      <p className="ui-card-meta">
-                        {modelPresetState.defaultPresetId
-                          ? `Current default: ${modelPresetState.defaultPresetId}`
-                          : 'No preset selected by default. Explicit model defaults are used instead.'}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-[13px] font-medium text-primary">Preset library</h3>
-                        <button
-                          type="button"
-                          onClick={() => { handleSelectModelPreset(NEW_MODEL_PRESET_ID); }}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          New preset
-                        </button>
-                      </div>
-
-                      {modelPresetState.presets.length > 0 ? (
-                        <div className="overflow-hidden rounded-lg border border-border-subtle">
-                          {modelPresetState.presets.map((preset, index) => {
-                            const selected = preset.id === selectedModelPresetId;
-                            return (
-                              <button
-                                key={preset.id}
-                                type="button"
-                                onClick={() => { handleSelectModelPreset(preset.id); }}
-                                className={cx(
-                                  'flex w-full items-start justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-surface focus-visible:outline-none focus-visible:bg-surface',
-                                  index > 0 && 'border-t border-border-subtle',
-                                  selected && 'bg-surface',
-                                )}
-                                aria-pressed={selected}
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate text-[13px] font-medium text-primary">{preset.id}</span>
-                                  <span className="ui-card-meta block truncate">{formatModelRefLabel(preset.model, modelState.models)}</span>
-                                </span>
-                                {preset.fallbacks.length > 0 && (
-                                  <span className="ui-card-meta hidden xl:block">{preset.fallbacks.length} fallback{preset.fallbacks.length === 1 ? '' : 's'}</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="ui-card-meta">No presets saved for this profile yet.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 min-w-0">
-                    <div className="space-y-1">
-                      <h3 className="text-[15px] font-medium text-primary">
-                        {selectedModelPresetId === NEW_MODEL_PRESET_ID ? 'New preset' : (selectedModelPreset?.id ?? 'Preset')}
-                      </h3>
-                      <p className="ui-card-meta max-w-3xl">
-                        Choose the primary model first, then add ordered fallbacks that should be tried when the primary target is unavailable for this profile.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-id">Preset id</label>
-                        <input
-                          id="settings-model-preset-id"
-                          value={modelPresetDraft.id}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, id: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          placeholder="balanced"
-                          autoComplete="off"
-                          spellCheck={false}
-                          disabled={modelPresetAction !== null}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-description">Description</label>
-                        <input
-                          id="settings-model-preset-description"
-                          value={modelPresetDraft.description}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, description: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          className={INPUT_CLASS}
-                          placeholder="Normal day-to-day work"
-                          autoComplete="off"
-                          disabled={modelPresetAction !== null}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-primary-model">Primary model</label>
-                        <select
-                          id="settings-model-preset-primary-model"
-                          value={modelPresetDraft.model}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, model: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          disabled={modelPresetAction !== null || modelState.models.length === 0}
-                          className={INPUT_CLASS}
-                        >
-                          <option value="">Select a model</option>
-                          {groupedModels.map(([provider, models]) => (
-                            <optgroup key={provider} label={provider}>
-                              {models.map((model) => (
-                                <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                                  {model.name} · {formatContextWindowLabel(model.context)} ctx
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-primary-thinking">Primary thinking level</label>
-                        <select
-                          id="settings-model-preset-primary-thinking"
-                          value={modelPresetDraft.thinkingLevel}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, thinkingLevel: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          disabled={modelPresetAction !== null}
-                          className={INPUT_CLASS}
-                        >
-                          {THINKING_LEVEL_OPTIONS.map((option) => (
-                            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-[13px] font-medium text-primary">Fallback targets</h4>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setModelPresetDraft((current) => ({ ...current, fallbacks: [...current.fallbacks, createFallbackDraft()] }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          disabled={modelPresetAction !== null}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Add fallback
-                        </button>
-                      </div>
-
-                      {modelPresetDraft.fallbacks.length > 0 ? (
-                        <div className="space-y-3">
-                          {modelPresetDraft.fallbacks.map((fallback, index) => (
-                            <div key={fallback.key} className="grid gap-3 rounded-lg border border-border-subtle p-3 md:grid-cols-[minmax(0,1fr)_180px_auto]">
-                              <div className="space-y-2 min-w-0">
-                                <label className="ui-card-meta" htmlFor={`settings-model-preset-fallback-model-${fallback.key}`}>Fallback {index + 1}</label>
-                                <select
-                                  id={`settings-model-preset-fallback-model-${fallback.key}`}
-                                  value={fallback.model}
-                                  onChange={(event) => {
-                                    setModelPresetDraft((current) => ({
-                                      ...current,
-                                      fallbacks: current.fallbacks.map((entry) => entry.key === fallback.key ? { ...entry, model: event.target.value } : entry),
-                                    }));
-                                    setModelPresetError(null);
-                                    setModelPresetMessage(null);
-                                  }}
-                                  disabled={modelPresetAction !== null || modelState.models.length === 0}
-                                  className={INPUT_CLASS}
-                                >
-                                  <option value="">Select a model</option>
-                                  {groupedModels.map(([provider, models]) => (
-                                    <optgroup key={provider} label={provider}>
-                                      {models.map((model) => (
-                                        <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                                          {model.name} · {formatContextWindowLabel(model.context)} ctx
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="ui-card-meta" htmlFor={`settings-model-preset-fallback-thinking-${fallback.key}`}>Thinking level</label>
-                                <select
-                                  id={`settings-model-preset-fallback-thinking-${fallback.key}`}
-                                  value={fallback.thinkingLevel}
-                                  onChange={(event) => {
-                                    setModelPresetDraft((current) => ({
-                                      ...current,
-                                      fallbacks: current.fallbacks.map((entry) => entry.key === fallback.key ? { ...entry, thinkingLevel: event.target.value } : entry),
-                                    }));
-                                    setModelPresetError(null);
-                                    setModelPresetMessage(null);
-                                  }}
-                                  disabled={modelPresetAction !== null}
-                                  className={INPUT_CLASS}
-                                >
-                                  {THINKING_LEVEL_OPTIONS.map((option) => (
-                                    <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div className="flex items-end">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setModelPresetDraft((current) => ({
-                                      ...current,
-                                      fallbacks: current.fallbacks.filter((entry) => entry.key !== fallback.key),
-                                    }));
-                                    setModelPresetError(null);
-                                    setModelPresetMessage(null);
-                                  }}
-                                  disabled={modelPresetAction !== null}
-                                  className={ACTION_BUTTON_CLASS}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="ui-card-meta">No fallbacks configured. The preset will use only its primary model.</p>
-                      )}
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-good-for">Good for</label>
-                        <textarea
-                          id="settings-model-preset-good-for"
-                          value={modelPresetDraft.goodForText}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, goodForText: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          className={JSON_TEXTAREA_CLASS}
-                          placeholder={"normal coding\nroutine debugging"}
-                          disabled={modelPresetAction !== null}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="ui-card-meta" htmlFor="settings-model-preset-avoid-for">Avoid for</label>
-                        <textarea
-                          id="settings-model-preset-avoid-for"
-                          value={modelPresetDraft.avoidForText}
-                          onChange={(event) => {
-                            setModelPresetDraft((current) => ({ ...current, avoidForText: event.target.value }));
-                            setModelPresetError(null);
-                            setModelPresetMessage(null);
-                          }}
-                          className={JSON_TEXTAREA_CLASS}
-                          placeholder={"short low-risk lookups\npurely mechanical chores"}
-                          disabled={modelPresetAction !== null}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="ui-card-meta" htmlFor="settings-model-preset-guidance">Instruction addendum</label>
-                      <textarea
-                        id="settings-model-preset-guidance"
-                        value={modelPresetDraft.instructionAddendum}
-                        onChange={(event) => {
-                          setModelPresetDraft((current) => ({ ...current, instructionAddendum: event.target.value }));
-                          setModelPresetError(null);
-                          setModelPresetMessage(null);
-                        }}
-                        className={JSON_TEXTAREA_CLASS}
-                        placeholder="Use solid judgment and normal depth."
-                        disabled={modelPresetAction !== null}
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { void handleSaveModelPreset(); }}
-                        disabled={modelPresetAction !== null}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {modelPresetAction === 'save' ? 'Saving…' : 'Save preset'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleDeleteModelPreset(); }}
-                        disabled={modelPresetAction !== null || !selectedModelPreset}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {modelPresetAction === 'delete' ? 'Deleting…' : 'Delete preset'}
-                      </button>
-                    </div>
-
-                    {modelPresetMessage && <p className="ui-card-meta">{modelPresetMessage}</p>}
-                    {modelPresetError && <p className="text-[12px] text-danger">{modelPresetError}</p>}
-                  </div>
-                </div>
-              ) : null}
             </div>
           </section>
 
