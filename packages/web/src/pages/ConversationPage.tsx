@@ -5,12 +5,13 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
-import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetPreferencesState, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
+import { EmptyState, IconButton, LoadingState, PageHeader, Pill, ToolbarButton, cx } from '../components/ui';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
+import { useConversations } from '../hooks/useConversations';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
@@ -70,12 +71,15 @@ import {
   persistDraftConversationProjectIds,
   persistDraftConversationExecutionTarget,
   persistDraftConversationThinkingLevel,
+  persistDraftConversationPresetId,
   readDraftConversationAttachments,
   readDraftConversationCwd,
   readDraftConversationExecutionTarget,
   readDraftConversationModel,
   readDraftConversationProjectIds,
   readDraftConversationThinkingLevel,
+  readDraftConversationPresetId,
+  clearDraftConversationPresetId,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
@@ -952,7 +956,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
   const { alerts, projects, tasks, sessions, setProjects, setSessions, setAlerts = () => {} } = useAppData();
+  const {
+    openIds,
+    pinnedIds,
+    archiveSession,
+  } = useConversations();
+  const conversationInWorkspace = useMemo(() => (
+    !draft
+    && Boolean(id)
+    && (openIds.includes(id) || pinnedIds.includes(id))
+  ), [draft, id, openIds, pinnedIds]);
 
+  const archiveCurrentConversation = useCallback(() => {
+    if (!id || !conversationInWorkspace) {
+      return;
+    }
+
+    archiveSession(id);
+    navigate('/conversations');
+  }, [archiveSession, conversationInWorkspace, id, navigate]);
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
@@ -2936,6 +2958,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         if (draft) {
           persistDraftConversationModel(preset.model);
           persistDraftConversationThinkingLevel(preset.thinkingLevel);
+          persistDraftConversationPresetId(presetId);
           setCurrentModel(preset.model);
           setCurrentThinkingLevel(preset.thinkingLevel);
         } else if (id) {
@@ -2943,9 +2966,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
 
+          // Pass presetId so the session tracks the preset association for fallback
           const next = await api.updateConversationModelPreferences(
             id,
-            { model: preset.model, thinkingLevel: preset.thinkingLevel },
+            { presetId, model: preset.model, thinkingLevel: preset.thinkingLevel },
             currentSurfaceId,
           );
           setCurrentModel(next.currentModel);
@@ -3945,9 +3969,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
+          const draftPresetId = readDraftConversationPresetId().trim() || undefined;
           const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds, undefined, remoteTargetId, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+            ...(draftPresetId ? { presetId: draftPresetId } : {}),
           });
           const attachmentRefs = await persistPromptDrawings(newId);
 
@@ -3964,6 +3990,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationModel();
           clearDraftConversationProjectIds();
           clearDraftConversationThinkingLevel();
+          clearDraftConversationPresetId();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
@@ -4549,12 +4576,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       <div className="flex h-full flex-col overflow-hidden">
         <PageHeader
         className="gap-3 py-2"
+        leading={!draft ? (
+          <button
+            type="button"
+            onClick={() => { navigate('/conversations'); }}
+            className="ui-icon-button"
+            title="Back to conversations"
+            aria-label="Back to conversations"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+        ) : undefined}
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
             {draft ? (
               <span className="text-dim">draft</span>
             ) : (
               <>
+                {conversationInWorkspace ? (
+                  <ToolbarButton
+                    type="button"
+                    onClick={() => { archiveCurrentConversation(); }}
+                    title="Archive this conversation from the workspace"
+                    className="text-warning"
+                  >
+                    archive
+                  </ToolbarButton>
+                ) : null}
                 {stream.isStreaming && (
                   <span
                     className="inline-flex items-center gap-1.5 text-accent"
