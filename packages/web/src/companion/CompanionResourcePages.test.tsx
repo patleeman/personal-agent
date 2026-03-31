@@ -78,7 +78,6 @@ describe('companion resource pages', () => {
 
     const html = renderWithRouter(<CompanionProjectsPage />);
 
-    expect(html).toContain('Projects');
     expect(html).toContain('Active');
     expect(html).toContain('Archived');
     expect(html).toContain('Active project');
@@ -129,7 +128,6 @@ describe('companion resource pages', () => {
 
     const html = renderWithRouter(<CompanionMemoriesPage />);
 
-    expect(html).toContain('Notes');
     expect(html).toContain('Memory index');
     expect(html).toContain('Old memory');
     expect(html).not.toContain('2 references');
@@ -165,7 +163,6 @@ describe('companion resource pages', () => {
 
     const html = renderWithRouter(<CompanionSkillsPage />);
 
-    expect(html).toContain('Skills');
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Triggered in last session');
     expect(html).toContain('shared');

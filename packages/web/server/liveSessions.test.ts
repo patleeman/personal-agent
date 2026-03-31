@@ -50,6 +50,8 @@ function setLiveEntry(
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
     ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
     session: entry.session as LiveRegistryEntry['session'],
+    activePreset: entry.activePreset ?? null,
+    activeFallbackIndex: entry.activeFallbackIndex ?? -1,
   });
 }
 

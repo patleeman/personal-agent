@@ -168,7 +168,6 @@ Think of the daemon as the system's background engine:
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
-- [Automation](./automation.md)
 - [Runs](./runs.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)

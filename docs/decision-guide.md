@@ -30,7 +30,6 @@ If you are not sure which surface to use, start here.
 | Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
 | Run something detached right now | durable background run | `daemon/runs/<run-id>/` | scheduled task |
 | Run something later or repeatedly | scheduled task | `sync/tasks/*.task.md` | run |
-| Add repeatable skill steps inside one conversation | conversation automation / todo list | conversation-local automation state | scheduled task or run |
 | Work on local repo files in the web UI | workspace | local repo/filesystem view | project docs or notes |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | project artifact directory as the first stop |
 | Keep a file with a specific project | project attachment or project artifact | `sync/projects/<id>/attachments|artifacts/` | top-level note assets |
@@ -68,7 +67,6 @@ If async work belongs to an existing conversation, keep the durable result with 
 
 ## Automation surfaces
 
-Use **conversation automation / todo lists** for short ordered skill steps inside one live conversation.
 
 Use **runs** for detached local work you want to start now.
 
@@ -78,7 +76,6 @@ A simple rule:
 
 - **now, detached** → run
 - **later or recurring** → scheduled task
-- **inside this conversation** → conversation automation
 
 ## Local vs portable state
 
@@ -114,7 +111,6 @@ The docs explain the product model. `AGENTS.md` explains how this particular age
 - [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)

@@ -197,7 +197,6 @@ describe('Sidebar', () => {
     expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
-    expect(html).toContain('Open create menu');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');

@@ -230,7 +230,6 @@ That is the intended shape of the product.
 - [Getting Started](./getting-started.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Web UI Guide](./web-ui.md)

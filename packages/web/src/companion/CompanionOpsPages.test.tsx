@@ -271,7 +271,6 @@ describe('companion operational pages', () => {
   it('renders the companion inbox with attention conversations and standalone activity', () => {
     const html = renderWithProviders(<CompanionInboxPage />);
 
-    expect(html).toContain('Inbox');
     expect(html).toContain('Investigate sync warnings');
     expect(html).toContain('Morning brief task failed');
     expect(html).toContain('Start conversation');
@@ -281,7 +280,6 @@ describe('companion operational pages', () => {
   it('renders the companion task list with quick actions', () => {
     const html = renderWithProviders(<CompanionTasksPage />);
 
-    expect(html).toContain('Tasks');
     expect(html).toContain('morning-brief');
     expect(html).toContain('cleanup');
     expect(html).toContain('Run now');
@@ -323,7 +321,6 @@ describe('companion operational pages', () => {
   it('renders the companion system page with runtime controls and background-run summary', () => {
     const html = renderWithProviders(<CompanionSystemPage />);
 
-    expect(html).toContain('System');
     expect(html).toContain('Application controls');
     expect(html).toContain('Daemon');
     expect(html).toContain('Sync');

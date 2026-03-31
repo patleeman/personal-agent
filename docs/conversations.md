@@ -16,7 +16,6 @@ A conversation is where live interaction happens:
 - branching/forking
 - wakeups and callbacks
 - conversation artifacts
-- optional conversation-local automation
 
 The durable meaning of a conversation is usually:
 
@@ -105,21 +104,6 @@ Conversations can be resumed later by several mechanisms:
 
 If a saved conversation is already open in the web UI when an allowed wakeup becomes ready, the UI can auto-resume it and deliver the deferred prompt.
 
-## Conversation-local automation
-
-A conversation can carry an ordered todo list of skill steps.
-
-This is the lightweight automation surface for one thread.
-
-Use it when you want:
-
-- a repeatable ordered workflow in the current thread
-- optional automation presets applied into a live conversation
-- structured skill execution that still belongs to one conversation
-
-Do not use it as a replacement for scheduled tasks or detached runs.
-
-See [Automation](./automation.md).
 
 ## Slash commands and quick actions
 
@@ -173,4 +157,3 @@ Then, if needed:
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)

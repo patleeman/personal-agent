@@ -65,6 +65,19 @@ export function CompanionTasksPage() {
   const failureCount = sortedTasks.filter((task) => task.lastStatus === 'failure').length;
   const isLoading = tasks === null && sseStatus !== 'offline';
 
+  const refreshTasks = useCallback(async () => {
+    setRefreshing(true);
+    setActionError(null);
+    try {
+      const next = await api.tasks();
+      setTasks(next);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [setTasks]);
+
   useEffect(() => {
     setTopBarAction(
       <button
@@ -79,19 +92,6 @@ export function CompanionTasksPage() {
     );
     return () => setTopBarAction(undefined);
   }, [refreshTasks, refreshing, setTopBarAction]);
-
-  const refreshTasks = useCallback(async () => {
-    setRefreshing(true);
-    setActionError(null);
-    try {
-      const next = await api.tasks();
-      setTasks(next);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [setTasks]);
 
   const handleToggleTask = useCallback(async (task: ScheduledTaskSummary) => {
     if (busyTaskId) {

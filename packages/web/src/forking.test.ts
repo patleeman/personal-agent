@@ -83,7 +83,7 @@ describe('resolveBranchEntryIdForMessage', () => {
         blockOffset: 3,
         blocks: [
           { type: 'thinking', id: 'assistant-123-t3', ts: '2026-03-29T11:59:58.000Z', text: 'Thinking…' },
-          { type: 'tool_use', id: 'assistant-123-c4', ts: '2026-03-29T11:59:59.000Z', tool: 'todo_list', input: {}, output: '[]', toolCallId: 'tool-1' },
+          { type: 'tool_use', id: 'assistant-123-c4', ts: '2026-03-29T11:59:59.000Z', tool: 'bash', input: {}, output: '[]', toolCallId: 'tool-1' },
           { type: 'text', id: 'assistant-123-x5', ts: '2026-03-29T12:00:01.000Z', text: 'Latest reply' },
         ],
       },

@@ -881,44 +881,8 @@ export function CompanionConversationsPage() {
     }
   }, [creating, navigate]);
 
-  useEffect(() => {
-    setTopBarRightAction(
-      <div className="flex items-center gap-1">
-        {installAvailable ? (
-          <button
-            type="button"
-            onClick={() => { void promptInstall(); }}
-            disabled={installBusy}
-            aria-label={installBusy ? 'Installing app' : 'Install app'}
-            title={installBusy ? 'Installing app' : 'Install app'}
-            className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
-            style={COMPANION_TOUCH_BUTTON_STYLE}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 4v10" />
-              <path d="m8 10 4 4 4-4" />
-              <path d="M5 19h14" />
-            </svg>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => { void handleCreateConversation(); }}
-          disabled={creating}
-          aria-label={creating ? 'Starting conversation' : 'New conversation'}
-          title={creating ? 'Starting conversation' : 'New conversation'}
-          className="flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
-          style={COMPANION_TOUCH_BUTTON_STYLE}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        </button>
-      </div>,
-    );
-    return () => setTopBarRightAction(undefined);
-  }, [installAvailable, installBusy, promptInstall, creating, handleCreateConversation, setTopBarRightAction]);
+  // Top bar actions now handled by CompanionLayout bottom nav (Chats | +Chat | +Note | Knowledge)
+  // No custom topBarRightAction needed here
 
   useEffect(() => {
     if (visibleError) {

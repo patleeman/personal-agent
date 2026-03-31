@@ -53,7 +53,6 @@ These response-style rules override conflicting response-format or tone guidance
 - Prefer the single highest-signal progress note, not a stream of tiny step-by-step updates.
 - If an update would mostly repeat the previous one, skip it until there is real progress.
 
-## Conversation automation
 
 
 NODE_POLICY
@@ -92,7 +91,6 @@ Use active-profile AGENTS.md + skills + shared note nodes as the durable node sy
 - AGENTS.md is for durable behavior and user/profile facts.
 - Skills are skill nodes: reusable workflows.
 - Shared note nodes are for durable knowledge, briefs, and notes.
-- Keep non-markdown automation state outside note nodes.
 - Never store secrets or session-local notes in AGENTS.md or note nodes.
 
 ## Available notes

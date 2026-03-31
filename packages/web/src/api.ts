@@ -311,7 +311,7 @@ export const api = {
   mcpServer: (server: string) => get<McpServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
   mcpTool: (server: string, tool: string) => get<McpToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`),
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
-  updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
+  updateModelPreferences: (input: { model?: string; thinkingLevel?: string; presetId?: string }) =>
     patch<{ ok: boolean }>('/models/current', input),
   updateDefaultCwd: (cwd: string | null) =>
     patch<DefaultCwdState>('/default-cwd', { cwd }),
@@ -628,9 +628,9 @@ export const api = {
   renameConversation: (id: string, name: string, surfaceId?: string) =>
     patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) }),
   conversationModelPreferences: (id: string) =>
-    get<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`),
-  updateConversationModelPreferences: (id: string, input: { model?: string | null; thinkingLevel?: string | null }, surfaceId?: string) =>
-    patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) }),
+    get<{ currentModel: string; currentThinkingLevel: string; presetId: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`),
+  updateConversationModelPreferences: (id: string, input: { model?: string | null; thinkingLevel?: string | null; presetId?: string | null }, surfaceId?: string) =>
+    patch<{ currentModel: string; currentThinkingLevel: string; presetId: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) }),
   recoverConversation: (id: string) =>
     post<{
       conversationId: string;
@@ -645,7 +645,7 @@ export const api = {
     referencedProjectIds?: string[],
     text?: string,
     targetId?: string | null,
-    options?: { model?: string | null; thinkingLevel?: string | null },
+    options?: { model?: string | null; thinkingLevel?: string | null; presetId?: string | null },
   ) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', {
       cwd,
@@ -654,6 +654,7 @@ export const api = {
       targetId,
       ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+      ...(options?.presetId !== undefined ? { presetId: options.presetId } : {}),
     }),
 
   resumeSession: (sessionFile: string) =>

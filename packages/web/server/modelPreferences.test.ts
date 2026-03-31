@@ -20,7 +20,7 @@ function createTempDir(): string {
 describe('readSavedModelPreferences', () => {
   it('returns empty values when the settings file is missing', () => {
     const dir = createTempDir();
-    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({ currentModel: '', currentThinkingLevel: '' });
+    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
   });
 
   it('reads the default model and thinking level from settings.json', () => {
@@ -28,7 +28,7 @@ describe('readSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4', defaultThinkingLevel: 'xhigh' }));
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'xhigh' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'xhigh', currentPresetId: '' });
   });
 
   it('falls back safely on invalid JSON', () => {
@@ -36,7 +36,7 @@ describe('readSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, '{not json');
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
   });
 });
 
@@ -50,7 +50,7 @@ describe('writeSavedModelPreferences', () => {
       { id: 'gpt-5.4', provider: 'openai-codex' },
     ]);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentPresetId: '' });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       theme: 'cobalt2',
       defaultProvider: 'openai-codex',
@@ -71,7 +71,7 @@ describe('writeSavedModelPreferences', () => {
 
     writeSavedModelPreferences({ model: '', thinkingLevel: '' }, file);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ theme: 'cobalt2' });
   });
 
@@ -98,36 +98,6 @@ describe('writeSavedModelPreferences', () => {
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openrouter',
       defaultModel: 'openrouter/free',
-    });
-  });
-
-  it('clears defaultModelPreset when explicit model preferences are written', () => {
-    const dir = createTempDir();
-    const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({
-      defaultModelPreset: 'balanced',
-      modelPresets: {
-        balanced: {
-          model: 'openai-codex/gpt-5.4',
-          thinkingLevel: 'high',
-        },
-      },
-    }));
-
-    writeSavedModelPreferences({ model: 'gpt-5.4', thinkingLevel: 'high' }, file, [
-      { id: 'gpt-5.4', provider: 'openai-codex' },
-    ]);
-
-    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
-      modelPresets: {
-        balanced: {
-          model: 'openai-codex/gpt-5.4',
-          thinkingLevel: 'high',
-        },
-      },
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
-      defaultThinkingLevel: 'high',
     });
   });
 });

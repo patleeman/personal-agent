@@ -10,9 +10,9 @@ import {
   getPiAgentRuntimeDir,
 } from '@personal-agent/core';
 import {
-  listModelPresetTargets,
-  resolveModelPreset,
-} from '@personal-agent/resources';
+  getDurableSessionsDir,
+  getPiAgentRuntimeDir,
+} from '@personal-agent/core';
 import {
   AgentSession,
   AuthStorage,
@@ -164,7 +164,6 @@ interface LiveEntry {
   activeHiddenTurnCustomType: string | null;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
-  lastHandledAutomationCompletionKey?: string | null;
   presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
   controllerSurfaceId?: string | null;
   controllerAcquiredAt?: string | null;
@@ -182,7 +181,6 @@ export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => 
 
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
-const automationProcessingSessions = new Set<string>();
 const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
 
 export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycleHandler): () => void {
@@ -268,47 +266,6 @@ function readRuntimeSettingsObject(): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-async function resolveDefaultModelPresetSelection(modelRegistry: ModelRegistry): Promise<{
-  model: string;
-  thinkingLevel: string;
-} | null> {
-  const settings = readRuntimeSettingsObject();
-  const presetId = typeof settings.defaultModelPreset === 'string' ? settings.defaultModelPreset.trim() : '';
-  if (!presetId) {
-    return null;
-  }
-
-  const preset = resolveModelPreset(settings, presetId);
-  if (!preset) {
-    return null;
-  }
-
-  for (const target of listModelPresetTargets(preset)) {
-    const model = modelRegistry.getAvailable().find((candidate) => {
-      if (target.provider) {
-        return candidate.provider === target.provider && candidate.id === target.model;
-      }
-
-      return candidate.id === target.model;
-    });
-    if (!model) {
-      continue;
-    }
-
-    const authResult = await modelRegistry.getApiKeyAndHeaders(model);
-    if (!authResult.ok) {
-      continue;
-    }
-
-    return {
-      model: target.model,
-      thinkingLevel: target.thinkingLevel,
-    };
-  }
-
-  return null;
 }
 
 interface ToolPatchableSessionInternals {
@@ -1118,471 +1075,6 @@ async function syncDurableConversationRun(
   }
 }
 
-function resolveConversationAutomationProfile(): string {
-  return resolveLiveSessionProfile() ?? 'shared';
-}
-
-function saveConversationAutomation(entry: LiveEntry, document: ConversationAutomationDocument): ConversationAutomationDocument {
-  const saved = writeConversationAutomationState({
-    profile: resolveConversationAutomationProfile(),
-    document,
-  });
-  notifyConversationAutomationChanged(entry.sessionId);
-  return saved;
-}
-
-function clearConversationAutomationTodoItemRuntime(item: ConversationAutomationTodoItem): void {
-  delete item.startedAt;
-  delete item.completedAt;
-  delete item.resultReason;
-}
-
-function clearConversationAutomationReviewRuntime(review: ConversationAutomationReviewState): void {
-  delete review.startedAt;
-  delete review.completedAt;
-  delete review.resultReason;
-}
-
-function findConversationAutomationTodoItem(document: ConversationAutomationDocument, itemId: string | undefined): ConversationAutomationTodoItem | null {
-  const normalizedItemId = itemId?.trim();
-  if (!normalizedItemId) {
-    return null;
-  }
-
-  return document.items.find((item) => item.id === normalizedItemId) ?? null;
-}
-
-function findFirstPendingConversationAutomationTodoItem(document: ConversationAutomationDocument): ConversationAutomationTodoItem | null {
-  return document.items.find((item) => item.status === 'pending') ?? null;
-}
-
-function hasFailedConversationAutomationTodoItem(document: ConversationAutomationDocument): boolean {
-  return document.items.some((item) => item.status === 'failed' || item.status === 'blocked');
-}
-
-function hasOpenConversationAutomationTodoItem(document: ConversationAutomationDocument): boolean {
-  return document.items.some((item) => item.status === 'pending' || item.status === 'running' || item.status === 'waiting');
-}
-
-function maybeFinalizeConversationAutomationTodoItem(
-  entry: LiveEntry,
-  document: ConversationAutomationDocument,
-  finishedAt: string,
-): ConversationAutomationDocument {
-  const item = findConversationAutomationTodoItem(document, document.activeItemId);
-  if (!item) {
-    return {
-      ...document,
-      activeItemId: undefined,
-      updatedAt: finishedAt,
-    };
-  }
-
-  const failure = entry.currentTurnError?.trim();
-  if (failure) {
-    item.status = 'failed';
-    item.updatedAt = finishedAt;
-    item.completedAt = finishedAt;
-    item.resultReason = failure;
-    document.activeItemId = undefined;
-    document.updatedAt = finishedAt;
-    document.enabled = false;
-    return document;
-  }
-
-  if (item.status !== 'running') {
-    document.activeItemId = undefined;
-    document.updatedAt = finishedAt;
-    return document;
-  }
-
-  item.status = 'failed';
-  item.updatedAt = finishedAt;
-  item.completedAt = finishedAt;
-  item.resultReason = 'Automation step ended without using todo_list to resolve the active item.';
-  document.activeItemId = undefined;
-  document.updatedAt = finishedAt;
-  document.enabled = false;
-  return document;
-}
-
-function maybeFinalizeConversationAutomationReview(
-  entry: LiveEntry,
-  document: ConversationAutomationDocument,
-  finishedAt: string,
-): ConversationAutomationDocument {
-  const review = document.review;
-  if (!review || review.status !== 'running') {
-    return document;
-  }
-
-  const failure = entry.currentTurnError?.trim();
-  review.updatedAt = finishedAt;
-  review.completedAt = finishedAt;
-
-  if (failure) {
-    review.status = 'failed';
-    review.resultReason = failure;
-    document.updatedAt = finishedAt;
-    document.enabled = false;
-    return document;
-  }
-
-  review.status = 'completed';
-  review.resultReason = 'Review finished.';
-  document.updatedAt = finishedAt;
-  return document;
-}
-
-function interruptConversationAutomationStep(
-  document: ConversationAutomationDocument,
-  reason: string,
-  finishedAt: string,
-): ConversationAutomationDocument {
-  const item = findConversationAutomationTodoItem(document, document.activeItemId);
-  if (item) {
-    item.status = 'failed';
-    item.updatedAt = finishedAt;
-    item.completedAt = finishedAt;
-    item.resultReason = reason;
-  }
-
-  if (document.review?.status === 'running') {
-    document.review.status = 'failed';
-    document.review.updatedAt = finishedAt;
-    document.review.completedAt = finishedAt;
-    document.review.resultReason = reason;
-  }
-
-  document.activeItemId = undefined;
-  document.updatedAt = finishedAt;
-  document.enabled = false;
-  return document;
-}
-
-function shouldStartConversationAutomationReview(document: ConversationAutomationDocument): boolean {
-  if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document) || document.waitingForUser) {
-    return false;
-  }
-
-  if (hasOpenConversationAutomationTodoItem(document) || document.activeItemId) {
-    return false;
-  }
-
-  if (!document.review) {
-    return true;
-  }
-
-  return document.review.status === 'pending';
-}
-
-function readLastConversationEntries(entry: LiveEntry) {
-  return typeof entry.session.sessionManager?.getEntries === 'function'
-    ? entry.session.sessionManager.getEntries()
-    : [];
-}
-
-function readLastAssistantConversationMessage(entry: LiveEntry): {
-  entryId?: string;
-  entryIndex: number;
-  timestamp?: string | number;
-  stopReason?: string;
-  errorMessage?: string;
-} | null {
-  const entries = readLastConversationEntries(entry);
-
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const candidate = entries[index] as {
-      type?: string;
-      id?: string;
-      timestamp?: string | number;
-      message?: {
-        role?: string;
-        timestamp?: string | number;
-        stopReason?: string;
-        errorMessage?: string;
-      };
-    } | undefined;
-    if (candidate?.type !== 'message') {
-      continue;
-    }
-
-    const message = candidate.message;
-    if (!message || message.role !== 'assistant') {
-      continue;
-    }
-
-    return {
-      entryIndex: index,
-      ...(candidate.id ? { entryId: candidate.id } : {}),
-      ...(typeof candidate.timestamp === 'string' || typeof candidate.timestamp === 'number'
-        ? { timestamp: candidate.timestamp }
-        : typeof message.timestamp === 'string' || typeof message.timestamp === 'number'
-          ? { timestamp: message.timestamp }
-          : {}),
-      ...(message.stopReason ? { stopReason: message.stopReason } : {}),
-      ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
-    };
-  }
-
-  return null;
-}
-
-function buildConversationAutomationCompletionKey(entry: LiveEntry): string | null {
-  const lastAssistantMessage = readLastAssistantConversationMessage(entry);
-  if (!lastAssistantMessage) {
-    return null;
-  }
-
-  const stableId = lastAssistantMessage.entryId ?? `index:${lastAssistantMessage.entryIndex}`;
-  const timestamp = typeof lastAssistantMessage.timestamp === 'string' || typeof lastAssistantMessage.timestamp === 'number'
-    ? String(lastAssistantMessage.timestamp)
-    : '';
-
-  return [
-    stableId,
-    timestamp,
-    lastAssistantMessage.stopReason ?? '',
-    lastAssistantMessage.errorMessage ?? '',
-  ].join('|');
-}
-
-function didLastAssistantReplyCompleteSuccessfully(entry: LiveEntry): boolean {
-  const lastAssistantMessage = readLastAssistantConversationMessage(entry);
-  if (!lastAssistantMessage) {
-    return false;
-  }
-  if (lastAssistantMessage.stopReason === 'aborted' || lastAssistantMessage.stopReason === 'error') {
-    return false;
-  }
-
-  return !lastAssistantMessage.errorMessage?.trim();
-}
-
-function countUserConversationMessages(entry: LiveEntry): number {
-  return readLastConversationEntries(entry).reduce((count, candidate) => {
-    if (candidate?.type !== 'message') {
-      return count;
-    }
-
-    const message = candidate.message as { role?: string } | undefined;
-    return message?.role === 'user' ? count + 1 : count;
-  }, 0);
-}
-
-function readLastNonAssistantConversationTurn(entry: LiveEntry): { role: string; customType?: string } | null {
-  const entries = readLastConversationEntries(entry);
-
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const candidate = entries[index];
-    if (candidate?.type === 'custom_message') {
-      return {
-        role: 'custom',
-        ...(candidate.customType ? { customType: candidate.customType } : {}),
-      };
-    }
-    if (candidate?.type !== 'message') {
-      continue;
-    }
-
-    const message = candidate.message as { role?: string; customType?: string } | undefined;
-    if (!message || !message.role || message.role === 'assistant') {
-      continue;
-    }
-
-    return {
-      role: message.role,
-      ...(message.customType ? { customType: message.customType } : {}),
-    };
-  }
-
-  return null;
-}
-
-function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
-  const turn = readLastNonAssistantConversationTurn(entry);
-  return turn?.role === 'custom'
-    && (turn.customType === 'conversation_automation_item' || turn.customType === 'conversation_automation_review');
-}
-
-function summarizeConversationAutomationState(document: ConversationAutomationDocument): Record<string, unknown> {
-  return {
-    enabled: document.enabled,
-    activeItemId: document.activeItemId ?? null,
-    pendingCount: document.items.filter((item) => item.status === 'pending').length,
-    runningCount: document.items.filter((item) => item.status === 'running').length,
-    waitingCount: document.items.filter((item) => item.status === 'waiting').length,
-    blockedOrFailedCount: document.items.filter((item) => item.status === 'blocked' || item.status === 'failed').length,
-    reviewStatus: document.review?.status ?? null,
-    waitingForUser: Boolean(document.waitingForUser),
-  };
-}
-
-export async function kickConversationAutomation(
-  sessionId: string,
-  trigger: 'manual' | 'turn_end' | 'agent_end' = 'manual',
-): Promise<void> {
-  const entry = registry.get(sessionId);
-  if (!entry || entry.session.isStreaming || automationProcessingSessions.has(sessionId)) {
-    return;
-  }
-
-  automationProcessingSessions.add(sessionId);
-  try {
-    const isCompletionTrigger = trigger === 'turn_end' || trigger === 'agent_end';
-    const completionKey = isCompletionTrigger
-      ? buildConversationAutomationCompletionKey(entry)
-      : null;
-    if (isCompletionTrigger && !completionKey) {
-      return;
-    }
-    if (completionKey && entry.lastHandledAutomationCompletionKey === completionKey) {
-      return;
-    }
-
-    const didAutomationAuthorLastTurn = isCompletionTrigger
-      ? didTurnEndFromConversationAutomation(entry)
-      : false;
-    const shouldContinueAfterTurnEnd = isCompletionTrigger
-      ? didAutomationAuthorLastTurn
-      : true;
-    let document = loadConversationAutomationState({
-      profile: resolveConversationAutomationProfile(),
-      conversationId: sessionId,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    const lastTurn = isCompletionTrigger
-      ? readLastNonAssistantConversationTurn(entry)
-      : null;
-    const lastAssistantMessage = isCompletionTrigger
-      ? readLastAssistantConversationMessage(entry)
-      : null;
-    const userMessageCount = isCompletionTrigger
-      ? countUserConversationMessages(entry)
-      : 0;
-    const didLastAssistantReplySucceed = isCompletionTrigger
-      ? didLastAssistantReplyCompleteSuccessfully(entry)
-      : false;
-
-    if (isCompletionTrigger && document.enabled) {
-      logInfo('automation completion evaluation', {
-        sessionId,
-        trigger,
-        lastTurnRole: lastTurn?.role ?? null,
-        lastTurnCustomType: lastTurn?.customType ?? null,
-        lastAssistantStopReason: lastAssistantMessage?.stopReason ?? null,
-        lastAssistantErrorMessage: lastAssistantMessage?.errorMessage ?? null,
-        userMessageCount,
-        didLastAssistantReplySucceed,
-        didAutomationAuthorLastTurn,
-        ...summarizeConversationAutomationState(document),
-      });
-    }
-
-    if (trigger === 'manual' && (document.activeItemId || document.review?.status === 'running')) {
-      document = interruptConversationAutomationStep(
-        document,
-        'Conversation automation was interrupted before the step completed.',
-        new Date().toISOString(),
-      );
-      document = saveConversationAutomation(entry, document);
-      entry.currentTurnError = null;
-    }
-
-    if (isCompletionTrigger && shouldContinueAfterTurnEnd && document.activeItemId) {
-      document = maybeFinalizeConversationAutomationTodoItem(entry, document, new Date().toISOString());
-      document = saveConversationAutomation(entry, document);
-      entry.currentTurnError = null;
-    } else if (isCompletionTrigger && shouldContinueAfterTurnEnd && document.review?.status === 'running') {
-      document = maybeFinalizeConversationAutomationReview(entry, document, new Date().toISOString());
-      document = saveConversationAutomation(entry, document);
-      entry.currentTurnError = null;
-    }
-
-    while (!entry.session.isStreaming && document.enabled && shouldContinueAfterTurnEnd) {
-      const pendingItem = findFirstPendingConversationAutomationTodoItem(document);
-      if (pendingItem) {
-        const startedAt = new Date().toISOString();
-        clearConversationAutomationTodoItemRuntime(pendingItem);
-        pendingItem.status = 'running';
-        pendingItem.startedAt = startedAt;
-        pendingItem.updatedAt = startedAt;
-        document.activeItemId = pendingItem.id;
-        document.updatedAt = startedAt;
-        document.review = undefined;
-        document = saveConversationAutomation(entry, document);
-
-        try {
-          entry.currentTurnError = null;
-          await triggerHiddenPrompt(
-            sessionId,
-            'conversation_automation_item',
-            buildConversationAutomationItemPrompt(pendingItem),
-            'followUp',
-          );
-        } catch (error) {
-          const failedAt = new Date().toISOString();
-          pendingItem.status = 'failed';
-          pendingItem.updatedAt = failedAt;
-          pendingItem.completedAt = failedAt;
-          pendingItem.resultReason = error instanceof Error ? error.message : String(error);
-          document.activeItemId = undefined;
-          document.updatedAt = failedAt;
-          document.enabled = false;
-          saveConversationAutomation(entry, document);
-        }
-        break;
-      }
-
-      if (!shouldStartConversationAutomationReview(document)) {
-        break;
-      }
-
-      const startedAt = new Date().toISOString();
-      const review: ConversationAutomationReviewState = {
-        createdAt: document.review?.createdAt ?? startedAt,
-        updatedAt: startedAt,
-        startedAt,
-        status: 'running',
-        round: document.review?.round ?? 1,
-      };
-      clearConversationAutomationReviewRuntime(review);
-      review.startedAt = startedAt;
-      document.review = review;
-      document.updatedAt = startedAt;
-      document = saveConversationAutomation(entry, document);
-
-      try {
-        entry.currentTurnError = null;
-        await triggerHiddenPrompt(
-          sessionId,
-          'conversation_automation_review',
-          buildConversationAutomationReviewPrompt(document),
-          'followUp',
-        );
-      } catch (error) {
-        const failedAt = new Date().toISOString();
-        if (document.review) {
-          document.review.status = 'failed';
-          document.review.updatedAt = failedAt;
-          document.review.completedAt = failedAt;
-          document.review.resultReason = error instanceof Error ? error.message : String(error);
-        }
-        document.updatedAt = failedAt;
-        document.enabled = false;
-        saveConversationAutomation(entry, document);
-      }
-      break;
-    }
-
-    if (completionKey) {
-      entry.lastHandledAutomationCompletionKey = completionKey;
-    }
-  } finally {
-    automationProcessingSessions.delete(sessionId);
-  }
-}
-
 function maybeAutoTitleConversation(entry: LiveEntry): void {
   if (entry.autoTitleRequested) {
     return;
@@ -1869,10 +1361,11 @@ function wireSession(
     activeHiddenTurnCustomType: null,
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
-    lastHandledAutomationCompletionKey: null,
     presenceBySurfaceId: new Map(),
     controllerSurfaceId: null,
     controllerAcquiredAt: null,
+    activePreset: options.activePreset ?? null,
+    activeFallbackIndex: -1,
   };
   registry.set(id, entry);
   publishSessionMetaChanged(id);
@@ -1891,7 +1384,6 @@ function wireSession(
         maybeAutoTitleConversation(entry);
       }
       void syncDurableConversationRun(entry, 'waiting');
-      void kickConversationAutomation(entry.sessionId, 'turn_end');
       notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
     }
 
@@ -1910,7 +1402,6 @@ function wireSession(
         maybeAutoTitleConversation(entry);
       }
       void syncDurableConversationRun(entry, 'waiting');
-      void kickConversationAutomation(entry.sessionId, 'agent_end');
     }
 
     if (event.type === 'message_end' && event.message.role === 'assistant') {
@@ -1979,9 +1470,6 @@ function wireSession(
     }
   });
 
-  if (didTurnEndFromConversationAutomation(entry)) {
-    void kickConversationAutomation(id, 'turn_end');
-  }
 
   return entry;
 }
@@ -2260,28 +1748,12 @@ export async function createSession(
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
-  const resolvedDefaultPreset = options.initialModel === undefined && options.initialThinkingLevel === undefined
-    ? await resolveDefaultModelPresetSelection(modelRegistry)
-    : null;
-
-  if (
-    options.initialModel !== undefined
-    || options.initialThinkingLevel !== undefined
-    || resolvedDefaultPreset !== null
-  ) {
+  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
     applyConversationModelPreferencesToLiveSession(
       session,
       {
-        ...(options.initialModel !== undefined
-          ? { model: options.initialModel }
-          : resolvedDefaultPreset?.model
-            ? { model: resolvedDefaultPreset.model }
-            : {}),
-        ...(options.initialThinkingLevel !== undefined
-          ? { thinkingLevel: options.initialThinkingLevel }
-          : resolvedDefaultPreset?.thinkingLevel
-            ? { thinkingLevel: resolvedDefaultPreset.thinkingLevel }
-            : {}),
+        ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
+        ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
       },
       {
         currentModel: session.model?.id ?? '',
@@ -2757,10 +2229,12 @@ export function renameSession(sessionId: string, name: string): void {
 export function updateLiveSessionModelPreferences(
   sessionId: string,
   input: ConversationModelPreferenceInput,
+  availableModels?: ReturnType<typeof getAvailableModelObjects>,
 ): ConversationModelPreferenceState {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
 
+  const models = availableModels ?? getAvailableModelObjects();
   const next = applyConversationModelPreferencesToLiveSession(
     entry.session,
     input,
@@ -2768,7 +2242,7 @@ export function updateLiveSessionModelPreferences(
       currentModel: entry.session.model?.id ?? '',
       currentThinkingLevel: entry.session.thinkingLevel ?? '',
     },
-    getAvailableModelObjects(),
+    models,
   );
 
   publishSessionMetaChanged(sessionId);

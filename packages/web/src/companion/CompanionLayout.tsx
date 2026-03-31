@@ -492,7 +492,9 @@ export function CompanionLayout() {
     requestNotificationPermission,
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
 
-  const showPrimaryNav = companionSession !== null && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
+  const showPrimaryNav = companionSession !== null;
+  const isConversationsPage = location.pathname === COMPANION_CONVERSATIONS_PATH;
+  const isConversationDetailPage = location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`) && location.pathname !== COMPANION_CONVERSATIONS_PATH;
   const isCapturePage = location.pathname === COMPANION_QUICK_NOTE_PATH;
   const topBarConfig = readTopBarConfig(location.pathname);
 
@@ -502,34 +504,37 @@ export function CompanionLayout() {
 
   function CompanionTopBar() {
     const displayTitle = topBarTitle ?? topBarConfig.label;
+    const showInboxAlert = !isConversationsPage;
     return (
       <header className="flex h-11 shrink-0 items-center border-b border-border-subtle bg-base/95 px-3 backdrop-blur-xl">
         <div className="flex min-w-0 flex-1 items-center">
-          {topBarConfig.showBack ? (
-            <NavLink
-              to={location.pathname.split('/').slice(0, -1).join('/') || COMPANION_KNOWLEDGE_PATH}
-              end
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-secondary hover:text-primary"
-              aria-label="Go back"
-            >
-              <ChevronLeftIcon />
-            </NavLink>
-          ) : (
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-secondary hover:bg-surface hover:text-primary"
+            aria-label="Open menu"
+          >
+            <MenuIcon active={menuOpen} />
+          </button>
+          {!topBarConfig.label && !topBarTitle ? null : (
             <span className="pl-1 text-[13px] font-semibold tracking-tight text-primary">{displayTitle}</span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {topBarAction}
           {topBarRightAction}
-          {!isCapturePage ? (
-            <Link
-              to={COMPANION_QUICK_NOTE_PATH}
-              aria-label="Quick note"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-secondary hover:bg-surface hover:text-primary"
+          {showInboxAlert && (
+            <NavLink
+              to={COMPANION_INBOX_PATH}
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-secondary hover:bg-surface hover:text-primary"
+              aria-label="Open inbox"
             >
-              <PlusIcon />
-            </Link>
-          ) : null}
+              <InboxIcon active={inboxActive} />
+              {inboxBadgeCount > 0 && (
+                <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-accent" />
+              )}
+            </NavLink>
+          )}
         </div>
       </header>
     );
@@ -546,6 +551,7 @@ export function CompanionLayout() {
       + (runs?.summary.recoveryActions.invalid ?? 0)) > 0;
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
+  const noteActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
   const knowledgeActive = location.pathname.startsWith(COMPANION_KNOWLEDGE_PATH)
     || location.pathname.startsWith(COMPANION_PROJECTS_PATH)
     || location.pathname.startsWith(COMPANION_NOTES_PATH)
@@ -555,8 +561,9 @@ export function CompanionLayout() {
     || location.pathname.startsWith(COMPANION_TASKS_PATH);
 
   const navItems = [
-    { to: COMPANION_INBOX_PATH, label: 'Inbox', ariaLabel: 'Open inbox', Icon: InboxIcon, badgeCount: inboxBadgeCount, active: inboxActive },
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
+    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chat', ariaLabel: 'New chat', Icon: PlusIcon, badgeCount: 0, active: false, isAccent: true },
+    { to: COMPANION_QUICK_NOTE_PATH, label: 'Note', ariaLabel: 'Quick note', Icon: PlusIcon, badgeCount: 0, active: noteActive, isAccent: true },
     { to: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', ariaLabel: 'Open knowledge', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
   ];
 
@@ -635,7 +642,7 @@ export function CompanionLayout() {
           )
         ) : (
           <CompanionTopBarActionContext.Provider value={{ action: topBarAction, setTopBarAction, title: topBarTitle, setTopBarTitle, rightAction: topBarRightAction, setTopBarRightAction }}>
-            {!isCapturePage && (topBarConfig.label || topBarTitle) ? <CompanionTopBar /> : null}
+            {!isCapturePage ? <CompanionTopBar /> : null}
             <Outlet context={contextValue} />
           </CompanionTopBarActionContext.Provider>
         )}
@@ -736,34 +743,27 @@ export function CompanionLayout() {
       {showPrimaryNav ? (
         <nav className="shrink-0 border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2 backdrop-blur-xl">
           <div className="mx-auto grid w-full max-w-sm grid-cols-4 gap-1.5">
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                aria-label={item.ariaLabel}
-                className={cx(
-                  'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
-                  item.active ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
-                )}
-              >
-                <item.Icon active={item.active} />
-                <span className="leading-none">{item.label}</span>
-                <BottomNavBadge count={item.badgeCount} />
-              </Link>
-            ))}
-            <button
-              type="button"
-              onClick={() => setMenuOpen(true)}
-              aria-label="Open settings"
-              className={cx(
-                'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
-                settingsActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
-              )}
-            >
-              <SettingsIcon active={settingsActive} />
-              <span className="leading-none">Settings</span>
-              <BottomNavBadge dot={menuHasAttention} />
-            </button>
+            {navItems.map((item) => {
+              const isNewChat = item.label === 'Chat' && item.isAccent;
+              return (
+                <Link
+                  key={isNewChat ? 'new-chat' : item.to}
+                  to={isNewChat ? '/app/conversations/new' : item.to}
+                  aria-label={item.ariaLabel}
+                  className={cx(
+                    'relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
+                    item.active && !item.isAccent ? 'bg-surface text-primary' : '',
+                    item.isAccent && item.active ? 'bg-accent/15 text-accent' : '',
+                    !item.active && !item.isAccent ? 'text-dim hover:text-primary' : '',
+                    item.isAccent && !item.active ? 'text-accent hover:bg-accent/10' : '',
+                  )}
+                >
+                  <item.Icon active={item.active || item.isAccent} />
+                  <span className="leading-none">{item.label}</span>
+                  <BottomNavBadge count={item.badgeCount} />
+                </Link>
+              );
+            })}
           </div>
         </nav>
       ) : null}

@@ -66,7 +66,7 @@ const PATH = {
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
-const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/plans', '/tools', '/instructions'] as const;
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/tools', '/instructions'] as const;
 
 type PointerPosition = { x: number; y: number };
 
@@ -931,21 +931,21 @@ export function Sidebar() {
         <div className="flex items-stretch gap-1 mx-1">
           <button
             onClick={handleNewConversation}
-            className="ui-sidebar-nav-item mx-0 flex-1"
+            className="ui-sidebar-nav-item mx-0 flex-1 text-secondary"
             title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14" /></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
             <span className="flex-1 text-left">Chat</span>
           </button>
           <Link
             to={`/notes${buildNoteSearch('', { creating: true })}`}
-            className="ui-sidebar-nav-item mx-0 flex-1"
-            title="Note"
+            className="ui-sidebar-nav-item mx-0 flex-1 bg-accent/10 text-accent hover:bg-accent/20"
+            title="Quick note capture"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
-              <path d={PATH.notes} />
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+              <path d="M12 5v14M5 12h14" />
             </svg>
-            <span className="flex-1 text-left">Note</span>
+            <span className="flex-1 text-left font-medium">Note</span>
           </Link>
         </div>
       </div>

@@ -16,7 +16,6 @@ Good fits:
 Do not use runs for:
 
 - later or recurring work — use [Scheduled Tasks](./scheduled-tasks.md)
-- lightweight ordered skill steps inside one conversation — use [Automation](./automation.md)
 - direct human reminders — use reminders/alerts
 
 ## Two run modes
@@ -101,7 +100,6 @@ If the outcome should eventually drive user attention, pair that behavior with t
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
-- [Automation](./automation.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Command-Line Guide (`pa`)](./command-line.md)

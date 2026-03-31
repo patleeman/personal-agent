@@ -14,6 +14,7 @@ const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft
 const DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY = 'pa:reload:conversation:draft:execution-target';
 const DRAFT_CONVERSATION_MODEL_STORAGE_KEY = 'pa:reload:conversation:draft:model';
 const DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY = 'pa:reload:conversation:draft:thinking-level';
+const DRAFT_CONVERSATION_PRESET_ID_STORAGE_KEY = 'pa:reload:conversation:draft:preset-id';
 
 let draftConversationAttachmentsMutationVersion = 0;
 
@@ -64,6 +65,10 @@ export function buildDraftConversationModelStorageKey(): string {
 
 export function buildDraftConversationThinkingLevelStorageKey(): string {
   return DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY;
+}
+
+export function buildDraftConversationPresetIdStorageKey(): string {
+  return DRAFT_CONVERSATION_PRESET_ID_STORAGE_KEY;
 }
 
 function normalizeDraftConversationComposer(value: unknown): string {
@@ -389,6 +394,37 @@ export function clearDraftConversationThinkingLevel(
   storage: StorageLike | null = getSessionStorage(),
 ): void {
   clearStoredState(storage, buildDraftConversationThinkingLevelStorageKey());
+  emitDraftConversationStateChanged();
+}
+
+export function readDraftConversationPresetId(
+  storage: StorageLike | null = getSessionStorage(),
+): string {
+  return readStoredState<string>({
+    key: buildDraftConversationPresetIdStorageKey(),
+    fallback: '',
+    storage,
+    deserialize: (raw) => typeof raw === 'string' ? raw : '',
+  });
+}
+
+export function persistDraftConversationPresetId(
+  presetId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  persistStoredState({
+    key: buildDraftConversationPresetIdStorageKey(),
+    value: presetId,
+    storage,
+    shouldPersist: (value) => value.trim().length > 0,
+  });
+  emitDraftConversationStateChanged();
+}
+
+export function clearDraftConversationPresetId(
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  clearStoredState(storage, buildDraftConversationPresetIdStorageKey());
   emitDraftConversationStateChanged();
 }
 

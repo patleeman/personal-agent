@@ -224,10 +224,8 @@ describe('CompanionConversationsPage', () => {
     );
 
     expect(html).toContain('Chats');
-    expect(html).toContain('Open inbox');
     expect(html).toContain('Open chats');
     expect(html).toContain('Open knowledge');
-    expect(html).toContain('Open settings');
     expect(html).toContain('3 live · 1 archived');
     expect(html).toContain('Live now');
     expect(html).not.toContain('In workspace');
