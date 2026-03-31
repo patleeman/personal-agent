@@ -355,20 +355,21 @@ export function NoteWorkspace({
   backHref,
   backLabel,
 }: {
-  detail: MemoryDocDetail;
+  detail?: MemoryDocDetail | null;
   onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
-  onRefetched: () => void;
+  onRefetched?: () => void;
   onSaved: (detail: MemoryDocDetail) => void;
   backHref?: string;
   backLabel?: string;
 }) {
-  const memory = detail.memory;
-  const [savedNoteTitle, setSavedNoteTitle] = useState(memory.title);
-  const [savedNoteDescription, setSavedNoteDescription] = useState(memory.description ?? '');
-  const [savedNoteBody, setSavedNoteBody] = useState(normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)));
-  const [noteTitle, setNoteTitle] = useState(memory.title);
-  const [noteDescription, setNoteDescription] = useState(memory.description ?? '');
-  const [noteBody, setNoteBody] = useState(normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)));
+  const isCreating = !detail;
+  const memory = detail?.memory;
+  const [savedNoteTitle, setSavedNoteTitle] = useState(memory?.title ?? '');
+  const [savedNoteDescription, setSavedNoteDescription] = useState(memory?.description ?? '');
+  const [savedNoteBody, setSavedNoteBody] = useState(memory ? normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)) : '');
+  const [noteTitle, setNoteTitle] = useState(memory?.title ?? '');
+  const [noteDescription, setNoteDescription] = useState(memory?.description ?? '');
+  const [noteBody, setNoteBody] = useState(memory ? normalizeMarkdownValue(readEditableNoteBody(detail.content, memory.title)) : '');
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
@@ -379,6 +380,18 @@ export function NoteWorkspace({
   const dirty = noteTitle !== savedNoteTitle || noteDescription !== savedNoteDescription || noteBody !== savedNoteBody;
 
   useEffect(() => {
+    if (!detail) {
+      setSavedNoteTitle('');
+      setSavedNoteDescription('');
+      setSavedNoteBody('');
+      setNoteTitle('');
+      setNoteDescription('');
+      setNoteBody('');
+      setSaveState('idle');
+      setNotice(null);
+      lastAutoSaveSignatureRef.current = null;
+      return;
+    }
     const editableBody = normalizeMarkdownValue(readEditableNoteBody(detail.content, detail.memory.title));
     setSavedNoteTitle(detail.memory.title);
     setSavedNoteDescription(detail.memory.description ?? '');
@@ -389,7 +402,7 @@ export function NoteWorkspace({
     setSaveState('idle');
     setNotice(null);
     lastAutoSaveSignatureRef.current = null;
-  }, [detail.content, detail.memory.description, detail.memory.title]);
+  }, [detail]);
 
   const handleSave = useCallback(async (options: { automated?: boolean } = {}) => {
     if (saveBusy || !dirty) {
@@ -411,17 +424,28 @@ export function NoteWorkspace({
     }
 
     try {
-      const result = await api.saveNoteDoc(memory.id, {
-        title: nextTitle,
-        description: noteDescription,
-        body: noteBody,
-      });
+      let result: MemoryDocDetail;
+      if (isCreating) {
+        result = await api.createNoteDoc({
+          title: nextTitle,
+          description: noteDescription,
+          body: noteBody,
+        });
+      } else {
+        result = await api.saveNoteDoc(memory!.id, {
+          title: nextTitle,
+          description: noteDescription,
+          body: noteBody,
+        });
+      }
       setSavedNoteTitle(noteTitle);
       setSavedNoteDescription(noteDescription);
       setSavedNoteBody(noteBody);
       setSaveState('saved');
       setNotice(null);
-      if (result.memory.id !== memory.id) {
+      if (isCreating) {
+        onNavigate({ memoryId: result.memory.id, creating: false }, true);
+      } else if (result.memory.id !== memory!.id) {
         onNavigate({ memoryId: result.memory.id, creating: false }, true);
       }
       onSaved(result);
@@ -433,7 +457,7 @@ export function NoteWorkspace({
     } finally {
       setSaveBusy(false);
     }
-  }, [dirty, memory.id, noteBody, noteDescription, noteTitle, onNavigate, onSaved, saveBusy]);
+  }, [dirty, isCreating, memory, noteBody, noteDescription, noteTitle, onNavigate, onSaved, saveBusy]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -488,14 +512,17 @@ export function NoteWorkspace({
   }, [noteDescription]);
 
   function handleReload() {
+    if (isCreating) {
+      return;
+    }
     setNotice(null);
     setSaveState('idle');
     lastAutoSaveSignatureRef.current = null;
-    onRefetched();
+    onRefetched?.();
   }
 
   async function handleDelete() {
-    if (deleteBusy) {
+    if (deleteBusy || isCreating || !memory) {
       return;
     }
 
@@ -516,7 +543,7 @@ export function NoteWorkspace({
   }
 
   async function handleStartConversation() {
-    if (startBusy) {
+    if (startBusy || isCreating || !memory) {
       return;
     }
 
@@ -533,7 +560,7 @@ export function NoteWorkspace({
   }
 
   const saveStatus = saveBusy
-    ? { text: 'Saving…', className: 'text-accent' }
+    ? { text: isCreating ? 'Creating…' : 'Saving…', className: 'text-accent' }
     : noteTitle.trim().length === 0
       ? { text: 'Title required to save', className: 'text-warning' }
       : dirty
@@ -542,16 +569,16 @@ export function NoteWorkspace({
           ? { text: 'Autosave failed', className: 'text-danger' }
           : { text: 'All changes saved', className: 'text-dim' };
 
-  const noteProperties = [
+  const noteProperties = memory ? [
     { label: 'Reference', value: <span className="font-mono text-[12px]">@{memory.id}</span> },
     ...(memory.updated ? [{ label: 'Updated', value: timeAgo(memory.updated) }] : []),
     ...(memory.path ? [{ label: 'Path', value: <span className="break-all font-mono text-[12px] leading-6 text-secondary">{memory.path}</span> }] : []),
-  ];
-  const hasReferences = detail.references.length > 0;
+  ] : [];
+  const hasReferences = detail?.references.length ?? 0 > 0;
   const hasRelationships = Boolean(
-    (detail.links?.outgoing?.length ?? 0) > 0
-      || (detail.links?.incoming?.length ?? 0) > 0
-      || (detail.links?.unresolved?.length ?? 0) > 0,
+    (detail?.links?.outgoing?.length ?? 0) > 0
+      || (detail?.links?.incoming?.length ?? 0) > 0
+      || (detail?.links?.unresolved?.length ?? 0) > 0,
   );
 
   return (
@@ -560,7 +587,11 @@ export function NoteWorkspace({
         <>
           <span>Notes</span>
           <span className="opacity-40">›</span>
-          <span className="font-mono text-secondary">@{memory.id}</span>
+          {memory ? (
+            <span className="font-mono text-secondary">@{memory.id}</span>
+          ) : (
+            <span className="font-medium text-primary">New note</span>
+          )}
         </>
       )}
       backHref={backHref}
@@ -594,32 +625,32 @@ export function NoteWorkspace({
       status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
         <NodeToolbarGroup>
-          <NodeIconActionButton onClick={handleReload} disabled={saveBusy} title="Reload note" aria-label="Reload note">
+          <NodeIconActionButton onClick={handleReload} disabled={saveBusy || isCreating} title="Reload note" aria-label="Reload note">
             <NoteWorkspaceIcon paths={["M20 11a8 8 0 1 0 2.3 5.7", "M20 4v7h-7"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleSave(); }}
             disabled={!dirty || saveBusy || noteTitle.trim().length === 0}
-            title={saveBusy ? 'Saving note' : 'Save note now'}
-            aria-label={saveBusy ? 'Saving note' : 'Save note now'}
+            title={saveBusy ? (isCreating ? 'Creating note' : 'Saving note') : (isCreating ? 'Create note' : 'Save note now')}
+            aria-label={saveBusy ? (isCreating ? 'Creating note' : 'Saving note') : (isCreating ? 'Create note' : 'Save note now')}
             tone={dirty || saveBusy ? 'accent' : saveState === 'error' ? 'danger' : 'default'}
           >
             <NoteWorkspaceIcon paths={["M5 4h11l3 3v13H5z", "M9 4v6h6V4", "M9 20v-6h6v6"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleStartConversation(); }}
-            disabled={startBusy}
-            title={startBusy ? 'Starting chat from note' : 'Chat about note'}
-            aria-label={startBusy ? 'Starting chat from note' : 'Chat about note'}
+            disabled={startBusy || isCreating}
+            title={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from note' : 'Chat about note')}
+            aria-label={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from note' : 'Chat about note')}
             tone="accent"
           >
             <NoteWorkspaceIcon paths={["M7 10h10", "M7 14h6", "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleDelete(); }}
-            disabled={deleteBusy}
-            title={deleteBusy ? 'Deleting note' : 'Delete note'}
-            aria-label={deleteBusy ? 'Deleting note' : 'Delete note'}
+            disabled={deleteBusy || isCreating}
+            title={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting note' : 'Delete note')}
+            aria-label={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting note' : 'Delete note')}
             tone="danger"
           >
             <NoteWorkspaceIcon paths={["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"]} />
@@ -627,23 +658,23 @@ export function NoteWorkspace({
         </NodeToolbarGroup>
       )}
       notice={notice ? <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice> : null}
-      inspector={(
+      inspector={!isCreating && (
         <>
           <NodeRailSection title="Properties">
             <NodePropertyList items={noteProperties} />
           </NodeRailSection>
 
           {hasReferences ? (
-            <NodeRailSection title="References" meta={`${detail.references.length}`}>
-              <NoteReferenceList references={detail.references} />
+            <NodeRailSection title="References" meta={`${detail?.references.length}`}>
+              <NoteReferenceList references={detail?.references ?? []} />
             </NodeRailSection>
           ) : null}
           {hasRelationships ? (
             <NodeRailSection title="Relationships">
               <div className="space-y-4">
-                <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-                <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
-                <UnresolvedNodeLinks ids={detail.links?.unresolved} />
+                <NodeLinkList title="Links to" items={detail?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+                <NodeLinkList title="Linked from" items={detail?.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+                <UnresolvedNodeLinks ids={detail?.links?.unresolved} />
               </div>
             </NodeRailSection>
           ) : null}
@@ -658,178 +689,6 @@ export function NoteWorkspace({
           onDescriptionChange={setNoteDescription}
           body={noteBody}
           onBodyChange={setNoteBody}
-          showTitle={false}
-          showDescription={false}
-          frameClassName="ui-note-editor-frame-embedded"
-          documentClassName="ui-note-editor-doc-embedded"
-          bodyPlaceholder="Start writing… Paste, drop, or insert images."
-        />
-      </div>
-    </NodeWorkspaceShell>
-  );
-}
-
-function NewNoteWorkspace({
-  onNavigate,
-  onCreated,
-}: {
-  onNavigate: (updates: { memoryId?: string | null; creating?: boolean | null }, replace?: boolean) => void;
-  onCreated: (detail: MemoryDocDetail) => void;
-}) {
-  const [createTitle, setCreateTitle] = useState('');
-  const [createDescription, setCreateDescription] = useState('');
-  const [createBody, setCreateBody] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const noteDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const lastAutoCreateSignatureRef = useRef<string | null>(null);
-  const hasDraftContent = createTitle.trim().length > 0 || createDescription.trim().length > 0 || createBody.trim().length > 0;
-
-  const handleCreateNote = useCallback(async () => {
-    if (creating || createTitle.trim().length === 0) {
-      return false;
-    }
-
-    setCreating(true);
-    setCreateError(null);
-
-    try {
-      const created = await api.createNoteDoc({
-        title: createTitle.trim(),
-        description: createDescription,
-        body: createBody,
-      });
-      emitMemoriesChanged();
-      onCreated(created);
-      onNavigate({ memoryId: created.memory.id, creating: false }, true);
-      return true;
-    } catch (error) {
-      setCreateError(error instanceof Error ? error.message : String(error));
-      return false;
-    } finally {
-      setCreating(false);
-    }
-  }, [createBody, createDescription, createTitle, creating, onCreated, onNavigate]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasDraftContent) {
-        return;
-      }
-      event.preventDefault();
-      event.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasDraftContent]);
-
-  useEffect(() => {
-    const nextTitle = createTitle.trim();
-    const autoCreateSignature = `${nextTitle}\u0000${createDescription}\u0000${createBody}`;
-    if (creating || nextTitle.length === 0 || lastAutoCreateSignatureRef.current === autoCreateSignature) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      lastAutoCreateSignatureRef.current = autoCreateSignature;
-      void handleCreateNote();
-    }, 900);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [createBody, createDescription, createTitle, creating, handleCreateNote]);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        void handleCreateNote();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCreateNote]);
-
-  useEffect(() => {
-    const element = noteDescriptionRef.current;
-    if (!element) {
-      return;
-    }
-
-    element.style.height = 'auto';
-    const nextHeight = Math.max(52, Math.min(element.scrollHeight, 220));
-    element.style.height = `${nextHeight}px`;
-    element.style.overflowY = element.scrollHeight > 220 ? 'auto' : 'hidden';
-  }, [createDescription]);
-
-  const createStatus = creating
-    ? { text: 'Creating…', className: 'text-accent' }
-    : createTitle.trim().length === 0
-      ? { text: 'Add a title to create', className: 'text-warning' }
-      : hasDraftContent
-        ? { text: 'Unsaved draft', className: 'text-warning' }
-        : { text: 'Ready', className: 'text-dim' };
-
-  return (
-    <NodeWorkspaceShell
-      breadcrumbs={(
-        <>
-          <span>Notes</span>
-          <span className="opacity-40">›</span>
-          <span className="font-medium text-primary">New note</span>
-        </>
-      )}
-      title={(
-        <input
-          aria-label="Note title"
-          name="note-title"
-          autoComplete="off"
-          spellCheck={false}
-          value={createTitle}
-          onChange={(event) => setCreateTitle(event.target.value)}
-          className="ui-node-title-input"
-          placeholder="Note title"
-        />
-      )}
-      titleAs="div"
-      summaryClassName="max-w-4xl"
-      summary={(
-        <textarea
-          ref={noteDescriptionRef}
-          aria-label="Note guidance for the agent"
-          name="note-description"
-          value={createDescription}
-          onChange={(event) => setCreateDescription(event.target.value)}
-          placeholder="Tell the agent how to use this note, when to read it, or what it is for."
-          className="ui-note-header-textarea"
-          rows={1}
-        />
-      )}
-      status={<span className={createStatus.className}>{createStatus.text}</span>}
-      actions={(
-        <NodeToolbarGroup>
-          <NodeIconActionButton
-            onClick={() => { void handleCreateNote(); }}
-            disabled={creating || createTitle.trim().length === 0}
-            title={creating ? 'Creating note' : 'Create note'}
-            aria-label={creating ? 'Creating note' : 'Create note'}
-            tone={creating || createTitle.trim().length > 0 ? 'accent' : 'default'}
-          >
-            <NoteWorkspaceIcon paths={["M5 4h11l3 3v13H5z", "M9 4v6h6V4", "M9 20v-6h6v6"]} />
-          </NodeIconActionButton>
-        </NodeToolbarGroup>
-      )}
-      notice={createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
-    >
-      <div className="max-w-4xl">
-        <NoteEditorDocument
-          title={createTitle}
-          onTitleChange={setCreateTitle}
-          description={createDescription}
-          onDescriptionChange={setCreateDescription}
-          body={createBody}
-          onBodyChange={setCreateBody}
           showTitle={false}
           showDescription={false}
           frameClassName="ui-note-editor-frame-embedded"
@@ -924,14 +783,17 @@ export function MemoriesPage() {
                 meta="Create a durable note with markdown content and inline @links."
               />
             </PageHeader>
-            <NewNoteWorkspace
+            <NoteWorkspace
+              detail={null}
               onNavigate={navigateNotes}
-              onCreated={(created) => {
+              onSaved={(created) => {
                 replaceData({
                   memories: [created.memory, ...memories.filter((memory) => memory.id !== created.memory.id)],
                   memoryQueue,
                 });
               }}
+              backHref="/notes"
+              backLabel="Back to notes"
             />
           </div>
         </div>
