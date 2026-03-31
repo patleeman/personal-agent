@@ -774,15 +774,7 @@ export function MemoriesPage() {
     return (
       <div className="min-h-0 flex h-full flex-col overflow-hidden">
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
-            <PageHeader
-              actions={<ToolbarButton onClick={() => navigateNotes({ creating: false })}>Back to notes</ToolbarButton>}
-            >
-              <PageHeading
-                title="Notes"
-                meta="Create a durable note with markdown content and inline @links."
-              />
-            </PageHeader>
+          <div className="mx-auto w-full max-w-[1440px]">
             <NoteWorkspace
               detail={null}
               onNavigate={navigateNotes}
