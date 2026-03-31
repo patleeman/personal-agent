@@ -261,7 +261,7 @@ describe('sessions', () => {
       JSON.stringify({ type: 'message', id: 'h-assistant-1', parentId: 'h-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }] } }),
       JSON.stringify({ type: 'custom_message', id: 'h-hidden-1', parentId: 'h-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
       JSON.stringify({ type: 'message', id: 'h-assistant-2', parentId: 'h-hidden-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
-      JSON.stringify({ type: 'message', id: 'h-tool-1', parentId: 'h-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'todo_list', content: [{ type: 'text', text: '{"action":"list"}' }] } }),
+      JSON.stringify({ type: 'message', id: 'h-tool-1', parentId: 'h-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'bash', content: [{ type: 'text', text: 'ls' }] } }),
     ].join('\n') + '\n');
 
     const detail = readSessionBlocks('session-tail-hidden', { tailBlocks: 5 });
@@ -612,8 +612,8 @@ describe('sessions', () => {
         message: {
           role: 'toolResult',
           toolCallId: 'call-1',
-          toolName: 'todo_list',
-          content: [{ type: 'text', text: '{"action":"list"}' }],
+          toolName: 'bash',
+          content: [{ type: 'text', text: 'ls' }],
         },
       },
     ]);

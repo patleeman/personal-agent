@@ -1426,13 +1426,22 @@ export function SettingsPage() {
                     <label className="ui-card-meta" htmlFor="settings-model">Model</label>
                     <select
                       id="settings-model"
-                      value={modelState.currentModel}
+                      value={modelState.presetId || modelState.currentModel}
                       onChange={(event) => {
                         void handleModelPreferenceChange({ model: event.target.value }, 'model');
                       }}
                       disabled={savingPreference !== null || modelState.models.length === 0}
                       className={INPUT_CLASS}
                     >
+                      {modelPresetState && modelPresetState.presets.length > 0 && (
+                        <optgroup label="Presets">
+                          {modelPresetState.presets.map((preset) => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.id} · {preset.model} · {preset.thinkingLevel || 'unset'} thinking{preset.fallbacks.length > 0 ? ` · ${preset.fallbacks.length} fallback${preset.fallbacks.length > 1 ? 's' : ''}` : ''}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                       {groupedModels.map(([provider, models]) => (
                         <optgroup key={provider} label={provider}>
                           {models.map((model) => (
@@ -1446,7 +1455,7 @@ export function SettingsPage() {
                     <p className="ui-card-meta">
                       {savingPreference === 'model'
                         ? 'Saving default model…'
-                        : formatModelSummary(selectedModel, 'No model selected.')}
+                        : formatModelSummary(selectedModel, modelState.presetId ? `preset ${modelState.presetId}` : 'No model selected.')}
                     </p>
 
                     <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>

@@ -930,7 +930,7 @@ export function CompanionConversationPage() {
       <button
         type="button"
         onClick={() => openPanel('actions')}
-        aria-label="Open conversation actions"
+        aria-label="Open conversation details"
         className="relative flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
         style={COMPANION_TOUCH_BUTTON_STYLE}
       >
@@ -943,10 +943,10 @@ export function CompanionConversationPage() {
             )}
           />
         ) : null}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 7h16" />
-          <path d="M4 12h16" />
-          <path d="M4 17h16" />
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
         </svg>
       </button>,
     );

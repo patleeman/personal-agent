@@ -96,7 +96,6 @@ describe('companion resource detail pages', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Continuous conversations');
     expect(html).toContain('Definition of done');
     expect(html).toContain('Validate the last mile on mobile.');
     expect(html).toContain('Ship the phone companion.');

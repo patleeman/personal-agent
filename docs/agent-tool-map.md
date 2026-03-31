@@ -25,7 +25,7 @@ Use the CLI mainly for:
 | Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
 | Continue this conversation later without user input | `deferred_resume` | local wakeup state | use for agent-owned continue-later behavior |
 | Remind the user later | `reminder` | local alert + wakeup state | use for user-requested tell-me-later behavior |
-| Add or manage ordered automation steps in one conversation | `todo_list` | conversation-local automation state | use for conversation automation, not scheduled work |
+
 | Ask for a specific user choice or answer | `ask_user_question` | conversation interaction | use focused questions and then stop for input |
 | Pause until the user replies or approves | `wait_for_user` | conversation interaction | use when you truly need input before continuing |
 | Create or update rendered reports, diagrams, or HTML views | `artifact` | conversation artifact state | use for rendered outputs; project artifacts are a separate durable file surface |
@@ -63,7 +63,7 @@ There is no dedicated `skill` CRUD tool in this environment. Edit `skills/<id>/I
 - **continue later without asking me** → `deferred_resume`
 - **run later / every day / on a schedule** → `scheduled_task`
 - **start detached work now** → `run`
-- **workflow steps inside this thread** → `todo_list`
+- **workflow steps inside this thread** → deleted
 - **need a rendered report or diagram** → `artifact`
 - **need user input before continuing** → `ask_user_question` or `wait_for_user`
 
@@ -77,7 +77,6 @@ Use the feature docs to decide whether the underlying product surface is correct
 - [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Projects](./projects.md)

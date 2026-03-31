@@ -26,4 +26,4 @@ The docs folder is for agents to use and understand how personal-assistant works
 
 ## Checkpoint when complete
 
-Once you're done with your task, remember to checkpoint your work.
+Once you're done with your task, remember to /skill:checkpoint your work. In this repo we commit and push directly to main, no need to create branches.

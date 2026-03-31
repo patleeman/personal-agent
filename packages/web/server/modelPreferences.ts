@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 export interface SavedModelPreferences {
   currentModel: string;
   currentThinkingLevel: string;
+  currentPresetId: string;
 }
 
 export interface ModelPreferenceOption {
@@ -60,12 +61,16 @@ function resolveModelPreference(model: string, models: ModelPreferenceOption[]):
   };
 }
 
-export function readSavedModelPreferences(settingsFile: string): SavedModelPreferences {
+export function readSavedModelPreferences(settingsFile: string, models: ModelPreferenceOption[] = []): SavedModelPreferences {
   const parsed = readSettingsObject(settingsFile);
+  const defaultModel = readNonEmptyString(parsed.defaultModel);
+  const defaultThinkingLevel = readNonEmptyString(parsed.defaultThinkingLevel);
 
+  const resolved = resolveModelPreference(defaultModel, models);
   return {
-    currentModel: readNonEmptyString(parsed.defaultModel),
-    currentThinkingLevel: readNonEmptyString(parsed.defaultThinkingLevel),
+    currentModel: resolved.model,
+    currentThinkingLevel: defaultThinkingLevel,
+    currentPresetId: '',
   };
 }
 
@@ -80,23 +85,26 @@ export function writeSavedModelPreferences(
   const settings = readSettingsObject(settingsFile);
 
   if (input.model !== undefined) {
-    delete settings.defaultModelPreset;
-    const resolved = resolveModelPreference(input.model ?? '', models);
-    if (resolved.model) {
+    const modelValue = input.model ?? '';
+    const normalizedModel = readNonEmptyString(modelValue);
+
+    if (!normalizedModel) {
+      delete settings.defaultModel;
+      delete settings.defaultProvider;
+      delete settings.defaultModelPreset;
+    } else {
+      delete settings.defaultModelPreset;
+      const resolved = resolveModelPreference(normalizedModel, models);
       settings.defaultModel = resolved.model;
       if (resolved.provider) {
         settings.defaultProvider = resolved.provider;
       } else {
         delete settings.defaultProvider;
       }
-    } else {
-      delete settings.defaultModel;
-      delete settings.defaultProvider;
     }
   }
 
   if (input.thinkingLevel !== undefined) {
-    delete settings.defaultModelPreset;
     const normalizedThinkingLevel = readNonEmptyString(input.thinkingLevel ?? '');
     if (normalizedThinkingLevel) {
       settings.defaultThinkingLevel = normalizedThinkingLevel;
@@ -108,5 +116,5 @@ export function writeSavedModelPreferences(
   mkdirSync(dirname(settingsFile), { recursive: true });
   writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 
-  return readSavedModelPreferences(settingsFile);
+  return readSavedModelPreferences(settingsFile, models);
 }

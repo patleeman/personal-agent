@@ -191,7 +191,6 @@ After this page:
 3. [Knowledge Management System](./knowledge-system.md)
 4. [Agent Tool Map](./agent-tool-map.md)
 5. [Conversations](./conversations.md)
-6. [Automation](./automation.md)
 7. [Web UI Guide](./web-ui.md)
 8. [Sync Guide](./sync.md)
 9. [Projects](./projects.md)

@@ -258,8 +258,6 @@ describe('CompanionConversationPage', () => {
     );
 
     expect(html).toContain('Take over to reply');
-    expect(html).toContain('Back to conversations');
-    expect(html).toContain('Open conversation actions');
     expect(html).not.toContain('Open todo panel');
     expect(html).not.toContain('Open artifact panel');
     expect(html).not.toContain('Agent reminders');

@@ -626,7 +626,6 @@ export type AppEventTopic =
   | 'attachments'
   | 'tasks'
   | 'runs'
-  | 'automation'
   | 'daemon'
   | 'sync'
   | 'webUi'
@@ -1102,6 +1101,7 @@ export interface ModelInfo {
 export interface ModelState {
   currentModel: string;
   currentThinkingLevel: string;
+  presetId: string;
   models: ModelInfo[];
 }
 
@@ -1245,107 +1245,6 @@ export interface ConversationTitleSettingsState {
   enabled: boolean;
   currentModel: string;
   effectiveModel: string;
-}
-
-export interface ConversationAutomationPreferencesState {
-  defaultEnabled: boolean;
-}
-
-export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'blocked';
-export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
-
-export type ConversationAutomationTodoItemKind = 'skill' | 'instruction';
-
-export type ConversationAutomationTemplateTodoItem = {
-  id: string;
-  kind?: 'skill';
-  label: string;
-  skillName: string;
-  skillArgs?: string;
-} | {
-  id: string;
-  kind: 'instruction';
-  label: string;
-  text: string;
-};
-
-export type ConversationAutomationTodoItem = ({
-  id: string;
-  kind?: 'skill';
-  label: string;
-  skillName: string;
-  skillArgs?: string;
-} | {
-  id: string;
-  kind: 'instruction';
-  label: string;
-  text: string;
-}) & {
-  status: ConversationAutomationTodoItemStatus;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  resultReason?: string;
-};
-
-export interface ConversationAutomationReviewState {
-  status: ConversationAutomationReviewStatus;
-  round: number;
-  createdAt: string;
-  updatedAt: string;
-  startedAt?: string;
-  completedAt?: string;
-  resultReason?: string;
-}
-
-export interface ConversationAutomationWorkflowPreset {
-  id: string;
-  name: string;
-  updatedAt: string;
-  items: ConversationAutomationTemplateTodoItem[];
-}
-
-export interface ConversationAutomationWorkflowPresetLibraryState {
-  presets: ConversationAutomationWorkflowPreset[];
-  defaultPresetIds: string[];
-}
-
-export interface ConversationAutomationState {
-  conversationId: string;
-  enabled: boolean;
-  activeItemId: string | null;
-  updatedAt: string;
-  waitingForUser?: {
-    createdAt: string;
-    updatedAt: string;
-    reason?: string;
-  };
-  items: ConversationAutomationTodoItem[];
-  review?: ConversationAutomationReviewState;
-}
-
-export interface ConversationAutomationSkillInfo {
-  name: string;
-  description: string;
-  source: string;
-}
-
-export interface ConversationAutomationResponse {
-  conversationId: string;
-  live: boolean;
-  inheritedPresetIds: string[];
-  automation: ConversationAutomationState;
-  presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
-  skills: ConversationAutomationSkillInfo[];
-}
-
-export type ConversationAutomationStreamEvent =
-  | { type: 'snapshot'; data: ConversationAutomationResponse };
-
-export interface ConversationAutomationWorkspaceState {
-  presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
-  skills: ConversationAutomationSkillInfo[];
 }
 
 export interface ProfileState {

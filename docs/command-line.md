@@ -431,7 +431,6 @@ Or set:
 - [Getting Started](./getting-started.md)
 - [How personal-agent works](./how-it-works.md)
 - [Conversations](./conversations.md)
-- [Automation](./automation.md)
 - [Runs](./runs.md)
 - [Execution Targets](./execution-targets.md)
 - [MCP](./mcp.md)

@@ -9,7 +9,7 @@ import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, publishAppEvent, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { streamSnapshotEvents } from './snapshotEventStreaming.js';
-import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
+
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
@@ -131,9 +131,7 @@ import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtensi
 import { createReminderAgentExtension } from './reminderAgentExtension.js';
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
-import { createConversationTodoAgentExtension } from './conversationTodoAgentExtension.js';
-import { createConversationAutomationPromptExtension } from './conversationAutomationPromptExtension.js';
-import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js';
+
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createNoteAgentExtension } from './noteAgentExtension.js';
@@ -219,25 +217,7 @@ import {
   type RemoteConversationMirrorSyncTelemetry,
 } from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
-import {
-  loadConversationAutomationState,
-  readSavedConversationAutomationPreferences,
-  replaceConversationAutomationItems,
-  resetConversationAutomationFromItem,
-  resolveConversationAutomationPath,
-  resumeConversationAutomationAfterUserMessage,
-  setConversationAutomationItemPending,
-  updateConversationAutomationEnabled,
-  updateConversationAutomationItemStatus,
-  writeSavedConversationAutomationPreferences,
-  writeConversationAutomationState,
-  readSavedConversationAutomationWorkflowPresets,
-  writeSavedConversationAutomationWorkflowPresets,
-} from './conversationAutomation.js';
-import {
-  clearLocalConversationAutomationSettings,
-  migrateLocalConversationAutomationSettingsToProfile,
-} from './conversationAutomationProfileSettings.js';
+
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './durableRuns.js';
 import { getDurableRunAttentionSignature } from './durableRunAttention.js';
@@ -614,11 +594,7 @@ async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
 }
 
 try {
-  if (migrateConversationAutomationSettingsForProfile(currentProfile)) {
-    logInfo('migrated local conversation automation settings to active profile', {
-      profile: currentProfile,
-    });
-  }
+
   materializeWebProfile(currentProfile);
 } catch (error) {
   logWarn('failed to materialize initial profile', {
@@ -640,21 +616,7 @@ function getCurrentProfileSettingsFile(): string {
   });
 }
 
-function migrateConversationAutomationSettingsForProfile(profile: string): boolean {
-  const migration = migrateLocalConversationAutomationSettingsToProfile(profile, {
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-  return migration.migrated;
-}
 
-function clearLocalConversationAutomationSettingsOverride(): boolean {
-  const result = clearLocalConversationAutomationSettings({
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-  return result.changed;
-}
 
 async function setCurrentProfile(profile: string): Promise<string> {
   const availableProfiles = listAvailableProfiles();
@@ -666,14 +628,8 @@ async function setCurrentProfile(profile: string): Promise<string> {
     return currentProfile;
   }
 
-  const migratedAutomationSettings = migrateConversationAutomationSettingsForProfile(profile);
   materializeWebProfile(profile);
   currentProfile = profile;
-  if (migratedAutomationSettings) {
-    logInfo('migrated local conversation automation settings to selected profile', {
-      profile,
-    });
-  }
   writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
   clearMemoryBrowserCaches();
   warmMemoryBrowserCaches(profile);
@@ -685,7 +641,6 @@ async function setCurrentProfile(profile: string): Promise<string> {
     'sessions',
     'tasks',
     'runs',
-    'automation',
     'daemon',
     'sync',
     'webUi',
@@ -705,19 +660,6 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createActivityAgentExtension({
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
-    createConversationTodoAgentExtension({
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
-    createConversationAutomationPromptExtension({
-      stateRoot: getStateRoot(),
-      settingsFile: SETTINGS_FILE,
-      getCurrentProfile,
-    }),
-    createWaitForUserAgentExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
@@ -3945,203 +3887,6 @@ function listAvailableModelDefinitions() {
   return models;
 }
 
-async function buildConversationAutomationResponse(conversationId: string) {
-  const profile = getCurrentProfile();
-  const loaded = loadConversationAutomationState({
-    profile,
-    conversationId,
-    settingsFile: SETTINGS_FILE,
-  });
-  const automation = loaded.document;
-  const skills = listSkillsForCurrentProfile().map((skill) => ({
-    name: skill.name,
-    description: skill.description,
-    source: skill.source,
-  }));
-
-  return {
-    conversationId,
-    live: liveRegistry.has(conversationId),
-    inheritedPresetIds: loaded.inheritedPresetIds,
-    automation: {
-      conversationId: automation.conversationId,
-      enabled: automation.enabled,
-      activeItemId: automation.activeItemId ?? null,
-      updatedAt: automation.updatedAt,
-      ...(automation.waitingForUser ? {
-        waitingForUser: {
-          createdAt: automation.waitingForUser.createdAt,
-          updatedAt: automation.waitingForUser.updatedAt,
-          ...(automation.waitingForUser.reason ? { reason: automation.waitingForUser.reason } : {}),
-        },
-      } : {}),
-      items: automation.items.map((item) => ({
-        id: item.id,
-        kind: item.kind,
-        label: item.label,
-        ...('text' in item
-          ? {
-            text: item.text,
-          }
-          : {
-            skillName: item.skillName,
-            ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
-          }),
-        status: item.status,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        ...(item.startedAt ? { startedAt: item.startedAt } : {}),
-        ...(item.completedAt ? { completedAt: item.completedAt } : {}),
-        ...(item.resultReason ? { resultReason: item.resultReason } : {}),
-      })),
-      ...(automation.review ? {
-        review: {
-          status: automation.review.status,
-          round: automation.review.round,
-          createdAt: automation.review.createdAt,
-          updatedAt: automation.review.updatedAt,
-          ...(automation.review.startedAt ? { startedAt: automation.review.startedAt } : {}),
-          ...(automation.review.completedAt ? { completedAt: automation.review.completedAt } : {}),
-          ...(automation.review.resultReason ? { resultReason: automation.review.resultReason } : {}),
-        },
-      } : {}),
-    },
-    presetLibrary: loaded.presetLibrary,
-    skills,
-  };
-}
-
-function saveConversationAutomationDocument(document: Parameters<typeof writeConversationAutomationState>[0]['document']) {
-  const saved = writeConversationAutomationState({
-    profile: getCurrentProfile(),
-    document,
-  });
-  notifyConversationAutomationChanged(document.conversationId);
-  return saved;
-}
-
-function migrateDraftConversationPlan(profile: string, conversationId: string): void {
-  const draftConversationId = 'new';
-  const draftPath = resolveConversationAutomationPath({ profile, conversationId: draftConversationId });
-  const loaded = loadConversationAutomationState({
-    profile,
-    conversationId: draftConversationId,
-    settingsFile: SETTINGS_FILE,
-  });
-
-  if (loaded.document.items.length > 0) {
-    writeConversationAutomationState({
-      profile,
-      document: {
-        ...loaded.document,
-        conversationId,
-        updatedAt: new Date().toISOString(),
-        enabled: true,
-        activeItemId: undefined,
-        review: undefined,
-      },
-    });
-  }
-
-  if (existsSync(draftPath)) {
-    rmSync(draftPath, { force: true });
-  }
-
-  notifyConversationAutomationChanged(conversationId);
-}
-
-function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
-  id: string;
-  label?: string;
-  kind?: 'skill' | 'instruction';
-  skillName?: string;
-  skillArgs?: string;
-  text?: string;
-}> {
-  if (!Array.isArray(items)) {
-    throw new Error('items must be an array');
-  }
-
-  for (const item of items) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('Each item must be an object.');
-    }
-
-    const explicitKind = typeof (item as { kind?: unknown }).kind === 'string'
-      ? (item as { kind: string }).kind.trim()
-      : '';
-    if (explicitKind && explicitKind !== 'skill' && explicitKind !== 'instruction') {
-      throw new Error('Each item kind must be skill or instruction.');
-    }
-
-    const text = typeof (item as { text?: unknown }).text === 'string'
-      ? (item as { text: string }).text.trim()
-      : '';
-    const skillName = typeof (item as { skillName?: unknown }).skillName === 'string'
-      ? (item as { skillName: string }).skillName.trim()
-      : '';
-    const kind = explicitKind === 'instruction' || (!explicitKind && text && !skillName)
-      ? 'instruction'
-      : 'skill';
-
-    if (kind === 'instruction') {
-      if (!text) {
-        throw new Error('Each instruction item requires text.');
-      }
-      continue;
-    }
-
-    if (!skillName) {
-      throw new Error('Each skill item requires a skillName.');
-    }
-    if (!availableSkillNames.has(skillName)) {
-      throw new Error(`Unknown skill: ${skillName}`);
-    }
-  }
-}
-
-function validateConversationAutomationWorkflowPresets(
-  presets: unknown,
-  defaultPresetIds: unknown,
-  availableSkillNames: Set<string>,
-): asserts presets is Array<{
-  id: string;
-  name: string;
-  items: Array<{
-    id: string;
-    label?: string;
-    kind?: 'skill' | 'instruction';
-    skillName?: string;
-    skillArgs?: string;
-    text?: string;
-  }>;
-}> {
-  if (!Array.isArray(presets)) {
-    throw new Error('presets must be an array');
-  }
-
-  const presetIds = new Set<string>();
-  for (const preset of presets) {
-    if (!preset || typeof preset !== 'object' || Array.isArray(preset)) {
-      throw new Error('Each preset must be an object.');
-    }
-
-    const id = typeof (preset as { id?: unknown }).id === 'string'
-      ? (preset as { id: string }).id.trim()
-      : '';
-    if (!id) {
-      throw new Error('Each preset requires an id.');
-    }
-    if (presetIds.has(id)) {
-      throw new Error(`Duplicate preset id: ${id}`);
-    }
-    presetIds.add(id);
-
-    const name = typeof (preset as { name?: unknown }).name === 'string'
-      ? (preset as { name: string }).name.trim()
-      : '';
-    if (!name) {
-      throw new Error('Each preset requires a name.');
     }
 
     const items = (preset as { items?: unknown }).items;
@@ -4736,114 +4481,6 @@ app.patch('/api/conversation-titles/settings', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/conversation-plans/defaults', (_req, res) => {
-  try {
-    res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/conversation-plans/defaults', (req, res) => {
-  try {
-    const { defaultEnabled } = req.body as { defaultEnabled?: unknown };
-    if (typeof defaultEnabled !== 'boolean') {
-      res.status(400).json({ error: 'defaultEnabled must be a boolean' });
-      return;
-    }
-
-    writeSavedConversationAutomationPreferences({ defaultEnabled }, getCurrentProfileSettingsFile());
-    clearLocalConversationAutomationSettingsOverride();
-    materializeWebProfile(getCurrentProfile());
-    invalidateAppTopics('automation');
-
-    res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/conversation-plans/workspace', async (_req, res) => {
-  try {
-    res.json({
-      presetLibrary: readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE),
-      skills: listSkillsForCurrentProfile().map((skill) => ({
-        name: skill.name,
-        description: skill.description,
-        source: skill.source,
-      })),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.get('/api/conversation-plans/library', (_req, res) => {
-  try {
-    res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/conversation-plans/library', async (req, res) => {
-  try {
-    const { presets, defaultPresetIds } = req.body as {
-      presets?: unknown;
-      defaultPresetIds?: unknown;
-    };
-    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    validateConversationAutomationWorkflowPresets(presets, defaultPresetIds, skillNames);
-
-    writeSavedConversationAutomationWorkflowPresets({
-      presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
-      defaultPresetIds: (Array.isArray(defaultPresetIds) ? defaultPresetIds.filter((presetId): presetId is string => typeof presetId === 'string') : []) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetIds'],
-    }, getCurrentProfileSettingsFile());
-    clearLocalConversationAutomationSettingsOverride();
-    materializeWebProfile(getCurrentProfile());
-    invalidateAppTopics('automation');
-
-    res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Unknown skill:')
-      || message.includes('items must be an array')
-      || message.includes('Each item')
-      || message.includes('Each skill item')
-      || message.includes('Each instruction item')
-      || message.includes('presets must be an array')
-      || message.includes('Each preset')
-      || message.includes('Duplicate preset id:')
-      || message.includes('defaultPresetIds must be an array')
-      || message.includes('Each default preset id must be a non-empty string.')
-      || message.includes('Duplicate default preset id:')
-      || message.includes('Default preset not found:')
-      ? 400
-      : 500;
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(status).json({ error: message });
   }
 });
 
@@ -7902,214 +7539,6 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
   }
 });
 
-app.get('/api/conversations/:id/plan/events', (req, res) => {
-  const conversationId = req.params.id;
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-  res.write('retry: 1000\n\n');
-
-  let closed = false;
-  let writeQueue = Promise.resolve();
-
-  const writeEvent = (event: { type: 'snapshot'; data: Awaited<ReturnType<typeof buildConversationAutomationResponse>> }) => {
-    if (closed) {
-      return;
-    }
-
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  };
-
-  const enqueueWrite = (task: () => Promise<void> | void) => {
-    writeQueue = writeQueue
-      .then(async () => {
-        if (closed) {
-          return;
-        }
-
-        await task();
-      })
-      .catch((error) => {
-        logWarn('conversation automation event stream write failed', {
-          conversationId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
-  };
-
-  const writeSnapshot = async () => {
-    const data = await buildConversationAutomationResponse(conversationId);
-    writeEvent({ type: 'snapshot', data });
-  };
-
-  enqueueWrite(writeSnapshot);
-
-  const heartbeat = setInterval(() => {
-    if (!closed) {
-      res.write(': heartbeat\n\n');
-    }
-  }, 15_000);
-  const unsubscribe = subscribeConversationAutomation(conversationId, () => {
-    enqueueWrite(writeSnapshot);
-  });
-
-  req.on('close', () => {
-    closed = true;
-    clearInterval(heartbeat);
-    unsubscribe();
-  });
-});
-
-app.get('/api/conversations/:id/plan', async (req, res) => {
-  try {
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/conversations/:id/plan', async (req, res) => {
-  try {
-    const body = req.body as {
-      enabled?: boolean;
-      items?: unknown;
-    };
-
-    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.items)) {
-      res.status(400).json({ error: 'enabled or items required' });
-      return;
-    }
-
-    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    if (Array.isArray(body.items)) {
-      validateConversationAutomationTemplateItems(body.items, skillNames);
-    }
-
-    let document = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    const updatedAt = new Date().toISOString();
-
-    if (Array.isArray(body.items)) {
-      document = replaceConversationAutomationItems(document, body.items, updatedAt);
-    }
-
-    if (typeof body.enabled === 'boolean') {
-      document = updateConversationAutomationEnabled(document, body.enabled, updatedAt);
-    }
-
-    saveConversationAutomationDocument(document);
-
-    if (document.enabled) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Unknown skill:')
-      || message.includes('items must be an array')
-      || message.includes('Each item')
-      || message.includes('Each skill item')
-      || message.includes('Each instruction item')
-      ? 400
-      : 500;
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(status).json({ error: message });
-  }
-});
-
-app.post('/api/conversations/:id/plan/items/:itemId/reset', async (req, res) => {
-  try {
-    const { resume } = req.body as { resume?: boolean };
-    const loaded = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-      settingsFile: SETTINGS_FILE,
-    });
-    const document = loaded.document;
-    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
-    if (!item) {
-      res.status(404).json({ error: 'Automation item not found' });
-      return;
-    }
-    if (document.activeItemId === item.id || item.status === 'running') {
-      res.status(409).json({ error: 'Running automation items cannot be reset' });
-      return;
-    }
-
-    saveConversationAutomationDocument(resetConversationAutomationFromItem(document, req.params.itemId, {
-      enabled: resume === true ? true : document.enabled,
-    }));
-
-    if (resume) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: message });
-  }
-});
-
-app.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) => {
-  try {
-    const { checked } = req.body as { checked?: unknown };
-    if (typeof checked !== 'boolean') {
-      res.status(400).json({ error: 'checked must be a boolean' });
-      return;
-    }
-
-    const loaded = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-      settingsFile: SETTINGS_FILE,
-    });
-    const document = loaded.document;
-    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
-    if (!item) {
-      res.status(404).json({ error: 'Automation item not found' });
-      return;
-    }
-    if (document.activeItemId === item.id || item.status === 'running') {
-      res.status(409).json({ error: 'Running automation items cannot be edited from the checklist.' });
-      return;
-    }
-
-    const nextDocument = checked
-      ? updateConversationAutomationItemStatus(document, req.params.itemId, 'completed', {
-        resultReason: 'Completed from the checklist UI.',
-      })
-      : setConversationAutomationItemPending(document, req.params.itemId, {
-        enabled: document.enabled,
-      });
-    saveConversationAutomationDocument(nextDocument);
-
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: message });
   }
 });
 
@@ -12073,111 +11502,6 @@ companionApp.post('/api/live-sessions/:id/abort', async (req, res) => {
       return;
     }
     res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.get('/api/conversations/:id/plan', async (req, res) => {
-  try {
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-companionApp.patch('/api/conversations/:id/plan', async (req, res) => {
-  try {
-    const body = req.body as { enabled?: boolean; items?: unknown };
-    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.items)) {
-      res.status(400).json({ error: 'enabled or items required' });
-      return;
-    }
-
-    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    if (Array.isArray(body.items)) {
-      validateConversationAutomationTemplateItems(body.items, skillNames);
-    }
-
-    let document = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    const updatedAt = new Date().toISOString();
-
-    if (Array.isArray(body.items)) {
-      document = replaceConversationAutomationItems(document, body.items, updatedAt);
-    }
-
-    if (typeof body.enabled === 'boolean') {
-      document = updateConversationAutomationEnabled(document, body.enabled, updatedAt);
-    }
-
-    saveConversationAutomationDocument(document);
-
-    if (document.enabled) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Unknown skill:')
-      || message.includes('items must be an array')
-      || message.includes('Each item')
-      || message.includes('Each skill item')
-      || message.includes('Each instruction item')
-      ? 400
-      : 500;
-    res.status(status).json({ error: message });
-  }
-});
-
-companionApp.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) => {
-  try {
-    const { checked } = req.body as { checked?: unknown };
-    if (typeof checked !== 'boolean') {
-      res.status(400).json({ error: 'checked must be a boolean' });
-      return;
-    }
-
-    const loaded = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-      settingsFile: SETTINGS_FILE,
-    });
-    const document = loaded.document;
-    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
-    if (!item) {
-      res.status(404).json({ error: 'Automation item not found' });
-      return;
-    }
-    if (document.activeItemId === item.id || item.status === 'running') {
-      res.status(409).json({ error: 'Running automation items cannot be edited from the checklist.' });
-      return;
-    }
-
-    const nextDocument = checked
-      ? updateConversationAutomationItemStatus(document, req.params.itemId, 'completed', { resultReason: 'Completed from the checklist UI.' })
-      : setConversationAutomationItemPending(document, req.params.itemId, { enabled: document.enabled });
-    saveConversationAutomationDocument(nextDocument);
-
-    res.json(await buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(500).json({ error: message });
-  }
-});
-
-companionApp.get('/api/conversations/:id/execution', async (req, res) => {
-  try {
-    res.json(await readConversationExecutionState(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(message.startsWith('Invalid') ? 400 : 500).json({ error: message });
   }
 });
 

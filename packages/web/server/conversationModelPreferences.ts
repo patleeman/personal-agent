@@ -21,7 +21,9 @@ export interface ConversationModelPreferenceInput {
   thinkingLevel?: string | null;
 }
 
-export interface ConversationModelPreferenceSnapshot extends ConversationModelPreferenceState {
+export interface ConversationModelPreferenceSnapshot {
+  currentModel: string;
+  currentThinkingLevel: string;
   hasExplicitModel: boolean;
   hasExplicitThinkingLevel: boolean;
 }

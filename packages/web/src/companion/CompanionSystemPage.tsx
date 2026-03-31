@@ -248,21 +248,6 @@ export function CompanionSystemPage() {
     };
   }, [runs, setRuns]);
 
-  useEffect(() => {
-    setTopBarAction(
-      <button
-        key="refresh"
-        type="button"
-        onClick={() => { void refreshAll(); }}
-        disabled={refreshing}
-        className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-      >
-        {refreshing ? 'Refreshing…' : 'Refresh'}
-      </button>,
-    );
-    return () => setTopBarAction(undefined);
-  }, [refreshAll, refreshing, setTopBarAction]);
-
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
     setActionError(null);
@@ -283,6 +268,21 @@ export function CompanionSystemPage() {
       setRefreshing(false);
     }
   }, [setDaemon, setRuns, setSync, setWebUi]);
+
+  useEffect(() => {
+    setTopBarAction(
+      <button
+        key="refresh"
+        type="button"
+        onClick={() => { void refreshAll(); }}
+        disabled={refreshing}
+        className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
+      >
+        {refreshing ? 'Refreshing…' : 'Refresh'}
+      </button>,
+    );
+    return () => setTopBarAction(undefined);
+  }, [refreshAll, refreshing, setTopBarAction]);
 
   const runAction = useCallback(async (action: typeof busyAction, request: () => Promise<unknown>, message?: string) => {
     if (!action || busyAction) {

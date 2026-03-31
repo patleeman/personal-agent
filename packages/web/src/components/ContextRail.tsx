@@ -46,7 +46,6 @@ import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
   AgentToolInfo,
-  ConversationAutomationWorkflowPreset,
   ConversationExecutionState,
   ConversationProjectLinks,
   DurableRunDetailResult,
@@ -70,7 +69,6 @@ import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
-import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { MentionTextarea } from './MentionTextarea';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import { NotesBrowserRail } from './NotesBrowserRail';
@@ -83,7 +81,6 @@ const ProjectOverviewPanel = lazy(() => import('./ProjectOverviewPanel').then((m
 const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
-const AutomationPresetPanel = lazy(() => import('./AutomationPresetPanel').then((module) => ({ default: module.AutomationPresetPanel })));
 const WorkspaceRail = lazy(() => import('./WorkspaceRail').then((module) => ({ default: module.WorkspaceRail })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
@@ -1308,9 +1305,6 @@ function DraftConversationContextPanel() {
         />
       </Section>
 
-      <Section title="Agent reminders">
-        <ConversationAutomationPanel conversationId={DRAFT_CONVERSATION_ID} />
-      </Section>
 
       {projectModalOpen && focusedProjectId && (
         <ReferencedProjectModal
@@ -2049,10 +2043,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         {changeCwdError && (
           <p className="text-[11px] text-danger/80">{changeCwdError}</p>
         )}
-      </Section>
-
-      <Section title="Agent reminders">
-        <ConversationAutomationPanel conversationId={id} />
       </Section>
 
       <Section title="Referenced projects">
@@ -3157,32 +3147,6 @@ function CapabilitiesOverviewContext({
   );
 }
 
-function CapabilitiesPresetContext({ preset, isDefault }: { preset: ConversationAutomationWorkflowPreset; isDefault: boolean }) {
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title break-words">{preset.name}</p>
-        <p className="ui-card-meta">{preset.id}</p>
-      </div>
-      <div className="space-y-2">
-        <RailMetadataRow label="Items" value={preset.items.length} />
-        <RailMetadataRow label="Default" value={isDefault ? 'Yes' : 'No'} />
-        <RailMetadataRow label="Updated" value={preset.updatedAt ? new Date(preset.updatedAt).toLocaleString() : 'Saved in settings'} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to={`/plans?plan=${encodeURIComponent(preset.id)}`} className="ui-toolbar-button">Open preset editor</Link>
-      </div>
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Items</p>
-        {preset.items.map((item) => (
-          <div key={item.id} className="rounded-lg border border-border-subtle bg-base px-3 py-2">
-            <p className="text-[12px] font-medium text-primary">{item.label}</p>
-            <p className="ui-card-meta mt-1">{item.kind === 'instruction' ? item.text : `${item.skillName}${item.skillArgs ? ` ${item.skillArgs}` : ''}`}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
@@ -3377,26 +3341,8 @@ export function ContextRail() {
         <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />,
         'Loading artifact…',
       )}
-    </div>
-  );
   if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Draft" />
-      <DraftConversationContextPanel />
-    </div>
-  );
-  if (section === 'conversations' && id && selectedRunId) return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Run" sub={selectedRunId} />
-      <RunContextPanel conversationId={id} runId={selectedRunId} />
-    </div>
-  );
-  if (section === 'conversations' && id) return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Session" />
-      <LiveSessionContextPanel id={id} />
-    </div>
-  );
   if (section === 'conversations') return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Conversations" sub="workspace" />

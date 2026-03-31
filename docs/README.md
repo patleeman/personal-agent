@@ -40,7 +40,6 @@ Those four pages should answer most agent questions quickly.
 
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Knowledge Management System](./knowledge-system.md)
 - [Projects](./projects.md)
@@ -77,7 +76,6 @@ Those four pages should answer most agent questions quickly.
 | Where should ongoing work live? | [Projects](./projects.md) | [Conversations](./conversations.md) |
 | Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Nodes](./nodes.md) |
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
-| How do I automate something? | [Automation](./automation.md) | [Scheduled Tasks](./scheduled-tasks.md), [Runs](./runs.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
 | How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Projects](./projects.md), [Web UI Guide](./web-ui.md) |

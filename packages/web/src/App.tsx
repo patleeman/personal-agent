@@ -101,7 +101,6 @@ const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ d
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const NodesPage = lazy(() => import('./pages/NodesPage').then((module) => ({ default: module.NodesPage })));
-const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then((module) => ({ default: module.SkillsPage })));
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
@@ -586,8 +585,6 @@ export function App() {
                       <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
                       <Route path="memories" element={<LegacyNotesRouteRedirect />} />
                       <Route path="skills" element={suspendRoute(<SkillsPage />)} />
-                      <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
-                      <Route path="plans" element={suspendRoute(<AutomationPage />)} />
                       <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
                       <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
                       <Route path="automations" element={<LegacyTaskRoutesRedirect />} />

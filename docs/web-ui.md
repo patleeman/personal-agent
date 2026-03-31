@@ -172,11 +172,8 @@ Conversation artifacts can appear as chat stubs and open in the right-hand artif
 
 When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
 
-Conversations can also carry lightweight automation.
-That automation is an ordered todo list of skill steps for that conversation.
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
-See [Conversations](./conversations.md) and [Automation](./automation.md).
 
 ### Workspace
 
@@ -193,9 +190,7 @@ When the selected folder lives inside a git repo, the page automatically roots i
 
 See [Workspace](./workspace.md).
 
-### Automation
 
-The Automation page manages reusable conversation-automation presets.
 
 Each preset is a named ordered todo list of skill items.
 You can:
@@ -205,9 +200,7 @@ You can:
 - mark presets as defaults for new conversations
 - apply presets into a live conversation
 
-The per-conversation automation panel shows the current todo list, active item, review state, and whether automation is enabled.
 
-See [Automation](./automation.md).
 
 ### Knowledge Base (`/nodes`)
 
@@ -313,7 +306,6 @@ Settings lets you change:
 - default model
 - default thinking level
 - conversation auto-title behavior and title model
-- whether inherited conversation-automation presets start enabled by default
 - saved UI state
 
 Switching the active profile affects:
@@ -404,7 +396,6 @@ So, for example:
 - [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
 - [Async Attention and Wakeups](./async-attention.md)
-- [Automation](./automation.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
