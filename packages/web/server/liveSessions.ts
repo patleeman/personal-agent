@@ -1364,8 +1364,7 @@ function wireSession(
     presenceBySurfaceId: new Map(),
     controllerSurfaceId: null,
     controllerAcquiredAt: null,
-    activePreset: options.activePreset ?? null,
-    activeFallbackIndex: -1,
+
   };
   registry.set(id, entry);
   publishSessionMetaChanged(id);

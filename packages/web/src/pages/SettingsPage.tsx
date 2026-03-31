@@ -1426,7 +1426,7 @@ export function SettingsPage() {
                     <label className="ui-card-meta" htmlFor="settings-model">Model</label>
                     <select
                       id="settings-model"
-                      value={modelState.presetId || modelState.currentModel}
+                      value={modelState.currentModel}
                       onChange={(event) => {
                         void handleModelPreferenceChange({ model: event.target.value }, 'model');
                       }}
@@ -1455,7 +1455,7 @@ export function SettingsPage() {
                     <p className="ui-card-meta">
                       {savingPreference === 'model'
                         ? 'Saving default model…'
-                        : formatModelSummary(selectedModel, modelState.presetId ? `preset ${modelState.presetId}` : 'No model selected.')}
+                        : formatModelSummary(selectedModel, 'No model selected.')
                     </p>
 
                     <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>

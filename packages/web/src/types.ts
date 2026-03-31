@@ -1101,7 +1101,6 @@ export interface ModelInfo {
 export interface ModelState {
   currentModel: string;
   currentThinkingLevel: string;
-  presetId: string;
   models: ModelInfo[];
 }
 

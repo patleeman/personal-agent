@@ -1927,7 +1927,7 @@ function resolveConversationSessionFile(conversationId: string): string | undefi
   return snapshotSessionFile || undefined;
 }
 
-async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string; presetId: string } | null> {
+async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
   const profile = getCurrentProfile();
   const binding = readRemoteConversationBindingForConversation({ profile, conversationId });
   if (binding) {
@@ -3983,7 +3983,6 @@ app.get('/api/models', (_req, res) => {
     res.json({
       currentModel,
       currentThinkingLevel: saved.currentThinkingLevel,
-      presetId: saved.currentPresetId,
       models,
     });
   } catch (err) {
@@ -3997,15 +3996,15 @@ app.get('/api/models', (_req, res) => {
 
 app.patch('/api/models/current', (req, res) => {
   try {
-    const { model, thinkingLevel, presetId } = req.body as { model?: string; thinkingLevel?: string; presetId?: string };
-    if (typeof model !== 'string' && typeof thinkingLevel !== 'string' && typeof presetId !== 'string') {
-      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
+    const { model, thinkingLevel } = req.body as { model?: string; thinkingLevel?: string };
+    if (typeof model !== 'string' && typeof thinkingLevel !== 'string') {
+      res.status(400).json({ error: 'model or thinkingLevel required' });
       return;
     }
 
     const availableModels = listAvailableModelDefinitions();
     persistSettingsWrite((settingsFile) => {
-      writeSavedModelPreferences({ model, thinkingLevel, presetId }, settingsFile, availableModels);
+      writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, availableModels);
     }, {
       localSettingsFile: getCurrentProfileSettingsFile(),
       runtimeSettingsFile: SETTINGS_FILE,
@@ -6567,7 +6566,6 @@ app.post('/api/live-sessions', async (req, res) => {
       targetId?: string | null;
       model?: string | null;
       thinkingLevel?: string | null;
-      presetId?: string | null;
     };
     const profile = getCurrentProfile();
     const availableProjectIds = listReferenceableProjectIds();
@@ -6605,7 +6603,6 @@ app.post('/api/live-sessions', async (req, res) => {
         remoteCwd,
         ...(body.model !== undefined ? { initialModel: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
-        ...(body.presetId !== undefined ? { initialPresetId: body.presetId } : {}),
       });
       setConversationExecutionTarget({
         profile,
@@ -6640,7 +6637,6 @@ app.post('/api/live-sessions', async (req, res) => {
       extensionFactories: buildLiveSessionExtensionFactories(),
       ...(body.model !== undefined ? { initialModel: body.model } : {}),
       ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
-      ...(body.presetId !== undefined ? { initialPresetId: body.presetId } : {}),
     });
     if (referencedProjectIds.length > 0) {
       setConversationProjectLinks({
@@ -7611,22 +7607,20 @@ app.get('/api/conversations/:id/model-preferences', async (req, res) => {
 
 app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
   try {
-    const { model, thinkingLevel, presetId } = req.body as {
+    const { model, thinkingLevel } = req.body as {
       model?: string | null;
       thinkingLevel?: string | null;
-      presetId?: string | null;
       surfaceId?: string;
     };
 
-    if (model === undefined && thinkingLevel === undefined && presetId === undefined) {
-      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
+    if (model === undefined && thinkingLevel === undefined) {
+      res.status(400).json({ error: 'model or thinkingLevel required' });
       return;
     }
 
     if ((model !== undefined && model !== null && typeof model !== 'string')
-      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
-      || (presetId !== undefined && presetId !== null && typeof presetId !== 'string')) {
-      res.status(400).json({ error: 'model, thinkingLevel, and presetId must be strings or null' });
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
+      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
       return;
     }
 
@@ -7634,11 +7628,9 @@ app.patch('/api/conversations/:id/model-preferences', async (req, res) => {
     const input: {
       model?: string | null;
       thinkingLevel?: string | null;
-      presetId?: string | null;
     } = {
       ...(model !== undefined ? { model } : {}),
       ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
-      ...(presetId !== undefined ? { presetId } : {}),
     };
 
     if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
@@ -10391,22 +10383,20 @@ companionApp.get('/api/conversations/:id/model-preferences', async (req, res) =>
 
 companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) => {
   try {
-    const { model, thinkingLevel, presetId } = req.body as {
+    const { model, thinkingLevel } = req.body as {
       model?: string | null;
       thinkingLevel?: string | null;
-      presetId?: string | null;
       surfaceId?: string;
     };
 
-    if (model === undefined && thinkingLevel === undefined && presetId === undefined) {
-      res.status(400).json({ error: 'model, thinkingLevel, or presetId required' });
+    if (model === undefined && thinkingLevel === undefined) {
+      res.status(400).json({ error: 'model or thinkingLevel required' });
       return;
     }
 
     if ((model !== undefined && model !== null && typeof model !== 'string')
-      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
-      || (presetId !== undefined && presetId !== null && typeof presetId !== 'string')) {
-      res.status(400).json({ error: 'model, thinkingLevel, and presetId must be strings or null' });
+      || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
+      res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
       return;
     }
 
@@ -10414,11 +10404,9 @@ companionApp.patch('/api/conversations/:id/model-preferences', async (req, res) 
     const input: {
       model?: string | null;
       thinkingLevel?: string | null;
-      presetId?: string | null;
     } = {
       ...(model !== undefined ? { model } : {}),
       ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
-      ...(presetId !== undefined ? { presetId } : {}),
     };
 
     if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
