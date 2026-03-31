@@ -25,15 +25,18 @@ export function pillToneClass(tone: PillTone) {
 export function PageHeader({
   children,
   actions,
+  leading,
   className,
 }: {
   children: ReactNode;
   actions?: ReactNode;
+  leading?: ReactNode;
   className?: string;
 }) {
   return (
     <div className={cx('ui-page-header', className)}>
-      <div className="min-w-0">{children}</div>
+      {leading && <div className="flex items-center shrink-0 pr-3">{leading}</div>}
+      <div className="flex-1 min-w-0">{children}</div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>
   );
