@@ -311,6 +311,9 @@ function KnowledgeBrowserPage({
   onQueryChange,
   onSortChange,
   onFilterChange,
+  onCreateNote,
+  onCreateProject,
+  onCreateSkill,
 }: {
   nodes: UnifiedNodeItem[];
   filteredNodes: UnifiedNodeItem[];
@@ -326,6 +329,9 @@ function KnowledgeBrowserPage({
   onQueryChange: (value: string) => void;
   onSortChange: (value: NodeBrowserSort) => void;
   onFilterChange: (value: NodeBrowserFilter) => void;
+  onCreateNote: () => void;
+  onCreateProject: () => void;
+  onCreateSkill: () => void;
 }) {
   const groupedNodes = useMemo(() => {
     if (filter !== 'all') {
@@ -346,9 +352,20 @@ function KnowledgeBrowserPage({
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
       <PageHeader
         actions={(
-          <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </ToolbarButton>
+          <div className="flex items-center gap-2">
+            <ToolbarButton onClick={onCreateNote} className="text-accent">
+              New note
+            </ToolbarButton>
+            <ToolbarButton onClick={onCreateProject}>
+              New project
+            </ToolbarButton>
+            <ToolbarButton onClick={onCreateSkill}>
+              New skill
+            </ToolbarButton>
+            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
+              {refreshing ? 'Refreshing…' : 'Refresh'}
+            </ToolbarButton>
+          </div>
         )}
       >
         <PageHeading
@@ -650,6 +667,18 @@ export function NodesPage() {
     })}`, { replace: true });
   }, [location.search, navigate, selected]);
 
+  const handleCreateNote = useCallback(() => {
+    navigate('/notes?creating=true');
+  }, [navigate]);
+
+  const handleCreateProject = useCallback(() => {
+    navigate('/projects?creating=true');
+  }, [navigate]);
+
+  const handleCreateSkill = useCallback(() => {
+    navigate('/skills?creating=true');
+  }, [navigate]);
+
   useEffect(() => {
     if (!selected) {
       return;
@@ -718,6 +747,9 @@ export function NodesPage() {
       onQueryChange={setQuery}
       onSortChange={setSort}
       onFilterChange={handleFilterChange}
+      onCreateNote={handleCreateNote}
+      onCreateProject={handleCreateProject}
+      onCreateSkill={handleCreateSkill}
     />
   );
 }

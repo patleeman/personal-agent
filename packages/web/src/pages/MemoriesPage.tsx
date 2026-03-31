@@ -681,6 +681,7 @@ function NewNoteWorkspace({
   const [createBody, setCreateBody] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const noteDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const lastAutoCreateSignatureRef = useRef<string | null>(null);
   const hasDraftContent = createTitle.trim().length > 0 || createDescription.trim().length > 0 || createBody.trim().length > 0;
 
@@ -750,30 +751,93 @@ function NewNoteWorkspace({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleCreateNote]);
 
+  useEffect(() => {
+    const element = noteDescriptionRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    const nextHeight = Math.max(52, Math.min(element.scrollHeight, 220));
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY = element.scrollHeight > 220 ? 'auto' : 'hidden';
+  }, [createDescription]);
+
+  const createStatus = creating
+    ? { text: 'Creating…', className: 'text-accent' }
+    : createTitle.trim().length === 0
+      ? { text: 'Add a title to create', className: 'text-warning' }
+      : hasDraftContent
+        ? { text: 'Unsaved draft', className: 'text-warning' }
+        : { text: 'Ready', className: 'text-dim' };
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <ToolbarButton onClick={() => { void handleCreateNote(); }} disabled={creating || createTitle.trim().length === 0} className="text-accent">
-          {creating ? 'Creating…' : 'Create now'}
-        </ToolbarButton>
+    <NodeWorkspaceShell
+      breadcrumbs={(
+        <>
+          <span>Notes</span>
+          <span className="opacity-40">›</span>
+          <span className="font-medium text-primary">New note</span>
+        </>
+      )}
+      title={(
+        <input
+          aria-label="Note title"
+          name="note-title"
+          autoComplete="off"
+          spellCheck={false}
+          value={createTitle}
+          onChange={(event) => setCreateTitle(event.target.value)}
+          className="ui-node-title-input"
+          placeholder="Note title"
+        />
+      )}
+      titleAs="div"
+      summaryClassName="max-w-4xl"
+      summary={(
+        <textarea
+          ref={noteDescriptionRef}
+          aria-label="Note guidance for the agent"
+          name="note-description"
+          value={createDescription}
+          onChange={(event) => setCreateDescription(event.target.value)}
+          placeholder="Tell the agent how to use this note, when to read it, or what it is for."
+          className="ui-note-header-textarea"
+          rows={1}
+        />
+      )}
+      status={<span className={createStatus.className}>{createStatus.text}</span>}
+      actions={(
+        <NodeToolbarGroup>
+          <NodeIconActionButton
+            onClick={() => { void handleCreateNote(); }}
+            disabled={creating || createTitle.trim().length === 0}
+            title={creating ? 'Creating note' : 'Create note'}
+            aria-label={creating ? 'Creating note' : 'Create note'}
+            tone={creating || createTitle.trim().length > 0 ? 'accent' : 'default'}
+          >
+            <NoteWorkspaceIcon paths={["M5 4h11l3 3v13H5z", "M9 4v6h6V4", "M9 20v-6h6v6"]} />
+          </NodeIconActionButton>
+        </NodeToolbarGroup>
+      )}
+      notice={createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
+    >
+      <div className="max-w-4xl">
+        <NoteEditorDocument
+          title={createTitle}
+          onTitleChange={setCreateTitle}
+          description={createDescription}
+          onDescriptionChange={setCreateDescription}
+          body={createBody}
+          onBodyChange={setCreateBody}
+          showTitle={false}
+          showDescription={false}
+          frameClassName="ui-note-editor-frame-embedded"
+          documentClassName="ui-note-editor-doc-embedded"
+          bodyPlaceholder="Start writing… Paste, drop, or insert images."
+        />
       </div>
-      {createError ? <WorkspaceActionNotice tone="danger">{createError}</WorkspaceActionNotice> : null}
-      <NoteEditorDocument
-        title={createTitle}
-        onTitleChange={setCreateTitle}
-        description={createDescription}
-        onDescriptionChange={setCreateDescription}
-        body={createBody}
-        onBodyChange={setCreateBody}
-        meta={(
-          <>
-            <span>Draft note</span>
-            <span>{createTitle.trim().length === 0 ? 'Autosaves once it has a title' : 'Autosaves automatically'}</span>
-          </>
-        )}
-        titlePlaceholder="Untitled note"
-      />
-    </div>
+    </NodeWorkspaceShell>
   );
 }
 
