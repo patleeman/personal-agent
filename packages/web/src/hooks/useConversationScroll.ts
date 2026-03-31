@@ -126,15 +126,23 @@ export function useConversationScroll({
     streamingTailAutoScrollKeyRef.current = null;
     scrollPinnedToBottomRef.current = true;
 
-    const el = scrollRef.current;
-    if (el) {
-      el.scrollTop = getConversationBottomScrollTop({
-        scrollHeight: el.scrollHeight,
-        clientHeight: el.clientHeight,
-      });
-    }
+    // Defer the initial scroll by one animation frame so that a remounting
+    // ChatView (triggered by a key change on conversationId) has time to
+    // compute its layout before we read scrollHeight.
+    const frame = window.requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (el) {
+        el.scrollTop = getConversationBottomScrollTop({
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+        });
+      }
+      setAtBottom(true);
+    });
 
-    setAtBottom(true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [cancelBottomScrollSettle, conversationId, scrollRef]);
 
   useLayoutEffect(() => () => {
