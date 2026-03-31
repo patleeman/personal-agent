@@ -5,13 +5,12 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
-import { EmptyState, IconButton, LoadingState, PageHeader, Pill, ToolbarButton, cx } from '../components/ui';
+import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, ModelPresetState, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
-import { useConversations } from '../hooks/useConversations';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
@@ -956,25 +955,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
   const { alerts, projects, tasks, sessions, setProjects, setSessions, setAlerts = () => {} } = useAppData();
-  const {
-    openIds,
-    pinnedIds,
-    archiveSession,
-  } = useConversations();
-  const conversationInWorkspace = useMemo(() => (
-    !draft
-    && Boolean(id)
-    && (openIds.includes(id) || pinnedIds.includes(id))
-  ), [draft, id, openIds, pinnedIds]);
-
-  const archiveCurrentConversation = useCallback(() => {
-    if (!id || !conversationInWorkspace) {
-      return;
-    }
-
-    archiveSession(id);
-    navigate('/conversations');
-  }, [archiveSession, conversationInWorkspace, id, navigate]);
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
@@ -4625,16 +4605,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <span className="text-dim">draft</span>
             ) : (
               <>
-                {conversationInWorkspace ? (
-                  <ToolbarButton
-                    type="button"
-                    onClick={() => { archiveCurrentConversation(); }}
-                    title="Archive this conversation from the workspace"
-                    className="text-warning"
-                  >
-                    archive
-                  </ToolbarButton>
-                ) : null}
+
                 {stream.isStreaming && (
                   <span
                     className="inline-flex items-center gap-1.5 text-accent"
