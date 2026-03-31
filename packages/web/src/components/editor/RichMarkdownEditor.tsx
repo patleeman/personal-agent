@@ -129,6 +129,13 @@ function shouldShowInsertFloatingMenu({
     return false;
   }
 
+  // Only show the insert menu for a truly empty document while preserving
+  // no-text-selection behavior on populated documents.
+  const documentText = state.doc.textBetween(0, state.doc.content.size, ' ', ' ').trim();
+  if (documentText.length > 0) {
+    return false;
+  }
+
   return !$anchor.parent.textContent && $anchor.parent.childCount === 0;
 }
 
