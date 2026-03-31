@@ -4233,7 +4233,8 @@ app.get('/api/models', (_req, res) => {
   try {
     const saved = readSavedModelPreferences(SETTINGS_FILE);
     const models = listAvailableModelDefinitions();
-    const currentModel = saved.currentModel || models[0]?.id || '';
+    const modelIds = new Set(models.map((m) => m.id));
+    const currentModel = (saved.currentModel && modelIds.has(saved.currentModel)) ? saved.currentModel : (models[0]?.id || '');
     res.json({
       currentModel,
       currentThinkingLevel: saved.currentThinkingLevel,
@@ -10925,7 +10926,8 @@ companionApp.get('/api/models', (_req, res) => {
   try {
     const saved = readSavedModelPreferences(SETTINGS_FILE);
     const models = listAvailableModelDefinitions();
-    const currentModel = saved.currentModel || models[0]?.id || '';
+    const modelIds = new Set(models.map((m) => m.id));
+    const currentModel = (saved.currentModel && modelIds.has(saved.currentModel)) ? saved.currentModel : (models[0]?.id || '');
     res.json({
       currentModel,
       currentThinkingLevel: saved.currentThinkingLevel,
