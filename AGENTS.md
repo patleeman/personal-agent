@@ -20,6 +20,10 @@ This is personal software, built for Patrick by Patrick.
 - Ensure consistency across pages, don't design in isolation!
 - If you modify anything in the web ui, you MUST perform a visual check before signing off on the work! Make sure there is no jank and the output looks good.
 
-# Docs are for agents
+## Docs are for agents
 
 The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.
+
+## Checkpoint when complete
+
+Once you're done with your task, remember to checkpoint your work.

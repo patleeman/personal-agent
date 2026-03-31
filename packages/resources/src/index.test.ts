@@ -189,6 +189,29 @@ describe('resources profile loader', () => {
     expect(readModelPresetLibrary(runtimeSettings).presets).toHaveLength(2);
   });
 
+  it('uses prompt-catalog/system.md as the system source when present', () => {
+    const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
+    const syncRoot = join(profilesRoot, '..');
+    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
+    tempDirs.push(runtime);
+
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
+    writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
+    writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
+    writeFile(join(profilesRoot, 'shared.json'), '{"title":"Shared"}\n');
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `---\nname: checkpoint\ndescription: Commit and push\nkind: skill\n---\n`);
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo, profilesRoot });
+    const result = materializeProfileToAgentDir(resolved, runtime);
+    const runtimePrompt = readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8');
+
+    expect(result.writtenFiles.some((path) => path.endsWith('/APPEND_SYSTEM.md'))).toBe(true);
+    expect(runtimePrompt).toContain('System source');
+    expect(runtimePrompt).not.toContain('legacy role');
+  });
+
   it('installs package sources into the selected durable settings file', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();

@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import * as nunjucks from 'nunjucks';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,15 +54,41 @@ export function requirePromptCatalogEntry(relativePath: string, options: { repoR
   return text;
 }
 
-export function renderPromptCatalogTemplate(template: string, variables: PromptCatalogVariables = {}): string {
-  const rendered = template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
-    const value = variables[key];
+export interface RenderPromptCatalogTemplateOptions {
+  templateRoot?: string;
+}
+
+function normalizeTemplateVariables(variables: PromptCatalogVariables): Record<string, string | number | boolean> {
+  const entries = Object.entries(variables).map(([key, value]) => {
     if (value === undefined || value === null || value === false) {
-      return '';
+      return [key, ''];
     }
 
-    return String(value);
+    return [key, value];
   });
+
+  return Object.fromEntries(entries);
+}
+
+function getTemplateEnvironment(templateRoot?: string): nunjucks.Environment {
+  const loader = templateRoot
+    ? new nunjucks.FileSystemLoader(templateRoot, { noCache: true })
+    : undefined;
+
+  return new nunjucks.Environment(loader, {
+    autoescape: false,
+  });
+}
+
+export function renderPromptCatalogTemplate(
+  template: string,
+  variables: PromptCatalogVariables = {},
+  options: RenderPromptCatalogTemplateOptions = {},
+): string {
+  const rendered = getTemplateEnvironment(options.templateRoot).renderString(
+    template,
+    normalizeTemplateVariables(variables),
+  );
 
   return rendered
     .replace(/[ \t]+\n/g, '\n')
@@ -93,6 +120,18 @@ export function composePromptCatalogDirectory(
   relativeDir: string,
   options: { repoRoot?: string; separator?: string } = {},
 ): string | undefined {
+  if (relativeDir === 'system') {
+    const singleTemplatePath = resolvePromptCatalogPath('system.md', options.repoRoot);
+    if (existsSync(singleTemplatePath)) {
+      const root = getPromptCatalogRoot(options.repoRoot);
+      const singleTemplate = requirePromptCatalogEntry('system.md', { repoRoot: options.repoRoot });
+      const rendered = renderPromptCatalogTemplate(singleTemplate, {}, { templateRoot: root });
+      if (rendered.length > 0) {
+        return rendered;
+      }
+    }
+  }
+
   const entries = listPromptCatalogEntries(relativeDir, { repoRoot: options.repoRoot });
   if (entries.length === 0) {
     return undefined;

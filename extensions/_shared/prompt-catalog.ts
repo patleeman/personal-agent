@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import * as nunjucks from 'nunjucks';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -6,6 +7,35 @@ export type PromptCatalogVariables = Record<string, string | number | boolean | 
 
 function normalizePromptText(text: string): string {
   return text.replace(/\r\n/g, '\n').trim();
+}
+
+function normalizePromptVariables(variables: PromptCatalogVariables): Record<string, string | number | boolean> {
+  const entries = Object.entries(variables).map(([key, value]) => {
+    if (value === undefined || value === null || value === false) {
+      return [key, ''];
+    }
+
+    return [key, value];
+  });
+
+  return Object.fromEntries(entries);
+}
+
+function getTemplateRootFromExtension(importMetaUrl: string): string {
+  const catalogRoot = inferRepoRootFromExtension(importMetaUrl);
+  return resolve(catalogRoot, 'prompt-catalog');
+}
+
+function getTemplateEnvironment(importMetaUrl: string): nunjucks.Environment {
+  return new nunjucks.Environment(new nunjucks.FileSystemLoader(getTemplateRootFromExtension(importMetaUrl), {
+    noCache: true,
+  }), {
+    autoescape: false,
+  });
+}
+
+function getTemplateEnvironmentWithoutLoader(): nunjucks.Environment {
+  return new nunjucks.Environment(undefined, { autoescape: false });
 }
 
 function inferRepoRootFromExtension(importMetaUrl: string): string {
@@ -85,15 +115,12 @@ export function requirePromptCatalogEntryFromExtension(importMetaUrl: string, re
   return text;
 }
 
-export function renderPromptCatalogTemplate(template: string, variables: PromptCatalogVariables = {}): string {
-  const rendered = template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
-    const value = variables[key];
-    if (value === undefined || value === null || value === false) {
-      return '';
-    }
+export function renderPromptCatalogTemplate(template: string, variables: PromptCatalogVariables = {}, importMetaUrl?: string): string {
+  const env = importMetaUrl
+    ? getTemplateEnvironment(importMetaUrl)
+    : getTemplateEnvironmentWithoutLoader();
 
-    return String(value);
-  });
+  const rendered = env.renderString(template, normalizePromptVariables(variables));
 
   return rendered
     .replace(/[ \t]+\n/g, '\n')

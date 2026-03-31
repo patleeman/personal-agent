@@ -18,7 +18,10 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@personal-agent/core": "*"
+    "@personal-agent/core": "*",
+    "nunjucks": "^3.2.4"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/nunjucks": "^3.2.6"
+  }
 }

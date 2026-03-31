@@ -40,8 +40,8 @@ describe('prompt catalog helpers', () => {
   it('renders template placeholders and collapses extra blank lines', () => {
     const rendered = renderPromptCatalogTemplate([
       'Header',
-      '{{section_one}}',
-      '{{section_two}}',
+      '{{ section_one }}',
+      '{{ section_two }}',
       'Footer',
     ].join('\n'), {
       section_one: 'First block',
@@ -49,6 +49,17 @@ describe('prompt catalog helpers', () => {
     });
 
     expect(rendered).toBe(['Header', 'First block', '', 'Footer'].join('\n'));
+  });
+
+  it('renders nunjucks conditional logic', () => {
+    const rendered = renderPromptCatalogTemplate([
+      'Header',
+      '{% if include_footer %}Footer{% endif %}',
+    ].join('\n'), {
+      include_footer: true,
+    });
+
+    expect(rendered).toBe('Header\nFooter');
   });
 
   it('composes multiple entries in order', () => {
@@ -79,6 +90,22 @@ describe('prompt catalog helpers', () => {
       '',
       'Task block',
     ].join('\n'));
+  });
+
+  it('prefers system.md for the system directory when present', () => {
+    const repo = createTempRepo('pa-prompt-catalog-');
+    mkdirSync(join(repo, 'prompt-catalog'), { recursive: true });
+    mkdirSync(join(repo, 'prompt-catalog', 'system'), { recursive: true });
+    writeFileSync(join(repo, 'prompt-catalog', 'system.md'), [
+      'System block',
+      '{% include "system/20-task.md" %}',
+    ].join('\n'));
+    writeFileSync(join(repo, 'prompt-catalog', 'system', '20-task.md'), 'Task block\n');
+
+    expect(composePromptCatalogDirectory('system', {
+      repoRoot: repo,
+      separator: '\n\n',
+    })).toBe('System block\nTask block');
   });
 
   it('returns undefined for missing optional entries and throws for required ones', () => {

@@ -13,9 +13,9 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function writeNoteNode(stateRoot: string, noteId: string, summary: string): void {
-  mkdirSync(join(stateRoot, 'notes', noteId), { recursive: true });
-  writeFileSync(join(stateRoot, 'notes', noteId, 'INDEX.md'), `---
+function writeNoteNode(notesDir: string, noteId: string, summary: string): void {
+  mkdirSync(join(notesDir, noteId), { recursive: true });
+  writeFileSync(join(notesDir, noteId, 'INDEX.md'), `---
 id: ${noteId}
 kind: note
 title: ${noteId}
@@ -38,7 +38,7 @@ afterEach(async () => {
 });
 
 describe('note policy extension', () => {
-  it('injects active profile path targets, node policy instructions, and available notes', async () => {
+  it('renders system.md with active profile and available notes', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
 
@@ -48,7 +48,7 @@ describe('note policy extension', () => {
 
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
-    writeNoteNode(stateRoot, 'runpod', 'Provisioning notes for short-lived GPU pods.');
+    writeNoteNode(join(stateRoot, 'notes'), 'runpod', 'Provisioning notes for short-lived GPU pods.');
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -65,21 +65,20 @@ describe('note policy extension', () => {
 
     const result = await beforeAgentStartHandler!(
       { prompt: 'please remember this setup', systemPrompt: 'BASE_SYSTEM_PROMPT' },
-      { cwd: repoRoot },
-    ) as { systemPrompt?: string; message?: { customType?: string; content?: string; display?: boolean } } | undefined;
+      { cwd: stateRoot },
+    ) as { systemPrompt?: string } | undefined;
 
-    expect(result?.systemPrompt).toContain('NODE_POLICY');
-    expect(result?.systemPrompt).toContain('- active_profile: datadog');
-    expect(result?.systemPrompt).toContain(`- Shared notes dir: ${join(stateRoot, 'notes')}`);
-    expect(result?.systemPrompt).toContain(`- Note node template: ${join(stateRoot, 'notes', '<note-id>', 'INDEX.md')}`);
-    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills + shared note nodes as the durable node system.');
-    expect(result?.systemPrompt).toContain('<available_notes>');
-    expect(result?.systemPrompt).toContain('<note id="runpod"');
-    expect(result?.systemPrompt).toContain(join(stateRoot, 'notes', 'runpod', 'INDEX.md'));
-    expect(result?.message).toBeUndefined();
+    const prompt = result?.systemPrompt ?? '';
+    expect(prompt).toContain('NODE_POLICY');
+    expect(prompt).toContain('- active_profile: datadog');
+    expect(prompt).toContain('- Shared notes dir: notes');
+    expect(prompt).toContain('Use active-profile AGENTS.md + skills + shared note nodes');
+    expect(prompt).toContain('<available_notes>');
+    expect(prompt).toContain('<note id="runpod"');
+    expect(prompt).toContain('notes/runpod/INDEX.md');
   });
 
-  it('falls back to shared when requested profile directory is missing', async () => {
+  it('shows fallback note when requested profile is missing', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -103,18 +102,18 @@ describe('note policy extension', () => {
     const result = await beforeAgentStartHandler!(
       { prompt: 'what should we retain?', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string; message?: { content?: string } } | undefined;
+    ) as { systemPrompt?: string } | undefined;
 
-    expect(result?.systemPrompt).toContain('- active_profile: shared');
-    expect(result?.systemPrompt).toContain('- requested_profile: missing-profile');
-    expect(result?.systemPrompt).toContain('requested profile was missing');
-    expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
-    expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
-    expect(result?.systemPrompt).toContain(`- Shared notes dir: ${join(stateRoot, 'notes')}`);
-    expect(result?.message).toBeUndefined();
+    const prompt = result?.systemPrompt ?? '';
+    expect(prompt).toContain('- active_profile: shared');
+    expect(prompt).toContain('- requested_profile: missing-profile');
+    expect(prompt).toContain('requested profile was missing');
+    expect(prompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
+    expect(prompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
+    expect(prompt).toContain('- Shared notes dir: unavailable');
   });
 
-  it('does not inject node policy for slash commands or empty prompts', async () => {
+  it('does not inject for slash commands or empty prompts', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -148,7 +147,7 @@ describe('note policy extension', () => {
     expect(emptyResult).toBeUndefined();
   });
 
-  it('injects only the lean node policy for generic prompts', async () => {
+  it('renders NODE_POLICY for generic prompts', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -173,10 +172,9 @@ describe('note policy extension', () => {
     const result = await beforeAgentStartHandler!(
       { prompt: 'inspect the sync prompt behavior', systemPrompt: 'BASE_SYSTEM_PROMPT' },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string; message?: unknown } | undefined;
+    ) as { systemPrompt?: string } | undefined;
 
-    expect(result?.systemPrompt).toContain('NODE_POLICY');
-    expect(result?.message).toBeUndefined();
+    expect(result?.systemPrompt ?? '').toContain('NODE_POLICY');
   });
 
   it('resolves the active note profile context', () => {
