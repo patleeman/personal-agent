@@ -40,6 +40,7 @@ prompt-catalog/
 - Keep prompt text stable and easy to diff.
 - Use placeholders only when runtime interpolation is genuinely required.
 - Keep execution logic in code and prompt wording in this catalog.
-- Keep `system/` entries universal; do not restate runtime- or profile-specific rules there.
+- Prefer a single `system.md` as the source for the base system prompt, so the complete prompt policy is readable in one place.
+- Keep `system/` legacy entries optional for compatibility only; `system.md` (or `SYSTEM.md` profile overrides) is now the preferred single-file base.
 - Keep `runtime/` entries delta-only; they should describe what changes in that mode, not repeat the shared base prompt.
 - Keep profile `AGENTS.md` files focused on durable facts, preferences, and profile-specific policy.
