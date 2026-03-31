@@ -10,7 +10,6 @@ import {
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
-  readModelPresetLibrary,
   readPackageSourceTargetState,
   resolveLocalProfileSettingsFilePath,
   resolveResourceProfile,
@@ -151,22 +150,15 @@ describe('resources profile loader', () => {
     writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
     writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({
       datadog: true,
-      defaultModelPreset: 'balanced',
-      modelPresets: {
-        balanced: {
-          description: 'Balanced default',
-          model: 'openai-codex/gpt-5.4',
-          thinkingLevel: 'high',
-          goodFor: ['most coding work'],
-        },
-        'cheap-ops': {
-          description: 'Cheaper bounded work',
-          model: 'openai-codex/gpt-5.1-codex-mini',
-          thinkingLevel: 'off',
-        },
-      },
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+      defaultThinkingLevel: 'high',
     }));
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `---\nname: checkpoint\ndescription: Commit and push the agent's current work.\nkind: skill\npreferredModelPreset: cheap-ops\n---\n`);
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `-----
+name: checkpoint
+description: Commit and push the agent's current work.
+kind: skill
+---`);
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
@@ -179,14 +171,10 @@ describe('resources profile loader', () => {
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('catalog role');
     expect(runtimePrompt).toContain('shared append');
-    expect(runtimePrompt).toContain('<model-presets>');
-    expect(runtimePrompt).toContain('Default preset: balanced');
-    expect(runtimePrompt).toContain('@checkpoint: prefer cheap-ops');
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Datadog');
     expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
     expect(runtimeSettings.defaultProvider).toBe('openai-codex');
     expect(runtimeSettings.defaultThinkingLevel).toBe('high');
-    expect(readModelPresetLibrary(runtimeSettings).presets).toHaveLength(2);
   });
 
   it('uses prompt-catalog/system.md as the system source when present', () => {
@@ -201,7 +189,11 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
     writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
     writeFile(join(profilesRoot, 'shared.json'), '{"title":"Shared"}\n');
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `---\nname: checkpoint\ndescription: Commit and push\nkind: skill\n---\n`);
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `-----
+name: checkpoint
+description: Commit and push
+kind: skill
+---`);
 
     const resolved = resolveResourceProfile('shared', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);

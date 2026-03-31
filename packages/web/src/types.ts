@@ -1104,28 +1104,6 @@ export interface ModelState {
   models: ModelInfo[];
 }
 
-export interface ModelPresetTargetState {
-  model: string;
-  thinkingLevel: string;
-}
-
-export interface ModelPresetState {
-  id: string;
-  description: string;
-  model: string;
-  thinkingLevel: string;
-  fallbacks: ModelPresetTargetState[];
-  goodFor: string[];
-  avoidFor: string[];
-  instructionAddendum: string;
-}
-
-export interface ModelPresetPreferencesState {
-  profile: string;
-  defaultPresetId: string;
-  presets: ModelPresetState[];
-}
-
 export type ModelProviderApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
 export type ModelProviderInputType = 'text' | 'image';
 
