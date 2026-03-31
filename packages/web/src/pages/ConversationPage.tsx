@@ -1596,6 +1596,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id, setInputState]);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
   const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
@@ -1649,6 +1650,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     persistDraftConversationExecutionTarget(draftExecutionTargetId);
   }, [draft, draftExecutionTargetId]);
+
+  // Track keyboard open/close via visualViewport (mobile keyboard)
+  useEffect(() => {
+    const syncKeyboardInset = () => {
+      const visualViewport = window.visualViewport;
+      if (!visualViewport) {
+        setKeyboardInset(0);
+        return;
+      }
+
+      const nextInset = Math.max(
+        0,
+        Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop)),
+      );
+      setKeyboardInset((current) => (current === nextInset ? current : nextInset));
+    };
+
+    syncKeyboardInset();
+    window.addEventListener('resize', syncKeyboardInset);
+    window.visualViewport?.addEventListener('resize', syncKeyboardInset);
+    window.visualViewport?.addEventListener('scroll', syncKeyboardInset);
+
+    return () => {
+      window.removeEventListener('resize', syncKeyboardInset);
+      window.visualViewport?.removeEventListener('resize', syncKeyboardInset);
+      window.visualViewport?.removeEventListener('scroll', syncKeyboardInset);
+    };
+  }, []);
 
   useEffect(() => {
     if (!draft || !draftAttachmentsHydratedRef.current) {
@@ -4330,6 +4359,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         ? 'Remote workspace disconnected. Click connect to resume.'
         : null);
   const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
+  const keyboardOpen = keyboardInset > 120;
   const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
     draft,
     isLiveSession,
@@ -4716,12 +4746,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {transcriptPane}
 
       {/* Input area */}
-      <div
-        className={`px-4 pb-4 pt-2 transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
+      {!keyboardOpen && (
+        <div
+          className={`px-4 pt-2 transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
         {notice && (
           <div className="mb-2 text-center">
             <Pill tone={notice.tone}>{notice.text}</Pill>
@@ -5256,6 +5287,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
         </div>
       </div>
+      )}
 
       {editingDrawingLocalId && (
         <Suspense fallback={null}>
