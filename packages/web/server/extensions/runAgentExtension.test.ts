@@ -17,14 +17,14 @@ const {
   startBackgroundRunMock: vi.fn(),
 }));
 
-vi.mock('./durableRuns.js', () => ({
+vi.mock('../automation/durableRuns.js', () => ({
   listDurableRuns: listDurableRunsMock,
   getDurableRun: getDurableRunMock,
   getDurableRunLog: getDurableRunLogMock,
   cancelDurableRun: cancelDurableRunMock,
 }));
 
-vi.mock('./daemonToolUtils.js', () => ({
+vi.mock('../automation/daemonToolUtils.js', () => ({
   ensureDaemonAvailable: ensureDaemonAvailableMock,
 }));
 

@@ -1,10 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
+export interface SavedNodeBrowserViewPreference {
+  id: string;
+  name: string;
+  search: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SavedWebUiPreferences {
   openConversationIds: string[];
   pinnedConversationIds: string[];
   archivedConversationIds: string[];
+  nodeBrowserViews: SavedNodeBrowserViewPreference[];
 }
 
 function readNonEmptyString(value: unknown): string {
@@ -49,10 +58,39 @@ function normalizeConversationIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizeNodeBrowserView(entry: unknown): SavedNodeBrowserViewPreference | null {
+  if (!isRecord(entry)) {
+    return null;
+  }
+
+  const id = readNonEmptyString(entry.id);
+  const name = readNonEmptyString(entry.name);
+  const search = typeof entry.search === 'string' ? entry.search.trim() : '';
+  const createdAt = readNonEmptyString(entry.createdAt) || new Date().toISOString();
+  const updatedAt = readNonEmptyString(entry.updatedAt) || createdAt;
+  if (!id || !name) {
+    return null;
+  }
+
+  return { id, name, search, createdAt, updatedAt };
+}
+
+function normalizeNodeBrowserViews(value: unknown): SavedNodeBrowserViewPreference[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => normalizeNodeBrowserView(entry))
+    .filter((entry): entry is SavedNodeBrowserViewPreference => entry !== null)
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+}
+
 function normalizeSavedWebUiPreferences(input: {
   openConversationIds?: unknown;
   pinnedConversationIds?: unknown;
   archivedConversationIds?: unknown;
+  nodeBrowserViews?: unknown;
 }): SavedWebUiPreferences {
   const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
   const pinnedIdSet = new Set(pinnedConversationIds);
@@ -65,6 +103,7 @@ function normalizeSavedWebUiPreferences(input: {
     pinnedConversationIds,
     archivedConversationIds: normalizeConversationIds(input.archivedConversationIds)
       .filter((id) => !workspaceIdSet.has(id)),
+    nodeBrowserViews: normalizeNodeBrowserViews(input.nodeBrowserViews),
   };
 }
 
@@ -80,6 +119,7 @@ export function readSavedWebUiPreferences(settingsFile: string): SavedWebUiPrefe
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
     archivedConversationIds: webUi.archivedConversationIds,
+    nodeBrowserViews: webUi.nodeBrowserViews,
   });
 }
 
@@ -88,6 +128,7 @@ export function writeSavedWebUiPreferences(
     openConversationIds?: string[] | null;
     pinnedConversationIds?: string[] | null;
     archivedConversationIds?: string[] | null;
+    nodeBrowserViews?: SavedNodeBrowserViewPreference[] | null;
   },
   settingsFile: string,
 ): SavedWebUiPreferences {
@@ -97,12 +138,14 @@ export function writeSavedWebUiPreferences(
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
     archivedConversationIds: webUi.archivedConversationIds,
+    nodeBrowserViews: webUi.nodeBrowserViews,
   });
 
   const next = normalizeSavedWebUiPreferences({
     openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
     pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
     archivedConversationIds: input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
+    nodeBrowserViews: input.nodeBrowserViews !== undefined ? (input.nodeBrowserViews ?? []) : current.nodeBrowserViews,
   });
 
   if (next.openConversationIds.length > 0) {
@@ -121,6 +164,12 @@ export function writeSavedWebUiPreferences(
     webUi.archivedConversationIds = next.archivedConversationIds;
   } else {
     delete webUi.archivedConversationIds;
+  }
+
+  if (next.nodeBrowserViews.length > 0) {
+    webUi.nodeBrowserViews = next.nodeBrowserViews;
+  } else {
+    delete webUi.nodeBrowserViews;
   }
 
   if (Object.keys(webUi).length > 0) {

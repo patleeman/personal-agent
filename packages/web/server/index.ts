@@ -67,7 +67,6 @@ import {
 } from './conversations/conversationModelPreferences.js';
 
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './middleware/index.js';
-import { findCurrentProfileTask } from './automation/taskService.js';
 import {
   clearMemoryBrowserCaches,
   ensureMemoryDocsDir,

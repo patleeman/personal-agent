@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 /**
@@ -22,20 +23,22 @@ let listAvailableProfilesFn: () => string[] = () => {
   throw new Error('listAvailableProfiles not initialized for profile routes');
 };
 
-export function setProfileRoutesGetters(
-  getCurrentProfile: () => string,
-  setCurrentProfile: (profile: string) => Promise<string>,
-  listAvailableProfiles: () => string[]
+function initializeProfileRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'setCurrentProfile' | 'listAvailableProfiles'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  setCurrentProfileFn = setCurrentProfile;
-  listAvailableProfilesFn = listAvailableProfiles;
+  getCurrentProfileFn = context.getCurrentProfile;
+  setCurrentProfileFn = context.setCurrentProfile;
+  listAvailableProfilesFn = context.listAvailableProfiles;
 }
 
 /**
  * Register profile routes on the given router.
  */
-export function registerProfileRoutes(router: Pick<Express, 'get' | 'patch'>): void {
+export function registerProfileRoutes(
+  router: Pick<Express, 'get' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'setCurrentProfile' | 'listAvailableProfiles'>,
+): void {
+  initializeProfileRoutesContext(context);
   router.get('/api/profiles', (_req, res) => {
     try {
       res.json({

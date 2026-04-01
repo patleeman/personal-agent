@@ -1,220 +1,115 @@
 import { setMemoryDocsProfileGetter } from '../knowledge/memoryDocs.js';
 import type { RegisterServerRoutesInput } from './context.js';
-import { registerActivityRoutes, setActivityRoutesProfileGetter } from './activity.js';
-import { registerAlertRoutes, setAlertRoutesProfileGetter } from './alerts.js';
+import { registerActivityRoutes } from './activity.js';
+import { registerAlertRoutes } from './alerts.js';
 import { registerAuthRoutes, registerCompanionAuthRoutes } from './auth.js';
 import {
   registerCompanionMemoryRoutes,
   registerCompanionModelPreferenceRoutes,
   registerCompanionNoteRoutes,
 } from './companionMemory.js';
-import { registerConversationStateRoutes, setConversationStateRoutesGetters } from './conversationState.js';
-import { registerConversationTitlesRoutes, setConversationTitlesRoutesGetters } from './conversationTitles.js';
+import { registerConversationStateRoutes } from './conversationState.js';
+import { registerConversationTitlesRoutes } from './conversationTitles.js';
 import {
   registerCompanionConversationRoutes,
   registerConversationRoutes,
-  setConversationRoutesGetters,
 } from './conversations.js';
-import { registerCompanionDaemonRoutes, registerDaemonRoutes, setDaemonRoutesProfileGetter } from './daemon.js';
-import { registerExecutionTargetRoutes, setExecutionTargetRoutesGetters } from './executionTargets.js';
-import { registerFolderPickerRoutes, setFolderPickerCwdGetters } from './folderPicker.js';
+import { registerCompanionDaemonRoutes, registerDaemonRoutes } from './daemon.js';
+import { registerExecutionTargetRoutes } from './executionTargets.js';
+import { registerFolderPickerRoutes } from './folderPicker.js';
 import {
-  handleLiveSessionPrompt,
   registerCompanionLiveSessionRoutes,
   registerLiveSessionRoutes,
   registerLiveSessionStatsRoutes,
-  setLiveSessionPromptHandler,
-  setLiveSessionRoutesGetters,
 } from './liveSessions.js';
-import { registerMemoryNotesRoutes, setMemoryNotesProfileGetters } from './memoryNotes.js';
-import { registerCompanionModelRoutes, registerModelRoutes, setModelRoutesGetters } from './models.js';
-import { registerNodeRoutes, setNodeRoutesGetters } from './nodes.js';
-import { registerProfileRoutes, setProfileRoutesGetters } from './profiles.js';
+import { registerMemoryNotesRoutes } from './memoryNotes.js';
+import { registerCompanionModelRoutes, registerModelRoutes } from './models.js';
+import { registerNodeRoutes } from './nodes.js';
+import { registerProfileRoutes } from './profiles.js';
 import {
   registerCompanionProjectRoutes,
   registerProjectRoutes,
-  setProjectRoutesGetters,
 } from './projects.js';
-import { registerCompanionRunRoutes, setRunsRoutesGetters } from './runs.js';
-import { registerRunAppRoutes, setRunsAppRoutesGetters } from './runsApp.js';
+import { registerCompanionRunRoutes } from './runs.js';
+import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
-import { registerShellRoutes, setShellCwdGetters } from './shell.js';
+import { registerShellRoutes } from './shell.js';
 import {
   registerCompanionSystemRoutes,
   registerSystemRoutes,
-  setSystemRoutesGetters,
 } from './system.js';
-import { registerCompanionTaskRunRoutes, registerTaskRoutes, setTaskRoutesProfileGetter } from './tasks.js';
-import { registerToolsRoutes, setToolsRoutesGetters } from './tools.js';
+import { registerCompanionTaskRunRoutes, registerTaskRoutes } from './tasks.js';
+import { registerToolsRoutes } from './tools.js';
 import {
   registerCompanionWebUiRoutes,
   registerWebUiRoutes,
-  setWebUiRoutesGetters,
 } from './webUi.js';
-import { registerWorkspaceRoutes, setWorkspaceRoutesGetters } from './workspace.js';
+import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerServerRoutes({ app, companionApp, context }: RegisterServerRoutesInput): void {
   setMemoryDocsProfileGetter(context.getCurrentProfile);
 
-  setProfileRoutesGetters(context.getCurrentProfile, context.setCurrentProfile, context.listAvailableProfiles);
-  registerProfileRoutes(app);
+  registerProfileRoutes(app, context);
 
-  setDaemonRoutesProfileGetter(context.getCurrentProfile);
   registerDaemonRoutes(app);
 
-  setTaskRoutesProfileGetter(context.getCurrentProfile);
-  registerTaskRoutes(app);
+  registerTaskRoutes(app, context);
 
-  setModelRoutesGetters(
-    context.getCurrentProfile,
-    context.getCurrentProfileSettingsFile,
-    context.materializeWebProfile,
-    context.getAuthFile(),
-    context.getSettingsFile(),
-  );
-  registerModelRoutes(app);
+  registerModelRoutes(app, context);
 
-  setToolsRoutesGetters({
-    getCurrentProfile: context.getCurrentProfile,
-    getRepoRoot: context.getRepoRoot,
-    getProfilesRoot: context.getProfilesRoot,
-    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
-    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
-    withTemporaryProfileAgentDir: context.withTemporaryProfileAgentDir,
-  });
-  registerToolsRoutes(app);
+  registerToolsRoutes(app, context);
 
   registerAuthRoutes(app);
   registerCompanionAuthRoutes(companionApp);
 
-  setSystemRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot,
-    context.listActivityForCurrentProfile,
-    context.listProjectsForCurrentProfile,
-    context.listTasksForCurrentProfile,
-  );
-  registerSystemRoutes(app);
+  registerSystemRoutes(app, context);
 
-  setWebUiRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot,
-    context.getSettingsFile,
-    context.getStateRoot,
-    context.getDefaultWebCwd,
-    context.buildLiveSessionResourceOptions,
-    context.buildLiveSessionExtensionFactories,
-  );
-  registerWebUiRoutes(app);
+  registerWebUiRoutes(app, context);
 
-  registerCompanionWebUiRoutes(companionApp);
-  registerCompanionSystemRoutes(companionApp);
+  registerCompanionWebUiRoutes(companionApp, context);
+  registerCompanionSystemRoutes(companionApp, context);
 
-  setProjectRoutesGetters(
-    context.getCurrentProfile,
-    context.listAvailableProfiles,
-    context.getRepoRoot(),
-    context.getSettingsFile(),
-    context.getAuthFile(),
-  );
-  registerProjectRoutes(app);
+  registerProjectRoutes(app, context);
 
-  setNodeRoutesGetters(context.getCurrentProfile, context.getRepoRoot);
-  registerNodeRoutes(app);
-  registerCompanionProjectRoutes(companionApp);
+  registerNodeRoutes(app, context);
+  registerCompanionProjectRoutes(companionApp, context);
 
-  setConversationRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot,
-    context.getSavedWebUiPreferences,
-    context.flushLiveDeferredResumes,
-  );
-  registerConversationRoutes(app);
-  registerCompanionConversationRoutes(companionApp);
+  registerConversationRoutes(app, context);
+  registerCompanionConversationRoutes(companionApp, context);
 
-  setConversationStateRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot,
-    context.buildLiveSessionResourceOptions,
-    context.buildLiveSessionExtensionFactories,
-    context.flushLiveDeferredResumes,
-  );
-  registerConversationStateRoutes(app);
+  registerConversationStateRoutes(app, context);
 
-  setLiveSessionRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot,
-    context.getDefaultWebCwd,
-    context.buildLiveSessionResourceOptions,
-    context.buildLiveSessionExtensionFactories,
-    context.flushLiveDeferredResumes,
-    {
-      listTasksForCurrentProfile: context.listTasksForCurrentProfile,
-      listMemoryDocs: context.listMemoryDocs,
-      listSkillsForCurrentProfile: context.listSkillsForCurrentProfile,
-      listProfileAgentItems: context.listProfileAgentItems,
-    },
-  );
-  setLiveSessionPromptHandler(handleLiveSessionPrompt);
-  registerLiveSessionRoutes(app);
-  registerLiveSessionStatsRoutes(app);
-  registerCompanionLiveSessionRoutes(companionApp);
+  registerLiveSessionRoutes(app, context);
+  registerLiveSessionStatsRoutes(app, context);
+  registerCompanionLiveSessionRoutes(companionApp, context);
 
-  setActivityRoutesProfileGetter(context.getCurrentProfile);
-  registerActivityRoutes(app);
-  registerActivityRoutes(companionApp);
+  registerActivityRoutes(app, context);
+  registerActivityRoutes(companionApp, context);
 
-  setAlertRoutesProfileGetter(context.getCurrentProfile);
-  registerAlertRoutes(app);
+  registerAlertRoutes(app, context);
 
-  setConversationTitlesRoutesGetters(context.getSettingsFile());
-  registerConversationTitlesRoutes(app);
+  registerConversationTitlesRoutes(app, context);
 
-  setExecutionTargetRoutesGetters(context.readExecutionTargetsState, context.browseRemoteTargetDirectory);
-  registerExecutionTargetRoutes(app);
+  registerExecutionTargetRoutes(app, context);
 
-  setRunsAppRoutesGetters(context.getDurableRunSnapshot);
-  registerRunAppRoutes(app);
+  registerRunAppRoutes(app, context);
 
-  setWorkspaceRoutesGetters(
-    context.getDefaultWebCwd,
-    context.resolveRequestedCwd,
-    context.draftWorkspaceCommitMessage,
-    context.getAuthFile(),
-  );
-  registerWorkspaceRoutes(app);
+  registerWorkspaceRoutes(app, context);
 
-  setMemoryNotesProfileGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot(),
-    context.getDefaultWebCwd,
-    context.resolveRequestedCwd,
-    context.buildLiveSessionResourceOptions,
-    context.buildLiveSessionExtensionFactories,
-  );
-  registerMemoryNotesRoutes(app);
+  registerMemoryNotesRoutes(app, context);
 
-  setFolderPickerCwdGetters(context.getDefaultWebCwd, context.resolveRequestedCwd);
-  registerFolderPickerRoutes(app);
+  registerFolderPickerRoutes(app, context);
 
-  setShellCwdGetters(context.getDefaultWebCwd, context.resolveRequestedCwd);
-  registerShellRoutes(app);
+  registerShellRoutes(app, context);
 
   registerRunsOpsRoutes(app);
 
-  registerCompanionModelRoutes(companionApp);
-  registerAlertRoutes(companionApp);
-  registerTaskRoutes(companionApp);
-  registerCompanionTaskRunRoutes(companionApp);
+  registerCompanionModelRoutes(companionApp, context);
+  registerAlertRoutes(companionApp, context);
+  registerTaskRoutes(companionApp, context);
+  registerCompanionTaskRunRoutes(companionApp, context);
   registerCompanionDaemonRoutes(companionApp);
 
-  setRunsRoutesGetters(
-    context.getCurrentProfile,
-    context.getRepoRoot(),
-    context.getDefaultWebCwd,
-    context.buildLiveSessionResourceOptions,
-    context.buildLiveSessionExtensionFactories,
-  );
   registerCompanionRunRoutes(companionApp);
 
   registerCompanionMemoryRoutes(companionApp);

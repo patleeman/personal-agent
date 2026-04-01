@@ -52,10 +52,12 @@ describe('unified nodes', () => {
       tags: ['type:note', 'profile:assistant', 'area:test'],
       parent: 'parent-node',
       related: ['sibling-node'],
+      relationships: [{ type: 'depends-on', targetId: 'sibling-node' }],
     }, { profilesRoot: join(stateRoot, 'sync', 'profiles') });
 
     expect(created.node.kinds).toEqual(['note']);
     expect(created.node.links.parent).toBe('parent-node');
+    expect(created.node.links.relationships).toEqual([{ type: 'depends-on', targetId: 'sibling-node' }]);
     expect(created.node.tags).toContain('parent:parent-node');
     expect(created.node.tags).toContain('status:active');
 
@@ -84,6 +86,7 @@ describe('unified nodes', () => {
     expect(loaded.nodes).toHaveLength(1);
     expect(findUnifiedNodes(loaded.nodes, 'type:note AND profile:assistant')).toHaveLength(1);
     expect(findUnifiedNodes(loaded.nodes, 'parent:parent-node')).toHaveLength(1);
+    expect(findUnifiedNodes(loaded.nodes, 'depends-on AND sibling-node')).toHaveLength(1);
 
     expect(deleteUnifiedNode('sample-node', { profilesRoot: join(stateRoot, 'sync', 'profiles') })).toEqual({ ok: true, id: 'sample-node' });
     expect(loadUnifiedNodes({ profilesRoot: join(stateRoot, 'sync', 'profiles') }).nodes).toHaveLength(0);
@@ -263,5 +266,37 @@ plan:
 
     const content = readFileSync(join(stateRoot, 'sync', 'nodes', 'shared-topic', 'INDEX.md'), 'utf-8');
     expect(content).toContain('Legacy Project State');
+  });
+
+  it('parses typed relationships from frontmatter objects', () => {
+    const stateRoot = createTempStateRoot();
+    const profilesRoot = join(stateRoot, 'sync', 'profiles');
+
+    writeFile(join(stateRoot, 'sync', 'nodes', 'graph-node', 'INDEX.md'), `---
+id: graph-node
+title: Graph Node
+summary: Node with explicit relationships.
+status: active
+tags:
+  - type:note
+links:
+  relationships:
+    - type: depends-on
+      target: upstream-node
+    - type: implements
+      target: downstream-node
+---
+
+# Graph Node
+
+Tracks graph relationships.
+`);
+
+    const loaded = loadUnifiedNodes({ profilesRoot });
+    expect(loaded.nodes[0]?.links.relationships).toEqual([
+      { type: 'depends-on', targetId: 'upstream-node' },
+      { type: 'implements', targetId: 'downstream-node' },
+    ]);
+    expect(loaded.nodes[0]?.links.related).toEqual(['upstream-node', 'downstream-node']);
   });
 });

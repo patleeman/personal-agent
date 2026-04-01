@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   getDurableRun,
   getDurableRunLog,
@@ -29,13 +30,17 @@ let getDurableRunSnapshotFn: (runId: string, tail: number) => Promise<unknown | 
   throw new Error('not initialized');
 };
 
-export function setRunsAppRoutesGetters(
-  getSnapshot: (runId: string, tail: number) => Promise<unknown | null>,
+function initializeRunsAppRoutesContext(
+  context: Pick<ServerRouteContext, 'getDurableRunSnapshot'>,
 ): void {
-  getDurableRunSnapshotFn = getSnapshot;
+  getDurableRunSnapshotFn = context.getDurableRunSnapshot;
 }
 
-export function registerRunAppRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerRunAppRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getDurableRunSnapshot'>,
+): void {
+  initializeRunsAppRoutesContext(context);
   router.get('/api/runs', async (_req, res) => {
     try {
       res.json(await listDurableRuns());

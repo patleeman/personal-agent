@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   normalizeSavedModelPreferences,
   readSavedModelPreferences,
@@ -304,24 +305,24 @@ function readConversationPlansWorkspace(settingsFile: string): { defaultEnabled:
   };
 }
 
-export function setModelRoutesGetters(
-  getCurrentProfile: () => string,
-  getCurrentProfileSettingsFile: () => string,
-  materializeWebProfile: (profile: string) => void,
-  authFile: string,
-  settingsFile: string
+function initializeModelRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  getCurrentProfileSettingsFileFn = getCurrentProfileSettingsFile;
-  materializeWebProfileFn = materializeWebProfile;
-  AUTH_FILE = authFile;
-  SETTINGS_FILE = settingsFile;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getCurrentProfileSettingsFileFn = context.getCurrentProfileSettingsFile;
+  materializeWebProfileFn = context.materializeWebProfile;
+  AUTH_FILE = context.getAuthFile();
+  SETTINGS_FILE = context.getSettingsFile();
 }
 
 /**
  * Register model routes on the given router.
  */
-export function registerModelRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+export function registerModelRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
+): void {
+  initializeModelRoutesContext(context);
   // ── Models ────────────────────────────────────────────────────────────────
 
   router.get('/api/models', (_req, res) => {
@@ -833,7 +834,11 @@ export function registerModelRoutes(router: Pick<Express, 'get' | 'post' | 'patc
   });
 }
 
-export function registerCompanionModelRoutes(router: Pick<Express, 'get'>): void {
+export function registerCompanionModelRoutes(
+  router: Pick<Express, 'get'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
+): void {
+  initializeModelRoutesContext(context);
   router.get('/api/models', (_req, res) => {
     try {
       const models = listModelDefinitions();

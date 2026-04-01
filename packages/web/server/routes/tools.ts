@@ -2,7 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { installPackageSource, listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
 import { inspectCliBinary, inspectMcpServer, inspectMcpTool, readMcpConfig } from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { LiveSessionResourceOptions } from './context.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
 import { logError } from '../middleware/index.js';
 
@@ -32,20 +32,15 @@ let withTemporaryProfileAgentDirFn: <T>(profile: string, run: (agentDir: string)
 
 const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
-export function setToolsRoutesGetters(params: {
-  getCurrentProfile: () => string;
-  getRepoRoot: () => string;
-  getProfilesRoot: () => string;
-  buildLiveSessionResourceOptions: (profile: string) => LiveSessionResourceOptions;
-  buildLiveSessionExtensionFactories: () => ExtensionFactory[];
-  withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
-}): void {
-  getCurrentProfileFn = params.getCurrentProfile;
-  getRepoRootFn = params.getRepoRoot;
-  getProfilesRootFn = params.getProfilesRoot;
-  buildLiveSessionResourceOptionsFn = params.buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = params.buildLiveSessionExtensionFactories;
-  withTemporaryProfileAgentDirFn = params.withTemporaryProfileAgentDir;
+function initializeToolsRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getProfilesRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'withTemporaryProfileAgentDir'>,
+): void {
+  getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
+  getProfilesRootFn = context.getProfilesRoot;
+  buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
+  buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
+  withTemporaryProfileAgentDirFn = context.withTemporaryProfileAgentDir;
 }
 
 function resolveRequestedProfileFromQuery(req: Request): string {
@@ -267,7 +262,11 @@ async function handleToolsMcpToolRequest(req: Request, res: Response): Promise<v
   }
 }
 
-export function registerToolsRoutes(app: Express): void {
+export function registerToolsRoutes(
+  app: Express,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getProfilesRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'withTemporaryProfileAgentDir'>,
+): void {
+  initializeToolsRoutesContext(context);
   app.get('/api/tools', handleToolsRequest);
   app.post('/api/tools/packages/install', handleToolsInstallRequest);
   app.get('/api/tools/mcp/servers/:server', handleToolsMcpServerRequest);

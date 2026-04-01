@@ -37,7 +37,7 @@ vi.mock('@personal-agent/core', async (importOriginal) => ({
   setConversationProjectLinks: setConversationProjectLinksMock,
 }));
 
-vi.mock('./liveSessions.js', async (importOriginal) => ({
+vi.mock('../conversations/liveSessions.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../conversations/liveSessions.js')>()),
   appendDetachedUserMessage: appendDetachedUserMessageMock,
   ensureSessionFileExists: ensureSessionFileExistsMock,

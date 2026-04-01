@@ -53,6 +53,7 @@ let getSavedWebUiPreferencesFn: () => SavedWebUiPreferences = () => ({
   openConversationIds: [],
   pinnedConversationIds: [],
   archivedConversationIds: [],
+  nodeBrowserViews: [],
 });
 
 export function getCurrentProfile(): string {

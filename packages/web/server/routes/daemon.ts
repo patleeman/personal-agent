@@ -17,17 +17,6 @@ import { invalidateAppTopics, logError } from '../middleware/index.js';
 import { createServiceAttentionMonitor, suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
 
 /**
- * Gets the current profile getter for use in route handlers.
- */
-let getCurrentProfileFn: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for daemon routes');
-};
-
-export function setDaemonRoutesProfileGetter(fn: () => string): void {
-  getCurrentProfileFn = fn;
-}
-
-/**
  * Register daemon routes on the given router.
  */
 export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): void {

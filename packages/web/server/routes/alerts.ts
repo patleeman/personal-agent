@@ -6,6 +6,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   acknowledgeAlertForProfile,
   dismissAlertForProfile,
@@ -24,8 +25,8 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for alert routes');
 };
 
-export function setAlertRoutesProfileGetter(fn: () => string): void {
-  getCurrentProfileFn = fn;
+function initializeAlertRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile'>): void {
+  getCurrentProfileFn = context.getCurrentProfile;
 }
 
 /**
@@ -37,7 +38,11 @@ export function setAlertRoutesProfileGetter(fn: () => string): void {
  *   POST /api/alerts/:id/dismiss - Dismiss an alert
  *   POST /api/alerts/:id/snooze  - Snooze an alert
  */
-export function registerAlertRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerAlertRoutes(
+  router: Pick<Express, 'get' | 'post'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
+  initializeAlertRoutesContext(context);
   router.get('/api/alerts', (_req, res) => {
     try {
       res.json(getAlertSnapshotForProfile(getCurrentProfileFn()));

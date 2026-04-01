@@ -9,14 +9,6 @@ import {
   type TaskRuntimeEntry,
 } from './scheduledTasks.js';
 
-let getCurrentProfileFn: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for task service');
-};
-
-export function setTaskServiceProfileGetter(getCurrentProfile: () => string): void {
-  getCurrentProfileFn = getCurrentProfile;
-}
-
 export function readRequiredTaskId(value: unknown): string {
   const normalized = typeof value === 'string' ? value.trim() : '';
   if (!normalized) {
@@ -28,9 +20,9 @@ export function readRequiredTaskId(value: unknown): string {
   return normalized;
 }
 
-export function findCurrentProfileTask(taskId: string) {
+export function findTaskForProfile(profile: string, taskId: string) {
   try {
-    return resolveScheduledTaskForProfile(getCurrentProfileFn(), taskId);
+    return resolveScheduledTaskForProfile(profile, taskId);
   } catch (error) {
     if (error instanceof Error && error.message === `Task not found: ${taskId}`) {
       return undefined;

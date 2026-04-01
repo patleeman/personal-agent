@@ -1,7 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import type { Express } from 'express';
 import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { LiveSessionResourceOptions } from './context.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import {
   getConversationExecutionTarget,
   getConversationProjectLink,
@@ -92,18 +92,14 @@ let buildLiveSessionExtensionFactoriesFn: () => ExtensionFactory[] = () => [];
 
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
-export function setConversationStateRoutesGetters(
-  getCurrentProfile: () => string,
-  getRepoRoot: () => string,
-  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories: () => ExtensionFactory[],
-  flushLiveDeferredResumes: () => Promise<void> = async () => {},
+function initializeConversationStateRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  getRepoRootFn = getRepoRoot;
-  buildLiveSessionResourceOptionsFn = buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = buildLiveSessionExtensionFactories;
-  flushLiveDeferredResumesFn = flushLiveDeferredResumes;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
+  buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
+  buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
+  flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 }
 
 function inspectSshBinaryState() {
@@ -180,7 +176,11 @@ async function readConversationBootstrapState(input: {
   };
 }
 
-export function registerConversationStateRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerConversationStateRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
+): void {
+  initializeConversationStateRoutesContext(context);
   router.get('/api/conversations/:id/bootstrap', async (req, res) => {
     const startedAt = process.hrtime.bigint();
 
