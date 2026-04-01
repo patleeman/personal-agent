@@ -80,9 +80,6 @@ import {
 } from './app/bootstrap.js';
 import { createProfileState } from './app/profileState.js';
 import { createServerRouteContext } from './app/routeContext.js';
-import {
-  writeInternalAttentionEntry,
-} from './shared/internalAttention.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './ui/webUiPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './ui/settingsPersistence.js';
 import { draftWorkspaceCommitMessage } from './workspace/workspaceCommitDraft.js';
@@ -366,29 +363,6 @@ async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
       repoRoot: REPO_ROOT,
     });
 
-    if (result.daemonRestarted) {
-      try {
-        writeInternalAttentionEntry({
-          repoRoot: REPO_ROOT,
-          stateRoot: resolveDaemonRoot(),
-          profile,
-          kind: 'service',
-          summary: 'Daemon restarted for the active profile.',
-          details: [
-            `Profile: ${profile}`,
-            `Running task dir: ${result.runningTaskDir ?? 'unknown'}`,
-            `Desired task dir: ${result.desiredTaskDir}`,
-            'The web UI restarted the daemon so scheduled work matches the active profile task scope.',
-          ].join('\n'),
-          idPrefix: 'daemon-profile-sync',
-        });
-      } catch (error) {
-        logWarn('failed to write daemon profile sync activity', {
-          profile,
-          message: (error as Error).message,
-        });
-      }
-    }
   } catch (error) {
     logWarn('failed to sync daemon task scope', {
       profile,

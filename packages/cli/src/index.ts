@@ -2068,7 +2068,7 @@ async function restartCommand(args: string[]): Promise<number> {
     console.log(keyValue('web ui', summary.webUiStatus));
 
     if (
-      process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1'
+      process.env.PERSONAL_AGENT_RESTART_NOTIFY_SUCCESS_INBOX === '1'
       && summary.webUiStatus.startsWith('blue/green')
     ) {
       const profile = process.env.PERSONAL_AGENT_RESTART_NOTIFY_PROFILE?.trim();
@@ -2090,7 +2090,10 @@ async function restartCommand(args: string[]): Promise<number> {
 
     return 0;
   } catch (error) {
-    if (process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1') {
+    if (
+      process.env.PERSONAL_AGENT_RESTART_NOTIFY_FAILURE_INBOX === '1'
+      || process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1'
+    ) {
       const profile = process.env.PERSONAL_AGENT_RESTART_NOTIFY_PROFILE?.trim();
 
       if (profile) {

@@ -71,7 +71,7 @@ describe('application maintenance requests', () => {
       stdio: ['ignore', expect.any(Number), expect.any(Number)],
       env: expect.objectContaining({
         PERSONAL_AGENT_REPO_ROOT: repoRoot,
-        PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+        PERSONAL_AGENT_RESTART_NOTIFY_FAILURE_INBOX: '1',
         PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: 'datadog',
         PERSONAL_AGENT_RESTART_REQUESTED_AT: result.requestedAt,
       }),

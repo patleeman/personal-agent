@@ -14,6 +14,7 @@ import {
 import { getAlertSnapshotForProfile } from '../automation/alerts.js';
 import { invalidateAppTopics, subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
 import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
+import { suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
 import {
   logError,
   logWarn,
@@ -163,6 +164,7 @@ function handleStatus(_req: Request, res: Response): void {
 
 function handleApplicationRestart(_req: Request, res: Response): void {
   try {
+    suppressMonitoredServiceAttention('daemon', 10 * 60_000);
     res.status(202).json(requestApplicationRestart({ repoRoot: getRepoRootFn(), profile: getCurrentProfileFn() }));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -177,6 +179,7 @@ function handleApplicationRestart(_req: Request, res: Response): void {
 
 function handleApplicationUpdate(_req: Request, res: Response): void {
   try {
+    suppressMonitoredServiceAttention('daemon', 15 * 60_000);
     res.status(202).json(requestApplicationUpdate({ repoRoot: getRepoRootFn(), profile: getCurrentProfileFn() }));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

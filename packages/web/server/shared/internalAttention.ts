@@ -38,6 +38,7 @@ export interface ServiceAttentionMonitorOptions {
   };
   now?: () => Date;
   intervalMs?: number;
+  issueGraceMs?: number;
 }
 
 export interface ServiceAttentionMonitor {
@@ -48,6 +49,7 @@ export interface ServiceAttentionMonitor {
 
 const DEFAULT_MONITOR_INTERVAL_MS = 10_000;
 const DEFAULT_SUPPRESSION_MS = 20_000;
+const DEFAULT_ISSUE_GRACE_MS = 60_000;
 
 const suppressedServiceAttentionUntilMs: Record<MonitoredInternalService, number> = {
   daemon: 0,
@@ -198,13 +200,20 @@ export function classifyDaemonAttentionState(snapshot: DaemonStateSnapshot): Cla
   };
 }
 
+interface ServiceAttentionStateRecord {
+  state: ClassifiedInternalServiceState;
+  sinceMs: number;
+  issueSurfaced: boolean;
+}
+
 export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOptions): ServiceAttentionMonitor {
   const now = options.now ?? (() => new Date());
   const logger = options.logger ?? { warn: (message: string, fields?: Record<string, unknown>) => logWarn(message, fields) };
   const writeEntry = options.writeEntry ?? ((input: WriteInternalAttentionEntryInput) => {
     writeInternalAttentionEntry(input);
   });
-  const previousStates = new Map<MonitoredInternalService, ClassifiedInternalServiceState>();
+  const stateRecords = new Map<MonitoredInternalService, ServiceAttentionStateRecord>();
+  const issueGraceMs = Math.max(0, options.issueGraceMs ?? DEFAULT_ISSUE_GRACE_MS);
   let intervalHandle: ReturnType<typeof setInterval> | undefined;
 
   const handleTransition = (
@@ -212,24 +221,48 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     nextState: ClassifiedInternalServiceState,
     profile: string,
   ): void => {
-    const previousState = previousStates.get(service);
-    previousStates.set(service, nextState);
-
-    if (!previousState || previousState.key === nextState.key) {
-      return;
-    }
-
     const timestamp = now();
+    const timestampMs = timestamp.getTime();
     const createdAt = timestamp.toISOString();
+    const record = stateRecords.get(service);
 
-    if (isSuppressed(service, timestamp.getTime())) {
+    if (!record) {
+      stateRecords.set(service, {
+        state: nextState,
+        sinceMs: timestampMs,
+        issueSurfaced: false,
+      });
       return;
     }
 
-    const previousWasIssue = isIssueState(previousState);
-    const nextIsIssue = isIssueState(nextState);
+    if (record.state.key !== nextState.key) {
+      if (!isSuppressed(service, timestampMs) && record.issueSurfaced && nextState.key === 'healthy') {
+        writeEntry({
+          repoRoot: options.repoRoot,
+          stateRoot: options.stateRoot,
+          profile,
+          kind: 'service',
+          summary: summarizeRecovery(service),
+          details: buildRecoveryDetails(service, record.state, createdAt),
+          createdAt,
+          idPrefix: `${service}-recovery`,
+        });
+      }
 
-    if (nextIsIssue) {
+      stateRecords.set(service, {
+        state: nextState,
+        sinceMs: timestampMs,
+        issueSurfaced: false,
+      });
+      return;
+    }
+
+    if (
+      isIssueState(nextState)
+      && !record.issueSurfaced
+      && !isSuppressed(service, timestampMs)
+      && (timestampMs - record.sinceMs) >= issueGraceMs
+    ) {
       writeEntry({
         repoRoot: options.repoRoot,
         stateRoot: options.stateRoot,
@@ -240,20 +273,7 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
         createdAt,
         idPrefix: `${service}-issue`,
       });
-      return;
-    }
-
-    if (previousWasIssue && nextState.key === 'healthy') {
-      writeEntry({
-        repoRoot: options.repoRoot,
-        stateRoot: options.stateRoot,
-        profile,
-        kind: 'service',
-        summary: summarizeRecovery(service),
-        details: buildRecoveryDetails(service, previousState, createdAt),
-        createdAt,
-        idPrefix: `${service}-recovery`,
-      });
+      record.issueSurfaced = true;
     }
   };
 
