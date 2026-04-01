@@ -1243,11 +1243,11 @@ export function buildConversationMemoryDistillRecoveryHiddenContext(input: {
 }
 
 function resolveConversationMemoryDistillRunnerPath(): string {
-  return join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
+  return fileURLToPath(new URL('./automation/distillConversationMemoryRun.js', import.meta.url));
 }
 
 function resolveConversationMemoryDistillBatchRecoveryRunnerPath(): string {
-  return join(REPO_ROOT, 'packages/web/dist-server/recoverConversationMemoryDistillRuns.js');
+  return fileURLToPath(new URL('./automation/recoverConversationMemoryDistillRuns.js', import.meta.url));
 }
 
 export async function startConversationMemoryDistillRun(input: ConversationMemoryDistillRunInput) {
