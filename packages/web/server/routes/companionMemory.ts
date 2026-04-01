@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   readConversationModelPreferenceStateById,
@@ -25,10 +26,13 @@ import {
 } from '../knowledge/memoryDocs.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
-export function registerCompanionMemoryRoutes(router: Pick<Express, 'get'>): void {
+export function registerCompanionMemoryRoutes(
+  router: Pick<Express, 'get'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
   router.get('/api/memory', (_req, res) => {
     try {
-      const skills = listSkillsForProfile();
+      const skills = listSkillsForProfile(context.getCurrentProfile());
       const memoryDocs = listMemoryDocs();
       res.json({ skills, memoryDocs });
     } catch (err) {
@@ -58,7 +62,7 @@ export function registerCompanionMemoryRoutes(router: Pick<Express, 'get'>): voi
 
   router.get('/api/skills/:name', (req, res) => {
     try {
-      const skillDetail = listSkillsForProfile().find((s) => s.name === req.params.name);
+      const skillDetail = listSkillsForProfile(context.getCurrentProfile()).find((s) => s.name === req.params.name);
       if (!skillDetail) { res.status(404).json({ error: 'Skill not found' }); return; }
       res.json(skillDetail);
     } catch (err) {
@@ -86,7 +90,10 @@ export function registerCompanionModelPreferenceRoutes(router: Pick<Express, 'ge
   });
 }
 
-export function registerCompanionNoteRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerCompanionNoteRoutes(
+  router: Pick<Express, 'get' | 'post'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
   router.post('/api/notes', (req, res) => {
     try {
       const title = normalizeCreatedNoteTitle(req.body?.title);
@@ -113,7 +120,7 @@ export function registerCompanionNoteRoutes(router: Pick<Express, 'get' | 'post'
         body: editableBody,
       }), 'utf-8');
       clearMemoryBrowserCaches();
-      res.status(201).json(readNoteDetail(noteId));
+      res.status(201).json(readNoteDetail(noteId, context.getCurrentProfile()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -125,7 +132,7 @@ export function registerCompanionNoteRoutes(router: Pick<Express, 'get' | 'post'
 
   router.get('/api/notes/:memoryId', (req, res) => {
     try {
-      res.json(readNoteDetail(req.params.memoryId));
+      res.json(readNoteDetail(req.params.memoryId, context.getCurrentProfile()));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {

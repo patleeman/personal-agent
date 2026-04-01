@@ -1,4 +1,3 @@
-import { setMemoryDocsProfileGetter } from '../knowledge/memoryDocs.js';
 import type { RegisterServerRoutesInput } from './context.js';
 import { registerActivityRoutes } from './activity.js';
 import { registerAlertRoutes } from './alerts.js';
@@ -47,8 +46,6 @@ import {
 import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerServerRoutes({ app, companionApp, context }: RegisterServerRoutesInput): void {
-  setMemoryDocsProfileGetter(context.getCurrentProfile);
-
   registerProfileRoutes(app, context);
 
   registerDaemonRoutes(app);
@@ -112,7 +109,7 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
 
   registerCompanionRunRoutes(companionApp);
 
-  registerCompanionMemoryRoutes(companionApp);
-  registerCompanionNoteRoutes(companionApp);
+  registerCompanionMemoryRoutes(companionApp, context);
+  registerCompanionNoteRoutes(companionApp, context);
   registerCompanionModelPreferenceRoutes(companionApp);
 }
