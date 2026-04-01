@@ -325,19 +325,19 @@ These defaults are intentionally conservative.
 
 | Event | Default durable surfacing | Default interrupting notification |
 | --- | --- | --- |
-| Application restart complete | unread inbox activity | none |
+| Application restart complete | none beyond the initiating surface by default | none |
 | Application restart failed | unread inbox activity | maybe |
 | Web UI rollback or mark-bad | unread inbox activity | maybe |
-| Daemon auto-restarted to match the active profile | unread inbox activity | none |
-| Daemon became unhealthy or later recovered | unread inbox activity | usually none |
+| Daemon auto-restarted to match the active profile | none by default | none |
+| Daemon became unhealthy or later recovered | unread inbox activity only after a sustained issue | usually none |
 | Gateway became unhealthy or later recovered | unread inbox activity | usually none |
 | Ordinary manual service actions or config saves | none beyond the initiating surface | none |
 
 Practical rule:
 
-- **write unread inbox activity for async or out-of-band internal events**
+- **write unread inbox activity for async or out-of-band internal events that are actually worth follow-up**
 - **reserve interrupting notifications for high-signal failures or disruptive background events**
-- **do not notify just because something happened somewhere in the system**
+- **do not notify just because something happened somewhere in the system or because a planned restart completed**
 
 ---
 

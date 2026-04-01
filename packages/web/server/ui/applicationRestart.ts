@@ -131,7 +131,7 @@ function buildNotificationEnv(input: {
   if (input.action === 'restart') {
     return {
       ...shared,
-      PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+      PERSONAL_AGENT_RESTART_NOTIFY_FAILURE_INBOX: '1',
       PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: input.profile ?? '',
       PERSONAL_AGENT_RESTART_REQUESTED_AT: input.requestedAt,
     };
