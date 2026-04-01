@@ -14,10 +14,10 @@ import {
   resolveScheduledTaskForProfile,
   taskDirForProfile,
   validateScheduledTaskDefinition,
-} from '../scheduledTasks.js';
+} from '../automation/scheduledTasks.js';
 import { startScheduledTaskRun } from '@personal-agent/daemon';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { findCurrentProfileTask, readRequiredTaskId } from '../taskService.js';
+import { findCurrentProfileTask, readRequiredTaskId } from '../automation/taskService.js';
 
 /**
  * Gets the current profile getter for use in route handlers.

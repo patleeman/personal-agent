@@ -12,9 +12,9 @@ import {
   startDaemonServiceAndReadState,
   stopDaemonServiceAndReadState,
   uninstallDaemonServiceAndReadState,
-} from '../daemon.js';
+} from '../automation/daemon.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { createServiceAttentionMonitor, suppressMonitoredServiceAttention } from '../internalAttention.js';
+import { createServiceAttentionMonitor, suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
 
 /**
  * Gets the current profile getter for use in route handlers.

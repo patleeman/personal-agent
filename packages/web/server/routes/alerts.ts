@@ -12,8 +12,8 @@ import {
   getAlertForProfile,
   getAlertSnapshotForProfile,
   snoozeAlertForProfile,
-} from '../alerts.js';
-import { invalidateAppTopics } from '../appEvents.js';
+} from '../automation/alerts.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
 import { logError } from '../middleware/index.js';
 
 /**

@@ -4,8 +4,8 @@ import {
   findActivityRecord,
   listActivityForCurrentProfile,
   markActivityReadState,
-} from '../services/inboxService.js';
-import { invalidateAppTopics } from '../appEvents.js';
+} from '../automation/inboxService.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
 import { logError } from '../middleware/index.js';
 
 let getCurrentProfileFn: () => string = () => {

@@ -13,9 +13,9 @@ export {
   createInMemoryRateLimit,
   enforceSameOriginUnsafeRequests,
   resolveRequestOrigin,
-} from '../webSecurity.js';
+} from '../shared/webSecurity.js';
 
-import { logInfo } from '../logging.js';
+import { logInfo } from '../shared/logging.js';
 
 // Logging middleware
 export {
@@ -24,7 +24,7 @@ export {
   logWarn,
   installProcessLogging,
   webRequestLoggingMiddleware,
-} from '../logging.js';
+} from '../shared/logging.js';
 
 export interface ServerTimingMetric {
   name: string;
@@ -89,10 +89,10 @@ export const COMPANION_SESSION_COOKIE = 'pa_companion';
 export {
   reloadAllLiveSessionAuth,
   refreshAllLiveSessionModelRegistries,
-} from '../liveSessions.js';
+} from '../conversations/liveSessions.js';
 
 // Settings persistence
-export { persistSettingsWrite } from '../settingsPersistence.js';
+export { persistSettingsWrite } from '../ui/settingsPersistence.js';
 
 // App events
-export { invalidateAppTopics } from '../appEvents.js';
+export { invalidateAppTopics } from '../shared/appEvents.js';

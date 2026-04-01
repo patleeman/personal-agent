@@ -1,18 +1,18 @@
 import type { Express, Request, Response } from 'express';
 import { listAllProjectIds } from '@personal-agent/core';
-import { requestWebUiServiceRestart } from '../applicationRestart.js';
-import { readWebUiConfig, readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../webUi.js';
-import { writeInternalAttentionEntry } from '../internalAttention.js';
-import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../webUiPreferences.js';
+import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
+import { readWebUiConfig, readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
+import { writeInternalAttentionEntry } from '../shared/internalAttention.js';
+import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import { logError, logWarn } from '../middleware/index.js';
-import { persistSettingsWrite } from '../settingsPersistence.js';
-import { invalidateAppTopics } from '../appEvents.js';
-import { resolveConversationCwd } from '../conversationCwd.js';
+import { persistSettingsWrite } from '../ui/settingsPersistence.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
+import { resolveConversationCwd } from '../conversations/conversationCwd.js';
 import {
   createSession as createLocalSession,
   queuePromptContext,
-} from '../liveSessions.js';
-import { findActivityRecord, type ActivityRecord } from '../services/inboxService.js';
+} from '../conversations/liveSessions.js';
+import { findActivityRecord, type ActivityRecord } from '../automation/inboxService.js';
 
 type LiveSessionCreateOptions = Parameters<typeof createLocalSession>[1];
 type LiveSessionResourceOptions = Omit<NonNullable<LiveSessionCreateOptions>, 'extensionFactories'>;

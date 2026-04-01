@@ -11,14 +11,14 @@ import {
   normalizeSavedModelPreferences,
   readSavedModelPreferences,
   writeSavedModelPreferences,
-} from '../modelPreferences.js';
+} from '../models/modelPreferences.js';
 import {
   readModelProvidersState,
   removeModelProvider,
   removeModelProviderModel,
   upsertModelProvider,
   upsertModelProviderModel,
-} from '../modelProviders.js';
+} from '../models/modelProviders.js';
 import {
   cancelProviderOAuthLogin,
   getProviderOAuthLoginState,
@@ -28,10 +28,10 @@ import {
   startProviderOAuthLogin,
   submitProviderOAuthLoginInput,
   subscribeProviderOAuthLogin,
-} from '../providerAuth.js';
-import { readCodexPlanUsage } from '../codexUsage.js';
-import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../defaultCwdPreferences.js';
-import { getAvailableModels } from '../liveSessions.js';
+} from '../models/providerAuth.js';
+import { readCodexPlanUsage } from '../models/codexUsage.js';
+import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
+import { getAvailableModels } from '../conversations/liveSessions.js';
 import {
   invalidateAppTopics,
   logError,

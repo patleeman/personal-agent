@@ -10,7 +10,7 @@ import {
   decorateSessionsWithAttention,
   toggleConversationAttention,
   readConversationModelPreferenceStateById,
-} from '../services/conversationService.js';
+} from '../conversations/conversationService.js';
 import {
   addConversationProjectLink,
   deleteConversationArtifact,
@@ -29,48 +29,48 @@ import {
   fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
   scheduleDeferredResumeForSessionFile,
-} from '../deferredResumes.js';
+} from '../automation/deferredResumes.js';
 import {
   getRemoteConversationConnectionState,
   subscribeRemoteConversationConnection,
   isRemoteLiveSession,
   readRemoteConversationBindingForConversation,
-} from '../remoteLiveSessions.js';
+} from '../conversations/remoteLiveSessions.js';
 import {
   getLiveSessions as getLocalLiveSessions,
   isLive as isLocalLive,
   updateLiveSessionModelPreferences,
   LiveSessionControlError,
   getAvailableModelObjects,
-} from '../liveSessions.js';
+} from '../conversations/liveSessions.js';
 import {
   ensureRequestControlsLocalLiveConversation,
 } from './liveSessions.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE,
-} from '../settingsPersistence.js';
+} from '../ui/settingsPersistence.js';
 import {
   applyConversationModelPreferencesToSessionManager,
   readConversationModelPreferenceSnapshot,
   resolveConversationModelPreferenceState,
-} from '../conversationModelPreferences.js';
-import { readSavedModelPreferences } from '../modelPreferences.js';
+} from '../conversations/conversationModelPreferences.js';
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   listSessions,
   readSessionBlock,
   readSessionImageAsset,
   readSessionSearchText,
   readSessionTree,
-} from '../sessions.js';
-import { buildContentDispositionHeader } from '../httpHeaders.js';
+} from '../conversations/sessions.js';
+import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import {
   logError,
   logSlowConversationPerf,
   setServerTimingHeaders,
   invalidateAppTopics,
 } from '../middleware/index.js';
-import type { SavedWebUiPreferences } from '../webUiPreferences.js';
+import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
