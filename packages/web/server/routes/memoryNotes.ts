@@ -29,10 +29,10 @@ import {
   isEditableMemoryFilePath,
   buildRecentReadUsage,
   normalizeMemoryPath,
-} from '../memoryDocs.js';
-import { buildReferencedMemoryDocsContext } from '../promptReferences.js';
-import { buildConversationMemoryWorkItemsFromStates, listConversationMemoryMaintenanceStates } from '../conversationMemoryMaintenance.js';
-import { createSession as createLocalSession, queuePromptContext } from '../liveSessions.js';
+} from '../knowledge/memoryDocs.js';
+import { buildReferencedMemoryDocsContext } from '../knowledge/promptReferences.js';
+import { buildConversationMemoryWorkItemsFromStates, listConversationMemoryMaintenanceStates } from '../conversations/conversationMemoryMaintenance.js';
+import { createSession as createLocalSession, queuePromptContext } from '../conversations/liveSessions.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 let _getCurrentProfile: () => string = () => { throw new Error('not initialized'); };

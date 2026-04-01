@@ -8,7 +8,7 @@ import type { Express } from 'express';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import {
   readConversationModelPreferenceStateById,
-} from '../services/conversationService.js';
+} from '../conversations/conversationService.js';
 import {
   listMemoryDocs,
   readNoteDetail,
@@ -22,7 +22,7 @@ import {
   extractNoteSummaryFromBody,
   clearMemoryBrowserCaches,
   listSkillsForProfile,
-} from '../memoryDocs.js';
+} from '../knowledge/memoryDocs.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 export function registerCompanionMemoryRoutes(router: Pick<Express, 'get'>): void {

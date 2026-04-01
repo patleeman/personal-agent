@@ -2,7 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { installPackageSource, listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
 import { inspectCliBinary, inspectMcpServer, inspectMcpTool, readMcpConfig } from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import { inspectAvailableTools } from '../liveSessions.js';
+import { inspectAvailableTools } from '../conversations/liveSessions.js';
 import { logError } from '../middleware/index.js';
 
 let getCurrentProfileFn: () => string = () => {

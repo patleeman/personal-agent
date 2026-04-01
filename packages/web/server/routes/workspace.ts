@@ -19,13 +19,13 @@ import {
   readWorkspacePreviewAsset,
   writeWorkspaceFile,
   retainWorkspaceWatch,
-} from '../workspaceBrowser.js';
-import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../settingsPersistence.js';
+} from '../workspace/workspaceBrowser.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 let _getDefaultWebCwd: () => string = () => process.cwd();
 let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;
-let _draftWorkspaceCommitMessage: (input: { draftSource: ReturnType<typeof import('../workspaceBrowser.js').readWorkspaceGitDraftSource>; authFile: string; settingsFile: string }) => Promise<unknown>;
+let _draftWorkspaceCommitMessage: (input: { draftSource: ReturnType<typeof import('../workspace/workspaceBrowser.js').readWorkspaceGitDraftSource>; authFile: string; settingsFile: string }) => Promise<unknown>;
 let _authFile: string;
 
 export function setWorkspaceRoutesGetters(

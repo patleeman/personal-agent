@@ -6,8 +6,8 @@ import type { Express } from 'express';
 import {
   readSavedConversationTitlePreferences,
   writeSavedConversationTitlePreferences,
-} from '../conversationTitlePreferences.js';
-import { persistSettingsWrite } from '../settingsPersistence.js';
+} from '../ui/conversationTitlePreferences.js';
+import { persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { logError } from '../middleware/index.js';
 
 let SETTINGS_FILE: string = '';

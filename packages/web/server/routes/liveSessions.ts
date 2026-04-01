@@ -25,7 +25,7 @@ import {
   registry as liveRegistry,
   subscribe as subscribeLocal,
   takeOverSessionControl,
-} from '../liveSessions.js';
+} from '../conversations/liveSessions.js';
 import {
   createLocalMirrorSession,
   createRemoteLiveSession,
@@ -36,16 +36,14 @@ import {
   stopRemoteLiveSession,
   subscribeRemoteLiveSession,
   submitRemoteLiveSessionPrompt,
-} from '../remoteLiveSessions.js';
-import { readCompanionSession } from '../companionAuth.js';
+} from '../conversations/remoteLiveSessions.js';
+import { readCompanionSession } from '../ui/companionAuth.js';
 import {
   getConversationExecutionTarget,
   getConversationProjectLink,
   getExecutionTarget,
   listAllProjectIds,
   resolveConversationAttachmentPromptFiles,
-  resolveProjectPaths,
-  readProjectOwnerProfile,
   setConversationExecutionTarget,
   setConversationProjectLinks,
 } from '@personal-agent/core';
@@ -56,11 +54,11 @@ import {
   invalidateAppTopics,
   logWarn,
 } from '../middleware/index.js';
-import { parseTailBlocksQuery, publishConversationSessionMetaChanged } from '../services/conversationService.js';
-import { readProjectDetailFromProject } from '../projects.js';
-import { readSessionMeta } from '../sessions.js';
-import { resolveConversationCwd } from '../conversationCwd.js';
-import { resolveRemoteExecutionCwd } from '../remoteExecution.js';
+import { parseTailBlocksQuery, publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
+import { readProjectDetailFromProject, readProjectOwnerProfile, resolveProjectNodePaths } from '../projects/projects.js';
+import { readSessionMeta } from '../conversations/sessions.js';
+import { resolveConversationCwd } from '../conversations/conversationCwd.js';
+import { resolveRemoteExecutionCwd } from '../workspace/remoteExecution.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedProfilesContext,
@@ -68,9 +66,9 @@ import {
   buildReferencedTasksContext,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
-} from '../promptReferences.js';
-import { syncWebLiveConversationRun } from '../conversationRuns.js';
-import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from '../gitStatus.js';
+} from '../knowledge/promptReferences.js';
+import { syncWebLiveConversationRun } from '../conversations/conversationRuns.js';
+import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from '../workspace/gitStatus.js';
 import {
   listPendingBackgroundRunResults,
   markBackgroundRunResultsDelivered,
@@ -303,17 +301,17 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
   const lines = projectIds.map((projectId) => {
     const projectProfile = readProjectProfileById(projectId) ?? currentProfile;
     const paths = {
-      projectFile: resolveProjectPaths({
+      projectFile: resolveProjectNodePaths({
         repoRoot: getRepoRootFn(),
         profile: projectProfile,
         projectId,
       }).projectFile,
-      notesDir: resolveProjectPaths({
+      notesDir: resolveProjectNodePaths({
         repoRoot: getRepoRootFn(),
         profile: projectProfile,
         projectId,
       }).notesDir,
-      filesDir: resolveProjectPaths({
+      filesDir: resolveProjectNodePaths({
         repoRoot: getRepoRootFn(),
         profile: projectProfile,
         projectId,
@@ -694,7 +692,7 @@ export function ensureRequestControlsLocalLiveConversation(conversationId: strin
   return surfaceId;
 }
 
-function writeLiveConversationControlError(res: Response, error: unknown): boolean {
+export function writeLiveConversationControlError(res: Response, error: unknown): boolean {
   if (error instanceof LiveSessionControlError) {
     res.status(409).json({ error: error.message });
     return true;

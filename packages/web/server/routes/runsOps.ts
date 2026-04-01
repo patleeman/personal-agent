@@ -5,23 +5,23 @@
  */
 
 import type { Express } from 'express';
-import { getDurableRun, clearDurableRunsListCache } from '../durableRuns.js';
-import { getDurableRunAttentionSignature } from '../durableRunAttention.js';
+import { getDurableRun, clearDurableRunsListCache } from '../automation/durableRuns.js';
+import { getDurableRunAttentionSignature } from '../automation/durableRunAttention.js';
 import { markDurableRunAttentionRead, markDurableRunAttentionUnread } from '@personal-agent/core';
-import { readRemoteExecutionRunConversationId } from '../remoteExecution.js';
-import { resolveConversationSessionFile, getCurrentProfile, listConversationSessionsSnapshot } from '../services/conversationService.js';
+import { readRemoteExecutionRunConversationId } from '../workspace/remoteExecution.js';
+import { resolveConversationSessionFile, getCurrentProfile, listConversationSessionsSnapshot } from '../conversations/conversationService.js';
 import {
   CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX,
   readConversationMemoryMaintenanceState,
   markConversationMemoryMaintenanceRunFailed,
   markConversationMemoryMaintenanceRunStarted,
   readConversationCheckpointSnapshotFromState,
-} from '../conversationMemoryMaintenance.js';
-import { writeConversationMemoryDistillFailureActivity } from '../conversationMemoryActivity.js';
-import { appendVisibleCustomMessage, createSessionFromExisting, renameSession, queuePromptContext } from '../liveSessions.js';
+} from '../conversations/conversationMemoryMaintenance.js';
+import { writeConversationMemoryDistillFailureActivity } from '../conversations/conversationMemoryActivity.js';
+import { appendVisibleCustomMessage, createSessionFromExisting, renameSession, queuePromptContext } from '../conversations/liveSessions.js';
 import { getConversationProjectLink, setConversationProjectLinks } from '@personal-agent/core';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { buildRemoteExecutionTranscriptResponse } from '../remoteExecution.js';
+import { buildRemoteExecutionTranscriptResponse } from '../workspace/remoteExecution.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 
 async function getDistillSupport() {

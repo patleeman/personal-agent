@@ -56,6 +56,7 @@ export {
 } from './webUi.js';
 
 export { registerConversationTitlesRoutes, setConversationTitlesRoutesGetters } from './conversationTitles.js';
+export { registerConversationStateRoutes, setConversationStateRoutesGetters } from './conversationState.js';
 export { registerExecutionTargetRoutes, setExecutionTargetRoutesGetters } from './executionTargets.js';
 
 // Add future route modules here:

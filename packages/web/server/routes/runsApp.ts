@@ -10,12 +10,12 @@ import {
   getDurableRunLog,
   listDurableRuns,
   cancelDurableRun,
-} from '../durableRuns.js';
+} from '../automation/durableRuns.js';
 import {
   importRemoteExecutionRun,
   readRemoteExecutionRunConversationId,
-} from '../remoteExecution.js';
-import { resolveConversationSessionFile, publishConversationSessionMetaChanged } from '../services/conversationService.js';
+} from '../workspace/remoteExecution.js';
+import { resolveConversationSessionFile, publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 function parseRunLogTail(raw: unknown): number {

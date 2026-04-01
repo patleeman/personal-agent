@@ -1243,8 +1243,8 @@ export function ProjectDetailPanel({
                   onClick={() => { void toggleRawProject(); }}
                   disabled={deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={rawProjectOpen ? 'Hide raw project YAML' : 'Show raw project YAML'}
-                  aria-label={rawProjectOpen ? 'Hide raw project YAML' : 'Show raw project YAML'}
+                  title={rawProjectOpen ? 'Hide raw project source' : 'Show raw project source'}
+                  aria-label={rawProjectOpen ? 'Hide raw project source' : 'Show raw project source'}
                 >
                   <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M10 11h4", "M10 15h4"]} />
                 </IconButton>
@@ -1371,7 +1371,7 @@ export function ProjectDetailPanel({
         {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
 
         {rawProjectOpen ? (
-          <ProjectRailSection title="state.yaml">
+          <ProjectRailSection title="INDEX.md">
             <ProjectRecordViewer
               repoRoot={record.repoRoot}
               summary={record.summary}

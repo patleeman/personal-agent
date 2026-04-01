@@ -3,7 +3,7 @@
  */
 
 import type { Express } from 'express';
-import { pickFolder } from '../folderPicker.js';
+import { pickFolder } from '../workspace/folderPicker.js';
 
 let _getDefaultWebCwd: () => string = () => process.cwd();
 let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;

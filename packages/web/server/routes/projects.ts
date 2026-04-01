@@ -24,7 +24,7 @@ import {
   updateProjectTaskRecord,
   type InvalidProjectRecord,
   type ProjectDetail,
-} from '../projects.js';
+} from '../projects/projects.js';
 import {
   createProjectNoteRecord,
   deleteProjectFileRecord,
@@ -33,12 +33,12 @@ import {
   saveProjectDocument,
   updateProjectNoteRecord,
   uploadProjectFile,
-} from '../projectResources.js';
-import { listConversationProjectLinks, readProjectOwnerProfile } from '@personal-agent/core';
-import { listConversationSessionsSnapshot } from '../services/conversationService.js';
-import { buildProjectSharePackageFileName, exportProjectSharePackage } from '../projectPackages.js';
-import { generateProjectDocument } from '../projectDocuments.js';
-import { buildContentDispositionHeader } from '../httpHeaders.js';
+} from '../projects/projectResources.js';
+import { listConversationProjectLinks } from '@personal-agent/core';
+import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
+import { buildProjectSharePackageFileName, exportProjectSharePackage } from '../projects/projectPackages.js';
+import { generateProjectDocument } from '../projects/projectDocuments.js';
+import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 /**
@@ -106,14 +106,6 @@ function readProjectIndexForSelection(profile: string | 'all') {
 
 function listProjectsForCurrentProfile() {
   return readProjectIndexForSelection(getCurrentProfileFn()).projects;
-}
-
-function readProjectOwnerProfileById(projectId: string): string | null {
-  try {
-    return readProjectOwnerProfile({ repoRoot: REPO_ROOT, projectId });
-  } catch {
-    return null;
-  }
 }
 
 function readProjectDetailForProfile(projectId: string, profile = getCurrentProfileFn()) {

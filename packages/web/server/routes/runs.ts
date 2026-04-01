@@ -10,13 +10,13 @@ import {
   getDurableRun,
   getDurableRunLog,
   listDurableRuns,
-} from '../durableRuns.js';
+} from '../automation/durableRuns.js';
 import {
   readRemoteExecutionRunConversationId,
   importRemoteExecutionRun,
-} from '../remoteExecution.js';
-import { resolveConversationSessionFile } from '../services/conversationService.js';
-import { publishConversationSessionMetaChanged } from '../services/conversationService.js';
+} from '../workspace/remoteExecution.js';
+import { resolveConversationSessionFile } from '../conversations/conversationService.js';
+import { publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
 import {
   invalidateAppTopics,
   logError,

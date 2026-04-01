@@ -1,24 +1,24 @@
 import type { Express, Request, Response } from 'express';
-import { listProjectIds } from '@personal-agent/core';
-import { requestApplicationRestart, requestApplicationUpdate } from '../applicationRestart.js';
-import { readWebUiState } from '../webUi.js';
-import { readCompanionSession } from '../companionAuth.js';
-import { readDaemonState } from '../daemon.js';
+import { requestApplicationRestart, requestApplicationUpdate } from '../ui/applicationRestart.js';
+import { listProjectIndex } from '../projects/projects.js';
+import { readWebUiState } from '../ui/webUi.js';
+import { readCompanionSession } from '../ui/companionAuth.js';
+import { readDaemonState } from '../automation/daemon.js';
 import {
   parseSyncSetupInput,
   readSyncState,
   requestSyncRunAndReadState,
   setupSyncAndReadState,
-} from '../sync.js';
-import { getAlertSnapshotForProfile } from '../alerts.js';
-import { invalidateAppTopics, subscribeAppEvents, type AppEventTopic } from '../appEvents.js';
-import { streamSnapshotEvents } from '../snapshotEventStreaming.js';
+} from '../conversations/sync.js';
+import { getAlertSnapshotForProfile } from '../automation/alerts.js';
+import { invalidateAppTopics, subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
+import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
 import {
   logError,
   logWarn,
 } from '../middleware/index.js';
-import { listConversationSessionsSnapshot } from '../services/conversationService.js';
-import { listDurableRuns } from '../durableRuns.js';
+import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
+import { listDurableRuns } from '../automation/durableRuns.js';
 
 type ActivityListEntryLike = {
   read?: boolean;
@@ -136,7 +136,7 @@ function handleStatus(_req: Request, res: Response): void {
   try {
     const profile = getCurrentProfileFn();
     const activities = listActivityForCurrentProfileFn();
-    const projectIds = listProjectIds({ repoRoot: getRepoRootFn(), profile });
+    const projectIds = listProjectIndex({ repoRoot: getRepoRootFn(), profile }).projects.map((project) => project.id);
     res.json({
       profile,
       repoRoot: getRepoRootFn(),

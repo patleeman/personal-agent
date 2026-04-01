@@ -6,7 +6,7 @@ import {
   readCompanionSession,
   revokeCompanionSession,
   revokeCompanionSessionByToken,
-} from '../companionAuth.js';
+} from '../ui/companionAuth.js';
 import { createInMemoryRateLimit, resolveRequestOrigin } from '../middleware/index.js';
 
 const DESKTOP_SESSION_COOKIE = 'pa_web';
