@@ -1,6 +1,7 @@
 import { existsSync, statSync } from 'node:fs';
 import type { Express } from 'express';
 import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { LiveSessionResourceOptions } from './context.js';
 import {
   getConversationExecutionTarget,
   getConversationProjectLink,
@@ -80,7 +81,7 @@ let getCurrentProfileFn: () => string = () => {
 
 let getRepoRootFn: () => string = () => process.cwd();
 
-let buildLiveSessionResourceOptionsFn: (profile?: string) => Record<string, unknown> = () => ({
+let buildLiveSessionResourceOptionsFn: (profile?: string) => LiveSessionResourceOptions = () => ({
   additionalExtensionPaths: [],
   additionalSkillPaths: [],
   additionalPromptTemplatePaths: [],
@@ -94,7 +95,7 @@ let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 export function setConversationStateRoutesGetters(
   getCurrentProfile: () => string,
   getRepoRoot: () => string,
-  buildLiveSessionResourceOptions: (profile?: string) => Record<string, unknown>,
+  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
   buildLiveSessionExtensionFactories: () => ExtensionFactory[],
   flushLiveDeferredResumes: () => Promise<void> = async () => {},
 ): void {

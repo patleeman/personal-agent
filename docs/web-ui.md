@@ -211,7 +211,10 @@ It is meant to make the knowledge system feel like one surface with a normal tab
 From the Knowledge Base page you can:
 
 - browse notes, projects, and skills together in one table
-- filter, sort, and group without leaving the page
+- use a Lucene-style query bar for tag and text search
+- sort by updated/created/title/status and group by kind or tag-derived dimensions
+- filter by date range without leaving the page
+- save reusable browser views locally for common slices of the node graph
 - open any row into a shared node workspace with the main content in the center and metadata on the right
 - hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
 
@@ -223,8 +226,8 @@ From the Projects page you can:
 
 - create a project from a short title plus a longer description
 - inspect current status, blockers, optional milestones, and tasks
-- edit the canonical `state.yaml`
-- edit or regenerate `INDEX.md`
+- edit the raw project node source (`INDEX.md` frontmatter + markdown body)
+- edit or regenerate the project document when present
 - append project notes
 - upload attachments and project artifacts
 - see linked conversations for the project

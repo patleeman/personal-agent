@@ -1016,6 +1016,59 @@ export interface MemoryData {
   memoryDocs: MemoryDocItem[];
 }
 
+export interface NodeBrowserProjectMeta {
+  profile?: string;
+  repoRoot?: string;
+  currentFocus?: string;
+  taskCount: number;
+  openTaskCount: number;
+  doneTaskCount: number;
+  archivedAt?: string;
+}
+
+export interface NodeBrowserSkillMeta {
+  source: string;
+  recentSessionCount?: number;
+  lastUsedAt?: string | null;
+  usedInLastSession?: boolean;
+}
+
+export interface NodeBrowserNoteMeta {
+  referenceCount?: number;
+  recentSessionCount?: number;
+  lastUsedAt?: string | null;
+  usedInLastSession?: boolean;
+  type?: string;
+  area?: string;
+  role?: string;
+}
+
+export interface NodeBrowserSummary {
+  kind: NodeLinkKind;
+  kinds: string[];
+  id: string;
+  title: string;
+  summary: string;
+  description?: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  path: string;
+  tags: string[];
+  profiles: string[];
+  parent?: string;
+  searchText: string;
+  note?: NodeBrowserNoteMeta;
+  project?: NodeBrowserProjectMeta;
+  skill?: NodeBrowserSkillMeta;
+}
+
+export interface NodeBrowserData {
+  profile: string;
+  tagKeys: string[];
+  nodes: NodeBrowserSummary[];
+}
+
 export interface SkillDetail {
   skill: MemorySkillItem;
   content: string;
