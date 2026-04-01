@@ -59,6 +59,10 @@ describe('subcommand help discoverability', () => {
       expected: ['Note', 'Usage: pa note [list|find|show|new|lint|help]', 'new <id> --title <title>'],
     },
     {
+      argv: ['node', '--help'],
+      expected: ['Node', 'Usage: pa node [list|find|show|get|new|update|delete|tag|lint|migrate|help]', 'migrate [--json]'],
+    },
+    {
       argv: ['inbox', '--help'],
       expected: ['Inbox', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
     },

@@ -174,6 +174,7 @@ import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createNoteAgentExtension } from './noteAgentExtension.js';
+import { createNodeAgentExtension } from './nodeAgentExtension.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import {
   saveCuratedDistilledConversationMemory,
@@ -313,6 +314,7 @@ import {
   listProfileActivityEntries,
   listAllProjectIds,
   listDeferredResumeRecords,
+  listUnifiedSkillNodeDirs,
   loadDeferredResumeState,
   loadProfileActivityReadState,
   markConversationAttentionRead,
@@ -723,6 +725,7 @@ export function buildLiveSessionExtensionFactories() {
       profilesRoot: getProfilesRoot(),
     }),
     createNoteAgentExtension(),
+    createNodeAgentExtension(),
     createArtifactAgentExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,
@@ -740,7 +743,7 @@ export function buildLiveSessionResourceOptions(profile = getCurrentProfile()) {
 
   return {
     additionalExtensionPaths: resolved.extensionEntries,
-    additionalSkillPaths: resolved.skillDirs,
+    additionalSkillPaths: [...new Set([...listUnifiedSkillNodeDirs(profile, { profilesRoot: getProfilesRoot() }), ...resolved.skillDirs])],
     additionalPromptTemplatePaths: resolved.promptEntries,
     additionalThemePaths: resolved.themeEntries,
   };

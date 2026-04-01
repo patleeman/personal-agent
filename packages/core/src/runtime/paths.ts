@@ -129,6 +129,10 @@ export function getDurableSkillsDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'skills');
 }
 
+export function getDurableNodesDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'nodes');
+}
+
 export function getDurableNotesDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'notes');
 }

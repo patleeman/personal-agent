@@ -74,5 +74,8 @@ export * from './memory-docs.js';
 // Memory package parsing + CRUD exports
 export * from './memory-store.js';
 
+// Unified durable nodes
+export * from './nodes.js';
+
 // Managed sync repo templates
 export * from './sync-managed-repo.js';

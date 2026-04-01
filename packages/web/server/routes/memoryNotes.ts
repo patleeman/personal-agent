@@ -9,7 +9,6 @@ import { dirname } from 'node:path';
 import {
   getProfilesRoot,
   listAllProjectIds,
-  loadMemoryDocs,
   setConversationProjectLinks,
 } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
@@ -18,6 +17,7 @@ import {
   findMemoryDocById,
   readNoteDetail,
   createMemoryDoc,
+  buildStructuredNoteMarkdown,
   normalizeCreatedNoteTitle,
   normalizeCreatedNoteSummary,
   normalizeCreatedNoteDescription,
@@ -229,7 +229,14 @@ export function registerMemoryNotesRoutes(router: Pick<Express, 'get' | 'post' |
         status: 'active',
       });
       const descriptionVal = normalizeCreatedNoteDescription(req.body?.description);
-      writeFileSync(filePath!, `---\nid: ${noteId}\nkind: note\ntitle: ${title}\nsummary: ${summary}\n${descriptionVal ? `description: ${descriptionVal}\n` : ''}status: active\n---\n\n# ${title}\n\n${editableBody}\n`, 'utf-8');
+      writeFileSync(filePath!, buildStructuredNoteMarkdown(readFileSync(filePath!, 'utf-8'), {
+        noteId,
+        title,
+        summary,
+        description: descriptionVal,
+        descriptionProvided: Object.prototype.hasOwnProperty.call(req.body ?? {}, 'description'),
+        body: editableBody,
+      }), 'utf-8');
       clearMemoryBrowserCaches();
       res.status(201).json(readNoteDetail(noteId));
     } catch (err) {
@@ -259,7 +266,14 @@ export function registerMemoryNotesRoutes(router: Pick<Express, 'get' | 'post' |
         writeFileSync(memory.path, content, 'utf-8');
       } else if (typeof title === 'string' && typeof body === 'string') {
         const descriptionVal = normalizeCreatedNoteDescription(description);
-        writeFileSync(memory.path, `---\nid: ${memory.id}\nkind: note\ntitle: ${title}\nsummary: ${summary ?? ''}\n${descriptionVal ? `description: ${descriptionVal}\n` : ''}status: active\n---\n\n# ${title}\n\n${body}\n`, 'utf-8');
+        writeFileSync(memory.path, buildStructuredNoteMarkdown(readFileSync(memory.path, 'utf-8'), {
+          noteId: memory.id,
+          title,
+          summary,
+          description: descriptionVal,
+          descriptionProvided: Object.prototype.hasOwnProperty.call(req.body ?? {}, 'description'),
+          body,
+        }), 'utf-8');
       } else {
         res.status(400).json({ error: 'content or { title, body } required' }); return;
       }
@@ -290,9 +304,8 @@ export function registerMemoryNotesRoutes(router: Pick<Express, 'get' | 'post' |
       const profile = _getCurrentProfile();
       const memoryId = req.params.memoryId;
       const memory = listMemoryDocs().find((entry: { id: string }) => entry.id === memoryId);
-      const loadedMemory = loadMemoryDocs({ profilesRoot: getProfilesRoot() }).docs.find((entry: { id: string }) => entry.id === memoryId);
-      if (!memory || !loadedMemory) { res.status(404).json({ error: 'Note not found.' }); return; }
-      const sourceCwd = typeof loadedMemory.metadata.source_cwd === 'string' ? loadedMemory.metadata.source_cwd.trim() : '';
+      if (!memory) { res.status(404).json({ error: 'Note not found.' }); return; }
+      const sourceCwd = '';
       const defaultWebCwd = _getDefaultWebCwd();
       const { cwd: requestedCwd } = req.body as { cwd?: string };
       let nextCwd = _resolveRequestedCwd(requestedCwd, sourceCwd || defaultWebCwd);
@@ -305,9 +318,7 @@ export function registerMemoryNotesRoutes(router: Pick<Express, 'get' | 'post' |
         ..._buildLiveSessionResourceOptions(profile),
         extensionFactories: _buildLiveSessionExtensionFactories(),
       });
-      const requestedRelatedProjectIds = Array.isArray(loadedMemory.metadata.related_project_ids)
-        ? loadedMemory.metadata.related_project_ids.filter((projectId: unknown): projectId is string => typeof projectId === 'string' && (projectId as string).trim().length > 0)
-        : [];
+      const requestedRelatedProjectIds: string[] = [];
       const availableProjectIds = new Set(listReferenceableProjectIds());
       const relatedProjectIds = requestedRelatedProjectIds.filter((projectId: string) => availableProjectIds.has(projectId));
       if (relatedProjectIds.length > 0) {
