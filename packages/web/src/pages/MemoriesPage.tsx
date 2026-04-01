@@ -29,6 +29,7 @@ import {
   noteKindLabel,
   readCreateState,
 } from '../noteWorkspaceState';
+import { buildNodesSearch } from '../nodeWorkspaceState';
 import { readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
@@ -374,6 +375,7 @@ export function NoteWorkspace({
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
+  const [promotionBusy, setPromotionBusy] = useState<'project' | 'skill' | null>(null);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'error'>('idle');
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger' | 'warning'; text: string } | null>(null);
   const lastAutoSaveSignatureRef = useRef<string | null>(null);
@@ -560,6 +562,54 @@ export function NoteWorkspace({
     }
   }
 
+  async function handlePromoteToProject() {
+    if (promotionBusy || isCreating || !memory) {
+      return;
+    }
+
+    setPromotionBusy('project');
+    setNotice(null);
+    try {
+      const created = await api.createProject({
+        title: noteTitle.trim(),
+        description: noteDescription.trim() || noteTitle.trim(),
+        summary: noteDescription.trim() || noteTitle.trim(),
+        documentContent: noteBody.trim(),
+      });
+      await api.saveNodeDetail(created.project.id, {
+        relationships: [{ type: 'derived-from', targetId: memory.id }],
+      });
+      emitProjectsChanged();
+      window.location.assign(`/nodes${buildNodesSearch('', { kind: 'project', nodeId: created.project.id })}`);
+    } catch (error) {
+      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
+      setPromotionBusy(null);
+    }
+  }
+
+  async function handlePromoteToSkill() {
+    if (promotionBusy || isCreating || !memory) {
+      return;
+    }
+
+    setPromotionBusy('skill');
+    setNotice(null);
+    try {
+      const created = await api.createSkill({
+        title: noteTitle.trim(),
+        description: noteDescription.trim() || noteTitle.trim(),
+        body: noteBody.trim(),
+      });
+      await api.saveNodeDetail(created.skill.name, {
+        relationships: [{ type: 'derived-from', targetId: memory.id }],
+      });
+      window.location.assign(`/nodes${buildNodesSearch('', { kind: 'skill', nodeId: created.skill.name })}`);
+    } catch (error) {
+      setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
+      setPromotionBusy(null);
+    }
+  }
+
   const saveStatus = saveBusy
     ? { text: isCreating ? 'Creating…' : 'Saving…', className: 'text-accent' }
     : noteTitle.trim().length === 0
@@ -646,6 +696,22 @@ export function NoteWorkspace({
             tone="accent"
           >
             <NoteWorkspaceIcon paths={["M7 10h10", "M7 14h6", "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"]} />
+          </NodeIconActionButton>
+          <NodeIconActionButton
+            onClick={() => { void handlePromoteToProject(); }}
+            disabled={promotionBusy !== null || isCreating || noteTitle.trim().length === 0}
+            title={isCreating ? 'Project promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating project from note' : 'Promote note to project')}
+            aria-label={isCreating ? 'Project promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating project from note' : 'Promote note to project')}
+          >
+            <NoteWorkspaceIcon paths={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M8 11h8", "M8 15h6"]} />
+          </NodeIconActionButton>
+          <NodeIconActionButton
+            onClick={() => { void handlePromoteToSkill(); }}
+            disabled={promotionBusy !== null || isCreating || noteTitle.trim().length === 0}
+            title={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from note' : 'Promote note to skill')}
+            aria-label={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from note' : 'Promote note to skill')}
+          >
+            <NoteWorkspaceIcon paths={["M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleDelete(); }}

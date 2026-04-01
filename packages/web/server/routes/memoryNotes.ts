@@ -18,6 +18,7 @@ import {
   findMemoryDocById,
   readNoteDetail,
   createMemoryDoc,
+  createSkillDoc,
   buildStructuredNoteMarkdown,
   normalizeCreatedNoteTitle,
   normalizeCreatedNoteSummary,
@@ -157,7 +158,7 @@ export function registerMemoryNotesRoutes(
     try {
       const filePath = req.query.path as string;
       if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
-      if (!isEditableMemoryFilePath(filePath)) { res.status(403).json({ error: 'Access denied' }); return; }
+      if (!isEditableMemoryFilePath(filePath, _getCurrentProfile())) { res.status(403).json({ error: 'Access denied' }); return; }
       if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
       res.json({ content: readFileSync(filePath, 'utf-8'), path: filePath });
     } catch (err) {
@@ -176,11 +177,51 @@ export function registerMemoryNotesRoutes(
     }
   });
 
+  router.post('/api/skills', (req, res) => {
+    try {
+      const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+      const name = typeof req.body?.name === 'string' && req.body.name.trim().length > 0
+        ? req.body.name.trim()
+        : title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!title || !name) {
+        res.status(400).json({ error: 'title required' });
+        return;
+      }
+
+      const created = createSkillDoc({
+        name,
+        title,
+        description: typeof req.body?.description === 'string' ? req.body.description : '',
+        body: typeof req.body?.body === 'string' ? req.body.body : undefined,
+        profile: _getCurrentProfile(),
+      });
+      clearMemoryBrowserCaches();
+      const detail = readSkillDetailForProfile(created.name, _getCurrentProfile());
+      if (!detail) {
+        res.status(500).json({ error: 'Created skill could not be loaded.' });
+        return;
+      }
+      res.status(201).json({
+        skill: detail,
+        content: readFileSync(detail.path, 'utf-8'),
+        references: [],
+        links: {
+          outgoing: [],
+          incoming: [],
+          unresolved: [],
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(message.includes('already exists') ? 409 : 500).json({ error: message });
+    }
+  });
+
   router.post('/api/memory/file', (req, res) => {
     try {
       const { path: filePath, content } = req.body as { path: string; content: string };
       if (!filePath || content === undefined) { res.status(400).json({ error: 'path and content required' }); return; }
-      if (!isEditableMemoryFilePath(filePath)) { res.status(403).json({ error: 'Access denied' }); return; }
+      if (!isEditableMemoryFilePath(filePath, _getCurrentProfile())) { res.status(403).json({ error: 'Access denied' }); return; }
       writeFileSync(filePath, content, 'utf-8');
       clearMemoryBrowserCaches();
       res.json({ ok: true });
@@ -238,7 +279,7 @@ export function registerMemoryNotesRoutes(
         body: editableBody,
       }), 'utf-8');
       clearMemoryBrowserCaches();
-      res.status(201).json(readNoteDetail(noteId));
+      res.status(201).json(readNoteDetail(noteId, _getCurrentProfile()));
     } catch (err) {
       logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
       res.status(500).json({ error: String(err) });
@@ -247,7 +288,7 @@ export function registerMemoryNotesRoutes(
 
   router.get('/api/notes/:memoryId', (req, res) => {
     try {
-      res.json(readNoteDetail(req.params.memoryId));
+      res.json(readNoteDetail(req.params.memoryId, _getCurrentProfile()));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
@@ -278,7 +319,7 @@ export function registerMemoryNotesRoutes(
         res.status(400).json({ error: 'content or { title, body } required' }); return;
       }
       clearMemoryBrowserCaches();
-      res.json(readNoteDetail(memory.id));
+      res.json(readNoteDetail(memory.id, _getCurrentProfile()));
     } catch (err) {
       logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
       res.status(500).json({ error: String(err) });

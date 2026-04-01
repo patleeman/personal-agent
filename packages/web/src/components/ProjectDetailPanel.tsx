@@ -492,6 +492,7 @@ export function ProjectDetailPanel({
 
   const [conversationBusy, setConversationBusy] = useState(false);
   const [conversationError, setConversationError] = useState<string | null>(null);
+  const [promotionBusy, setPromotionBusy] = useState(false);
 
   const [rawProjectOpen, setRawProjectOpen] = useState(false);
   const [rawProjectLoaded, setRawProjectLoaded] = useState(false);
@@ -1021,6 +1022,30 @@ export function ProjectDetailPanel({
     }
   }
 
+  async function promoteProjectToNote() {
+    if (promotionBusy) {
+      return;
+    }
+
+    setPromotionBusy(true);
+    setConversationError(null);
+    try {
+      const created = await api.createNoteDoc({
+        title: record.title,
+        summary: record.summary,
+        description: record.description,
+        body: documentContent.trim() || record.summary,
+      });
+      await api.saveNodeDetail(created.memory.id, {
+        relationships: [{ type: 'derived-from', targetId: record.id }],
+      });
+      window.location.assign(`/nodes?kind=note&node=${encodeURIComponent(created.memory.id)}`);
+    } catch (error) {
+      setConversationError(error instanceof Error ? error.message : String(error));
+      setPromotionBusy(false);
+    }
+  }
+
   function downloadProjectPackage() {
     const link = document.createElement('a');
     link.href = `/api/projects/${encodeURIComponent(record.id)}/package?viewProfile=${encodeURIComponent(projectProfile)}`;
@@ -1202,6 +1227,16 @@ export function ProjectDetailPanel({
                   aria-label={noteEditor?.mode === 'add' ? 'Cancel note' : 'Add note'}
                 >
                   <ToolbarGlyph path={["M12 5v14", "M5 12h14", "M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"]} />
+                </IconButton>
+                <IconButton
+                  type="button"
+                  onClick={() => { void promoteProjectToNote(); }}
+                  disabled={promotionBusy || deleteBusy}
+                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
+                  title={promotionBusy ? 'Creating note from project' : 'Create reusable note'}
+                  aria-label={promotionBusy ? 'Creating note from project' : 'Create reusable note'}
+                >
+                  <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M8 11h8", "M8 15h4"]} />
                 </IconButton>
                 <IconButton
                   type="button"

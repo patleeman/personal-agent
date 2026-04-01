@@ -645,6 +645,10 @@ function SkillsTable({
   );
 }
 
+function readCreatingSkill(search: string): boolean {
+  return new URLSearchParams(search).get('creating') === 'true';
+}
+
 export function SkillsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -653,7 +657,13 @@ export function SkillsPage() {
   const [query, setQuery] = useState('');
   const filteredSkills = useMemo(() => skills.filter((skill) => matchesSkill(skill, query)), [query, skills]);
   const selectedSkillName = useMemo(() => getKnowledgeSkillName(location.search), [location.search]);
+  const creatingSkill = useMemo(() => readCreatingSkill(location.search), [location.search]);
   const selectedView = useMemo(() => readSkillView(location.search), [location.search]);
+  const [newSkillTitle, setNewSkillTitle] = useState('');
+  const [newSkillDescription, setNewSkillDescription] = useState('');
+  const [newSkillBody, setNewSkillBody] = useState('');
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const selectedItem = useMemo(() => new URLSearchParams(location.search).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null, [location.search]);
   const skillDetailApi = useApi(
     () => selectedSkillName ? api.skillDetail(selectedSkillName) : Promise.resolve(null),
@@ -685,6 +695,24 @@ export function SkillsPage() {
     ensureOpenResourceShelfItem('skill', selectedSkillName);
   }, [selectedSkillName]);
 
+  async function handleCreateSkill() {
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      const created = await api.createSkill({
+        title: newSkillTitle,
+        description: newSkillDescription,
+        body: newSkillBody,
+      });
+      await refetch({ resetLoading: false });
+      navigate(`/skills${buildSkillsSearch('', { skillName: created.skill.name, view: null, item: null })}`, { replace: true });
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreateBusy(false);
+    }
+  }
+
   if (selectedSkillName) {
     return (
       <div className="min-h-0 flex h-full flex-col overflow-hidden">
@@ -712,15 +740,67 @@ export function SkillsPage() {
     );
   }
 
+  if (creatingSkill) {
+    return (
+      <div className="min-h-0 flex h-full flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-5">
+            <PageHeader
+              actions={(
+                <div className="flex items-center gap-2">
+                  <ToolbarButton onClick={() => navigate('/skills')}>Cancel</ToolbarButton>
+                  <ToolbarButton onClick={() => { void handleCreateSkill(); }} disabled={createBusy || newSkillTitle.trim().length === 0} className="text-accent">
+                    {createBusy ? 'Creating…' : 'Create skill'}
+                  </ToolbarButton>
+                </div>
+              )}
+            >
+              <PageHeading title="New skill" meta="Create a reusable workflow node for the active profile." />
+            </PageHeader>
+
+            <div className="space-y-3 max-w-3xl">
+              <input
+                value={newSkillTitle}
+                onChange={(event) => setNewSkillTitle(event.target.value)}
+                placeholder="Skill title"
+                aria-label="Skill title"
+                className={INPUT_CLASS}
+              />
+              <textarea
+                value={newSkillDescription}
+                onChange={(event) => setNewSkillDescription(event.target.value)}
+                placeholder="Short description"
+                aria-label="Skill description"
+                rows={2}
+                className={`${INPUT_CLASS} resize-y`}
+              />
+            </div>
+            <div className="max-w-4xl">
+              <RichMarkdownEditor
+                value={newSkillBody}
+                onChange={setNewSkillBody}
+                placeholder="Document when to use this skill, the workflow, and any sharp edges."
+              />
+            </div>
+            {createError ? <p className="text-[12px] text-danger">{createError}</p> : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
           <PageHeader
             actions={(
-              <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
-                {refreshing ? 'Refreshing…' : 'Refresh'}
-              </ToolbarButton>
+              <div className="flex items-center gap-2">
+                <ToolbarButton onClick={() => navigate('/skills?creating=true')} className="text-accent">New skill</ToolbarButton>
+                <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
+                  {refreshing ? 'Refreshing…' : 'Refresh'}
+                </ToolbarButton>
+              </div>
             )}
           >
             <PageHeading

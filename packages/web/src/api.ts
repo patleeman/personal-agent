@@ -613,6 +613,8 @@ export const api = {
     del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),
   skillDetail: (name: string, options?: { profile?: string }) =>
     get<SkillDetail>(withViewProfile(`/skills/${encodeURIComponent(name)}`, options?.profile)),
+  createSkill: (input: { title: string; name?: string; description?: string; body?: string }) =>
+    post<SkillDetail>('/skills', input),
   startNoteConversation: (memoryId: string, input?: { cwd?: string }) =>
     post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/notes/${encodeURIComponent(memoryId)}/start`, input ?? {}),
   addConversationProject: (id: string, projectId: string) =>

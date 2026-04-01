@@ -1,4 +1,5 @@
 import { relative } from 'node:path';
+import { getProfilesRoot, loadUnifiedNodes, type UnifiedNodeRecord } from '@personal-agent/core';
 
 export interface PromptReferenceTask {
   id: string;
@@ -40,6 +41,12 @@ export interface ResolvedPromptReferences {
   memoryDocIds: string[];
   skillNames: string[];
   profileIds: string[];
+}
+
+export interface ExpandedPromptNodeGraphReferences {
+  projectIds: string[];
+  memoryDocIds: string[];
+  skillNames: string[];
 }
 
 function appendUnique(target: string[], seen: Set<string>, value: string) {
@@ -123,6 +130,88 @@ export function resolvePromptReferences(input: {
     memoryDocIds,
     skillNames,
     profileIds,
+  };
+}
+
+function resolveNodeReferenceKind(node: Pick<UnifiedNodeRecord, 'type' | 'kinds'>): 'project' | 'note' | 'skill' {
+  if (node.type === 'project' || node.kinds.includes('project')) {
+    return 'project';
+  }
+  if (node.type === 'skill' || node.kinds.includes('skill')) {
+    return 'skill';
+  }
+  return 'note';
+}
+
+export function expandPromptReferencesWithNodeGraph(input: {
+  projectIds: string[];
+  memoryDocIds: string[];
+  skillNames: string[];
+  maxRelatedPerSeed?: number;
+}): ExpandedPromptNodeGraphReferences {
+  const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
+  const nodesById = new Map(loaded.nodes.map((node) => [node.id, node] as const));
+  const childrenByParent = new Map<string, string[]>();
+  for (const node of loaded.nodes) {
+    if (!node.links.parent) {
+      continue;
+    }
+    const existing = childrenByParent.get(node.links.parent) ?? [];
+    existing.push(node.id);
+    childrenByParent.set(node.links.parent, existing);
+  }
+
+  const seedIds = [...new Set([...input.projectIds, ...input.memoryDocIds, ...input.skillNames])];
+  const maxRelatedPerSeed = input.maxRelatedPerSeed ?? 2;
+  const projectIds = [...input.projectIds];
+  const memoryDocIds = [...input.memoryDocIds];
+  const skillNames = [...input.skillNames];
+  const seen = new Set(seedIds);
+
+  for (const seedId of seedIds) {
+    const node = nodesById.get(seedId);
+    if (!node) {
+      continue;
+    }
+
+    const candidateIds = [
+      ...(node.links.parent ? [node.links.parent] : []),
+      ...node.links.relationships.map((relationship) => relationship.targetId),
+      ...(childrenByParent.get(seedId) ?? []),
+    ];
+
+    let added = 0;
+    for (const candidateId of candidateIds) {
+      if (!candidateId || seen.has(candidateId)) {
+        continue;
+      }
+
+      const candidate = nodesById.get(candidateId);
+      if (!candidate) {
+        continue;
+      }
+
+      seen.add(candidateId);
+      added += 1;
+      const kind = resolveNodeReferenceKind(candidate);
+      if (kind === 'project') {
+        projectIds.push(candidateId);
+      } else if (kind === 'skill') {
+        skillNames.push(candidateId);
+      } else {
+        memoryDocIds.push(candidateId);
+      }
+
+      if (added >= maxRelatedPerSeed) {
+        break;
+      }
+    }
+  }
+
+  return {
+    projectIds,
+    memoryDocIds,
+    skillNames,
   };
 }
 
