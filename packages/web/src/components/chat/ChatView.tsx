@@ -2435,6 +2435,7 @@ interface ChatViewProps {
   scrollContainerRef?: RefObject<HTMLDivElement>;
   focusMessageIndex?: number | null;
   isStreaming?: boolean;
+  isCompacting?: boolean;
   pendingStatusLabel?: string | null;
   performanceMode?: ChatViewPerformanceMode;
   layout?: ChatViewLayout;
@@ -2463,6 +2464,7 @@ export const ChatView = memo(function ChatView({
   scrollContainerRef,
   focusMessageIndex = null,
   isStreaming = false,
+  isCompacting = false,
   pendingStatusLabel = null,
   performanceMode = 'default',
   layout = 'default',
@@ -2485,7 +2487,9 @@ export const ChatView = memo(function ChatView({
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
-  const streamingStatusLabel = pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
+  const streamingStatusLabel = isCompacting
+    ? 'Compacting context…'
+    : pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
   const renderingProfile = CHAT_VIEW_RENDERING_PROFILE[performanceMode];
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (Boolean(pendingStatusLabel) || !lastBlock || lastBlock.type === 'user');

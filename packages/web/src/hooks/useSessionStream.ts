@@ -24,6 +24,7 @@ export interface StreamState {
   totalBlocks: number;
   hasSnapshot: boolean;
   isStreaming: boolean;
+  isCompacting: boolean;
   error: string | null;
   title: string | null;
   tokens: { input: number; output: number; total: number } | null;
@@ -48,6 +49,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   totalBlocks: 0,
   hasSnapshot: false,
   isStreaming: false,
+  isCompacting: false,
   error: null,
   title: null,
   tokens: null,
@@ -642,8 +644,13 @@ export function applyEvent(
         totalBlocks: event.totalBlocks,
         hasSnapshot: true,
         isStreaming: false,
+        isCompacting: false,
         error: null,
       };
+    }
+
+    case 'compaction_start': {
+      return { ...prev, isCompacting: true };
     }
 
     case 'agent_start': {

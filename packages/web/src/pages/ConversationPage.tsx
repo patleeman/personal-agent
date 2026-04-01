@@ -4343,6 +4343,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               scrollContainerRef={scrollRef}
               focusMessageIndex={requestedFocusMessageIndex}
               isStreaming={stream.isStreaming}
+              isCompacting={stream.isCompacting}
               pendingStatusLabel={pendingAssistantStatusLabel}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
