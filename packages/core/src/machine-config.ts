@@ -158,11 +158,9 @@ export function getMachineConfigFilePath(options: MachineConfigOptions = {}): st
     return join(resolve(options.configRoot), 'config.json');
   }
 
-  for (const key of ['PERSONAL_AGENT_CONFIG_FILE', 'PERSONAL_AGENT_DAEMON_CONFIG', 'PERSONAL_AGENT_WEB_CONFIG_FILE'] as const) {
-    const explicit = process.env[key];
-    if (explicit && explicit.trim().length > 0) {
-      return resolve(explicit.trim());
-    }
+  const explicit = process.env.PERSONAL_AGENT_CONFIG_FILE;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(explicit.trim());
   }
 
   return join(resolve(getConfigRoot()), 'config.json');
