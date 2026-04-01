@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   listExecutionTargets,
   saveExecutionTarget,
@@ -21,15 +22,18 @@ let browseRemoteTargetDirectoryFn: (input: { targetId: string; cwd?: string; bas
   throw new Error('browseRemoteTargetDirectory not initialized');
 };
 
-export function setExecutionTargetRoutesGetters(
-  readState: () => Promise<unknown>,
-  browseDir: (input: { targetId: string; cwd?: string; baseCwd?: string }) => Promise<unknown>,
+function initializeExecutionTargetRoutesContext(
+  context: Pick<ServerRouteContext, 'readExecutionTargetsState' | 'browseRemoteTargetDirectory'>,
 ): void {
-  readExecutionTargetsStateFn = readState;
-  browseRemoteTargetDirectoryFn = browseDir;
+  readExecutionTargetsStateFn = context.readExecutionTargetsState;
+  browseRemoteTargetDirectoryFn = context.browseRemoteTargetDirectory;
 }
 
-export function registerExecutionTargetRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+export function registerExecutionTargetRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'readExecutionTargetsState' | 'browseRemoteTargetDirectory'>,
+): void {
+  initializeExecutionTargetRoutesContext(context);
   router.get('/api/execution-targets', async (_req, res) => {
     try {
       const state = await readExecutionTargetsStateFn();

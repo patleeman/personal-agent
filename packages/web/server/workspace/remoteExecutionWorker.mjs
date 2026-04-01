@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 
 export const REMOTE_EXECUTION_RESULT_FILE = 'remote-execution.json';
 export const REMOTE_EXECUTION_SESSION_FILE = 'remote-session.jsonl';
-export const LOCAL_PA_CLI_PATH = fileURLToPath(new URL('../../cli/dist/index.js', import.meta.url));
+export const LOCAL_PA_CLI_PATH = fileURLToPath(new URL('../../../cli/dist/index.js', import.meta.url));
 
 function quoteShellArg(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;

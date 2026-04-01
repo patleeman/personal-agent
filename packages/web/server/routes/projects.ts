@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   addProjectMilestone,
   createProjectRecord,
@@ -56,18 +57,14 @@ let REPO_ROOT: string = '';
 let SETTINGS_FILE: string = '';
 let AUTH_FILE: string = '';
 
-export function setProjectRoutesGetters(
-  getCurrentProfile: () => string,
-  listAvailableProfiles: () => string[],
-  repoRoot: string,
-  settingsFile: string,
-  authFile: string
+function initializeProjectRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'listAvailableProfiles' | 'getRepoRoot' | 'getSettingsFile' | 'getAuthFile'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  listAvailableProfilesFn = listAvailableProfiles;
-  REPO_ROOT = repoRoot;
-  SETTINGS_FILE = settingsFile;
-  AUTH_FILE = authFile;
+  getCurrentProfileFn = context.getCurrentProfile;
+  listAvailableProfilesFn = context.listAvailableProfiles;
+  REPO_ROOT = context.getRepoRoot();
+  SETTINGS_FILE = context.getSettingsFile();
+  AUTH_FILE = context.getAuthFile();
 }
 
 function readProjectIndexForProfile(profile = getCurrentProfileFn()) {
@@ -146,7 +143,11 @@ function projectErrorStatus(error: unknown): number {
 /**
  * Register project routes on the given router.
  */
-export function registerProjectRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+export function registerProjectRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'listAvailableProfiles' | 'getRepoRoot' | 'getSettingsFile' | 'getAuthFile'>,
+): void {
+  initializeProjectRoutesContext(context);
   router.get('/api/projects', (req, res) => {
     try {
       const profile = (req.query.viewProfile as string) || getCurrentProfileFn();
@@ -671,7 +672,11 @@ export function registerProjectRoutes(router: Pick<Express, 'get' | 'post' | 'pa
   });
 }
 
-export function registerCompanionProjectRoutes(router: Pick<Express, 'get'>): void {
+export function registerCompanionProjectRoutes(
+  router: Pick<Express, 'get'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'listAvailableProfiles' | 'getRepoRoot' | 'getSettingsFile' | 'getAuthFile'>,
+): void {
+  initializeProjectRoutesContext(context);
   router.get('/api/projects', (_req, res) => {
     try {
       res.json(listProjectsForCurrentProfile());

@@ -1,4 +1,5 @@
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   setConversationServiceContext,
   handleCompanionConversationListRequest,
@@ -78,39 +79,20 @@ let getCurrentProfileFn: () => string = () => {
 
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
-export function setConversationRoutesGetters(
-  getCurrentProfile: () => string,
-  getCurrentRepoRoot: () => string,
-  getSavedWebUiPreferences: () => SavedWebUiPreferences = () => ({
-    openConversationIds: [],
-    pinnedConversationIds: [],
-    archivedConversationIds: [],
-  }),
-  flushLiveDeferredResumes: () => Promise<void> = async () => {},
+function initializeConversationRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  flushLiveDeferredResumesFn = flushLiveDeferredResumes;
+  getCurrentProfileFn = context.getCurrentProfile;
+  flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 
   setConversationServiceContext({
-    getCurrentProfile,
-    getRepoRoot: getCurrentRepoRoot,
-    getSavedWebUiPreferences,
+    getCurrentProfile: context.getCurrentProfile,
+    getRepoRoot: context.getRepoRoot,
+    getSavedWebUiPreferences: context.getSavedWebUiPreferences,
   });
 }
 
-export function registerConversationRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
-  router.get('/api/sessions', (_req, res) => {
-    try {
-      res.json(decorateSessionsWithAttention(getCurrentProfileFn(), listSessions()));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
+function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
   router.get('/api/sessions/:id/meta', (req, res) => {
     try {
       const session = readConversationSessionMeta(req.params.id);
@@ -240,6 +222,26 @@ export function registerConversationRoutes(router: Pick<Express, 'get' | 'post' 
       res.status(500).json({ error: String(err) });
     }
   });
+}
+
+export function registerConversationRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
+): void {
+  initializeConversationRoutesContext(context);
+  router.get('/api/sessions', (_req, res) => {
+    try {
+      res.json(decorateSessionsWithAttention(getCurrentProfileFn(), listSessions()));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  registerConversationReadRoutes(router);
 
   router.post('/api/sessions/search-index', (req, res) => {
     try {
@@ -811,8 +813,13 @@ export function registerConversationRoutes(router: Pick<Express, 'get' | 'post' 
   });
 }
 
-export function registerCompanionConversationRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerCompanionConversationRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
+): void {
+  initializeConversationRoutesContext(context);
   router.get('/api/companion/conversations', handleCompanionConversationListRequest);
+  registerConversationReadRoutes(router);
   router.get('/api/conversations/:id/artifacts', (req, res) => {
     try {
       const profile = getCurrentProfileFn();

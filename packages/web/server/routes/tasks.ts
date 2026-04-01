@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
@@ -17,7 +18,7 @@ import {
 } from '../automation/scheduledTasks.js';
 import { startScheduledTaskRun } from '@personal-agent/daemon';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { findCurrentProfileTask, readRequiredTaskId } from '../automation/taskService.js';
+import { findTaskForProfile, readRequiredTaskId } from '../automation/taskService.js';
 
 /**
  * Gets the current profile getter for use in route handlers.
@@ -26,14 +27,18 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for task routes');
 };
 
-export function setTaskRoutesProfileGetter(fn: () => string): void {
-  getCurrentProfileFn = fn;
+function initializeTaskRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile'>): void {
+  getCurrentProfileFn = context.getCurrentProfile;
 }
 
-export function registerCompanionTaskRunRoutes(router: Pick<Express, 'post'>): void {
+export function registerCompanionTaskRunRoutes(
+  router: Pick<Express, 'post'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
+  initializeTaskRoutesContext(context);
   router.post('/api/tasks/:id/run', async (req, res) => {
     try {
-      const resolvedTask = findCurrentProfileTask(req.params.id);
+      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) {
         res.status(404).json({ error: 'Task not found' });
         return;
@@ -77,7 +82,11 @@ function buildTaskDetailResponse(task: { filePath: string }, runtime?: { running
 /**
  * Register task routes on the given router.
  */
-export function registerTaskRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerTaskRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
+  initializeTaskRoutesContext(context);
   router.get('/api/tasks', (_req, res) => {
     try {
       const loaded = loadScheduledTasksForProfile(getCurrentProfileFn());
@@ -180,7 +189,7 @@ export function registerTaskRoutes(router: Pick<Express, 'get' | 'post' | 'patch
         timeoutSeconds?: number | null;
         prompt?: string;
       };
-      const resolvedTask = findCurrentProfileTask(req.params.id);
+      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
       const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
@@ -233,7 +242,7 @@ export function registerTaskRoutes(router: Pick<Express, 'get' | 'post' | 'patch
 
   router.get('/api/tasks/:id/log', (req, res) => {
     try {
-      const resolvedTask = findCurrentProfileTask(req.params.id);
+      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask?.runtime?.lastLogPath || !existsSync(resolvedTask.runtime.lastLogPath)) {
         res.status(404).json({ error: 'No log available' }); return;
       }
@@ -250,7 +259,7 @@ export function registerTaskRoutes(router: Pick<Express, 'get' | 'post' | 'patch
 
   router.get('/api/tasks/:id', (req, res) => {
     try {
-      const resolvedTask = findCurrentProfileTask(req.params.id);
+      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
       res.json(buildTaskDetailResponse(resolvedTask.task, resolvedTask.runtime));
@@ -265,7 +274,7 @@ export function registerTaskRoutes(router: Pick<Express, 'get' | 'post' | 'patch
 
   router.post('/api/tasks/:id/run', async (req, res) => {
     try {
-      const resolvedTask = findCurrentProfileTask(req.params.id);
+      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
       if (!resolvedTask.task.prompt.trim()) { res.status(400).json({ error: 'Task has no prompt body' }); return; }
 

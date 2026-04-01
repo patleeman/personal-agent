@@ -25,10 +25,16 @@ export interface UnifiedNodeParseError {
   error: string;
 }
 
+export interface UnifiedNodeRelationship {
+  type: string;
+  targetId: string;
+}
+
 export interface UnifiedNodeLinkInfo {
   parent?: string;
   related: string[];
   conversations: string[];
+  relationships: UnifiedNodeRelationship[];
 }
 
 export interface UnifiedNodeRecord {
@@ -67,6 +73,7 @@ export interface CreateUnifiedNodeInput {
   tags?: string[];
   parent?: string;
   related?: string[];
+  relationships?: UnifiedNodeRelationship[];
   body?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -90,6 +97,7 @@ export interface UpdateUnifiedNodeInput {
   removeTags?: string[];
   parent?: string | null;
   related?: string[];
+  relationships?: UnifiedNodeRelationship[];
   body?: string;
 }
 
@@ -277,12 +285,71 @@ function humanizeId(id: string): string {
     .join(' ');
 }
 
+function normalizeRelationshipType(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readRelationships(value: unknown): UnifiedNodeRelationship[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const relationships: UnifiedNodeRelationship[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    if (typeof entry === 'string') {
+      const targetId = readOptionalString(entry)?.toLowerCase();
+      if (!targetId) {
+        continue;
+      }
+      const key = `related:${targetId}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      relationships.push({ type: 'related', targetId });
+      continue;
+    }
+
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    const type = normalizeRelationshipType(entry.type);
+    const targetId = readOptionalString(entry.target)?.toLowerCase() ?? readOptionalString(entry.id)?.toLowerCase();
+    if (!type || !targetId) {
+      continue;
+    }
+
+    const key = `${type}:${targetId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    relationships.push({ type, targetId });
+  }
+
+  return relationships.sort((left, right) => left.type.localeCompare(right.type) || left.targetId.localeCompare(right.targetId));
+}
+
 function readLinks(attributes: Record<string, unknown>): UnifiedNodeLinkInfo {
   const links = isRecord(attributes.links) ? attributes.links : {};
+  const relationships = readRelationships(links.relationships);
+  const related = dedupeStrings([
+    ...readStringArray(links.related).map((value) => value.toLowerCase()),
+    ...relationships.map((relationship) => relationship.targetId),
+  ]);
   return {
     parent: readOptionalString(links.parent),
-    related: readStringArray(links.related),
+    related,
     conversations: readStringArray(links.conversations),
+    relationships,
   };
 }
 
@@ -321,6 +388,7 @@ function buildSearchText(node: {
   body: string;
   parent?: string;
   related: string[];
+  relationships: UnifiedNodeRelationship[];
 }): string {
   return [
     node.id,
@@ -331,6 +399,7 @@ function buildSearchText(node: {
     ...node.tags,
     node.parent,
     ...node.related,
+    ...node.relationships.flatMap((relationship) => [relationship.type, relationship.targetId]),
     node.body,
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -371,6 +440,7 @@ function parseUnifiedNode(filePath: string): UnifiedNodeRecord {
     body: section.body,
     parent: parentTag,
     related: links.related,
+    relationships: links.relationships,
   });
 
   return {
@@ -553,6 +623,28 @@ function dedupeStrings(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))];
 }
 
+function normalizeRelationships(relationships: UnifiedNodeRelationship[] | undefined): UnifiedNodeRelationship[] {
+  const seen = new Set<string>();
+  const normalized: UnifiedNodeRelationship[] = [];
+
+  for (const relationship of relationships ?? []) {
+    const type = normalizeRelationshipType(relationship.type);
+    const targetId = readOptionalString(relationship.targetId)?.toLowerCase();
+    if (!type || !targetId) {
+      continue;
+    }
+
+    const key = `${type}:${targetId}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push({ type, targetId });
+  }
+
+  return normalized.sort((left, right) => left.type.localeCompare(right.type) || left.targetId.localeCompare(right.targetId));
+}
+
 function buildNodeFrontmatter(input: {
   id: string;
   title: string;
@@ -565,8 +657,13 @@ function buildNodeFrontmatter(input: {
   tags: string[];
   parent?: string;
   related?: string[];
+  relationships?: UnifiedNodeRelationship[];
 }): Record<string, unknown> {
-  const related = dedupeStrings(input.related ?? []);
+  const relationships = normalizeRelationships(input.relationships);
+  const related = dedupeStrings([
+    ...(input.related ?? []),
+    ...relationships.map((relationship) => relationship.targetId),
+  ]);
   const tags = normalizeTags([
     ...input.tags,
     ...(input.parent ? [`parent:${input.parent}`] : []),
@@ -576,6 +673,14 @@ function buildNodeFrontmatter(input: {
   const links: Record<string, unknown> = {
     ...(input.parent ? { parent: input.parent } : {}),
     ...(related.length > 0 ? { related } : {}),
+    ...(relationships.length > 0
+      ? {
+        relationships: relationships.map((relationship) => ({
+          type: relationship.type,
+          target: relationship.targetId,
+        })),
+      }
+      : {}),
   };
 
   return {
@@ -683,6 +788,7 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     tags: normalizeTags(input.tags),
     parent: input.parent?.trim() || undefined,
     related: input.related,
+    relationships: input.relationships,
   }), body);
 
   return { nodesDir, node, overwritten: overwrite };
@@ -709,6 +815,7 @@ export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: Resolv
     ...(input.addTags ?? []),
   ]);
   const related = input.related ?? current.links.related;
+  const relationships = input.relationships ?? current.links.relationships;
   const nextFrontmatter = buildNodeFrontmatter({
     id,
     title: input.title?.trim() || current.title,
@@ -721,6 +828,7 @@ export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: Resolv
     tags: nextTags.filter((tag) => !/^status:/i.test(tag) && !/^parent:/i.test(tag)),
     parent: input.parent === null ? undefined : (input.parent?.trim() || current.links.parent),
     related,
+    relationships,
   });
 
   return writeUnifiedNode(filePath, nextFrontmatter, input.body?.trim() ?? current.body);
@@ -956,6 +1064,10 @@ function copyLegacyNodeCandidate(candidate: LegacyNodeCandidate, nodesDir: strin
       tags: normalizeTags([...existing.tags.filter((tag) => !/^status:/i.test(tag) && !/^parent:/i.test(tag)), ...nextTags]),
       parent: existing.links.parent ?? parentLink,
       related: dedupeStrings([...existing.links.related, ...mergedRelated]),
+      relationships: normalizeRelationships([
+        ...existing.links.relationships,
+        ...readLinks(candidate.frontmatter).relationships,
+      ]),
     });
     writeUnifiedNode(targetPath, mergedFrontmatter, combinedBody);
     return {

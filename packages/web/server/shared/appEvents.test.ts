@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -124,7 +124,10 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     events.length = 0;
 
-    writeFileSync(join(sessionsDir, 'conv-2.jsonl'), '{"type":"session"}\n', 'utf-8');
+    const pendingSessionFile = join(repoRoot, 'conv-2.pending.jsonl');
+    const sessionFile = join(sessionsDir, 'conv-2.jsonl');
+    writeFileSync(pendingSessionFile, '{"type":"session"}\n', 'utf-8');
+    renameSync(pendingSessionFile, sessionFile);
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
     await new Promise((resolve) => setTimeout(resolve, 150));

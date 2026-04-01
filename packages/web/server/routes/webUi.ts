@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { listAllProjectIds } from '@personal-agent/core';
 import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
 import { readWebUiConfig, readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
@@ -47,22 +48,16 @@ let buildLiveSessionExtensionFactoriesFn: () => LiveSessionExtensionFactories = 
   throw new Error('buildLiveSessionExtensionFactories not initialized for web-ui routes');
 };
 
-export function setWebUiRoutesGetters(
-  getCurrentProfile: () => string,
-  getRepoRoot: () => string,
-  getWebUiSettingsFile: () => string,
-  getStateRoot: () => string,
-  getDefaultWebCwd: () => string,
-  buildLiveSessionResourceOptions: () => LiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories: () => LiveSessionExtensionFactories,
+function initializeWebUiRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  getRepoRootFn = getRepoRoot;
-  getWebUiSettingsFileFn = getWebUiSettingsFile;
-  getStateRootFn = getStateRoot;
-  getDefaultWebCwdFn = getDefaultWebCwd;
-  buildLiveSessionResourceOptionsFn = buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = buildLiveSessionExtensionFactories;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
+  getWebUiSettingsFileFn = context.getSettingsFile;
+  getStateRootFn = context.getStateRoot;
+  getDefaultWebCwdFn = context.getDefaultWebCwd;
+  buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
+  buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
 }
 
 function listReferenceableProjectIds(): string[] {
@@ -474,7 +469,11 @@ async function handleActivityStart(req: Request, res: Response): Promise<void> {
   }
 }
 
-export function registerWebUiRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerWebUiRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+): void {
+  initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);
   router.post('/api/web-ui/service/install', handleWebUiServiceInstall);
   router.post('/api/web-ui/service/start', handleWebUiServiceStart);
@@ -489,7 +488,11 @@ export function registerWebUiRoutes(router: Pick<Express, 'get' | 'post' | 'patc
   router.post('/api/activity/:id/start', handleActivityStart);
 }
 
-export function registerCompanionWebUiRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerCompanionWebUiRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+): void {
+  initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);
   router.post('/api/web-ui/service/restart', handleWebUiServiceRestart);
   router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);

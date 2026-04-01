@@ -69,10 +69,10 @@ describe('note policy extension', () => {
     ) as { systemPrompt?: string } | undefined;
 
     const prompt = result?.systemPrompt ?? '';
-    expect(prompt).toContain('NODE_POLICY');
+    expect(prompt).toContain('# Identity & Goal');
     expect(prompt).toContain('- active_profile: datadog');
     expect(prompt).toContain('- Shared notes dir: notes');
-    expect(prompt).toContain('Use active-profile AGENTS.md + skills + shared note nodes');
+    expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
     expect(prompt).toContain('<available_notes>');
     expect(prompt).toContain('<note id="runpod"');
     expect(prompt).toContain('notes/runpod/INDEX.md');
@@ -108,9 +108,9 @@ describe('note policy extension', () => {
     expect(prompt).toContain('- active_profile: shared');
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');
-    expect(prompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
-    expect(prompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
-    expect(prompt).toContain('- Shared notes dir: unavailable');
+    expect(prompt).toContain('- AGENTS.md: none (shared profile does not use AGENTS.md)');
+    expect(prompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir) (Note: Scheduled tasks belong here, not in shared notes).');
+    expect(prompt).not.toContain('## Shared Notes & Available Nodes');
   });
 
   it('does not inject for slash commands or empty prompts', async () => {
@@ -174,7 +174,7 @@ describe('note policy extension', () => {
       { cwd: repoRoot },
     ) as { systemPrompt?: string } | undefined;
 
-    expect(result?.systemPrompt ?? '').toContain('NODE_POLICY');
+    expect(result?.systemPrompt ?? '').toContain('# Identity & Goal');
   });
 
   it('resolves the active note profile context', () => {

@@ -1,5 +1,6 @@
 import { relative } from 'node:path';
 import type { Express, Request, Response } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   createSession as createLocalSession,
@@ -129,8 +130,6 @@ let listSkillsForCurrentProfileFn: () => {
 
 let listProfileAgentItemsFn: () => { source: string; path: string }[] = () => [];
 
-let liveSessionPromptHandler: ((req: Request, res: Response) => Promise<void> | void) | undefined;
-
 const COMPANION_SESSION_COOKIE = 'pa_companion';
 
 function readCookieValue(req: Request, cookieName: string): string {
@@ -165,63 +164,19 @@ function writeSseHeaders(res: Response): void {
   res.flushHeaders();
 }
 
-export function setLiveSessionRoutesGetters(
-  getCurrentProfile: () => string,
-  getRepoRoot: () => string,
-  getDefaultWebCwd: () => string,
-  buildLiveSessionResourceOptions: (profile?: string) => Record<string, unknown>,
-  buildLiveSessionExtensionFactories: () => unknown[],
-  flushLiveDeferredResumes: () => Promise<void> = async () => {},
-  promptReferenceGetters: {
-    listTasksForCurrentProfile?: () => {
-      id: string;
-      filePath: string;
-      prompt: string;
-      enabled: boolean;
-      running: boolean;
-      cron?: string;
-      model?: string;
-      lastStatus?: string;
-    }[];
-    listMemoryDocs?: () => {
-      id: string;
-      title: string;
-      summary?: string;
-      description?: string;
-      path: string;
-      updated?: string;
-    }[];
-    listSkillsForCurrentProfile?: () => {
-      name: string;
-      source: string;
-      description: string;
-      path: string;
-    }[];
-    listProfileAgentItems?: () => { source: string; path: string }[];
-  } = {},
+function initializeLiveSessionRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  getRepoRootFn = getRepoRoot;
-  getDefaultWebCwdFn = getDefaultWebCwd;
-  buildLiveSessionResourceOptionsFn = buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = buildLiveSessionExtensionFactories;
-  flushLiveDeferredResumesFn = flushLiveDeferredResumes;
-  if (promptReferenceGetters.listTasksForCurrentProfile) {
-    listTasksForCurrentProfileFn = promptReferenceGetters.listTasksForCurrentProfile;
-  }
-  if (promptReferenceGetters.listMemoryDocs) {
-    listMemoryDocsFn = promptReferenceGetters.listMemoryDocs;
-  }
-  if (promptReferenceGetters.listSkillsForCurrentProfile) {
-    listSkillsForCurrentProfileFn = promptReferenceGetters.listSkillsForCurrentProfile;
-  }
-  if (promptReferenceGetters.listProfileAgentItems) {
-    listProfileAgentItemsFn = promptReferenceGetters.listProfileAgentItems;
-  }
-}
-
-export function setLiveSessionPromptHandler(handler: (req: Request, res: Response) => Promise<void> | void): void {
-  liveSessionPromptHandler = handler;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
+  getDefaultWebCwdFn = context.getDefaultWebCwd;
+  buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
+  buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
+  flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
+  listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
+  listMemoryDocsFn = context.listMemoryDocs;
+  listSkillsForCurrentProfileFn = context.listSkillsForCurrentProfile;
+  listProfileAgentItemsFn = context.listProfileAgentItems;
 }
 
 function listReferenceableProjectIds(): string[] {
@@ -715,7 +670,11 @@ async function abortLiveSession(sessionId: string): Promise<void> {
   await abortLocalSession(sessionId);
 }
 
-export function registerLiveSessionRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+export function registerLiveSessionRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+): void {
+  initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions', (_req, res) => {
     res.json(listAllLiveSessions());
   });
@@ -938,9 +897,7 @@ export function registerLiveSessionRoutes(router: Pick<Express, 'get' | 'post' |
     }
   });
 
-  if (liveSessionPromptHandler) {
-    router.post('/api/live-sessions/:id/prompt', liveSessionPromptHandler);
-  }
+  router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
 
   router.post('/api/live-sessions/:id/dequeue', (req, res) => {
     try {
@@ -1192,7 +1149,11 @@ export function registerLiveSessionRoutes(router: Pick<Express, 'get' | 'post' |
   });
 }
 
-export function registerCompanionLiveSessionRoutes(router: Pick<Express, 'get' | 'post' | 'delete'>): void {
+export function registerCompanionLiveSessionRoutes(
+  router: Pick<Express, 'get' | 'post' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+): void {
+  initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions', (_req, res) => {
     res.json(listAllLiveSessions());
   });
@@ -1362,9 +1323,7 @@ export function registerCompanionLiveSessionRoutes(router: Pick<Express, 'get' |
     });
   });
 
-  if (liveSessionPromptHandler) {
-    router.post('/api/live-sessions/:id/prompt', liveSessionPromptHandler);
-  }
+  router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
 
   router.post('/api/live-sessions/:id/abort', async (req, res) => {
     try {
@@ -1384,7 +1343,11 @@ export function registerCompanionLiveSessionRoutes(router: Pick<Express, 'get' |
   });
 }
 
-export function registerLiveSessionStatsRoutes(router: Pick<Express, 'get'>): void {
+export function registerLiveSessionStatsRoutes(
+  router: Pick<Express, 'get'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+): void {
+  initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions/:id/stats', (req, res) => {
     try {
       const stats = getSessionStats(req.params.id);

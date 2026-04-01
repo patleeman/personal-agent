@@ -29,7 +29,7 @@ That means `index.ts` builds the shared context once, then the route layer handl
 - `routes/registerAll.ts` — central route mounting order and dependency injection
 - `routes/<domain>.ts` — actual handlers for each domain
 
-This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGetters(...)` calls across `index.ts`.
+This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGetters(...)` calls across `index.ts`. Route modules now take the context directly during registration rather than relying on exported setter functions.
 
 ## Route modules worth knowing
 
@@ -65,5 +65,8 @@ A few shared service/helper files exist to keep the route modules from becoming 
 - Validate with:
   - `npm run build:ts`
   - `npm --prefix packages/web run build:server`
+  - `npx vitest run $(find packages/web/server -name '*.test.ts' | sort)`
 
 If a handler needs a helper that only exists in `index.ts`, prefer exporting the helper or moving it into the matching domain/shared file over duplicating the logic.
+
+There is also a route-level smoke test at `packages/web/server/routes/registerAll.smoke.test.ts` that mounts the shared route registry on real Express apps and checks both app and companion surfaces.

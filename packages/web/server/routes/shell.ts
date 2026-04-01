@@ -3,20 +3,24 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { execSync } from 'node:child_process';
 
 let _getDefaultWebCwd: () => string = () => process.cwd();
 let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;
 
-export function setShellCwdGetters(
-  getDefaultWebCwd: () => string,
-  resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined,
+function initializeShellRoutesContext(
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
 ): void {
-  _getDefaultWebCwd = getDefaultWebCwd;
-  _resolveRequestedCwd = resolveRequestedCwd;
+  _getDefaultWebCwd = context.getDefaultWebCwd;
+  _resolveRequestedCwd = context.resolveRequestedCwd;
 }
 
-export function registerShellRoutes(router: Pick<Express, 'post'>): void {
+export function registerShellRoutes(
+  router: Pick<Express, 'post'>,
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
+): void {
+  initializeShellRoutesContext(context);
   router.post('/api/run', (req, res) => {
     const defaultWebCwd = _getDefaultWebCwd();
     const { command, cwd: runCwd } = req.body as { command: string; cwd?: string };

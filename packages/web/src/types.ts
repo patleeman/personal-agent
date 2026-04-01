@@ -1069,6 +1069,32 @@ export interface NodeBrowserData {
   nodes: NodeBrowserSummary[];
 }
 
+export interface NodeBrowserRelationship {
+  type: string;
+  node: NodeLinkSummary;
+}
+
+export interface NodeBrowserRelationshipSuggestion {
+  node: NodeLinkSummary;
+  score: number;
+  reasons: string[];
+}
+
+export interface NodeBrowserDetail {
+  node: NodeBrowserSummary;
+  outgoingRelationships: NodeBrowserRelationship[];
+  incomingRelationships: NodeBrowserRelationship[];
+  suggestedNodes: NodeBrowserRelationshipSuggestion[];
+}
+
+export interface SavedNodeBrowserView {
+  id: string;
+  name: string;
+  search: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SkillDetail {
   skill: MemorySkillItem;
   content: string;

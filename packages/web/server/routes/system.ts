@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { requestApplicationRestart, requestApplicationUpdate } from '../ui/applicationRestart.js';
 import { listProjectIndex } from '../projects/projects.js';
 import { readWebUiState } from '../ui/webUi.js';
@@ -44,18 +45,14 @@ let listTasksForCurrentProfileFn: () => unknown[] = () => {
   throw new Error('listTasksForCurrentProfile not initialized for system routes');
 };
 
-export function setSystemRoutesGetters(
-  getCurrentProfile: () => string,
-  getRepoRoot: () => string,
-  listActivityForCurrentProfile: () => ActivityListEntryLike[],
-  listProjectsForCurrentProfile: () => unknown[],
-  listTasksForCurrentProfile: () => unknown[],
+function initializeSystemRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
 ): void {
-  getCurrentProfileFn = getCurrentProfile;
-  getRepoRootFn = getRepoRoot;
-  listActivityForCurrentProfileFn = listActivityForCurrentProfile;
-  listProjectsForCurrentProfileFn = listProjectsForCurrentProfile;
-  listTasksForCurrentProfileFn = listTasksForCurrentProfile;
+  getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
+  listActivityForCurrentProfileFn = context.listActivityForCurrentProfile;
+  listProjectsForCurrentProfileFn = context.listProjectsForCurrentProfile;
+  listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
 }
 
 function getActivitySnapshotForCurrentProfile(): { entries: ActivityListEntryLike[]; unreadCount: number } {
@@ -103,7 +100,17 @@ async function emitSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: u
 }
 
 const COMPANION_SESSION_COOKIE = 'pa_companion';
-const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(['activity', 'alerts', 'projects', 'sessions']);
+const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>([
+  'activity',
+  'alerts',
+  'projects',
+  'sessions',
+  'tasks',
+  'runs',
+  'daemon',
+  'sync',
+  'webUi',
+]);
 
 function writeSseHeaders(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -231,7 +238,11 @@ async function handleSyncSetup(req: Request, res: Response): Promise<void> {
   }
 }
 
-export function registerSystemRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerSystemRoutes(
+  router: Pick<Express, 'get' | 'post'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
+): void {
+  initializeSystemRoutesContext(context);
   router.get('/api/events', (req, res) => {
     writeSseHeaders(res);
 
@@ -304,7 +315,11 @@ export function registerSystemRoutes(router: Pick<Express, 'get' | 'post'>): voi
   router.post('/api/sync/setup', handleSyncSetup);
 }
 
-export function registerCompanionSystemRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerCompanionSystemRoutes(
+  router: Pick<Express, 'get' | 'post'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
+): void {
+  initializeSystemRoutesContext(context);
   router.get('/api/events', (req, res) => {
     writeSseHeaders(res);
 
@@ -341,7 +356,7 @@ export function registerCompanionSystemRoutes(router: Pick<Express, 'get' | 'pos
 
     writeEvent({ type: 'connected' });
     enqueueWrite(async () => {
-      await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'projects']);
+      await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'projects', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
     });
 
     const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);

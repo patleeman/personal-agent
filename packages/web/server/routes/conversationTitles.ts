@@ -3,6 +3,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   readSavedConversationTitlePreferences,
   writeSavedConversationTitlePreferences,
@@ -12,13 +13,17 @@ import { logError } from '../middleware/index.js';
 
 let SETTINGS_FILE: string = '';
 
-export function setConversationTitlesRoutesGetters(
-  settingsFile: string,
+function initializeConversationTitleRoutesContext(
+  context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
-  SETTINGS_FILE = settingsFile;
+  SETTINGS_FILE = context.getSettingsFile();
 }
 
-export function registerConversationTitlesRoutes(router: Pick<Express, 'get' | 'patch'>): void {
+export function registerConversationTitlesRoutes(
+  router: Pick<Express, 'get' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getSettingsFile'>,
+): void {
+  initializeConversationTitleRoutesContext(context);
   router.get('/api/conversation-titles/settings', (_req, res) => {
     try {
       res.json(readSavedConversationTitlePreferences(SETTINGS_FILE));

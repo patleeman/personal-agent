@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   readWorkspaceSnapshot,
   readWorkspaceGitStatus,
@@ -28,19 +29,20 @@ let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => strin
 let _draftWorkspaceCommitMessage: (input: { draftSource: ReturnType<typeof import('../workspace/workspaceBrowser.js').readWorkspaceGitDraftSource>; authFile: string; settingsFile: string }) => Promise<unknown>;
 let _authFile: string;
 
-export function setWorkspaceRoutesGetters(
-  getDefaultWebCwd: () => string,
-  resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined,
-  draftWorkspaceCommitMessage: typeof _draftWorkspaceCommitMessage,
-  authFile: string,
+function initializeWorkspaceRoutesContext(
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd' | 'draftWorkspaceCommitMessage' | 'getAuthFile'>,
 ): void {
-  _getDefaultWebCwd = getDefaultWebCwd;
-  _resolveRequestedCwd = resolveRequestedCwd;
-  _draftWorkspaceCommitMessage = draftWorkspaceCommitMessage;
-  _authFile = authFile;
+  _getDefaultWebCwd = context.getDefaultWebCwd;
+  _resolveRequestedCwd = context.resolveRequestedCwd;
+  _draftWorkspaceCommitMessage = context.draftWorkspaceCommitMessage;
+  _authFile = context.getAuthFile();
 }
 
-export function registerWorkspaceRoutes(router: Pick<Express, 'get' | 'post'>): void {
+export function registerWorkspaceRoutes(
+  router: Pick<Express, 'get' | 'post'>,
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd' | 'draftWorkspaceCommitMessage' | 'getAuthFile'>,
+): void {
+  initializeWorkspaceRoutesContext(context);
   router.get('/api/workspace', (req, res) => {
     try {
       const defaultWebCwd = _getDefaultWebCwd();

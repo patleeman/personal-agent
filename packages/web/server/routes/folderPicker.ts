@@ -3,20 +3,24 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { pickFolder } from '../workspace/folderPicker.js';
 
 let _getDefaultWebCwd: () => string = () => process.cwd();
 let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;
 
-export function setFolderPickerCwdGetters(
-  getDefaultWebCwd: () => string,
-  resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined,
+function initializeFolderPickerRoutesContext(
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
 ): void {
-  _getDefaultWebCwd = getDefaultWebCwd;
-  _resolveRequestedCwd = resolveRequestedCwd;
+  _getDefaultWebCwd = context.getDefaultWebCwd;
+  _resolveRequestedCwd = context.resolveRequestedCwd;
 }
 
-export function registerFolderPickerRoutes(router: Pick<Express, 'post'>): void {
+export function registerFolderPickerRoutes(
+  router: Pick<Express, 'post'>,
+  context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
+): void {
+  initializeFolderPickerRoutesContext(context);
   router.post('/api/folder-picker', (req, res) => {
     const defaultWebCwd = _getDefaultWebCwd();
     const { cwd } = req.body as { cwd?: string };

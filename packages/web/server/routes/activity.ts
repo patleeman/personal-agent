@@ -1,4 +1,5 @@
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import {
   clearInboxForCurrentProfile,
   findActivityRecord,
@@ -12,11 +13,15 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for activity routes');
 };
 
-export function setActivityRoutesProfileGetter(fn: () => string): void {
-  getCurrentProfileFn = fn;
+function initializeActivityRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile'>): void {
+  getCurrentProfileFn = context.getCurrentProfile;
 }
 
-export function registerActivityRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+export function registerActivityRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+): void {
+  initializeActivityRoutesContext(context);
   router.get('/api/activity/count', (_req, res) => {
     try {
       res.json({ count: listActivityForCurrentProfile(getCurrentProfileFn()).filter(a => !a.read).length });

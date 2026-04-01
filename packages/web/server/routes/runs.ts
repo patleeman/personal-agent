@@ -5,7 +5,6 @@
  */
 
 import type { Express } from 'express';
-import type { LiveSessionResourceOptions } from './context.js';
 import {
   cancelDurableRun,
   getDurableRun,
@@ -22,37 +21,6 @@ import {
   invalidateAppTopics,
   logError,
 } from '../middleware/index.js';
-
-/**
- * Gets the current profile getter for use in route handlers.
- */
-let getCurrentProfileFn: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for run routes');
-};
-
-let REPO_ROOT: string = '';
-let getDefaultWebCwdFn: () => string = () => '/tmp';
-let buildLiveSessionExtensionFactoriesFn: () => unknown[] = () => [];
-let buildLiveSessionResourceOptionsFn: (profile?: string) => LiveSessionResourceOptions = () => ({
-  additionalExtensionPaths: [],
-  additionalSkillPaths: [],
-  additionalPromptTemplatePaths: [],
-  additionalThemePaths: [],
-});
-
-export function setRunsRoutesGetters(
-  getCurrentProfile: () => string,
-  repoRoot: string,
-  getDefaultWebCwd: () => string,
-  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories: () => unknown[],
-): void {
-  getCurrentProfileFn = getCurrentProfile;
-  REPO_ROOT = repoRoot;
-  getDefaultWebCwdFn = getDefaultWebCwd;
-  buildLiveSessionResourceOptionsFn = buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = buildLiveSessionExtensionFactories;
-}
 
 function parseRunLogTail(queryTail: unknown): number | undefined {
   if (typeof queryTail !== 'string') {
@@ -99,7 +67,6 @@ export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'
   router.patch('/api/runs/:id/attention', async (req, res) => {
     try {
       const { read } = req.body as { read?: boolean };
-      const profile = getCurrentProfileFn();
       if (read === false) {
         invalidateAppTopics('runs');
       }

@@ -24,6 +24,7 @@ describe('readSavedWebUiPreferences', () => {
       openConversationIds: [],
       pinnedConversationIds: [],
       archivedConversationIds: [],
+      nodeBrowserViews: [],
     });
   });
 
@@ -42,6 +43,7 @@ describe('readSavedWebUiPreferences', () => {
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-2', 'session-3'],
       archivedConversationIds: ['session-4'],
+      nodeBrowserViews: [],
     });
   });
 });
@@ -91,6 +93,28 @@ describe('writeSavedWebUiPreferences', () => {
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-4'],
       archivedConversationIds: ['session-3'],
+      nodeBrowserViews: [],
+    });
+  });
+
+  it('stores and sanitizes node browser views', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+
+    writeSavedWebUiPreferences({
+      nodeBrowserViews: [
+        { id: ' shared-skills ', name: ' Shared skills ', search: '?q=type:skill', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:01:00.000Z' },
+        { id: '', name: 'broken', search: '', createdAt: '', updatedAt: '' },
+      ],
+    }, file);
+
+    expect(readSavedWebUiPreferences(file)).toEqual({
+      openConversationIds: [],
+      pinnedConversationIds: [],
+      archivedConversationIds: [],
+      nodeBrowserViews: [
+        { id: 'shared-skills', name: 'Shared skills', search: '?q=type:skill', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:01:00.000Z' },
+      ],
     });
   });
 

@@ -4,7 +4,7 @@
 
 import type { Express, Request } from 'express';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { LiveSessionResourceOptions } from './context.js';
+import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import { existsSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
@@ -45,20 +45,15 @@ let _buildLiveSessionExtensionFactories: () => ExtensionFactory[] = () => [];
 
 const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
-export function setMemoryNotesProfileGetters(
-  getCurrentProfile: () => string,
-  repoRoot: string,
-  getDefaultWebCwd: () => string,
-  resolveRequestedCwd: (requestedCwd: string | null | undefined, fallbackCwd?: string) => string | undefined,
-  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories: () => ExtensionFactory[],
+function initializeMemoryNotesRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'resolveRequestedCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
 ): void {
-  _getCurrentProfile = getCurrentProfile;
-  _repoRoot = repoRoot;
-  _getDefaultWebCwd = getDefaultWebCwd;
-  _resolveRequestedCwd = resolveRequestedCwd;
-  _buildLiveSessionResourceOptions = buildLiveSessionResourceOptions;
-  _buildLiveSessionExtensionFactories = buildLiveSessionExtensionFactories;
+  _getCurrentProfile = context.getCurrentProfile;
+  _repoRoot = context.getRepoRoot();
+  _getDefaultWebCwd = context.getDefaultWebCwd;
+  _resolveRequestedCwd = context.resolveRequestedCwd;
+  _buildLiveSessionResourceOptions = context.buildLiveSessionResourceOptions;
+  _buildLiveSessionExtensionFactories = context.buildLiveSessionExtensionFactories;
 }
 
 function resolveRequestedProfileFromQuery(req: Request): string {
@@ -110,7 +105,11 @@ function generateNoteId(title: string): string {
   return `${base}-${Date.now()}`;
 }
 
-export function registerMemoryNotesRoutes(router: Pick<Express, 'get' | 'post' | 'delete'>): void {
+export function registerMemoryNotesRoutes(
+  router: Pick<Express, 'get' | 'post' | 'delete'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'resolveRequestedCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+): void {
+  initializeMemoryNotesRoutesContext(context);
   router.get('/api/memory', (req, res) => {
     try {
       const profile = resolveRequestedProfileFromQuery(req) as string;
