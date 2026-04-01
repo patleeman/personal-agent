@@ -36,6 +36,7 @@ import {
 import { MentionTextarea } from './MentionTextarea';
 import { IconButton, cx } from './ui';
 import { NodeRelationshipsPanel } from './NodeRelationshipsPanel';
+import { NodeMetadataPanel } from './NodeMetadataPanel';
 import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
@@ -1471,6 +1472,16 @@ export function ProjectDetailPanel({
               />
             ) : null}
           </div>
+        </ProjectRailSection>
+
+        <ProjectRailSection title="Node metadata">
+          <NodeMetadataPanel
+            nodeId={record.id}
+            onChanged={onChanged}
+            showTitle={false}
+            showSummary={false}
+            showStatus={false}
+          />
         </ProjectRailSection>
 
         {showLinkedConversationsSection ? (

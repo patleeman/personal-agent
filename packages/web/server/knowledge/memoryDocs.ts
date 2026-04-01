@@ -312,6 +312,53 @@ export function readSkillDetailForProfile(skillName: string, profile: string): S
   return listSkillsForProfile(profile).find((skill) => skill.name === skillName) ?? null;
 }
 
+export function readSkillWorkspaceDetailForProfile(skillName: string, profile: string): {
+  skill: SkillItem;
+  content: string;
+  references: Array<{
+    title: string;
+    summary?: string;
+    path: string;
+    relativePath: string;
+    updated?: string;
+  }>;
+  links?: NodeLinks;
+} | null {
+  const skill = readSkillDetailForProfile(skillName, profile);
+  if (!skill) {
+    return null;
+  }
+
+  const content = readFileSync(skill.path, 'utf-8');
+  const references = loadMemoryPackageReferences(dirname(skill.path)).map((reference) => ({
+    title: reference.title,
+    summary: reference.summary,
+    path: reference.filePath,
+    relativePath: reference.relativePath,
+    updated: reference.updated,
+  }));
+
+  let links: NodeLinks | undefined;
+  try {
+    links = readNodeLinks({
+      repoRoot: process.cwd(),
+      profilesRoot: getProfilesRoot(),
+      profile,
+      kind: 'skill',
+      id: skill.name,
+    });
+  } catch {
+    links = undefined;
+  }
+
+  return {
+    skill,
+    content,
+    references,
+    ...(links ? { links } : {}),
+  };
+}
+
 export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
   const profile = input.profile.trim();
   const title = input.title.trim();

@@ -28,6 +28,7 @@ import {
   clearMemoryBrowserCaches,
   listSkillsForProfile,
   readSkillDetailForProfile,
+  readSkillWorkspaceDetailForProfile,
   isEditableMemoryFilePath,
   buildRecentReadUsage,
   normalizeMemoryPath,
@@ -241,7 +242,12 @@ export function registerMemoryNotesRoutes(
   router.get('/api/skills/:name', (req, res) => {
     try {
       const profile = resolveRequestedProfileFromQuery(req) as string;
-      res.json(readSkillDetailForProfile(req.params.name, profile));
+      const detail = readSkillWorkspaceDetailForProfile(req.params.name, profile);
+      if (!detail) {
+        res.status(404).json({ error: 'Skill not found.' });
+        return;
+      }
+      res.json(detail);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(message.startsWith('Skill not found:') || message.startsWith('Skill file not found:') ? 404 : 500).json({ error: message });

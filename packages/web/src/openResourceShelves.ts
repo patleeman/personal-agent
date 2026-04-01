@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
+  OPEN_NODE_IDS_STORAGE_KEY,
   OPEN_NOTE_IDS_STORAGE_KEY,
   OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
+  PINNED_NODE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_PROJECT_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
@@ -12,7 +14,25 @@ import {
 
 export const OPEN_RESOURCE_SHELVES_CHANGED_EVENT = 'pa:open-resource-shelves-changed';
 
-export type OpenResourceKind = 'note' | 'project' | 'skill' | 'workspace';
+export type OpenResourceKind = 'node' | 'note' | 'project' | 'skill' | 'workspace';
+
+export function buildOpenNodeShelfId(kind: 'note' | 'project' | 'skill', id: string): string {
+  const normalizedId = normalizeResourceId(id);
+  return normalizedId ? `${kind}:${normalizedId}` : '';
+}
+
+export function parseOpenNodeShelfId(value: string | null | undefined): { kind: 'note' | 'project' | 'skill'; id: string } | null {
+  const normalized = normalizeResourceId(value);
+  const match = normalized.match(/^(note|project|skill):(.*)$/);
+  if (!match?.[1] || !match[2]?.trim()) {
+    return null;
+  }
+
+  return {
+    kind: match[1] as 'note' | 'project' | 'skill',
+    id: match[2].trim(),
+  };
+}
 
 export interface OpenResourceShelfState {
   openIds: string[];
@@ -65,6 +85,8 @@ function sameShelfState(left: OpenResourceShelfState, right: OpenResourceShelfSt
 
 function storageKeys(kind: OpenResourceKind): { open: string; pinned: string } {
   switch (kind) {
+    case 'node':
+      return { open: OPEN_NODE_IDS_STORAGE_KEY, pinned: PINNED_NODE_IDS_STORAGE_KEY };
     case 'note':
       return { open: OPEN_NOTE_IDS_STORAGE_KEY, pinned: PINNED_NOTE_IDS_STORAGE_KEY };
     case 'project':
@@ -74,6 +96,21 @@ function storageKeys(kind: OpenResourceKind): { open: string; pinned: string } {
     case 'workspace':
       return { open: OPEN_WORKSPACE_IDS_STORAGE_KEY, pinned: PINNED_WORKSPACE_IDS_STORAGE_KEY };
   }
+}
+
+function readLegacyNodeShelfState(): OpenResourceShelfState {
+  return normalizeShelfState({
+    openIds: [
+      ...readStoredIds(OPEN_NOTE_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('note', id)),
+      ...readStoredIds(OPEN_PROJECT_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('project', id)),
+      ...readStoredIds(OPEN_SKILL_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('skill', id)),
+    ],
+    pinnedIds: [
+      ...readStoredIds(PINNED_NOTE_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('note', id)),
+      ...readStoredIds(PINNED_PROJECT_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('project', id)),
+      ...readStoredIds(PINNED_SKILL_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('skill', id)),
+    ],
+  });
 }
 
 function readStoredIds(storageKey: string): string[] {
@@ -113,20 +150,41 @@ function dispatchShelfChanged(kind: OpenResourceKind, state: OpenResourceShelfSt
   }));
 }
 
+function clearLegacyNodeShelfState(): void {
+  writeStoredIds(OPEN_NOTE_IDS_STORAGE_KEY, []);
+  writeStoredIds(PINNED_NOTE_IDS_STORAGE_KEY, []);
+  writeStoredIds(OPEN_PROJECT_IDS_STORAGE_KEY, []);
+  writeStoredIds(PINNED_PROJECT_IDS_STORAGE_KEY, []);
+  writeStoredIds(OPEN_SKILL_IDS_STORAGE_KEY, []);
+  writeStoredIds(PINNED_SKILL_IDS_STORAGE_KEY, []);
+}
+
 function writeShelfState(kind: OpenResourceKind, state: OpenResourceShelfState): OpenResourceShelfState {
   const normalized = normalizeShelfState(state);
   const keys = storageKeys(kind);
   writeStoredIds(keys.open, normalized.openIds);
   writeStoredIds(keys.pinned, normalized.pinnedIds);
+  if (kind === 'node') {
+    clearLegacyNodeShelfState();
+  }
   dispatchShelfChanged(kind, normalized);
   return normalized;
 }
 
 export function readOpenResourceShelf(kind: OpenResourceKind): OpenResourceShelfState {
   const keys = storageKeys(kind);
-  return normalizeShelfState({
+  const current = normalizeShelfState({
     openIds: readStoredIds(keys.open),
     pinnedIds: readStoredIds(keys.pinned),
+  });
+  if (kind !== 'node') {
+    return current;
+  }
+
+  const legacy = readLegacyNodeShelfState();
+  return normalizeShelfState({
+    openIds: [...legacy.openIds, ...current.openIds],
+    pinnedIds: [...legacy.pinnedIds, ...current.pinnedIds],
   });
 }
 

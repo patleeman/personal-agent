@@ -271,6 +271,12 @@ function handleCompanionAuthGate(req: Request, res: Response, next: NextFunction
   next();
 }
 
+function registerCompanionAuthAdminRoutes(app: Express): void {
+  app.get('/api/companion-auth', handleCompanionAuthStateRequest);
+  app.post('/api/companion-auth/pairing-code', handleCompanionAuthCreatePairingCodeRequest);
+  app.delete('/api/companion-auth/sessions/:sessionId', handleCompanionAuthRevokeSessionRequest);
+}
+
 export function registerAuthRoutes(app: Express): void {
   app.get('/api/desktop-auth/session', handleDesktopAuthSessionRequest);
   app.post('/api/desktop-auth/exchange', companionAuthExchangeRateLimit, handleDesktopAuthExchangeRequest);
@@ -279,15 +285,14 @@ export function registerAuthRoutes(app: Express): void {
   app.use('/api', (req, res, next) => {
     handleDesktopAuthGate(req, res, next);
   });
+
+  registerCompanionAuthAdminRoutes(app);
 }
 
 export function registerCompanionAuthRoutes(app: Express): void {
   app.post('/api/companion-auth/exchange', companionAuthExchangeRateLimit, handleCompanionAuthExchangeRequest);
   app.get('/api/companion-auth/session', handleCompanionAuthSessionRequest);
   app.post('/api/companion-auth/logout', handleCompanionAuthLogoutRequest);
-  app.get('/api/companion-auth', handleCompanionAuthStateRequest);
-  app.post('/api/companion-auth/pairing-code', handleCompanionAuthCreatePairingCodeRequest);
-  app.delete('/api/companion-auth/sessions/:sessionId', handleCompanionAuthRevokeSessionRequest);
 
   app.use('/api', (req, res, next) => {
     handleCompanionAuthGate(req, res, next);

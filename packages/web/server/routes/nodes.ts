@@ -209,7 +209,11 @@ export function registerNodeRoutes(
         : null;
       updateUnifiedNode({
         id: nodeId,
+        ...(typeof req.body?.title === 'string' ? { title: req.body.title } : {}),
         ...(typeof req.body?.summary === 'string' ? { summary: req.body.summary } : {}),
+        ...(Object.prototype.hasOwnProperty.call(req.body ?? {}, 'description')
+          ? { description: typeof req.body.description === 'string' ? req.body.description : null }
+          : {}),
         ...(typeof req.body?.status === 'string' ? { status: req.body.status } : {}),
         ...(nextTags
           ? {

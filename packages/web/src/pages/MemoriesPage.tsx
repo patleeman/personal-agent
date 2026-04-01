@@ -32,9 +32,10 @@ import {
 import { buildNodesSearch } from '../nodeWorkspaceState';
 import { readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
+import { NodeMetadataPanel } from '../components/NodeMetadataPanel';
 import { NodeCaptureTriagePanel } from '../components/NodeCaptureTriagePanel';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -737,6 +738,14 @@ export function NoteWorkspace({
               <NoteReferenceList references={detail?.references ?? []} />
             </NodeRailSection>
           ) : null}
+          <NodeRailSection title="Node metadata">
+            <NodeMetadataPanel
+              nodeId={detail.memory.id}
+              onChanged={onRefetched}
+              showTitle={false}
+              showDescription={false}
+            />
+          </NodeRailSection>
           {detail.memory.type === 'capture' || detail.memory.status === 'inbox' ? (
             <NodeRailSection title="Capture triage">
               <NodeCaptureTriagePanel nodeId={detail.memory.id} onChanged={onRefetched} />
@@ -848,7 +857,7 @@ export function MemoriesPage() {
       return;
     }
 
-    ensureOpenResourceShelfItem('note', selectedMemoryId);
+    ensureOpenResourceShelfItem('node', buildOpenNodeShelfId('note', selectedMemoryId));
   }, [selectedMemoryId]);
 
   if (creating) {

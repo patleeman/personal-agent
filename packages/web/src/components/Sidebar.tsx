@@ -32,12 +32,13 @@ import { buildProjectsHref } from '../projectWorkspaceState';
 import { buildSkillsSearch, SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
+  buildOpenNodeShelfId,
   useOpenResourceShelf,
   closeOpenResourceShelfItem,
   pinOpenResourceShelfItem,
   unpinOpenResourceShelfItem,
+  parseOpenNodeShelfId,
 } from '../openResourceShelves';
-import { humanizeSkillName } from '../memoryOverview';
 import { buildNestedSessionRows } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 
@@ -479,10 +480,9 @@ function buildWorkspaceHref(cwd: string): string {
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, alerts, projects, runs } = useAppData();
+  const { activity, alerts, runs } = useAppData();
   const { data: status } = useApi(api.status);
-  const { data: notesData } = useApi(api.notes);
-  const { data: memoryData } = useApi(api.memory);
+  const { data: nodesData } = useApi(api.nodes);
   const {
     pinnedSessions,
     tabs,
@@ -494,9 +494,7 @@ export function Sidebar() {
     loading,
   } = useConversations();
 
-  const noteShelf = useOpenResourceShelf('note');
-  const projectShelf = useOpenResourceShelf('project');
-  const skillShelf = useOpenResourceShelf('skill');
+  const nodeShelf = useOpenResourceShelf('node');
   const workspaceShelf = useOpenResourceShelf('workspace');
 
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
@@ -553,39 +551,22 @@ export function Sidebar() {
   );
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
 
-  const notesById = useMemo(
-    () => new Map((notesData?.memories ?? []).map((memory) => [memory.id, memory] as const)),
-    [notesData?.memories],
-  );
-  const skillsByName = useMemo(
-    () => new Map((memoryData?.skills ?? []).map((skill) => [skill.name, skill] as const)),
-    [memoryData?.skills],
-  );
-  const projectsById = useMemo(
-    () => new Map((projects ?? []).map((project) => [project.id, project] as const)),
-    [projects],
+  const nodesByKindAndId = useMemo(
+    () => new Map((nodesData?.nodes ?? []).map((node) => [`${node.kind}:${node.id}`, node] as const)),
+    [nodesData?.nodes],
   );
 
-  const openNotes = useMemo(
+  const openNodeEntries = useMemo(
     () => [
-      ...noteShelf.pinnedIds.map((id) => ({ id, pinned: true })),
-      ...noteShelf.openIds.map((id) => ({ id, pinned: false })),
-    ],
-    [noteShelf.openIds, noteShelf.pinnedIds],
-  );
-  const openProjects = useMemo(
-    () => [
-      ...projectShelf.pinnedIds.map((id) => ({ id, pinned: true })),
-      ...projectShelf.openIds.map((id) => ({ id, pinned: false })),
-    ],
-    [projectShelf.openIds, projectShelf.pinnedIds],
-  );
-  const openSkills = useMemo(
-    () => [
-      ...skillShelf.pinnedIds.map((id) => ({ id, pinned: true })),
-      ...skillShelf.openIds.map((id) => ({ id, pinned: false })),
-    ],
-    [skillShelf.openIds, skillShelf.pinnedIds],
+      ...nodeShelf.pinnedIds.map((shelfId) => ({ shelfId, pinned: true })),
+      ...nodeShelf.openIds.map((shelfId) => ({ shelfId, pinned: false })),
+    ]
+      .map((item) => {
+        const parsed = parseOpenNodeShelfId(item.shelfId);
+        return parsed ? { ...parsed, shelfId: item.shelfId, pinned: item.pinned } : null;
+      })
+      .filter((item): item is { kind: 'note' | 'project' | 'skill'; id: string; shelfId: string; pinned: boolean } => item !== null),
+    [nodeShelf.openIds, nodeShelf.pinnedIds],
   );
   const openWorkspaces = useMemo(
     () => [
@@ -595,41 +576,18 @@ export function Sidebar() {
     [workspaceShelf.openIds, workspaceShelf.pinnedIds],
   );
   const openNodes = useMemo(() => {
-    const notes = openNotes.map((item) => {
-      const note = notesById.get(item.id) ?? null;
+    return openNodeEntries.map((item) => {
+      const node = nodesByKindAndId.get(`${item.kind}:${item.id}`) ?? null;
       return {
-        kind: 'note' as const,
+        kind: item.kind,
         id: item.id,
+        shelfId: item.shelfId,
         pinned: item.pinned,
-        title: note?.title ?? item.id,
-        meta: note?.summary || `Note · @${item.id}`,
+        title: node?.title ?? item.id,
+        meta: node?.summary || `${item.kind} · @${item.id}`,
       };
-    });
-
-    const projectsForShelf = openProjects.map((item) => {
-      const project = projectsById.get(item.id) ?? null;
-      return {
-        kind: 'project' as const,
-        id: item.id,
-        pinned: item.pinned,
-        title: project?.title ?? item.id,
-        meta: project?.summary || project?.description || `Project · @${item.id}`,
-      };
-    });
-
-    const skills = openSkills.map((item) => {
-      const skill = skillsByName.get(item.id) ?? null;
-      return {
-        kind: 'skill' as const,
-        id: item.id,
-        pinned: item.pinned,
-        title: humanizeSkillName(item.id),
-        meta: skill?.description || `Skill · @${item.id}`,
-      };
-    });
-
-    return [...notes, ...projectsForShelf, ...skills].sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.title.localeCompare(right.title));
-  }, [notesById, openNotes, openProjects, openSkills, projectsById, skillsByName]);
+    }).sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.title.localeCompare(right.title));
+  }, [nodesByKindAndId, openNodeEntries]);
   const runsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
@@ -878,23 +836,12 @@ export function Sidebar() {
     }
   }
 
-  function handleCloseNote(noteId: string) {
-    closeOpenResourceShelfItem('note', noteId);
-    if ((selectedNoteId === noteId && location.pathname.startsWith('/notes')) || (selectedNodesPageItem?.kind === 'note' && selectedNodesPageItem.id === noteId)) {
-      navigate('/nodes');
-    }
-  }
-
-  function handleCloseProject(projectId: string) {
-    closeOpenResourceShelfItem('project', projectId);
-    if ((selectedProjectId === projectId && location.pathname.startsWith('/projects')) || (selectedNodesPageItem?.kind === 'project' && selectedNodesPageItem.id === projectId)) {
-      navigate('/nodes');
-    }
-  }
-
-  function handleCloseSkill(skillName: string) {
-    closeOpenResourceShelfItem('skill', skillName);
-    if ((selectedSkillName === skillName && location.pathname.startsWith('/skills')) || (selectedNodesPageItem?.kind === 'skill' && selectedNodesPageItem.id === skillName)) {
+  function handleCloseNode(kind: 'note' | 'project' | 'skill', nodeId: string) {
+    closeOpenResourceShelfItem('node', buildOpenNodeShelfId(kind, nodeId));
+    if ((kind === 'note' && selectedNoteId === nodeId && location.pathname.startsWith('/notes'))
+      || (kind === 'project' && selectedProjectId === nodeId && location.pathname.startsWith('/projects'))
+      || (kind === 'skill' && selectedSkillName === nodeId && location.pathname.startsWith('/skills'))
+      || (selectedNodesPageItem?.kind === kind && selectedNodesPageItem.id === nodeId)) {
       navigate('/nodes');
     }
   }
@@ -1058,17 +1005,9 @@ export function Sidebar() {
                   title={item.title}
                   meta={item.meta}
                   pinned={item.pinned}
-                  onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem(item.kind, item.id)}
-                  onUnpin={item.pinned ? () => unpinOpenResourceShelfItem(item.kind, item.id) : undefined}
-                  onClose={item.pinned ? undefined : () => {
-                    if (item.kind === 'note') {
-                      handleCloseNote(item.id);
-                    } else if (item.kind === 'project') {
-                      handleCloseProject(item.id);
-                    } else {
-                      handleCloseSkill(item.id);
-                    }
-                  }}
+                  onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('node', item.shelfId)}
+                  onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('node', item.shelfId) : undefined}
+                  onClose={item.pinned ? undefined : () => handleCloseNode(item.kind, item.id)}
                 />
               ))}
             </div>

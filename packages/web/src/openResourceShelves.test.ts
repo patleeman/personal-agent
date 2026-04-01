@@ -1,15 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  OPEN_NODE_IDS_STORAGE_KEY,
   OPEN_NOTE_IDS_STORAGE_KEY,
   OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
+  PINNED_NODE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_PROJECT_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
   PINNED_WORKSPACE_IDS_STORAGE_KEY,
 } from './localSettings';
 import {
+  buildOpenNodeShelfId,
   closeOpenResourceShelfItem,
   ensureOpenResourceShelfItem,
   pinOpenResourceShelfItem,
@@ -42,6 +45,8 @@ function createStorage(): MockStorage {
 
 function keysFor(kind: OpenResourceKind): { open: string; pinned: string } {
   switch (kind) {
+    case 'node':
+      return { open: OPEN_NODE_IDS_STORAGE_KEY, pinned: PINNED_NODE_IDS_STORAGE_KEY };
     case 'note':
       return { open: OPEN_NOTE_IDS_STORAGE_KEY, pinned: PINNED_NOTE_IDS_STORAGE_KEY };
     case 'project':
@@ -151,5 +156,16 @@ describe('openResourceShelves', () => {
       pinnedIds: ['project-b'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('merges legacy note/project/skill shelves into the consolidated node shelf', () => {
+    localStorage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-a']));
+    localStorage.setItem(PINNED_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['project-a']));
+    localStorage.setItem(OPEN_NODE_IDS_STORAGE_KEY, JSON.stringify([buildOpenNodeShelfId('skill', 'skill-a')]));
+
+    expect(readOpenResourceShelf('node')).toEqual({
+      openIds: [buildOpenNodeShelfId('note', 'note-a'), buildOpenNodeShelfId('skill', 'skill-a')],
+      pinnedIds: [buildOpenNodeShelfId('project', 'project-a')],
+    });
   });
 });

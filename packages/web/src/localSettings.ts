@@ -15,6 +15,8 @@ export const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
 export const PINNED_SKILL_IDS_STORAGE_KEY = 'pa:pinned-skill-ids';
 export const OPEN_WORKSPACE_IDS_STORAGE_KEY = 'pa:open-workspace-ids';
 export const PINNED_WORKSPACE_IDS_STORAGE_KEY = 'pa:pinned-workspace-ids';
+export const OPEN_NODE_IDS_STORAGE_KEY = 'pa:open-node-ids';
+export const PINNED_NODE_IDS_STORAGE_KEY = 'pa:pinned-node-ids';
 export const SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX = 'pa:sidebar-nav-section:';
 
 export function buildSidebarNavSectionStorageKey(sectionId: string): string {
@@ -69,5 +71,7 @@ export function resetStoredConversationUiState(): void {
   removeStoredItem(PINNED_SKILL_IDS_STORAGE_KEY);
   removeStoredItem(OPEN_WORKSPACE_IDS_STORAGE_KEY);
   removeStoredItem(PINNED_WORKSPACE_IDS_STORAGE_KEY);
+  removeStoredItem(OPEN_NODE_IDS_STORAGE_KEY);
+  removeStoredItem(PINNED_NODE_IDS_STORAGE_KEY);
   removeStoredItemsMatching(isComposerHistoryStorageKey);
 }

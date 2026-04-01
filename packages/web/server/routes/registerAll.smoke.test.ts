@@ -158,11 +158,18 @@ describe('registerServerRoutes smoke test', () => {
     });
   });
 
-  it('serves companion routes through the shared route registry', async () => {
-    const pairingCodeResponse = await fetch(`${companionBaseUrl}/api/companion-auth/pairing-code`, {
-      method: 'POST',
-    });
+  it('serves companion pairing admin routes through the desktop app surface and keeps the companion surface gated', async () => {
+    const [pairingCodeResponse, gatedPairingCodeResponse] = await Promise.all([
+      fetch(`${appBaseUrl}/api/companion-auth/pairing-code`, {
+        method: 'POST',
+      }),
+      fetch(`${companionBaseUrl}/api/companion-auth/pairing-code`, {
+        method: 'POST',
+      }),
+    ]);
+
     expect(pairingCodeResponse.status).toBe(201);
+    expect(gatedPairingCodeResponse.status).toBe(401);
     const pairingCodeBody = await pairingCodeResponse.json() as { code: string };
 
     const exchangeResponse = await fetch(`${companionBaseUrl}/api/companion-auth/exchange`, {

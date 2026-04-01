@@ -68,8 +68,9 @@ In practice:
 
 For app-level access control on remote devices:
 
-- generate a short-lived pairing code from the local web UI or `pa ui pairing-code`
+- generate a short-lived pairing code from the local desktop web UI or `pa ui pairing-code`
 - enter it once on the remote desktop browser or companion app
+- the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
 - the browser stays signed in until you revoke that paired session
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
@@ -218,6 +219,8 @@ From the Knowledge Base page you can:
 - switch between the normal browse view and a denser table mode
 - open quick-capture notes and saved URLs directly into the node system
 - open any row into a shared node workspace with the main content in the center and metadata on the right
+- edit shared node metadata there, including title/summary/description where appropriate, status, parent, and tags
+- keep recently opened notes, projects, and skills together in the sidebar’s unified Open Nodes shelf
 - hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
 
 ### Projects
