@@ -14,6 +14,10 @@ export interface DurableRunManifest {
   resumePolicy: DurableRunResumePolicy;
   createdAt: string;
   spec: Record<string, unknown>;
+  // Hierarchy
+  parentId?: string;           // parent run ID (root runs have no parent)
+  rootId?: string;             // root conversation ID
+  // Source attribution
   source?: {
     type: string;
     id?: string;
@@ -172,6 +176,8 @@ function parseManifest(value: unknown): DurableRunManifest | undefined {
     resumePolicy,
     createdAt,
     spec,
+    parentId: toString(value.parentId),
+    rootId: toString(value.rootId),
     source,
   };
 }
@@ -313,6 +319,8 @@ export function createDurableRunManifest(input: {
   resumePolicy: DurableRunResumePolicy;
   createdAt?: string;
   spec?: Record<string, unknown>;
+  parentId?: string;
+  rootId?: string;
   source?: DurableRunManifest['source'];
 }): DurableRunManifest {
   return {
@@ -322,6 +330,8 @@ export function createDurableRunManifest(input: {
     resumePolicy: input.resumePolicy,
     createdAt: new Date(input.createdAt ?? Date.now()).toISOString(),
     spec: input.spec ?? {},
+    parentId: input.parentId,
+    rootId: input.rootId,
     source: input.source,
   };
 }
@@ -513,4 +523,94 @@ export function summarizeScannedDurableRuns(runs: ScannedDurableRun[]): ScannedD
     recoveryActions,
     statuses,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Cascade cancel
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect all descendant run IDs for a given run.
+ * Does not include the run itself.
+ */
+export function collectDescendantRunIds(runsRoot: string, runId: string): string[] {
+  const descendants: string[] = [];
+  const queue: string[] = [runId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    const children = listDurableRunIds(runsRoot)
+      .map((id) => {
+        const manifest = loadDurableRunManifest(join(runsRoot, id, 'manifest.json'));
+        return manifest?.parentId === currentId ? id : undefined;
+      })
+      .filter((id): id is string => id !== undefined);
+
+    for (const childId of children) {
+      descendants.push(childId);
+      queue.push(childId);
+    }
+  }
+
+  return descendants;
+}
+
+/**
+ * Cancel a run and all its descendants.
+ * Returns the IDs of all cancelled runs.
+ */
+export function cascadeCancelRun(
+  runsRoot: string,
+  runId: string,
+): string[] {
+  // Check if the run exists
+  const statusPath = join(runsRoot, runId, 'status.json');
+  const currentStatus = loadDurableRunStatus(statusPath);
+
+  if (!currentStatus) {
+    return [];
+  }
+
+  const descendants = collectDescendantRunIds(runsRoot, runId);
+  const allIds = [runId, ...descendants];
+  const now = new Date().toISOString();
+
+  for (const id of allIds) {
+    const idStatusPath = join(runsRoot, id, 'status.json');
+    const idStatus = loadDurableRunStatus(idStatusPath);
+
+    if (!idStatus) {
+      continue;
+    }
+
+    // Skip if already terminal
+    if (terminalStatus(idStatus.status)) {
+      continue;
+    }
+
+    // Update to cancelled
+    const updatedStatus: DurableRunStatusFile = {
+      ...idStatus,
+      status: 'cancelled',
+      updatedAt: now,
+      completedAt: idStatus.completedAt ?? now,
+    };
+
+    saveDurableRunStatus(idStatusPath, updatedStatus);
+  }
+
+  return allIds;
+}
+
+/**
+ * Check if a run has any non-terminal children.
+ */
+export function hasActiveChildren(runsRoot: string, runId: string): boolean {
+  return listDurableRunIds(runsRoot)
+    .map((id) => {
+      const manifest = loadDurableRunManifest(join(runsRoot, id, 'manifest.json'));
+      const status = loadDurableRunStatus(join(runsRoot, id, 'status.json'));
+      return manifest?.parentId === runId && status && !terminalStatus(status.status);
+    })
+    .some(Boolean);
 }

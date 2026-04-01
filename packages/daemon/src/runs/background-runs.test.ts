@@ -46,25 +46,26 @@ describe('createBackgroundRunRecord', () => {
     const manifest = loadDurableRunManifest(record.paths.manifestPath);
     const checkpoint = loadDurableRunCheckpoint(record.paths.checkpointPath);
 
-    expect(manifest?.spec).toMatchObject({
-      taskSlug: 'code-review',
-      cwd: '/tmp/workspace',
-      agent: {
-        prompt: 'Review the latest diff',
-        profile: 'datadog',
-        model: 'openai-codex/gpt-5.4',
-      },
-      argv: record.argv,
-    });
-    expect(checkpoint?.payload).toMatchObject({
-      taskSlug: 'code-review',
-      cwd: '/tmp/workspace',
-      agent: {
-        prompt: 'Review the latest diff',
-        profile: 'datadog',
-        model: 'openai-codex/gpt-5.4',
-      },
-      argv: record.argv,
-    });
+    // Check run kind is background-run for agent targets
+    expect(manifest?.kind).toBe('background-run');
+    expect(manifest?.resumePolicy).toBe('manual');
+
+    // Check that target contains the agent spec
+    const target = manifest?.spec.target as Record<string, unknown>;
+    expect(target?.type).toBe('agent');
+    expect(target?.prompt).toBe('Review the latest diff');
+    expect(target?.profile).toBe('datadog');
+    expect(target?.model).toBe('openai-codex/gpt-5.4');
+
+    // Check metadata contains task info
+    const metadata = manifest?.spec.metadata as Record<string, unknown>;
+    expect(metadata?.taskSlug).toBe('code-review');
+    expect(metadata?.cwd).toBe('/tmp/workspace');
+
+    // Check checkpoint payload
+    const payload = checkpoint?.payload as Record<string, unknown>;
+    const payloadTarget = payload?.target as Record<string, unknown>;
+    expect(payloadTarget?.prompt).toBe('Review the latest diff');
+    expect(metadata?.taskSlug).toBe('code-review');
   });
 });

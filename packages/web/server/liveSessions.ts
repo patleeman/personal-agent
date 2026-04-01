@@ -1723,6 +1723,28 @@ async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
   return loader;
 }
 
+function repairSessionModelProvider(session: Pick<AgentSession, 'agent' | 'sessionManager' | 'model'>, models: ReturnType<ModelRegistry['getAvailable']>): void {
+  const currentId = session.model?.id ?? '';
+  const currentProvider = (session.model as { provider?: string } | undefined)?.provider ?? '';
+  if (!currentId) {
+    return;
+  }
+
+  const exactMatch = models.find((candidate) => candidate.id === currentId && candidate.provider === currentProvider);
+  if (exactMatch) {
+    return;
+  }
+
+  const idMatches = models.filter((candidate) => candidate.id === currentId);
+  if (idMatches.length !== 1) {
+    return;
+  }
+
+  const repairedModel = idMatches[0]!;
+  session.agent.setModel(repairedModel);
+  session.sessionManager.appendModelChange(repairedModel.provider, repairedModel.id);
+}
+
 /** Create a brand-new Pi session. */
 export async function createSession(
   cwd: string,
@@ -1745,6 +1767,9 @@ export async function createSession(
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
+  const availableModels = modelRegistry.getAvailable();
+  repairSessionModelProvider(session, availableModels);
+
   if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
     applyConversationModelPreferencesToLiveSession(
       session,
@@ -1756,7 +1781,7 @@ export async function createSession(
         currentModel: session.model?.id ?? '',
         currentThinkingLevel: session.thinkingLevel ?? '',
       },
-      modelRegistry.getAvailable(),
+      availableModels,
     );
   }
 
@@ -1772,13 +1797,14 @@ export async function createSessionFromExisting(
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
   const auth = makeAuth();
+  const modelRegistry = makeRegistry(auth);
   const resourceLoader = await makeLoader(cwd, options);
   const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
   const { session } = await createAgentSession({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
-    modelRegistry: makeRegistry(auth),
+    modelRegistry,
     resourceLoader,
     sessionManager,
   });
@@ -1786,6 +1812,7 @@ export async function createSessionFromExisting(
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
+  repairSessionModelProvider(session, modelRegistry.getAvailable());
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -1803,6 +1830,7 @@ export async function resumeSession(
   }
 
   const auth = makeAuth();
+  const modelRegistry = makeRegistry(auth);
   const sessionManager = SessionManager.open(sessionFile);
   const cwd = sessionManager.getCwd();
   const resourceLoader = await makeLoader(cwd, options);
@@ -1810,13 +1838,14 @@ export async function resumeSession(
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
-    modelRegistry: makeRegistry(auth),
+    modelRegistry,
     resourceLoader,
     sessionManager,
   });
 
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
+  repairSessionModelProvider(session, modelRegistry.getAvailable());
 
   const id = session.sessionId;
   wireSession(id, session, cwd, {

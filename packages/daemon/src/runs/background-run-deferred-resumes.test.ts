@@ -56,10 +56,12 @@ async function createFinishedBackgroundRun(input: {
 
 describe('background run result surfacing', () => {
   it('waits until the last active run stops, then surfaces a batched pending result', async () => {
-    const runsRoot = createTempDir('pa-background-run-results-');
+    // Note: runs are stored under <runsRoot>/runs/ due to scheduleRun structure
+    const tempRoot = createTempDir('pa-background-run-results-');
+    const runsRoot = join(tempRoot, 'runs');
     const sessionFile = '/tmp/conversations/batch.jsonl';
 
-    const slow = await createBackgroundRunRecord(runsRoot, {
+    const slow = await createBackgroundRunRecord(tempRoot, {
       taskSlug: 'slow-task',
       cwd: createTempDir('bg-run-slow-cwd-'),
       argv: [process.execPath, '-e', 'setTimeout(() => {}, 1000)'],
@@ -74,7 +76,7 @@ describe('background run result surfacing', () => {
       createdAt: '2026-03-22T19:00:00.000Z',
     });
     const fast = await createFinishedBackgroundRun({
-      runsRoot,
+      runsRoot: tempRoot,
       taskSlug: 'fast-task',
       sessionFile,
       endedAt: '2026-03-22T19:00:05.000Z',
@@ -127,11 +129,13 @@ describe('background run result surfacing', () => {
   });
 
   it('marks pending result batches delivered after the next prompt consumes them', async () => {
-    const runsRoot = createTempDir('pa-background-run-results-');
+    // Note: runs are stored under <runsRoot>/runs/ due to scheduleRun structure
+    const tempRoot = createTempDir('pa-background-run-results-');
+    const runsRoot = join(tempRoot, 'runs');
     const sessionFile = '/tmp/conversations/delivered.jsonl';
 
     const run = await createFinishedBackgroundRun({
-      runsRoot,
+      runsRoot: tempRoot,
       taskSlug: 'deliver-task',
       sessionFile,
       endedAt: '2026-03-22T19:00:05.000Z',

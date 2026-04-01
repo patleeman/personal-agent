@@ -57,7 +57,9 @@ function readCheckpointPayload(checkpoint: DurableRunCheckpointFile | undefined)
 }
 
 function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroundRun | undefined {
-  if (run.manifest?.kind !== 'background-run') {
+  // Accept both background-run (agent target) and raw-shell (argv/shell target)
+  // This maintains backward compatibility with the old structure
+  if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
     return undefined;
   }
 
@@ -67,7 +69,12 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
   }
 
   const payload = readCheckpointPayload(run.checkpoint);
-  if (payload.resumeParentOnExit !== true) {
+
+  // Support both old structure (resumeParentOnExit at root) and new (in metadata)
+  const resumeParentOnExit = payload.resumeParentOnExit === true
+    || (isRecord(payload.metadata) && payload.metadata.resumeParentOnExit === true);
+
+  if (!resumeParentOnExit) {
     return undefined;
   }
 
@@ -117,20 +124,32 @@ function readRunLogTail(logPath: string, maxLines: number): string {
 
 function describeRunCommand(run: ScannedDurableRun): string | undefined {
   const payload = readCheckpointPayload(run.checkpoint);
-  const agent = isRecord(payload.agent) ? payload.agent : undefined;
+
+  // Support both old structure (agent/shellCommand/argv at root) and new (in target)
+  const target = isRecord(payload.target) ? payload.target : undefined;
+  const agent = isRecord(target?.agent) ? target.agent
+    : isRecord(payload.agent) ? payload.agent
+    : undefined;
   const agentPrompt = trimText(readOptionalString(agent?.prompt), MAX_COMMAND_LENGTH);
   if (agentPrompt) {
     return agentPrompt;
   }
 
-  const shellCommand = trimText(readOptionalString(payload.shellCommand), MAX_COMMAND_LENGTH);
+  const shellCommand = trimText(
+    readOptionalString(target?.command ?? payload.shellCommand),
+    MAX_COMMAND_LENGTH,
+  );
   if (shellCommand) {
     return shellCommand;
   }
 
-  const argv = Array.isArray(payload.argv)
-    ? payload.argv.flatMap((value) => typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : [])
-    : [];
+  // argv could be in target or at root level
+  const argvArray = Array.isArray(target?.argv)
+    ? target.argv
+    : Array.isArray(payload.argv)
+      ? payload.argv
+      : [];
+  const argv = argvArray.flatMap((value) => typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []);
 
   if (argv.length === 0) {
     return undefined;
@@ -153,7 +172,11 @@ function sortRuns(runs: EligibleBackgroundRun[]): EligibleBackgroundRun[] {
 }
 
 function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
-  const taskSlug = readOptionalString(run.run.manifest?.spec.taskSlug) ?? 'unknown';
+  // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
+  const spec = run.run.manifest?.spec ?? {};
+  const taskSlug = readOptionalString(
+    isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug,
+  ) ?? 'unknown';
   const status = run.run.status?.status ?? 'unknown';
   const logText = readRunLogTail(run.run.paths.outputLogPath, SINGLE_RUN_LOG_TAIL_LINES) || '(empty log)';
   const lines = [
@@ -188,7 +211,11 @@ function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
   ];
 
   for (const run of orderedRuns) {
-    const taskSlug = readOptionalString(run.run.manifest?.spec.taskSlug) ?? 'unknown';
+    // Support both old structure (spec.taskSlug) and new (spec.metadata.taskSlug)
+    const spec = run.run.manifest?.spec ?? {};
+    const taskSlug = readOptionalString(
+      isRecord(spec.metadata) ? spec.metadata.taskSlug : spec.taskSlug,
+    ) ?? 'unknown';
     const status = run.run.status?.status ?? 'unknown';
     const logText = readRunLogTail(run.run.paths.outputLogPath, BATCH_RUN_LOG_TAIL_LINES) || '(empty log)';
 

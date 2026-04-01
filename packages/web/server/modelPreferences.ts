@@ -61,6 +61,56 @@ function resolveModelPreference(model: string, models: ModelPreferenceOption[]):
   };
 }
 
+function normalizeSettingsDefaultModelProvider(settings: Record<string, unknown>, models: ModelPreferenceOption[]): boolean {
+  const defaultModel = readNonEmptyString(settings.defaultModel);
+  if (!defaultModel || models.length === 0) {
+    return false;
+  }
+
+  const slashIndex = defaultModel.indexOf('/');
+  if (slashIndex > 0 && slashIndex < defaultModel.length - 1) {
+    const provider = defaultModel.slice(0, slashIndex);
+    const model = defaultModel.slice(slashIndex + 1);
+    const changed = settings.defaultProvider !== provider || settings.defaultModel !== model;
+    settings.defaultProvider = provider;
+    settings.defaultModel = model;
+    return changed;
+  }
+
+  const storedProvider = readNonEmptyString(settings.defaultProvider);
+  const exactMatches = models.filter((candidate) => candidate.id === defaultModel);
+  if (exactMatches.length === 0) {
+    return false;
+  }
+
+  if (storedProvider && exactMatches.some((candidate) => candidate.provider === storedProvider)) {
+    return false;
+  }
+
+  if (exactMatches.length !== 1) {
+    return false;
+  }
+
+  const nextProvider = exactMatches[0]!.provider;
+  if (!nextProvider || storedProvider === nextProvider) {
+    return false;
+  }
+
+  settings.defaultProvider = nextProvider;
+  return true;
+}
+
+export function normalizeSavedModelPreferences(settingsFile: string, models: ModelPreferenceOption[] = []): SavedModelPreferences {
+  const settings = readSettingsObject(settingsFile);
+  const changed = normalizeSettingsDefaultModelProvider(settings, models);
+  if (changed) {
+    mkdirSync(dirname(settingsFile), { recursive: true });
+    writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+  }
+
+  return readSavedModelPreferences(settingsFile, models);
+}
+
 export function readSavedModelPreferences(settingsFile: string, models: ModelPreferenceOption[] = []): SavedModelPreferences {
   const parsed = readSettingsObject(settingsFile);
   const defaultModel = readNonEmptyString(parsed.defaultModel);

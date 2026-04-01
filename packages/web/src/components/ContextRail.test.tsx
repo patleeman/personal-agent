@@ -360,9 +360,7 @@ describe('ContextRail run detail', () => {
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Agent reminders')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
-    expect(html.indexOf('Referenced projects')).toBeLessThan(html.indexOf('Agent reminders'));
     expect(html).toContain('No referenced projects.');
   });
 

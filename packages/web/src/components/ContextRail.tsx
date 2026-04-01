@@ -3147,8 +3147,6 @@ function CapabilitiesOverviewContext({
   );
 }
 
-}
-
 function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
   const navigate = useNavigate();
   const { data, loading, error, refreshing, refetch } = useApi(() => api.taskDetail(taskId), `capabilities-task-rail:${taskId}`);
@@ -3341,8 +3339,26 @@ export function ContextRail() {
         <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />,
         'Loading artifact…',
       )}
+    </div>
+  );
   if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
+    <div className="flex-1 overflow-hidden flex flex-col">
+      <RailHeader label="Draft" />
+      <DraftConversationContextPanel />
+    </div>
+  );
+  if (section === 'conversations' && id && selectedRunId) return (
+    <div className="flex-1 overflow-hidden flex flex-col">
+      <RailHeader label="Run" sub={selectedRunId} />
+      <RunContextPanel conversationId={id} runId={selectedRunId} />
+    </div>
+  );
+  if (section === 'conversations' && id) return (
+    <div className="flex-1 overflow-hidden flex flex-col">
+      <RailHeader label="Conversation" sub={id} />
+      <LiveSessionContextPanel id={id} />
+    </div>
+  );
   if (section === 'conversations') return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Conversations" sub="workspace" />
