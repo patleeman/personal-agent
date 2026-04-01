@@ -19,6 +19,14 @@ const RunToolParams = Type.Object({
   profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
+  // Trigger options for start_agent
+  defer: Type.Optional(Type.String({ description: 'Delay before running, for example 30s, 10m, 2h, 1d. Use with start_agent.' })),
+  cron: Type.Optional(Type.String({ description: 'Cron expression for recurring runs, for example "0 9 * * 1-5". Use with start_agent.' })),
+  at: Type.Optional(Type.String({ description: 'ISO timestamp to run at. Use with start_agent.' })),
+  // Loop options
+  loop: Type.Optional(Type.Boolean({ description: 'Enable loop mode - agent schedules its own next iteration.' })),
+  loopDelay: Type.Optional(Type.String({ description: 'Default delay between loop iterations, for example 1h. Use with start_agent and loop=true.' })),
+  loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations. Use with start_agent and loop=true.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -81,6 +89,10 @@ export function createRunAgentExtension(options: {
         'Use this tool for durable background jobs that should keep running outside the current turn.',
         'Prefer one focused run per independent task slug.',
         'Use start for detached shell work, start_agent for detached subagents, get/logs for inspection, and cancel to stop a run.',
+        'For time-based runs, use defer/cron/at with start_agent.',
+        'For looping agents, use loop=true with start_agent.',
+        'For conversation-bound wakeups, prefer deferred_resume instead.',
+        'For persistent task-file-based automation, prefer scheduled_task instead.',
       ],
       parameters: RunToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -187,6 +199,19 @@ export function createRunAgentExtension(options: {
               const conversationFile = ctx.sessionManager.getSessionFile();
               const model = params.model?.trim();
               const profile = params.profile?.trim() || options.getCurrentProfile();
+              const defer = params.defer?.trim();
+              const cron = params.cron?.trim();
+              const at = params.at?.trim();
+              const loop = params.loop === true;
+              const loopDelay = params.loopDelay?.trim();
+              const loopMaxIterations = params.loopMaxIterations;
+
+              // Build trigger info for the response
+              const triggerInfo: string[] = [];
+              if (defer) triggerInfo.push(`defer ${defer}`);
+              if (cron) triggerInfo.push(`cron ${cron}`);
+              if (at) triggerInfo.push(`at ${at}`);
+              if (loop) triggerInfo.push(`loop`);
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -204,6 +229,12 @@ export function createRunAgentExtension(options: {
                 },
                 checkpointPayload: {
                   resumeParentOnExit: true,
+                  ...(defer ? { defer } : {}),
+                  ...(cron ? { cron } : {}),
+                  ...(at ? { at } : {}),
+                  ...(loop ? { loop: true } : {}),
+                  ...(loopDelay ? { loopDelay } : {}),
+                  ...(loopMaxIterations !== undefined ? { loopMaxIterations } : {}),
                 },
               });
 
@@ -212,10 +243,18 @@ export function createRunAgentExtension(options: {
               }
 
               invalidateAppTopics('runs');
+
+              // Build response message
+              let message = `Started durable agent run ${result.runId} for ${taskSlug}`;
+              if (triggerInfo.length > 0) {
+                message += ` [${triggerInfo.join(', ')}]`;
+              }
+              message += '.';
+
               return {
                 content: [{
                   type: 'text' as const,
-                  text: `Started durable agent run ${result.runId} for ${taskSlug}.`,
+                  text: message,
                 }],
                 details: {
                   action: 'start_agent',
@@ -225,6 +264,10 @@ export function createRunAgentExtension(options: {
                   model,
                   profile,
                   logPath: result.logPath,
+                  ...(defer ? { defer } : {}),
+                  ...(cron ? { cron } : {}),
+                  ...(at ? { at } : {}),
+                  ...(loop ? { loop: true } : {}),
                 },
               };
             }

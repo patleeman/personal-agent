@@ -3,18 +3,26 @@ import { dirname } from 'path';
 import { buildBackgroundAgentArgv, type BackgroundRunAgentSpec } from '../background-run-agent.js';
 import {
   appendDurableRunEvent,
-  createDurableRunManifest,
   createInitialDurableRunStatus,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
   loadDurableRunStatus,
-  resolveDurableRunPaths,
   saveDurableRunCheckpoint,
-  saveDurableRunManifest,
   saveDurableRunStatus,
   type DurableRunPaths,
 } from './store.js';
+import {
+  scheduleRun,
+  type ScheduleRunInput,
+  type TriggerNow,
+  type TargetAgent,
+  type TargetShell,
+} from './schedule-run.js';
 
+/**
+ * @deprecated Use scheduleRun() from './schedule-run.js' instead.
+ * This function is kept for backward compatibility.
+ */
 export interface StartBackgroundRunInput {
   taskSlug: string;
   cwd: string;
@@ -29,6 +37,12 @@ export interface StartBackgroundRunInput {
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
   createdAt?: string;
+  /** Override default callback behavior */
+  callback?: {
+    alertLevel?: 'none' | 'passive' | 'disruptive';
+    autoResumeIfOpen?: boolean;
+    requireAck?: boolean;
+  };
 }
 
 export interface StartBackgroundRunRecord {
@@ -155,84 +169,79 @@ export async function createBackgroundRunRecord(
   runsRoot: string,
   input: StartBackgroundRunInput,
 ): Promise<StartBackgroundRunRecord> {
-  const createdAt = new Date(input.createdAt ?? Date.now()).toISOString();
-  const runId = createBackgroundRunId(input.taskSlug, createdAt);
-  const paths = resolveDurableRunPaths(runsRoot, runId);
   const { argv, shellCommand, agent } = ensureCommandSpec(input);
 
-  mkdirSync(paths.root, { recursive: true, mode: 0o700 });
-  writeFileSync(paths.outputLogPath, '', 'utf-8');
+  // Build ScheduleRunInput from legacy input
+  const scheduleInput = buildScheduleRunInputFromBackgroundRun(input, argv, shellCommand, agent);
 
-  saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
-    id: runId,
-    kind: 'background-run',
-    resumePolicy: 'manual',
-    createdAt,
-    spec: {
-      taskSlug: input.taskSlug,
-      cwd: input.cwd,
-      ...(argv ? { argv } : {}),
-      ...(shellCommand ? { shellCommand } : {}),
-      ...(agent ? { agent } : {}),
-    },
-    source: input.source
-      ? {
-        type: input.source.type,
-        ...(input.source.id ? { id: input.source.id } : {}),
-        ...(input.source.filePath ? { filePath: input.source.filePath } : {}),
-      }
-      : {
-        type: 'background-run',
-        id: input.taskSlug,
-      },
-  }));
+  // scheduleRun expects daemonRoot where runs are stored under <daemonRoot>/runs/
+  // The old API accepted runsRoot directly (the parent of run directories)
+  // Convert: if runsRoot ends with '/runs', use its parent; otherwise use runsRoot itself
+  const daemonRoot = runsRoot.endsWith('/runs')
+    ? runsRoot.slice(0, -'/runs'.length)
+    : runsRoot;
 
-  saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
-    runId,
-    status: 'queued',
-    createdAt,
-    updatedAt: createdAt,
-    activeAttempt: 0,
-    checkpointKey: 'queued',
-  }));
+  const result = await scheduleRun(daemonRoot, scheduleInput);
 
-  saveDurableRunCheckpoint(paths.checkpointPath, {
-    version: 1,
-    runId,
-    updatedAt: createdAt,
-    step: 'queued',
-    payload: {
-      ...(input.checkpointPayload ?? {}),
-      taskSlug: input.taskSlug,
-      cwd: input.cwd,
-      ...(argv ? { argv } : {}),
-      ...(shellCommand ? { shellCommand } : {}),
-      ...(agent ? { agent } : {}),
-    },
-  });
-
-  await appendDurableRunEvent(paths.eventsPath, {
-    version: 1,
-    runId,
-    timestamp: createdAt,
-    type: 'run.created',
-    payload: {
-      kind: 'background-run',
-      taskSlug: input.taskSlug,
-      cwd: input.cwd,
-      ...(argv ? { argv } : {}),
-      ...(shellCommand ? { shellCommand } : {}),
-      ...(agent ? { agent } : {}),
-    },
-  });
-
-  appendOutputLog(paths.outputLogPath, `# task=${input.taskSlug}\n# cwd=${input.cwd}\n# createdAt=${createdAt}\n`);
+  // Initialize output log
+  mkdirSync(dirname(result.paths.outputLogPath), { recursive: true, mode: 0o700 });
+  appendOutputLog(result.paths.outputLogPath, `# task=${input.taskSlug}\n# cwd=${input.cwd}\n# createdAt=${new Date().toISOString()}\n`);
 
   return {
-    runId,
-    paths,
+    runId: result.runId,
+    paths: result.paths,
     ...(argv ? { argv } : {}),
     ...(shellCommand ? { shellCommand } : {}),
+  };
+}
+
+/**
+ * Build ScheduleRunInput from legacy StartBackgroundRunInput.
+ * This bridges the old API to the new unified API.
+ */
+function buildScheduleRunInputFromBackgroundRun(
+  input: StartBackgroundRunInput,
+  argv: string[] | undefined,
+  shellCommand: string | undefined,
+  agent: BackgroundRunAgentSpec | undefined,
+): ScheduleRunInput {
+  // Determine target type
+  let target: TargetAgent | TargetShell;
+
+  if (agent) {
+    target = {
+      type: 'agent',
+      prompt: agent.prompt,
+      ...(agent.profile ? { profile: agent.profile } : {}),
+      ...(agent.model ? { model: agent.model } : {}),
+    };
+  } else if (argv) {
+    target = {
+      type: 'shell',
+      command: argv.join(' '),
+      cwd: input.cwd,
+    };
+  } else if (shellCommand) {
+    target = {
+      type: 'shell',
+      command: shellCommand,
+      cwd: input.cwd,
+    };
+  } else {
+    throw new Error('Background run must have agent, argv, or shellCommand');
+  }
+
+  return {
+    trigger: { type: 'now' } as TriggerNow,
+    target,
+    callback: input.callback,
+    source: input.source ?? { type: 'background-run', id: input.taskSlug },
+    metadata: {
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+      ...(input.manifestMetadata ?? {}),
+      ...(input.checkpointPayload ?? {}),
+    },
   };
 }
 

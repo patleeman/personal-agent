@@ -304,7 +304,7 @@ export function useConversationScroll({
     return () => {
       cancelBottomScrollSettle();
     };
-  }, [cancelBottomScrollSettle, hasMessages, initialScrollKey, scrollRef, sessionLoading, settleBottomScroll]);
+  }, [cancelBottomScrollSettle, hasMessages, initialScrollKey, messages, scrollRef, sessionLoading, settleBottomScroll]);
 
   useLayoutEffect(() => {
     const tailBlock = messages?.[messages.length - 1];

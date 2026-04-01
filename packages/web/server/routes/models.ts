@@ -1,0 +1,856 @@
+/**
+ * Model and provider routes
+ * 
+ * Handles model preferences, model providers, and provider authentication.
+ */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+import type { Express } from 'express';
+import {
+  normalizeSavedModelPreferences,
+  readSavedModelPreferences,
+  writeSavedModelPreferences,
+} from '../modelPreferences.js';
+import {
+  readModelProvidersState,
+  removeModelProvider,
+  removeModelProviderModel,
+  upsertModelProvider,
+  upsertModelProviderModel,
+} from '../modelProviders.js';
+import {
+  cancelProviderOAuthLogin,
+  getProviderOAuthLoginState,
+  readProviderAuthState,
+  removeProviderCredential,
+  setProviderApiKey,
+  startProviderOAuthLogin,
+  submitProviderOAuthLoginInput,
+  subscribeProviderOAuthLogin,
+} from '../providerAuth.js';
+import { readCodexPlanUsage } from '../codexUsage.js';
+import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../defaultCwdPreferences.js';
+import { getAvailableModels } from '../liveSessions.js';
+import {
+  invalidateAppTopics,
+  logError,
+  persistSettingsWrite,
+  reloadAllLiveSessionAuth,
+  refreshAllLiveSessionModelRegistries,
+} from '../middleware/index.js';
+
+/**
+ * Gets the current profile getter for use in route handlers.
+ */
+let getCurrentProfileFn: () => string = () => {
+  throw new Error('getCurrentProfile not initialized for model routes');
+};
+
+let getCurrentProfileSettingsFileFn: () => string = () => {
+  throw new Error('getCurrentProfileSettingsFile not initialized for model routes');
+};
+
+let materializeWebProfileFn: (profile: string) => void = () => {
+  throw new Error('materializeWebProfile not initialized for model routes');
+};
+
+let AUTH_FILE: string = '';
+
+let SETTINGS_FILE: string = '';
+
+const BUILT_IN_MODELS = [
+  { id: 'claude-opus-4-6', provider: 'anthropic', name: 'Claude Opus 4.6', context: 200_000 },
+  { id: 'claude-sonnet-4-6', provider: 'anthropic', name: 'Claude Sonnet 4.6', context: 200_000 },
+  { id: 'claude-haiku-4-6', provider: 'anthropic', name: 'Claude Haiku 4.6', context: 200_000 },
+  { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 128_000 },
+  { id: 'gpt-5.2', provider: 'openai-codex', name: 'GPT-5.2', context: 128_000 },
+  { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini', context: 128_000 },
+  { id: 'gpt-4o', provider: 'openai', name: 'GPT-4o', context: 128_000 },
+  { id: 'gemini-2.5-pro', provider: 'google', name: 'Gemini 2.5 Pro', context: 1_000_000 },
+  { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000 },
+];
+
+function listModelDefinitions() {
+  try {
+    const live = getAvailableModels();
+    if (live.length > 0) {
+      return live;
+    }
+  } catch {
+    // Fall back to built-ins when the live registry cannot be materialized.
+  }
+
+  return BUILT_IN_MODELS;
+}
+
+function readSettingsObject(settingsFile: string): Record<string, unknown> {
+  if (!existsSync(settingsFile)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(settingsFile, 'utf-8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return { ...(parsed as Record<string, unknown>) };
+  } catch {
+    return {};
+  }
+}
+
+function writeSettingsObject(settingsFile: string, settings: Record<string, unknown>): void {
+  mkdirSync(dirname(settingsFile), { recursive: true });
+  writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readConversationPlanDefaults(settingsFile: string): { defaultEnabled: boolean } {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+
+  return {
+    defaultEnabled: conversationAutomation.defaultEnabled === true,
+  };
+}
+
+function writeConversationPlanDefaults(input: { defaultEnabled?: boolean }, settingsFile: string): { defaultEnabled: boolean } {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+
+  if (typeof input.defaultEnabled === 'boolean') {
+    conversationAutomation.defaultEnabled = input.defaultEnabled;
+  }
+
+  webUi.conversationAutomation = conversationAutomation;
+  settings.webUi = webUi;
+  writeSettingsObject(settingsFile, settings);
+  return readConversationPlanDefaults(settingsFile);
+}
+
+type ConversationPlanItemRecord = Record<string, unknown>;
+type ConversationPlanPresetRecord = {
+  id: string;
+  name: string;
+  updatedAt: string;
+  items: ConversationPlanItemRecord[];
+};
+
+function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const kind = value.kind === 'skill' ? 'skill' : 'instruction';
+  const id = typeof value.id === 'string' && value.id.trim().length > 0
+    ? value.id.trim()
+    : `item-${index + 1}`;
+  const label = typeof value.label === 'string' && value.label.trim().length > 0
+    ? value.label.trim()
+    : kind === 'skill'
+      ? 'Skill'
+      : 'Instruction';
+
+  if (kind === 'skill') {
+    const skillName = typeof value.skillName === 'string' ? value.skillName.trim() : '';
+    if (!skillName) {
+      return null;
+    }
+
+    const skillArgs = typeof value.skillArgs === 'string' && value.skillArgs.trim().length > 0
+      ? value.skillArgs.trim()
+      : undefined;
+
+    return {
+      id,
+      kind,
+      label,
+      skillName,
+      ...(skillArgs ? { skillArgs } : {}),
+    };
+  }
+
+  const text = typeof value.text === 'string' ? value.text.trim() : '';
+  if (!text) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    label,
+    text,
+  };
+}
+
+function readConversationPlanLibrary(settingsFile: string): { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? conversationAutomation.workflowPresets : {};
+
+  const presets = Array.isArray(workflowPresets.presets)
+    ? workflowPresets.presets
+        .map((preset, index) => {
+          if (!isRecord(preset)) {
+            return null;
+          }
+
+          const id = typeof preset.id === 'string' && preset.id.trim().length > 0
+            ? preset.id.trim()
+            : `preset-${index + 1}`;
+          const name = typeof preset.name === 'string' && preset.name.trim().length > 0
+            ? preset.name.trim()
+            : `Preset ${index + 1}`;
+          const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
+            ? preset.updatedAt.trim()
+            : new Date(0).toISOString();
+          const items = Array.isArray(preset.items)
+            ? preset.items
+                .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
+                .filter((item): item is ConversationPlanItemRecord => item !== null)
+            : [];
+
+          return { id, name, updatedAt, items };
+        })
+        .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
+    : [];
+
+  const presetIdSet = new Set(presets.map((preset) => String(preset.id)));
+  const defaultPresetIds = Array.isArray(workflowPresets.defaultPresetIds)
+    ? workflowPresets.defaultPresetIds
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim())
+        .filter((value, index, list) => list.indexOf(value) === index)
+        .filter((value) => presetIdSet.has(value))
+    : [];
+
+  return { presets, defaultPresetIds };
+}
+
+function writeConversationPlanLibrary(
+  input: { presets?: unknown; defaultPresetIds?: unknown },
+  settingsFile: string,
+): { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? { ...conversationAutomation.workflowPresets } : {};
+
+  if (input.presets !== undefined) {
+    workflowPresets.presets = Array.isArray(input.presets)
+      ? input.presets
+          .map((preset, index) => {
+            if (!isRecord(preset)) {
+              return null;
+            }
+
+            const id = typeof preset.id === 'string' && preset.id.trim().length > 0
+              ? preset.id.trim()
+              : `preset-${index + 1}`;
+            const name = typeof preset.name === 'string' && preset.name.trim().length > 0
+              ? preset.name.trim()
+              : `Preset ${index + 1}`;
+            const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
+              ? preset.updatedAt.trim()
+              : new Date().toISOString();
+            const items = Array.isArray(preset.items)
+              ? preset.items
+                  .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
+                  .filter((item): item is ConversationPlanItemRecord => item !== null)
+              : [];
+
+            return { id, name, updatedAt, items };
+          })
+          .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
+      : [];
+  }
+
+  if (input.defaultPresetIds !== undefined) {
+    const presetIdSet = new Set(
+      Array.isArray(workflowPresets.presets)
+        ? workflowPresets.presets
+            .filter((preset): preset is ConversationPlanPresetRecord => isRecord(preset) && typeof preset.id === 'string' && typeof preset.name === 'string' && typeof preset.updatedAt === 'string' && Array.isArray(preset.items))
+            .map((preset) => preset.id)
+        : [],
+    );
+    workflowPresets.defaultPresetIds = Array.isArray(input.defaultPresetIds)
+      ? input.defaultPresetIds
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .map((value) => value.trim())
+          .filter((value, index, list) => list.indexOf(value) === index)
+          .filter((value) => presetIdSet.has(value))
+      : [];
+  }
+
+  conversationAutomation.workflowPresets = workflowPresets;
+  webUi.conversationAutomation = conversationAutomation;
+  settings.webUi = webUi;
+  writeSettingsObject(settingsFile, settings);
+  return readConversationPlanLibrary(settingsFile);
+}
+
+function readConversationPlansWorkspace(settingsFile: string): { defaultEnabled: boolean; presetLibrary: { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } } {
+  return {
+    ...readConversationPlanDefaults(settingsFile),
+    presetLibrary: readConversationPlanLibrary(settingsFile),
+  };
+}
+
+export function setModelRoutesGetters(
+  getCurrentProfile: () => string,
+  getCurrentProfileSettingsFile: () => string,
+  materializeWebProfile: (profile: string) => void,
+  authFile: string,
+  settingsFile: string
+): void {
+  getCurrentProfileFn = getCurrentProfile;
+  getCurrentProfileSettingsFileFn = getCurrentProfileSettingsFile;
+  materializeWebProfileFn = materializeWebProfile;
+  AUTH_FILE = authFile;
+  SETTINGS_FILE = settingsFile;
+}
+
+/**
+ * Register model routes on the given router.
+ */
+export function registerModelRoutes(router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>): void {
+  // ── Models ────────────────────────────────────────────────────────────────
+
+  router.get('/api/models', (_req, res) => {
+    try {
+      const models = listModelDefinitions();
+      const saved = normalizeSavedModelPreferences(SETTINGS_FILE, models);
+      const modelIds = new Set(models.map((model) => model.id));
+      const currentModel = (saved.currentModel && modelIds.has(saved.currentModel))
+        ? saved.currentModel
+        : (models[0]?.id || '');
+      res.json({
+        currentModel,
+        currentThinkingLevel: saved.currentThinkingLevel,
+        models,
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/models/current', (req, res) => {
+    try {
+      const { model, thinkingLevel } = req.body as { model?: string; thinkingLevel?: string };
+      if (typeof model !== 'string' && typeof thinkingLevel !== 'string') {
+        res.status(400).json({ error: 'model or thinkingLevel required' });
+        return;
+      }
+
+      const models = listModelDefinitions();
+      persistSettingsWrite((settingsFile) => {
+        writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, models);
+      }, {
+        localSettingsFile: getCurrentProfileSettingsFileFn(),
+        runtimeSettingsFile: SETTINGS_FILE,
+      });
+
+      materializeWebProfileFn(getCurrentProfileFn());
+
+      res.json({ ok: true });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/default-cwd', (_req, res) => {
+    try {
+      res.json(readSavedDefaultCwdPreferences(SETTINGS_FILE, process.cwd()));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/default-cwd', (req, res) => {
+    try {
+      const { cwd } = req.body as { cwd?: string | null };
+      if (cwd !== undefined && cwd !== null && typeof cwd !== 'string') {
+        res.status(400).json({ error: 'cwd must be a string or null' });
+        return;
+      }
+
+      const state = persistSettingsWrite((settingsFile) => writeSavedDefaultCwdPreference(
+        { cwd },
+        settingsFile,
+        { baseDir: process.cwd(), validate: true },
+      ), {
+        localSettingsFile: getCurrentProfileSettingsFileFn(),
+        runtimeSettingsFile: SETTINGS_FILE,
+      });
+
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(state);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('required') || message.includes('Directory does not exist') || message.includes('Not a directory')
+        ? 400
+        : 500;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  router.get('/api/conversation-plans/defaults', (_req, res) => {
+    try {
+      res.json(readConversationPlanDefaults(SETTINGS_FILE));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.patch('/api/conversation-plans/defaults', (req, res) => {
+    try {
+      const { defaultEnabled } = req.body as { defaultEnabled?: boolean };
+      if (typeof defaultEnabled !== 'boolean') {
+        res.status(400).json({ error: 'defaultEnabled required' });
+        return;
+      }
+
+      const state = persistSettingsWrite(
+        (settingsFile) => writeConversationPlanDefaults({ defaultEnabled }, settingsFile),
+        {
+          localSettingsFile: getCurrentProfileSettingsFileFn(),
+          runtimeSettingsFile: SETTINGS_FILE,
+        },
+      );
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(state);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.get('/api/conversation-plans/library', (_req, res) => {
+    try {
+      res.json(readConversationPlanLibrary(SETTINGS_FILE));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.patch('/api/conversation-plans/library', (req, res) => {
+    try {
+      const state = persistSettingsWrite(
+        (settingsFile) => writeConversationPlanLibrary(req.body as { presets?: unknown; defaultPresetIds?: unknown }, settingsFile),
+        {
+          localSettingsFile: getCurrentProfileSettingsFileFn(),
+          runtimeSettingsFile: SETTINGS_FILE,
+        },
+      );
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(state);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.get('/api/conversation-plans/workspace', (_req, res) => {
+    try {
+      res.json(readConversationPlansWorkspace(SETTINGS_FILE));
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  // ── Model Providers ────────────────────────────────────────────────────────
+
+  router.get('/api/model-providers', (_req, res) => {
+    try {
+      res.json(readModelProvidersState(getCurrentProfileFn()));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/model-providers/providers', (req, res) => {
+    try {
+      const {
+        provider,
+        baseUrl,
+        api,
+        apiKey,
+        authHeader,
+        headers,
+        compat,
+        modelOverrides,
+      } = req.body as {
+        provider?: string;
+        baseUrl?: string;
+        api?: string;
+        apiKey?: string;
+        authHeader?: boolean;
+        headers?: Record<string, string>;
+        compat?: Record<string, unknown>;
+        modelOverrides?: Record<string, unknown>;
+      };
+
+      if (typeof provider !== 'string' || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      const state = upsertModelProvider(getCurrentProfileFn(), provider, {
+        baseUrl,
+        api: api as Parameters<typeof upsertModelProvider>[2]['api'],
+        apiKey,
+        authHeader,
+        headers,
+        compat,
+        modelOverrides,
+      });
+      materializeWebProfileFn(getCurrentProfileFn());
+      refreshAllLiveSessionModelRegistries();
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.delete('/api/model-providers/providers/:provider', (req, res) => {
+    try {
+      const { provider } = req.params;
+      if (!provider || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      const result = removeModelProvider(getCurrentProfileFn(), provider);
+      materializeWebProfileFn(getCurrentProfileFn());
+      refreshAllLiveSessionModelRegistries();
+      res.json(result.state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/model-providers/providers/:provider/models', (req, res) => {
+    try {
+      const { provider } = req.params;
+      const {
+        modelId,
+        name,
+        api,
+        baseUrl,
+        reasoning,
+        input,
+        contextWindow,
+        maxTokens,
+        headers,
+        cost,
+        compat,
+      } = req.body as {
+        modelId?: string;
+        name?: string;
+        api?: string;
+        baseUrl?: string;
+        reasoning?: boolean;
+        input?: Array<'text' | 'image'>;
+        contextWindow?: number;
+        maxTokens?: number;
+        headers?: Record<string, string>;
+        cost?: {
+          input?: number;
+          output?: number;
+          cacheRead?: number;
+          cacheWrite?: number;
+        };
+        compat?: Record<string, unknown>;
+      };
+
+      if (!provider || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      if (typeof modelId !== 'string' || modelId.trim().length === 0) {
+        res.status(400).json({ error: 'modelId required' });
+        return;
+      }
+
+      const state = upsertModelProviderModel(getCurrentProfileFn(), provider, modelId, {
+        name,
+        api: api as Parameters<typeof upsertModelProviderModel>[3]['api'],
+        baseUrl,
+        reasoning,
+        input,
+        contextWindow,
+        maxTokens,
+        headers,
+        cost,
+        compat,
+      });
+      materializeWebProfileFn(getCurrentProfileFn());
+      refreshAllLiveSessionModelRegistries();
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.delete('/api/model-providers/providers/:provider/models/:modelId', (req, res) => {
+    try {
+      const { provider, modelId } = req.params;
+      if (!provider || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      if (!modelId || modelId.trim().length === 0) {
+        res.status(400).json({ error: 'modelId required' });
+        return;
+      }
+
+      const result = removeModelProviderModel(getCurrentProfileFn(), provider, modelId);
+      materializeWebProfileFn(getCurrentProfileFn());
+      refreshAllLiveSessionModelRegistries();
+      res.json(result.state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // ── Provider Auth ─────────────────────────────────────────────────────────
+
+  router.get('/api/provider-auth', (_req, res) => {
+    try {
+      res.json(readProviderAuthState(AUTH_FILE));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/provider-auth/openai-codex/usage', async (_req, res) => {
+    try {
+      res.json(await readCodexPlanUsage(AUTH_FILE));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({
+        available: true,
+        planType: null,
+        fiveHour: null,
+        weekly: null,
+        credits: null,
+        updatedAt: null,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  router.patch('/api/provider-auth/:provider/api-key', (req, res) => {
+    try {
+      const { provider } = req.params;
+      const { apiKey } = req.body as { apiKey?: string };
+
+      if (!provider || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+        res.status(400).json({ error: 'apiKey required' });
+        return;
+      }
+
+      const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
+      reloadAllLiveSessionAuth();
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.delete('/api/provider-auth/:provider', (req, res) => {
+    try {
+      const { provider } = req.params;
+      if (!provider || provider.trim().length === 0) {
+        res.status(400).json({ error: 'provider required' });
+        return;
+      }
+
+      const state = removeProviderCredential(AUTH_FILE, provider);
+      reloadAllLiveSessionAuth();
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/provider-auth/:provider/oauth/start', (req, res) => {
+    try {
+      const { provider } = req.params;
+      const { redirectPort } = req.body as { redirectPort?: number };
+      const state = startProviderOAuthLogin(AUTH_FILE, provider);
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/provider-auth/oauth/:loginId', (req, res) => {
+    try {
+      res.json(getProviderOAuthLoginState(req.params.loginId));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/provider-auth/oauth/:loginId/events', (req, res) => {
+    try {
+      const loginId = req.params.loginId;
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+
+      const unsubscribe = subscribeProviderOAuthLogin(loginId, (login: { status: string }) => {
+        res.write(`data: ${JSON.stringify(login)}\n\n`);
+        if (login.status === 'completed' || login.status === 'failed') {
+          clearTimeout(timeoutId);
+          unsubscribe();
+          res.end();
+        }
+      });
+
+      // Timeout after 10 minutes
+      const timeoutId = setTimeout(() => {
+        unsubscribe();
+        res.end();
+      }, 10 * 60 * 1000);
+
+      req.on('close', () => {
+        unsubscribe();
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
+    try {
+      const { loginId } = req.params;
+      const { input } = req.body as { input?: string };
+      const state = submitProviderOAuthLoginInput(loginId, input ?? '');
+      res.json(state);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/provider-auth/oauth/:loginId/cancel', (req, res) => {
+    try {
+      const { loginId } = req.params;
+
+      if (!loginId || loginId.trim().length === 0) {
+        res.status(400).json({ error: 'loginId required' });
+        return;
+      }
+
+      const login = cancelProviderOAuthLogin(req.params.loginId);
+      res.json(login);
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+}
+
+export function registerCompanionModelRoutes(router: Pick<Express, 'get'>): void {
+  router.get('/api/models', (_req, res) => {
+    try {
+      const models = listModelDefinitions();
+      const saved = normalizeSavedModelPreferences(SETTINGS_FILE, models);
+      const modelIds = new Set(models.map((m) => m.id));
+      const currentModel = (saved.currentModel && modelIds.has(saved.currentModel)) ? saved.currentModel : (models[0]?.id || '');
+      res.json({
+        currentModel,
+        currentThinkingLevel: saved.currentThinkingLevel,
+        models,
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+}

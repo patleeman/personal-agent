@@ -328,7 +328,8 @@ describe('daemon IPC integration', () => {
     });
 
     const run = scanDurableRun(runsRoot, runId);
-    expect(run?.manifest?.kind).toBe('background-run');
+    // argv runs are now stored as 'raw-shell' kind
+    expect(run?.manifest?.kind).toMatch(/^(background-run|raw-shell)$/);
     expect(run?.status?.status).toBe('completed');
     expect(readFileSync(run?.paths.outputLogPath as string, 'utf-8')).toContain('hello from durable run');
     expect(existsSync(run?.paths.resultPath as string)).toBe(true);

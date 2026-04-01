@@ -61,6 +61,7 @@ Those four pages should answer most agent questions quickly.
 - [Alerts and Reminders](./alerts.md)
 - [Inbox and Activity](./inbox.md)
 - [Daemon and Background Automation](./daemon.md)
+- [Web Server Route Modules](./web-server-routing.md)
 - [Sync Guide (`pa sync`)](./sync.md)
 - [Configuration](./configuration.md)
 - [Troubleshooting](./troubleshooting.md)
