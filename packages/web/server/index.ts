@@ -1,13 +1,11 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import express, { type Request, type Response } from 'express';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './conversations/sessions.js';
-import { invalidateAppTopics, publishAppEvent, startAppEventMonitor } from './shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from './shared/appEvents.js';
 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversations/conversationCwd.js';
 import { pickFolder } from './workspace/folderPicker.js';
@@ -36,7 +34,6 @@ import {
   uninstallDaemonServiceAndReadState,
 } from './automation/daemon.js';
 import { readWebUiConfig } from './ui/webUi.js';
-import { shouldServeCompanionIndex } from './ui/companionSpaIndex.js';
 import { buildContentDispositionHeader } from './shared/httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './ui/defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './models/modelPreferences.js';
@@ -57,7 +54,6 @@ import {
   startProviderOAuthLogin,
   submitProviderOAuthLoginInput,
   subscribeProviderOAuthLogin,
-  subscribeProviderOAuthLogins,
 } from './models/providerAuth.js';
 import { readCodexPlanUsage } from './models/codexUsage.js';
 import {
@@ -66,26 +62,26 @@ import {
   resolveConversationModelPreferenceState,
 } from './conversations/conversationModelPreferences.js';
 
-import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './middleware/index.js';
+import { logError, logWarn, installProcessLogging } from './middleware/index.js';
 import {
-  clearMemoryBrowserCaches,
   ensureMemoryDocsDir,
   listMemoryDocs,
   listSkillsForProfile,
   type MemoryDocItem,
   warmMemoryBrowserCaches,
 } from './knowledge/memoryDocs.js';
+import { registerServerRoutes } from './routes/index.js';
 import {
-  readCompanionSession,
-} from './ui/companionAuth.js';
+  createServerApps,
+  mountStaticServerApps,
+  startBootstrapMonitors,
+  startConversationRecovery,
+  startDeferredResumeLoop,
+  startServerListeners,
+} from './app/bootstrap.js';
+import { createProfileState } from './app/profileState.js';
+import { createServerRouteContext } from './app/routeContext.js';
 import {
-  applyWebSecurityHeaders,
-  enforceSameOriginUnsafeRequests,
-} from './middleware/index.js';
-import { registerServerRoutes, type ServerRouteContext } from './routes/index.js';
-import {
-  createServiceAttentionMonitor,
-  suppressMonitoredServiceAttention,
   writeInternalAttentionEntry,
 } from './shared/internalAttention.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './ui/webUiPreferences.js';
@@ -93,9 +89,6 @@ import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './ui/settin
 import { draftWorkspaceCommitMessage } from './workspace/workspaceCommitDraft.js';
 import {
   getProfileConfigFilePath,
-  readSavedProfilePreferences,
-  resolveActiveProfile,
-  writeSavedProfilePreferences,
 } from './ui/profilePreferences.js';
 import { syncDaemonTaskScopeToProfile } from './automation/daemonProfileSync.js';
 import {
@@ -107,17 +100,6 @@ import {
   validateScheduledTaskDefinition,
   type TaskRuntimeEntry,
 } from './automation/scheduledTasks.js';
-import { createProjectAgentExtension } from './extensions/projectAgentExtension.js';
-import { createArtifactAgentExtension } from './extensions/artifactAgentExtension.js';
-import { createDeferredResumeAgentExtension } from './extensions/deferredResumeAgentExtension.js';
-import { createReminderAgentExtension } from './extensions/reminderAgentExtension.js';
-import { createScheduledTaskAgentExtension } from './extensions/scheduledTaskAgentExtension.js';
-import { createActivityAgentExtension } from './extensions/activityAgentExtension.js';
-
-import { createAskUserQuestionAgentExtension } from './extensions/askUserQuestionAgentExtension.js';
-import { createRunAgentExtension } from './extensions/runAgentExtension.js';
-import { createNoteAgentExtension } from './extensions/noteAgentExtension.js';
-import { createNodeAgentExtension } from './extensions/nodeAgentExtension.js';
 import { ensureDaemonAvailable } from './automation/daemonToolUtils.js';
 import {
   saveCuratedDistilledConversationMemory,
@@ -199,14 +181,11 @@ import {
   syncRemoteConversationMirror,
   type RemoteConversationMirrorSyncTelemetry,
 } from './conversations/remoteLiveSessions.js';
-import { recoverDurableLiveConversations } from './conversations/conversationRecovery.js';
-
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversations/conversationRuns.js';
 import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './automation/durableRuns.js';
 import { getDurableRunAttentionSignature } from './automation/durableRunAttention.js';
 import {
   buildConversationExecutionState,
-  buildExecutionTargetsState,
   buildRemoteExecutionTranscriptResponse,
   importRemoteExecutionRun,
   readRemoteExecutionRunConversationId,
@@ -251,13 +230,11 @@ import {
   listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
-  inspectCliBinary,
   inspectMcpServer,
   inspectMcpTool,
   listProfileActivityEntries,
   listAllProjectIds,
   listDeferredResumeRecords,
-  listUnifiedSkillNodeDirs,
   loadDeferredResumeState,
   loadProfileActivityReadState,
   markConversationAttentionRead,
@@ -285,11 +262,7 @@ import {
 } from '@personal-agent/core';
 import {
   installPackageSource,
-  listProfiles,
-  materializeProfileToAgentDir,
   readPackageSourceTargetState,
-  resolveProfileSettingsFilePath,
-  resolveResourceProfile,
 } from '@personal-agent/resources';
 import {
   completeDeferredResumeConversationRun,
@@ -377,6 +350,7 @@ const TASK_STATE_FILE = getScheduledTaskStateFilePath();
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
+const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 const CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
 const LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
 const CONVERSATION_NODE_DISTILL_BATCH_RECOVERY_RUN_SOURCE_TYPE = 'conversation-node-distill-recovery-batch';
@@ -385,10 +359,6 @@ const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running'
 function isConversationNodeDistillRunSourceType(value: string | undefined): boolean {
   return value === CONVERSATION_NODE_DISTILL_RUN_SOURCE_TYPE
     || value === LEGACY_CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE;
-}
-
-function isLiveSession(sessionId: string): boolean {
-  return isLocalLive(sessionId) || isRemoteLiveSession(sessionId);
 }
 
 function listAllLiveSessions() {
@@ -412,67 +382,6 @@ function publishConversationSessionMetaChanged(...conversationIds: Array<string 
   }
 }
 
-function subscribeLiveSession(
-  sessionId: string,
-  listener: (event: unknown) => void,
-  options?: {
-    tailBlocks?: number;
-    surface?: {
-      surfaceId: string;
-      surfaceType: 'desktop_web' | 'mobile_web';
-    };
-  },
-): (() => void) | null {
-  return subscribeLocal(sessionId, listener, options)
-    ?? subscribeRemoteLiveSession(sessionId, listener, options ? { tailBlocks: options.tailBlocks } : undefined);
-}
-
-async function abortLiveSession(sessionId: string): Promise<void> {
-  if (isRemoteLiveSession(sessionId)) {
-    await abortRemoteLiveSession(sessionId);
-    return;
-  }
-
-  await abortLocalSession(sessionId);
-}
-
-function readRequestSurfaceId(body: unknown): string | undefined {
-  if (!body || typeof body !== 'object') {
-    return undefined;
-  }
-
-  const value = (body as { surfaceId?: unknown }).surfaceId;
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-function ensureRequestControlsLocalLiveConversation(conversationId: string, body: unknown): string | undefined {
-  const surfaceId = readRequestSurfaceId(body);
-  if (!isLocalLive(conversationId)) {
-    return surfaceId;
-  }
-
-  if (!surfaceId) {
-    throw new Error('surfaceId is required for local live conversation control.');
-  }
-
-  ensureSessionSurfaceCanControl(conversationId, surfaceId);
-  return surfaceId;
-}
-
-function writeLiveConversationControlError(res: express.Response, error: unknown): boolean {
-  if (error instanceof LiveSessionControlError) {
-    res.status(409).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof Error && error.message === 'surfaceId is required for local live conversation control.') {
-    res.status(400).json({ error: error.message });
-    return true;
-  }
-
-  return false;
-}
-
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
@@ -482,59 +391,6 @@ export function getDefaultWebCwd(): string {
 }
 
 installProcessLogging();
-
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
-
-function listAvailableProfiles(): string[] {
-  return listProfiles({
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-}
-
-export function resolveRequestedProfileFromQuery(
-  req: express.Request,
-  options: { allowAll?: boolean } = {},
-): string | 'all' {
-  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string'
-    ? req.query[VIEW_PROFILE_QUERY_PARAM].trim()
-    : '';
-
-  if (!requestedProfile) {
-    return getCurrentProfile();
-  }
-
-  if (options.allowAll && requestedProfile === 'all') {
-    return 'all';
-  }
-
-  if (!listAvailableProfiles().includes(requestedProfile)) {
-    throw new Error(`Unknown profile: ${requestedProfile}`);
-  }
-
-  return requestedProfile;
-}
-
-function applyProfileEnvironment(profile: string): void {
-  process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
-  process.env.PERSONAL_AGENT_PROFILE = profile;
-  process.env.PERSONAL_AGENT_REPO_ROOT = REPO_ROOT;
-}
-
-function materializeWebProfile(profile: string): void {
-  applyProfileEnvironment(profile);
-  const resolved = resolveResourceProfile(profile, {
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-  materializeProfileToAgentDir(resolved, AGENT_DIR);
-}
-
-let currentProfile = resolveActiveProfile({
-  explicitProfile: process.env.PERSONAL_AGENT_ACTIVE_PROFILE,
-  savedProfile: readSavedProfilePreferences(PROFILE_CONFIG_FILE).defaultProfile,
-  availableProfiles: listAvailableProfiles(),
-});
 
 async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
   try {
@@ -574,28 +430,30 @@ async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
   }
 }
 
-try {
+const profileState = createProfileState({
+  repoRoot: REPO_ROOT,
+  agentDir: AGENT_DIR,
+  profileConfigFile: PROFILE_CONFIG_FILE,
+  logger: {
+    warn: (message, fields) => logWarn(message, fields),
+  },
+  onProfileChanged: syncDaemonTaskScopeForProfile,
+});
 
-  materializeWebProfile(currentProfile);
-} catch (error) {
-  logWarn('failed to materialize initial profile', {
-    profile: currentProfile,
-    message: (error as Error).message,
-  });
-}
+const {
+  getCurrentProfile,
+  setCurrentProfile,
+  listAvailableProfiles,
+  materializeWebProfile,
+  getCurrentProfileSettingsFile,
+  buildLiveSessionExtensionFactories,
+  buildLiveSessionResourceOptions,
+  withTemporaryProfileAgentDir,
+} = profileState;
 
-void syncDaemonTaskScopeForProfile(currentProfile);
+export { buildLiveSessionExtensionFactories, buildLiveSessionResourceOptions };
 
-function getCurrentProfile(): string {
-  return currentProfile;
-}
-
-function getCurrentProfileSettingsFile(): string {
-  return resolveProfileSettingsFilePath(getCurrentProfile(), {
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-}
+void syncDaemonTaskScopeForProfile(getCurrentProfile());
 
 function readNodeLinksForProfile(kind: NodeLinkKind, id: string, profile = getCurrentProfile()): NodeLinks {
   return readNodeLinks({
@@ -615,95 +473,6 @@ function listProjectsForCurrentProfile() {
 }
 
 type MemoryWorkItem = ConversationMemoryWorkItem;
-
-async function setCurrentProfile(profile: string): Promise<string> {
-  const availableProfiles = listAvailableProfiles();
-  if (!availableProfiles.includes(profile)) {
-    throw new Error(`Unknown profile: ${profile}`);
-  }
-
-  if (profile === currentProfile) {
-    return currentProfile;
-  }
-
-  materializeWebProfile(profile);
-  currentProfile = profile;
-  writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
-  clearMemoryBrowserCaches();
-  warmMemoryBrowserCaches(profile);
-  await syncDaemonTaskScopeForProfile(profile);
-  invalidateAppTopics(
-    'activity',
-    'alerts',
-    'projects',
-    'sessions',
-    'tasks',
-    'runs',
-    'daemon',
-    'sync',
-    'webUi',
-    'executionTargets',
-  );
-  return currentProfile;
-}
-
-export function buildLiveSessionExtensionFactories() {
-  return [
-    createProjectAgentExtension({
-      repoRoot: REPO_ROOT,
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
-    createScheduledTaskAgentExtension({
-      getCurrentProfile,
-    }),
-    createActivityAgentExtension({
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
-    createAskUserQuestionAgentExtension(),
-    createRunAgentExtension({
-      getCurrentProfile,
-      repoRoot: REPO_ROOT,
-      profilesRoot: getProfilesRoot(),
-    }),
-    createNoteAgentExtension(),
-    createNodeAgentExtension(),
-    createArtifactAgentExtension({
-      stateRoot: getStateRoot(),
-      getCurrentProfile,
-    }),
-    createDeferredResumeAgentExtension(),
-    createReminderAgentExtension(),
-  ];
-}
-
-export function buildLiveSessionResourceOptions(profile = getCurrentProfile()) {
-  const resolved = resolveResourceProfile(profile, {
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-
-  return {
-    additionalExtensionPaths: resolved.extensionEntries,
-    additionalSkillPaths: [...new Set([...listUnifiedSkillNodeDirs(profile, { profilesRoot: getProfilesRoot() }), ...resolved.skillDirs])],
-    additionalPromptTemplatePaths: resolved.promptEntries,
-    additionalThemePaths: resolved.themeEntries,
-  };
-}
-
-function withTemporaryProfileAgentDir<T>(profile: string, run: (agentDir: string) => Promise<T>): Promise<T> {
-  const resolved = resolveResourceProfile(profile, {
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-  });
-  const agentDir = mkdtempSync(join(tmpdir(), 'pa-web-profile-inspect-'));
-  materializeProfileToAgentDir(resolved, agentDir);
-
-  return run(agentDir).finally(() => {
-    rmSync(agentDir, { recursive: true, force: true });
-  });
-}
 
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
@@ -854,40 +623,6 @@ function startInboxCullLoop(): void {
       logWarn(`Inbox cull failed: ${(error as Error).message}`);
     });
   }, INBOX_CULL_INTERVAL_MS);
-}
-
-interface ServerTimingMetric {
-  name: string;
-  durationMs: number;
-  description?: string;
-}
-
-function formatServerTimingMetric(metric: ServerTimingMetric): string {
-  const dur = Number.isFinite(metric.durationMs) ? Math.max(0, metric.durationMs) : 0;
-  const parts = [`${metric.name};dur=${dur.toFixed(1)}`];
-  if (metric.description) {
-    parts.push(`desc="${metric.description.replace(/"/g, '')}"`);
-  }
-  return parts.join(';');
-}
-
-function setServerTimingHeaders(res: express.Response, metrics: ServerTimingMetric[], meta?: Record<string, unknown>): void {
-  if (metrics.length > 0) {
-    res.setHeader('Server-Timing', metrics.map(formatServerTimingMetric).join(', '));
-  }
-
-  if (meta && Object.keys(meta).length > 0) {
-    res.setHeader('X-PA-Perf', JSON.stringify(meta));
-  }
-}
-
-function logSlowConversationPerf(label: string, fields: Record<string, unknown>): void {
-  const durationMs = typeof fields.durationMs === 'number' ? fields.durationMs : 0;
-  if (durationMs < 150) {
-    return;
-  }
-
-  logInfo(label, fields);
 }
 
 type ActivityEntryWithConversationLinks = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
@@ -1133,6 +868,10 @@ function readOptionalRecordString(record: Record<string, unknown>, key: string):
 function readOptionalRecordBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
   const value = record[key];
   return typeof value === 'boolean' ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function readConversationMemoryDistillRunInputFromRun(
@@ -2800,81 +2539,20 @@ async function flushLiveDeferredResumes(): Promise<void> {
   }
 }
 
-function startDeferredResumeLoop(): void {
-  void flushLiveDeferredResumes().catch((error) => {
-    logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
-  });
-
-  setInterval(() => {
-    void flushLiveDeferredResumes().catch((error) => {
-      logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
-    });
-  }, DEFERRED_RESUME_POLL_MS);
-}
-
-function startConversationRecovery(): void {
-  void recoverDurableLiveConversations({
-    isLive: isLocalLive,
-    resumeSession: resumeLocalSession,
-    queuePromptContext,
-    promptSession: promptLocalSession,
-    loaderOptions: {
-      ...buildLiveSessionResourceOptions(),
-      extensionFactories: buildLiveSessionExtensionFactories(),
-    },
-    logger: {
-      info: (message) => logInfo(message),
-      warn: (message) => logWarn(message),
-    },
-  }).then(async (result) => {
-    if (result.recovered.length > 0) {
-      logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
-      await flushLiveDeferredResumes();
-    }
-  }).catch((error) => {
-    logWarn(`Conversation recovery failed: ${(error as Error).message}`);
-  });
-}
-
-startDeferredResumeLoop();
-startConversationRecovery();
+startDeferredResumeLoop({
+  flushLiveDeferredResumes,
+  pollMs: DEFERRED_RESUME_POLL_MS,
+});
+startConversationRecovery({
+  flushLiveDeferredResumes,
+  buildLiveSessionResourceOptions: () => buildLiveSessionResourceOptions(),
+  buildLiveSessionExtensionFactories,
+  isLive: isLocalLive,
+  resumeSession: resumeLocalSession,
+  queuePromptContext,
+  promptSession: promptLocalSession,
+});
 startInboxCullLoop();
-
-function listCompanionReadableMarkdownPaths(profile: string): Set<string> {
-  return new Set([
-    ...listSkillsForProfile(profile).map((entry) => normalize(entry.path)),
-    ...listMemoryDocs().map((entry) => normalize(entry.path)),
-  ]);
-}
-
-const COMPANION_SESSION_COOKIE = 'pa_companion';
-
-function writeSseHeaders(res: Response): void {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-}
-
-function readCookieValue(req: Request, cookieName: string): string {
-  const cookieHeader = req.headers.cookie;
-  if (typeof cookieHeader !== 'string' || cookieHeader.trim().length === 0) {
-    return '';
-  }
-
-  const pairs = cookieHeader.split(';');
-  for (const pair of pairs) {
-    const [rawName, ...valueParts] = pair.split('=');
-    if (rawName?.trim() !== cookieName) {
-      continue;
-    }
-
-    return decodeURIComponent(valueParts.join('=').trim());
-  }
-
-  return '';
-}
 
 const DIST_DIR =
   process.env.PA_WEB_DIST ??
@@ -2882,76 +2560,27 @@ const DIST_DIR =
 const COMPANION_DIST_DIR = join(DIST_DIR, 'app');
 const DIST_ASSETS_DIR = join(DIST_DIR, 'assets');
 
-const app = express();
-const companionApp = express();
+const { app, companionApp } = createServerApps();
 
-for (const serverApp of [app, companionApp]) {
-  serverApp.set('etag', false);
-  serverApp.set('trust proxy', true);
-  serverApp.use(applyWebSecurityHeaders);
-  serverApp.use(express.json({ limit: '25mb' }));
-  serverApp.use(webRequestLoggingMiddleware);
-  serverApp.use(enforceSameOriginUnsafeRequests);
-}
-
-companionApp.use((req, _res, next) => {
-  if (req.url === '/app/api' || req.url.startsWith('/app/api/')) {
-    req.url = req.url.slice('/app'.length);
-  }
-  next();
-});
-
-startAppEventMonitor({
+startBootstrapMonitors({
   repoRoot: REPO_ROOT,
   sessionsDir: SESSIONS_DIR,
   taskStateFile: TASK_STATE_FILE,
   profileConfigFile: PROFILE_CONFIG_FILE,
   getCurrentProfile,
-});
-
-subscribeProviderOAuthLogins((login) => {
-  if (login.status === 'completed') {
-    reloadAllLiveSessionAuth();
-  }
-});
-
-createServiceAttentionMonitor({
-  repoRoot: REPO_ROOT,
-  stateRoot: resolveDaemonRoot(),
-  getCurrentProfile,
+  daemonRoot: resolveDaemonRoot(),
   readDaemonState,
-  logger: {
-    warn: (message, fields) => logWarn(message, fields),
-  },
-}).start();
+});
 
-// ── Route Registrations ─────────────────────────────────────────────────────
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function inspectSshBinaryState() {
-  return inspectCliBinary({ command: 'ssh', cwd: REPO_ROOT, versionArgs: ['-V'] });
-}
-
-async function readExecutionTargetsState() {
-  return buildExecutionTargetsState({
-    runs: (await listDurableRuns()).runs,
-    inspectSshBinary: inspectSshBinaryState,
-  });
-}
-
-const routeContext: ServerRouteContext = {
+const routeContext = createServerRouteContext({
+  repoRoot: REPO_ROOT,
+  settingsFile: SETTINGS_FILE,
+  authFile: AUTH_FILE,
   getCurrentProfile,
   setCurrentProfile,
   listAvailableProfiles,
-  getRepoRoot: () => REPO_ROOT,
-  getProfilesRoot,
   getCurrentProfileSettingsFile,
   materializeWebProfile,
-  getSettingsFile: () => SETTINGS_FILE,
-  getAuthFile: () => AUTH_FILE,
   getStateRoot,
   getDefaultWebCwd,
   resolveRequestedCwd,
@@ -2966,11 +2595,11 @@ const routeContext: ServerRouteContext = {
   listSkillsForCurrentProfile: () => listSkillsForProfile(getCurrentProfile()),
   listProfileAgentItems: () => [],
   withTemporaryProfileAgentDir,
-  readExecutionTargetsState,
   browseRemoteTargetDirectory,
-  getDurableRunSnapshot: async (runId, tail) => (await getDurableRunSnapshot(runId, tail)) ?? null,
+  getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   draftWorkspaceCommitMessage,
-};
+  listDurableRuns,
+});
 
 registerServerRoutes({
   app,
@@ -2978,81 +2607,29 @@ registerServerRoutes({
   context: routeContext,
 });
 
-if (existsSync(DIST_DIR)) {
-  companionApp.use('/assets', express.static(DIST_ASSETS_DIR));
-  companionApp.use('/app', express.static(COMPANION_DIST_DIR));
-  companionApp.get('/', (_req, res) => {
-    res.redirect('/app/inbox');
-  });
-  companionApp.use(express.static(COMPANION_DIST_DIR, { index: false }));
-  companionApp.get('*', (req, res, next) => {
-    if (!shouldServeCompanionIndex(req.path)) {
-      next();
-      return;
-    }
-
-    res.sendFile(join(COMPANION_DIST_DIR, 'index.html'));
-  });
-} else {
-  companionApp.get('*', (_req, res) => {
-    res.send(
-      '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">' +
-        'personal-agent companion\n\n' +
-        'SPA not built yet.\n' +
-        'Run: npm run build in packages/web\n' +
-        '</pre>',
-    );
-  });
-}
-
-// ── Static + SPA fallback ─────────────────────────────────────────────────────
-
-if (existsSync(DIST_DIR)) {
-  if (COMPANION_DISABLED) {
-    app.get('/app*', (_req, res) => {
-      res.sendFile(join(COMPANION_DIST_DIR, 'index.html'));
-    });
-  } else {
-    app.get('/app*', (req, res) => {
-      const search = typeof req.url === 'string' && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-      res.redirect(`http://${LOOPBACK_HOST}:${COMPANION_PORT}${req.path}${search}`);
-    });
-  }
-  app.use(express.static(DIST_DIR));
-  app.get('*', (_req, res) => {
-    res.sendFile(join(DIST_DIR, 'index.html'));
-  });
-} else {
-  app.get('/', (_req, res) => {
-    res.send(
-      '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">' +
-        'personal-agent web UI\n\n' +
-        'SPA not built yet.\n' +
-        'Run: npm run build in packages/web\n' +
-        '</pre>',
-    );
-  });
-}
-
-warmMemoryBrowserCaches();
-
-app.listen(PORT, LOOPBACK_HOST, () => {
-  logInfo('web ui started', {
-    url: `http://${LOOPBACK_HOST}:${PORT}`,
-    profile: getCurrentProfile(),
-    repoRoot: REPO_ROOT,
-    cwd: getDefaultWebCwd(),
-    dist: DIST_DIR,
-  });
+mountStaticServerApps({
+  app,
+  companionApp,
+  distDir: DIST_DIR,
+  companionDistDir: COMPANION_DIST_DIR,
+  distAssetsDir: DIST_ASSETS_DIR,
+  companionDisabled: COMPANION_DISABLED,
+  loopbackHost: LOOPBACK_HOST,
+  companionPort: COMPANION_PORT,
 });
 
-if (!COMPANION_DISABLED) {
-  companionApp.listen(COMPANION_PORT, LOOPBACK_HOST, () => {
-    logInfo('companion service started', {
-      url: `http://${LOOPBACK_HOST}:${COMPANION_PORT}`,
-      profile: getCurrentProfile(),
-      repoRoot: REPO_ROOT,
-      dist: COMPANION_DIST_DIR,
-    });
-  });
-}
+warmMemoryBrowserCaches(getCurrentProfile());
+
+startServerListeners({
+  app,
+  companionApp,
+  port: PORT,
+  companionPort: COMPANION_PORT,
+  loopbackHost: LOOPBACK_HOST,
+  companionDisabled: COMPANION_DISABLED,
+  getCurrentProfile,
+  getDefaultWebCwd,
+  repoRoot: REPO_ROOT,
+  distDir: DIST_DIR,
+  companionDistDir: COMPANION_DIST_DIR,
+});

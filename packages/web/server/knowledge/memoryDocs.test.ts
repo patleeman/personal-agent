@@ -8,7 +8,6 @@ import {
   createMemoryDoc,
   listMemoryDocs,
   readNoteDetail,
-  setMemoryDocsProfileGetter,
 } from './memoryDocs.js';
 
 const originalEnv = process.env;
@@ -40,7 +39,6 @@ beforeEach(() => {
     PERSONAL_AGENT_STATE_ROOT: stateRoot,
     PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', 'profiles'),
   };
-  setMemoryDocsProfileGetter(() => 'assistant');
   clearMemoryBrowserCaches();
 });
 
@@ -131,7 +129,7 @@ Reference details.
 `,
     );
 
-    const detail = readNoteDetail('memory-index');
+    const detail = readNoteDetail('memory-index', 'assistant');
 
     expect(detail.memory.id).toBe('memory-index');
     expect(detail.content).toContain('# Memory Index');

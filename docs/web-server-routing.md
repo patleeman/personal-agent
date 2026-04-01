@@ -15,27 +15,33 @@ The server root is now intentionally shallow:
 - `knowledge/` — memory docs, prompt references, node links
 - `ui/` — web UI config, companion auth, SPA helpers, web-specific preferences
 - `extensions/` — agent extension factories
+- `app/` — server bootstrap/profile/runtime wiring that should not live in route modules
 - `shared/` — shared HTTP/logging/security/event helpers
 
-Use the route module that matches the domain first, then reach into the matching domain folder for implementation code.
+Use the route module that matches the domain first, then reach into the matching domain folder for implementation code. When a background helper needs a built JS entrypoint, keep that entrypoint in its domain folder and resolve it relative to the built module instead of adding top-level re-export stubs in `server/`.
 
 ## Routing pattern
 
 Route mounting now goes through a shared `ServerRouteContext` and a single `registerServerRoutes({ app, companionApp, context })` entrypoint in `routes/`.
 
-That means `index.ts` builds the shared context once, then the route layer handles the per-domain wiring. The important split is:
+That means `index.ts` now delegates most startup wiring to `app/*`, builds the shared route context once, then the route layer handles the per-domain wiring. The important split is:
 
+- `app/profileState.ts` — active-profile lifecycle, materialization, and live-session resource wiring
+- `app/bootstrap.ts` — Express app setup, background monitors, static SPA mounting, and server listen helpers
+- `app/routeContext.ts` — shared `ServerRouteContext` builder
 - `routes/context.ts` — typed route dependency surface
 - `routes/registerAll.ts` — central route mounting order and dependency injection
 - `routes/<domain>.ts` — actual handlers for each domain
 
 This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGetters(...)` calls across `index.ts`. Route modules now take the context directly during registration rather than relying on exported setter functions.
 
+On the companion surface, the `/api/events` stream also needs to carry the operational snapshots the mobile UI depends on for Tasks and System (`tasks`, `runs`, `daemon`, `sync`, and `webUi`), not just inbox-style topics.
+
 ## Route modules worth knowing
 
 | File | Responsibility | Notes |
 | --- | --- | --- |
-| `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads |
+| `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads. The companion surface also mounts the read-only session detail/meta/tree/block routes so mobile conversation links can open transcripts directly. |
 | `routes/conversationState.ts` | conversation bootstrap, recover, execution target state, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel/import; companion surface is read-focused |
@@ -54,7 +60,7 @@ A few shared service/helper files exist to keep the route modules from becoming 
 
 - `conversations/conversationService.ts` — shared conversation snapshot/detail/bootstrap helpers used across conversation, project, run, and companion routes
 - `automation/taskService.ts` — task ID/profile lookup helpers
-- `knowledge/memoryDocs.ts` — shared note, skill, and memory document helpers
+- `knowledge/memoryDocs.ts` — shared note, skill, and memory document helpers; profile-sensitive calls now take the profile explicitly instead of relying on a module-level setter
 - `shared/*` — cross-cutting helpers for logging, security headers, SSE/cookie helpers, and app events
 
 ## When adding or moving a route
