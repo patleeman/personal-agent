@@ -68,13 +68,11 @@ import {
 
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './middleware/index.js';
 import { findCurrentProfileTask } from './automation/taskService.js';
-import { registerCompanionMemoryRoutes, registerCompanionNoteRoutes, registerCompanionModelPreferenceRoutes } from './routes/companionMemory.js';
 import {
   clearMemoryBrowserCaches,
   ensureMemoryDocsDir,
   listMemoryDocs,
   listSkillsForProfile,
-  setMemoryDocsProfileGetter,
   type MemoryDocItem,
   warmMemoryBrowserCaches,
 } from './knowledge/memoryDocs.js';
@@ -85,63 +83,7 @@ import {
   applyWebSecurityHeaders,
   enforceSameOriginUnsafeRequests,
 } from './middleware/index.js';
-import {
-  registerActivityRoutes,
-  setActivityRoutesProfileGetter,
-  registerAlertRoutes,
-  setAlertRoutesProfileGetter,
-  registerProfileRoutes,
-  setProfileRoutesGetters,
-  registerDaemonRoutes,
-  registerCompanionDaemonRoutes,
-  registerCompanionRunRoutes,
-  setRunsRoutesGetters,
-  registerConversationTitlesRoutes,
-  setConversationTitlesRoutesGetters,
-  registerConversationStateRoutes,
-  setConversationStateRoutesGetters,
-  registerExecutionTargetRoutes,
-  setExecutionTargetRoutesGetters,
-  registerRunAppRoutes,
-  setRunsAppRoutesGetters,
-  registerWorkspaceRoutes,
-  setWorkspaceRoutesGetters,
-  registerMemoryNotesRoutes,
-  setMemoryNotesProfileGetters,
-  registerFolderPickerRoutes,
-  setFolderPickerCwdGetters,
-  registerShellRoutes,
-  setShellCwdGetters,
-  registerRunsOpsRoutes,
-  setDaemonRoutesProfileGetter,
-  registerTaskRoutes, registerCompanionTaskRunRoutes,
-  setTaskRoutesProfileGetter,
-  registerModelRoutes,
-  registerCompanionModelRoutes,
-  setModelRoutesGetters,
-  registerAuthRoutes,
-  registerCompanionAuthRoutes,
-  setToolsRoutesGetters,
-  registerToolsRoutes,
-  registerSystemRoutes,
-  registerCompanionSystemRoutes,
-  setSystemRoutesGetters,
-  setWebUiRoutesGetters,
-  registerWebUiRoutes,
-  registerCompanionWebUiRoutes,
-  registerConversationRoutes,
-  registerCompanionConversationRoutes,
-  setConversationRoutesGetters,
-  registerProjectRoutes,
-  registerCompanionProjectRoutes,
-  setProjectRoutesGetters,
-  registerLiveSessionRoutes,
-  registerCompanionLiveSessionRoutes,
-  registerLiveSessionStatsRoutes,
-  setLiveSessionRoutesGetters,
-  setLiveSessionPromptHandler,
-  handleLiveSessionPrompt,
-} from './routes/index.js';
+import { registerServerRoutes, type ServerRouteContext } from './routes/index.js';
 import {
   createServiceAttentionMonitor,
   suppressMonitoredServiceAttention,
@@ -2986,173 +2928,12 @@ createServiceAttentionMonitor({
 
 // ── Route Registrations ─────────────────────────────────────────────────────
 
-setProfileRoutesGetters(getCurrentProfile, setCurrentProfile, listAvailableProfiles);
-registerProfileRoutes(app);
-
-setDaemonRoutesProfileGetter(getCurrentProfile);
-registerDaemonRoutes(app);
-
-setTaskRoutesProfileGetter(getCurrentProfile);
-registerTaskRoutes(app);
-
-setModelRoutesGetters(
-  getCurrentProfile,
-  getCurrentProfileSettingsFile,
-  materializeWebProfile,
-  AUTH_FILE,
-  SETTINGS_FILE,
-);
-registerModelRoutes(app);
-
-setToolsRoutesGetters({
-  getCurrentProfile,
-  getRepoRoot: () => REPO_ROOT,
-  getProfilesRoot,
-  buildLiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories,
-  withTemporaryProfileAgentDir,
-});
-registerToolsRoutes(app);
-
-registerAuthRoutes(app);
-registerCompanionAuthRoutes(companionApp);
-
-setSystemRoutesGetters(
-  getCurrentProfile,
-  () => REPO_ROOT,
-  listActivityForCurrentProfile,
-  listProjectsForCurrentProfile,
-  listTasksForCurrentProfile,
-);
-registerSystemRoutes(app);
-
-setWebUiRoutesGetters(
-  getCurrentProfile,
-  () => REPO_ROOT,
-  () => SETTINGS_FILE,
-  resolveDaemonRoot,
-  getDefaultWebCwd,
-  buildLiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories,
-);
-registerWebUiRoutes(app);
-
-registerCompanionWebUiRoutes(companionApp);
-registerCompanionSystemRoutes(companionApp);
-
-setProjectRoutesGetters(getCurrentProfile, listAvailableProfiles, REPO_ROOT, SETTINGS_FILE, AUTH_FILE);
-registerProjectRoutes(app);
-registerCompanionProjectRoutes(companionApp);
-
-setConversationRoutesGetters(getCurrentProfile, () => REPO_ROOT, () => readSavedWebUiPreferences(SETTINGS_FILE), flushLiveDeferredResumes);
-registerConversationRoutes(app);
-registerCompanionConversationRoutes(companionApp);
-
-setConversationStateRoutesGetters(
-  getCurrentProfile,
-  () => REPO_ROOT,
-  buildLiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories,
-  flushLiveDeferredResumes,
-);
-registerConversationStateRoutes(app);
-
-setLiveSessionRoutesGetters(
-  getCurrentProfile,
-  () => REPO_ROOT,
-  getDefaultWebCwd,
-  buildLiveSessionResourceOptions,
-  buildLiveSessionExtensionFactories,
-  flushLiveDeferredResumes,
-);
-setLiveSessionPromptHandler(handleLiveSessionPrompt);
-registerLiveSessionRoutes(app);
-registerLiveSessionStatsRoutes(app);
-registerCompanionLiveSessionRoutes(companionApp);
-
-setActivityRoutesProfileGetter(getCurrentProfile);
-registerActivityRoutes(app);
-registerActivityRoutes(companionApp);
-
-// ── Alerts ───────────────────────────────────────────────────────────────
-
-setAlertRoutesProfileGetter(getCurrentProfile);
-registerAlertRoutes(app);
-
-// ── Models ────────────────────────────────────────────────────────────────────
-
-const BUILT_IN_MODELS = [
-  // Anthropic
-  { id: 'claude-opus-4-6',    provider: 'anthropic',    name: 'Claude Opus 4.6',     context: 200_000 },
-  { id: 'claude-sonnet-4-6',  provider: 'anthropic',    name: 'Claude Sonnet 4.6',   context: 200_000 },
-  { id: 'claude-haiku-4-6',   provider: 'anthropic',    name: 'Claude Haiku 4.6',    context: 200_000 },
-  // OpenAI / Codex
-  { id: 'gpt-5.4',            provider: 'openai-codex', name: 'GPT-5.4',             context: 128_000 },
-  { id: 'gpt-5.2',            provider: 'openai-codex', name: 'GPT-5.2',             context: 128_000 },
-  { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini',  context: 128_000 },
-  { id: 'gpt-4o',             provider: 'openai',       name: 'GPT-4o',              context: 128_000 },
-  // Google
-  { id: 'gemini-2.5-pro',     provider: 'google',       name: 'Gemini 2.5 Pro',      context: 1_000_000 },
-  { id: 'gemini-3.1-pro-high',provider: 'google',       name: 'Gemini 3.1 Pro High', context: 1_000_000 },
-];
-
-function listAvailableModelDefinitions() {
-  let models = BUILT_IN_MODELS;
-
-  try {
-    const live = getAvailableModels();
-    if (live.length > 0) {
-      models = live;
-    }
-  } catch {
-    // Fall back to the built-in list when the registry is unavailable.
-  }
-
-  return models;
-}
-
-setConversationTitlesRoutesGetters(SETTINGS_FILE);
-registerConversationTitlesRoutes(app);
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function inspectSshBinaryState() {
   return inspectCliBinary({ command: 'ssh', cwd: REPO_ROOT, versionArgs: ['-V'] });
-}
-
-function normalizeExecutionTargetInput(body: unknown) {
-  if (!isRecord(body)) {
-    throw new Error('Execution target payload must be an object.');
-  }
-
-  const cwdMappings = Array.isArray(body.cwdMappings)
-    ? body.cwdMappings.flatMap((entry) => {
-        if (!isRecord(entry)) {
-          return [];
-        }
-
-        const localPrefix = typeof entry.localPrefix === 'string' ? entry.localPrefix.trim() : '';
-        const remotePrefix = typeof entry.remotePrefix === 'string' ? entry.remotePrefix.trim() : '';
-        return localPrefix && remotePrefix ? [{ localPrefix, remotePrefix }] : [];
-      })
-    : [];
-
-  const readOptional = (value: unknown) => typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-
-  return {
-    id: typeof body.id === 'string' ? body.id.trim() : '',
-    label: typeof body.label === 'string' ? body.label.trim() : '',
-    sshDestination: typeof body.sshDestination === 'string' ? body.sshDestination.trim() : '',
-    ...(readOptional(body.description) ? { description: readOptional(body.description) } : {}),
-    ...(readOptional(body.sshCommand) ? { sshCommand: readOptional(body.sshCommand) } : {}),
-    ...(readOptional(body.remotePaCommand) ? { remotePaCommand: readOptional(body.remotePaCommand) } : {}),
-    ...(readOptional(body.profile) ? { profile: readOptional(body.profile) } : {}),
-    ...(readOptional(body.defaultRemoteCwd) ? { defaultRemoteCwd: readOptional(body.defaultRemoteCwd) } : {}),
-    ...(readOptional(body.commandPrefix) ? { commandPrefix: readOptional(body.commandPrefix) } : {}),
-    cwdMappings,
-  };
 }
 
 async function readExecutionTargetsState() {
@@ -3162,41 +2943,41 @@ async function readExecutionTargetsState() {
   });
 }
 
-setExecutionTargetRoutesGetters(readExecutionTargetsState, browseRemoteTargetDirectory);
-registerExecutionTargetRoutes(app);
+const routeContext: ServerRouteContext = {
+  getCurrentProfile,
+  setCurrentProfile,
+  listAvailableProfiles,
+  getRepoRoot: () => REPO_ROOT,
+  getProfilesRoot,
+  getCurrentProfileSettingsFile,
+  materializeWebProfile,
+  getSettingsFile: () => SETTINGS_FILE,
+  getAuthFile: () => AUTH_FILE,
+  getStateRoot,
+  getDefaultWebCwd,
+  resolveRequestedCwd,
+  buildLiveSessionResourceOptions,
+  buildLiveSessionExtensionFactories,
+  flushLiveDeferredResumes,
+  getSavedWebUiPreferences: () => readSavedWebUiPreferences(SETTINGS_FILE),
+  listActivityForCurrentProfile,
+  listProjectsForCurrentProfile,
+  listTasksForCurrentProfile,
+  listMemoryDocs: () => listMemoryDocs(),
+  listSkillsForCurrentProfile: () => listSkillsForProfile(getCurrentProfile()),
+  listProfileAgentItems: () => [],
+  withTemporaryProfileAgentDir,
+  readExecutionTargetsState,
+  browseRemoteTargetDirectory,
+  getDurableRunSnapshot: async (runId, tail) => (await getDurableRunSnapshot(runId, tail)) ?? null,
+  draftWorkspaceCommitMessage,
+};
 
-setRunsAppRoutesGetters(async (runId, tail) => (await getDurableRunSnapshot(runId, tail)) ?? null);
-registerRunAppRoutes(app);
-
-setWorkspaceRoutesGetters(getDefaultWebCwd, resolveRequestedCwd, draftWorkspaceCommitMessage, AUTH_FILE);
-registerWorkspaceRoutes(app);
-
-setMemoryNotesProfileGetters(getCurrentProfile, REPO_ROOT, getDefaultWebCwd, resolveRequestedCwd, buildLiveSessionResourceOptions, buildLiveSessionExtensionFactories);
-registerMemoryNotesRoutes(app);
-
-setFolderPickerCwdGetters(getDefaultWebCwd, resolveRequestedCwd);
-registerFolderPickerRoutes(app);
-
-setShellCwdGetters(getDefaultWebCwd, resolveRequestedCwd);
-registerShellRoutes(app);
-
-registerRunsOpsRoutes(app);
-
-// ── Companion auth + restricted companion service ────────────────────────────
-registerCompanionModelRoutes(companionApp);
-
-registerAlertRoutes(companionApp);
-registerTaskRoutes(companionApp);
-
-registerCompanionTaskRunRoutes(companionApp);
-
-registerCompanionDaemonRoutes(companionApp);
-setRunsRoutesGetters(getCurrentProfile, REPO_ROOT, getDefaultWebCwd, buildLiveSessionResourceOptions, buildLiveSessionExtensionFactories);
-registerCompanionRunRoutes(companionApp);
-setMemoryDocsProfileGetter(getCurrentProfile);
-registerCompanionMemoryRoutes(companionApp);
-registerCompanionNoteRoutes(companionApp);
-registerCompanionModelPreferenceRoutes(companionApp);
+registerServerRoutes({
+  app,
+  companionApp,
+  context: routeContext,
+});
 
 if (existsSync(DIST_DIR)) {
   companionApp.use('/assets', express.static(DIST_ASSETS_DIR));

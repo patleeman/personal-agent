@@ -4,6 +4,7 @@
 
 import type { Express, Request } from 'express';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { LiveSessionResourceOptions } from './context.js';
 import { existsSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
@@ -39,7 +40,7 @@ let _getCurrentProfile: () => string = () => { throw new Error('not initialized'
 let _repoRoot: string = process.cwd();
 let _getDefaultWebCwd: () => string = () => process.cwd();
 let _resolveRequestedCwd: (requestedCwd: string | null | undefined, fallbackCwd?: string) => string | undefined = (requestedCwd, fallbackCwd) => requestedCwd?.trim() || fallbackCwd?.trim() || process.cwd();
-let _buildLiveSessionResourceOptions: (profile?: string) => Record<string, unknown> = () => ({});
+let _buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions = () => ({ additionalExtensionPaths: [], additionalSkillPaths: [], additionalPromptTemplatePaths: [], additionalThemePaths: [] });
 let _buildLiveSessionExtensionFactories: () => ExtensionFactory[] = () => [];
 
 const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
@@ -49,7 +50,7 @@ export function setMemoryNotesProfileGetters(
   repoRoot: string,
   getDefaultWebCwd: () => string,
   resolveRequestedCwd: (requestedCwd: string | null | undefined, fallbackCwd?: string) => string | undefined,
-  buildLiveSessionResourceOptions: (profile?: string) => Record<string, unknown>,
+  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
   buildLiveSessionExtensionFactories: () => ExtensionFactory[],
 ): void {
   _getCurrentProfile = getCurrentProfile;

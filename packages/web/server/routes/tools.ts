@@ -2,6 +2,7 @@ import type { Express, Request, Response } from 'express';
 import { installPackageSource, listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
 import { inspectCliBinary, inspectMcpServer, inspectMcpTool, readMcpConfig } from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
+import type { LiveSessionResourceOptions } from './context.js';
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
 import { logError } from '../middleware/index.js';
 
@@ -17,7 +18,7 @@ let getProfilesRootFn: () => string = () => {
   throw new Error('getProfilesRoot not initialized for tools routes');
 };
 
-let buildLiveSessionResourceOptionsFn: (profile: string) => Record<string, unknown> = () => {
+let buildLiveSessionResourceOptionsFn: (profile: string) => LiveSessionResourceOptions = () => {
   throw new Error('buildLiveSessionResourceOptions not initialized for tools routes');
 };
 
@@ -35,7 +36,7 @@ export function setToolsRoutesGetters(params: {
   getCurrentProfile: () => string;
   getRepoRoot: () => string;
   getProfilesRoot: () => string;
-  buildLiveSessionResourceOptions: (profile: string) => Record<string, unknown>;
+  buildLiveSessionResourceOptions: (profile: string) => LiveSessionResourceOptions;
   buildLiveSessionExtensionFactories: () => ExtensionFactory[];
   withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
 }): void {

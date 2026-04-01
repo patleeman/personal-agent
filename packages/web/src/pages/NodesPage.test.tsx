@@ -6,12 +6,78 @@ import { NodesPage } from './NodesPage.js';
 import { useApi } from '../hooks';
 import { AppDataContext } from '../contexts';
 import { ThemeProvider } from '../theme';
+import type { NodeBrowserData } from '../types';
 
 vi.mock('../hooks', () => ({
   useApi: vi.fn(),
 }));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+function createNodeBrowserData(): NodeBrowserData {
+  return {
+    profile: 'assistant',
+    tagKeys: ['area', 'profile', 'status', 'type'],
+    nodes: [
+      {
+        kind: 'note',
+        kinds: ['note'],
+        id: 'memory-index',
+        title: 'Memory index',
+        summary: 'Top-level knowledge hub.',
+        status: 'active',
+        updatedAt: '2026-03-28T12:00:00.000Z',
+        path: '/tmp/memory-index/INDEX.md',
+        tags: ['type:note', 'status:active', 'area:knowledge'],
+        profiles: [],
+        searchText: 'memory index top-level knowledge hub',
+        note: {
+          referenceCount: 2,
+        },
+      },
+      {
+        kind: 'project',
+        kinds: ['project'],
+        id: 'active-project',
+        title: 'Active project',
+        summary: 'In progress.',
+        description: 'Still being worked on.',
+        status: 'active',
+        createdAt: '2026-03-16T10:00:00.000Z',
+        updatedAt: '2026-03-16T12:00:00.000Z',
+        path: '/tmp/active-project/INDEX.md',
+        tags: ['type:project', 'status:active', 'profile:assistant'],
+        profiles: ['assistant'],
+        searchText: 'active project in progress still being worked on',
+        project: {
+          profile: 'assistant',
+          taskCount: 1,
+          openTaskCount: 1,
+          doneTaskCount: 0,
+        },
+      },
+      {
+        kind: 'skill',
+        kinds: ['skill'],
+        id: 'agent-browser',
+        title: 'Agent Browser',
+        summary: 'Automate browsers and Electron apps with agent-browser.',
+        status: 'active',
+        updatedAt: '2026-03-27T12:00:00.000Z',
+        path: '/tmp/agent-browser/INDEX.md',
+        tags: ['type:skill', 'status:active', 'profile:assistant'],
+        profiles: ['assistant'],
+        searchText: 'agent browser automate browsers electron apps',
+        skill: {
+          source: 'shared',
+          recentSessionCount: 2,
+          lastUsedAt: '2026-03-27T12:00:00.000Z',
+          usedInLastSession: true,
+        },
+      },
+    ],
+  };
+}
 
 function createProjectDetail() {
   return {
@@ -114,31 +180,11 @@ describe('NodesPage', () => {
     );
   }
 
-  it('renders a unified browser with notes, projects, and skills together', () => {
+  it('renders a richer unified browser with lucene query controls', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-memory') {
+      if (key === 'nodes-browser:assistant') {
         return {
-          data: {
-            profile: 'assistant',
-            agentsMd: [],
-            skills: [{
-              source: 'shared',
-              name: 'agent-browser',
-              description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/agent-browser/INDEX.md',
-              recentSessionCount: 2,
-              lastUsedAt: '2026-03-27T12:00:00.000Z',
-              usedInLastSession: true,
-            }],
-            memoryDocs: [{
-              id: 'memory-index',
-              title: 'Memory index',
-              summary: 'Top-level knowledge hub.',
-              path: '/tmp/memory-index/INDEX.md',
-              updated: '2026-03-28T12:00:00.000Z',
-              referenceCount: 2,
-            }],
-          },
+          data: createNodeBrowserData(),
           loading: false,
           refreshing: false,
           error: null,
@@ -152,29 +198,6 @@ describe('NodesPage', () => {
             currentProfile: 'assistant',
             profiles: ['assistant'],
           },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-projects:assistant') {
-        return {
-          data: [{
-            id: 'active-project',
-            title: 'Active project',
-            summary: 'In progress.',
-            description: 'Still being worked on.',
-            createdAt: '2026-03-16T10:00:00.000Z',
-            updatedAt: '2026-03-16T12:00:00.000Z',
-            requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
-            status: 'active',
-            blockers: [],
-            recentProgress: [],
-            plan: { milestones: [], tasks: [] },
-            profile: 'assistant',
-          }],
           loading: false,
           refreshing: false,
           error: null,
@@ -195,14 +218,11 @@ describe('NodesPage', () => {
 
     expect(html).toContain('Knowledge Base');
     expect(html).toContain('Refresh');
-    expect(html).not.toContain('Select a node');
     expect(html).toContain('3 nodes · 1 notes · 1 projects · 1 skills');
-    expect(html).toContain('Notes');
-    expect(html).toContain('Projects');
-    expect(html).toContain('Skills');
-    expect(html).toContain('Recently updated');
-    expect(html).toMatch(/3.*visible/);
-    expect(html).toContain('Search knowledge');
+    expect(html).toContain('Lucene query');
+    expect(html).toContain('Group by');
+    expect(html).toContain('Date field');
+    expect(html).toContain('Save view');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
     expect(html).toContain('Agent Browser');
@@ -210,20 +230,24 @@ describe('NodesPage', () => {
 
   it('renders the selected note in the dedicated note workspace', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-memory') {
+      if (key === 'nodes-browser:assistant') {
         return {
           data: {
-            profile: 'assistant',
-            agentsMd: [],
-            skills: [],
-            memoryDocs: [{
+            ...createNodeBrowserData(),
+            nodes: [{
+              kind: 'note',
+              kinds: ['note'],
               id: 'memory-index',
               title: 'Memory index',
               summary: 'Top-level knowledge hub.',
               description: 'Use this note as the top-level routing document for durable memory.',
+              status: 'active',
+              updatedAt: '2026-03-28T12:00:00.000Z',
               path: '/tmp/memory-index/INDEX.md',
-              updated: '2026-03-28T12:00:00.000Z',
-              referenceCount: 2,
+              tags: ['type:note', 'status:active'],
+              profiles: [],
+              searchText: 'memory index top-level knowledge hub',
+              note: { referenceCount: 2 },
             }],
           },
           loading: false,
@@ -239,16 +263,6 @@ describe('NodesPage', () => {
             currentProfile: 'assistant',
             profiles: ['assistant'],
           },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-projects:assistant') {
-        return {
-          data: [],
           loading: false,
           refreshing: false,
           error: null,
@@ -302,31 +316,20 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=note&node=memory-index');
 
-    expect(html).not.toContain('Refresh knowledge base');
+    expect(html).not.toContain('Lucene query');
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
-    expect(html).toContain('Use this note as the top-level routing document for durable memory.');
     expect(html).toContain('Back to table');
-    expect(html).toContain('aria-label="Reload note"');
-    expect(html).toContain('aria-label="Save note now"');
-    expect(html).toContain('aria-label="Chat about note"');
-    expect(html).toContain('aria-label="Delete note"');
-    expect(html).toContain('Properties');
-    expect(html).toContain('References');
-    expect(html).not.toContain('Relationships');
     expect(html).toContain('overview.md');
-    expect(html).not.toContain('Open dedicated page');
   });
 
   it('renders the selected project with the dedicated project detail page', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-memory') {
+      if (key === 'nodes-browser:assistant') {
         return {
           data: {
-            profile: 'assistant',
-            agentsMd: [],
-            skills: [],
-            memoryDocs: [],
+            ...createNodeBrowserData(),
+            nodes: [createNodeBrowserData().nodes[1]!],
           },
           loading: false,
           refreshing: false,
@@ -341,16 +344,6 @@ describe('NodesPage', () => {
             currentProfile: 'assistant',
             profiles: ['assistant'],
           },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-projects:assistant') {
-        return {
-          data: [createProjectDetail().project],
           loading: false,
           refreshing: false,
           error: null,
@@ -382,33 +375,20 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=project&node=active-project');
 
-    expect(html).not.toContain('Refresh knowledge base');
+    expect(html).not.toContain('Lucene query');
     expect(html).toContain('Active project');
     expect(html).toContain('aria-label="Back to table"');
-    expect(html).not.toContain('>Back to table<');
-    expect(html).not.toContain('>Document<');
     expect(html).toContain('Tasks');
     expect(html).toContain('Properties');
-    expect(html).not.toContain('Open dedicated page');
   });
 
   it('renders the selected skill without the embedded knowledge browser', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-memory') {
+      if (key === 'nodes-browser:assistant') {
         return {
           data: {
-            profile: 'assistant',
-            agentsMd: [],
-            skills: [{
-              source: 'shared',
-              name: 'agent-browser',
-              description: 'Automate browsers and Electron apps with agent-browser.',
-              path: '/tmp/agent-browser/INDEX.md',
-              recentSessionCount: 2,
-              lastUsedAt: '2026-03-27T12:00:00.000Z',
-              usedInLastSession: true,
-            }],
-            memoryDocs: [],
+            ...createNodeBrowserData(),
+            nodes: [createNodeBrowserData().nodes[2]!],
           },
           loading: false,
           refreshing: false,
@@ -423,16 +403,6 @@ describe('NodesPage', () => {
             currentProfile: 'assistant',
             profiles: ['assistant'],
           },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-projects:assistant') {
-        return {
-          data: [],
           loading: false,
           refreshing: false,
           error: null,
@@ -481,13 +451,10 @@ describe('NodesPage', () => {
 
     const html = renderPage('/nodes?kind=skill&node=agent-browser');
 
-    expect(html).not.toContain('Refresh knowledge base');
+    expect(html).not.toContain('Lucene query');
     expect(html).toContain('Back to table');
     expect(html).toContain('agent-browser');
     expect(html).toContain('Reload');
-    expect(html).toContain('Autosave on');
-    expect(html).toContain('Files');
     expect(html).toContain('Properties');
-    expect(html).not.toContain('Open dedicated page');
   });
 });

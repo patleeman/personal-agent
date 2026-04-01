@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import type { LiveSessionResourceOptions } from './context.js';
 import {
   cancelDurableRun,
   getDurableRun,
@@ -32,7 +33,7 @@ let getCurrentProfileFn: () => string = () => {
 let REPO_ROOT: string = '';
 let getDefaultWebCwdFn: () => string = () => '/tmp';
 let buildLiveSessionExtensionFactoriesFn: () => unknown[] = () => [];
-let buildLiveSessionResourceOptionsFn: (profile?: string) => Record<string, unknown> = () => ({
+let buildLiveSessionResourceOptionsFn: (profile?: string) => LiveSessionResourceOptions = () => ({
   additionalExtensionPaths: [],
   additionalSkillPaths: [],
   additionalPromptTemplatePaths: [],
@@ -43,7 +44,7 @@ export function setRunsRoutesGetters(
   getCurrentProfile: () => string,
   repoRoot: string,
   getDefaultWebCwd: () => string,
-  buildLiveSessionResourceOptions: (profile?: string) => Record<string, unknown>,
+  buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions,
   buildLiveSessionExtensionFactories: () => unknown[],
 ): void {
   getCurrentProfileFn = getCurrentProfile;

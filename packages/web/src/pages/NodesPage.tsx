@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { useAppData } from '../contexts';
 import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import {
@@ -15,17 +14,29 @@ import {
   SectionLabel,
   ToolbarButton,
 } from '../components/ui';
-import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import type {
-  MemoryData,
-  MemoryDocItem,
-  MemorySkillItem,
+  NodeBrowserData,
+  NodeBrowserSummary,
   NodeLinkKind,
   ProjectDetail,
-  ProjectRecord,
   SkillDetail,
 } from '../types';
-import { buildNodesSearch, readNodeBrowserFilter, readSelectedNode, type NodeBrowserFilter } from '../nodeWorkspaceState';
+import {
+  buildNodesSearch,
+  getNodeGroupValue,
+  matchesNodeBrowserQuery,
+  readNodeBrowserDateField,
+  readNodeBrowserDateRange,
+  readNodeBrowserFilter,
+  readNodeBrowserGroupBy,
+  readNodeBrowserQuery,
+  readNodeBrowserSort,
+  readSelectedNode,
+  type NodeBrowserDateField,
+  type NodeBrowserFilter,
+  type NodeBrowserGroupBy,
+  type NodeBrowserSort,
+} from '../nodeWorkspaceState';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { NoteWorkspace } from './MemoriesPage';
@@ -39,25 +50,33 @@ import {
 } from '../skillWorkspaceState';
 import { SkillWorkspace } from './SkillsPage';
 import { timeAgo } from '../utils';
+import {
+  deleteSavedNodeBrowserView,
+  readSavedNodeBrowserViews,
+  saveNodeBrowserView,
+  type SavedNodeBrowserView,
+} from '../nodeBrowserViews';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
+const QUERY_INPUT_CLASS = `${INPUT_CLASS} font-mono text-[12px]`;
 const NODE_KIND_ORDER: NodeLinkKind[] = ['note', 'project', 'skill'];
-
-type NodeBrowserSort = 'updated' | 'title';
-
-type UnifiedNodeItem = {
-  kind: NodeLinkKind;
-  id: string;
-  title: string;
-  summary: string;
-  sortAt: string | null;
-  contextPrimary: string;
-  contextSecondary: string | null;
-  metaParts: string[];
-  searchParts: string[];
-  record: MemoryDocItem | MemorySkillItem | ProjectRecord;
-};
+const GROUP_BY_OPTIONS: Array<{ value: NodeBrowserGroupBy; label: string }> = [
+  { value: 'kind', label: 'Kind' },
+  { value: 'none', label: 'No grouping' },
+  { value: 'status', label: 'Status' },
+  { value: 'profile', label: 'Profile' },
+  { value: 'area', label: 'Area' },
+];
+const SORT_OPTIONS: Array<{ value: NodeBrowserSort; label: string }> = [
+  { value: 'updated_desc', label: 'Recently updated' },
+  { value: 'updated_asc', label: 'Least recently updated' },
+  { value: 'created_desc', label: 'Recently created' },
+  { value: 'created_asc', label: 'Least recently created' },
+  { value: 'title_asc', label: 'Title (A–Z)' },
+  { value: 'title_desc', label: 'Title (Z–A)' },
+  { value: 'status_asc', label: 'Status' },
+];
 
 type SelectedNodeDetail =
   | { kind: 'note'; detail: Awaited<ReturnType<typeof api.noteDoc>> }
@@ -91,144 +110,7 @@ function humanizeStatus(status: string): string {
   if (!normalized) {
     return 'Unknown';
   }
-
   return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function summarizeRepoRoot(repoRoot: string | undefined): string | null {
-  const normalized = repoRoot?.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  const segments = normalized.replace(/\\/g, '/').split('/').filter(Boolean);
-  return segments.at(-1) ?? normalized;
-}
-
-function projectTaskSummary(project: ProjectRecord): string {
-  const tasks = project.plan.tasks ?? [];
-  if (tasks.length === 0) {
-    return 'No tasks';
-  }
-
-  const completed = tasks.filter((task) => task.status === 'done' || task.status === 'completed').length;
-  const open = Math.max(0, tasks.length - completed);
-  return `${open} open · ${completed} done`;
-}
-
-function summarizeNoteContext(memory: MemoryDocItem): string {
-  const referenceCount = memory.referenceCount ?? 0;
-  if (referenceCount > 0) {
-    return `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}`;
-  }
-
-  if (memory.usedInLastSession) {
-    return 'Used recently';
-  }
-
-  const recentSessionCount = memory.recentSessionCount ?? 0;
-  if (recentSessionCount > 0) {
-    return `${recentSessionCount} recent ${recentSessionCount === 1 ? 'chat' : 'chats'}`;
-  }
-
-  return 'Shared note node';
-}
-
-function buildUnifiedNodes(memoryData: MemoryData | null, projects: ProjectRecord[] | null): UnifiedNodeItem[] {
-  const noteItems = (memoryData?.memoryDocs ?? []).map((memory) => ({
-    kind: 'note' as const,
-    id: memory.id,
-    title: memory.title,
-    summary: memory.summary,
-    sortAt: memory.updated ?? memory.lastUsedAt ?? null,
-    contextPrimary: summarizeNoteContext(memory),
-    contextSecondary: memory.status ?? 'active',
-    metaParts: [
-      `@${memory.id}`,
-      ...(memory.path ? [memory.path] : []),
-    ],
-    searchParts: [
-      memory.id,
-      memory.title,
-      memory.summary,
-      summarizeNoteContext(memory),
-      memory.status ?? 'active',
-      memory.path ?? '',
-    ],
-    record: memory,
-  }));
-
-  const skillItems = (memoryData?.skills ?? []).map((skill) => ({
-    kind: 'skill' as const,
-    id: skill.name,
-    title: humanizeSkillName(skill.name),
-    summary: skill.description,
-    sortAt: skill.lastUsedAt ?? null,
-    contextPrimary: skill.source,
-    contextSecondary: formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently'),
-    metaParts: [`@${skill.name}`],
-    searchParts: [
-      skill.name,
-      humanizeSkillName(skill.name),
-      skill.description,
-      skill.source,
-      formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently'),
-    ],
-    record: skill,
-  }));
-
-  const projectItems = (projects ?? []).map((project) => {
-    const repoLabel = summarizeRepoRoot(project.repoRoot);
-    return {
-      kind: 'project' as const,
-      id: project.id,
-      title: project.title,
-      summary: project.summary || project.description,
-      sortAt: project.updatedAt,
-      contextPrimary: humanizeStatus(project.status),
-      contextSecondary: [projectTaskSummary(project), project.profile ?? null].filter(Boolean).join(' · '),
-      metaParts: [
-        `@${project.id}`,
-        ...(repoLabel ? [repoLabel] : []),
-      ],
-      searchParts: [
-        project.id,
-        project.title,
-        project.summary || project.description,
-        project.status,
-        project.currentFocus ?? '',
-        project.profile ?? '',
-        repoLabel ?? '',
-        projectTaskSummary(project),
-      ],
-      record: project,
-    };
-  });
-
-  return [...noteItems, ...projectItems, ...skillItems];
-}
-
-function compareNodeItems(left: UnifiedNodeItem, right: UnifiedNodeItem, sort: NodeBrowserSort): number {
-  if (sort === 'title') {
-    return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
-  }
-
-  const leftSort = left.sortAt ?? '';
-  const rightSort = right.sortAt ?? '';
-  return rightSort.localeCompare(leftSort) || left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
-}
-
-function matchesFilter(item: UnifiedNodeItem, filter: NodeBrowserFilter, query: string): boolean {
-  if (filter !== 'all' && item.kind !== filter) {
-    return false;
-  }
-
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return true;
-  }
-
-  return item.searchParts.join('\n').toLowerCase().includes(normalizedQuery);
 }
 
 function stripWorkspaceParams(search: string): string {
@@ -243,6 +125,148 @@ function stripWorkspaceParams(search: string): string {
   params.delete('new');
   const next = params.toString();
   return next ? `?${next}` : '';
+}
+
+function extractTagValue(tags: string[], key: string): string | null {
+  for (const tag of tags) {
+    const match = tag.match(new RegExp(`^${key}:(.+)$`, 'i'));
+    if (match?.[1]?.trim()) {
+      return match[1].trim();
+    }
+  }
+  return null;
+}
+
+function summarizeNodeContext(node: NodeBrowserSummary): { primary: string; secondary: string | null; tags: string[] } {
+  const visibleTags = node.tags
+    .filter((tag) => !/^(type|status):/i.test(tag))
+    .slice(0, 3);
+
+  switch (node.kind) {
+    case 'note': {
+      const referenceCount = node.note?.referenceCount ?? 0;
+      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Shared note node';
+      return { primary, secondary: humanizeStatus(node.status), tags: visibleTags };
+    }
+    case 'skill': {
+      const usage = node.skill?.usedInLastSession
+        ? 'Used recently'
+        : node.skill?.lastUsedAt
+          ? `Used ${timeAgo(node.skill.lastUsedAt)}`
+          : 'Not used recently';
+      return { primary: node.skill?.source ?? 'skill', secondary: usage, tags: visibleTags };
+    }
+    case 'project': {
+      const open = node.project?.openTaskCount ?? 0;
+      const done = node.project?.doneTaskCount ?? 0;
+      const taskSummary = `${open} open · ${done} done`;
+      const secondary = [taskSummary, node.project?.profile ?? null].filter(Boolean).join(' · ');
+      return { primary: humanizeStatus(node.status), secondary, tags: visibleTags };
+    }
+  }
+}
+
+function compareNodeItems(left: NodeBrowserSummary, right: NodeBrowserSummary, sort: NodeBrowserSort): number {
+  switch (sort) {
+    case 'updated_asc':
+      return (left.updatedAt ?? '').localeCompare(right.updatedAt ?? '') || left.title.localeCompare(right.title);
+    case 'created_desc':
+      return (right.createdAt ?? '').localeCompare(left.createdAt ?? '') || left.title.localeCompare(right.title);
+    case 'created_asc':
+      return (left.createdAt ?? '').localeCompare(right.createdAt ?? '') || left.title.localeCompare(right.title);
+    case 'title_desc':
+      return right.title.localeCompare(left.title) || right.id.localeCompare(left.id);
+    case 'status_asc':
+      return left.status.localeCompare(right.status) || left.title.localeCompare(right.title);
+    case 'title_asc':
+      return left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+    case 'updated_desc':
+    default:
+      return (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '') || left.title.localeCompare(right.title);
+  }
+}
+
+function matchesDateRange(node: NodeBrowserSummary, field: NodeBrowserDateField, from: string | null, to: string | null): boolean {
+  if (!from && !to) {
+    return true;
+  }
+
+  const rawValue = field === 'created' ? node.createdAt : node.updatedAt;
+  if (!rawValue) {
+    return false;
+  }
+
+  const dateValue = new Date(rawValue);
+  if (Number.isNaN(dateValue.getTime())) {
+    return false;
+  }
+
+  if (from) {
+    const start = new Date(`${from}T00:00:00`);
+    if (dateValue < start) {
+      return false;
+    }
+  }
+
+  if (to) {
+    const end = new Date(`${to}T23:59:59.999`);
+    if (dateValue > end) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function matchesBrowserFilters(
+  node: NodeBrowserSummary,
+  filter: NodeBrowserFilter,
+  query: string,
+  dateField: NodeBrowserDateField,
+  dateRange: { from: string | null; to: string | null },
+): boolean {
+  if (filter !== 'all' && node.kind !== filter) {
+    return false;
+  }
+  if (!matchesNodeBrowserQuery(node, query)) {
+    return false;
+  }
+  return matchesDateRange(node, dateField, dateRange.from, dateRange.to);
+}
+
+function sortGroupEntries(left: { key: string }, right: { key: string }, groupBy: NodeBrowserGroupBy): number {
+  if (groupBy === 'kind') {
+    return NODE_KIND_ORDER.indexOf(left.key as NodeLinkKind) - NODE_KIND_ORDER.indexOf(right.key as NodeLinkKind);
+  }
+  return left.key.localeCompare(right.key);
+}
+
+function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGroupBy): Array<{ key: string; label: string; items: NodeBrowserSummary[] }> {
+  if (groupBy === 'none') {
+    return [{ key: 'all', label: 'All nodes', items: nodes }];
+  }
+
+  const map = new Map<string, NodeBrowserSummary[]>();
+  for (const node of nodes) {
+    const key = getNodeGroupValue(node, groupBy);
+    const existing = map.get(key) ?? [];
+    existing.push(node);
+    map.set(key, existing);
+  }
+
+  return [...map.entries()]
+    .map(([key, items]) => ({
+      key,
+      label: groupBy === 'kind'
+        ? pluralKindLabel(key as NodeLinkKind)
+        : groupBy === 'status'
+          ? humanizeStatus(key)
+          : key === 'untagged'
+            ? 'Untagged'
+            : key,
+      items,
+    }))
+    .sort((left, right) => sortGroupEntries(left, right, groupBy));
 }
 
 function buildNodeHref(locationSearch: string, item: { kind: NodeLinkKind; id: string }): string {
@@ -261,122 +285,245 @@ function buildOverviewHref(locationSearch: string): string {
   })}`;
 }
 
+function buildSavedBrowserViewSearch(locationSearch: string): string {
+  const baseSearch = stripWorkspaceParams(locationSearch);
+  return buildNodesSearch(baseSearch, {
+    kind: null,
+    nodeId: null,
+  });
+}
+
 function NodeBrowserListItem({
   item,
   selected,
   locationSearch,
 }: {
-  item: UnifiedNodeItem;
+  item: NodeBrowserSummary;
   selected: boolean;
   locationSearch: string;
 }) {
   const href = buildNodeHref(locationSearch, item);
+  const context = summarizeNodeContext(item);
 
   return (
     <ListLinkRow to={href} selected={selected}>
       <div className="flex items-start justify-between gap-3">
         <p className="ui-row-title break-words">{item.title}</p>
-        <span className="shrink-0 text-[11px] text-dim">{item.sortAt ? timeAgo(item.sortAt) : '—'}</span>
+        <span className="shrink-0 text-[11px] text-dim">{item.updatedAt ? timeAgo(item.updatedAt) : '—'}</span>
       </div>
       {item.summary ? <p className="ui-row-summary">{item.summary}</p> : null}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
         <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">{kindLabel(item.kind)}</span>
         <span className="opacity-40">·</span>
-        <span>{item.contextPrimary}</span>
-        {item.contextSecondary ? (
+        <span>{context.primary}</span>
+        {context.secondary ? (
           <>
             <span className="opacity-40">·</span>
-            <span>{item.contextSecondary}</span>
+            <span>{context.secondary}</span>
           </>
         ) : null}
         <span className="opacity-40">·</span>
         <span className="font-mono" title={`@${item.id}`}>{`@${item.id}`}</span>
+        {context.tags.map((tag) => (
+          <span key={`${item.kind}:${item.id}:${tag}`} className="contents">
+            <span className="opacity-40">·</span>
+            <span className="font-mono">{tag}</span>
+          </span>
+        ))}
       </div>
     </ListLinkRow>
   );
 }
 
+function SavedViewsBar({
+  savedViews,
+  activeViewId,
+  savingView,
+  savingName,
+  onActiveViewChange,
+  onStartSave,
+  onCancelSave,
+  onSavingNameChange,
+  onSave,
+  onDelete,
+}: {
+  savedViews: SavedNodeBrowserView[];
+  activeViewId: string;
+  savingView: boolean;
+  savingName: string;
+  onActiveViewChange: (value: string) => void;
+  onStartSave: () => void;
+  onCancelSave: () => void;
+  onSavingNameChange: (value: string) => void;
+  onSave: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
+        <span className="font-semibold uppercase tracking-[0.12em] text-dim">Views</span>
+        <select
+          value={activeViewId}
+          onChange={(event) => onActiveViewChange(event.target.value)}
+          aria-label="Saved views"
+          className={SELECT_CLASS}
+        >
+          <option value="">Current view</option>
+          {savedViews.map((view) => (
+            <option key={view.id} value={view.id}>{view.name}</option>
+          ))}
+        </select>
+        <ToolbarButton onClick={onStartSave}>Save view</ToolbarButton>
+        <ToolbarButton onClick={onDelete} disabled={!activeViewId}>Delete view</ToolbarButton>
+      </div>
+
+      {savingView ? (
+        <div className="flex w-full max-w-md items-center gap-2">
+          <input
+            value={savingName}
+            onChange={(event) => onSavingNameChange(event.target.value)}
+            placeholder="View name"
+            aria-label="View name"
+            className={INPUT_CLASS}
+          />
+          <ToolbarButton onClick={onSave} className="text-accent">Save</ToolbarButton>
+          <ToolbarButton onClick={onCancelSave}>Cancel</ToolbarButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function KnowledgeBrowserPage({
-  nodes,
+  data,
   filteredNodes,
+  groupedNodes,
   locationSearch,
   filter,
   query,
   sort,
+  groupBy,
+  dateField,
+  dateRange,
   loading,
   error,
   refreshing,
   pageMeta,
+  savedViews,
+  activeViewId,
+  savingView,
+  savingName,
   onRefresh,
   onQueryChange,
   onSortChange,
+  onGroupByChange,
+  onDateFieldChange,
+  onDateFromChange,
+  onDateToChange,
   onFilterChange,
   onCreateNote,
   onCreateProject,
   onCreateSkill,
+  onActiveViewChange,
+  onStartSaveView,
+  onCancelSaveView,
+  onSavingNameChange,
+  onSaveView,
+  onDeleteView,
 }: {
-  nodes: UnifiedNodeItem[];
-  filteredNodes: UnifiedNodeItem[];
+  data: NodeBrowserData | null;
+  filteredNodes: NodeBrowserSummary[];
+  groupedNodes: Array<{ key: string; label: string; items: NodeBrowserSummary[] }>;
   locationSearch: string;
   filter: NodeBrowserFilter;
   query: string;
   sort: NodeBrowserSort;
+  groupBy: NodeBrowserGroupBy;
+  dateField: NodeBrowserDateField;
+  dateRange: { from: string | null; to: string | null };
   loading: boolean;
   error: string | null;
   refreshing: boolean;
   pageMeta: string;
+  savedViews: SavedNodeBrowserView[];
+  activeViewId: string;
+  savingView: boolean;
+  savingName: string;
   onRefresh: () => void;
   onQueryChange: (value: string) => void;
   onSortChange: (value: NodeBrowserSort) => void;
+  onGroupByChange: (value: NodeBrowserGroupBy) => void;
+  onDateFieldChange: (value: NodeBrowserDateField) => void;
+  onDateFromChange: (value: string | null) => void;
+  onDateToChange: (value: string | null) => void;
   onFilterChange: (value: NodeBrowserFilter) => void;
   onCreateNote: () => void;
   onCreateProject: () => void;
   onCreateSkill: () => void;
+  onActiveViewChange: (value: string) => void;
+  onStartSaveView: () => void;
+  onCancelSaveView: () => void;
+  onSavingNameChange: (value: string) => void;
+  onSaveView: () => void;
+  onDeleteView: () => void;
 }) {
-  const groupedNodes = useMemo(() => {
-    if (filter !== 'all') {
-      return [];
-    }
-
-    return NODE_KIND_ORDER
-      .map((kind) => ({
-        kind,
-        items: filteredNodes.filter((item) => item.kind === kind),
-      }))
-      .filter((entry) => entry.items.length > 0);
-  }, [filter, filteredNodes]);
-
   const filterLabel = filter === 'all' ? 'All' : pluralKindLabel(filter);
+  const tagGroupOptions = (data?.tagKeys ?? [])
+    .filter((key) => !['area', 'profile', 'status', 'type'].includes(key))
+    .map((key) => ({ value: `tag:${key}` as NodeBrowserGroupBy, label: `Tag: ${key}` }));
 
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
       <PageHeader
         actions={(
           <div className="flex items-center gap-2">
-            <ToolbarButton onClick={onCreateNote} className="text-accent">
-              New note
-            </ToolbarButton>
-            <ToolbarButton onClick={onCreateProject}>
-              New project
-            </ToolbarButton>
-            <ToolbarButton onClick={onCreateSkill}>
-              New skill
-            </ToolbarButton>
+            <ToolbarButton onClick={onCreateNote} className="text-accent">New note</ToolbarButton>
+            <ToolbarButton onClick={onCreateProject}>New project</ToolbarButton>
+            <ToolbarButton onClick={onCreateSkill}>New skill</ToolbarButton>
             <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </ToolbarButton>
           </div>
         )}
       >
-        <PageHeading
-          title="Knowledge Base"
-          meta={pageMeta}
-        />
+        <PageHeading title="Knowledge Base" meta={pageMeta} />
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4">
+          <SavedViewsBar
+            savedViews={savedViews}
+            activeViewId={activeViewId}
+            savingView={savingView}
+            savingName={savingName}
+            onActiveViewChange={onActiveViewChange}
+            onStartSave={onStartSaveView}
+            onCancelSave={onCancelSaveView}
+            onSavingNameChange={onSavingNameChange}
+            onSave={onSaveView}
+            onDelete={onDeleteView}
+          />
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">Lucene query</span>
+              <input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder='type:project AND status:active AND area:architecture'
+                aria-label="Lucene query"
+                className={QUERY_INPUT_CLASS}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <div className="text-[11px] text-dim xl:pl-4 xl:text-right">
+              <p>{filteredNodes.length} visible</p>
+              <p className="font-mono text-[10px] text-dim">Fields: type, status, profile, area, parent, tag, id, title</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div className="ui-segmented-control" role="group" aria-label="Node filter">
               {([
                 ['all', 'All'],
@@ -395,36 +542,51 @@ function KnowledgeBrowserPage({
               ))}
             </div>
 
-            <div className="flex items-center gap-2 text-[11px] text-dim">
-              <select
-                value={sort}
-                onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)}
-                aria-label="Sort nodes"
-                className={SELECT_CLASS}
-              >
-                <option value="updated">Recently updated</option>
-                <option value="title">Title</option>
-              </select>
-              <span>{filteredNodes.length} visible</span>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>Sort</span>
+                <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort nodes">
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>Group by</span>
+                <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group nodes">
+                  {[...GROUP_BY_OPTIONS, ...tagGroupOptions].map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>Date field</span>
+                <select value={dateField} onChange={(event) => onDateFieldChange(event.target.value as NodeBrowserDateField)} className={SELECT_CLASS} aria-label="Date field">
+                  <option value="updated">Updated</option>
+                  <option value="created">Created</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>From</span>
+                <input type="date" value={dateRange.from ?? ''} onChange={(event) => onDateFromChange(event.target.value || null)} className={SELECT_CLASS} aria-label="From date" />
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>To</span>
+                <input type="date" value={dateRange.to ?? ''} onChange={(event) => onDateToChange(event.target.value || null)} className={SELECT_CLASS} aria-label="To date" />
+              </label>
             </div>
           </div>
 
-          <input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search knowledge"
-            aria-label="Search knowledge"
-            className={INPUT_CLASS}
-            autoComplete="off"
-            spellCheck={false}
-          />
+          {error && data && data.nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
 
-          {error && nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
+          {loading && !data ? <LoadingState label="Loading knowledge base…" className="py-10" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load knowledge base: ${error}`} className="py-10" /> : null}
 
-          {loading && nodes.length === 0 ? <LoadingState label="Loading knowledge base…" className="py-10" /> : null}
-          {error && nodes.length === 0 ? <ErrorState message={`Unable to load knowledge base: ${error}`} className="py-10" /> : null}
-
-          {!loading && !error && nodes.length === 0 ? (
+          {!loading && !error && data && data.nodes.length === 0 ? (
             <EmptyState
               className="py-10"
               title="No nodes yet"
@@ -432,46 +594,33 @@ function KnowledgeBrowserPage({
             />
           ) : null}
 
-          {!loading && !error && nodes.length > 0 && filteredNodes.length === 0 ? (
+          {!loading && !error && data && data.nodes.length > 0 && filteredNodes.length === 0 ? (
             <EmptyState
               className="py-10"
               title="No matching nodes"
-              body={`No ${filterLabel.toLowerCase()} match the current browser filter.`}
+              body={`No ${filterLabel.toLowerCase()} match the current query, grouping, and date range.`}
             />
           ) : null}
 
           {!loading && !error && filteredNodes.length > 0 ? (
-            filter === 'all' ? (
+            groupBy === 'none' ? (
+              <div className="space-y-0.5">
+                {filteredNodes.map((item) => (
+                  <NodeBrowserListItem key={`${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
+                ))}
+              </div>
+            ) : (
               <div className="space-y-5">
                 {groupedNodes.map((entry) => (
-                  <div key={entry.kind} className="space-y-1">
-                    <SectionLabel label={pluralKindLabel(entry.kind)} count={entry.items.length} className="px-3 pb-1" />
+                  <div key={entry.key} className="space-y-1">
+                    <SectionLabel label={entry.label} count={entry.items.length} className="px-3 pb-1" />
                     <div className="space-y-0.5">
                       {entry.items.map((item) => (
-                        <NodeBrowserListItem
-                          key={`${item.kind}:${item.id}`}
-                          item={item}
-                          selected={false}
-                          locationSearch={locationSearch}
-                        />
+                        <NodeBrowserListItem key={`${entry.key}:${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
                       ))}
                     </div>
                   </div>
                 ))}
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <SectionLabel label={filterLabel} count={filteredNodes.length} className="px-3 pb-1" />
-                <div className="space-y-0.5">
-                  {filteredNodes.map((item) => (
-                    <NodeBrowserListItem
-                      key={`${item.kind}:${item.id}`}
-                      item={item}
-                      selected={false}
-                      locationSearch={locationSearch}
-                    />
-                  ))}
-                </div>
               </div>
             )
           ) : null}
@@ -578,25 +727,34 @@ function SelectedNodeView({
 export function NodesPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projects: projectSnapshot } = useAppData();
   const { data: profileState } = useApi(api.profiles);
-  const memoryApi = useApi(api.memory, 'nodes-memory');
-  const projectsApi = useApi(
-    () => profileState ? api.projects({ profile: profileState.currentProfile }) : Promise.resolve([]),
-    profileState ? `nodes-projects:${profileState.currentProfile}` : 'nodes-projects:pending',
+  const currentProfile = profileState?.currentProfile ?? null;
+  const nodesApi = useApi(
+    () => profileState ? api.nodes({ profile: profileState.currentProfile }) : Promise.resolve(null),
+    profileState ? `nodes-browser:${profileState.currentProfile}` : 'nodes-browser:pending',
   );
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<NodeBrowserSort>('updated');
 
   const filter = useMemo(() => readNodeBrowserFilter(location.search), [location.search]);
   const selected = useMemo(() => readSelectedNode(location.search), [location.search]);
-  const currentProfile = profileState?.currentProfile ?? null;
-  const projects = currentProfile && projectSnapshot ? projectSnapshot : (projectsApi.data ?? null);
-  const nodes = useMemo(() => buildUnifiedNodes(memoryApi.data ?? null, projects), [memoryApi.data, projects]);
+  const query = useMemo(() => readNodeBrowserQuery(location.search), [location.search]);
+  const sort = useMemo(() => readNodeBrowserSort(location.search), [location.search]);
+  const groupBy = useMemo(() => readNodeBrowserGroupBy(location.search), [location.search]);
+  const dateField = useMemo(() => readNodeBrowserDateField(location.search), [location.search]);
+  const dateRange = useMemo(() => readNodeBrowserDateRange(location.search), [location.search]);
+  const [savedViews, setSavedViews] = useState<SavedNodeBrowserView[]>([]);
+  const [activeViewId, setActiveViewId] = useState('');
+  const [savingView, setSavingView] = useState(false);
+  const [savingName, setSavingName] = useState('');
+
+  const data = nodesApi.data ?? null;
+  const nodes = data?.nodes ?? [];
   const filteredNodes = useMemo(
-    () => nodes.filter((item) => matchesFilter(item, filter, query)).sort((left, right) => compareNodeItems(left, right, sort)),
-    [filter, nodes, query, sort],
+    () => nodes
+      .filter((node) => matchesBrowserFilters(node, filter, query, dateField, dateRange))
+      .sort((left, right) => compareNodeItems(left, right, sort)),
+    [dateField, dateRange, filter, nodes, query, sort],
   );
+  const groupedNodes = useMemo(() => buildGroupedNodes(filteredNodes, groupBy), [filteredNodes, groupBy]);
   const selectedNode = useMemo(
     () => selected ? nodes.find((item) => item.kind === selected.kind && item.id === selected.id) ?? null : null,
     [nodes, selected],
@@ -607,23 +765,20 @@ export function NodesPage() {
     project: nodes.filter((item) => item.kind === 'project').length,
     skill: nodes.filter((item) => item.kind === 'skill').length,
   }), [nodes]);
-  const combinedError = [memoryApi.error, projectsApi.error].filter(Boolean).join(' · ') || null;
-  const dataLoading = (memoryApi.loading || projectsApi.loading) && nodes.length === 0;
+  const combinedError = nodesApi.error || null;
+  const dataLoading = nodesApi.loading && nodes.length === 0;
   const pageMeta = useMemo(() => {
     if (dataLoading) {
       return 'Loading knowledge base…';
     }
-
     if (counts.all === 0) {
-      return 'No notes, projects, or skills yet.';
+      return 'No nodes yet.';
     }
-
-    if (query.trim() || filter !== 'all') {
+    if (query.trim() || filter !== 'all' || dateRange.from || dateRange.to || groupBy !== 'kind' || sort !== 'updated_desc') {
       return `${filteredNodes.length} visible · ${counts.all} total nodes`;
     }
-
     return `${counts.all} nodes · ${counts.note} notes · ${counts.project} projects · ${counts.skill} skills`;
-  }, [counts.all, counts.note, counts.project, counts.skill, dataLoading, filter, filteredNodes.length, query]);
+  }, [counts.all, counts.note, counts.project, counts.skill, dataLoading, dateRange.from, dateRange.to, filter, filteredNodes.length, groupBy, query, sort]);
 
   const detailApi = useApi(async () => {
     if (!selected) {
@@ -637,7 +792,7 @@ export function NodesPage() {
         return { kind: 'skill', detail: await api.skillDetail(selected.id) } satisfies SelectedNodeDetail;
       case 'project': {
         const projectProfile = selectedNode?.kind === 'project'
-          ? (selectedNode.record as ProjectRecord).profile
+          ? selectedNode.project?.profile
           : currentProfile ?? undefined;
         return {
           kind: 'project',
@@ -649,41 +804,63 @@ export function NodesPage() {
 
   const refreshAll = useCallback(async () => {
     await Promise.all([
-      memoryApi.refetch({ resetLoading: false }),
-      projectsApi.refetch({ resetLoading: false }),
+      nodesApi.refetch({ resetLoading: false }),
       detailApi.refetch({ resetLoading: false }),
     ]);
-  }, [detailApi, memoryApi, projectsApi]);
+  }, [detailApi, nodesApi]);
+
+  const navigateBrowser = useCallback((updates: Parameters<typeof buildNodesSearch>[1]) => {
+    navigate(`/nodes${buildNodesSearch(location.search, updates)}`, { replace: true });
+  }, [location.search, navigate]);
 
   const handleFilterChange = useCallback((nextFilter: NodeBrowserFilter) => {
-    const nextSelection = selected && (nextFilter === 'all' || selected.kind === nextFilter)
-      ? selected
-      : null;
+    const nextSelection = selected && (nextFilter === 'all' || selected.kind === nextFilter) ? selected : null;
+    navigateBrowser({ filter: nextFilter, kind: nextSelection?.kind ?? null, nodeId: nextSelection?.id ?? null });
+  }, [navigateBrowser, selected]);
 
-    navigate(`/nodes${buildNodesSearch(location.search, {
-      filter: nextFilter,
-      kind: nextSelection?.kind ?? null,
-      nodeId: nextSelection?.id ?? null,
-    })}`, { replace: true });
-  }, [location.search, navigate, selected]);
+  const handleCreateNote = useCallback(() => navigate('/notes?creating=true'), [navigate]);
+  const handleCreateProject = useCallback(() => navigate('/projects?creating=true'), [navigate]);
+  const handleCreateSkill = useCallback(() => navigate('/skills?creating=true'), [navigate]);
 
-  const handleCreateNote = useCallback(() => {
-    navigate('/notes?creating=true');
-  }, [navigate]);
+  const handleSaveView = useCallback(() => {
+    const nextViews = saveNodeBrowserView(savingName, buildSavedBrowserViewSearch(location.search));
+    const nextActive = nextViews.find((view) => view.name.toLowerCase() === savingName.trim().toLowerCase());
+    setSavedViews(nextViews);
+    setActiveViewId(nextActive?.id ?? '');
+    setSavingView(false);
+    setSavingName('');
+  }, [location.search, savingName]);
 
-  const handleCreateProject = useCallback(() => {
-    navigate('/projects?creating=true');
-  }, [navigate]);
+  const handleDeleteView = useCallback(() => {
+    if (!activeViewId) {
+      return;
+    }
+    setSavedViews(deleteSavedNodeBrowserView(activeViewId));
+    setActiveViewId('');
+  }, [activeViewId]);
 
-  const handleCreateSkill = useCallback(() => {
-    navigate('/skills?creating=true');
-  }, [navigate]);
+  const handleActiveViewChange = useCallback((value: string) => {
+    setActiveViewId(value);
+    if (!value) {
+      return;
+    }
+    const view = savedViews.find((entry) => entry.id === value);
+    if (view) {
+      navigate(`/nodes${view.search}`, { replace: true });
+    }
+  }, [navigate, savedViews]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    setSavedViews(readSavedNodeBrowserViews());
+  }, []);
 
   useEffect(() => {
     if (!selected) {
       return;
     }
-
     ensureOpenResourceShelfItem(selected.kind, selected.id);
   }, [selected]);
 
@@ -691,7 +868,6 @@ export function NodesPage() {
     const handleNodesChanged = () => {
       void refreshAll();
     };
-
     window.addEventListener(MEMORIES_CHANGED_EVENT, handleNodesChanged);
     window.addEventListener(PROJECTS_CHANGED_EVENT, handleNodesChanged);
     return () => {
@@ -704,7 +880,6 @@ export function NodesPage() {
     if (!selected || nodes.length === 0) {
       return;
     }
-
     const exists = nodes.some((item) => item.kind === selected.kind && item.id === selected.id);
     if (!exists) {
       navigate(buildOverviewHref(location.search), { replace: true });
@@ -733,23 +908,41 @@ export function NodesPage() {
 
   return (
     <KnowledgeBrowserPage
-      nodes={nodes}
+      data={data}
       filteredNodes={filteredNodes}
+      groupedNodes={groupedNodes}
       locationSearch={location.search}
       filter={filter}
       query={query}
       sort={sort}
+      groupBy={groupBy}
+      dateField={dateField}
+      dateRange={dateRange}
       loading={dataLoading}
       error={combinedError}
-      refreshing={memoryApi.refreshing || projectsApi.refreshing}
+      refreshing={nodesApi.refreshing}
       pageMeta={pageMeta}
+      savedViews={savedViews}
+      activeViewId={activeViewId}
+      savingView={savingView}
+      savingName={savingName}
       onRefresh={() => { void refreshAll(); }}
-      onQueryChange={setQuery}
-      onSortChange={setSort}
+      onQueryChange={(value) => navigateBrowser({ query: value })}
+      onSortChange={(value) => navigateBrowser({ sort: value })}
+      onGroupByChange={(value) => navigateBrowser({ groupBy: value })}
+      onDateFieldChange={(value) => navigateBrowser({ dateField: value })}
+      onDateFromChange={(value) => navigateBrowser({ dateFrom: value })}
+      onDateToChange={(value) => navigateBrowser({ dateTo: value })}
       onFilterChange={handleFilterChange}
       onCreateNote={handleCreateNote}
       onCreateProject={handleCreateProject}
       onCreateSkill={handleCreateSkill}
+      onActiveViewChange={handleActiveViewChange}
+      onStartSaveView={() => setSavingView(true)}
+      onCancelSaveView={() => { setSavingView(false); setSavingName(''); }}
+      onSavingNameChange={setSavingName}
+      onSaveView={handleSaveView}
+      onDeleteView={handleDeleteView}
     />
   );
 }
