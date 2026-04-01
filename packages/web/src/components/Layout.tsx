@@ -12,7 +12,6 @@ import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../se
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../liveSessionWarmth';
-import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -301,7 +300,6 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
               runsVersion: versions.runs,
               executionTargetsVersion: versions.executionTargets,
             }),
-            prefetchConversationAutomation(conversationId),
           ]);
 
           if (cancelled) {
@@ -355,37 +353,6 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
       window.clearTimeout(timer);
     };
   }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.projects, versions.runs, versions.workspace, warmingEnabled]);
-
-  useEffect(() => {
-    if (!warmingEnabled || versions.automation === 0) {
-      return;
-    }
-
-    const idsToWarm = openConversationIds
-      .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
-    if (idsToWarm.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const conversationId of idsToWarm) {
-          if (cancelled) {
-            return;
-          }
-
-          await prefetchConversationAutomation(conversationId, { force: true }).catch(() => undefined);
-        }
-      })();
-    }, OPEN_TAB_WARM_START_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.automation, warmingEnabled]);
 
   return warmingEnabled
     ? openConversationIds
