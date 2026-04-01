@@ -35,6 +35,7 @@ import {
 } from './projectDetailState';
 import { MentionTextarea } from './MentionTextarea';
 import { IconButton, cx } from './ui';
+import { NodeRelationshipsPanel } from './NodeRelationshipsPanel';
 import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
@@ -1504,6 +1505,15 @@ export function ProjectDetailPanel({
             </div>
           </ProjectRailSection>
         ) : null}
+
+        <ProjectRailSection title="Node graph">
+          <NodeRelationshipsPanel
+            nodeId={record.id}
+            emptyOutgoingText="No typed node links yet."
+            emptyIncomingText="No typed links point here yet."
+            onChanged={onChanged}
+          />
+        </ProjectRailSection>
       </aside>
     </div>
   );

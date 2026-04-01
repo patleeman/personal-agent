@@ -27,12 +27,14 @@ import {
   matchesNodeBrowserQuery,
   readNodeBrowserDateField,
   readNodeBrowserDateRange,
+  readNodeBrowserDensity,
   readNodeBrowserFilter,
   readNodeBrowserGroupBy,
   readNodeBrowserQuery,
   readNodeBrowserSort,
   readSelectedNode,
   type NodeBrowserDateField,
+  type NodeBrowserDensity,
   type NodeBrowserFilter,
   type NodeBrowserGroupBy,
   type NodeBrowserSort,
@@ -50,12 +52,7 @@ import {
 } from '../skillWorkspaceState';
 import { SkillWorkspace } from './SkillsPage';
 import { timeAgo } from '../utils';
-import {
-  deleteSavedNodeBrowserView,
-  readSavedNodeBrowserViews,
-  saveNodeBrowserView,
-  type SavedNodeBrowserView,
-} from '../nodeBrowserViews';
+import type { SavedNodeBrowserView } from '../types';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
@@ -335,6 +332,52 @@ function NodeBrowserListItem({
   );
 }
 
+function DenseNodeTable({
+  items,
+  locationSearch,
+}: {
+  items: NodeBrowserSummary[];
+  locationSearch: string;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border-subtle">
+      <table className="min-w-full border-collapse text-left text-[12px]">
+        <thead className="bg-base/70 text-[10px] uppercase tracking-[0.12em] text-dim">
+          <tr>
+            <th className="px-3 py-2.5 font-medium">Title</th>
+            <th className="px-3 py-2.5 font-medium">Kind</th>
+            <th className="px-3 py-2.5 font-medium">Status</th>
+            <th className="px-3 py-2.5 font-medium">Updated</th>
+            <th className="px-3 py-2.5 font-medium">Context</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const context = summarizeNodeContext(item);
+            return (
+              <tr key={`${item.kind}:${item.id}`} className="border-t border-border-subtle align-top">
+                <td className="px-3 py-2.5">
+                  <Link to={buildNodeHref(locationSearch, item)} className="font-medium text-primary hover:underline">
+                    {item.title}
+                  </Link>
+                  <div className="mt-0.5 font-mono text-[11px] text-dim">@{item.id}</div>
+                </td>
+                <td className="px-3 py-2.5 text-secondary">{kindLabel(item.kind)}</td>
+                <td className="px-3 py-2.5 text-secondary">{humanizeStatus(item.status)}</td>
+                <td className="px-3 py-2.5 text-secondary">{item.updatedAt ? timeAgo(item.updatedAt) : '—'}</td>
+                <td className="px-3 py-2.5 text-secondary">
+                  <div>{context.primary}</div>
+                  {context.secondary ? <div className="mt-0.5 text-[11px] text-dim">{context.secondary}</div> : null}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function SavedViewsBar({
   savedViews,
   activeViewId,
@@ -405,6 +448,7 @@ function KnowledgeBrowserPage({
   groupBy,
   dateField,
   dateRange,
+  density,
   loading,
   error,
   refreshing,
@@ -420,6 +464,7 @@ function KnowledgeBrowserPage({
   onDateFieldChange,
   onDateFromChange,
   onDateToChange,
+  onDensityChange,
   onFilterChange,
   onCreateNote,
   onCreateProject,
@@ -441,6 +486,7 @@ function KnowledgeBrowserPage({
   groupBy: NodeBrowserGroupBy;
   dateField: NodeBrowserDateField;
   dateRange: { from: string | null; to: string | null };
+  density: NodeBrowserDensity;
   loading: boolean;
   error: string | null;
   refreshing: boolean;
@@ -456,6 +502,7 @@ function KnowledgeBrowserPage({
   onDateFieldChange: (value: NodeBrowserDateField) => void;
   onDateFromChange: (value: string | null) => void;
   onDateToChange: (value: string | null) => void;
+  onDensityChange: (value: NodeBrowserDensity) => void;
   onFilterChange: (value: NodeBrowserFilter) => void;
   onCreateNote: () => void;
   onCreateProject: () => void;
@@ -562,6 +609,14 @@ function KnowledgeBrowserPage({
               </label>
 
               <label className="flex flex-col gap-1 text-[11px] text-dim">
+                <span>Density</span>
+                <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Node density">
+                  <option value="comfortable">Comfortable</option>
+                  <option value="dense">Dense table</option>
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-[11px] text-dim">
                 <span>Date field</span>
                 <select value={dateField} onChange={(event) => onDateFieldChange(event.target.value as NodeBrowserDateField)} className={SELECT_CLASS} aria-label="Date field">
                   <option value="updated">Updated</option>
@@ -604,21 +659,29 @@ function KnowledgeBrowserPage({
 
           {!loading && !error && filteredNodes.length > 0 ? (
             groupBy === 'none' ? (
-              <div className="space-y-0.5">
-                {filteredNodes.map((item) => (
-                  <NodeBrowserListItem key={`${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
-                ))}
-              </div>
+              density === 'dense' ? (
+                <DenseNodeTable items={filteredNodes} locationSearch={locationSearch} />
+              ) : (
+                <div className="space-y-0.5">
+                  {filteredNodes.map((item) => (
+                    <NodeBrowserListItem key={`${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
+                  ))}
+                </div>
+              )
             ) : (
               <div className="space-y-5">
                 {groupedNodes.map((entry) => (
                   <div key={entry.key} className="space-y-1">
                     <SectionLabel label={entry.label} count={entry.items.length} className="px-3 pb-1" />
-                    <div className="space-y-0.5">
-                      {entry.items.map((item) => (
-                        <NodeBrowserListItem key={`${entry.key}:${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
-                      ))}
-                    </div>
+                    {density === 'dense' ? (
+                      <DenseNodeTable items={entry.items} locationSearch={locationSearch} />
+                    ) : (
+                      <div className="space-y-0.5">
+                        {entry.items.map((item) => (
+                          <NodeBrowserListItem key={`${entry.key}:${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -741,12 +804,14 @@ export function NodesPage() {
   const groupBy = useMemo(() => readNodeBrowserGroupBy(location.search), [location.search]);
   const dateField = useMemo(() => readNodeBrowserDateField(location.search), [location.search]);
   const dateRange = useMemo(() => readNodeBrowserDateRange(location.search), [location.search]);
-  const [savedViews, setSavedViews] = useState<SavedNodeBrowserView[]>([]);
+  const density = useMemo(() => readNodeBrowserDensity(location.search), [location.search]);
+  const nodeViewsApi = useApi(api.nodeViews, 'node-browser-views');
   const [activeViewId, setActiveViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [savingName, setSavingName] = useState('');
 
   const data = nodesApi.data ?? null;
+  const savedViews = nodeViewsApi.data?.views ?? [];
   const nodes = data?.nodes ?? [];
   const filteredNodes = useMemo(
     () => nodes
@@ -822,22 +887,26 @@ export function NodesPage() {
   const handleCreateProject = useCallback(() => navigate('/projects?creating=true'), [navigate]);
   const handleCreateSkill = useCallback(() => navigate('/skills?creating=true'), [navigate]);
 
-  const handleSaveView = useCallback(() => {
-    const nextViews = saveNodeBrowserView(savingName, buildSavedBrowserViewSearch(location.search));
-    const nextActive = nextViews.find((view) => view.name.toLowerCase() === savingName.trim().toLowerCase());
-    setSavedViews(nextViews);
+  const handleSaveView = useCallback(async () => {
+    const result = await api.saveNodeView({
+      name: savingName,
+      search: buildSavedBrowserViewSearch(location.search),
+    });
+    nodeViewsApi.replaceData(result);
+    const nextActive = result.views.find((view) => view.name.toLowerCase() === savingName.trim().toLowerCase());
     setActiveViewId(nextActive?.id ?? '');
     setSavingView(false);
     setSavingName('');
-  }, [location.search, savingName]);
+  }, [location.search, nodeViewsApi, savingName]);
 
-  const handleDeleteView = useCallback(() => {
+  const handleDeleteView = useCallback(async () => {
     if (!activeViewId) {
       return;
     }
-    setSavedViews(deleteSavedNodeBrowserView(activeViewId));
+    const result = await api.deleteNodeView(activeViewId);
+    nodeViewsApi.replaceData(result);
     setActiveViewId('');
-  }, [activeViewId]);
+  }, [activeViewId, nodeViewsApi]);
 
   const handleActiveViewChange = useCallback((value: string) => {
     setActiveViewId(value);
@@ -851,11 +920,14 @@ export function NodesPage() {
   }, [navigate, savedViews]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (savedViews.some((view) => view.id === activeViewId)) {
       return;
     }
-    setSavedViews(readSavedNodeBrowserViews());
-  }, []);
+    if (!activeViewId) {
+      return;
+    }
+    setActiveViewId('');
+  }, [activeViewId, savedViews]);
 
   useEffect(() => {
     if (!selected) {
@@ -918,6 +990,7 @@ export function NodesPage() {
       groupBy={groupBy}
       dateField={dateField}
       dateRange={dateRange}
+      density={density}
       loading={dataLoading}
       error={combinedError}
       refreshing={nodesApi.refreshing}
@@ -933,6 +1006,7 @@ export function NodesPage() {
       onDateFieldChange={(value) => navigateBrowser({ dateField: value })}
       onDateFromChange={(value) => navigateBrowser({ dateFrom: value })}
       onDateToChange={(value) => navigateBrowser({ dateTo: value })}
+      onDensityChange={(value) => navigateBrowser({ density: value })}
       onFilterChange={handleFilterChange}
       onCreateNote={handleCreateNote}
       onCreateProject={handleCreateProject}

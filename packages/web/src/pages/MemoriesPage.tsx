@@ -33,6 +33,7 @@ import { readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
+import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
@@ -678,6 +679,14 @@ export function NoteWorkspace({
               </div>
             </NodeRailSection>
           ) : null}
+          <NodeRailSection title="Node graph">
+            <NodeRelationshipsPanel
+              nodeId={detail.memory.id}
+              emptyOutgoingText="No typed node links yet."
+              emptyIncomingText="No typed links point here yet."
+              onChanged={onRefetched}
+            />
+          </NodeRailSection>
         </>
       )}
     >

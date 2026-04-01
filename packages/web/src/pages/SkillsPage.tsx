@@ -23,6 +23,7 @@ import {
   WorkspaceActionNotice,
 } from '../components/NodeWorkspace';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
+import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
 import {
   buildSkillsSearch,
   matchesSkill,
@@ -520,6 +521,14 @@ export function SkillWorkspace({
               </div>
             </NodeRailSection>
           ) : null}
+          <NodeRailSection title="Node graph">
+            <NodeRelationshipsPanel
+              nodeId={detail.skill.name}
+              emptyOutgoingText="No typed node links yet."
+              emptyIncomingText="No typed links point here yet."
+              onChanged={onRefetched}
+            />
+          </NodeRailSection>
           <details className="ui-disclosure">
             <summary className="ui-disclosure-summary">
               <span>Advanced</span>
