@@ -590,7 +590,9 @@ export const api = {
   nodes: (options?: { profile?: string }) => get<NodeBrowserData>(withViewProfile('/nodes', options?.profile)),
   nodeDetail: (nodeId: string, options?: { profile?: string }) => get<NodeBrowserDetail>(withViewProfile(`/nodes/${encodeURIComponent(nodeId)}`, options?.profile)),
   saveNodeDetail: (nodeId: string, input: {
+    summary?: string;
     status?: string;
+    tags?: string[];
     addTags?: string[];
     removeTags?: string[];
     parent?: string | null;
@@ -605,6 +607,10 @@ export const api = {
     post<{ accepted: true; runId: string; count: number }>('/notes/recover-failed-node-distills'),
   createNoteDoc: (input: { title: string; summary?: string; description?: string; body?: string }) =>
     post<MemoryDocDetail>('/notes', input),
+  captureNote: (input: { title?: string; body: string }) =>
+    post<MemoryDocDetail>('/captures', input),
+  captureUrl: (input: { url: string; title?: string }) =>
+    post<MemoryDocDetail>('/captures/url', input),
   noteDoc: (memoryId: string) =>
     get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
   saveNoteDoc: (memoryId: string, input: { content: string } | { title: string; summary?: string; description?: string; body: string }) =>

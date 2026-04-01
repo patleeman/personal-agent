@@ -61,6 +61,7 @@ describe('registerServerRoutes smoke test', () => {
       getSettingsFile: () => settingsFile,
       getAuthFile: () => authFile,
       getStateRoot: () => tempRoot,
+      getServerPort: () => 3741,
       getDefaultWebCwd: () => workspaceDir,
       resolveRequestedCwd: (cwd, defaultCwd) => {
         const candidate = typeof cwd === 'string' && cwd.trim().length > 0 ? cwd.trim() : defaultCwd?.trim();

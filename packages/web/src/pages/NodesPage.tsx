@@ -469,6 +469,19 @@ function KnowledgeBrowserPage({
   onCreateNote,
   onCreateProject,
   onCreateSkill,
+  captureMode,
+  captureTitle,
+  captureBody,
+  captureUrl,
+  captureBusy,
+  captureError,
+  onOpenQuickCapture,
+  onOpenUrlCapture,
+  onCloseCapture,
+  onCaptureTitleChange,
+  onCaptureBodyChange,
+  onCaptureUrlChange,
+  onSubmitCapture,
   onActiveViewChange,
   onStartSaveView,
   onCancelSaveView,
@@ -507,6 +520,19 @@ function KnowledgeBrowserPage({
   onCreateNote: () => void;
   onCreateProject: () => void;
   onCreateSkill: () => void;
+  captureMode: 'text' | 'url' | null;
+  captureTitle: string;
+  captureBody: string;
+  captureUrl: string;
+  captureBusy: boolean;
+  captureError: string | null;
+  onOpenQuickCapture: () => void;
+  onOpenUrlCapture: () => void;
+  onCloseCapture: () => void;
+  onCaptureTitleChange: (value: string) => void;
+  onCaptureBodyChange: (value: string) => void;
+  onCaptureUrlChange: (value: string) => void;
+  onSubmitCapture: () => void;
   onActiveViewChange: (value: string) => void;
   onStartSaveView: () => void;
   onCancelSaveView: () => void;
@@ -527,6 +553,8 @@ function KnowledgeBrowserPage({
             <ToolbarButton onClick={onCreateNote} className="text-accent">New note</ToolbarButton>
             <ToolbarButton onClick={onCreateProject}>New project</ToolbarButton>
             <ToolbarButton onClick={onCreateSkill}>New skill</ToolbarButton>
+            <ToolbarButton onClick={onOpenQuickCapture}>Quick capture</ToolbarButton>
+            <ToolbarButton onClick={onOpenUrlCapture}>Save URL</ToolbarButton>
             <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </ToolbarButton>
@@ -550,6 +578,56 @@ function KnowledgeBrowserPage({
             onSave={onSaveView}
             onDelete={onDeleteView}
           />
+
+          {captureMode ? (
+            <div className="rounded-xl border border-border-subtle px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[12px] font-medium text-primary">{captureMode === 'text' ? 'Quick capture' : 'Save URL'}</p>
+                  <p className="mt-1 text-[12px] text-secondary">
+                    {captureMode === 'text'
+                      ? 'Capture a rough idea without forcing structure up front.'
+                      : 'Archive a URL into an inbox capture with a local reference copy.'}
+                  </p>
+                </div>
+                <ToolbarButton onClick={onCloseCapture}>Close</ToolbarButton>
+              </div>
+              <div className="mt-4 space-y-3 max-w-3xl">
+                <input
+                  value={captureTitle}
+                  onChange={(event) => onCaptureTitleChange(event.target.value)}
+                  placeholder={captureMode === 'text' ? 'Optional title' : 'Optional title override'}
+                  aria-label="Capture title"
+                  className={INPUT_CLASS}
+                />
+                {captureMode === 'url' ? (
+                  <input
+                    value={captureUrl}
+                    onChange={(event) => onCaptureUrlChange(event.target.value)}
+                    placeholder="https://example.com/article"
+                    aria-label="Capture URL"
+                    className={`${INPUT_CLASS} font-mono`}
+                    spellCheck={false}
+                  />
+                ) : (
+                  <textarea
+                    value={captureBody}
+                    onChange={(event) => onCaptureBodyChange(event.target.value)}
+                    placeholder="Drop in the raw thought, rough note, or follow-up to triage later."
+                    aria-label="Capture body"
+                    rows={6}
+                    className={`${INPUT_CLASS} resize-y`}
+                  />
+                )}
+                {captureError ? <p className="text-[12px] text-danger">{captureError}</p> : null}
+                <div>
+                  <ToolbarButton onClick={onSubmitCapture} disabled={captureBusy} className="text-accent">
+                    {captureBusy ? (captureMode === 'text' ? 'Capturing…' : 'Saving…') : (captureMode === 'text' ? 'Capture' : 'Save URL')}
+                  </ToolbarButton>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <label className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -809,6 +887,12 @@ export function NodesPage() {
   const [activeViewId, setActiveViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [savingName, setSavingName] = useState('');
+  const [captureMode, setCaptureMode] = useState<'text' | 'url' | null>(null);
+  const [captureTitle, setCaptureTitle] = useState('');
+  const [captureBody, setCaptureBody] = useState('');
+  const [captureUrl, setCaptureUrl] = useState('');
+  const [captureBusy, setCaptureBusy] = useState(false);
+  const [captureError, setCaptureError] = useState<string | null>(null);
 
   const data = nodesApi.data ?? null;
   const savedViews = nodeViewsApi.data?.views ?? [];
@@ -929,6 +1013,31 @@ export function NodesPage() {
     setActiveViewId('');
   }, [activeViewId, savedViews]);
 
+  const closeCapture = useCallback(() => {
+    setCaptureMode(null);
+    setCaptureTitle('');
+    setCaptureBody('');
+    setCaptureUrl('');
+    setCaptureError(null);
+    setCaptureBusy(false);
+  }, []);
+
+  const handleSubmitCapture = useCallback(async () => {
+    setCaptureBusy(true);
+    setCaptureError(null);
+    try {
+      const created = captureMode === 'url'
+        ? await api.captureUrl({ url: captureUrl, title: captureTitle || undefined })
+        : await api.captureNote({ title: captureTitle || undefined, body: captureBody });
+      closeCapture();
+      await refreshAll();
+      navigate(`/nodes${buildNodesSearch('', { kind: 'note', nodeId: created.memory.id })}`);
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : String(error));
+      setCaptureBusy(false);
+    }
+  }, [captureBody, captureMode, captureTitle, captureUrl, closeCapture, navigate, refreshAll]);
+
   useEffect(() => {
     if (!selected) {
       return;
@@ -1011,6 +1120,19 @@ export function NodesPage() {
       onCreateNote={handleCreateNote}
       onCreateProject={handleCreateProject}
       onCreateSkill={handleCreateSkill}
+      captureMode={captureMode}
+      captureTitle={captureTitle}
+      captureBody={captureBody}
+      captureUrl={captureUrl}
+      captureBusy={captureBusy}
+      captureError={captureError}
+      onOpenQuickCapture={() => setCaptureMode('text')}
+      onOpenUrlCapture={() => setCaptureMode('url')}
+      onCloseCapture={closeCapture}
+      onCaptureTitleChange={setCaptureTitle}
+      onCaptureBodyChange={setCaptureBody}
+      onCaptureUrlChange={setCaptureUrl}
+      onSubmitCapture={() => { void handleSubmitCapture(); }}
       onActiveViewChange={handleActiveViewChange}
       onStartSaveView={() => setSavingView(true)}
       onCancelSaveView={() => { setSavingView(false); setSavingName(''); }}

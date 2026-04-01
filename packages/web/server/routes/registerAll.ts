@@ -99,7 +99,7 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
 
   registerShellRoutes(app, context);
 
-  registerRunsOpsRoutes(app);
+  registerRunsOpsRoutes(app, context);
 
   registerCompanionModelRoutes(companionApp, context);
   registerAlertRoutes(companionApp, context);

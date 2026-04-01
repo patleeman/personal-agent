@@ -174,14 +174,17 @@ This is the part that makes the system feel alive instead of static.
 
 When a conversation clearly produces reusable knowledge, distill it into a note.
 Keep raw conversations raw by default. Do not passively mine every transcript.
+The web UI now exposes a direct conversation → note promotion flow.
 
 ### Conversation → project
 
 When a conversation turns into ongoing work, create or update a project.
+The web UI now exposes a direct conversation → project promotion flow.
 
 ### Repeated manual process → skill
 
 When the same procedure keeps happening, extract it into a skill.
+The current product path is usually note → skill once the workflow is stable enough to trust.
 
 ### Repeated standing preference → `AGENTS.md`
 
@@ -190,13 +193,26 @@ When a pattern is really a durable user preference or standing instruction, put 
 ### Note → project
 
 If a note grows active status, blockers, and next steps, it probably wants to become a project.
+The web UI now supports note → project promotion directly from the note workspace.
 
 ### Project → note
 
 If project-specific material becomes generally reusable knowledge, distill it into a note.
 That same high bar applies here too: prefer a small explicit durable update over broad transcript-to-note dumping.
+The web UI now supports project → note promotion directly from the project workspace.
 
 That movement is normal. The system should stay sparse, but it does evolve.
+
+## Fast capture and URL capture
+
+Not every durable input should start life as a polished note or project.
+
+The web UI now supports two low-friction capture paths:
+
+- **quick capture** for rough ideas or half-baked thoughts
+- **URL capture** for saving a web page into the node system with a local archived reference copy
+
+Captured items land as inbox-style note nodes so they can be triaged later into a normal note, promoted into a project, or ignored.
 
 ## Shared knowledge vs active work
 
@@ -232,6 +248,7 @@ When an agent needs context, the intended retrieval pattern is:
 2. load relevant skill nodes for procedure
 3. load relevant note nodes for durable knowledge
 4. load the project node if the task is about active work
+5. expand through explicit node relationships when graph context is likely to matter
 
 This is why the docs should describe these as one knowledge system rather than separate product features.
 

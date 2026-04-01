@@ -134,6 +134,130 @@ function createProjectDetail() {
   };
 }
 
+function emptyApiResult(data: unknown = null) {
+  return {
+    data,
+    loading: false,
+    refreshing: false,
+    error: null,
+    refetch: vi.fn(),
+    replaceData: vi.fn(),
+  };
+}
+
+function installUseApiMock(path: string) {
+  const nodes = createNodeBrowserData();
+  vi.mocked(useApi).mockImplementation((_, key) => {
+    if (key == null) {
+      return emptyApiResult({
+        currentProfile: 'assistant',
+        profiles: ['assistant'],
+      });
+    }
+
+    if (key === 'nodes-browser:assistant') {
+      return emptyApiResult(nodes);
+    }
+
+    if (key === 'node-browser-views') {
+      return emptyApiResult({ views: [] });
+    }
+
+    if (key === 'node-detail-options') {
+      return emptyApiResult(nodes);
+    }
+
+    if (key === 'node-detail:memory-index') {
+      return emptyApiResult({
+        node: nodes.nodes[0],
+        outgoingRelationships: [],
+        incomingRelationships: [],
+        suggestedNodes: [],
+      });
+    }
+
+    if (key === 'node-detail:active-project') {
+      return emptyApiResult({
+        node: nodes.nodes[1],
+        outgoingRelationships: [],
+        incomingRelationships: [],
+        suggestedNodes: [],
+      });
+    }
+
+    if (key === 'node-detail:agent-browser') {
+      return emptyApiResult({
+        node: nodes.nodes[2],
+        outgoingRelationships: [],
+        incomingRelationships: [],
+        suggestedNodes: [],
+      });
+    }
+
+    if (key === 'nodes-detail:note:memory-index:assistant') {
+      return emptyApiResult({
+        kind: 'note',
+        detail: {
+          memory: {
+            id: 'memory-index',
+            title: 'Memory index',
+            summary: 'Top-level knowledge hub.',
+            description: 'Use this note as the top-level routing document for durable memory.',
+            path: '/tmp/memory-index/INDEX.md',
+            updated: '2026-03-28T12:00:00.000Z',
+            referenceCount: 2,
+          },
+          content: '# Memory index\n\nTop-level knowledge hub.',
+          references: [{
+            title: 'Overview',
+            summary: 'More context.',
+            relativePath: 'references/overview.md',
+            path: '/tmp/memory-index/references/overview.md',
+          }],
+          links: {
+            outgoing: [],
+            incoming: [],
+            unresolved: [],
+          },
+        },
+      });
+    }
+
+    if (key === 'nodes-detail:project:active-project:assistant') {
+      return emptyApiResult({
+        kind: 'project',
+        detail: createProjectDetail(),
+      });
+    }
+
+    if (key === 'nodes-detail:skill:agent-browser:assistant') {
+      return emptyApiResult({
+        kind: 'skill',
+        detail: {
+          skill: {
+            source: 'shared',
+            name: 'agent-browser',
+            description: 'Automate browsers and Electron apps with agent-browser.',
+            path: '/tmp/agent-browser/INDEX.md',
+            recentSessionCount: 2,
+            lastUsedAt: '2026-03-27T12:00:00.000Z',
+            usedInLastSession: true,
+          },
+          content: '---\ntitle: agent-browser\n---\n\n# agent-browser\n\nAutomate browsers.',
+          references: [],
+          links: {
+            outgoing: [],
+            incoming: [],
+            unresolved: [],
+          },
+        },
+      });
+    }
+
+    return emptyApiResult();
+  });
+}
+
 describe('NodesPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
@@ -154,6 +278,7 @@ describe('NodesPage', () => {
   });
 
   function renderPage(path: string) {
+    installUseApiMock(path);
     return renderToString(
       <ThemeProvider>
         <AppDataContext.Provider value={{
@@ -180,40 +305,7 @@ describe('NodesPage', () => {
     );
   }
 
-  it('renders a richer unified browser with lucene query controls', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-browser:assistant') {
-        return {
-          data: createNodeBrowserData(),
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key == null) {
-        return {
-          data: {
-            currentProfile: 'assistant',
-            profiles: ['assistant'],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
-
+  it('renders a richer unified browser with dense and saved-view controls', () => {
     const html = renderPage('/nodes');
 
     expect(html).toContain('Knowledge Base');
@@ -221,7 +313,7 @@ describe('NodesPage', () => {
     expect(html).toContain('3 nodes · 1 notes · 1 projects · 1 skills');
     expect(html).toContain('Lucene query');
     expect(html).toContain('Group by');
-    expect(html).toContain('Date field');
+    expect(html).toContain('Density');
     expect(html).toContain('Save view');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
@@ -229,91 +321,6 @@ describe('NodesPage', () => {
   });
 
   it('renders the selected note in the dedicated note workspace', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-browser:assistant') {
-        return {
-          data: {
-            ...createNodeBrowserData(),
-            nodes: [{
-              kind: 'note',
-              kinds: ['note'],
-              id: 'memory-index',
-              title: 'Memory index',
-              summary: 'Top-level knowledge hub.',
-              description: 'Use this note as the top-level routing document for durable memory.',
-              status: 'active',
-              updatedAt: '2026-03-28T12:00:00.000Z',
-              path: '/tmp/memory-index/INDEX.md',
-              tags: ['type:note', 'status:active'],
-              profiles: [],
-              searchText: 'memory index top-level knowledge hub',
-              note: { referenceCount: 2 },
-            }],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key == null) {
-        return {
-          data: {
-            currentProfile: 'assistant',
-            profiles: ['assistant'],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-detail:note:memory-index:assistant') {
-        return {
-          data: {
-            kind: 'note',
-            detail: {
-              memory: {
-                id: 'memory-index',
-                title: 'Memory index',
-                summary: 'Top-level knowledge hub.',
-                description: 'Use this note as the top-level routing document for durable memory.',
-                path: '/tmp/memory-index/INDEX.md',
-                updated: '2026-03-28T12:00:00.000Z',
-                referenceCount: 2,
-              },
-              content: '# Memory index\n\nTop-level knowledge hub.',
-              references: [{
-                title: 'Overview',
-                summary: 'More context.',
-                relativePath: 'references/overview.md',
-                path: '/tmp/memory-index/references/overview.md',
-              }],
-              links: {
-                outgoing: [],
-                incoming: [],
-                unresolved: [],
-              },
-            },
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
-
     const html = renderPage('/nodes?kind=note&node=memory-index');
 
     expect(html).not.toContain('Lucene query');
@@ -321,58 +328,10 @@ describe('NodesPage', () => {
     expect(html).toContain('Top-level knowledge hub.');
     expect(html).toContain('Back to table');
     expect(html).toContain('overview.md');
+    expect(html).toContain('Node graph');
   });
 
   it('renders the selected project with the dedicated project detail page', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-browser:assistant') {
-        return {
-          data: {
-            ...createNodeBrowserData(),
-            nodes: [createNodeBrowserData().nodes[1]!],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key == null) {
-        return {
-          data: {
-            currentProfile: 'assistant',
-            profiles: ['assistant'],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-detail:project:active-project:assistant') {
-        return {
-          data: {
-            kind: 'project',
-            detail: createProjectDetail(),
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
-
     const html = renderPage('/nodes?kind=project&node=active-project');
 
     expect(html).not.toContain('Lucene query');
@@ -380,75 +339,10 @@ describe('NodesPage', () => {
     expect(html).toContain('aria-label="Back to table"');
     expect(html).toContain('Tasks');
     expect(html).toContain('Properties');
+    expect(html).toContain('Node graph');
   });
 
   it('renders the selected skill without the embedded knowledge browser', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'nodes-browser:assistant') {
-        return {
-          data: {
-            ...createNodeBrowserData(),
-            nodes: [createNodeBrowserData().nodes[2]!],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key == null) {
-        return {
-          data: {
-            currentProfile: 'assistant',
-            profiles: ['assistant'],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      if (key === 'nodes-detail:skill:agent-browser:assistant') {
-        return {
-          data: {
-            kind: 'skill',
-            detail: {
-              skill: {
-                source: 'shared',
-                name: 'agent-browser',
-                description: 'Automate browsers and Electron apps with agent-browser.',
-                path: '/tmp/agent-browser/INDEX.md',
-                recentSessionCount: 2,
-                lastUsedAt: '2026-03-27T12:00:00.000Z',
-                usedInLastSession: true,
-              },
-              content: '---\ntitle: agent-browser\n---\n\n# agent-browser\n\nAutomate browsers.',
-              references: [],
-              links: {
-                outgoing: [],
-                incoming: [],
-                unresolved: [],
-              },
-            },
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
-
     const html = renderPage('/nodes?kind=skill&node=agent-browser');
 
     expect(html).not.toContain('Lucene query');
@@ -456,5 +350,6 @@ describe('NodesPage', () => {
     expect(html).toContain('agent-browser');
     expect(html).toContain('Reload');
     expect(html).toContain('Properties');
+    expect(html).toContain('Node graph');
   });
 });

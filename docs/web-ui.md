@@ -214,7 +214,9 @@ From the Knowledge Base page you can:
 - use a Lucene-style query bar for tag and text search
 - sort by updated/created/title/status and group by kind or tag-derived dimensions
 - filter by date range without leaving the page
-- save reusable browser views locally for common slices of the node graph
+- save reusable browser views on the server so they follow the active profile instead of the current browser tab
+- switch between the normal browse view and a denser table mode
+- open quick-capture notes and saved URLs directly into the node system
 - open any row into a shared node workspace with the main content in the center and metadata on the right
 - hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
 
@@ -225,6 +227,7 @@ Projects are durable cross-conversation work hubs.
 From the Projects page you can:
 
 - create a project from a short title plus a longer description
+- promote a project into a reusable note when project-specific material becomes generally useful knowledge
 - inspect current status, blockers, optional milestones, and tasks
 - edit the raw project node source (`INDEX.md` frontmatter + markdown body)
 - edit or regenerate the project document when present
