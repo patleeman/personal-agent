@@ -5,8 +5,8 @@
 import type { Express, Request } from 'express';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
-import { existsSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   getProfilesRoot,
   listAllProjectIds,
@@ -104,6 +104,77 @@ function generateNoteId(title: string): string {
     if (!existingIds.has(candidate)) return candidate;
   }
   return `${base}-${Date.now()}`;
+}
+
+function inferCaptureTitle(title: string | undefined, body: string): string {
+  const normalizedTitle = title?.trim();
+  if (normalizedTitle) {
+    return normalizedTitle;
+  }
+
+  const firstLine = body.split(/\r?\n/).map((line) => line.trim()).find((line) => line.length > 0);
+  return firstLine ? firstLine.slice(0, 80) : 'Quick capture';
+}
+
+function summarizeCaptureBody(body: string): string {
+  return body.replace(/\s+/g, ' ').trim().slice(0, 160) || 'Captured note.';
+}
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\r/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+function extractHtmlTitle(html: string): string {
+  const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  return stripHtml(match?.[1] ?? '').slice(0, 160);
+}
+
+async function captureUrl(url: string): Promise<{
+  finalUrl: string;
+  title: string;
+  contentType: string;
+  raw: string;
+  extractedText: string;
+}> {
+  const response = await fetch(url, {
+    redirect: 'follow',
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      'User-Agent': 'personal-agent/knowledge-capture',
+      Accept: 'text/html, text/plain;q=0.9, application/xhtml+xml;q=0.8, */*;q=0.5',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Capture failed: ${response.status} ${response.statusText}`);
+  }
+
+  const contentType = response.headers.get('content-type')?.trim() || 'application/octet-stream';
+  const raw = await response.text();
+  const isHtml = /html|xml/i.test(contentType);
+  const extractedText = (isHtml ? stripHtml(raw) : raw.trim()).slice(0, 20000);
+  const title = isHtml ? extractHtmlTitle(raw) : raw.split(/\r?\n/).find((line) => line.trim().length > 0)?.trim().slice(0, 160) ?? '';
+  return {
+    finalUrl: response.url,
+    title,
+    contentType,
+    raw,
+    extractedText,
+  };
 }
 
 export function registerMemoryNotesRoutes(
@@ -249,6 +320,106 @@ export function registerMemoryNotesRoutes(
     } catch (err) {
       logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/captures', (req, res) => {
+    try {
+      const body = normalizeNoteBody(req.body?.body);
+      if (!body) {
+        res.status(400).json({ error: 'body required' });
+        return;
+      }
+      const title = inferCaptureTitle(typeof req.body?.title === 'string' ? req.body.title : undefined, body);
+      const noteId = generateNoteId(title);
+      const created = createMemoryDoc({
+        id: noteId,
+        title,
+        summary: summarizeCaptureBody(body),
+        status: 'inbox',
+        type: 'capture',
+      });
+      writeFileSync(created.filePath!, buildStructuredNoteMarkdown(readFileSync(created.filePath!, 'utf-8'), {
+        noteId,
+        title,
+        summary: summarizeCaptureBody(body),
+        body,
+      }), 'utf-8');
+      clearMemoryBrowserCaches();
+      res.status(201).json(readNoteDetail(noteId, _getCurrentProfile()));
+    } catch (err) {
+      logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/captures/url', async (req, res) => {
+    try {
+      const rawUrl = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+      if (!rawUrl) {
+        res.status(400).json({ error: 'url required' });
+        return;
+      }
+      const parsed = new URL(rawUrl);
+      const captured = await captureUrl(parsed.toString());
+      const title = inferCaptureTitle(typeof req.body?.title === 'string' ? req.body.title : captured.title, captured.title || parsed.hostname);
+      const noteId = generateNoteId(title);
+      const summary = summarizeCaptureBody(captured.extractedText || title);
+      const created = createMemoryDoc({
+        id: noteId,
+        title,
+        summary,
+        status: 'inbox',
+        type: 'capture',
+        description: `Saved from ${captured.finalUrl}`,
+      });
+      const noteBody = [
+        `# ${title}`,
+        '',
+        `Saved from ${captured.finalUrl}.`,
+        '',
+        'Review this capture and either keep it as a note, promote it into a project, or ignore it.',
+      ].join('\n');
+      writeFileSync(created.filePath!, buildStructuredNoteMarkdown(readFileSync(created.filePath!, 'utf-8'), {
+        noteId,
+        title,
+        summary,
+        description: `Saved from ${captured.finalUrl}`,
+        descriptionProvided: true,
+        body: noteBody,
+      }), 'utf-8');
+
+      const noteDir = dirname(created.filePath!);
+      const referencesDir = join(noteDir, 'references');
+      mkdirSync(referencesDir, { recursive: true });
+      writeFileSync(join(referencesDir, 'source.md'), [
+        '---',
+        `id: source`,
+        `title: ${JSON.stringify(captured.title || title)}`,
+        `summary: ${JSON.stringify(summary)}`,
+        `updatedAt: ${new Date().toISOString()}`,
+        'metadata:',
+        `  sourceUrl: ${JSON.stringify(parsed.toString())}`,
+        `  finalUrl: ${JSON.stringify(captured.finalUrl)}`,
+        `  contentType: ${JSON.stringify(captured.contentType)}`,
+        '---',
+        '',
+        `# ${captured.title || title}`,
+        '',
+        `Source: ${captured.finalUrl}`,
+        '',
+        '## Archived extract',
+        '',
+        captured.extractedText || '(No readable text extracted.)',
+        '',
+      ].join('\n'), 'utf-8');
+      writeFileSync(join(referencesDir, /html|xml/i.test(captured.contentType) ? 'source.raw.html' : 'source.raw.txt'), captured.raw, 'utf-8');
+      clearMemoryBrowserCaches();
+      res.status(201).json(readNoteDetail(noteId, _getCurrentProfile()));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(message.startsWith('url required') || message.startsWith('Invalid URL') ? 400 : 500).json({ error: message });
     }
   });
 

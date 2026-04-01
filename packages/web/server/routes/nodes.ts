@@ -200,9 +200,23 @@ export function registerNodeRoutes(
     try {
       const profile = resolveRequestedProfile(req.query.viewProfile, context);
       const nodeId = String(req.params.nodeId).trim().toLowerCase();
+      const current = readNodeBrowserDetail(profile, nodeId).node;
+      const nextTags = Array.isArray(req.body?.tags)
+        ? req.body.tags
+          .filter((entry: unknown): entry is string => typeof entry === 'string')
+          .map((entry: string) => entry.trim())
+          .filter((entry: string) => entry.length > 0)
+        : null;
       updateUnifiedNode({
         id: nodeId,
+        ...(typeof req.body?.summary === 'string' ? { summary: req.body.summary } : {}),
         ...(typeof req.body?.status === 'string' ? { status: req.body.status } : {}),
+        ...(nextTags
+          ? {
+            addTags: nextTags.filter((tag: string) => !current.tags.includes(tag)),
+            removeTags: current.tags.filter((tag: string) => !nextTags.includes(tag)),
+          }
+          : {}),
         ...(Array.isArray(req.body?.addTags)
           ? { addTags: req.body.addTags.filter((entry: unknown): entry is string => typeof entry === 'string') }
           : {}),

@@ -5,11 +5,20 @@
  */
 
 import type { Express } from 'express';
+import type { ServerRouteContext } from './context.js';
 import { getDurableRun, clearDurableRunsListCache } from '../automation/durableRuns.js';
 import { getDurableRunAttentionSignature } from '../automation/durableRunAttention.js';
 import { markDurableRunAttentionRead, markDurableRunAttentionUnread } from '@personal-agent/core';
-import { readRemoteExecutionRunConversationId } from '../workspace/remoteExecution.js';
-import { resolveConversationSessionFile, getCurrentProfile, listConversationSessionsSnapshot } from '../conversations/conversationService.js';
+import { resolveConversationSessionFile, listConversationSessionsSnapshot } from '../conversations/conversationService.js';
+import {
+  buildConversationMemoryDistillRecoveryHiddenContext,
+  buildConversationMemoryDistillRecoveryVisibleMessage,
+  distillConversationMemoryNow,
+  formatConversationMemoryCheckpointAnchor,
+  readConversationMemoryDistillRunInputFromRun,
+  readConversationMemoryDistillRunState,
+  startConversationMemoryDistillRun,
+} from '../conversations/conversationMemoryDistillService.js';
 import {
   CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX,
   readConversationMemoryMaintenanceState,
@@ -24,24 +33,10 @@ import { invalidateAppTopics, logError } from '../middleware/index.js';
 import { buildRemoteExecutionTranscriptResponse } from '../workspace/remoteExecution.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 
-async function getDistillSupport() {
-  const idx = await import('../index.js');
-  return {
-    readConversationMemoryDistillRunInputFromRun: idx.readConversationMemoryDistillRunInputFromRun,
-    readConversationMemoryDistillRunState: idx.readConversationMemoryDistillRunState,
-    startConversationMemoryDistillRun: idx.startConversationMemoryDistillRun,
-    distillConversationMemoryNow: idx.distillConversationMemoryNow,
-    formatConversationMemoryCheckpointAnchor: idx.formatConversationMemoryCheckpointAnchor,
-    buildConversationMemoryDistillRecoveryVisibleMessage: idx.buildConversationMemoryDistillRecoveryVisibleMessage,
-    buildConversationMemoryDistillRecoveryHiddenContext: idx.buildConversationMemoryDistillRecoveryHiddenContext,
-    startConversationMemoryDistillBatchRecoveryRun: idx.startConversationMemoryDistillBatchRecoveryRun,
-    listMemoryWorkItems: idx.listMemoryWorkItems,
-    buildLiveSessionResourceOptions: idx.buildLiveSessionResourceOptions,
-    buildLiveSessionExtensionFactories: idx.buildLiveSessionExtensionFactories,
-  };
-}
-
-export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
+export function registerRunsOpsRoutes(
+  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getServerPort' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+): void {
   router.patch('/api/runs/:id/attention', async (req, res) => {
     try {
       const { read } = req.body as { read?: boolean };
@@ -64,17 +59,16 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
 
   router.post('/api/runs/:id/node-distill/retry', async (req, res) => {
     try {
-      const distill = await getDistillSupport();
-      const profile = getCurrentProfile();
+      const profile = context.getCurrentProfile();
       const detail = await getDurableRun(req.params.id);
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
-      const distillInput = distill.readConversationMemoryDistillRunInputFromRun(run, profile);
+      const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
       if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
       if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be retried.' }); return; }
-      const existing = await distill.readConversationMemoryDistillRunState(distillInput.conversationId);
+      const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
       if (existing.running) { res.status(409).json({ error: 'A node distillation is already running for this conversation.' }); return; }
-      const result = await distill.startConversationMemoryDistillRun({
+      const result = await startConversationMemoryDistillRun({
         conversationId: distillInput.conversationId,
         profile,
         checkpointId: distillInput.checkpointId,
@@ -83,6 +77,9 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         title: distillInput.title,
         summary: distillInput.summary,
         emitActivity: distillInput.emitActivity,
+      }, {
+        repoRoot: context.getRepoRoot(),
+        port: context.getServerPort(),
       });
       if (!result.accepted || !result.runId) {
         const error = result.reason ?? 'Could not retry conversation node distillation.';
@@ -119,15 +116,14 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
   router.post('/api/runs/:id/node-distill/recover-now', async (req, res) => {
     const requestedProfile = typeof req.body?.profile === 'string' && req.body.profile.trim().length > 0
       ? req.body.profile.trim()
-      : getCurrentProfile();
+      : context.getCurrentProfile();
 
     try {
-      const distill = await getDistillSupport();
       const profile = requestedProfile;
       const detail = await getDurableRun(req.params.id);
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
-      const distillInput = distill.readConversationMemoryDistillRunInputFromRun(run, profile);
+      const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
       if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
       const maintenanceState = readConversationMemoryMaintenanceState({ profile, conversationId: distillInput.conversationId });
       if (maintenanceState?.lastCompletedCheckpointId === distillInput.checkpointId && maintenanceState.status !== 'failed') {
@@ -135,9 +131,9 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
         return;
       }
       if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered automatically.' }); return; }
-      const existing = await distill.readConversationMemoryDistillRunState(distillInput.conversationId);
+      const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
       if (existing.running) { res.status(409).json({ error: 'A node distillation is already running for this conversation.' }); return; }
-      const recovered = await distill.distillConversationMemoryNow({
+      const recovered = await distillConversationMemoryNow({
         conversationId: distillInput.conversationId,
         profile,
         checkpointId: distillInput.checkpointId,
@@ -154,7 +150,7 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
       try {
         const detail = await getDurableRun(req.params.id);
         const run = detail?.run;
-        const distillInput = run ? (await getDistillSupport()).readConversationMemoryDistillRunInputFromRun(run, requestedProfile) : null;
+        const distillInput = run ? readConversationMemoryDistillRunInputFromRun(run, requestedProfile) : null;
         if (distillInput) {
           markConversationMemoryMaintenanceRunFailed({ profile: requestedProfile, conversationId: distillInput.conversationId, checkpointId: distillInput.checkpointId, error: message });
           if (distillInput.emitActivity) {
@@ -187,12 +183,11 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
 
   router.post('/api/runs/:id/node-distill/recover', async (req, res) => {
     try {
-      const distill = await getDistillSupport();
-      const profile = getCurrentProfile();
+      const profile = context.getCurrentProfile();
       const detail = await getDurableRun(req.params.id);
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
-      const distillInput = distill.readConversationMemoryDistillRunInputFromRun(run, profile);
+      const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
       if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
       if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered in a conversation.' }); return; }
       const maintenanceState = readConversationMemoryMaintenanceState({ profile, conversationId: distillInput.conversationId });
@@ -204,10 +199,9 @@ export function registerRunsOpsRoutes(router: Pick<Express, 'get' | 'post' | 'pa
       const cwd = sourceSession?.cwd
         ?? maintenanceState?.latestCwd
         ?? SessionManager.open(sessionFile).getCwd();
-      const { buildLiveSessionResourceOptions, buildLiveSessionExtensionFactories, buildConversationMemoryDistillRecoveryVisibleMessage, buildConversationMemoryDistillRecoveryHiddenContext, formatConversationMemoryCheckpointAnchor } = distill;
       const created = await createSessionFromExisting(sessionFile, cwd, {
-        ...buildLiveSessionResourceOptions(),
-        extensionFactories: buildLiveSessionExtensionFactories(),
+        ...context.buildLiveSessionResourceOptions(),
+        extensionFactories: context.buildLiveSessionExtensionFactories(),
       });
       const sourceLabel = sourceSession?.title ?? maintenanceState?.latestConversationTitle ?? distillInput.conversationId;
       renameSession(created.id, `${CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX} ${sourceLabel}`);

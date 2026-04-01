@@ -35,6 +35,7 @@ import { normalizeMarkdownValue } from '../markdownDocument';
 import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
+import { NodeCaptureTriagePanel } from '../components/NodeCaptureTriagePanel';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
@@ -734,6 +735,11 @@ export function NoteWorkspace({
           {hasReferences ? (
             <NodeRailSection title="References" meta={`${detail?.references.length}`}>
               <NoteReferenceList references={detail?.references ?? []} />
+            </NodeRailSection>
+          ) : null}
+          {detail.memory.type === 'capture' || detail.memory.status === 'inbox' ? (
+            <NodeRailSection title="Capture triage">
+              <NodeCaptureTriagePanel nodeId={detail.memory.id} onChanged={onRefetched} />
             </NodeRailSection>
           ) : null}
           {hasRelationships ? (
