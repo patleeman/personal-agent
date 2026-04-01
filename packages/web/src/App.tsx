@@ -592,6 +592,7 @@ export function App() {
                       <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tools" element={suspendRoute(<ToolsPage />)} />
+                      <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
                       <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                     </Route>
                   </Routes>

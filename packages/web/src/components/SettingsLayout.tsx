@@ -79,11 +79,6 @@ const SETTINGS_CONTROL_CENTER_ITEMS = [
     summary: 'Browse cron jobs, one-time tasks, and unattended automation.',
   },
   {
-    href: '/plans',
-    label: 'Reminder Presets',
-    summary: 'Reusable reminder presets and default automation stacks.',
-  },
-  {
     href: '/tools',
     label: 'Tools',
     summary: 'Available tools, CLIs, MCP servers, and package sources.',

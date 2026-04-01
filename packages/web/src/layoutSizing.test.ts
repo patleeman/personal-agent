@@ -69,11 +69,6 @@ describe('layout sizing helpers', () => {
       storageKey: 'pa:rail-width:settings',
       initialWidth: 380,
     });
-
-    expect(getRailLayoutPrefs('/plans')).toEqual({
-      storageKey: 'pa:rail-width:plans',
-      initialMainWidthRatio: 0.7,
-    });
   });
 
   it('derives 70% initial rails for tools and managed notes', () => {
