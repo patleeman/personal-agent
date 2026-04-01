@@ -5,11 +5,20 @@
  * Extracted from index.ts so route modules can use them.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
-import { readdirSync } from 'node:fs';
-import { join, normalize } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, normalize } from 'node:path';
+import {
+  createUnifiedNode,
+  getProfilesRoot,
+  listUnifiedSkillNodeDirs,
+  loadMemoryPackageReferences,
+  loadUnifiedNodes,
+  migrateLegacyNodes,
+  resolveUnifiedNodesDir,
+} from '@personal-agent/core';
+import { resolveResourceProfile } from '@personal-agent/resources';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
-import { getProfilesRoot } from '@personal-agent/core';
+import { readNodeLinks, type NodeLinks } from './nodeLinks.js';
 
 // ── Profile getter ────────────────────────────────────────────────────────────
 
@@ -25,7 +34,7 @@ export function getMemoryDocsCurrentProfile(): string {
   return _getCurrentProfile();
 }
 
-// ── Memory path utilities ───────────────────────────────────────────────────────
+// ── Memory path utilities ─────────────────────────────────────────────────────
 
 export function normalizeMemoryPath(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -40,9 +49,16 @@ export function isEditableMemoryFilePath(filePath: string): boolean {
   if (!filePath || typeof filePath !== 'string') return false;
   const normalized = normalizeMemoryPath(filePath);
   if (!normalized) return false;
+
   const profilesRoot = getProfilesRoot();
-  const memoryDir = join(profilesRoot, _getCurrentProfile(), 'memory');
-  return normalized.startsWith(memoryDir + '/');
+  const sharedRoot = dirname(profilesRoot);
+  const noteDir = normalizeMemoryPath(resolveUnifiedNodesDir({ profilesRoot }));
+  const agentDir = normalizeMemoryPath(join(profilesRoot, _getCurrentProfile(), 'agent'));
+  const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
+
+  return normalized.startsWith(`${noteDir}/`)
+    || normalized.startsWith(`${agentDir}/`)
+    || normalized.startsWith(`${sharedSkillsDir}/`);
 }
 
 // ── Memory docs ───────────────────────────────────────────────────────────────
@@ -53,6 +69,7 @@ interface MemoryDocFrontmatter {
   summary?: string;
   description?: string;
   updatedAt?: string;
+  status?: string;
   [key: string]: unknown;
 }
 
@@ -62,79 +79,89 @@ export interface MemoryDocItem {
   summary?: string;
   description?: string;
   path: string;
+  type?: string;
+  status?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related?: string[];
   updated?: string;
+  searchText?: string;
+  referenceCount?: number;
   recentSessionCount?: number;
   lastUsedAt?: string | null;
   usedInLastSession?: boolean;
 }
 
-export interface MemoryDocDetail extends MemoryDocItem {
-  body?: string;
+export interface MemoryReferenceItem {
+  title: string;
+  summary: string;
+  path: string;
+  relativePath: string;
+  updated?: string;
 }
 
-function _ensureMemoryDocsDir(): string {
-  const profilesRoot = getProfilesRoot();
-  const memoryDir = join(profilesRoot, _getCurrentProfile(), 'memory');
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-  }
+export interface MemoryDocDetail {
+  memory: MemoryDocItem;
+  content: string;
+  references: MemoryReferenceItem[];
+  links?: NodeLinks;
+}
 
+function extractTagValue(tags: string[], key: string): string | undefined {
+  return tags
+    .map((tag) => tag.match(new RegExp(`^${key}:(.+)$`, 'i'))?.[1]?.trim())
+    .find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function countReferenceFiles(dirPath: string): number {
+  const referencesDir = join(dirPath, 'references');
+  try {
+    return loadMemoryPackageReferences(dirPath).length;
+  } catch {
+    return existsSync(referencesDir) ? 1 : 0;
+  }
+}
+
+function mapLoadedMemoryDoc(doc: ReturnType<typeof loadUnifiedNodes>['nodes'][number], includeSearchText = false): MemoryDocItem {
+  const searchText = includeSearchText ? doc.searchText : undefined;
+
+  return {
+    id: doc.id,
+    title: doc.title,
+    summary: doc.summary,
+    description: doc.description,
+    path: doc.filePath,
+    type: extractTagValue(doc.tags, 'noteType') ?? doc.type,
+    status: doc.status,
+    area: extractTagValue(doc.tags, 'area'),
+    role: extractTagValue(doc.tags, 'role') ?? extractTagValue(doc.tags, 'noteType'),
+    parent: doc.links.parent,
+    related: [...doc.links.related],
+    updated: doc.updatedAt,
+    ...(searchText ? { searchText } : {}),
+    referenceCount: countReferenceFiles(doc.dirPath),
+  };
+}
+
+function ensureUnifiedNodesMaterialized(): string {
+  const profilesRoot = getProfilesRoot();
+  const memoryDir = resolveUnifiedNodesDir({ profilesRoot });
+  mkdirSync(memoryDir, { recursive: true });
+  migrateLegacyNodes({ profilesRoot });
   return memoryDir;
 }
 
 export function ensureMemoryDocsDir(): string {
-  return _ensureMemoryDocsDir();
+  return ensureUnifiedNodesMaterialized();
 }
-
-function _loadMemoryDocMetadata(filePath: string): MemoryDocItem | null {
-  try {
-    const raw = readFileSync(filePath, 'utf-8');
-    const normalized = raw.replace(/\r\n/g, '\n');
-    const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-    if (!match) return null;
-    const document = parseDocument(match[1], { prettyErrors: true, uniqueKeys: true });
-    if (document.errors.length > 0) return null;
-    const parsed = document.toJS() as MemoryDocFrontmatter;
-    if (!parsed || typeof parsed !== 'object') return null;
-    return {
-      id: parsed.id ?? '',
-      title: parsed.title ?? '',
-      summary: parsed.summary?.toString().trim(),
-      description: parsed.description?.toString().trim(),
-      path: filePath,
-      updated: parsed.updatedAt,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function _listMemoryDocsFromDir(dir: string): MemoryDocItem[] {
-  const docs: MemoryDocItem[] = [];
-  try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-      const doc = _loadMemoryDocMetadata(join(dir, entry.name));
-      if (doc) docs.push(doc);
-    }
-  } catch {
-    // ignore
-  }
-  docs.sort((a, b) => String(b.updated ?? '').localeCompare(String(a.updated ?? '')));
-  return docs;
-}
-
-let _memoryDocsCache: MemoryDocItem[] | null = null;
-let _memoryDocsCacheAt = 0;
-const MEMORY_DOCS_CACHE_TTL_MS = 30_000;
 
 export function clearMemoryBrowserCaches(): void {
-  _memoryDocsCache = null;
 }
 
-export function warmMemoryBrowserCaches(_profile = _getCurrentProfile()): void {
+export function warmMemoryBrowserCaches(profile = _getCurrentProfile()): void {
   void listMemoryDocs();
-  void listSkillsForProfile(_profile);
+  void listSkillsForProfile(profile);
 }
 
 export interface RecentReadUsageEntry {
@@ -148,14 +175,18 @@ export function buildRecentReadUsage(_paths: string[]): Map<string, RecentReadUs
 }
 
 export function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
-  const now = Date.now();
-  if (!_memoryDocsCache || now - _memoryDocsCacheAt > MEMORY_DOCS_CACHE_TTL_MS || options.includeSearchText) {
-    const profilesRoot = getProfilesRoot();
-    const memoryDir = join(profilesRoot, _getCurrentProfile(), 'memory');
-    _memoryDocsCache = existsSync(memoryDir) ? _listMemoryDocsFromDir(memoryDir) : [];
-    _memoryDocsCacheAt = now;
-  }
-  return _memoryDocsCache!.map((doc) => ({ ...doc }));
+  ensureUnifiedNodesMaterialized();
+  const docs = loadUnifiedNodes({ profilesRoot: getProfilesRoot() }).nodes
+    .filter((doc) => doc.kinds.includes('note') || (!doc.kinds.includes('project') && !doc.kinds.includes('skill')))
+    .map((doc) => mapLoadedMemoryDoc(doc, options.includeSearchText === true));
+
+  docs.sort((left, right) => {
+    return String(right.updated ?? '').localeCompare(String(left.updated ?? ''))
+      || left.title.localeCompare(right.title)
+      || left.id.localeCompare(right.id);
+  });
+
+  return docs;
 }
 
 export function findMemoryDocById(
@@ -167,29 +198,56 @@ export function findMemoryDocById(
 
 // ── Skills ────────────────────────────────────────────────────────────────────
 
-function _inferSkillSource(filePath: string): string {
+function inferSkillSource(filePath: string, profile: string): string {
   const profilesRoot = getProfilesRoot();
-  const profile = _getCurrentProfile();
-  if (filePath.startsWith(join(profilesRoot, profile, 'skills/'))) return 'profile';
-  if (filePath.includes('/skills/')) return 'global';
+  const sharedRoot = dirname(profilesRoot);
+  const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
+  const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
+  const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
+  const normalizedFilePath = normalizeMemoryPath(filePath);
+
+  if (normalizedFilePath.startsWith(`${profileSkillDir}/`) || normalizedFilePath.startsWith(`${profileLegacySkillDir}/`)) {
+    return 'profile';
+  }
+  if (normalizedFilePath.startsWith(`${sharedSkillsDir}/`)) {
+    return 'global';
+  }
   return 'project';
 }
 
-function _listSkillFiles(skillDir: string): string[] {
+function listSkillFiles(skillDir: string): string[] {
   if (!existsSync(skillDir)) return [];
-  const files: string[] = [];
+  const candidates = [join(skillDir, 'INDEX.md'), join(skillDir, 'SKILL.md')];
+  return candidates.filter((filePath) => existsSync(filePath));
+}
+
+function parseSkillFrontmatter(filePath: string): Record<string, unknown> {
   try {
-    for (const entry of readdirSync(skillDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        files.push(..._listSkillFiles(join(skillDir, entry.name)));
-      } else if (entry.name.endsWith('.md')) {
-        files.push(join(skillDir, entry.name));
-      }
+    const content = readFileSync(filePath, 'utf-8');
+    const match = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!match) {
+      return {};
     }
+    const document = parseDocument(match[1], { prettyErrors: true, uniqueKeys: true });
+    if (document.errors.length > 0) {
+      return {};
+    }
+    const parsed = document.toJS() as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
   } catch {
-    // ignore
+    return {};
   }
-  return files;
+}
+
+function skillMatchesProfile(frontmatter: Record<string, unknown>, profile: string): boolean {
+  const profiles = frontmatter.profiles;
+  if (!Array.isArray(profiles) || profiles.length === 0) {
+    return true;
+  }
+
+  return profiles.some((entry) => typeof entry === 'string' && entry.trim() === profile);
 }
 
 export interface SkillItem {
@@ -204,42 +262,62 @@ export interface SkillItem {
 
 export function listSkillsForProfile(profile = _getCurrentProfile()): SkillItem[] {
   const profilesRoot = getProfilesRoot();
-  const profileDir = join(profilesRoot, profile);
-  const skillDirs = [join(profileDir, 'skills'), join(profileDir, '.skills')];
+  ensureUnifiedNodesMaterialized();
+  const resolved = resolveResourceProfile(profile, {
+    repoRoot: process.cwd(),
+    profilesRoot,
+  });
+
+  const seenPaths = new Set<string>();
+  const seenNames = new Set<string>();
   const skills: SkillItem[] = [];
-  for (const skillDir of skillDirs) {
-    for (const filePath of _listSkillFiles(skillDir)) {
-      try {
-        const content = readFileSync(filePath, 'utf-8');
-        const match = content.match(/^---\n([\s\S]*?)\n---/);
-        let title = filePath.replace(/\\/g, '/').split('/').pop()?.replace(/\.md$/, '') ?? '';
-        let description = '';
-        if (match) {
-          const document = parseDocument(match[1], { prettyErrors: true, uniqueKeys: true });
-          if (document.errors.length === 0) {
-            const parsed = document.toJS() as Record<string, unknown>;
-            if (typeof parsed.title === 'string' && parsed.title.trim()) {
-              title = parsed.title.trim();
-            }
-            if (typeof parsed.description === 'string') description = parsed.description.trim();
-          }
-        }
-        const name = title.replace(/[^a-zA-Z0-9_-]+/g, '-').toLowerCase();
-        skills.push({ name, source: _inferSkillSource(filePath), description, path: filePath });
-      } catch {
-        // ignore
+  const unifiedSkillDirs = listUnifiedSkillNodeDirs(profile, { profilesRoot });
+
+  for (const skillDir of [...unifiedSkillDirs, ...resolved.skillDirs]) {
+    for (const filePath of listSkillFiles(skillDir)) {
+      const normalizedPath = normalizeMemoryPath(filePath);
+      if (!normalizedPath || seenPaths.has(normalizedPath)) {
+        continue;
       }
+      seenPaths.add(normalizedPath);
+
+      const frontmatter = parseSkillFrontmatter(filePath);
+      if (!skillMatchesProfile(frontmatter, profile)) {
+        continue;
+      }
+
+      const name = typeof frontmatter.id === 'string' && frontmatter.id.trim().length > 0
+        ? frontmatter.id.trim()
+        : (typeof frontmatter.name === 'string' && frontmatter.name.trim().length > 0
+          ? frontmatter.name.trim()
+          : normalizedPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.md$/, '') ?? '');
+      if (!name || seenNames.has(name)) {
+        continue;
+      }
+      seenNames.add(name);
+
+      const description = typeof frontmatter.summary === 'string' && frontmatter.summary.trim().length > 0
+        ? frontmatter.summary.trim()
+        : (typeof frontmatter.description === 'string' ? frontmatter.description.trim() : '');
+
+      skills.push({
+        name,
+        source: inferSkillSource(filePath, profile),
+        description,
+        path: filePath,
+      });
     }
   }
+
   skills.sort((a, b) => a.name.localeCompare(b.name));
   return skills;
 }
 
 export function readSkillDetailForProfile(skillName: string, profile = _getCurrentProfile()): SkillItem | null {
-  return listSkillsForProfile(profile).find((s) => s.name === skillName) ?? null;
+  return listSkillsForProfile(profile).find((skill) => skill.name === skillName) ?? null;
 }
 
-// ── Notes ────────────────────────────────────────────────────────────────────
+// ── Notes ─────────────────────────────────────────────────────────────────────
 
 const MAX_CREATED_NOTE_ID_LENGTH = 52;
 
@@ -271,7 +349,7 @@ export function extractNoteSummaryFromBody(content: string): string {
   return '';
 }
 
-function _parseNoteFrontmatter(rawContent: string): { frontmatter: Record<string, unknown>; body: string } {
+function parseNoteFrontmatter(rawContent: string): { frontmatter: Record<string, unknown>; body: string } {
   const normalized = rawContent.replace(/\r\n/g, '\n');
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: normalized.trim() };
@@ -284,7 +362,7 @@ function _parseNoteFrontmatter(rawContent: string): { frontmatter: Record<string
   return { frontmatter: parsed as Record<string, unknown>, body: (match[2] ?? '').replace(/^\n+/, '') };
 }
 
-function _stringifyNoteMarkdown(frontmatter: Record<string, unknown>, body: string): string {
+function stringifyNoteMarkdown(frontmatter: Record<string, unknown>, body: string): string {
   const text = stringifyYaml(frontmatter, { lineWidth: 0, indent: 2, minContentWidth: 0 }).trimEnd();
   const normalizedBody = body.replace(/\r\n/g, '\n').trim();
   return `---\n${text}\n---\n\n${normalizedBody.length > 0 ? `${normalizedBody}\n` : ''}`;
@@ -300,47 +378,60 @@ export function buildStructuredNoteMarkdown(rawContent: string, input: {
 }): string {
   const title = normalizeCreatedNoteTitle(input.title);
   if (title.length === 0) throw new Error('title required');
+
   const editableBody = normalizeNoteBody(input.body);
   const summary = normalizeCreatedNoteSummary(input.summary)
     || extractNoteSummaryFromBody(editableBody)
     || `Personal note about ${title}.`;
-  const parsed = _parseNoteFrontmatter(rawContent);
+  const parsed = parseNoteFrontmatter(rawContent);
   const description = input.descriptionProvided
     ? normalizeCreatedNoteDescription(input.description)
     : normalizeCreatedNoteDescription(parsed.frontmatter.description as string);
-  const frontmatter: Record<string, unknown> = {
+
+  const existingTags = Array.isArray(parsed.frontmatter.tags)
+    ? parsed.frontmatter.tags.filter((entry): entry is string => typeof entry === 'string').map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+    : [];
+  const nextTags = [...new Set([
+    ...existingTags.filter((tag) => !/^type:/i.test(tag) && !/^status:/i.test(tag)),
+    'type:note',
+    `status:${(typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0) ? parsed.frontmatter.status.trim() : 'active'}`,
+  ])].sort((left, right) => left.localeCompare(right));
+
+  const frontmatter: MemoryDocFrontmatter = {
     ...parsed.frontmatter,
     id: (typeof parsed.frontmatter.id === 'string' && parsed.frontmatter.id.trim().length > 0)
       ? parsed.frontmatter.id.trim()
       : input.noteId,
-    kind: 'note',
     title,
     summary,
-    ...(description ? { description } : {}),
     status: (typeof parsed.frontmatter.status === 'string' && parsed.frontmatter.status.trim().length > 0)
       ? parsed.frontmatter.status.trim()
       : 'active',
-    updatedAt: new Date().toISOString().slice(0, 10),
+    updatedAt: new Date().toISOString(),
+    tags: nextTags,
   };
-  delete (frontmatter as Record<string, unknown>).links;
-  delete (frontmatter as Record<string, unknown>).parent;
-  delete (frontmatter as Record<string, unknown>).related;
-  delete (frontmatter as Record<string, unknown>).tags;
+
+  if (description) {
+    frontmatter.description = description;
+  } else {
+    delete frontmatter.description;
+  }
+
   const markdownBody = editableBody.length > 0 ? `# ${title}\n\n${editableBody}` : `# ${title}`;
-  return _stringifyNoteMarkdown(frontmatter, markdownBody);
+  return stringifyNoteMarkdown(frontmatter, markdownBody);
 }
 
-function _slugifyNoteId(value: string): string {
+function slugifyNoteId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-').slice(0, MAX_CREATED_NOTE_ID_LENGTH).replace(/-+$/g, '') || 'note';
 }
 
 export function generateCreatedNoteId(title: string): string {
-  const existingIds = new Set(listMemoryDocs().map((d) => d.id));
-  const base = _slugifyNoteId(title);
+  const existingIds = new Set(listMemoryDocs().map((doc) => doc.id));
+  const base = slugifyNoteId(title);
   if (!existingIds.has(base)) return base;
-  for (let i = 2; i < Number.MAX_SAFE_INTEGER; i++) {
+  for (let i = 2; i < Number.MAX_SAFE_INTEGER; i += 1) {
     const suffix = `-${i}`;
-    const candidate = base.slice(0, MAX_CREATED_NOTE_ID_LENGTH - suffix.length).replace(/-+$/g, '') + suffix;
+    const candidate = `${base.slice(0, MAX_CREATED_NOTE_ID_LENGTH - suffix.length).replace(/-+$/g, '')}${suffix}`;
     if (!existingIds.has(candidate)) return candidate;
   }
   return `${base}-${Date.now()}`;
@@ -353,30 +444,85 @@ export interface CreatedMemoryDoc {
   summary?: string;
   description?: string;
   status: string;
+  type?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related?: string[];
+  force?: boolean;
+  updated?: string;
 }
 
 export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
-  _ensureMemoryDocsDir();
-  const profilesRoot = getProfilesRoot();
-  const filePath = join(profilesRoot, _getCurrentProfile(), 'memory', `${input.id}.md`);
-  writeFileSync(filePath, buildStructuredNoteMarkdown('', {
-    noteId: input.id,
+  const tags = [
+    'type:note',
+    ...(input.type ? [`noteType:${input.type}`] : []),
+    ...(input.area ? [`area:${input.area}`] : []),
+    ...(input.role ? [`role:${input.role}`] : []),
+  ];
+  const created = createUnifiedNode({
+    id: input.id,
     title: input.title,
-    summary: input.summary,
-    description: input.description,
-    descriptionProvided: !!input.description,
-    body: '',
-  }), 'utf-8');
-  return { ...input, filePath };
+    summary: normalizeCreatedNoteSummary(input.summary) || `Personal note about ${normalizeCreatedNoteTitle(input.title) || input.id}.`,
+    description: normalizeCreatedNoteDescription(input.description) || undefined,
+    status: input.status,
+    tags,
+    parent: input.parent,
+    related: input.related,
+    force: input.force,
+    updatedAt: input.updated,
+  }, {
+    profilesRoot: getProfilesRoot(),
+  });
+
+  return {
+    id: created.node.id,
+    filePath: created.node.filePath,
+    title: created.node.title,
+    summary: created.node.summary,
+    description: created.node.description,
+    status: created.node.status,
+    type: created.node.type,
+    area: extractTagValue(created.node.tags, 'area'),
+    role: extractTagValue(created.node.tags, 'role') ?? extractTagValue(created.node.tags, 'noteType'),
+    parent: created.node.links.parent,
+    related: created.node.links.related,
+    updated: created.node.updatedAt,
+  };
 }
 
 export function readNoteDetail(memoryId: string): MemoryDocDetail {
-  const item = findMemoryDocById(memoryId);
-  if (!item) throw new Error('Note not found.');
+  ensureUnifiedNodesMaterialized();
+  const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
+  const doc = loaded.nodes.find((entry) => entry.id === memoryId && (entry.kinds.includes('note') || (!entry.kinds.includes('project') && !entry.kinds.includes('skill'))));
+  if (!doc) throw new Error('Note not found.');
+
+  const content = readFileSync(doc.filePath, 'utf-8');
+  const references = loadMemoryPackageReferences(doc.dirPath).map((reference) => ({
+    title: reference.title,
+    summary: reference.summary,
+    path: reference.filePath,
+    relativePath: reference.relativePath,
+    updated: reference.updated,
+  }));
+
+  let links: NodeLinks | undefined;
   try {
-    const body = readFileSync(item.path, 'utf-8');
-    return { ...item, body };
+    links = readNodeLinks({
+      repoRoot: process.cwd(),
+      profilesRoot: getProfilesRoot(),
+      profile: _getCurrentProfile(),
+      kind: 'note',
+      id: doc.id,
+    });
   } catch {
-    return { ...item };
+    links = undefined;
   }
+
+  return {
+    memory: mapLoadedMemoryDoc(doc, true),
+    content,
+    references,
+    ...(links ? { links } : {}),
+  };
 }

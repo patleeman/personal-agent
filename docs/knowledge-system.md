@@ -8,7 +8,7 @@ The short version is:
 - **notes** store reusable knowledge
 - **skills** store reusable procedures
 - **projects** store active tracked work
-- **nodes** are the file model that makes notes, skills, and projects consistent
+- **nodes** are the canonical shared storage model under `sync/nodes/`
 
 The system only feels fragmented if you look at the files first.
 The real model is simpler: one durable memory system, with a few different homes for different kinds of memory.
@@ -98,7 +98,7 @@ That means they share a common durable structure:
 This is why the system is cohesive.
 
 Nodes are not separate systems for notes, skills, and projects.
-They are one file model with different semantic roles.
+They are one file model with different semantic roles and tag-based distinctions.
 
 A simple way to say it:
 
@@ -109,10 +109,10 @@ A simple way to say it:
 
 | Memory role | Durable home | Use it for | Do not default to |
 | --- | --- | --- | --- |
-| Behavioral memory | `AGENTS.md` | preferences, policy, durable behavior | note nodes or project state |
-| Knowledge memory | note nodes under `sync/notes/` | reusable facts and references | projects for generic knowledge |
-| Procedural memory | skill nodes under `sync/skills/` | reusable workflows | AGENTS for long procedures |
-| Working memory | project nodes under `sync/projects/` | active tracked work | top-level notes for live project state |
+| Behavioral memory | `AGENTS.md` | preferences, policy, durable behavior | node content or project state |
+| Knowledge memory | unified nodes tagged for note/reference roles under `sync/nodes/` | reusable facts and references | projects for generic knowledge |
+| Procedural memory | unified nodes tagged `type:skill` under `sync/nodes/` | reusable workflows | AGENTS for long procedures |
+| Working memory | unified nodes tagged `type:project` under `sync/nodes/` | active tracked work | top-level notes for live project state |
 
 ## What makes this a knowledge-management system
 
@@ -239,7 +239,7 @@ This is why the docs should describe these as one knowledge system rather than s
 
 The old naming can be confusing.
 
-`pa note` operates on shared **note nodes** under `sync/notes/`.
+`pa note` operates on the shared **note subset**. The canonical shared store is now `sync/nodes/`, and `pa node` is the primary unified surface.
 
 That does **not** mean the whole durable memory system is only note nodes.
 

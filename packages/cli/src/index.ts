@@ -88,6 +88,7 @@ import {
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { noteCommand } from './note.js';
+import { nodeCommand } from './node.js';
 import { mcpCommand } from './mcp-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import {
@@ -5108,6 +5109,14 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect note nodes',
       disableBuiltInHelp: true,
       run: noteCommand,
+    },
+    {
+      name: 'node',
+      category: 'data',
+      usage: 'node [list|find|show|get|new|update|delete|tag|lint|migrate|help] [args...]',
+      description: 'Inspect unified durable nodes',
+      disableBuiltInHelp: true,
+      run: nodeCommand,
     },
     {
       name: 'mcp',

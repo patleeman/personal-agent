@@ -40,6 +40,7 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa note ...`
+- `pa node ...`
 - `pa mcp ...`
 - `pa runs ...`
 - `pa targets ...`
@@ -66,7 +67,7 @@ pa ui --open
 pa tui
 pa tui -p "hello"
 pa inbox list
-pa note list
+pa node list
 pa mcp list
 pa tasks list
 pa targets list
@@ -200,9 +201,27 @@ pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 
 See [Web UI Guide](./web-ui.md).
 
+### `pa node [list|find|show|get|new|update|delete|tag|lint|migrate]`
+
+Work with the unified durable node store under `sync/nodes/`.
+
+Examples:
+
+```bash
+pa node list
+pa node find "type:skill AND profile:assistant"
+pa node show agent-browser
+pa node new quick-note --title "Quick note" --summary "Captured thought." --tag type:note
+pa node tag quick-note --add area:notes
+pa node migrate
+pa node lint
+```
+
+See [Nodes](./nodes.md).
+
 ### `pa note [list|find|show|new|lint]`
 
-Work with the shared global note-node store under `sync/notes/`.
+Compatibility surface for the shared note subset. Use `pa node` for new work.
 
 Examples:
 
