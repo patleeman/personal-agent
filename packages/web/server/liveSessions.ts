@@ -10,10 +10,6 @@ import {
   getPiAgentRuntimeDir,
 } from '@personal-agent/core';
 import {
-  getDurableSessionsDir,
-  getPiAgentRuntimeDir,
-} from '@personal-agent/core';
-import {
   AgentSession,
   AuthStorage,
   DefaultResourceLoader,
@@ -25,7 +21,6 @@ import {
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from './appEvents.js';
-import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 import {
   applyConversationModelPreferencesToLiveSession,
   type ConversationModelPreferenceInput,
@@ -36,15 +31,6 @@ import {
   generateConversationTitle,
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
-import {
-  buildConversationAutomationItemPrompt,
-  buildConversationAutomationReviewPrompt,
-  loadConversationAutomationState,
-  writeConversationAutomationState,
-  type ConversationAutomationDocument,
-  type ConversationAutomationReviewState,
-  type ConversationAutomationTodoItem,
-} from './conversationAutomation.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 import {
   buildDisplayBlocksFromEntries,
@@ -132,6 +118,7 @@ export type SseEvent =
   | { type: 'title_update';    title: string }
   | { type: 'context_usage';   usage: LiveContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
+  | { type: 'compaction_start'; mode: 'manual' | 'auto' }
   | { type: 'error';           message: string };
 
 export interface PromptImageAttachment {
@@ -1532,6 +1519,9 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
       };
     }
 
+    case 'compaction_start':
+      return { type: 'compaction_start', mode: event.reason === 'manual' ? 'manual' : 'auto' };
+
     default:
       return null;
   }
@@ -1561,6 +1551,14 @@ export function getLiveSessions() {
     isStreaming: entry.session.isStreaming,
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
   }));
+}
+
+export function getLiveSessionForkEntries(sessionId: string): unknown[] | null {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    return null;
+  }
+  return entry.session.getUserMessagesForForking();
 }
 
 export function getAvailableModelObjects() {

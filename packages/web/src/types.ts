@@ -922,6 +922,7 @@ export type SseEvent =
   | { type: 'title_update';    title: string }
   | { type: 'context_usage';   usage: SessionContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
+  | { type: 'compaction_start'; mode: 'manual' | 'auto' }
   | { type: 'error';           message: string };
 
 export type DurableRunSseEvent =
