@@ -37,9 +37,9 @@ Because SSH destinations and local path mappings are machine-specific, execution
 
 ## Storage
 
-Execution targets are stored in:
+Execution targets are stored in the machine-local config file under the `executionTargets` section:
 
-- `~/.local/state/personal-agent/config/execution-targets.json`
+- `~/.local/state/personal-agent/config/config.json`
 
 See [Configuration](./configuration.md).
 

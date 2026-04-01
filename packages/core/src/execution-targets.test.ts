@@ -46,7 +46,7 @@ describe('execution targets', () => {
       },
     });
 
-    expect(resolveExecutionTargetsFilePath(configRoot)).toContain('execution-targets.json');
+    expect(resolveExecutionTargetsFilePath(configRoot)).toContain('config.json');
     expect(saved).toMatchObject({
       id: 'gpu-box',
       label: 'GPU Box',

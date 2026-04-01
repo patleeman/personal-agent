@@ -43,12 +43,15 @@ That avoids duplicate-launch failures like `EADDRINUSE` and makes `pa ui --open`
 ## Expose with Tailscale Serve
 
 You can expose the running web UI to your Tailnet via Tailscale Serve.
-The UI and `pa ui` config persist this preference in `~/.local/state/personal-agent/config/web.json` as:
+The UI and `pa ui` config persist this preference in the `webUi` section of `~/.local/state/personal-agent/config/config.json` as:
 
 ```json
 {
-  "useTailscaleServe": true,
-  "port": 3741
+  "webUi": {
+    "useTailscaleServe": true,
+    "port": 3741,
+    "companionPort": 3742
+  }
 }
 ```
 

@@ -318,7 +318,7 @@ pa targets delete gpu-box
 
 `pa targets install <id>` uploads the current built `personal-agent` runtime bundle plus synced profile/auth state to the remote target so remote runs do not require a full `personal-agent` checkout on that machine.
 
-Targets are stored in `~/.local/state/personal-agent/config/execution-targets.json` by default.
+Targets are stored in the `executionTargets` section of `~/.local/state/personal-agent/config/config.json` by default.
 Use this when you want your local agent to configure remote SSH destinations without hand-editing the System page form.
 
 See [Execution Targets](./execution-targets.md).

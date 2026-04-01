@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { getConfigRoot } from '@personal-agent/core';
+import {
+  getMachineConfigFilePath,
+  readMachineDefaultProfile,
+  writeMachineDefaultProfile,
+} from '@personal-agent/core';
 
 export interface SavedProfilePreferences {
   defaultProfile: string;
@@ -11,32 +13,17 @@ function readNonEmptyString(value: unknown): string {
 }
 
 export function getProfileConfigFilePath(): string {
-  const explicit = process.env.PERSONAL_AGENT_CONFIG_FILE;
-  if (explicit && explicit.trim().length > 0) {
-    return explicit;
-  }
-
-  return join(getConfigRoot(), 'config.json');
+  return getMachineConfigFilePath();
 }
 
 export function readSavedProfilePreferences(configFile = getProfileConfigFilePath()): SavedProfilePreferences {
-  if (!existsSync(configFile)) {
-    return { defaultProfile: 'shared' };
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configFile, 'utf-8')) as { defaultProfile?: unknown };
-    return {
-      defaultProfile: readNonEmptyString(parsed.defaultProfile) || 'shared',
-    };
-  } catch {
-    return { defaultProfile: 'shared' };
-  }
+  return {
+    defaultProfile: readMachineDefaultProfile({ filePath: configFile }),
+  };
 }
 
 export function writeSavedProfilePreferences(profile: string, configFile = getProfileConfigFilePath()): void {
-  mkdirSync(dirname(configFile), { recursive: true });
-  writeFileSync(configFile, JSON.stringify({ defaultProfile: profile }, null, 2) + '\n');
+  writeMachineDefaultProfile(profile, { filePath: configFile });
 }
 
 export function resolveActiveProfile(input: {

@@ -29,7 +29,7 @@ The managed sync repo tracks these roots:
 Machine-local runtime files stay out of the synced surface.
 That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
-`config/config.json`, `config/daemon.json`, and `config/web.json` remain machine-local by default.
+`config/config.json` remains machine-local by default.
 
 ## First-time setup (first machine)
 

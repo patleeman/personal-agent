@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher }
 import { basename, dirname, join } from 'node:path';
 import {
   getDurableTasksDir,
+  getMachineConfigFilePath,
   getStateRoot,
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
@@ -17,7 +18,6 @@ import {
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { logWarn } from './logging.js';
-import { resolveWebUiConfigFilePath } from '../ui/webUi.js';
 
 export type AppEventTopic =
   | 'activity'
@@ -245,7 +245,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       ...(syncRepoDir ? [{ path: syncRepoDir, kind: 'directory' as const }] : []),
     ],
     webUi: [
-      { path: resolveWebUiConfigFilePath(), kind: 'file' },
+      { path: getMachineConfigFilePath(), kind: 'file' },
       { path: join(webStateDir, 'deploy-state.json'), kind: 'file' },
       { path: join(webStateDir, 'app-restart.lock.json'), kind: 'file' },
     ],

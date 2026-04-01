@@ -143,9 +143,9 @@ Scheduled task and deferred-resume events can create durable local inbox activit
 
 ## Configuration
 
-Main config file:
+Main machine-local config file:
 
-- `~/.local/state/personal-agent/config/daemon.json`
+- `~/.local/state/personal-agent/config/config.json` (`daemon` section)
 
 Use it to control:
 
