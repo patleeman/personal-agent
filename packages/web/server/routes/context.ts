@@ -52,6 +52,7 @@ export interface ServerRouteContext {
   getSettingsFile: () => string;
   getAuthFile: () => string;
   getStateRoot: () => string;
+  getServerPort: () => number;
   getDefaultWebCwd: () => string;
   resolveRequestedCwd: (cwd: string | null | undefined, defaultCwd?: string) => string | undefined;
   buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions;

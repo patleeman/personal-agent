@@ -20,6 +20,7 @@ interface CreateServerRouteContextOptions {
   getCurrentProfileSettingsFile: () => string;
   materializeWebProfile: (profile: string) => void;
   getStateRoot: () => string;
+  serverPort: number;
   getDefaultWebCwd: () => string;
   resolveRequestedCwd: (cwd: string | null | undefined, defaultCwd?: string) => string | undefined;
   buildLiveSessionResourceOptions: ServerRouteContext['buildLiveSessionResourceOptions'];
@@ -58,6 +59,7 @@ export function createServerRouteContext(options: CreateServerRouteContextOption
     getSettingsFile: () => options.settingsFile,
     getAuthFile: () => options.authFile,
     getStateRoot: options.getStateRoot,
+    getServerPort: () => options.serverPort,
     getDefaultWebCwd: options.getDefaultWebCwd,
     resolveRequestedCwd: options.resolveRequestedCwd,
     buildLiveSessionResourceOptions: options.buildLiveSessionResourceOptions,
