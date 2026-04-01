@@ -65,6 +65,7 @@ import {
   buildReferencedProfilesContext,
   buildReferencedSkillsContext,
   buildReferencedTasksContext,
+  expandPromptReferencesWithNodeGraph,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
 } from '../knowledge/promptReferences.js';
@@ -427,11 +428,16 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       skills,
       profiles: profileAgents,
     });
+    const expandedNodeReferences = expandPromptReferencesWithNodeGraph({
+      projectIds: promptReferences.projectIds,
+      memoryDocIds: promptReferences.memoryDocIds,
+      skillNames: promptReferences.skillNames,
+    });
 
-    const relatedProjectIds = syncConversationProjectReferences(id, promptReferences.projectIds);
+    const relatedProjectIds = syncConversationProjectReferences(id, expandedNodeReferences.projectIds);
     const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
-    const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
-    const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
+    const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
+    const referencedSkills = pickPromptReferencesInOrder(expandedNodeReferences.skillNames, skills);
     const referencedProfiles = pickPromptReferencesInOrder(promptReferences.profileIds, profileAgents);
     let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
     if (normalizedAttachmentRefs.length > 0) {

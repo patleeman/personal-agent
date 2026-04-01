@@ -20,20 +20,6 @@ import { resolveResourceProfile } from '@personal-agent/resources';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { readNodeLinks, type NodeLinks } from './nodeLinks.js';
 
-// ── Profile getter ────────────────────────────────────────────────────────────
-
-let _getCurrentProfile: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for memory docs');
-};
-
-export function setMemoryDocsProfileGetter(getCurrentProfile: () => string): void {
-  _getCurrentProfile = getCurrentProfile;
-}
-
-export function getMemoryDocsCurrentProfile(): string {
-  return _getCurrentProfile();
-}
-
 // ── Memory path utilities ─────────────────────────────────────────────────────
 
 export function normalizeMemoryPath(value: unknown): string {
@@ -45,7 +31,7 @@ export function normalizeMemoryPath(value: unknown): string {
   }
 }
 
-export function isEditableMemoryFilePath(filePath: string): boolean {
+export function isEditableMemoryFilePath(filePath: string, profile: string): boolean {
   if (!filePath || typeof filePath !== 'string') return false;
   const normalized = normalizeMemoryPath(filePath);
   if (!normalized) return false;
@@ -53,7 +39,7 @@ export function isEditableMemoryFilePath(filePath: string): boolean {
   const profilesRoot = getProfilesRoot();
   const sharedRoot = dirname(profilesRoot);
   const noteDir = normalizeMemoryPath(resolveUnifiedNodesDir({ profilesRoot }));
-  const agentDir = normalizeMemoryPath(join(profilesRoot, _getCurrentProfile(), 'agent'));
+  const agentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
   const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
 
   return normalized.startsWith(`${noteDir}/`)
@@ -159,7 +145,7 @@ export function ensureMemoryDocsDir(): string {
 export function clearMemoryBrowserCaches(): void {
 }
 
-export function warmMemoryBrowserCaches(profile = _getCurrentProfile()): void {
+export function warmMemoryBrowserCaches(profile: string): void {
   void listMemoryDocs();
   void listSkillsForProfile(profile);
 }
@@ -260,7 +246,16 @@ export interface SkillItem {
   usedInLastSession?: boolean;
 }
 
-export function listSkillsForProfile(profile = _getCurrentProfile()): SkillItem[] {
+export interface CreatedSkillDoc {
+  name: string;
+  title: string;
+  description: string;
+  body?: string;
+  profile: string;
+  force?: boolean;
+}
+
+export function listSkillsForProfile(profile: string): SkillItem[] {
   const profilesRoot = getProfilesRoot();
   ensureUnifiedNodesMaterialized();
   const resolved = resolveResourceProfile(profile, {
@@ -313,8 +308,31 @@ export function listSkillsForProfile(profile = _getCurrentProfile()): SkillItem[
   return skills;
 }
 
-export function readSkillDetailForProfile(skillName: string, profile = _getCurrentProfile()): SkillItem | null {
+export function readSkillDetailForProfile(skillName: string, profile: string): SkillItem | null {
   return listSkillsForProfile(profile).find((skill) => skill.name === skillName) ?? null;
+}
+
+export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
+  const profile = input.profile.trim();
+  const title = input.title.trim();
+  const description = input.description.trim();
+  const created = createUnifiedNode({
+    id: input.name.trim().toLowerCase(),
+    title,
+    summary: description || `Skill for ${title}.`,
+    body: input.body?.trim() || `# ${title}\n\n${description || `Use this skill for ${title}.`}`,
+    tags: ['type:skill', `profile:${profile}`],
+    force: input.force,
+  }, {
+    profilesRoot: getProfilesRoot(),
+  });
+
+  return {
+    name: created.node.id,
+    source: 'project',
+    description: created.node.summary,
+    path: created.node.filePath,
+  };
 }
 
 // ── Notes ─────────────────────────────────────────────────────────────────────
@@ -491,7 +509,7 @@ export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
   };
 }
 
-export function readNoteDetail(memoryId: string): MemoryDocDetail {
+export function readNoteDetail(memoryId: string, profile: string): MemoryDocDetail {
   ensureUnifiedNodesMaterialized();
   const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
   const doc = loaded.nodes.find((entry) => entry.id === memoryId && (entry.kinds.includes('note') || (!entry.kinds.includes('project') && !entry.kinds.includes('skill'))));
@@ -511,7 +529,7 @@ export function readNoteDetail(memoryId: string): MemoryDocDetail {
     links = readNodeLinks({
       repoRoot: process.cwd(),
       profilesRoot: getProfilesRoot(),
-      profile: _getCurrentProfile(),
+      profile,
       kind: 'note',
       id: doc.id,
     });
