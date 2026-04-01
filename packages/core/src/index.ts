@@ -14,6 +14,9 @@ export * from './profile/index.js';
 // Runtime state exports
 export * from './runtime/index.js';
 
+// Machine-local config exports
+export * from './machine-config.js';
+
 // Activity exports
 export * from './activity.js';
 

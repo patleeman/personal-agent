@@ -1,6 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { dirname, join, resolve } from 'path';
-import { getConfigRoot } from './runtime/paths.js';
+import { getMachineConfigFilePath, readMachineConfigSection, updateMachineConfigSection } from './machine-config.js';
 
 const EXECUTION_TARGET_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 const EXECUTION_TARGET_TRANSPORTS = ['ssh'] as const;
@@ -33,12 +31,12 @@ interface ExecutionTargetsDocument {
   targets: ExecutionTargetRecord[];
 }
 
-function getExecutionTargetsConfigRoot(configRoot?: string): string {
-  return resolve(configRoot ?? getConfigRoot());
+function getExecutionTargetsConfigOptions(configRoot?: string): { configRoot?: string } {
+  return configRoot ? { configRoot } : {};
 }
 
 export function resolveExecutionTargetsFilePath(configRoot?: string): string {
-  return join(getExecutionTargetsConfigRoot(configRoot), 'execution-targets.json');
+  return getMachineConfigFilePath(getExecutionTargetsConfigOptions(configRoot));
 }
 
 export function validateExecutionTargetId(targetId: string): void {
@@ -209,27 +207,32 @@ function normalizeExecutionTargetsDocument(value: unknown): ExecutionTargetsDocu
   };
 }
 
-function readExecutionTargetsDocument(path: string): ExecutionTargetsDocument {
-  if (!existsSync(path)) {
+function readExecutionTargetsDocument(configRoot?: string): ExecutionTargetsDocument {
+  const path = resolveExecutionTargetsFilePath(configRoot);
+  const parsed = readMachineConfigSection('executionTargets', getExecutionTargetsConfigOptions(configRoot));
+
+  if (parsed === undefined) {
     return emptyExecutionTargetsDocument();
   }
 
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
   const normalized = normalizeExecutionTargetsDocument(parsed);
   if (!normalized) {
-    throw new Error(`Invalid execution targets document: ${path}`);
+    throw new Error(`Invalid execution targets document in ${path}`);
   }
 
   return normalized;
 }
 
-function writeExecutionTargetsDocument(path: string, document: ExecutionTargetsDocument): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(document, null, 2)}\n`);
+function writeExecutionTargetsDocument(configRoot: string | undefined, document: ExecutionTargetsDocument | undefined): void {
+  updateMachineConfigSection(
+    'executionTargets',
+    () => document as Record<string, unknown> | undefined,
+    getExecutionTargetsConfigOptions(configRoot),
+  );
 }
 
 export function listExecutionTargets(options: { configRoot?: string } = {}): ExecutionTargetRecord[] {
-  return readExecutionTargetsDocument(resolveExecutionTargetsFilePath(options.configRoot)).targets;
+  return readExecutionTargetsDocument(options.configRoot).targets;
 }
 
 export function getExecutionTarget(options: { targetId: string; configRoot?: string }): ExecutionTargetRecord | null {
@@ -253,8 +256,7 @@ export interface SaveExecutionTargetInput {
 
 export function saveExecutionTarget(options: { configRoot?: string; target: SaveExecutionTargetInput }): ExecutionTargetRecord {
   validateExecutionTargetId(options.target.id);
-  const path = resolveExecutionTargetsFilePath(options.configRoot);
-  const document = readExecutionTargetsDocument(path);
+  const document = readExecutionTargetsDocument(options.configRoot);
   const existing = document.targets.find((target) => target.id === options.target.id);
   const now = new Date().toISOString();
 
@@ -282,7 +284,7 @@ export function saveExecutionTarget(options: { configRoot?: string; target: Save
   nextTargets.push(target);
   nextTargets.sort((left, right) => left.label.localeCompare(right.label) || left.id.localeCompare(right.id));
 
-  writeExecutionTargetsDocument(path, {
+  writeExecutionTargetsDocument(options.configRoot, {
     version: 1,
     targets: nextTargets,
   });
@@ -292,23 +294,21 @@ export function saveExecutionTarget(options: { configRoot?: string; target: Save
 
 export function deleteExecutionTarget(options: { targetId: string; configRoot?: string }): boolean {
   validateExecutionTargetId(options.targetId);
-  const path = resolveExecutionTargetsFilePath(options.configRoot);
-  if (!existsSync(path)) {
+  const document = readExecutionTargetsDocument(options.configRoot);
+  if (document.targets.length === 0) {
     return false;
   }
-
-  const document = readExecutionTargetsDocument(path);
   const nextTargets = document.targets.filter((target) => target.id !== options.targetId);
   if (nextTargets.length === document.targets.length) {
     return false;
   }
 
   if (nextTargets.length === 0) {
-    rmSync(path, { force: true });
+    writeExecutionTargetsDocument(options.configRoot, undefined);
     return true;
   }
 
-  writeExecutionTargetsDocument(path, {
+  writeExecutionTargetsDocument(options.configRoot, {
     version: 1,
     targets: nextTargets,
   });

@@ -1,6 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { getDurableTasksDir, getProfilesRoot } from '@personal-agent/core';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import {
+  getDurableTasksDir,
+  getProfilesRoot,
+  readMachineConfigSection,
+  updateMachineConfigSection,
+} from '@personal-agent/core';
 import {
   getDaemonConfigFilePath,
   getDaemonStatus,
@@ -71,21 +76,6 @@ export function classifyRepoManagedTaskDir(taskDir: string | undefined, repoRoot
   return 'other';
 }
 
-function readJsonObject(filePath: string): Record<string, unknown> {
-  const raw = readFileSync(filePath, 'utf-8');
-  const parsed = JSON.parse(raw) as unknown;
-  if (!isRecord(parsed)) {
-    throw new Error(`Daemon config at ${filePath} must contain a JSON object`);
-  }
-
-  return parsed;
-}
-
-function writeJsonObject(filePath: string, value: Record<string, unknown>): void {
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n');
-}
-
 export function normalizeDaemonTaskDirOverride(options: {
   repoRoot: string;
   daemonConfigFile?: string;
@@ -95,7 +85,11 @@ export function normalizeDaemonTaskDirOverride(options: {
     return { changed: false };
   }
 
-  const config = readJsonObject(daemonConfigFile);
+  const config = readMachineConfigSection('daemon', { filePath: daemonConfigFile });
+  if (config === undefined) {
+    return { changed: false };
+  }
+
   const modules = isRecord(config.modules) ? { ...config.modules } : undefined;
   const tasks = modules && isRecord(modules.tasks) ? { ...modules.tasks } : undefined;
   const taskDir = typeof tasks?.taskDir === 'string' ? tasks.taskDir : undefined;
@@ -127,7 +121,11 @@ export function normalizeDaemonTaskDirOverride(options: {
     delete nextConfig.modules;
   }
 
-  writeJsonObject(daemonConfigFile, nextConfig);
+  updateMachineConfigSection(
+    'daemon',
+    () => (Object.keys(nextConfig).length > 0 ? nextConfig : undefined),
+    { filePath: daemonConfigFile },
+  );
   return { changed: true };
 }
 

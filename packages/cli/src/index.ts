@@ -13,8 +13,8 @@ import {
   clearActivityConversationLinks,
   createProjectActivityEntry,
   ensureConversationAttentionBaselines,
+  finalizeMachineWebUiConfigState,
   getActivityConversationLink,
-  getConfigRoot,
   getDurableProfilesDir,
   listProfileActivityEntries,
   listStoredSessions,
@@ -22,6 +22,7 @@ import {
   markConversationAttentionRead,
   markConversationAttentionUnread,
   preparePiAgentDir,
+  readMachineWebUiConfig,
   resolveActivityEntryPath,
   resolveProfileActivityDir,
   resolveStatePaths,
@@ -30,6 +31,7 @@ import {
   summarizeConversationAttention,
   validateActivityId,
   validateStatePathsOutsideRepo,
+  writeMachineWebUiConfig,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import {
@@ -156,8 +158,6 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 }
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
-const DEFAULT_WEB_UI_PORT = 3741;
-const DEFAULT_WEB_UI_COMPANION_PORT = 3742;
 const INSTALL_COMMAND_USAGE = 'pa install <source> [--profile <name> | -l | --local]';
 const INSTALL_COMMAND_HELP_TEXT = `Default target: active mutable profile settings.json.
 
@@ -172,103 +172,12 @@ Examples:
   pa install --profile assistant https://github.com/user/repo
   pa install --local ./my-package`;
 
-interface WebUiConfig {
-  port: number;
-  companionPort: number;
-  useTailscaleServe: boolean;
+function readWebUiConfig() {
+  return readMachineWebUiConfig();
 }
 
-function isWebUiConfigRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function getWebUiConfigFilePath(): string {
-  const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
-  if (explicit && explicit.trim().length > 0) {
-    return resolve(explicit);
-  }
-
-  return join(getConfigRoot(), 'web.json');
-}
-
-function normalizeWebUiPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return fallback;
-  }
-
-  const parsed = Math.floor(value);
-  return parsed > 0 && parsed <= 65535 ? parsed : fallback;
-}
-
-function normalizeWebUiCompanionPort(value: unknown, fallback = DEFAULT_WEB_UI_COMPANION_PORT): number {
-  return normalizeWebUiPort(value, fallback);
-}
-
-function normalizeWebUiBool(value: unknown, fallback = false): boolean {
-  return value === true || value === 'true' ? true : value === false ? false : fallback;
-}
-
-function parseWebUiEnvBool(value: string | undefined): boolean | undefined {
-  return value === 'true' ? true : value === 'false' ? false : undefined;
-}
-
-function readRawWebUiConfig(): Record<string, unknown> {
-  const filePath = getWebUiConfigFilePath();
-
-  if (!existsSync(filePath)) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
-    return isWebUiConfigRecord(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function finalizeWebUiConfig(config: WebUiConfig): WebUiConfig {
-  if (config.companionPort !== config.port) {
-    return config;
-  }
-
-  return {
-    ...config,
-    companionPort: config.port === DEFAULT_WEB_UI_COMPANION_PORT ? DEFAULT_WEB_UI_COMPANION_PORT + 1 : config.port + 1,
-  };
-}
-
-function readWebUiConfig(): WebUiConfig {
-  const envOverride = parseWebUiEnvBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
-  const parsed = readRawWebUiConfig();
-
-  return finalizeWebUiConfig({
-    port: normalizeWebUiPort(parsed.port),
-    companionPort: normalizeWebUiCompanionPort(parsed.companionPort),
-    useTailscaleServe: envOverride ?? normalizeWebUiBool(parsed.useTailscaleServe),
-  });
-}
-
-function writeWebUiConfig(config: WebUiConfig): void {
-  const filePath = getWebUiConfigFilePath();
-  const raw = readRawWebUiConfig();
-  const current = readWebUiConfig();
-  const next = finalizeWebUiConfig({
-    port: normalizeWebUiPort(config.port),
-    companionPort: normalizeWebUiCompanionPort(config.companionPort),
-    useTailscaleServe: normalizeWebUiBool(config.useTailscaleServe),
-  });
-
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(
-    {
-      ...raw,
-      ...current,
-      ...next,
-    },
-    null,
-    2,
-  )}\n`);
+function writeWebUiConfig(config: Parameters<typeof writeMachineWebUiConfig>[0]): void {
+  writeMachineWebUiConfig(config);
 }
 
 function getWebUiServiceOptions(overrides: WebUiServiceOptions = {}): Required<WebUiServiceOptions> {
@@ -1981,7 +1890,7 @@ async function restartBackgroundServices(options: {
         if (!currentStatus.installed) {
           webUiSpinner.succeed('Managed web UI service not installed (skipped)');
         } else {
-          const webUiConfig = finalizeWebUiConfig({
+          const webUiConfig = finalizeMachineWebUiConfigState({
             ...readWebUiConfig(),
             port: webUiOptions.port,
           });
@@ -4643,10 +4552,11 @@ async function runWebUiServiceAction(action: string, args: string[], commandPref
   const desiredUseTailscaleServe = parsedTailscaleServe.explicit
     ? parsedTailscaleServe.value
     : currentConfig.useTailscaleServe;
-  const desiredConfig = finalizeWebUiConfig({
+  const desiredConfig = finalizeMachineWebUiConfigState({
     ...currentConfig,
     port: options.port,
     useTailscaleServe: desiredUseTailscaleServe,
+    resumeFallbackPrompt: currentConfig.resumeFallbackPrompt,
   });
   const autoEnableTailscaleAfterServiceStart = !parsedTailscaleServe.explicit
     && desiredUseTailscaleServe
@@ -4849,10 +4759,11 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
   const desiredUseTailscaleServe = parsedTailscaleServe.explicit
     ? parsedTailscaleServe.value
     : currentConfig.useTailscaleServe;
-  const desiredConfig = finalizeWebUiConfig({
+  const desiredConfig = finalizeMachineWebUiConfigState({
     ...currentConfig,
     port: portParse.value,
     useTailscaleServe: desiredUseTailscaleServe,
+    resumeFallbackPrompt: currentConfig.resumeFallbackPrompt,
   });
 
   if (parsedTailscaleServe.explicit) {

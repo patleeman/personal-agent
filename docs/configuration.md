@@ -7,77 +7,60 @@ The guiding principle is:
 - keep durable defaults in files
 - use environment variables mainly for machine-local bootstrapping and external secret resolution
 
-## The main config files
+## The main machine-local config file
 
 ### `~/.local/state/personal-agent/config/config.json`
 
-This stores the default profile.
+This is the canonical machine-local config file.
+
+It stores machine-specific settings such as:
+
+- default profile selection
+- daemon overrides
+- web UI runtime preferences
+- execution targets
 
 Example:
 
 ```json
 {
-  "defaultProfile": "assistant"
-}
-```
-
-Useful command:
-
-```bash
-pa profile use assistant
-```
-
-This file is machine-local runtime config and is intentionally not part of the synced durable surface.
-
-### `~/.local/state/personal-agent/config/daemon.json`
-
-This configures the background daemon.
-
-Common reasons to edit it:
-
-- change timeouts or retry behavior
-- change socket or queue settings
-- override task discovery only if you intentionally want a non-default task dir
-
-Example:
-
-```json
-{
-  "logLevel": "info",
-  "modules": {
-    "tasks": {
-      "enabled": true,
-      "taskDir": "~/.local/state/personal-agent/sync/tasks",
-      "tickIntervalSeconds": 30,
-      "maxRetries": 3,
-      "defaultTimeoutSeconds": 1800
+  "defaultProfile": "assistant",
+  "daemon": {
+    "logLevel": "info",
+    "modules": {
+      "tasks": {
+        "enabled": true,
+        "taskDir": "~/.local/state/personal-agent/sync/tasks",
+        "tickIntervalSeconds": 30,
+        "maxRetries": 3,
+        "defaultTimeoutSeconds": 1800
+      }
     }
+  },
+  "webUi": {
+    "port": 3741,
+    "companionPort": 3742,
+    "useTailscaleServe": false,
+    "resumeFallbackPrompt": "Continue from where you left off."
+  },
+  "executionTargets": {
+    "version": 1,
+    "targets": []
   }
 }
 ```
 
-See [Daemon and Background Automation](./daemon.md) and [Scheduled Tasks](./scheduled-tasks.md).
-
-### `~/.local/state/personal-agent/config/execution-targets.json`
-
-This stores machine-local execution targets for remote conversation offload.
-
-Use it for:
-
-- named SSH destinations such as `gpu-box` or `runpod-a100`
-- remote default working directories
-- local repo path → remote checkout mappings
-- optional remote profile / `pa` command overrides
-- installed remote runtime bundles created by `pa targets install <id>`
-
-Prefer writing this file with:
+Useful commands:
 
 ```bash
+pa profile use assistant
 pa targets list
 pa targets add <id> --label <label> --ssh <destination>
 ```
 
-Because SSH destinations and path mappings are often machine-specific, this file is generally local runtime config rather than shared profile state.
+This file is machine-local runtime config and is intentionally not part of the synced durable surface.
+
+Legacy sibling files such as `daemon.json`, `web.json`, and `execution-targets.json` are read for compatibility when present, but `config.json` is the single canonical write target now.
 
 ## Profile resource configuration
 
@@ -158,9 +141,7 @@ Canonical state-home layout:
 │   └── deferred-resumes-state.json
 ├── pi-agent-runtime/          # generated runtime materialization
 ├── config/
-│   ├── config.json
-│   ├── daemon.json
-│   └── web.json
+│   └── config.json
 ├── daemon/
 ├── web/
 └── logs/
@@ -212,14 +193,14 @@ See [Sync Guide](./sync.md).
 
 ### Daemon
 
-- `PERSONAL_AGENT_DAEMON_CONFIG` — alternate daemon config file
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — default daemon socket path
 - `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1` — disable daemon integration explicitly
+- `PERSONAL_AGENT_DAEMON_CONFIG` — optional legacy override path for daemon-only config migration/compatibility
 
 ### Web UI
 
-- `PERSONAL_AGENT_WEB_CONFIG_FILE` — override `~/.local/state/personal-agent/config/web.json`
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — runtime override (`true`/`false`) for `pa ui` foreground launches
+- `PERSONAL_AGENT_WEB_CONFIG_FILE` — optional legacy override path for web-ui-only config migration/compatibility
 
 ### 1Password secrets
 
@@ -261,16 +242,20 @@ These defaults are used when a run does not explicitly override them.
 
 ### Web UI runtime config
 
-`pa ui` and the managed web UI service use `~/.local/state/personal-agent/config/web.json`:
+`pa ui` and the managed web UI service persist their machine-local settings under the `webUi` section in `~/.local/state/personal-agent/config/config.json`:
 
 ```json
 {
-  "port": 3741,
-  "useTailscaleServe": false
+  "webUi": {
+    "port": 3741,
+    "companionPort": 3742,
+    "useTailscaleServe": false,
+    "resumeFallbackPrompt": "Continue from where you left off."
+  }
 }
 ```
 
-This file persists the web UI port and whether `tailscale serve` should be enabled for the web UI. It is managed by the CLI and editable if needed.
+That section persists the web UI port, companion port, Tailscale Serve preference, and resume fallback prompt. It is managed by the CLI and editable if needed.
 When that setting is toggled via `pa ui` or the Web UI page, `personal-agent` also runs the matching `tailscale serve` command for `localhost:<port>`.
 
 You can also adjust model, theme, and conversation title settings from the web UI Settings page.
@@ -281,7 +266,7 @@ For most setups:
 
 1. set the default profile with `pa profile use <name>`
 2. keep durable behavior and knowledge in the synced roots under `~/.local/state/personal-agent/sync/` (with repo defaults in `defaults/agent` and optional machine-local additions in `~/.local/state/personal-agent/config/local`)
-3. keep daemon behavior in `daemon.json`
+3. keep machine-local app behavior in `config/config.json`
 4. keep secrets as 1Password references where possible; use env vars only when a component truly needs them
 
 ## Related docs

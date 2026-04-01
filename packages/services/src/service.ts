@@ -137,7 +137,7 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
   const passthroughKeys = [
     'PATH',
     'PERSONAL_AGENT_STATE_ROOT',
-    'PERSONAL_AGENT_DAEMON_CONFIG',
+    'PERSONAL_AGENT_CONFIG_FILE',
     'PERSONAL_AGENT_OP_BIN',
     'OP_SERVICE_ACCOUNT_TOKEN',
   ] as const;
@@ -172,11 +172,9 @@ function buildWebUiServiceEnvironment(
     'PERSONAL_AGENT_STATE_ROOT',
     'PERSONAL_AGENT_CONFIG_FILE',
     'PERSONAL_AGENT_LOCAL_PROFILE_DIR',
-    'PERSONAL_AGENT_DAEMON_CONFIG',
     'PERSONAL_AGENT_DISABLE_DAEMON_EVENTS',
     'PERSONAL_AGENT_OP_BIN',
     'OP_SERVICE_ACCOUNT_TOKEN',
-    'PERSONAL_AGENT_WEB_CONFIG_FILE',
     'XDG_CONFIG_HOME',
     'XDG_STATE_HOME',
   ] as const;

@@ -1,15 +1,17 @@
 import {
   closeSync,
   existsSync,
-  mkdirSync,
   openSync,
-  readFileSync,
   readSync,
   statSync,
-  writeFileSync,
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { getConfigRoot } from '@personal-agent/core';
+import {
+  DEFAULT_WEB_UI_PORT,
+  readMachineWebUiConfig,
+  writeMachineWebUiConfig,
+  type MachineWebUiConfigState,
+  type WriteMachineWebUiConfigInput,
+} from '@personal-agent/core';
 import {
   findBadWebUiRelease,
   getWebUiServiceStatus,
@@ -78,141 +80,14 @@ export interface WebUiStateSnapshot {
 
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 
-interface WebUiConfig {
-  port?: unknown;
-  companionPort?: unknown;
-  useTailscaleServe?: unknown;
-  resumeFallbackPrompt?: unknown;
-}
-
-interface WebUiConfigState {
-  port: number;
-  companionPort: number;
-  useTailscaleServe: boolean;
-  resumeFallbackPrompt: string;
-}
-
-const DEFAULT_WEB_UI_PORT = 3741;
-const DEFAULT_WEB_UI_COMPANION_PORT = 3742;
-const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
-
-function normalizeWebUiConfigPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return fallback;
-  }
-
-  const parsed = Math.floor(value);
-  return parsed > 0 && parsed <= 65535 ? parsed : fallback;
-}
-
-function normalizeWebUiCompanionPort(value: unknown, fallback = DEFAULT_WEB_UI_COMPANION_PORT): number {
-  return normalizeWebUiConfigPort(value, fallback);
-}
-
-function finalizeWebUiConfigState(config: WebUiConfigState): WebUiConfigState {
-  if (config.companionPort !== config.port) {
-    return config;
-  }
-
-  return {
-    ...config,
-    companionPort: config.port === DEFAULT_WEB_UI_COMPANION_PORT ? DEFAULT_WEB_UI_COMPANION_PORT + 1 : config.port + 1,
-  };
-}
-
-function parseWebUiConfigPort(value: string | undefined): number | undefined {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : undefined;
-}
-
-function parseWebUiConfigBool(value: unknown): boolean | undefined {
-  if (value === true || value === 'true') {
-    return true;
-  }
-
-  if (value === false || value === 'false') {
-    return false;
-  }
-
-  return undefined;
-}
-
-function normalizeResumeFallbackPrompt(value: unknown): string {
-  if (typeof value !== 'string') {
-    return DEFAULT_RESUME_FALLBACK_PROMPT;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : DEFAULT_RESUME_FALLBACK_PROMPT;
-}
-
-export function resolveWebUiConfigFilePath(): string {
-  const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
-  if (explicit && explicit.trim().length > 0) {
-    return resolve(explicit);
-  }
-
-  return join(getConfigRoot(), 'web.json');
-}
+export type WebUiConfigState = MachineWebUiConfigState;
 
 export function readWebUiConfig(): WebUiConfigState {
-  const filePath = resolveWebUiConfigFilePath();
-  const fromEnv = parseWebUiConfigBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
-  const companionPortFromEnv = parseWebUiConfigPort(process.env.PA_WEB_COMPANION_PORT);
-
-  if (!existsSync(filePath)) {
-    return finalizeWebUiConfigState({
-      port: DEFAULT_WEB_UI_PORT,
-      companionPort: companionPortFromEnv ?? DEFAULT_WEB_UI_COMPANION_PORT,
-      useTailscaleServe: fromEnv ?? false,
-      resumeFallbackPrompt: DEFAULT_RESUME_FALLBACK_PROMPT,
-    });
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as WebUiConfig;
-    return finalizeWebUiConfigState({
-      port: normalizeWebUiConfigPort(parsed.port),
-      companionPort: companionPortFromEnv ?? normalizeWebUiCompanionPort(parsed.companionPort),
-      useTailscaleServe: fromEnv ?? parseWebUiConfigBool(parsed.useTailscaleServe) ?? false,
-      resumeFallbackPrompt: normalizeResumeFallbackPrompt(parsed.resumeFallbackPrompt),
-    });
-  } catch {
-    return finalizeWebUiConfigState({
-      port: DEFAULT_WEB_UI_PORT,
-      companionPort: companionPortFromEnv ?? DEFAULT_WEB_UI_COMPANION_PORT,
-      useTailscaleServe: fromEnv ?? false,
-      resumeFallbackPrompt: DEFAULT_RESUME_FALLBACK_PROMPT,
-    });
-  }
+  return readMachineWebUiConfig();
 }
 
-export function writeWebUiConfig(input: {
-  companionPort?: number;
-  useTailscaleServe?: boolean;
-  resumeFallbackPrompt?: string;
-}): WebUiConfigState {
-  const filePath = resolveWebUiConfigFilePath();
-  const raw = readWebUiConfig();
-  const updated = finalizeWebUiConfigState({
-    ...raw,
-    companionPort: input.companionPort === undefined
-      ? raw.companionPort
-      : normalizeWebUiCompanionPort(input.companionPort, raw.companionPort),
-    useTailscaleServe: input.useTailscaleServe === undefined ? raw.useTailscaleServe : input.useTailscaleServe,
-    resumeFallbackPrompt: input.resumeFallbackPrompt === undefined
-      ? raw.resumeFallbackPrompt
-      : normalizeResumeFallbackPrompt(input.resumeFallbackPrompt),
-  });
-
-  mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify(updated, null, 2)}\n`, 'utf-8');
-
-  return updated;
+export function writeWebUiConfig(input: WriteMachineWebUiConfigInput): WebUiConfigState {
+  return writeMachineWebUiConfig(input);
 }
 
 export function syncConfiguredWebUiTailscaleServe(enabled: boolean): void {

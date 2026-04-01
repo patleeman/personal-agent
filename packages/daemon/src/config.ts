@@ -1,7 +1,12 @@
-import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
-import { getConfigRoot, getDurableTasksDir, getStateRoot, getSyncRoot } from '@personal-agent/core';
+import {
+  getDurableTasksDir,
+  getMachineConfigFilePath,
+  getStateRoot,
+  getSyncRoot,
+  readMachineConfigSection,
+} from '@personal-agent/core';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -48,7 +53,6 @@ export interface DaemonConfig {
   };
 }
 
-const DEFAULT_DAEMON_CONFIG_FILE = join(getConfigRoot(), 'daemon.json');
 
 function expandHome(path: string): string {
   if (path === '~') {
@@ -140,29 +144,27 @@ function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknow
   return output;
 }
 
-function readConfigFile(path: string): Record<string, unknown> {
-  if (!existsSync(path)) {
+function readConfigOverride(path: string): Record<string, unknown> {
+  const section = readMachineConfigSection('daemon', { filePath: path });
+
+  if (section === undefined) {
     return {};
   }
 
-  const raw = readFileSync(path, 'utf-8');
-  const parsed = JSON.parse(raw) as unknown;
-
-  if (!isRecord(parsed)) {
-    throw new Error(`Invalid daemon config at ${path}: root must be an object`);
+  if (!isRecord(section)) {
+    throw new Error(`Invalid daemon config at ${path}: daemon section must be an object`);
   }
 
-  return parsed;
+  return section;
 }
 
 export function getDaemonConfigFilePath(): string {
   const explicit = process.env.PERSONAL_AGENT_DAEMON_CONFIG;
-
   if (explicit && explicit.trim().length > 0) {
-    return resolve(expandHome(explicit));
+    return resolve(expandHome(explicit.trim()));
   }
 
-  return DEFAULT_DAEMON_CONFIG_FILE;
+  return getMachineConfigFilePath();
 }
 
 export function getDefaultDaemonConfig(): DaemonConfig {
@@ -195,7 +197,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
 export function loadDaemonConfig(): DaemonConfig {
   const defaults = getDefaultDaemonConfig();
   const filePath = getDaemonConfigFilePath();
-  const fromDisk = readConfigFile(filePath);
+  const fromDisk = readConfigOverride(filePath);
   const merged = deepMerge(defaults as unknown as Record<string, unknown>, fromDisk);
 
   return expandConfigPaths(merged as unknown as DaemonConfig);
