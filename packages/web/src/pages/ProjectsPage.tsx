@@ -15,7 +15,7 @@ import {
   readCreateProjectState,
   VIEW_PROFILE_QUERY_PARAM,
 } from '../projectWorkspaceState';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { timeAgo } from '../utils';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
@@ -507,7 +507,7 @@ export function ProjectsPage() {
       return;
     }
 
-    ensureOpenResourceShelfItem('project', selectedId);
+    ensureOpenResourceShelfItem('node', buildOpenNodeShelfId('project', selectedId));
   }, [selectedId]);
 
   function openCreateForm() {

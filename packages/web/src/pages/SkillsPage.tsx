@@ -24,6 +24,7 @@ import {
 } from '../components/NodeWorkspace';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
+import { NodeMetadataPanel } from '../components/NodeMetadataPanel';
 import {
   buildSkillsSearch,
   matchesSkill,
@@ -32,7 +33,7 @@ import {
   type SkillWorkspaceView,
   sortSkills,
 } from '../skillWorkspaceState';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { joinMarkdownFrontmatter, normalizeMarkdownValue, splitMarkdownFrontmatter } from '../markdownDocument';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
@@ -502,6 +503,14 @@ export function SkillWorkspace({
               { label: 'Source', value: detail.skill.source },
             ]} />
           </NodeRailSection>
+          <NodeRailSection title="Node metadata">
+            <NodeMetadataPanel
+              nodeId={detail.skill.name}
+              onChanged={onRefetched}
+              showTitle={false}
+              showDescription={false}
+            />
+          </NodeRailSection>
           <NodeRailSection title="Files" meta={selectedReference ? 'References live here instead of separate pages.' : 'Use the inspector to open supporting references.'}>
             <SkillFileList
               detail={detail}
@@ -692,7 +701,7 @@ export function SkillsPage() {
       return;
     }
 
-    ensureOpenResourceShelfItem('skill', selectedSkillName);
+    ensureOpenResourceShelfItem('node', buildOpenNodeShelfId('skill', selectedSkillName));
   }, [selectedSkillName]);
 
   async function handleCreateSkill() {

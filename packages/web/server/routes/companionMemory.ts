@@ -23,6 +23,7 @@ import {
   extractNoteSummaryFromBody,
   clearMemoryBrowserCaches,
   listSkillsForProfile,
+  readSkillWorkspaceDetailForProfile,
 } from '../knowledge/memoryDocs.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
@@ -62,9 +63,9 @@ export function registerCompanionMemoryRoutes(
 
   router.get('/api/skills/:name', (req, res) => {
     try {
-      const skillDetail = listSkillsForProfile(context.getCurrentProfile()).find((s) => s.name === req.params.name);
-      if (!skillDetail) { res.status(404).json({ error: 'Skill not found' }); return; }
-      res.json(skillDetail);
+      const detail = readSkillWorkspaceDetailForProfile(req.params.name, context.getCurrentProfile());
+      if (!detail) { res.status(404).json({ error: 'Skill not found' }); return; }
+      res.json(detail);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });

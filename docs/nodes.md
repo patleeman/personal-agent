@@ -20,7 +20,7 @@ The canonical synced durable store is now:
 
 - `~/.local/state/personal-agent/sync/nodes/<id>/`
 
-Legacy roots under `sync/notes/`, `sync/projects/`, and `sync/skills/` still exist as migration inputs and compatibility surfaces while older code paths are phased over, but new unified tooling targets `sync/nodes/`.
+The live durable system now reads and writes notes, projects, and skills from `sync/nodes/` directly. Legacy roots under `sync/notes/`, `sync/projects/`, and `sync/skills/` are migration-era leftovers, not the active source of truth.
 
 ## Directory layout
 
@@ -90,6 +90,7 @@ Use these when they add value:
 - `links.parent`
 - `links.related[]`
 - `links.conversations[]`
+- `links.relationships[]`
 
 ## Tags
 
@@ -116,6 +117,8 @@ Everything else is queryable but unconstrained:
 - `topic:gpu`
 
 The model is closer to Datadog-style event tags than a rigid schema.
+
+In the UI, the shared node editor on `/nodes` also treats `parent` and `status` as first-class fields instead of making you edit their reserved tags by hand.
 
 ## Parent/child hierarchy
 

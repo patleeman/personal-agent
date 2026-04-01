@@ -39,7 +39,7 @@ import {
   type NodeBrowserGroupBy,
   type NodeBrowserSort,
 } from '../nodeWorkspaceState';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
+import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { NoteWorkspace } from './MemoriesPage';
 import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
@@ -1042,7 +1042,7 @@ export function NodesPage() {
     if (!selected) {
       return;
     }
-    ensureOpenResourceShelfItem(selected.kind, selected.id);
+    ensureOpenResourceShelfItem('node', buildOpenNodeShelfId(selected.kind, selected.id));
   }, [selected]);
 
   useEffect(() => {

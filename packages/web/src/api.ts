@@ -590,7 +590,9 @@ export const api = {
   nodes: (options?: { profile?: string }) => get<NodeBrowserData>(withViewProfile('/nodes', options?.profile)),
   nodeDetail: (nodeId: string, options?: { profile?: string }) => get<NodeBrowserDetail>(withViewProfile(`/nodes/${encodeURIComponent(nodeId)}`, options?.profile)),
   saveNodeDetail: (nodeId: string, input: {
+    title?: string;
     summary?: string;
+    description?: string | null;
     status?: string;
     tags?: string[];
     addTags?: string[];
