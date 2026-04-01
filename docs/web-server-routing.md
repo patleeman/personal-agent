@@ -8,7 +8,7 @@ The server root is now intentionally shallow:
 
 - `routes/` — Express route registration modules
 - `conversations/` — session reads, live sessions, remote bindings, conversation memory, and conversation services
-- `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes
+- `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes, and server-side maintenance runner entrypoints
 - `workspace/` — workspace browser, git helpers, remote execution, folder picker
 - `models/` — model defaults, providers, auth, usage
 - `projects/` — project records, packages, resources, generated documents
