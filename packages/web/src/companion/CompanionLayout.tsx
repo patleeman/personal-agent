@@ -296,8 +296,19 @@ export function useCompanionTopBarAction() {
 
 export function CompanionLayout() {
   const location = useLocation();
-  const { activity, alerts, sessions, tasks, runs } = useAppData();
-  const { daemon, sync, webUi } = useSystemStatus();
+  const {
+    activity,
+    alerts,
+    sessions,
+    tasks,
+    runs,
+    setActivity,
+    setAlerts,
+    setProjects,
+    setTasks,
+    setRuns,
+  } = useAppData();
+  const { daemon, sync, webUi, setDaemon, setSync, setWebUi } = useSystemStatus();
   const { data: companionSession, loading: companionSessionLoading } = useApi(api.companionSession, 'companion-auth-session');
   const [pairingCode, setPairingCode] = useState('');
   const [deviceLabel, setDeviceLabel] = useState(() => readDefaultDeviceLabel());
@@ -566,6 +577,75 @@ export function CompanionLayout() {
     { to: COMPANION_QUICK_NOTE_PATH, label: 'Note', ariaLabel: 'Quick note', Icon: PlusIcon, badgeCount: 0, active: noteActive, isAccent: true },
     { to: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', ariaLabel: 'Open knowledge', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
   ];
+
+  useEffect(() => {
+    if (!companionSession) {
+      return;
+    }
+
+    let cancelled = false;
+    const applyIfMounted = <T,>(setter: (value: T) => void) => (value: T) => {
+      if (!cancelled) {
+        setter(value);
+      }
+    };
+
+    if (activity === null) {
+      void api.activity().then((entries) => {
+        applyIfMounted(setActivity)({
+          entries,
+          unreadCount: entries.filter((entry) => !entry.read).length,
+        });
+      }).catch(() => undefined);
+    }
+
+    if (alerts === null) {
+      void api.alerts().then(applyIfMounted(setAlerts)).catch(() => undefined);
+    }
+
+    void api.projects().then(applyIfMounted(setProjects)).catch(() => undefined);
+
+    if (tasks === null) {
+      void api.tasks().then(applyIfMounted(setTasks)).catch(() => undefined);
+    }
+
+    if (runs === null) {
+      void api.runs().then(applyIfMounted(setRuns)).catch(() => undefined);
+    }
+
+    if (daemon === null) {
+      void api.daemon().then(applyIfMounted(setDaemon)).catch(() => undefined);
+    }
+
+    if (sync === null) {
+      void api.sync().then(applyIfMounted(setSync)).catch(() => undefined);
+    }
+
+    if (webUi === null) {
+      void api.webUiState().then(applyIfMounted(setWebUi)).catch(() => undefined);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activity,
+    alerts,
+    companionSession,
+    daemon,
+    runs,
+    setActivity,
+    setAlerts,
+    setDaemon,
+    setProjects,
+    setRuns,
+    setSync,
+    setTasks,
+    setWebUi,
+    sync,
+    tasks,
+    webUi,
+  ]);
 
   const handlePairDevice = useCallback(async () => {
     if (authBusy) {

@@ -4,6 +4,7 @@ export type NodeBrowserFilter = 'all' | NodeLinkKind;
 export type NodeBrowserSort = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc' | 'status_asc';
 export type NodeBrowserDateField = 'updated' | 'created';
 export type NodeBrowserGroupBy = 'none' | 'kind' | 'status' | 'profile' | 'area' | `tag:${string}`;
+export type NodeBrowserDensity = 'comfortable' | 'dense';
 
 export const NODE_FILTER_SEARCH_PARAM = 'type';
 export const NODE_KIND_SEARCH_PARAM = 'kind';
@@ -14,6 +15,7 @@ export const NODE_GROUP_SEARCH_PARAM = 'group';
 export const NODE_DATE_FIELD_SEARCH_PARAM = 'dateField';
 export const NODE_DATE_FROM_SEARCH_PARAM = 'from';
 export const NODE_DATE_TO_SEARCH_PARAM = 'to';
+export const NODE_DENSITY_SEARCH_PARAM = 'density';
 
 function normalizeFilter(value: string | null): NodeBrowserFilter {
   switch (value?.trim()) {
@@ -53,6 +55,10 @@ function normalizeSort(value: string | null): NodeBrowserSort {
 
 function normalizeDateField(value: string | null): NodeBrowserDateField {
   return value?.trim() === 'created' ? 'created' : 'updated';
+}
+
+function normalizeDensity(value: string | null): NodeBrowserDensity {
+  return value?.trim() === 'dense' ? 'dense' : 'comfortable';
 }
 
 function isDateValue(value: string | null): value is string {
@@ -119,6 +125,11 @@ export function readNodeBrowserDateField(search: string): NodeBrowserDateField {
   return normalizeDateField(params.get(NODE_DATE_FIELD_SEARCH_PARAM));
 }
 
+export function readNodeBrowserDensity(search: string): NodeBrowserDensity {
+  const params = new URLSearchParams(search);
+  return normalizeDensity(params.get(NODE_DENSITY_SEARCH_PARAM));
+}
+
 export function readNodeBrowserDateRange(search: string): { from: string | null; to: string | null } {
   const params = new URLSearchParams(search);
   return {
@@ -139,6 +150,7 @@ export function buildNodesSearch(
     dateField?: NodeBrowserDateField | null;
     dateFrom?: string | null;
     dateTo?: string | null;
+    density?: NodeBrowserDensity | null;
   },
 ): string {
   const params = new URLSearchParams(currentSearch);
@@ -214,6 +226,14 @@ export function buildNodesSearch(
       params.delete(NODE_DATE_TO_SEARCH_PARAM);
     } else {
       params.set(NODE_DATE_TO_SEARCH_PARAM, updates.dateTo);
+    }
+  }
+
+  if (updates.density !== undefined) {
+    if (!updates.density || updates.density === 'comfortable') {
+      params.delete(NODE_DENSITY_SEARCH_PARAM);
+    } else {
+      params.set(NODE_DENSITY_SEARCH_PARAM, updates.density);
     }
   }
 
