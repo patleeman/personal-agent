@@ -36,7 +36,6 @@ import type {
   SessionDetail,
 } from '../types';
 import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
-import { CompanionConversationTodos } from './CompanionConversationTodos';
 import { buildCompanionConversationPath, COMPANION_CONVERSATIONS_PATH, COMPANION_TASKS_PATH } from './routes';
 
 interface CompanionLiveStateInput {
@@ -269,11 +268,11 @@ function buildBannerDetail(input: {
   return 'Waiting for controller state…';
 }
 
-type CompanionConversationPanel = 'actions' | 'runtime' | 'todos' | 'artifacts';
+type CompanionConversationPanel = 'actions' | 'runtime' | 'artifacts';
 
 function getCompanionConversationPanel(search: string): CompanionConversationPanel | null {
   const value = new URLSearchParams(search).get('panel');
-  return value === 'actions' || value === 'runtime' || value === 'todos' || value === 'artifacts' ? value : null;
+  return value === 'actions' || value === 'runtime' || value === 'artifacts' ? value : null;
 }
 
 function setCompanionConversationPanel(search: string, panel: CompanionConversationPanel | null): string {
@@ -583,7 +582,6 @@ export function CompanionConversationPage() {
   useEffect(() => {
     if (!id) {
       setRuntimeModels([]);
-      setRuntimePresets([]);
       setCurrentModel('');
       setCurrentThinkingLevel('');
       setRuntimeLoading(false);
@@ -692,13 +690,6 @@ export function CompanionConversationPage() {
   );
   const showStatusIndicators = orderedDeferredResumes.length > 0 || Boolean(scheduledTaskSummary.indicatorText);
   const canResumeConversation = !isLiveSession && Boolean(savedConversationSessionFile);
-  const todoReadOnlyReason = !isLiveSession
-    ? 'Resume this conversation to edit the agent reminders from this device.'
-    : controlState.needsTakeover
-      ? 'Take over to manage the agent reminders from this device.'
-      : stream.isStreaming
-        ? 'Wait for the current turn to finish before editing the agent reminders.'
-        : null;
   const runtimeReadOnlyReason = controlState.needsTakeover
     ? 'Take over to change this conversation runtime from this device.'
     : null;
@@ -1276,9 +1267,7 @@ export function CompanionConversationPage() {
                       ? 'Actions'
                       : selectedPanel === 'runtime'
                         ? 'Conversation runtime'
-                        : selectedPanel === 'todos'
-                          ? 'Agent reminders'
-                          : 'Artifacts'}
+                        : 'Artifacts'}
                   </h2>
                 </div>
               </div>
@@ -1356,19 +1345,6 @@ export function CompanionConversationPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => openPanel('todos')}
-                    className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-medium text-primary">Agent reminders</p>
-                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">Review, reorder, and manage the current reminders for the agent.</p>
-                    </div>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0 text-dim">
-                      <path d="m9 6 6 6-6 6" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => openPanel('artifacts')}
                     className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface"
                   >
@@ -1404,12 +1380,6 @@ export function CompanionConversationPage() {
                   disabledReason={runtimeReadOnlyReason}
                   onSelectModel={(modelId) => { void handleSelectRuntimeModel(modelId); }}
                   onSelectThinkingLevel={(thinkingLevel) => { void handleSelectRuntimeThinkingLevel(thinkingLevel); }}
-                />
-              ) : selectedPanel === 'todos' ? (
-                <CompanionConversationTodos
-                  conversationId={id}
-                  readOnly={Boolean(todoReadOnlyReason)}
-                  readOnlyReason={todoReadOnlyReason}
                 />
               ) : (
                 <CompanionConversationArtifacts conversationId={id} />

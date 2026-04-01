@@ -38,10 +38,6 @@ vi.mock('../hooks/useSessions', () => ({
   useSessionDetail: vi.fn(),
 }));
 
-vi.mock('./CompanionConversationTodos', () => ({
-  CompanionConversationTodos: ({ readOnly }: { readOnly?: boolean }) => <div>todos: {readOnly ? 'read-only' : 'editable'}</div>,
-}));
-
 vi.mock('./CompanionConversationArtifacts', () => ({
   CompanionConversationArtifacts: ({ conversationId }: { conversationId: string }) => <div>artifacts: {conversationId}</div>,
 }));
@@ -300,10 +296,9 @@ describe('CompanionConversationPage', () => {
     expect(html).not.toContain('Resume conversation');
     expect(html).toContain('Open conversation');
     expect(html).toContain('Conversation runtime');
-    expect(html).toContain('Agent reminders');
     expect(html).toContain('Artifacts');
     expect(html).toContain('Scheduled tasks');
-    expect(html).not.toContain('todos:');
+    expect(html).not.toContain('Agent reminders');
   });
 
   it('opens the runtime side panel when requested in the URL', () => {
@@ -337,9 +332,9 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('Thinking');
   });
 
-  it('opens the side panel for conversation todos when requested in the URL', () => {
+  it('opens the artifacts side panel when requested in the URL', () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={['/app/conversations/conv-123?panel=todos']}>
+      <MemoryRouter initialEntries={['/app/conversations/conv-123?panel=artifacts']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: vi.fn() }}>
             <AppDataContext.Provider value={{
@@ -363,9 +358,9 @@ describe('CompanionConversationPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('todos:');
-    expect(html).toContain('read-only');
-    expect(html).not.toContain('artifacts: conv-123');
+    expect(html).toContain('Artifacts');
+    expect(html).toContain('artifacts:');
+    expect(html).toContain('conv-123');
   });
 
   it('shows deferred resume and scheduled task indicators and lets the user load older transcript blocks', () => {
