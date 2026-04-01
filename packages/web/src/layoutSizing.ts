@@ -31,7 +31,6 @@ export function getRailPageKey(pathname: string): string {
     case 'skills':
     case 'nodes':
     case 'instructions':
-    case 'plans':
     case 'tools':
     case 'settings':
     case 'memory':
@@ -100,7 +99,6 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
     case 'notes':
     case 'nodes':
     case 'tools':
-    case 'plans':
       return {
         storageKey: buildRailWidthStorageKey(pageKey),
         initialMainWidthRatio: 0.7,

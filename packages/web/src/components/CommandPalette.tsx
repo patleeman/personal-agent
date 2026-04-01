@@ -191,15 +191,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/skills' },
     },
     {
-      id: 'nav:plans',
-      section: 'nav',
-      title: 'Reminder Presets',
-      subtitle: 'Browse reusable reminder presets',
-      keywords: ['automation', 'presets', 'reminder', 'todo', 'workflow'],
-      order: 7,
-      action: { kind: 'navigate', to: '/plans' },
-    },
-    {
       id: 'nav:scheduled',
       section: 'nav',
       title: 'Scheduled Tasks',

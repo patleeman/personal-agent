@@ -317,6 +317,8 @@ Settings lets you change:
 - conversation auto-title behavior and title model
 - saved UI state
 
+The settings rail also links out to Runs, Scheduled tasks, Tools, and Instructions for operational work.
+
 Switching the active profile affects:
 
 - inbox
