@@ -1,10 +1,9 @@
 import { useCallback, useEffect, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { COMPANION_NOTES_PATH } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -16,8 +15,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function CompanionMemoryDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export function CompanionMemoryDetailPage({ memoryId }: { memoryId?: string }) {
+  const params = useParams<{ id: string }>();
+  const id = memoryId ?? params.id;
   const fetchMemory = useCallback(() => {
     if (!id) {
       throw new Error('Missing memory id.');

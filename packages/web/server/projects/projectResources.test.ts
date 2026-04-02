@@ -1,19 +1,16 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProjectScaffold, resolveProjectPaths } from '@personal-agent/core';
+import { createProjectScaffold, loadUnifiedNodes, resolveProjectPaths } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  createProjectNoteRecord,
   deleteProjectFileRecord,
-  deleteProjectNoteRecord,
   listProjectFiles,
-  listProjectNotes,
+  migrateLegacyProjectPages,
   readProjectDocument,
   readProjectFileDownload,
   saveProjectDocument,
-  updateProjectNoteRecord,
   uploadProjectFile,
 } from './projectResources.js';
 
@@ -60,44 +57,44 @@ describe('projectResources', () => {
     expect(brief?.path).toContain('project-document.md');
   });
 
-  it('creates, updates, lists, and deletes project notes', () => {
+  it('migrates legacy project notes into child pages', () => {
     const repoRoot = createTempRepo();
-    createProjectScaffold({
+    const scaffold = createProjectScaffold({
       repoRoot,
       profile: 'datadog',
       projectId: 'notes',
       title: 'Notes',
-      description: 'Test project notes',
+      description: 'Test project pages',
     });
+    const legacyNotesDir = join(scaffold.paths.projectDir, 'notes');
+    mkdirSync(legacyNotesDir, { recursive: true });
+    writeFileSync(join(legacyNotesDir, 'capture-the-decision.md'), `---
+id: capture-the-decision
+title: Capture the decision
+kind: decision
+createdAt: 2026-03-20T12:00:00.000Z
+updatedAt: 2026-03-21T09:30:00.000Z
+---
+Keep the main project doc in INDEX.md.
+`);
 
-    const created = createProjectNoteRecord({
+    const result = migrateLegacyProjectPages({
       repoRoot,
       profile: 'datadog',
       projectId: 'notes',
-      title: 'Capture the decision',
-      kind: 'decision',
-      body: 'Keep the main project doc in INDEX.md.',
     });
 
-    const updated = updateProjectNoteRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'notes',
-      noteId: created.id,
-      body: 'Keep the main project doc in INDEX.md and regenerate it on demand.',
-    });
+    expect(result.migratedPageIds).toHaveLength(1);
+    expect(existsSync(legacyNotesDir)).toBe(false);
 
-    expect(updated.body).toContain('regenerate it on demand');
-    expect(listProjectNotes({ repoRoot, profile: 'datadog', projectId: 'notes' })).toHaveLength(1);
-
-    deleteProjectNoteRecord({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'notes',
-      noteId: created.id,
-    });
-
-    expect(listProjectNotes({ repoRoot, profile: 'datadog', projectId: 'notes' })).toHaveLength(0);
+    const loaded = loadUnifiedNodes();
+    const child = loaded.nodes.find((node) => node.id === result.migratedPageIds[0]);
+    expect(child?.links.parent).toBe('notes');
+    expect(child?.tags).toContain('type:note');
+    expect(child?.tags).toContain('profile:datadog');
+    expect(child?.tags).toContain('noteType:decision');
+    expect(child?.body).toContain('# Capture the decision');
+    expect(child?.body).toContain('Keep the main project doc in INDEX.md.');
   });
 
   it('uploads, downloads, and deletes project files from the unified files bucket', () => {

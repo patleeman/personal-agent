@@ -1,6 +1,6 @@
 import { parseSlashInput } from './slashMenu';
 
-export const PROJECT_SLASH_USAGE = 'Usage: /project new <title> | /project reference <id> | /project unreference <id>';
+export const PROJECT_SLASH_USAGE = 'Usage: /page new <title> | /page reference <id> | /page unreference <id>';
 
 export type ProjectSlashCommand =
   | { action: 'new'; description: string }
@@ -13,7 +13,7 @@ export type ProjectSlashParseResult =
 
 export function parseProjectSlashCommand(input: string): ProjectSlashParseResult | null {
   const parsed = parseSlashInput(input.trim());
-  if (!parsed || parsed.command !== '/project') {
+  if (!parsed || (parsed.command !== '/page' && parsed.command !== '/project')) {
     return null;
   }
 
@@ -31,7 +31,7 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
     if (!description) {
       return {
         kind: 'invalid',
-        message: 'Usage: /project new <title>',
+        message: 'Usage: /page new <title>',
       };
     }
 
@@ -49,7 +49,7 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
     if (!projectId) {
       return {
         kind: 'invalid',
-        message: 'Usage: /project reference <id>',
+        message: 'Usage: /page reference <id>',
       };
     }
 
@@ -67,7 +67,7 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
     if (!projectId) {
       return {
         kind: 'invalid',
-        message: 'Usage: /project unreference <id>',
+        message: 'Usage: /page unreference <id>',
       };
     }
 

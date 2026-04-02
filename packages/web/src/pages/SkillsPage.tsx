@@ -13,7 +13,7 @@ import {
   PageHeading,
   ToolbarButton,
 } from '../components/ui';
-import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
+import { PageEditorDocument } from '../components/PageEditorDocument';
 import {
   NodeIconActionButton,
   NodePropertyList,
@@ -558,18 +558,26 @@ export function SkillWorkspace({
         <LoadingState label="Loading skill…" className="h-full justify-center" />
       ) : (
         <div className="max-w-4xl space-y-3">
-          {selectedReference ? (
-            <div className="space-y-1 border-b border-border-subtle pb-4">
-              {documentLabel ? <p className="text-[16px] font-medium text-primary">{documentLabel}</p> : null}
-              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
-              <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
-              {documentSummary ? <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{documentSummary}</p> : null}
-            </div>
-          ) : null}
-          <RichMarkdownEditor
-            value={draft}
-            onChange={setDraft}
-            placeholder="Start writing…"
+          <PageEditorDocument
+            title=""
+            onTitleChange={() => undefined}
+            description=""
+            onDescriptionChange={() => undefined}
+            body={draft}
+            onBodyChange={setDraft}
+            meta={selectedReference ? (
+              <div className="space-y-1 border-b border-border-subtle pb-4">
+                {documentLabel ? <p className="text-[16px] font-medium text-primary">{documentLabel}</p> : null}
+                <p className="text-[10px] uppercase tracking-[0.14em] text-dim">{documentKindLabel}</p>
+                <p className="break-all text-[12px] text-secondary">{documentMeta}</p>
+                {documentSummary ? <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{documentSummary}</p> : null}
+              </div>
+            ) : undefined}
+            showTitle={false}
+            showDescription={false}
+            frameClassName="ui-note-editor-frame-embedded"
+            documentClassName={selectedReference ? 'ui-note-editor-doc-embedded gap-0' : 'ui-note-editor-doc-embedded'}
+            bodyPlaceholder="Start writing…"
           />
         </div>
       )}
@@ -767,28 +775,18 @@ export function SkillsPage() {
               <PageHeading title="New skill" meta="Create a reusable workflow node for the active profile." />
             </PageHeader>
 
-            <div className="space-y-3 max-w-3xl">
-              <input
-                value={newSkillTitle}
-                onChange={(event) => setNewSkillTitle(event.target.value)}
-                placeholder="Skill title"
-                aria-label="Skill title"
-                className={INPUT_CLASS}
-              />
-              <textarea
-                value={newSkillDescription}
-                onChange={(event) => setNewSkillDescription(event.target.value)}
-                placeholder="Short description"
-                aria-label="Skill description"
-                rows={2}
-                className={`${INPUT_CLASS} resize-y`}
-              />
-            </div>
             <div className="max-w-4xl">
-              <RichMarkdownEditor
-                value={newSkillBody}
-                onChange={setNewSkillBody}
-                placeholder="Document when to use this skill, the workflow, and any sharp edges."
+              <PageEditorDocument
+                title={newSkillTitle}
+                onTitleChange={setNewSkillTitle}
+                description={newSkillDescription}
+                onDescriptionChange={setNewSkillDescription}
+                body={newSkillBody}
+                onBodyChange={setNewSkillBody}
+                titlePlaceholder="Skill title"
+                descriptionLabel="Description"
+                descriptionPlaceholder="Short description"
+                bodyPlaceholder="Document when to use this skill, the workflow, and any sharp edges."
               />
             </div>
             {createError ? <p className="text-[12px] text-danger">{createError}</p> : null}

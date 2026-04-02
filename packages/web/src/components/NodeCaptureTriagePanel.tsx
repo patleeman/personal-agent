@@ -48,11 +48,11 @@ export function NodeCaptureTriagePanel({
   return (
     <div className="space-y-3">
       <p className="text-[12px] leading-relaxed text-secondary">
-        This note is still an inbox capture. Triage it into a durable note, promote it into a project, or ignore it.
+        This page is still an inbox capture. Triage it into a durable page, promote it into a tracked page, or ignore it.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <ToolbarButton onClick={() => { void run('promote'); }} disabled={busy !== null} className="text-accent">
-          {busy === 'promote' ? 'Promoting…' : 'Promote to note'}
+          {busy === 'promote' ? 'Promoting…' : 'Promote to page'}
         </ToolbarButton>
         <ToolbarButton onClick={() => { void run('ignore'); }} disabled={busy !== null}>
           {busy === 'ignore' ? 'Ignoring…' : 'Ignore capture'}

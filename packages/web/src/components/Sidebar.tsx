@@ -26,8 +26,8 @@ import {
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
-import { buildNoteSearch, NOTE_ID_SEARCH_PARAM, readCreateState } from '../noteWorkspaceState';
-import { buildNodesHref, readSelectedNode } from '../nodeWorkspaceState';
+import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
+import { buildNodeCreateSearch, buildNodesHref, readCreatingNode, readSelectedNode } from '../nodeWorkspaceState';
 import { SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
@@ -531,7 +531,7 @@ export function Sidebar() {
   }, [location.pathname]);
   const selectedNoteId = useMemo(() => new URLSearchParams(location.search).get(NOTE_ID_SEARCH_PARAM)?.trim() || null, [location.search]);
   const creatingNote = useMemo(
-    () => location.pathname.startsWith('/notes') && readCreateState(location.search),
+    () => location.pathname.startsWith('/pages') && readCreatingNode(location.search),
     [location.pathname, location.search],
   );
   const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get(SKILL_SEARCH_PARAM)?.trim() || null, [location.search]);
@@ -541,7 +541,7 @@ export function Sidebar() {
     [location.pathname, location.search],
   );
   const nodesRouteActive = useMemo(
-    () => location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes') || location.pathname.startsWith('/notes') || location.pathname.startsWith('/projects') || location.pathname.startsWith('/skills'),
+    () => location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes'),
     [location.pathname],
   );
   const selectedWorkspaceId = useMemo(
@@ -837,10 +837,7 @@ export function Sidebar() {
 
   function handleCloseNode(kind: 'note' | 'project' | 'skill', nodeId: string) {
     closeOpenResourceShelfItem('node', buildOpenNodeShelfId(kind, nodeId));
-    if ((kind === 'note' && selectedNoteId === nodeId && location.pathname.startsWith('/notes'))
-      || (kind === 'project' && selectedProjectId === nodeId && location.pathname.startsWith('/projects'))
-      || (kind === 'skill' && selectedSkillName === nodeId && location.pathname.startsWith('/skills'))
-      || (selectedNodesPageItem?.kind === kind && selectedNodesPageItem.id === nodeId)) {
+    if (selectedNodesPageItem?.kind === kind && selectedNodesPageItem.id === nodeId) {
       navigate('/pages');
     }
   }
@@ -884,14 +881,14 @@ export function Sidebar() {
             <span className="flex-1 text-left">Chat</span>
           </button>
           <Link
-            to={`/notes${buildNoteSearch('', { creating: true })}`}
+            to={`/pages${buildNodeCreateSearch('', { creating: true, createKind: 'note' })}`}
             className="ui-sidebar-nav-item mx-0 flex-1 bg-accent/10 text-accent hover:bg-accent/20"
-            title="Quick note capture"
+            title="Create page"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            <span className="flex-1 text-left font-medium">Note</span>
+            <span className="flex-1 text-left font-medium">Page</span>
           </Link>
         </div>
       </div>
@@ -984,23 +981,18 @@ export function Sidebar() {
             <div className="py-1 space-y-0.5">
               {creatingNote ? (
                 <ShelfRow
-                  to={`/notes${buildNoteSearch(location.search, { creating: true })}`}
+                  to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`}
                   active
-                  title="new note"
-                  meta="Draft note"
-                  onClose={() => navigate(`/notes${buildNoteSearch(location.search, { creating: false })}`)}
+                  title="new page"
+                  meta="Draft page"
+                  onClose={() => navigate(`/pages${buildNodeCreateSearch(location.search, { creating: false, createKind: null })}`)}
                 />
               ) : null}
               {openNodes.map((item) => (
                 <ShelfRow
                   key={`${item.kind}:${item.id}`}
                   to={buildNodesHref(item.kind, item.id)}
-                  active={
-                    (selectedNodesPageItem?.kind === item.kind && selectedNodesPageItem.id === item.id)
-                    || (item.kind === 'note' && location.pathname.startsWith('/notes') && selectedNoteId === item.id)
-                    || (item.kind === 'project' && location.pathname.startsWith('/projects') && selectedProjectId === item.id)
-                    || (item.kind === 'skill' && location.pathname.startsWith('/skills') && selectedSkillName === item.id)
-                  }
+                  active={selectedNodesPageItem?.kind === item.kind && selectedNodesPageItem.id === item.id}
                   title={item.title}
                   meta={item.meta}
                   pinned={item.pinned}

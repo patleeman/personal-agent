@@ -13,7 +13,7 @@ import {
   PageHeading,
   ToolbarButton,
 } from '../components/ui';
-import { NoteEditorDocument } from '../components/NoteEditorDocument';
+import { PageEditorDocument } from '../components/PageEditorDocument';
 import {
   NodeIconActionButton,
   NodePropertyList,
@@ -64,7 +64,7 @@ function memoryWorkItemLabel(item: MemoryWorkItem): string {
     case 'recovering':
       return 'Recovering page distillation';
     default:
-      return 'Distilling into a note page';
+      return 'Distilling into a page';
   }
 }
 
@@ -654,8 +654,8 @@ function NoteReferencesPanel({
       <div className="space-y-4">
         {hasLinkedNodes ? (
           <>
-            <NodeLinkList title="Links to" items={links?.outgoing} surface="main" emptyText="This note does not reference other pages yet." />
-            <NodeLinkList title="Linked from" items={links?.incoming} surface="main" emptyText="No other pages link to this note yet." />
+            <NodeLinkList title="Links to" items={links?.outgoing} surface="main" emptyText="This page does not reference other pages yet." />
+            <NodeLinkList title="Linked from" items={links?.incoming} surface="main" emptyText="No other pages link to this page yet." />
             <UnresolvedNodeLinks ids={links?.unresolved} />
           </>
         ) : null}
@@ -850,7 +850,7 @@ export function NoteWorkspace({
       return;
     }
 
-    if (!window.confirm(`Delete note page @${memory.id}?`)) {
+    if (!window.confirm(`Delete page @${memory.id}?`)) {
       return;
     }
 
@@ -951,12 +951,12 @@ export function NoteWorkspace({
     <NodeWorkspaceShell
       breadcrumbs={(
         <>
-          <span>Notes</span>
+          <span>Pages</span>
           <span className="opacity-40">›</span>
           {memory ? (
             <span className="font-mono text-secondary">@{memory.id}</span>
           ) : (
-            <span className="font-medium text-primary">New note</span>
+            <span className="font-medium text-primary">New page</span>
           )}
         </>
       )}
@@ -964,14 +964,14 @@ export function NoteWorkspace({
       backLabel={backLabel}
       title={(
         <input
-          aria-label="Note title"
+          aria-label="Page title"
           name="note-title"
           autoComplete="off"
           spellCheck={false}
           value={noteTitle}
           onChange={(event) => setNoteTitle(event.target.value)}
           className="ui-node-title-input"
-          placeholder="Note title"
+          placeholder="Page title"
         />
       )}
       titleAs="div"
@@ -979,11 +979,11 @@ export function NoteWorkspace({
       summary={(
         <textarea
           ref={noteDescriptionRef}
-          aria-label="Note guidance for the agent"
+          aria-label="Page guidance for the agent"
           name="note-description"
           value={noteDescription}
           onChange={(event) => setNoteDescription(event.target.value)}
-          placeholder="Tell the agent how to use this note, when to read it, or what it is for."
+          placeholder="Tell the agent how to use this page, when to read it, or what it is for."
           className="ui-note-header-textarea"
           rows={1}
         />
@@ -991,14 +991,14 @@ export function NoteWorkspace({
       status={<span className={saveStatus.className}>{saveStatus.text}</span>}
       actions={(
         <NodeToolbarGroup>
-          <NodeIconActionButton onClick={handleReload} disabled={saveBusy || isCreating} title="Reload note" aria-label="Reload note">
+          <NodeIconActionButton onClick={handleReload} disabled={saveBusy || isCreating} title="Reload page" aria-label="Reload page">
             <NoteWorkspaceIcon paths={["M20 11a8 8 0 1 0 2.3 5.7", "M20 4v7h-7"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleSave(); }}
             disabled={!dirty || saveBusy || noteTitle.trim().length === 0}
-            title={saveBusy ? (isCreating ? 'Creating note' : 'Saving note') : (isCreating ? 'Create note' : 'Save note now')}
-            aria-label={saveBusy ? (isCreating ? 'Creating note' : 'Saving note') : (isCreating ? 'Create note' : 'Save note now')}
+            title={saveBusy ? (isCreating ? 'Creating page' : 'Saving page') : (isCreating ? 'Create page' : 'Save page now')}
+            aria-label={saveBusy ? (isCreating ? 'Creating page' : 'Saving page') : (isCreating ? 'Create page' : 'Save page now')}
             tone={dirty || saveBusy ? 'accent' : saveState === 'error' ? 'danger' : 'default'}
           >
             <NoteWorkspaceIcon paths={["M5 4h11l3 3v13H5z", "M9 4v6h6V4", "M9 20v-6h6v6"]} />
@@ -1006,8 +1006,8 @@ export function NoteWorkspace({
           <NodeIconActionButton
             onClick={() => { void handleStartConversation(); }}
             disabled={startBusy || isCreating}
-            title={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from note' : 'Chat about note')}
-            aria-label={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from note' : 'Chat about note')}
+            title={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from page' : 'Chat about page')}
+            aria-label={isCreating ? 'Chat unavailable while creating' : (startBusy ? 'Starting chat from page' : 'Chat about page')}
             tone="accent"
           >
             <NoteWorkspaceIcon paths={["M7 10h10", "M7 14h6", "M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4l-4 3v-3H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"]} />
@@ -1015,24 +1015,24 @@ export function NoteWorkspace({
           <NodeIconActionButton
             onClick={() => { void handlePromoteToProject(); }}
             disabled={promotionBusy !== null || isCreating || noteTitle.trim().length === 0}
-            title={isCreating ? 'Project promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating project from note' : 'Promote note to project')}
-            aria-label={isCreating ? 'Project promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating project from note' : 'Promote note to project')}
+            title={isCreating ? 'Tracked-page promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating tracked page from page' : 'Promote page to tracked page')}
+            aria-label={isCreating ? 'Tracked-page promotion unavailable while creating' : (promotionBusy === 'project' ? 'Creating tracked page from page' : 'Promote page to tracked page')}
           >
             <NoteWorkspaceIcon paths={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M8 11h8", "M8 15h6"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handlePromoteToSkill(); }}
             disabled={promotionBusy !== null || isCreating || noteTitle.trim().length === 0}
-            title={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from note' : 'Promote note to skill')}
-            aria-label={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from note' : 'Promote note to skill')}
+            title={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from page' : 'Promote page to skill')}
+            aria-label={isCreating ? 'Skill promotion unavailable while creating' : (promotionBusy === 'skill' ? 'Creating skill from page' : 'Promote page to skill')}
           >
             <NoteWorkspaceIcon paths={["M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125"]} />
           </NodeIconActionButton>
           <NodeIconActionButton
             onClick={() => { void handleDelete(); }}
             disabled={deleteBusy || isCreating}
-            title={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting note' : 'Delete note')}
-            aria-label={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting note' : 'Delete note')}
+            title={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting page' : 'Delete page')}
+            aria-label={isCreating ? 'Delete unavailable while creating' : (deleteBusy ? 'Deleting page' : 'Delete page')}
             tone="danger"
           >
             <NoteWorkspaceIcon paths={["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"]} />
@@ -1061,7 +1061,7 @@ export function NoteWorkspace({
       )}
     >
       <div className="max-w-4xl">
-        <NoteEditorDocument
+        <PageEditorDocument
           title={noteTitle}
           onTitleChange={setNoteTitle}
           description={noteDescription}
@@ -1211,7 +1211,7 @@ export function MemoriesPage() {
           <PageHeader
             actions={(
               <>
-                <ToolbarButton onClick={() => navigateNotes({ creating: true })}>New note</ToolbarButton>
+                <ToolbarButton onClick={() => navigateNotes({ creating: true })}>New page</ToolbarButton>
                 <ToolbarButton onClick={() => {
                   void Promise.allSettled([
                     refetch({ resetLoading: false }),
@@ -1224,8 +1224,8 @@ export function MemoriesPage() {
             )}
           >
             <PageHeading
-              title="Notes"
-              meta="Browse durable notes, then open one into the main workspace and the left sidebar shelf."
+              title="Pages"
+              meta="Browse durable pages, then open one into the main workspace and the left sidebar shelf."
             />
           </PageHeader>
 
@@ -1239,35 +1239,35 @@ export function MemoriesPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-[12px] text-secondary">
-              {query.trim() ? `Showing ${filteredMemories.length} of ${memories.length} notes.` : `${memories.length} notes.`}
+              {query.trim() ? `Showing ${filteredMemories.length} of ${memories.length} pages.` : `${memories.length} pages.`}
             </div>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search notes"
-              aria-label="Search notes"
+              placeholder="Search pages"
+              aria-label="Search pages"
               className={`${INPUT_CLASS} sm:w-[22rem]`}
               autoComplete="off"
               spellCheck={false}
             />
           </div>
 
-          {loading && !data ? <LoadingState label="Loading notes…" className="min-h-[18rem]" /> : null}
-          {error && !data ? <ErrorState message={`Unable to load notes: ${error}`} /> : null}
+          {loading && !data ? <LoadingState label="Loading pages…" className="min-h-[18rem]" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load pages: ${error}`} /> : null}
 
           {!loading && !error && memories.length === 0 ? (
             <EmptyState
               className="min-h-[18rem]"
-              title="No notes yet"
-              body="Create a note to start building durable context."
-              action={<ToolbarButton onClick={() => navigateNotes({ creating: true })}>Create note</ToolbarButton>}
+              title="No pages yet"
+              body="Create a page to start building durable context."
+              action={<ToolbarButton onClick={() => navigateNotes({ creating: true })}>Create page</ToolbarButton>}
             />
           ) : null}
 
           {!loading && !error && filteredMemories.length === 0 && memories.length > 0 ? (
             <EmptyState
               className="min-h-[18rem]"
-              title="No matching notes"
+              title="No matching pages"
               body="Try a broader search across titles, ids, and summaries."
             />
           ) : null}

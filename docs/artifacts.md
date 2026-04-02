@@ -133,6 +133,6 @@ Then choose the right home:
 
 - [Decision Guide](./decision-guide.md)
 - [Agent Tool Map](./agent-tool-map.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Conversations](./conversations.md)
 - [Web UI Guide](./web-ui.md)

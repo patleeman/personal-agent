@@ -4,7 +4,7 @@ import { useApi } from '../hooks';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import type { MemorySkillItem } from '../types';
 import { BrowserRecordRow } from '../components/ui';
-import { buildCompanionSkillPath } from './routes';
+import { buildCompanionPagePath } from './routes';
 
 function sortCompanionSkills(skills: MemorySkillItem[]): MemorySkillItem[] {
   return [...skills].sort((left, right) => {
@@ -40,7 +40,7 @@ export function CompanionSkillsPage() {
                 {skills.map((skill) => (
                   <BrowserRecordRow
                     key={skill.name}
-                    to={buildCompanionSkillPath(skill.name)}
+                    to={buildCompanionPagePath('skill', skill.name)}
                     label={skill.source === 'shared' ? 'Shared skill' : 'Custom skill'}
                     aside={skill.usedInLastSession ? 'Used recently' : null}
                     heading={humanizeSkillName(skill.name)}

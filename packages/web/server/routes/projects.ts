@@ -27,12 +27,9 @@ import {
   type ProjectDetail,
 } from '../projects/projects.js';
 import {
-  createProjectNoteRecord,
   deleteProjectFileRecord,
-  deleteProjectNoteRecord,
   readProjectFileDownload,
   saveProjectDocument,
-  updateProjectNoteRecord,
   uploadProjectFile,
 } from '../projects/projectResources.js';
 import { listConversationProjectLinks } from '@personal-agent/core';
@@ -344,61 +341,6 @@ export function registerProjectRoutes(
         profile,
         projectId: req.params.id,
         content: generatedDocument,
-      });
-      invalidateAppTopics('projects');
-      res.json(readProjectDetailForProfile(req.params.id, profile));
-    } catch (error) {
-      res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  router.post('/api/projects/:id/notes', (req, res) => {
-    try {
-      const profile = (req.query.viewProfile as string) || getCurrentProfileFn();
-      const body = req.body as { title?: string; kind?: string; body?: string };
-      createProjectNoteRecord({
-        repoRoot: REPO_ROOT,
-        profile,
-        projectId: req.params.id,
-        title: body.title ?? '',
-        kind: body.kind ?? 'note',
-        body: body.body,
-      });
-      invalidateAppTopics('projects');
-      res.status(201).json(readProjectDetailForProfile(req.params.id, profile));
-    } catch (error) {
-      res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  router.patch('/api/projects/:id/notes/:noteId', (req, res) => {
-    try {
-      const profile = (req.query.viewProfile as string) || getCurrentProfileFn();
-      const body = req.body as { title?: string; kind?: string; body?: string };
-      updateProjectNoteRecord({
-        repoRoot: REPO_ROOT,
-        profile,
-        projectId: req.params.id,
-        noteId: req.params.noteId,
-        title: body.title,
-        kind: body.kind,
-        body: body.body,
-      });
-      invalidateAppTopics('projects');
-      res.json(readProjectDetailForProfile(req.params.id, profile));
-    } catch (error) {
-      res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  router.delete('/api/projects/:id/notes/:noteId', (req, res) => {
-    try {
-      const profile = (req.query.viewProfile as string) || getCurrentProfileFn();
-      deleteProjectNoteRecord({
-        repoRoot: REPO_ROOT,
-        profile,
-        projectId: req.params.id,
-        noteId: req.params.noteId,
       });
       invalidateAppTopics('projects');
       res.json(readProjectDetailForProfile(req.params.id, profile));

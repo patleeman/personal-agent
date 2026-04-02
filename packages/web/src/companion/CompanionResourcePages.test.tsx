@@ -4,8 +4,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApi } from '../hooks.js';
 import { CompanionKnowledgePage } from './CompanionKnowledgePage.js';
-import { CompanionMemoriesPage } from './CompanionMemoriesPage.js';
-import { CompanionProjectsPage } from './CompanionProjectsPage.js';
 import { CompanionSkillsPage } from './CompanionSkillsPage.js';
 
 vi.mock('../hooks', () => ({
@@ -99,122 +97,22 @@ describe('companion resource pages', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/app/pages?q=type:project%20AND%20status:active']}>
+      <MemoryRouter initialEntries={['/app/pages?q=type:page%20AND%20status:active']}>
         <CompanionKnowledgePage />
       </MemoryRouter>,
     );
 
     expect(html).toContain('Browse all durable pages from your phone.');
     expect(html).toContain('Lucene query');
-    expect(html).toContain('type:project AND status:active');
-    expect(html).toContain('Projects');
+    expect(html).toContain('type:page AND status:active');
     expect(html).toContain('Active project');
-    expect(html).not.toContain('Tracked work with status, blockers, and linked conversations.');
-    expect(html).not.toContain('Durable references, distilled writeups, and structured knowledge.');
-    expect(html).toContain('/app/projects/active-project');
-    expect(html).not.toContain('/app/notes/memory-index');
-    expect(html).not.toContain('/app/skills/agent-browser');
+    expect(html).toContain('/app/pages?kind=project&amp;page=active-project');
+    expect(html).toContain('/app/pages?kind=note&amp;page=memory-index');
+    expect(html).not.toContain('Durable work, references, writeups, and tracked page detail in one place.');
+    expect(html).not.toContain('Reusable procedures, workflows, and agent operating guidance.');
+    expect(html).not.toContain('/app/pages?kind=skill&amp;page=agent-browser');
   });
 
-  it('renders linked active and archived projects in the companion project browser', () => {
-    vi.mocked(useApi).mockReturnValue({
-      data: [
-        {
-          id: 'active-project',
-          createdAt: '2026-03-16T10:00:00.000Z',
-          updatedAt: '2026-03-16T12:00:00.000Z',
-          title: 'Active project',
-          description: 'Still being worked on.',
-          summary: 'In progress.',
-          requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
-          status: 'in_progress',
-          blockers: [],
-          currentFocus: 'Keep shipping.',
-          recentProgress: [],
-          plan: { milestones: [], tasks: [] },
-        },
-        {
-          id: 'archived-project',
-          createdAt: '2026-03-10T10:00:00.000Z',
-          updatedAt: '2026-03-12T12:00:00.000Z',
-          archivedAt: '2026-03-15T08:00:00.000Z',
-          title: 'Archived project',
-          description: 'Finished work.',
-          summary: 'Done.',
-          requirements: { goal: 'Keep the record.', acceptanceCriteria: [] },
-          status: 'completed',
-          blockers: [],
-          recentProgress: [],
-          completionSummary: 'Shipped.',
-          plan: { milestones: [], tasks: [] },
-        },
-      ],
-      loading: false,
-      refreshing: false,
-      error: null,
-      refetch: vi.fn(),
-      replaceData: vi.fn(),
-    });
-
-    const html = renderWithRouter(<CompanionProjectsPage />);
-
-    expect(html).toContain('Active');
-    expect(html).toContain('Archived');
-    expect(html).toContain('Active project');
-    expect(html).toContain('Archived project');
-    expect(html).toContain('@active-project');
-    expect(html).toContain('/app/projects/active-project');
-  });
-
-  it('renders linked active and archived note nodes in the companion notes browser', () => {
-    vi.mocked(useApi).mockReturnValue({
-      data: {
-        profile: 'assistant',
-        agentsMd: [],
-        skills: [],
-        memoryDocs: [
-          {
-            id: 'memory-index',
-            title: 'Memory index',
-            summary: 'Top-level knowledge hub.',
-            tags: ['notes', 'index'],
-            path: '/tmp/memory-index/INDEX.md',
-            type: 'index',
-            status: 'active',
-            role: 'hub',
-            area: 'notes',
-            related: ['personal-agent'],
-            referenceCount: 2,
-            updated: '2026-03-17T12:00:00.000Z',
-          },
-          {
-            id: 'old-memory',
-            title: 'Old memory',
-            summary: 'Deprecated but kept for reference.',
-            tags: ['archive'],
-            path: '/tmp/old-memory/INDEX.md',
-            status: 'archived',
-            referenceCount: 1,
-            updated: '2026-03-15T08:00:00.000Z',
-          },
-        ],
-      },
-      loading: false,
-      refreshing: false,
-      error: null,
-      refetch: vi.fn(),
-      replaceData: vi.fn(),
-    });
-
-    const html = renderWithRouter(<CompanionMemoriesPage />);
-
-    expect(html).toContain('Memory index');
-    expect(html).toContain('Old memory');
-    expect(html).not.toContain('2 references');
-    expect(html).toContain('@memory-index');
-    expect(html).toContain('Archived');
-    expect(html).toContain('/app/notes/memory-index');
-  });
 
   it('renders linked humanized skills with recent-usage labels in the companion skill browser', () => {
     vi.mocked(useApi).mockReturnValue({
@@ -246,6 +144,6 @@ describe('companion resource pages', () => {
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Triggered in last session');
     expect(html).toContain('shared');
-    expect(html).toContain('/app/skills/agent-browser');
+    expect(html).toContain('/app/pages?kind=skill&amp;page=agent-browser');
   });
 });

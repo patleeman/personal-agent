@@ -31,7 +31,6 @@ export interface ProjectPaths {
   projectFile: string;
   documentFile: string;
   tasksDir: string;
-  notesDir: string;
   filesDir: string;
   attachmentsDir: string;
   artifactsDir: string;
@@ -64,7 +63,6 @@ interface DurableProjectPaths {
   projectFile: string;
   documentFile: string;
   tasksDir: string;
-  notesDir: string;
   filesDir: string;
   attachmentsDir: string;
   artifactsDir: string;
@@ -214,7 +212,6 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     projectFile: existsSync(preferredProjectFile) ? preferredProjectFile : (existsSync(legacyProjectFile) ? legacyProjectFile : preferredProjectFile),
     documentFile: join(projectDir, 'INDEX.md'),
     tasksDir: join(projectDir, 'tasks'),
-    notesDir: join(projectDir, 'notes'),
     filesDir: join(projectDir, 'files'),
     attachmentsDir: join(projectDir, 'attachments'),
     artifactsDir: join(projectDir, 'artifacts'),
@@ -320,7 +317,6 @@ export function createProjectScaffold(
   mkdirSync(paths.projectDir, { recursive: true });
   mkdirSync(join(paths.projectDir, 'documents'), { recursive: true });
   mkdirSync(paths.tasksDir, { recursive: true });
-  mkdirSync(paths.notesDir, { recursive: true });
   mkdirSync(paths.filesDir, { recursive: true });
   mkdirSync(paths.attachmentsDir, { recursive: true });
   mkdirSync(paths.artifactsDir, { recursive: true });

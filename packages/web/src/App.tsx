@@ -40,22 +40,6 @@ function WorkspaceRouteRedirect() {
   return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
 }
 
-function LegacyNotesRouteRedirect() {
-  const location = useLocation();
-  return <Navigate to={{ pathname: '/notes', search: location.search }} replace />;
-}
-
-function LegacyNodesRouteRedirect() {
-  const location = useLocation();
-  return <Navigate to={{ pathname: '/pages', search: location.search }} replace />;
-}
-
-function LegacyCompanionNotesRouteRedirect() {
-  const { id } = useParams<{ id?: string }>();
-  const location = useLocation();
-  return <Navigate to={{ pathname: id ? `/app/notes/${encodeURIComponent(id)}` : '/app/notes', search: location.search }} replace />;
-}
-
 function CompanionRouteValidationBoundary() {
   const location = useLocation();
   const redirectPath = resolveCompanionRouteRedirect(location.pathname);
@@ -104,13 +88,10 @@ const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((m
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
-const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const NodesPage = lazy(() => import('./pages/NodesPage').then((module) => ({ default: module.NodesPage })));
-const SkillsPage = lazy(() => import('./pages/SkillsPage').then((module) => ({ default: module.SkillsPage })));
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
-const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((module) => ({ default: module.WorkspacePage })));
 const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').then((module) => ({ default: module.WorkspaceChangesPage })));
 const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
@@ -123,12 +104,6 @@ const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDeta
 const CompanionSystemPage = lazy(() => import('./companion/CompanionSystemPage').then((module) => ({ default: module.CompanionSystemPage })));
 const CompanionKnowledgePage = lazy(() => import('./companion/CompanionKnowledgePage').then((module) => ({ default: module.CompanionKnowledgePage })));
 const CompanionQuickNotePage = lazy(() => import('./companion/CompanionQuickNotePage').then((module) => ({ default: module.CompanionQuickNotePage })));
-const CompanionProjectsPage = lazy(() => import('./companion/CompanionProjectsPage').then((module) => ({ default: module.CompanionProjectsPage })));
-const CompanionProjectDetailPage = lazy(() => import('./companion/CompanionProjectDetailPage').then((module) => ({ default: module.CompanionProjectDetailPage })));
-const CompanionMemoriesPage = lazy(() => import('./companion/CompanionMemoriesPage').then((module) => ({ default: module.CompanionMemoriesPage })));
-const CompanionMemoryDetailPage = lazy(() => import('./companion/CompanionMemoryDetailPage').then((module) => ({ default: module.CompanionMemoryDetailPage })));
-const CompanionSkillsPage = lazy(() => import('./companion/CompanionSkillsPage').then((module) => ({ default: module.CompanionSkillsPage })));
-const CompanionSkillDetailPage = lazy(() => import('./companion/CompanionSkillDetailPage').then((module) => ({ default: module.CompanionSkillDetailPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -562,14 +537,6 @@ export function App() {
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
                       <Route path="pages" element={suspendRoute(<CompanionKnowledgePage />)} />
                       <Route path="capture" element={suspendRoute(<CompanionQuickNotePage />)} />
-                      <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
-                      <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
-                      <Route path="notes" element={suspendRoute(<CompanionMemoriesPage />)} />
-                      <Route path="notes/:id" element={suspendRoute(<CompanionMemoryDetailPage />)} />
-                      <Route path="memories" element={<LegacyCompanionNotesRouteRedirect />} />
-                      <Route path="memories/:id" element={<LegacyCompanionNotesRouteRedirect />} />
-                      <Route path="skills" element={suspendRoute(<CompanionSkillsPage />)} />
-                      <Route path="skills/:name" element={suspendRoute(<CompanionSkillDetailPage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/conversations" replace />} />
@@ -584,13 +551,7 @@ export function App() {
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="runs" element={suspendRoute(<RunsPage />)} />
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
-                      <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
-                      <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="pages" element={suspendRoute(<NodesPage />)} />
-                      <Route path="nodes" element={<LegacyNodesRouteRedirect />} />
-                      <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
-                      <Route path="memories" element={<LegacyNotesRouteRedirect />} />
-                      <Route path="skills" element={suspendRoute(<SkillsPage />)} />
                       <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
                       <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
                       <Route path="automations" element={<LegacyTaskRoutesRedirect />} />

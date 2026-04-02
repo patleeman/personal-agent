@@ -58,12 +58,12 @@ describe('companion resource detail pages', () => {
           },
         },
         taskCount: 1,
-        noteCount: 1,
+        childPageCount: 1,
         attachmentCount: 0,
         artifactCount: 0,
         tasks: [{ id: 'todo', title: 'Manage conversation todos', status: 'in_progress' }],
         document: { content: '## Document\n\nShip the phone companion.', updatedAt: '2026-03-25T00:00:00.000Z' },
-        notes: [{ id: 'note-1', title: 'Next step', kind: 'note', body: 'Validate on mobile.', updatedAt: '2026-03-25T00:00:00.000Z' }],
+        childPages: [{ id: 'note-1', title: 'Next step', kind: 'note', kinds: ['note'], summary: 'Validate on mobile.', status: 'active', tags: ['type:note'], parent: 'continuous-conversations', body: '# Next step\n\nValidate on mobile.', updatedAt: '2026-03-25T00:00:00.000Z', path: '/tmp/note-1/INDEX.md' }],
         attachments: [],
         artifacts: [],
         linkedConversations: [{
@@ -99,10 +99,11 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('Definition of done');
     expect(html).toContain('Validate the last mile on mobile.');
     expect(html).toContain('Ship the phone companion.');
+    expect(html).toContain('Next step');
     expect(html).toContain('Companion todo session');
     expect(html).toContain('/app/conversations/conv-123');
     expect(html).toContain('Linked from');
-    expect(html).toContain('/app/notes/companion-roadmap');
+    expect(html).toContain('/app/pages?kind=note&amp;page=companion-roadmap');
     expect(html).toContain('@missing-node');
   });
 
@@ -198,6 +199,6 @@ describe('companion resource detail pages', () => {
     expect(html).toContain('agent-browser');
     expect(html).toContain('Use this skill for browser automation.');
     expect(html).toContain('unknown-skill-ref');
-    expect(html).toContain('/app/notes/memory-index');
+    expect(html).toContain('/app/pages?kind=note&amp;page=memory-index');
   });
 });

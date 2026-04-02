@@ -11,7 +11,7 @@ import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { buildCompanionConversationPath } from './routes';
+import { buildCompanionConversationPath, buildCompanionPagePath } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -23,11 +23,12 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function CompanionProjectDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export function CompanionProjectDetailPage({ projectId }: { projectId?: string }) {
+  const params = useParams<{ id: string }>();
+  const id = projectId ?? params.id;
   const fetchProject = useCallback(() => {
     if (!id) {
-      throw new Error('Missing project id.');
+      throw new Error('Missing page id.');
     }
 
     return api.projectById(id);
@@ -61,9 +62,9 @@ export function CompanionProjectDetailPage() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-6">
-          {loading ? <p className="px-4 text-[13px] text-dim">Loading project…</p> : null}
-          {!loading && error ? <p className="px-4 text-[13px] text-danger">Unable to load project: {error}</p> : null}
-          {!loading && !error && !data ? <p className="px-4 text-[13px] text-dim">Project not found.</p> : null}
+          {loading ? <p className="px-4 text-[13px] text-dim">Loading page…</p> : null}
+          {!loading && error ? <p className="px-4 text-[13px] text-danger">Unable to load page: {error}</p> : null}
+          {!loading && !error && !data ? <p className="px-4 text-[13px] text-dim">Page not found.</p> : null}
 
           {data && project ? (
             <div className="overflow-hidden border-y border-border-subtle bg-surface/70">
@@ -139,14 +140,21 @@ export function CompanionProjectDetailPage() {
                 </Section>
               ) : null}
 
-              {data.notes.length > 0 ? (
-                <Section title="Notes">
-                  {data.notes.map((note) => (
-                    <div key={note.id} className="rounded-xl bg-base/65 px-3 py-3">
-                      <p className="text-[14px] font-medium text-primary">{note.title}</p>
-                      <p className="mt-1 text-[11px] text-dim">{note.kind} · updated {timeAgo(note.updatedAt)}</p>
-                      {note.body ? <CompanionMarkdown content={note.body} className="ui-markdown mt-3 max-w-none text-[13px] leading-relaxed" /> : null}
-                    </div>
+              {data.childPages.length > 0 ? (
+                <Section title="Pages">
+                  {data.childPages.map((page) => (
+                    <Link
+                      key={page.id}
+                      to={buildCompanionPagePath(page.kind, page.id)}
+                      className="block rounded-xl bg-base/65 px-3 py-3 transition-colors hover:bg-base"
+                    >
+                      <p className="text-[14px] font-medium text-primary">{page.title}</p>
+                      <p className="mt-1 text-[11px] text-dim">
+                        {page.kind === 'skill' ? 'skill' : 'page'} · {formatProjectStatus(page.status)}
+                        {page.updatedAt ? ` · updated ${timeAgo(page.updatedAt)}` : ''}
+                      </p>
+                      <p className="mt-2 text-[13px] leading-relaxed text-secondary">{page.summary}</p>
+                    </Link>
                   ))}
                 </Section>
               ) : null}
@@ -156,13 +164,13 @@ export function CompanionProjectDetailPage() {
                   title="Links to"
                   items={data.links?.outgoing}
                   surface="companion"
-                  emptyText="This project does not reference other pages yet."
+                  emptyText="This page does not reference other pages yet."
                 />
                 <NodeLinkList
                   title="Linked from"
                   items={data.links?.incoming}
                   surface="companion"
-                  emptyText="No other pages link to this project yet."
+                  emptyText="No other pages link to this page yet."
                 />
                 <UnresolvedNodeLinks ids={data.links?.unresolved} />
               </Section>

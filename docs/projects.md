@@ -1,73 +1,75 @@
-# Projects
+# Tracked Pages
 
-Projects are the durable home for ongoing work in `personal-agent`.
+Tracked pages are the durable home for ongoing work in `personal-agent`.
 
-Use a project when a thread of work should survive the current conversation and you want durable status, next steps, blockers, notes, or project files.
+Use a tracked page when a thread of work should survive the current conversation and you want durable status, next steps, blockers, child pages, or page files.
 
-Do not use a project for general reusable knowledge. That belongs in a note page. Do not keep the same topic as both a top-level note and a project unless they are genuinely different things.
+Do not use a tracked page for general reusable knowledge. That belongs in a normal page. Do not keep the same topic as both a top-level reusable page and a tracked page unless they are genuinely different things.
 
 ## Mental model
 
 A useful rule of thumb is:
 
 - conversation = active interaction right now
-- project = durable tracked work
-- note = reusable knowledge or reference
+- page = durable knowledge or tracked work
+- tracked page = durable tracked work with structured execution state
 - skill = reusable procedure
 
-If the work should still make sense next week and has an active plan, it probably belongs in a project.
+If the work should still make sense next week and has an active plan, it probably belongs in a tracked page.
 
 ## On-disk shape
 
-Projects are project pages stored in the unified node tree:
+Tracked pages are stored in the unified node tree:
 
 - `~/.local/state/personal-agent/sync/nodes/<projectId>/INDEX.md`
-- `~/.local/state/personal-agent/sync/nodes/<projectId>/notes/`
 - `~/.local/state/personal-agent/sync/nodes/<projectId>/attachments/`
 - `~/.local/state/personal-agent/sync/nodes/<projectId>/artifacts/`
 - optional supporting files under `~/.local/state/personal-agent/sync/nodes/<projectId>/documents/`
+- optional child pages anywhere under `~/.local/state/personal-agent/sync/nodes/<childPageId>/INDEX.md` with `links.parent: <projectId>`
 
-`INDEX.md` is the canonical project page.
+`INDEX.md` is the canonical tracked page.
 
-The old top-level `sync/projects/` tree was a legacy layout. Projects now live with notes and skills in `sync/nodes/`.
+The old top-level `sync/projects/` tree was a legacy layout. Tracked pages now live with other pages and skills in `sync/nodes/`.
 
 ## What goes where
 
 ### `INDEX.md`
 
-Use `INDEX.md` for the durable project record:
+Use `INDEX.md` for the durable tracked-page record:
 
-- what the project is
+- what the work is
 - why it exists
 - the current direction
 - the most important constraints or decisions
 - the shipped result or final decision when it is done
 - compact structured sections like goal, blockers, progress, milestones, and tasks
 
-The frontmatter is also where project identity lives:
+The frontmatter is also where tracked-page identity lives:
 
 - `id`
 - `title`
 - `summary`
 - `status`
-- project tags like `type:project`, `profile:<profile>`, and optional `cwd:<repoRoot>`
+- tracked-page tags like `type:project`, `profile:<profile>`, and optional `cwd:<repoRoot>`
 - `createdAt`
 - `updatedAt`
 
-### `notes/`
+### Child pages
 
-Use project notes for material that belongs to one project but would bloat the overview doc:
+Use child pages for material that belongs to one tracked page but would bloat the overview doc:
 
 - design notes
-- decision notes
+- decision logs
 - checkpoints
-- meeting notes
+- meeting writeups
 - detailed research
 - implementation sketches
 
+They are normal pages with `links.parent: <projectId>`, not files in a special tracked-page-only notes bucket.
+
 ### `attachments/` and `artifacts/`
 
-Use these for project-specific files you want to keep with the work:
+Use these for work-specific files you want to keep with the page:
 
 - screenshots
 - reports
@@ -75,11 +77,11 @@ Use these for project-specific files you want to keep with the work:
 - sample data
 - generated deliverables
 
-These are durable project files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](./artifacts.md).
+These are durable tracked-page files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](./artifacts.md).
 
 ### `documents/`
 
-Use `documents/` sparingly for supporting project files that should live with the project package but do not belong in the main page or project notes.
+Use `documents/` sparingly for supporting files that should live with the tracked-page package but do not belong in the main page or a child page.
 
 ## Writing style
 
@@ -88,35 +90,35 @@ Use these defaults:
 - prefer human-readable titles; keep raw slugs in ids and directory names
 - keep `summary` to one sentence
 - start `INDEX.md` with a plain-English overview
-- keep `INDEX.md` high-signal and move long detail into project notes
+- keep `INDEX.md` high-signal and move long detail into child pages
 - avoid template filler and empty headings
 - prefer a few concrete bullets over bloated PM boilerplate
 - keep current status and recent progress truthful and current
-- when a project is done, say what shipped or what decision was made
+- when a tracked page is done, say what shipped or what decision was made
 
-A bad project doc reads like scaffolding. A good project doc reads like a concise handoff.
+A bad tracked-page doc reads like scaffolding. A good tracked-page doc reads like a concise handoff.
 
-## Notes vs projects
+## Reusable pages vs tracked pages
 
-Use a project when the content is about one active workstream.
+Use a tracked page when the content is about one active workstream.
 
-Use a note when the content is reusable outside one active project.
+Use a normal page when the content is reusable outside one active tracked page.
 
-Good examples for projects:
+Good examples for tracked pages:
 
 - a feature or product initiative
 - a migration
 - an evaluation effort
 - an investigation with active next steps
 
-Good examples for notes:
+Good examples for reusable pages:
 
 - a reusable runbook
 - machine or environment reference notes
 - architecture guidance used by multiple projects
 - a decision or reference that should outlive one workstream
 
-If a top-level note grows active status, blockers, and next steps, promote it into a project.
+If a top-level reusable page grows active status, blockers, and next steps, promote it into a tracked page.
 
 ## Status and archiving
 
@@ -130,11 +132,11 @@ Projects should usually use a small status vocabulary:
 
 ## Linked conversations
 
-Conversations can reference one or more projects.
+Conversations can reference one or more pages.
 
-Those conversation ↔ project links stay in local runtime state, not in portable project files.
+Those conversation ↔ page links stay in local runtime state, not in portable tracked-page files.
 
-Do not store conversation ids or session ids in project pages or project note frontmatter.
+Do not store conversation ids or session ids in tracked pages or child-page frontmatter.
 
 ## Validation
 
@@ -146,9 +148,9 @@ node scripts/validate-projects.mjs --profile <profile> --project <projectId>
 node scripts/validate-projects.mjs --path <absolute-path-to-project-state.yaml>
 ```
 
-## Scheduled tasks vs project tasks
+## Scheduled tasks vs tracked-page tasks
 
-Project tasks are just project checklist items.
+Tracked-page tasks are just tracked-page checklist items.
 
 Scheduled tasks are daemon automation definitions under:
 
@@ -163,5 +165,5 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 - [Conversations](./conversations.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)

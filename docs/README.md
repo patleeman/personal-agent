@@ -42,8 +42,8 @@ Those four pages should answer most agent questions quickly.
 - [Async Attention and Wakeups](./async-attention.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Projects](./projects.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Tracked Pages](./projects.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Pages](./pages.md)
 - [Nodes](./nodes.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
@@ -74,14 +74,14 @@ Those four pages should answer most agent questions quickly.
 | --- | --- | --- |
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
 | What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Pages](./pages.md), [Configuration](./configuration.md) |
-| How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Pages](./pages.md), [Projects](./projects.md) |
+| How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md), [Pages](./pages.md), [Tracked Pages](./projects.md) |
 | How do unified durable pages work? | [Pages](./pages.md) | [Command-Line Guide (`pa`)](./command-line.md), [Knowledge Management System](./knowledge-system.md) |
-| Where should ongoing work live? | [Projects](./projects.md) | [Conversations](./conversations.md) |
-| Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Pages](./pages.md) |
+| Where should ongoing work live? | [Tracked Pages](./projects.md) | [Conversations](./conversations.md) |
+| Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md), [Pages](./pages.md) |
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
-| How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Projects](./projects.md), [Web UI Guide](./web-ui.md) |
+| How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Tracked Pages](./projects.md), [Web UI Guide](./web-ui.md) |
 | Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
 | How do remote execution targets work? | [Execution Targets](./execution-targets.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
@@ -107,7 +107,7 @@ The highest-value rules are:
 
 - use the smallest correct durable surface
 - keep conversations for active work, not durable storage
-- use pages as the primitive, with projects for tracked work, notes for reusable knowledge, and skills for reusable procedures
+- use pages as the primitive for durable knowledge and tracked work, and skills for reusable procedures
 - use activity for passive async attention and reminders/alerts for interrupting attention
 - use scheduled tasks for later/scheduled automation and runs for detached work started now
 - keep conversation ids and other machine-local bindings out of portable durable files

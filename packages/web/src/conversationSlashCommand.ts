@@ -16,7 +16,7 @@ export const CONVERSATION_MENU_SLASH_COMMANDS = [
 
 export const EXTERNAL_MENU_SLASH_COMMANDS = [
   '/model',
-  '/project',
+  '/page',
   '/resume',
 ] as const;
 

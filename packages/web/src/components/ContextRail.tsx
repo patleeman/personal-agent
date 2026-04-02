@@ -21,6 +21,7 @@ import {
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
 import { buildKnowledgeSearch, getKnowledgeInstructionPath, getKnowledgeNoteId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
+import { buildNodesHref, buildNodesSearch, readSelectedNode } from '../nodeWorkspaceState';
 import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
@@ -71,8 +72,7 @@ import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { MentionTextarea } from './MentionTextarea';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
-import { NotesBrowserRail } from './NotesBrowserRail';
-import { ProjectsBrowserRail } from './ProjectsBrowserRail';
+import { PagesBrowserRail } from './PagesBrowserRail';
 import { SkillsBrowserRail } from './SkillsBrowserRail';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
@@ -837,7 +837,7 @@ function LinkedProjectOverviewPanel({
       onRemove={onRemove}
       removeDisabled={removeDisabled}
     />,
-    'Loading project…',
+    'Loading page…',
   );
 }
 
@@ -879,14 +879,14 @@ function ReferencedProjectModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Referenced project: ${modalLabel}`}
+        aria-label={`Referenced page: ${modalLabel}`}
         className="ui-dialog-shell"
         style={{ maxWidth: 'min(980px, calc(100vw - 3rem))', maxHeight: 'calc(100vh - 5rem)' }}
       >
         <div className="shrink-0 border-b border-border-subtle px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <p className="ui-section-label">Referenced project</p>
+              <p className="ui-section-label">Referenced page</p>
               <p className="truncate text-[13px] text-primary" title={modalLabel}>{modalLabel}</p>
             </div>
             <button type="button" onClick={onClose} className="ui-toolbar-button">
@@ -899,7 +899,7 @@ function ReferencedProjectModal({
           className="min-h-0 flex-1 overflow-y-auto py-4 pl-4 pr-5"
           style={{ scrollbarGutter: 'stable' }}
         >
-          {loading && !project && <LoadingState label="Loading project…" className="justify-center" />}
+          {loading && !project && <LoadingState label="Loading page…" className="justify-center" />}
           {!loading && project && (
             <LinkedProjectOverviewPanel
               project={project}
@@ -907,7 +907,7 @@ function ReferencedProjectModal({
               removeDisabled={removeDisabled}
             />
           )}
-          {!loading && !project && <ErrorState message="Unable to load this project." />}
+          {!loading && !project && <ErrorState message="Unable to load this page." />}
         </div>
       </div>
     </div>
@@ -945,7 +945,7 @@ function ReferencedProjectsSectionContent({
                   'w-full py-2.5 text-left transition-colors',
                   isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
                 )}
-                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
+                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced page ${projectId}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -971,10 +971,10 @@ function ReferencedProjectsSectionContent({
       )}
 
       {projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim animate-pulse">Loading projects…</p>
+        <p className="text-[12px] text-dim animate-pulse">Loading pages…</p>
       )}
       {!projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim">No referenced projects.</p>
+        <p className="text-[12px] text-dim">No referenced pages.</p>
       )}
     </div>
   );
@@ -1299,7 +1299,7 @@ function DraftConversationContextPanel() {
         )}
       </Section>
 
-      <Section title="Referenced projects">
+      <Section title="Referenced pages">
         <ReferencedProjectsSectionContent
           relatedProjectIds={draftProjectIds}
           allProjects={allProjects}
@@ -2056,7 +2056,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         )}
       </Section>
 
-      <Section title="Referenced projects">
+      <Section title="Referenced pages">
         <ReferencedProjectsSectionContent
           relatedProjectIds={relatedProjectIds}
           allProjects={allProjects}
@@ -2343,9 +2343,9 @@ function InboxItemContext({ id }: { id: string }) {
 
             {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Projects</p>
+                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Pages</p>
                 {entry.relatedProjectIds.map((projectId) => (
-                  <Link key={projectId} to={`/projects/${encodeURIComponent(projectId)}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
+                  <Link key={projectId} to={buildNodesHref('project', projectId)} className="ui-card-meta font-mono text-accent hover:text-accent/80">
                     {projectId}
                   </Link>
                 ))}
@@ -2399,8 +2399,8 @@ export function ProjectDetailContext({ id }: { id: string }) {
   }, [refetch]);
 
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (error) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
-  if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
+  if (error) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
+  if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
 
   const nextSearch = viewProfile ? `?${VIEW_PROFILE_SEARCH_PARAM}=${encodeURIComponent(viewProfile)}` : '';
 
@@ -2413,11 +2413,11 @@ export function ProjectDetailContext({ id }: { id: string }) {
         emitProjectsChanged();
       }}
       onDeleted={() => {
-        navigate(`/projects${nextSearch}`);
+        navigate(`/pages${buildNodesSearch(nextSearch, { filter: 'page', kind: null, nodeId: null })}`);
         emitProjectsChanged();
       }}
     />,
-    'Loading project…',
+    'Loading page…',
   );
 }
 
@@ -2742,8 +2742,8 @@ function KnowledgeOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Projects</p>
-          <p className="ui-card-meta">Select a project on the left to inspect its active plan, blockers, and linked work.</p>
+          <p className="ui-card-title">Pages</p>
+          <p className="ui-card-meta">Select a page on the left to inspect its active plan, blockers, and linked work.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Active" value={activeProjects.length} />
@@ -2751,7 +2751,7 @@ function KnowledgeOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recently updated</p>
-          {projects.length === 0 ? <p className="ui-card-meta">No projects available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
+          {projects.length === 0 ? <p className="ui-card-meta">No tracked pages available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
             <Link key={project.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'projects', projectId: project.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{project.title}</p>
               <p className="ui-card-meta mt-1">{formatProjectStatus(project.status)} · updated {timeAgo(project.updatedAt)}</p>
@@ -2766,16 +2766,16 @@ function KnowledgeOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Notes</p>
-          <p className="ui-card-meta">Select a note node on the left to inspect its overview and package-local references.</p>
+          <p className="ui-card-title">Pages</p>
+          <p className="ui-card-meta">Select a page on the left to inspect its overview and package-local references.</p>
         </div>
         <div className="space-y-2">
-          <RailMetadataRow label="Note nodes" value={memories.length} />
+          <RailMetadataRow label="Pages" value={memories.length} />
           <RailMetadataRow label="Recently used" value={memories.filter((item) => item.usedInLastSession).length} />
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recent notes</p>
-          {memories.length === 0 ? <p className="ui-card-meta">No note pages available.</p> : memories.slice(0, 5).map((memory) => (
+          <p className="ui-section-label">Recent pages</p>
+          {memories.length === 0 ? <p className="ui-card-meta">No pages available.</p> : memories.slice(0, 5).map((memory) => (
             <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{memory.title}</p>
               <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
@@ -2838,12 +2838,11 @@ function KnowledgeOverviewContext({
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Pages</p>
-        <p className="ui-card-meta">Durable context lives here: project pages, note pages, skill pages, and instruction sources.</p>
+        <p className="ui-card-meta">Durable context lives here: pages and skills, plus instruction sources.</p>
       </div>
 
       <div className="space-y-2">
-        <RailMetadataRow label="Projects" value={activeProjects.length} />
-        <RailMetadataRow label="Notes" value={memories.length} />
+        <RailMetadataRow label="Pages" value={projects.length + memories.length} />
         <RailMetadataRow label="Skills" value={skills.length} />
         <RailMetadataRow label="Instructions" value={instructions.length} />
       </div>
@@ -2880,9 +2879,9 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
   const fetcher = useCallback(() => api.projectById(projectId, viewProfile ? { profile: viewProfile } : undefined), [projectId, viewProfile]);
   const { data, loading, error, refreshing, refetch } = useApi(fetcher, `knowledge-project-rail:${projectId}:${viewProfile ?? ''}`);
 
-  if (loading && !data) return <LoadingState label="Loading project…" className="px-4 py-4" />;
+  if (loading && !data) return <LoadingState label="Loading page…" className="px-4 py-4" />;
   if (error && !data) return <ErrorState message={`Failed to load project: ${error}`} className="px-4 py-4" />;
-  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
+  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
 
   return (
     <div className="flex h-full flex-col">
@@ -2898,7 +2897,7 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading project…')}
+        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading page…')}
       </div>
     </div>
   );
@@ -2927,7 +2926,7 @@ function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
           <RailMetadataRow label="Updated" value={data.memory.updated ? timeAgo(data.memory.updated) : 'unknown'} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link to={`/notes?note=${encodeURIComponent(data.memory.id)}`} className="ui-toolbar-button">Open notes browser</Link>
+          <Link to={buildNodesHref('note', data.memory.id)} className="ui-toolbar-button">Open page</Link>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -3431,26 +3430,19 @@ export function ContextRail() {
     </div>
   );
 
-  // Projects
-  if (section === 'projects') return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Projects" sub={id ?? undefined} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <ProjectsBrowserRail />
-      </div>
-    </div>
-  );
-
-  // Managed note nodes
-  if (section === 'notes' || section === 'memories') {
+  // Pages
+  if (section === 'projects' || section === 'notes' || section === 'memories') {
     const params = new URLSearchParams(location.search);
-    const memoryId = params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || null;
+    const selected = readSelectedNode(location.search);
+    const sub = selected && selected.kind !== 'skill'
+      ? `@${selected.id}`
+      : params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || id || undefined;
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Notes" sub={memoryId ? `@${memoryId}` : undefined} />
+        <RailHeader label="Pages" sub={sub ?? undefined} />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <NotesBrowserRail />
+          <PagesBrowserRail />
         </div>
       </div>
     );
@@ -3500,7 +3492,7 @@ export function ContextRail() {
       const fileName = itemPath.split('/').pop() ?? itemPath;
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Notes" sub={fileName} />
+          <RailHeader label="Pages" sub={fileName} />
           <div className="flex-1 overflow-y-auto">
             <MemoryFileContext path={itemPath} />
           </div>
@@ -3509,7 +3501,7 @@ export function ContextRail() {
     }
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Notes" />
+        <RailHeader label="Pages" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
         </div>
@@ -3595,7 +3587,7 @@ export function ContextRail() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-      <p className="text-[12px] text-dim">Select a conversation, project, or inbox item to see context.</p>
+      <p className="text-[12px] text-dim">Select a conversation, page, or inbox item to see context.</p>
     </div>
   );
 }

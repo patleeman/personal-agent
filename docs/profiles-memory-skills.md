@@ -1,4 +1,4 @@
-# Profiles, AGENTS, Notes, and Skills
+# Profiles, AGENTS, Pages, and Skills
 
 Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a synced durable resource store.
 
@@ -6,9 +6,9 @@ A profile is not just a name. It is the durable resource bundle the agent runs w
 
 See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the storage compatibility term.
 
-If you want the single conceptual overview of notes, skills, projects, and `AGENTS.md` as one memory system, start with [Knowledge Management System](./knowledge-system.md).
+If you want the single conceptual overview of pages, skills, tracked pages, and `AGENTS.md` as one memory system, start with [Knowledge Management System](./knowledge-system.md).
 
-If you need Patrick-specific preferences or standing behavior, the active profile's `AGENTS.md` is the canonical home. Use this page to understand how that fits with notes, skills, projects, and layered resources.
+If you need Patrick-specific preferences or standing behavior, the active profile's `AGENTS.md` is the canonical home. Use this page to understand how that fits with pages, skills, tracked pages, and layered resources.
 
 ## The layer model
 
@@ -73,7 +73,7 @@ Repo built-ins still provide:
 | --- | --- |
 | `agents/**` | durable role, behavior rules, and operating policy fragments |
 | `nodes/<id>/INDEX.md` tagged `type:skill` | reusable workflow skill pages |
-| `nodes/<id>/INDEX.md` tagged `type:note` | shared durable note pages |
+| `nodes/<id>/INDEX.md` tagged `type:note` | shared durable pages |
 | `nodes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that page |
 | `nodes/<id>/assets/**` | non-markdown assets used by that page |
 | `tasks/*.task.md` | scheduled automation |
@@ -182,13 +182,13 @@ Do not create empty hub or index notes by default. If a topic already has a real
 
 ## Project pages
 
-Projects are project pages with:
+Tracked pages are stored under `sync/nodes/<id>/` with:
 
-- `projects/<id>/INDEX.md` for the human handoff / overview
-- `projects/<id>/state.yaml` for structured state
-- `notes/`, `attachments/`, and `artifacts/` for supporting material
+- `INDEX.md` for the human handoff / overview
+- optional `documents/`, `attachments/`, and `artifacts/` directories for supporting material
+- optional child pages elsewhere in `sync/nodes/**` linked back with `links.parent: <projectId>`
 
-See [Projects](./projects.md).
+See [Tracked Pages](./projects.md).
 
 ## Shared resources vs profile-targeted resources
 
@@ -209,8 +209,8 @@ This distinction still matters.
 
 Use:
 
-- **note pages** for reusable durable knowledge
-- **project pages** for current tracked work state, handoff context, project notes, and project files
+- **pages** for reusable durable knowledge
+- **tracked pages** for current tracked work state, handoff context, child pages, and page files
 - **inbox** for asynchronous outcomes that need attention later
 
 A good rule:
@@ -227,7 +227,7 @@ Use these defaults for durable node prose:
 - keep ids stable and slug-like, but make titles human-readable
 - keep `summary` to one sentence
 - start `INDEX.md` with a plain-English opening
-- keep overview docs high-signal and move long detail into `references/` or project `notes/`
+- keep overview docs high-signal and move long detail into `references/` or project child pages
 - avoid placeholder sections, stale scaffolding, and empty structure pages
 - update or remove stale text instead of letting it linger
 
@@ -251,7 +251,7 @@ pa note new <id> --title "..." --summary "..." --type reference
 pa note lint
 ```
 
-Use `pa note` to operate on shared note pages under `sync/nodes/`.
+Use `pa note` to operate on shared pages under `sync/nodes/`.
 
 `pa note new` scaffolds `nodes/<note-id>/INDEX.md`.
 
@@ -291,7 +291,7 @@ Conversation-local bindings belong in local runtime state.
 - [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
 - [How personal-agent works](./how-it-works.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Conversations](./conversations.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Inbox and Activity](./inbox.md)

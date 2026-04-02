@@ -351,7 +351,7 @@ function readSkillDocuments(options: { repoRoot: string; profilesRoot: string; p
 function buildProjectText(detail: ReturnType<typeof readProjectDetailFromProject>): string[] {
   return [
     detail.document?.content ?? '',
-    ...detail.notes.flatMap((note) => [note.title, note.body]),
+    ...detail.childPages.flatMap((page) => [page.title, page.summary, page.body]),
   ].filter((value) => value.trim().length > 0);
 }
 

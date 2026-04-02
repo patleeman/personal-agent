@@ -275,12 +275,9 @@ import {
   type ProjectTimelineEntry,
 } from './projects/projects.js';
 import {
-  createProjectNoteRecord,
   deleteProjectFileRecord,
-  deleteProjectNoteRecord,
   readProjectFileDownload,
   saveProjectDocument,
-  updateProjectNoteRecord,
   uploadProjectFile,
 } from './projects/projectResources.js';
 import {
@@ -1283,13 +1280,13 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
     });
   }
 
-  for (const note of detail.notes) {
+  for (const page of detail.childPages) {
     timeline.push({
-      id: `note:${note.id}`,
-      kind: 'note',
-      createdAt: note.updatedAt,
-      title: note.title,
-      href: `#project-note-${note.id}`,
+      id: `page:${page.id}`,
+      kind: 'page',
+      createdAt: page.updatedAt ?? page.createdAt ?? '',
+      title: page.title,
+      href: `/pages?kind=${encodeURIComponent(page.kind)}&page=${encodeURIComponent(page.id)}`,
     });
   }
 

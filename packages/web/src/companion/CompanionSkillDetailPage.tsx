@@ -18,8 +18,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function CompanionSkillDetailPage() {
-  const { name } = useParams<{ name: string }>();
+export function CompanionSkillDetailPage({ skillName }: { skillName?: string }) {
+  const params = useParams<{ name: string }>();
+  const name = skillName ?? params.name;
   const fetchSkill = useCallback(async (): Promise<SkillDetail> => {
     if (!name) {
       throw new Error('Missing skill name.');

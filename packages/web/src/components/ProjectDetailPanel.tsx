@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
-import type { ProjectDetail, ProjectFile, ProjectNote, ProjectTask } from '../types';
+import { buildNodeCreateSearch, buildNodesHref } from '../nodeWorkspaceState';
+import type { ProjectChildPage, ProjectDetail, ProjectFile, ProjectTask } from '../types';
 import {
   ProjectFileUploadForm,
-  ProjectNoteEditorForm,
   ProjectTaskEditorForm,
 } from './ProjectDetailForms';
 import {
@@ -19,16 +19,12 @@ import {
 import {
   buildActivityItems,
   emptyFileUploadState,
-  emptyNoteForm,
   emptyTaskForm,
-  noteFormFromNote,
   normalizeProjectForm,
   projectFormFromDetail,
   projectFormsEqual,
   taskFormFromTask,
   type FileUploadState,
-  type NoteFormState,
-  type ProjectNoteEditorState,
   type ProjectTaskEditorState,
   type ProjectFormState,
   type TaskFormState,
@@ -52,7 +48,6 @@ const PROJECT_PROPERTY_INPUT_CLASS = 'w-full rounded-lg border border-transparen
 const PROJECT_PROPERTY_SELECT_CLASS = `${PROJECT_PROPERTY_INPUT_CLASS} pr-8`;
 const PROJECT_STATUSES = ['active', 'paused', 'done'];
 const TASK_STATUSES = ['todo', 'doing', 'done'];
-const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -284,59 +279,43 @@ function ProjectTaskListBlock({
   );
 }
 
-function ProjectNoteList({
-  notes,
-  noteEditor,
-  noteEditorForm,
-  noteBusy,
-  onEditNote,
-  onDeleteNote,
+function ProjectChildPageList({
+  pages,
 }: {
-  notes: ProjectNote[];
-  noteEditor: ProjectNoteEditorState | null;
-  noteEditorForm: ReactNode;
-  noteBusy: boolean;
-  onEditNote: (note: ProjectNote) => void;
-  onDeleteNote: (noteId: string) => void;
+  pages: ProjectChildPage[];
 }) {
-  if (notes.length === 0 && noteEditor?.mode !== 'add') {
-    return <p className="text-[12px] text-secondary">No notes yet.</p>;
+  if (pages.length === 0) {
+    return <p className="text-[12px] text-secondary">No child pages yet.</p>;
   }
 
   return (
-    <div className="space-y-2.5">
-      {noteEditor?.mode === 'add' ? noteEditorForm : null}
-      <div className="divide-y divide-border-subtle">
-        {notes.map((note) => {
-          const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
-          if (isEditing) {
-            return (
-              <div key={note.id} id={`project-note-${note.id}`} className="px-3 py-3 scroll-mt-6">
-                {noteEditorForm}
-              </div>
-            );
-          }
-
-          return (
-            <article key={note.id} className="px-3 py-2.5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-medium text-primary">{note.title}</p>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-                    <span>{formatProjectStatus(note.kind)}</span>
+    <div className="divide-y divide-border-subtle">
+      {pages.map((page) => (
+        <article key={page.id} id={`project-page-${page.id}`} className="px-3 py-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Link to={buildNodesHref(page.kind, page.id)} className="text-[13px] font-medium text-accent transition-colors hover:text-accent/75">
+                {page.title}
+              </Link>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
+                <span>{page.kind === 'skill' ? 'skill' : 'page'}</span>
+                <span className="opacity-40">·</span>
+                <span>{formatProjectStatus(page.status)}</span>
+                {page.updatedAt ? (
+                  <>
                     <span className="opacity-40">·</span>
-                    <span>updated {timeAgo(note.updatedAt)}</span>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button type="button" onClick={() => onEditNote(note)} className={ACTION_TEXT_BUTTON_CLASS}>Edit</button>
-                  <button type="button" onClick={() => onDeleteNote(note.id)} className={DANGER_TEXT_BUTTON_CLASS} disabled={noteBusy}>Delete</button>
-                </div>
+                    <span>updated {timeAgo(page.updatedAt)}</span>
+                  </>
+                ) : null}
               </div>
-            </article>
-          );
-        })}
-      </div>
+              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{page.summary}</p>
+            </div>
+            <Link to={buildNodesHref(page.kind, page.id)} className={ACTION_TEXT_BUTTON_CLASS}>
+              Open page
+            </Link>
+          </div>
+        </article>
+      ))}
     </div>
   );
 }
@@ -481,11 +460,6 @@ export function ProjectDetailPanel({
   const documentSaveQueuedRef = useRef(false);
   const documentUsesTitleHeadingRef = useRef(projectDocumentStartsWithTitleHeading(documentRecord?.content ?? '', record.title));
 
-  const [noteEditor, setNoteEditor] = useState<ProjectNoteEditorState | null>(null);
-  const [noteForm, setNoteForm] = useState<NoteFormState>(() => emptyNoteForm());
-  const [noteBusy, setNoteBusy] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
-
   const [fileUpload, setFileUpload] = useState<FileUploadState>(() => emptyFileUploadState());
   const [fileBusy, setFileBusy] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -567,7 +541,6 @@ export function ProjectDetailPanel({
     projectSaveQueuedRef.current = false;
     documentSaveQueuedRef.current = false;
     setTaskEditor(null);
-    setNoteEditor(null);
     setFileUpload(emptyFileUploadState());
     setFileComposerOpen(false);
     setShowCompletedTasks(false);
@@ -576,7 +549,6 @@ export function ProjectDetailPanel({
     setTaskError(null);
     setDocumentError(null);
     setDocumentSavedAt(null);
-    setNoteError(null);
     setFileError(null);
     setConversationError(null);
     setArchiveError(null);
@@ -695,17 +667,17 @@ export function ProjectDetailPanel({
 
     const normalizedProjectForm = normalizeProjectForm(draftProjectForm);
     if (!normalizedProjectForm.title) {
-      setProjectError('Project title must not be empty.');
+      setProjectError('Page title must not be empty.');
       return;
     }
 
     if (!normalizedProjectForm.summary) {
-      setProjectError('Project summary must not be empty.');
+      setProjectError('Page summary must not be empty.');
       return;
     }
 
     if (!normalizedProjectForm.status) {
-      setProjectError('Project status must not be empty.');
+      setProjectError('Page status must not be empty.');
       return;
     }
 
@@ -836,18 +808,6 @@ export function ProjectDetailPanel({
     setTaskError(null);
   }
 
-  function openNoteAdd() {
-    setNoteEditor({ mode: 'add' });
-    setNoteForm(emptyNoteForm());
-    setNoteError(null);
-  }
-
-  function openNoteEdit(note: ProjectNote) {
-    setNoteEditor({ mode: 'edit', noteId: note.id });
-    setNoteForm(noteFormFromNote(note));
-    setNoteError(null);
-  }
-
   async function saveTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTaskBusy(true);
@@ -907,56 +867,6 @@ export function ProjectDetailPanel({
       setTaskError(error instanceof Error ? error.message : String(error));
     } finally {
       setTaskBusy(false);
-    }
-  }
-
-  async function saveNote(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setNoteBusy(true);
-    setNoteError(null);
-
-    try {
-      if (noteEditor?.mode === 'edit') {
-        await api.updateProjectNote(record.id, noteEditor.noteId, {
-          title: noteForm.title.trim(),
-          kind: noteForm.kind,
-          body: noteForm.body.trim() || undefined,
-        }, projectApiOptions);
-      } else {
-        await api.createProjectNote(record.id, {
-          title: noteForm.title.trim(),
-          kind: noteForm.kind,
-          body: noteForm.body.trim() || undefined,
-        }, projectApiOptions);
-      }
-      setNoteEditor(null);
-      setNoteForm(emptyNoteForm());
-      onChanged?.();
-    } catch (error) {
-      setNoteError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setNoteBusy(false);
-    }
-  }
-
-  async function deleteNote(noteId: string) {
-    if (!window.confirm(`Delete note ${noteId}?`)) {
-      return;
-    }
-
-    setNoteBusy(true);
-    setNoteError(null);
-
-    try {
-      await api.deleteProjectNote(record.id, noteId, projectApiOptions);
-      if (noteEditor?.mode === 'edit' && noteEditor.noteId === noteId) {
-        setNoteEditor(null);
-      }
-      onChanged?.();
-    } catch (error) {
-      setNoteError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setNoteBusy(false);
     }
   }
 
@@ -1115,7 +1025,7 @@ export function ProjectDetailPanel({
   }
 
   async function deleteProject() {
-    if (!window.confirm(`Delete project ${record.id}?`)) {
+    if (!window.confirm(`Delete page ${record.id}?`)) {
       return;
     }
 
@@ -1144,19 +1054,6 @@ export function ProjectDetailPanel({
     />
   ) : null;
 
-  const noteEditorForm = noteEditor ? (
-    <ProjectNoteEditorForm
-      editor={noteEditor}
-      value={noteForm}
-      kinds={PROJECT_NOTE_KINDS}
-      error={noteError}
-      busy={noteBusy}
-      onChange={(patch) => setNoteForm((current) => ({ ...current, ...patch }))}
-      onCancel={() => setNoteEditor(null)}
-      onSubmit={saveNote}
-    />
-  ) : null;
-
   const fileUploadForm = fileComposerOpen ? (
     <ProjectFileUploadForm
       value={fileUpload}
@@ -1175,8 +1072,9 @@ export function ProjectDetailPanel({
         ? 'Unsaved changes'
         : (documentSavedAt ? 'Saved' : null));
   const showLinkedConversationsSection = project.linkedConversations.length > 0;
-  const showNotesSection = project.notes.length > 0 || noteEditor !== null || Boolean(noteError);
+  const showChildPagesSection = true;
   const showFilesSection = project.files.length > 0 || fileComposerOpen || Boolean(fileError);
+  const childPageCreateHref = `/pages${buildNodeCreateSearch('', { creating: true, createKind: 'note', parent: record.id })}`;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
@@ -1190,7 +1088,7 @@ export function ProjectDetailPanel({
                 </Link>
               ) : null}
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-dim">
-                <span>Projects</span>
+                <span>Pages</span>
                 <span className="opacity-40">›</span>
                 <span className="font-mono text-secondary">{record.id}</span>
               </div>
@@ -1213,29 +1111,21 @@ export function ProjectDetailPanel({
                 >
                   <ToolbarGlyph path="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z" />
                 </IconButton>
-                <IconButton
-                  type="button"
-                  onClick={() => {
-                    if (noteEditor?.mode === 'add') {
-                      setNoteEditor(null);
-                      return;
-                    }
-                    openNoteAdd();
-                  }}
-                  disabled={noteBusy || deleteBusy}
-                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={noteEditor?.mode === 'add' ? 'Cancel note' : 'Add note'}
-                  aria-label={noteEditor?.mode === 'add' ? 'Cancel note' : 'Add note'}
+                <Link
+                  to={childPageCreateHref}
+                  className={`${PROJECT_TOOLBAR_BUTTON_CLASS} inline-flex items-center justify-center`}
+                  title="Create child page"
+                  aria-label="Create child page"
                 >
                   <ToolbarGlyph path={["M12 5v14", "M5 12h14", "M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"]} />
-                </IconButton>
+                </Link>
                 <IconButton
                   type="button"
                   onClick={() => { void promoteProjectToNote(); }}
                   disabled={promotionBusy || deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={promotionBusy ? 'Creating note from project' : 'Create reusable note'}
-                  aria-label={promotionBusy ? 'Creating note from project' : 'Create reusable note'}
+                  title={promotionBusy ? 'Creating standalone page' : 'Create standalone page'}
+                  aria-label={promotionBusy ? 'Creating standalone page' : 'Create standalone page'}
                 >
                   <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M8 11h8", "M8 15h4"]} />
                 </IconButton>
@@ -1257,8 +1147,8 @@ export function ProjectDetailPanel({
                   onClick={downloadProjectPackage}
                   disabled={deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title="Export project"
-                  aria-label="Export project"
+                  title="Export page"
+                  aria-label="Export page"
                 >
                   <ToolbarGlyph path={["M12 4v9", "M8.5 9.5 12 13l3.5-3.5", "M5 18.25h14"]} />
                 </IconButton>
@@ -1267,8 +1157,8 @@ export function ProjectDetailPanel({
                   onClick={() => { void toggleArchive(); }}
                   disabled={archiveBusy || deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={archived ? 'Restore project' : 'Archive project'}
-                  aria-label={archived ? 'Restore project' : 'Archive project'}
+                  title={archived ? 'Restore page' : 'Archive page'}
+                  aria-label={archived ? 'Restore page' : 'Archive page'}
                 >
                   <ToolbarGlyph path={archived
                     ? ["M7 11.5 12 7l5 4.5", "M12 7v10", "M5 19h14"]
@@ -1280,8 +1170,8 @@ export function ProjectDetailPanel({
                   onClick={() => { void toggleRawProject(); }}
                   disabled={deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={rawProjectOpen ? 'Hide raw project source' : 'Show raw project source'}
-                  aria-label={rawProjectOpen ? 'Hide raw project source' : 'Show raw project source'}
+                  title={rawProjectOpen ? 'Hide raw page source' : 'Show raw page source'}
+                  aria-label={rawProjectOpen ? 'Hide raw page source' : 'Show raw page source'}
                 >
                   <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M10 11h4", "M10 15h4"]} />
                 </IconButton>
@@ -1290,8 +1180,8 @@ export function ProjectDetailPanel({
                   onClick={() => { void deleteProject(); }}
                   disabled={deleteBusy}
                   className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={deleteBusy ? 'Deleting project' : 'Delete project'}
-                  aria-label={deleteBusy ? 'Deleting project' : 'Delete project'}
+                  title={deleteBusy ? 'Deleting page' : 'Delete page'}
+                  aria-label={deleteBusy ? 'Deleting page' : 'Delete page'}
                 >
                   <ToolbarGlyph path={["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6", "M10 11v6", "M14 11v6"]} />
                 </IconButton>
@@ -1302,19 +1192,19 @@ export function ProjectDetailPanel({
           <div className="space-y-2">
             <h1 className="m-0">
               <input
-                aria-label="Project title"
+                aria-label="Page title"
                 name="project-title"
                 autoComplete="off"
                 value={projectForm.title}
                 onChange={(event) => updateProjectFormField({ title: event.target.value })}
                 onBlur={() => { void flushProjectSave(); }}
                 className={PROJECT_INLINE_TITLE_INPUT_CLASS}
-                placeholder="Project title"
+                placeholder="Page title"
               />
             </h1>
             <MentionTextarea
               ref={summaryTextareaRef}
-              aria-label="Project summary"
+              aria-label="Page summary"
               name="project-summary"
               autoComplete="off"
               rows={1}
@@ -1322,7 +1212,7 @@ export function ProjectDetailPanel({
               onValueChange={(summary) => updateProjectFormField({ summary })}
               onBlur={() => { void flushProjectSave(); }}
               className={PROJECT_INLINE_SUMMARY_CLASS}
-              placeholder="Add a short project summary…"
+              placeholder="Add a short page summary…"
             />
           </div>
         </section>
@@ -1402,7 +1292,7 @@ export function ProjectDetailPanel({
       <aside className="ui-node-workspace-chrome space-y-3 xl:sticky xl:top-4 xl:self-start">
         {!canStartConversation && activeProfile ? (
           <p className="text-[12px] leading-relaxed text-secondary">
-            Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
+            Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this page.
           </p>
         ) : null}
         {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
@@ -1429,7 +1319,7 @@ export function ProjectDetailPanel({
               label="Status"
               value={(
                 <select
-                  aria-label="Project status"
+                  aria-label="Page status"
                   name="project-status"
                   value={projectForm.status}
                   onChange={(event) => updateProjectFormField({ status: event.target.value }, { immediate: true })}
@@ -1448,7 +1338,7 @@ export function ProjectDetailPanel({
               label="Repo root"
               value={(
                 <input
-                  aria-label="Project repo root"
+                  aria-label="Page repo root"
                   name="project-repo-root"
                   autoComplete="off"
                   spellCheck={false}
@@ -1493,36 +1383,17 @@ export function ProjectDetailPanel({
           </ProjectRailSection>
         ) : null}
 
-        {showNotesSection ? (
+        {showChildPagesSection ? (
           <ProjectRailSection
-            title="Notes"
-            meta={`${project.noteCount ?? project.notes.length} ${project.notes.length === 1 ? 'note' : 'notes'}`}
+            title="Pages"
+            meta={`${project.childPageCount ?? project.childPages.length} ${project.childPages.length === 1 ? 'page' : 'pages'}`}
             action={(
-              <button
-                type="button"
-                onClick={() => {
-                  if (noteEditor?.mode === 'add') {
-                    setNoteEditor(null);
-                    return;
-                  }
-                  openNoteAdd();
-                }}
-                className={ACTION_TEXT_BUTTON_CLASS}
-                disabled={noteBusy}
-              >
-                {noteEditor?.mode === 'add' ? 'Cancel' : '+ Add note'}
-              </button>
+              <Link to={childPageCreateHref} className={ACTION_TEXT_BUTTON_CLASS}>
+                + New page
+              </Link>
             )}
           >
-            <ProjectNoteList
-              notes={project.notes}
-              noteEditor={noteEditor}
-              noteEditorForm={noteEditorForm}
-              noteBusy={noteBusy}
-              onEditNote={openNoteEdit}
-              onDeleteNote={(noteId) => { void deleteNote(noteId); }}
-            />
-            {noteError && !noteEditor ? <p className="mt-2 text-[12px] text-danger">{noteError}</p> : null}
+            <ProjectChildPageList pages={project.childPages} />
           </ProjectRailSection>
         ) : null}
 

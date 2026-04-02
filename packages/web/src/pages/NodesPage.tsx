@@ -21,9 +21,13 @@ import type {
   SkillDetail,
 } from '../types';
 import {
+  buildNodeCreateSearch,
   buildNodesSearch,
   getNodeGroupValue,
   matchesNodeBrowserQuery,
+  readCreateNodeKind,
+  readCreateNodeParent,
+  readCreatingNode,
   readNodeBrowserDateField,
   readNodeBrowserDateRange,
   readNodeBrowserDensity,
@@ -42,7 +46,7 @@ import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResour
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
 import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import { NoteWorkspace } from './MemoriesPage';
-import { buildNoteSearch, NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
+import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import {
   buildSkillsSearch,
   readSkillView,
@@ -50,7 +54,6 @@ import {
   SKILL_SEARCH_PARAM,
   SKILL_VIEW_SEARCH_PARAM,
 } from '../skillWorkspaceState';
-import { buildProjectsHref } from '../projectWorkspaceState';
 import { SkillWorkspace } from './SkillsPage';
 import { timeAgo } from '../utils';
 import type { SavedNodeBrowserView } from '../types';
@@ -58,9 +61,9 @@ import type { SavedNodeBrowserView } from '../types';
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
 const QUERY_INPUT_CLASS = `${INPUT_CLASS} font-mono text-[12px]`;
-const NODE_KIND_ORDER: NodeLinkKind[] = ['note', 'project', 'skill'];
+const PAGE_GROUP_ORDER = ['page', 'skill'] as const;
 const GROUP_BY_OPTIONS: Array<{ value: NodeBrowserGroupBy; label: string }> = [
-  { value: 'kind', label: 'Kind' },
+  { value: 'kind', label: 'Page type' },
   { value: 'none', label: 'No grouping' },
   { value: 'status', label: 'Status' },
   { value: 'profile', label: 'Profile' },
@@ -75,17 +78,13 @@ const SORT_OPTIONS: Array<{ value: NodeBrowserSort; label: string }> = [
   { value: 'title_desc', label: 'Title (Z–A)' },
   { value: 'status_asc', label: 'Status' },
 ];
-const CREATE_NODE_SEARCH_PARAM = 'new';
-const CREATE_NODE_KIND_SEARCH_PARAM = 'createType';
-
 const BUILT_IN_VIEW_OPTIONS: Array<{ value: NodeBrowserFilter; label: string }> = [
   { value: 'all', label: 'All pages' },
-  { value: 'note', label: 'Notes' },
-  { value: 'project', label: 'Projects' },
+  { value: 'page', label: 'Pages' },
   { value: 'skill', label: 'Skills' },
 ];
 const CORE_QUERY_FIELDS = [
-  { key: 'type', detail: 'note, project, or skill' },
+  { key: 'type', detail: 'page or skill' },
   { key: 'status', detail: 'active, inbox, done, archived…' },
   { key: 'profile', detail: 'profile ownership tag' },
   { key: 'area', detail: 'domain or work area' },
@@ -102,26 +101,31 @@ type SelectedNodeDetail =
 
 type GroupedNodeEntry = { key: string; label: string; items: NodeBrowserSummary[] };
 
-function kindLabel(kind: NodeLinkKind): string {
+function kindLabel(kind: NodeLinkKind | 'page'): string {
   switch (kind) {
-    case 'note':
-      return 'Note';
-    case 'project':
-      return 'Project';
     case 'skill':
       return 'Skill';
+    case 'note':
+    case 'project':
+    case 'page':
+      return 'Page';
   }
 }
 
-function pluralKindLabel(kind: NodeLinkKind): string {
+function pluralKindLabel(kind: NodeLinkKind | 'page'): string {
   switch (kind) {
-    case 'note':
-      return 'Notes';
-    case 'project':
-      return 'Projects';
     case 'skill':
       return 'Skills';
+    case 'note':
+    case 'project':
+    case 'page':
+      return 'Pages';
   }
+}
+
+function formatPageRoleCount(kind: NodeLinkKind | 'page', count: number): string {
+  const label = count === 1 ? kindLabel(kind).toLowerCase() : pluralKindLabel(kind).toLowerCase();
+  return `${count} ${label}`;
 }
 
 function humanizeStatus(status: string): string {
@@ -141,47 +145,8 @@ function stripWorkspaceParams(search: string): string {
   params.delete('memory');
   params.delete('item');
   params.delete('view');
-  params.delete(CREATE_NODE_SEARCH_PARAM);
-  params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
-  const next = params.toString();
-  return next ? `?${next}` : '';
-}
-
-function readCreatingNode(search: string): boolean {
-  return new URLSearchParams(search).get(CREATE_NODE_SEARCH_PARAM) === '1';
-}
-
-function readCreateNodeKind(search: string): NodeLinkKind {
-  const value = new URLSearchParams(search).get(CREATE_NODE_KIND_SEARCH_PARAM)?.trim();
-  if (value === 'project' || value === 'skill') {
-    return value;
-  }
-  return 'note';
-}
-
-function buildNodeCreateSearch(
-  currentSearch: string,
-  updates: { creating?: boolean | null; createKind?: NodeLinkKind | null },
-): string {
-  const params = new URLSearchParams(buildNodesSearch(currentSearch, { kind: null, nodeId: null }));
-
-  if (updates.creating !== undefined) {
-    if (updates.creating) {
-      params.set(CREATE_NODE_SEARCH_PARAM, '1');
-    } else {
-      params.delete(CREATE_NODE_SEARCH_PARAM);
-      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
-    }
-  }
-
-  if (updates.createKind !== undefined) {
-    if (updates.createKind) {
-      params.set(CREATE_NODE_KIND_SEARCH_PARAM, updates.createKind);
-    } else {
-      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
-    }
-  }
-
+  params.delete('new');
+  params.delete('createType');
   const next = params.toString();
   return next ? `?${next}` : '';
 }
@@ -194,7 +159,7 @@ function summarizeNodeContext(node: NodeBrowserSummary): { primary: string; seco
   switch (node.kind) {
     case 'note': {
       const referenceCount = node.note?.referenceCount ?? 0;
-      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Note page';
+      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Page';
       return { primary, secondary: humanizeStatus(node.status), tags: visibleTags };
     }
     case 'skill': {
@@ -274,7 +239,10 @@ function matchesBrowserFilters(
   dateField: NodeBrowserDateField,
   dateRange: { from: string | null; to: string | null },
 ): boolean {
-  if (filter !== 'all' && node.kind !== filter) {
+  if (filter === 'skill' && node.kind !== 'skill') {
+    return false;
+  }
+  if (filter === 'page' && node.kind === 'skill') {
     return false;
   }
   if (!matchesNodeBrowserQuery(node, query)) {
@@ -283,9 +251,13 @@ function matchesBrowserFilters(
   return matchesDateRange(node, dateField, dateRange.from, dateRange.to);
 }
 
+function normalizeGroupKind(kind: NodeLinkKind): 'page' | 'skill' {
+  return kind === 'skill' ? 'skill' : 'page';
+}
+
 function sortGroupEntries(left: { key: string }, right: { key: string }, groupBy: NodeBrowserGroupBy): number {
   if (groupBy === 'kind') {
-    return NODE_KIND_ORDER.indexOf(left.key as NodeLinkKind) - NODE_KIND_ORDER.indexOf(right.key as NodeLinkKind);
+    return PAGE_GROUP_ORDER.indexOf(left.key as (typeof PAGE_GROUP_ORDER)[number]) - PAGE_GROUP_ORDER.indexOf(right.key as (typeof PAGE_GROUP_ORDER)[number]);
   }
   return left.key.localeCompare(right.key);
 }
@@ -297,7 +269,7 @@ function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGrou
 
   const map = new Map<string, NodeBrowserSummary[]>();
   for (const node of nodes) {
-    const key = getNodeGroupValue(node, groupBy);
+    const key = groupBy === 'kind' ? normalizeGroupKind(node.kind) : getNodeGroupValue(node, groupBy);
     const existing = map.get(key) ?? [];
     existing.push(node);
     map.set(key, existing);
@@ -307,7 +279,7 @@ function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGrou
     .map(([key, items]) => ({
       key,
       label: groupBy === 'kind'
-        ? pluralKindLabel(key as NodeLinkKind)
+        ? pluralKindLabel(key as NodeLinkKind | 'page')
         : groupBy === 'status'
           ? humanizeStatus(key)
           : key === 'untagged'
@@ -340,19 +312,6 @@ function buildSavedBrowserViewSearch(locationSearch: string): string {
     kind: null,
     nodeId: null,
   });
-}
-
-function buildDedicatedNodeHref(item: NodeBrowserSummary, currentProfile: string | null): string {
-  switch (item.kind) {
-    case 'note':
-      return `/notes${buildNoteSearch('', { memoryId: item.id, creating: false })}`;
-    case 'skill':
-      return `/skills${buildSkillsSearch('', { skillName: item.id, view: null, item: null })}`;
-    case 'project': {
-      const profile = item.project?.profile ?? currentProfile;
-      return profile ? buildProjectsHref(profile, item.id) : `/projects/${encodeURIComponent(item.id)}`;
-    }
-  }
 }
 
 function readQueryToken(query: string, cursor: number) {
@@ -481,7 +440,7 @@ function LuceneQueryInput({
             }}
             onKeyUp={(event) => setCursor(event.currentTarget.selectionStart ?? event.currentTarget.value.length)}
             onBlur={() => setFocused(false)}
-            placeholder='type:project AND status:active AND area:architecture'
+            placeholder='type:page AND status:active AND area:architecture'
             aria-label="Lucene query"
             aria-autocomplete="list"
             aria-expanded={suggestions.length > 0}
@@ -607,7 +566,6 @@ function NodesTable({
   groups,
   groupBy,
   locationSearch,
-  currentProfile,
   density,
   deletingKey,
   onDelete,
@@ -615,7 +573,6 @@ function NodesTable({
   groups: GroupedNodeEntry[];
   groupBy: NodeBrowserGroupBy;
   locationSearch: string;
-  currentProfile: string | null;
   density: NodeBrowserDensity;
   deletingKey: string | null;
   onDelete: (item: NodeBrowserSummary) => Promise<void> | void;
@@ -629,7 +586,7 @@ function NodesTable({
         <thead className="bg-base/70 text-[10px] uppercase tracking-[0.12em] text-dim">
           <tr>
             <th className="px-3 py-2.5 font-medium">Title</th>
-            <th className="px-3 py-2.5 font-medium">Kind</th>
+            <th className="px-3 py-2.5 font-medium">Role</th>
             <th className="px-3 py-2.5 font-medium">Status</th>
             <th className="px-3 py-2.5 font-medium">Updated</th>
             <th className="px-3 py-2.5 font-medium">Context</th>
@@ -655,8 +612,6 @@ function NodesTable({
                 const context = summarizeNodeContext(item);
                 const rowKey = `${item.kind}:${item.id}`;
                 const canDelete = item.kind !== 'skill';
-                const editHref = buildDedicatedNodeHref(item, currentProfile);
-                const itemKindLabel = kindLabel(item.kind).toLowerCase();
                 const deleting = deletingKey === rowKey;
 
                 return (
@@ -694,16 +649,10 @@ function NodesTable({
                     </td>
                     <td className={`${cellClassName} w-[7.5rem] text-right`}>
                       <div className="flex justify-end gap-1 whitespace-nowrap">
-                        <NodeActionIconLink to={buildNodeHref(locationSearch, item)} label={`View ${itemKindLabel}`}>
+                        <NodeActionIconLink to={buildNodeHref(locationSearch, item)} label="Open page">
                           <TableActionIcon paths={[
                             'M2.06 12.35C3.43 9.51 6.52 6 12 6s8.57 3.51 9.94 5.65c.09.14.09.56 0 .7C20.57 14.49 17.48 18 12 18s-8.57-3.51-9.94-5.65a.75.75 0 0 1 0-.7Z',
                             'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-                          ]} />
-                        </NodeActionIconLink>
-                        <NodeActionIconLink to={editHref} label={`Edit ${itemKindLabel}`}>
-                          <TableActionIcon paths={[
-                            'M12 20h9',
-                            'M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z',
                           ]} />
                         </NodeActionIconLink>
                         {canDelete ? (
@@ -714,7 +663,7 @@ function NodesTable({
                               void onDelete(item);
                             }}
                             disabled={deleting}
-                            label={deleting ? `Deleting ${itemKindLabel}` : `Delete ${itemKindLabel}`}
+                            label={deleting ? 'Deleting page' : 'Delete page'}
                             tone="danger"
                           >
                             <span className={deleting ? 'animate-pulse' : undefined}>
@@ -804,6 +753,7 @@ function SavedViewsBar({
 
 function NodeCreatePage({
   createKind,
+  initialParent,
   currentProfile,
   busy,
   error,
@@ -812,10 +762,11 @@ function NodeCreatePage({
   onCreateKindChange,
 }: {
   createKind: NodeLinkKind;
+  initialParent: string | null;
   currentProfile: string | null;
   busy: boolean;
   error: string | null;
-  onCreate: (input: { kind: NodeLinkKind; title: string; summary: string; body: string; repoRoot: string }) => void;
+  onCreate: (input: { kind: NodeLinkKind; title: string; summary: string; body: string; repoRoot: string; parent: string }) => void;
   onCancel: () => void;
   onCreateKindChange: (value: NodeLinkKind) => void;
 }) {
@@ -823,24 +774,30 @@ function NodeCreatePage({
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [repoRoot, setRepoRoot] = useState('');
+  const [parent, setParent] = useState(initialParent ?? '');
+
+  useEffect(() => {
+    setParent(initialParent ?? '');
+  }, [initialParent]);
 
   const heading = 'New page';
+  const parentMeta = parent.trim() ? ` under @${parent.trim().toLowerCase()}` : '';
   const meta = createKind === 'project'
-    ? `Start a durable project page${currentProfile ? ` for profile ${currentProfile}` : ''}.`
+    ? `Start a tracked page${parentMeta}${currentProfile ? ` for profile ${currentProfile}` : ''}.`
     : createKind === 'skill'
-      ? 'Create a reusable workflow page.'
-      : 'Create a shared note page.';
+      ? `Create a reusable workflow page${parentMeta}.`
+      : `Create a page${parentMeta}.`;
   const summaryLabel = createKind === 'project' ? 'Summary' : 'Description';
   const summaryPlaceholder = createKind === 'project'
-    ? 'Short summary shown in project lists.'
+    ? 'Short summary shown in page lists.'
     : createKind === 'skill'
       ? 'What this skill is for and when to use it.'
-      : 'What this note is for and how the agent should use it.';
+      : 'What this page is for and how the agent should use it.';
   const bodyPlaceholder = createKind === 'project'
-    ? 'Optional. Add the initial project plan, context, or working notes.'
+    ? 'Optional. Add the initial plan, context, or working notes.'
     : createKind === 'skill'
       ? 'Document the workflow, steps, and sharp edges.'
-      : 'Optional. Add the initial note content.';
+      : 'Optional. Add the initial page content.';
 
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
@@ -851,7 +808,7 @@ function NodeCreatePage({
               <div className="flex items-center gap-2">
                 <ToolbarButton onClick={onCancel}>Cancel</ToolbarButton>
                 <ToolbarButton
-                  onClick={() => onCreate({ kind: createKind, title, summary, body, repoRoot })}
+                  onClick={() => onCreate({ kind: createKind, title, summary, body, repoRoot, parent })}
                   disabled={busy || title.trim().length === 0}
                   className="text-accent"
                 >
@@ -865,15 +822,15 @@ function NodeCreatePage({
 
           <div className="space-y-4 rounded-2xl border border-border-subtle px-5 py-5">
             <label className="flex max-w-xs flex-col gap-1.5 text-[12px] text-dim">
-              <span>Type</span>
+              <span>Page type</span>
               <select
                 value={createKind}
                 onChange={(event) => onCreateKindChange(event.target.value as NodeLinkKind)}
                 className={SELECT_CLASS}
                 aria-label="Page type"
               >
-                <option value="note">Note</option>
-                <option value="project">Project</option>
+                <option value="note">Page</option>
+                <option value="project">Tracked page</option>
                 <option value="skill">Skill</option>
               </select>
             </label>
@@ -885,7 +842,7 @@ function NodeCreatePage({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 className={INPUT_CLASS}
-                placeholder={createKind === 'project' ? 'Short project title' : createKind === 'skill' ? 'Skill title' : 'Note title'}
+                placeholder={createKind === 'project' ? 'Short page title' : createKind === 'skill' ? 'Skill title' : 'Page title'}
               />
             </div>
 
@@ -913,6 +870,18 @@ function NodeCreatePage({
                 />
               </div>
             ) : null}
+
+            <div className="space-y-1.5">
+              <label className="text-[12px] text-dim" htmlFor="new-node-parent">Parent page</label>
+              <input
+                id="new-node-parent"
+                value={parent}
+                onChange={(event) => setParent(event.target.value)}
+                className={`${INPUT_CLASS} font-mono`}
+                placeholder="Optional parent page id"
+                spellCheck={false}
+              />
+            </div>
 
             <div className="space-y-1.5">
               <label className="text-[12px] text-dim">Body</label>
@@ -943,7 +912,6 @@ function KnowledgeBrowserPage({
   error,
   refreshing,
   pageMeta,
-  currentProfile,
   savedViews,
   selectedView,
   activeSavedViewId,
@@ -983,7 +951,6 @@ function KnowledgeBrowserPage({
   error: string | null;
   refreshing: boolean;
   pageMeta: string;
-  currentProfile: string | null;
   savedViews: SavedNodeBrowserView[];
   selectedView: string;
   activeSavedViewId: string | null;
@@ -1102,7 +1069,7 @@ function KnowledgeBrowserPage({
             <EmptyState
               className="py-10"
               title="No pages yet"
-              body="Create a note, project, or skill page to start shaping your durable layer."
+              body="Create a page or skill page to start shaping your durable layer."
             />
           ) : null}
 
@@ -1119,7 +1086,6 @@ function KnowledgeBrowserPage({
               groups={groupBy === 'none' ? [{ key: 'all', label: 'All pages', items: filteredNodes }] : groupedNodes}
               groupBy={groupBy}
               locationSearch={locationSearch}
-              currentProfile={currentProfile}
               density={density}
               deletingKey={deletingKey}
               onDelete={onDeleteNode}
@@ -1239,6 +1205,7 @@ export function NodesPage() {
   const selected = useMemo(() => readSelectedNode(location.search), [location.search]);
   const creatingNode = useMemo(() => readCreatingNode(location.search), [location.search]);
   const createKind = useMemo(() => readCreateNodeKind(location.search), [location.search]);
+  const createParent = useMemo(() => readCreateNodeParent(location.search), [location.search]);
   const query = useMemo(() => readNodeBrowserQuery(location.search), [location.search]);
   const sort = useMemo(() => readNodeBrowserSort(location.search), [location.search]);
   const groupBy = useMemo(() => readNodeBrowserGroupBy(location.search), [location.search]);
@@ -1291,7 +1258,7 @@ export function NodesPage() {
     if (query.trim() || filter !== 'all' || dateRange.from || dateRange.to || groupBy !== 'kind' || sort !== 'updated_desc') {
       return `${filteredNodes.length} visible · ${counts.all} total pages`;
     }
-    return `${counts.all} pages · ${counts.note} notes · ${counts.project} projects · ${counts.skill} skills`;
+    return `${counts.all} total · ${formatPageRoleCount('page', counts.note + counts.project)} · ${formatPageRoleCount('skill', counts.skill)}`;
   }, [counts.all, counts.note, counts.project, counts.skill, dataLoading, dateRange.from, dateRange.to, filter, filteredNodes.length, groupBy, query, sort]);
 
   const detailApi = useApi(async () => {
@@ -1374,8 +1341,7 @@ export function NodesPage() {
     }
 
     const rowKey = `${item.kind}:${item.id}`;
-    const itemLabel = item.kind === 'project' ? 'project' : 'note';
-    if (!window.confirm(`Delete ${itemLabel} @${item.id}?`)) {
+    if (!window.confirm(`Delete page @${item.id}?`)) {
       return;
     }
 
@@ -1412,6 +1378,7 @@ export function NodesPage() {
     summary: string;
     body: string;
     repoRoot: string;
+    parent: string;
   }) => {
     const title = input.title.trim();
     if (!title) {
@@ -1421,6 +1388,8 @@ export function NodesPage() {
     setCreateBusy(true);
     setCreateError(null);
     try {
+      const parent = input.parent.trim().toLowerCase();
+
       if (input.kind === 'note') {
         const created = await api.createNoteDoc({
           title,
@@ -1428,6 +1397,9 @@ export function NodesPage() {
           description: input.summary.trim() || undefined,
           body: input.body.trim() || undefined,
         });
+        if (parent) {
+          await api.saveNodeDetail(created.memory.id, { parent });
+        }
         emitMemoriesChanged({ memoryId: created.memory.id });
         await refreshAll();
         navigate(`/pages${buildNodesSearch('', { kind: 'note', nodeId: created.memory.id })}`, { replace: true });
@@ -1442,6 +1414,9 @@ export function NodesPage() {
           documentContent: input.body.trim() || undefined,
           repoRoot: input.repoRoot.trim() || undefined,
         }, currentProfile ? { profile: currentProfile } : undefined);
+        if (parent) {
+          await api.saveNodeDetail(created.project.id, { parent }, currentProfile ? { profile: currentProfile } : undefined);
+        }
         emitProjectsChanged();
         await refreshAll();
         navigate(`/pages${buildNodesSearch('', { kind: 'project', nodeId: created.project.id })}`, { replace: true });
@@ -1453,6 +1428,9 @@ export function NodesPage() {
         description: input.summary.trim() || undefined,
         body: input.body.trim() || undefined,
       });
+      if (parent) {
+        await api.saveNodeDetail(created.skill.name, { parent });
+      }
       await refreshAll();
       navigate(`/pages${buildNodesSearch('', { kind: 'skill', nodeId: created.skill.name })}`, { replace: true });
     } catch (error) {
@@ -1514,6 +1492,7 @@ export function NodesPage() {
     return (
       <NodeCreatePage
         createKind={createKind}
+        initialParent={createParent}
         currentProfile={currentProfile}
         busy={createBusy}
         error={createError}
@@ -1521,7 +1500,7 @@ export function NodesPage() {
         onCancel={handleCancelCreateNode}
         onCreateKindChange={(value) => {
           setCreateError(null);
-          navigate(`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: value })}`, { replace: true });
+          navigate(`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: value, parent: createParent })}`, { replace: true });
         }}
       />
     );
@@ -1544,7 +1523,6 @@ export function NodesPage() {
       error={combinedError}
       refreshing={nodesApi.refreshing}
       pageMeta={pageMeta}
-      currentProfile={currentProfile}
       savedViews={savedViews}
       selectedView={selectedView}
       activeSavedViewId={matchedSavedView?.id ?? null}

@@ -61,7 +61,7 @@ Conversations can reference durable objects with `@` references.
 Typical references include:
 
 - projects
-- note pages
+- pages
 - skill pages
 - scheduled tasks
 - profiles
@@ -155,5 +155,5 @@ Then, if needed:
 - [Web UI Guide](./web-ui.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Async Attention and Wakeups](./async-attention.md)

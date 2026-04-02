@@ -1,10 +1,9 @@
 import { useId, type FormEventHandler, type ReactNode } from 'react';
 import { formatProjectStatus } from '../contextRailProject';
-import type { ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
+import type { ProjectFile, ProjectMilestone, ProjectTask } from '../types';
 import {
   type FileUploadState,
   type MilestoneFormState,
-  type NoteFormState,
   type ProjectMilestoneEditorState,
   type ProjectTaskEditorState,
   type ProjectFormState,
@@ -13,7 +12,6 @@ import {
 import { timeAgo } from '../utils';
 import { Pill, ToolbarButton, type PillTone } from './ui';
 import { MentionTextarea } from './MentionTextarea';
-import { RichMarkdownEditor } from './editor/RichMarkdownEditor';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
@@ -108,7 +106,7 @@ export function ProjectRecordEditorForm({
       {error && <p className="text-[12px] text-danger">{error}</p>}
 
       <div className="flex items-center gap-3">
-        <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save project'}</ToolbarButton>
+        <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save page'}</ToolbarButton>
         <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
           Cancel
         </button>
@@ -290,95 +288,6 @@ export function ProjectMilestoneRow(_props: {
   return null;
 }
 
-export function ProjectNoteEditorForm({
-  editor,
-  value,
-  kinds,
-  error,
-  busy,
-  onChange,
-  onCancel,
-  onSubmit,
-}: {
-  editor: { mode: 'add' } | { mode: 'edit'; noteId: string };
-  value: NoteFormState;
-  kinds: string[];
-  error: string | null;
-  busy: boolean;
-  onChange: (patch: Partial<NoteFormState>) => void;
-  onCancel: () => void;
-  onSubmit: FormEventHandler<HTMLFormElement>;
-}) {
-  return (
-    <form onSubmit={onSubmit} className="space-y-5 border-t border-border-subtle pt-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="ui-card-meta">{editor.mode === 'add' ? 'New note' : `Edit note ${editor.noteId}`}</p>
-        <button type="button" onClick={onCancel} className={ACTION_BUTTON_CLASS}>Cancel</button>
-      </div>
-
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Title</label>
-          <input value={value.title} onChange={(event) => onChange({ title: event.target.value })} className={INPUT_CLASS} />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Kind</label>
-          <select value={value.kind} onChange={(event) => onChange({ kind: event.target.value })} className={SELECT_CLASS}>
-            {kinds.map((kind) => (
-              <option key={kind} value={kind}>{formatProjectStatus(kind)}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="ui-card-meta">Body</label>
-        <RichMarkdownEditor value={value.body} onChange={(body) => onChange({ body })} placeholder="Start writing…" variant="panel" />
-      </div>
-
-      {error && <p className="text-[12px] text-danger">{error}</p>}
-
-      <div className="flex items-center gap-3">
-        <ToolbarButton type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save note'}</ToolbarButton>
-      </div>
-    </form>
-  );
-}
-
-export function ProjectNoteRow({
-  note,
-  busy,
-  onEdit,
-  onDelete,
-  children,
-}: {
-  note: ProjectNote;
-  busy: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <article id={`project-note-${note.id}`} className="py-4 space-y-3 scroll-mt-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-[15px] font-medium text-primary">{note.title}</p>
-            <Pill tone="muted">{formatProjectStatus(note.kind)}</Pill>
-            <span className="ui-card-meta">updated {timeAgo(note.updatedAt)}</span>
-          </div>
-          {children}
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <button type="button" onClick={onEdit} className={ACTION_BUTTON_CLASS}>Edit</button>
-          <button type="button" onClick={onDelete} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={busy}>Delete</button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
 export function ProjectFileUploadForm({
   value,
   error,
@@ -397,7 +306,7 @@ export function ProjectFileUploadForm({
   const descriptionId = useId();
   const fileMeta = value.file
     ? [formatBytes(value.file.size), value.file.type || null].filter(Boolean).join(' · ')
-    : 'Pick a file to attach to this project.';
+    : 'Pick a file to attach to this page.';
 
   return (
     <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">

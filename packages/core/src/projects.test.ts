@@ -88,7 +88,6 @@ describe('resolveProjectPaths', () => {
     expect(paths.projectFile).toBe(join(paths.projectDir, 'state.yaml'));
     expect(paths.documentFile).toBe(join(paths.projectDir, 'INDEX.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
-    expect(paths.notesDir).toBe(join(paths.projectDir, 'notes'));
     expect(paths.attachmentsDir).toBe(join(paths.projectDir, 'attachments'));
     expect(paths.artifactsDir).toBe(join(paths.projectDir, 'artifacts'));
   });
@@ -193,7 +192,6 @@ describe('createProjectScaffold', () => {
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
     expect(existsSync(result.paths.tasksDir)).toBe(true);
-    expect(existsSync(result.paths.notesDir)).toBe(true);
     expect(existsSync(result.paths.attachmentsDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
     expect(existsSync(join(repo, 'sync', 'projects'))).toBe(false);

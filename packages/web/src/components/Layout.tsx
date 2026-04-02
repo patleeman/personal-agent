@@ -402,14 +402,10 @@ export function Layout() {
     : Math.max(rail.width, artifactRailTargetWidth);
   const showContextRail = !(
     location.pathname.startsWith('/conversations')
-    || location.pathname.startsWith('/notes')
-    || location.pathname.startsWith('/memories')
     || location.pathname.startsWith('/pages')
     || location.pathname.startsWith('/nodes')
-    || location.pathname.startsWith('/projects')
     || location.pathname.startsWith('/settings')
     || location.pathname.startsWith('/system')
-    || location.pathname.startsWith('/skills')
     || location.pathname.startsWith('/workspace')
   );
 

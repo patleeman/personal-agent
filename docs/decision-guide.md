@@ -20,19 +20,19 @@ If you are not sure which surface to use, start here.
 
 | If you need to… | Use | Durable home | Do not default to |
 | --- | --- | --- | --- |
-| Work with the agent right now | conversation | conversation/session state | inbox, note, or project as the primary work surface |
-| Keep ongoing work alive across conversations | project | `sync/nodes/<id>/` tagged `type:project` | top-level note or long conversation history |
-| Save reusable knowledge or references | note page | `sync/nodes/<id>/` tagged `type:note` | project docs or random conversation text |
-| Save reusable workflow instructions | skill page | `sync/nodes/<id>/` tagged `type:skill` | AGENTS or ad hoc notes |
-| Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | note pages or project state |
+| Work with the agent right now | conversation | conversation/session state | inbox or page as the primary work surface |
+| Keep ongoing work alive across conversations | tracked page | `sync/nodes/<id>/` tagged `type:project` | top-level reusable page or long conversation history |
+| Save reusable knowledge or references | page | `sync/nodes/<id>/` tagged `type:note` | tracked-page docs or random conversation text |
+| Save reusable workflow instructions | skill page | `sync/nodes/<id>/` tagged `type:skill` | AGENTS or ad hoc pages |
+| Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | pages or tracked-page state |
 | Surface async work later without interrupting | activity / inbox | local inbox state | alerts by default |
 | Tell the user later | reminder / alert | local alert + wakeup state | scheduled task if no automation is needed |
 | Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
 | Run something detached right now | durable background run | `daemon/runs/<run-id>/` | scheduled task |
 | Run something later or repeatedly | scheduled task | `sync/tasks/*.task.md` | run |
-| Work on local repo files in the web UI | workspace | local repo/filesystem view | project docs or notes |
-| Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | project artifact directory as the first stop |
-| Keep a file with a specific project | project attachment or project artifact | `sync/nodes/<id>/attachments|artifacts/` | top-level note assets |
+| Work on local repo files in the web UI | workspace | local repo/filesystem view | tracked-page docs or pages |
+| Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory as the first stop |
+| Keep a file with a specific tracked page | tracked-page attachment or tracked-page artifact | `sync/nodes/<id>/attachments|artifacts/` | top-level page assets |
 | Offload a conversation to another machine | execution target | machine-local execution-target config | scheduled task or run |
 | Call external tool servers through MCP | MCP server config + MCP calls | MCP config + auth state | hand-rolled shell scripts by default |
 
@@ -46,7 +46,7 @@ Promote the work into a **project** when it needs:
 
 - durable status
 - blockers or milestones
-- project notes or files
+- project child pages or files
 - continuity across conversations
 
 Use a **note** when the content is reusable outside one workstream.
@@ -113,6 +113,6 @@ The docs explain the product model. `AGENTS.md` explains how this particular age
 - [Async Attention and Wakeups](./async-attention.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
-- [Projects](./projects.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Tracked Pages](./projects.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Agent Tool Map](./agent-tool-map.md)

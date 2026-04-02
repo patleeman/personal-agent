@@ -1,4 +1,4 @@
-import type { ProjectDetail, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
+import type { ProjectDetail, ProjectMilestone, ProjectTask } from '../types';
 
 export const UNASSIGNED_TASK_KEY = '__unassigned__';
 
@@ -22,12 +22,6 @@ export interface TaskFormState {
   milestoneId: string;
 }
 
-export interface NoteFormState {
-  title: string;
-  kind: string;
-  body: string;
-}
-
 export interface FileUploadState {
   title: string;
   description: string;
@@ -39,8 +33,6 @@ export type ProjectMilestoneEditorState = { mode: 'add' } | { mode: 'edit'; mile
 export type ProjectTaskEditorState =
   | { mode: 'add'; anchorMilestoneId?: string }
   | { mode: 'edit'; taskId: string; anchorMilestoneId?: string };
-
-export type ProjectNoteEditorState = { mode: 'add' } | { mode: 'edit'; noteId: string };
 
 export type ProjectActivityItemShape =
   | {
@@ -113,22 +105,6 @@ export function taskFormFromTask(task: ProjectTask): TaskFormState {
     title: task.title,
     status: task.status,
     milestoneId: task.milestoneId ?? '',
-  };
-}
-
-export function emptyNoteForm(): NoteFormState {
-  return {
-    title: '',
-    kind: 'note',
-    body: '',
-  };
-}
-
-export function noteFormFromNote(note: ProjectNote): NoteFormState {
-  return {
-    title: note.title,
-    kind: note.kind,
-    body: note.body,
   };
 }
 

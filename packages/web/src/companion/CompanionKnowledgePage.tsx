@@ -8,33 +8,31 @@ import {
   matchesNodeBrowserQuery,
   readNodeBrowserFilter,
   readNodeBrowserQuery,
+  readSelectedNode,
   type NodeBrowserFilter,
 } from '../nodeWorkspaceState';
 import type { NodeBrowserSummary, NodeLinkKind } from '../types';
 import { timeAgo } from '../utils';
 import { CompanionSection } from './CompanionBrowser';
 import {
-  buildCompanionNotePath,
-  buildCompanionProjectPath,
-  buildCompanionSkillPath,
-  COMPANION_NOTES_PATH,
+  buildCompanionPagePath,
   COMPANION_PAGES_PATH,
-  COMPANION_PROJECTS_PATH,
-  COMPANION_SKILLS_PATH,
 } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
+import { CompanionMemoryDetailPage } from './CompanionMemoryDetailPage';
+import { CompanionProjectDetailPage } from './CompanionProjectDetailPage';
+import { CompanionSkillDetailPage } from './CompanionSkillDetailPage';
 
 const INPUT_CLASS = 'w-full rounded-2xl border border-border-default bg-base px-3.5 py-3 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} pr-9`;
 const QUERY_INPUT_CLASS = `${INPUT_CLASS} font-mono text-[13px]`;
 const FILTER_OPTIONS: Array<{ value: NodeBrowserFilter; label: string }> = [
   { value: 'all', label: 'All pages' },
-  { value: 'project', label: 'Projects' },
-  { value: 'note', label: 'Notes' },
+  { value: 'page', label: 'Pages' },
   { value: 'skill', label: 'Skills' },
 ];
 const CORE_QUERY_FIELDS = [
-  { key: 'type', detail: 'note, project, or skill' },
+  { key: 'type', detail: 'page or skill' },
   { key: 'status', detail: 'active, inbox, done, archived…' },
   { key: 'profile', detail: 'profile ownership tag' },
   { key: 'area', detail: 'domain or work area' },
@@ -45,25 +43,25 @@ const CORE_QUERY_FIELDS = [
 ] as const;
 const PAGE_KIND_ORDER: NodeLinkKind[] = ['project', 'note', 'skill'];
 
-function kindLabel(kind: NodeLinkKind): string {
+function kindLabel(kind: NodeLinkKind | 'page'): string {
   switch (kind) {
-    case 'project':
-      return 'Project';
-    case 'note':
-      return 'Note';
     case 'skill':
       return 'Skill';
+    case 'project':
+    case 'note':
+    case 'page':
+      return 'Page';
   }
 }
 
-function pluralKindLabel(kind: NodeLinkKind): string {
+function pluralKindLabel(kind: NodeLinkKind | 'page'): string {
   switch (kind) {
-    case 'project':
-      return 'Projects';
-    case 'note':
-      return 'Notes';
     case 'skill':
       return 'Skills';
+    case 'project':
+    case 'note':
+    case 'page':
+      return 'Pages';
   }
 }
 
@@ -205,7 +203,7 @@ function LuceneQueryInput({
             }}
             onKeyUp={(event) => setCursor(event.currentTarget.selectionStart ?? event.currentTarget.value.length)}
             onBlur={() => setFocused(false)}
-            placeholder='type:project AND status:active AND area:architecture'
+            placeholder='type:page AND status:active AND area:architecture'
             aria-label="Lucene query"
             aria-autocomplete="list"
             aria-expanded={suggestions.length > 0}
@@ -271,17 +269,6 @@ function comparePages(left: NodeBrowserSummary, right: NodeBrowserSummary): numb
     || left.id.localeCompare(right.id);
 }
 
-function buildCompanionPagePath(page: NodeBrowserSummary): string {
-  switch (page.kind) {
-    case 'project':
-      return buildCompanionProjectPath(page.id);
-    case 'note':
-      return buildCompanionNotePath(page.id);
-    case 'skill':
-      return buildCompanionSkillPath(page.id);
-  }
-}
-
 function buildPageLabel(page: NodeBrowserSummary): string {
   const base = kindLabel(page.kind);
   return page.status === 'archived' ? `Archived ${base.toLowerCase()}` : base;
@@ -317,9 +304,46 @@ function buildPageMeta(page: NodeBrowserSummary): string {
 
 function filterPages(pages: NodeBrowserSummary[], filter: NodeBrowserFilter, query: string): NodeBrowserSummary[] {
   return pages
-    .filter((page) => (filter === 'all' ? true : page.kind === filter))
+    .filter((page) => filter === 'all' ? true : filter === 'skill' ? page.kind === 'skill' : page.kind !== 'skill')
     .filter((page) => matchesNodeBrowserQuery(page, query))
     .sort(comparePages);
+}
+
+function CompanionSelectedPageView({
+  selection,
+  page,
+  onBack,
+}: {
+  selection: { kind: NodeLinkKind; id: string };
+  page: NodeBrowserSummary | null;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="border-b border-border-subtle px-4 py-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-[12px] font-medium text-accent transition-colors hover:text-accent/80"
+        >
+          ← Back to pages
+        </button>
+      </div>
+
+      {!page ? (
+        <div className="px-4 py-5">
+          <p className="text-[15px] text-primary">Page not found.</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-secondary">@{selection.id} is not available in the current page store.</p>
+        </div>
+      ) : selection.kind === 'project' ? (
+        <CompanionProjectDetailPage projectId={selection.id} />
+      ) : selection.kind === 'note' ? (
+        <CompanionMemoryDetailPage memoryId={selection.id} />
+      ) : (
+        <CompanionSkillDetailPage skillName={selection.id} />
+      )}
+    </div>
+  );
 }
 
 export function CompanionKnowledgePage() {
@@ -329,17 +353,26 @@ export function CompanionKnowledgePage() {
   const { setTopBarRightAction } = useCompanionTopBarAction();
   const filter = readNodeBrowserFilter(location.search);
   const query = readNodeBrowserQuery(location.search);
+  const selected = readSelectedNode(location.search);
 
   const pages = useMemo(() => data?.nodes ?? [], [data?.nodes]);
   const visiblePages = useMemo(() => filterPages(pages, filter, query), [filter, pages, query]);
-  const groupedPages = useMemo(() => PAGE_KIND_ORDER
-    .map((kind) => ({ kind, items: visiblePages.filter((page) => page.kind === kind) }))
-    .filter((group) => group.items.length > 0), [visiblePages]);
+  const groupedPages = useMemo(() => {
+    const pageItems = visiblePages.filter((page) => page.kind !== 'skill');
+    const skillItems = visiblePages.filter((page) => page.kind === 'skill');
+    return [
+      ...(pageItems.length > 0 ? [{ kind: 'page' as const, items: pageItems }] : []),
+      ...(skillItems.length > 0 ? [{ kind: 'skill' as const, items: skillItems }] : []),
+    ];
+  }, [visiblePages]);
   const countsByKind = useMemo(() => ({
-    project: pages.filter((page) => page.kind === 'project').length,
-    note: pages.filter((page) => page.kind === 'note').length,
+    page: pages.filter((page) => page.kind !== 'skill').length,
     skill: pages.filter((page) => page.kind === 'skill').length,
   }), [pages]);
+  const selectedPage = useMemo(
+    () => selected ? pages.find((page) => page.kind === selected.kind && page.id === selected.id) ?? null : null,
+    [pages, selected],
+  );
 
   const updateSearch = useCallback((updates: { filter?: NodeBrowserFilter | null; query?: string | null }) => {
     navigate({
@@ -350,6 +383,13 @@ export function CompanionKnowledgePage() {
         kind: null,
         nodeId: null,
       }),
+    }, { replace: true });
+  }, [location.search, navigate]);
+
+  const clearSelection = useCallback(() => {
+    navigate({
+      pathname: COMPANION_PAGES_PATH,
+      search: buildNodesSearch(location.search, { kind: null, nodeId: null }),
     }, { replace: true });
   }, [location.search, navigate]);
 
@@ -367,6 +407,10 @@ export function CompanionKnowledgePage() {
     return () => setTopBarRightAction(undefined);
   }, [refreshing, refetch, setTopBarRightAction]);
 
+  if (selected) {
+    return <CompanionSelectedPageView selection={selected} page={selectedPage} onBack={clearSelection} />;
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
@@ -376,7 +420,7 @@ export function CompanionKnowledgePage() {
               <div>
                 <p className="text-[15px] font-medium text-primary">Browse all durable pages from your phone.</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-secondary">
-                  Use Lucene-style filters like <span className="font-mono text-[12px] text-primary">type:project AND status:active</span> or jump into dedicated project, note, and skill views.
+                  Use Lucene-style filters like <span className="font-mono text-[12px] text-primary">type:page AND status:active</span>, then open any page inline without leaving the Pages surface.
                 </p>
               </div>
 
@@ -396,7 +440,7 @@ export function CompanionKnowledgePage() {
                   </select>
                 </label>
                 <div className="text-[12px] text-secondary sm:text-right">
-                  {pages.length} total · {countsByKind.project} projects · {countsByKind.note} notes · {countsByKind.skill} skills
+                  {pages.length} total · {countsByKind.page} pages · {countsByKind.skill} skills
                 </div>
               </div>
 
@@ -417,7 +461,7 @@ export function CompanionKnowledgePage() {
             <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">No pages match this query.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Try a broader filter, clear the Lucene query, or jump into the dedicated project, note, or skill browsers above.
+                Try a broader filter or clear the Lucene query.
               </p>
             </div>
           ) : null}
@@ -426,7 +470,7 @@ export function CompanionKnowledgePage() {
               {group.items.map((page) => (
                 <BrowserRecordRow
                   key={`${page.kind}:${page.id}`}
-                  to={buildCompanionPagePath(page)}
+                  to={buildCompanionPagePath(page.kind, page.id)}
                   label={buildPageLabel(page)}
                   aside={buildPageAside(page)}
                   heading={page.title}
