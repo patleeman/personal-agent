@@ -19,12 +19,7 @@ Typical durable paths include:
 
 - `profiles/**`
 - `agents/**`
-- `settings/**`
-- `models/**`
-- `skills/**`
-- `notes/**`
 - `nodes/**`
-- `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`

@@ -117,6 +117,22 @@ export function getDurableProfilesDir(syncRoot: string = getSyncRoot()): string 
   return join(syncRoot, 'profiles');
 }
 
+export function getDurableProfileDir(profile: string, syncRoot: string = getSyncRoot()): string {
+  return join(getDurableProfilesDir(syncRoot), profile);
+}
+
+export function getDurableProfileAgentFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
+  return join(getDurableProfileDir(profile, syncRoot), 'AGENTS.md');
+}
+
+export function getDurableProfileSettingsFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
+  return join(getDurableProfileDir(profile, syncRoot), 'settings.json');
+}
+
+export function getDurableProfileModelsFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
+  return join(getDurableProfileDir(profile, syncRoot), 'models.json');
+}
+
 export function getDurableSettingsDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'settings');
 }

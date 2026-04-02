@@ -26,10 +26,9 @@ Common repo-managed examples:
 
 Mutable durable resources default to the synced durable-state home:
 
-- `~/.local/state/personal-agent/sync/profiles/*.json`
-- `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md`
-- `~/.local/state/personal-agent/sync/settings/**`
-- `~/.local/state/personal-agent/sync/models/**`
+- `~/.local/state/personal-agent/sync/profiles/<profile>/AGENTS.md`
+- `~/.local/state/personal-agent/sync/profiles/<profile>/settings.json`
+- `~/.local/state/personal-agent/sync/profiles/<profile>/models.json`
 - `~/.local/state/personal-agent/sync/nodes/**`
 - `~/.local/state/personal-agent/sync/tasks/**`
 
@@ -114,7 +113,7 @@ Pages are the unified durable product model for notes, projects, and skills.
 
 Use them for:
 
-- profile behavior files in `sync/profiles/<profile>/agent/AGENTS.md`
+- profile behavior files in `sync/profiles/<profile>/AGENTS.md`
 - reusable workflow skill pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:skill`
 - durable note pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:note` plus package-local `references/`
 - structured project pages backed by `sync/nodes/<id>/INDEX.md` plus supporting files

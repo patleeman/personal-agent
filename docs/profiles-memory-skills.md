@@ -27,11 +27,10 @@ In addition, repo built-ins are always available from:
 
 The synced durable store can contain:
 
-- `profiles/*.json`
-- `profiles/<profile>/agent/AGENTS.md`
+- `profiles/<profile>/AGENTS.md`
+- `profiles/<profile>/settings.json`
+- `profiles/<profile>/models.json`
 - `agents/**`
-- `settings/**`
-- `models/**`
 - `nodes/**`
 - `tasks/*.task.md`
 - `projects/<projectId>/{INDEX.md,state.yaml}`
@@ -55,11 +54,14 @@ Repo built-ins still provide:
 ~/.local/state/personal-agent/
 └── sync/
     ├── profiles/
-    │   ├── assistant.json
-    │   └── datadog.json
+    │   ├── assistant/
+    │   │   ├── AGENTS.md
+    │   │   ├── settings.json
+    │   │   └── models.json
+    │   └── datadog/
+    │       ├── AGENTS.md
+    │       └── settings.json
     ├── agents/
-    ├── settings/
-    ├── models/
     ├── nodes/
     ├── tasks/
     └── projects/
@@ -76,7 +78,8 @@ Repo built-ins still provide:
 | `nodes/<id>/assets/**` | non-markdown assets used by that page |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
-| `settings/**` | default model, thinking, theme, and other runtime defaults |
+| `profiles/<profile>/settings.json` | profile-specific runtime defaults such as theme and model prefs |
+| `profiles/<profile>/models.json` | profile-specific model provider definitions and overrides |
 
 ## `AGENTS.md`: durable identity and behavior
 
@@ -198,7 +201,7 @@ Important convention:
 In particular:
 
 - there is no profile-local synced `memory/` directory
-- behavior targeting belongs in durable `agents/**`, `settings/**`, `models/**`, and tagged nodes under `nodes/**`
+- behavior targeting belongs in durable `agents/**`, per-profile `profiles/<profile>/{settings.json,models.json}`, and tagged nodes under `nodes/**`
 
 ## Notes vs projects vs inbox
 
