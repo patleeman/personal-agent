@@ -157,19 +157,22 @@ You can do the same setup from the Web UI **Sync** tab.
 
 Setup enables the daemon sync module and schedules periodic background sync.
 
-By default, sync tracks:
+By default, sync tracks everything under `~/.local/state/personal-agent/sync/`.
+Typical durable paths there include:
 
-- `profiles/*.json`
-- `profiles/<profile>/agent/AGENTS.md`
+- `profiles/**`
 - `agents/**`
 - `settings/**`
 - `models/**`
+- `skills/**`
+- `notes/**`
 - `nodes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
+- `pi-agent/state/conversation-attention/**`
 
-Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced. Conversation attention read-state is synced so “needs review” follows across machines.
+Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Conversation attention read-state is synced so “needs review” follows across machines.
 
 See [Sync Guide](./sync.md).
 
