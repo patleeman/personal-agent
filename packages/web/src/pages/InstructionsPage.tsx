@@ -9,10 +9,13 @@ import { SettingsSplitLayout } from '../components/SettingsLayout';
 import {
   EmptyState,
   ErrorState,
+  Keycap,
   ListLinkRow,
   LoadingState,
   PageHeader,
   PageHeading,
+  SectionLabel,
+  SurfacePanel,
   ToolbarButton,
 } from '../components/ui';
 import { useApi } from '../hooks';
@@ -70,6 +73,10 @@ function instructionTitle(item: MemoryAgentsItem): string {
     return 'Local overlay';
   }
 
+  if (item.source === 'profile') {
+    return 'Active profile';
+  }
+
   return `${item.source} profile`;
 }
 
@@ -82,6 +89,10 @@ function instructionSavedLabel(item: MemoryAgentsItem): string {
     return 'Saved local overlay.';
   }
 
+  if (item.source === 'profile') {
+    return 'Saved active profile instructions.';
+  }
+
   return `Saved ${item.source} instructions.`;
 }
 
@@ -92,6 +103,10 @@ function instructionReloadedLabel(item: MemoryAgentsItem): string {
 
   if (item.source === 'local') {
     return 'Reloaded local overlay.';
+  }
+
+  if (item.source === 'profile') {
+    return 'Reloaded active profile instructions.';
   }
 
   return `Reloaded ${item.source} instructions.`;
@@ -323,98 +338,104 @@ export function InstructionsPage() {
           )}
 
           {!loading && !error && instructions.length > 0 && (
-            <div className="grid h-full min-h-0 lg:grid-cols-[20rem_minmax(0,1fr)]">
-              <section className="flex min-h-0 flex-col border-r border-border-subtle">
-                <div className="shrink-0 space-y-2 border-b border-border-subtle px-5 py-4">
-                  <p className="ui-card-meta">Inspect and edit the durable instruction sources loaded for the active profile.</p>
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search instruction sources and content"
-                    aria-label="Search instruction sources"
-                    className={INPUT_CLASS}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <p className="ui-card-meta">
-                    {query.trim()
-                      ? `Showing ${filteredInstructions.length} of ${instructions.length} instruction sources.`
-                      : 'Search across source names, paths, and loaded content.'}
-                  </p>
-                </div>
+            <div className="space-y-5 overflow-y-auto px-6 py-5">
+              <section className="space-y-3">
+                <SectionLabel label="Instruction sources" />
+                <SurfacePanel muted className="px-5 py-5">
+                  <div className="space-y-1">
+                    <h2 className="text-[15px] font-medium text-primary">Loaded sources</h2>
+                    <p className="ui-card-meta max-w-3xl">Inspect and edit the durable instruction sources loaded for the active profile.</p>
+                  </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-                  {filteredInstructions.length === 0 ? (
-                    <EmptyState
-                      title="No instruction sources match that search"
-                      body="Try a broader search across source names, paths, and instruction content."
+                  <div className="mt-4 space-y-3">
+                    <input
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                      placeholder="Search instruction sources and content"
+                      aria-label="Search instruction sources"
+                      className={INPUT_CLASS}
+                      autoComplete="off"
+                      spellCheck={false}
                     />
-                  ) : (
-                    <div className="space-y-px">
-                      {filteredInstructions.map((item) => (
-                        <ListLinkRow
-                          key={item.path}
-                          to={`/instructions${buildInstructionsSearch(location.search, item.path)}`}
-                          selected={item.path === selectedInstructionPath}
-                          onClick={(event) => handleSelectInstruction(event, item.path)}
-                          leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />}
-                        >
-                          <p className="ui-row-title">{instructionTitle(item)}</p>
-                          <p className="ui-row-summary break-words">{item.path}</p>
-                          <p className="ui-row-meta break-words">{item.content ? `${item.content.length.toLocaleString()} chars` : 'No content loaded'}</p>
-                        </ListLinkRow>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                    <p className="ui-card-meta">
+                      {query.trim()
+                        ? `Showing ${filteredInstructions.length} of ${instructions.length} instruction sources.`
+                        : 'Search across source names, paths, and loaded content.'}
+                    </p>
+                    {filteredInstructions.length === 0 ? (
+                      <EmptyState
+                        title="No instruction sources match that search"
+                        body="Try a broader search across source names, paths, and instruction content."
+                        className="py-6"
+                      />
+                    ) : (
+                      <div className="max-h-72 space-y-px overflow-y-auto pr-1">
+                        {filteredInstructions.map((item) => (
+                          <ListLinkRow
+                            key={item.path}
+                            to={`/instructions${buildInstructionsSearch(location.search, item.path)}`}
+                            selected={item.path === selectedInstructionPath}
+                            onClick={(event) => handleSelectInstruction(event, item.path)}
+                            leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />}
+                          >
+                            <p className="ui-row-title">{instructionTitle(item)}</p>
+                            <p className="ui-row-summary break-words">{item.path}</p>
+                            <p className="ui-row-meta break-words">{item.content ? `${item.content.length.toLocaleString()} chars` : 'No content loaded'}</p>
+                          </ListLinkRow>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </SurfacePanel>
               </section>
 
-              <section className="min-h-0 flex flex-col overflow-hidden">
+              <section className="space-y-3 pb-2">
+                <SectionLabel label="Editor" />
                 {!selectedInstruction ? (
-                  <div className="flex h-full items-center justify-center px-8 py-10">
+                  <SurfacePanel muted className="px-8 py-10">
                     <EmptyState
                       title="Select an instruction source"
-                      body="Choose an AGENTS file on the left to inspect and edit it."
+                      body="Choose an AGENTS file above to inspect and edit it."
                     />
-                  </div>
+                  </SurfacePanel>
                 ) : (
-                  <>
-                    <div className="shrink-0 space-y-3 border-b border-border-subtle px-6 py-4">
-                      <div className="space-y-1">
+                  <SurfacePanel muted className="overflow-hidden">
+                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
+                      <div className="min-w-0 max-w-3xl space-y-1">
                         <h2 className="text-[15px] font-medium text-primary">{instructionTitle(selectedInstruction)}</h2>
                         <p className="ui-card-meta break-words">{selectedInstruction.path}</p>
                         <p className="ui-card-meta">
                           {dirty ? 'Unsaved changes · ' : ''}
-                          Press ⌘/Ctrl+S to save.
+                          Press <Keycap>⌘/Ctrl+S</Keycap> to save.
                         </p>
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        {notice ? (
-                          <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice>
-                        ) : (
-                          <span className="ui-card-meta">Editing the live source file shown above.</span>
-                        )}
-
-                        <NodePrimaryToolbar>
-                          <ToolbarButton onClick={() => { void handleReload(); }} disabled={reloadBusy || saveBusy}>
-                            {reloadBusy ? 'Reloading…' : 'Reload'}
-                          </ToolbarButton>
-                          <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy || reloadBusy}>
-                            {saveBusy ? 'Saving…' : 'Save'}
-                          </ToolbarButton>
-                        </NodePrimaryToolbar>
-                      </div>
+                      <NodePrimaryToolbar>
+                        <ToolbarButton onClick={() => { void handleReload(); }} disabled={reloadBusy || saveBusy}>
+                          {reloadBusy ? 'Reloading…' : 'Reload'}
+                        </ToolbarButton>
+                        <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy || reloadBusy}>
+                          {saveBusy ? 'Saving…' : 'Save'}
+                        </ToolbarButton>
+                      </NodePrimaryToolbar>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-hidden">
+                    <div className="px-5 py-4">
+                      {notice ? (
+                        <WorkspaceActionNotice tone={notice.tone}>{notice.text}</WorkspaceActionNotice>
+                      ) : (
+                        <p className="ui-card-meta">Editing the live source file. Use the right rail for source metadata and rendered preview.</p>
+                      )}
+                    </div>
+
+                    <div className="h-[min(70vh,48rem)] min-h-[26rem] border-t border-border-subtle bg-panel">
                       <InstructionEditorSurface
                         path={selectedInstruction.path}
                         value={draft}
                         onChange={handleDraftChange}
                       />
                     </div>
-                  </>
+                  </SurfacePanel>
                 )}
               </section>
             </div>

@@ -328,6 +328,8 @@ The settings rail also links out to Runs, Scheduled tasks, Tools, and Instructio
 
 Each settings page uses the same basic treatment: one stacked content column with muted section panels and simple dividers instead of nested cards or page-specific box patterns.
 
+The Instructions page follows the same pattern: a stacked source picker and a full-width editor in the center, while the right rail carries source metadata and rendered instruction preview.
+
 Switching the active profile affects:
 
 - inbox

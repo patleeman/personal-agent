@@ -73,8 +73,11 @@ describe('InstructionsPage', () => {
     expect(html).toContain('href="/instructions?instruction=%2Frepo%2Fprofiles%2Fdatadog%2Fagent%2FAGENTS.md"');
     expect(html).toContain('class="group ui-list-row ui-list-row-selected"');
     expect(html).toContain('/repo/profiles/datadog/agent/AGENTS.md');
+    expect(html).toContain('Loaded sources');
+    expect(html).toContain('Editor');
     expect(html).toContain('Reload');
     expect(html).toContain('Save');
-    expect(html).toContain('Press ⌘/Ctrl+S to save.');
+    expect(html).toContain('⌘/Ctrl+S');
+    expect(html).toContain('Use the right rail for source metadata and rendered preview.');
   });
 });
