@@ -1,5 +1,9 @@
 const COMPANION_ROOT_FALLBACK_PREFIXES = [
+  '/inbox',
   '/conversations',
+  '/tasks',
+  '/system',
+  '/pages',
   '/capture',
   '/projects',
   '/notes',

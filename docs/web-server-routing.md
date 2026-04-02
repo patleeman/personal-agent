@@ -37,6 +37,8 @@ This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGe
 
 On the companion surface, the `/api/events` stream also needs to carry the operational snapshots the mobile UI depends on for Tasks and System (`tasks`, `runs`, `daemon`, `sync`, and `webUi`), not just inbox-style topics.
 
+The companion SPA fallback also has to recognize both canonical `/app/*` URLs and stripped path-proxy requests like `/inbox`, `/conversations`, `/tasks`, `/system`, `/pages`, and `/capture`, because Tailscale Serve mounts the companion behind `/app` while forwarding stripped paths to the restricted companion server.
+
 ## Route modules worth knowing
 
 | File | Responsibility | Notes |
