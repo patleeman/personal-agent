@@ -19,8 +19,7 @@ The managed sync repo tracks these roots:
 - `agents/**`
 - `settings/**`
 - `models/**`
-- `skills/**`
-- `notes/**`
+- `nodes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`

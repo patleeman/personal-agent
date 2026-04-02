@@ -10,7 +10,6 @@ import { dirname, join, normalize } from 'node:path';
 import {
   createUnifiedNode,
   getProfilesRoot,
-  listUnifiedSkillNodeDirs,
   loadMemoryPackageReferences,
   loadUnifiedNodes,
   migrateLegacyNodes,
@@ -266,9 +265,8 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
   const seenPaths = new Set<string>();
   const seenNames = new Set<string>();
   const skills: SkillItem[] = [];
-  const unifiedSkillDirs = listUnifiedSkillNodeDirs(profile, { profilesRoot });
 
-  for (const skillDir of [...unifiedSkillDirs, ...resolved.skillDirs]) {
+  for (const skillDir of resolved.skillDirs) {
     for (const filePath of listSkillFiles(skillDir)) {
       const normalizedPath = normalizeMemoryPath(filePath);
       if (!normalizedPath || seenPaths.has(normalizedPath)) {

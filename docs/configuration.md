@@ -77,8 +77,7 @@ Common durable roots:
 - `agents/**`
 - `settings/**`
 - `models/**`
-- `skills/**`
-- `notes/**`
+- `nodes/**`
 - `tasks/`
 - `projects/`
 
@@ -165,8 +164,7 @@ By default, sync tracks:
 - `agents/**`
 - `settings/**`
 - `models/**`
-- `skills/**`
-- `notes/**`
+- `nodes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`

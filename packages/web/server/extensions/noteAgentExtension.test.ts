@@ -72,7 +72,7 @@ function createToolContext() {
 }
 
 function notePath(noteId: string): string {
-  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'notes', noteId, 'INDEX.md');
+  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'nodes', noteId, 'INDEX.md');
 }
 
 describe('note agent extension', () => {
@@ -83,16 +83,14 @@ describe('note agent extension', () => {
       notePath('runpod'),
       `---
 id: runpod
-kind: note
 title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
 status: active
-tags:
-  - gpu
-  - infra
 updatedAt: 2026-03-08
-metadata:
-  type: project
+tags:
+  - noteType:project
+  - status:active
+  - type:note
 ---
 # Runpod
 
@@ -103,16 +101,14 @@ Runpod operational notes.
       notePath('desktop'),
       `---
 id: desktop
-kind: note
 title: Desktop Machine Notes
 summary: Local Ubuntu GPU workstation details.
 status: archived
-tags:
-  - gpu
-  - desktop
 updatedAt: 2026-03-09
-metadata:
-  type: reference
+tags:
+  - noteType:reference
+  - status:archived
+  - type:note
 ---
 # Desktop
 
@@ -141,7 +137,7 @@ Desktop operational notes.
       noteId: 'runpod',
     }, undefined, undefined, createToolContext());
     expect(showResult.isError).not.toBe(true);
-    expect(showResult.content[0]?.text).toContain('Note node @runpod');
+    expect(showResult.content[0]?.text).toContain('Note page @runpod');
     expect(showResult.content[0]?.text).toContain('Runpod operational notes.');
   });
 
@@ -159,7 +155,7 @@ Desktop operational notes.
     }, undefined, undefined, createToolContext());
 
     expect(created.isError).not.toBe(true);
-    expect(created.content[0]?.text).toContain('Created note node @quick-note');
+    expect(created.content[0]?.text).toContain('Created note page @quick-note');
     expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('id: quick-note');
     expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('summary: Tracks one-off details.');
 
@@ -184,7 +180,7 @@ Desktop operational notes.
     }, undefined, undefined, createToolContext());
 
     expect(updated.isError).not.toBe(true);
-    expect(updated.content[0]?.text).toContain('Updated note node @quick-note');
+    expect(updated.content[0]?.text).toContain('Updated note page @quick-note');
     expect(readFileSync(notePath('quick-note'), 'utf-8')).toContain('title: Updated Note');
   });
 
@@ -195,16 +191,14 @@ Desktop operational notes.
       notePath('runpod'),
       `---
 id: runpod
-kind: note
 title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
 status: active
-tags:
-  - gpu
-  - infra
 updatedAt: 2026-03-08
-metadata:
-  type: project
+tags:
+  - noteType:project
+  - status:active
+  - type:note
 ---
 # Runpod
 
@@ -215,17 +209,16 @@ Runpod operational notes.
       notePath('orphan'),
       `---
 id: orphan
-kind: note
 title: Orphan
 summary: Broken parent reference.
 status: active
-tags:
-  - test
 updatedAt: 2026-03-08
+tags:
+  - noteType:note
+  - status:active
+  - type:note
 links:
   parent: missing-parent
-metadata:
-  type: note
 ---
 # Orphan
 

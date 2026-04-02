@@ -1,10 +1,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import {
   getDurableModelsDir as getCanonicalDurableModelsDir,
+  getDurableNodesDir as getCanonicalDurableNodesDir,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableSettingsDir as getCanonicalDurableSettingsDir,
-  getDurableSkillsDir as getCanonicalDurableSkillsDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
+  listUnifiedSkillNodeDirs,
 } from '@personal-agent/core';
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
@@ -394,8 +395,8 @@ function getModelsRoot(options: ResolveProfileOptions = {}): string {
   return getCanonicalDurableModelsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
-function getSkillsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableSkillsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+function getNodesRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalDurableNodesDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
 function listProfilesInRoot(root: string): string[] {
@@ -460,7 +461,7 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
     repoDefaultsAgentDir
     || rootHasSharedDurableResources(getSettingsRoot(options), ['.json'])
     || rootHasSharedDurableResources(getModelsRoot(options), ['.json'])
-    || existsSync(getSkillsRoot(options))
+    || existsSync(getNodesRoot(options))
   ) {
     profiles.add('shared');
   }
@@ -496,72 +497,6 @@ function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string
 
 function isScopeAlias(value: string): boolean {
   return value === 'shared' || value === 'global';
-}
-
-function normalizeProfilesSelector(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) {
-    const profiles = value
-      .filter((entry): entry is string => typeof entry === 'string')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    return profiles.length > 0 ? profiles : undefined;
-  }
-
-  if (typeof value === 'string' && value.trim().length > 0) {
-    return [value.trim()];
-  }
-
-  return undefined;
-}
-
-function parseSimpleFrontmatter(content: string): Record<string, unknown> {
-  const match = content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!match) {
-    return {};
-  }
-
-  const rawFrontmatter = match[1] ?? '';
-  const result: Record<string, unknown> = {};
-  const lines = rawFrontmatter.split('\n');
-
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index] ?? '';
-    const keyValue = line.match(/^([\w-]+):\s*(.*)$/);
-    if (!keyValue) {
-      index += 1;
-      continue;
-    }
-
-    const key = keyValue[1] as string;
-    const value = (keyValue[2] ?? '').trim();
-
-    if (value.length === 0) {
-      const items: string[] = [];
-      index += 1;
-      while (index < lines.length && /^\s+-\s+/.test(lines[index] ?? '')) {
-        items.push((lines[index] ?? '').replace(/^\s+-\s+/, '').trim().replace(/^["']|["']$/g, ''));
-        index += 1;
-      }
-      result[key] = items;
-      continue;
-    }
-
-    if (value.startsWith('[') && value.endsWith(']')) {
-      result[key] = value
-        .slice(1, -1)
-        .split(',')
-        .map((item) => item.trim().replace(/^["']|["']$/g, ''))
-        .filter((item) => item.length > 0);
-      index += 1;
-      continue;
-    }
-
-    result[key] = value.replace(/^["']|["']$/g, '');
-    index += 1;
-  }
-
-  return result;
 }
 
 function fileDirectScopeApplies(baseName: string, profileName: string, knownProfiles: Set<string>): boolean | undefined {
@@ -635,42 +570,6 @@ function collectScopedFiles(root: string, extensions: string[], profileName: str
 
   output.sort();
   return dedupe(output);
-}
-
-function isSkillDefinitionFile(skillFile: string): boolean {
-  const name = basename(skillFile);
-  if (name === 'SKILL.md') {
-    return true;
-  }
-
-  if (name !== 'INDEX.md') {
-    return false;
-  }
-
-  const frontmatter = parseSimpleFrontmatter(readFileSync(skillFile, 'utf-8'));
-  const kind = typeof frontmatter.kind === 'string' ? frontmatter.kind.trim().toLowerCase() : undefined;
-  if (kind === 'skill') {
-    return true;
-  }
-
-  return typeof frontmatter.name === 'string' && typeof frontmatter.description === 'string';
-}
-
-function skillDefinitionAppliesToProfile(skillFile: string, root: string, profileName: string, knownProfiles: Set<string>): boolean {
-  const frontmatter = parseSimpleFrontmatter(readFileSync(skillFile, 'utf-8'));
-  const selector = normalizeProfilesSelector(frontmatter.profiles);
-  if (!selector || selector.length === 0) {
-    return relativePathAppliesToProfile(root, skillFile, profileName, knownProfiles);
-  }
-
-  return selector.some((entry) => entry === profileName || isScopeAlias(entry));
-}
-
-function collectScopedSkillDirs(root: string, profileName: string, knownProfiles: Set<string>): string[] {
-  const skillFiles = collectScopedFiles(root, ['.md'], profileName, knownProfiles)
-    .filter((filePath) => isSkillDefinitionFile(filePath));
-
-  return dedupe(skillFiles.filter((filePath) => skillDefinitionAppliesToProfile(filePath, root, profileName, knownProfiles)).map((filePath) => dirname(filePath)));
 }
 
 function isExtensionEntrypointFile(name: string): boolean {
@@ -785,14 +684,13 @@ export function resolveResourceProfile(
 
   const settingsRoot = getSettingsRoot(options);
   const modelsRoot = getModelsRoot(options);
-  const skillsRoot = getSkillsRoot(options);
 
   const durableAgentFile = profileName === 'shared'
     ? undefined
     : existingFile(resolveProfileAgentFilePath(profileName, options));
   const durableSettingsFiles = collectScopedFiles(settingsRoot, ['.json'], profileName, knownProfiles);
   const durableModelsFiles = collectScopedFiles(modelsRoot, ['.json'], profileName, knownProfiles);
-  const durableSkillDirs = collectScopedSkillDirs(skillsRoot, profileName, knownProfiles);
+  const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { profilesRoot });
 
   const layers: ProfileLayer[] = [];
 

@@ -20,7 +20,7 @@ function writeFile(path: string, content: string): void {
 }
 
 function notePath(profilesRoot: string, noteId: string): string {
-  return join(profilesRoot, '..', 'notes', noteId, 'INDEX.md');
+  return join(profilesRoot, '..', 'nodes', noteId, 'INDEX.md');
 }
 
 function createNoteRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
@@ -53,31 +53,43 @@ afterEach(async () => {
 });
 
 describe('note command', () => {
-  it('lists and shows shared note nodes, migrating legacy profile files', async () => {
+  it('lists and shows shared note nodes', async () => {
     const { repoRoot, profilesRoot, configPath, stateRoot } = createNoteRepo();
 
     writeFile(
-      join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md'),
+      notePath(profilesRoot, 'runpod'),
       `---
 id: runpod
 title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
-tags: [gpu, infra]
-updated: 2026-03-08
+status: active
+updatedAt: 2026-03-08
+tags:
+  - noteType:project
+  - status:active
+  - type:note
 ---
+# Runpod
+
 Runpod operational notes.
 `,
     );
 
     writeFile(
-      join(profilesRoot, 'assistant', 'agent', 'memory', 'desktop.md'),
+      notePath(profilesRoot, 'desktop'),
       `---
 id: desktop
 title: Desktop Machine Notes
 summary: Local Ubuntu GPU workstation details.
-tags: [gpu, desktop]
-updated: 2026-03-08
+status: active
+updatedAt: 2026-03-08
+tags:
+  - noteType:reference
+  - status:active
+  - type:note
 ---
+# Desktop
+
 Desktop operational notes.
 `,
     );
@@ -101,7 +113,7 @@ Desktop operational notes.
       parseErrors: Array<unknown>;
     };
 
-    expect(listPayload.noteDir).toBe(join(profilesRoot, '..', 'notes'));
+    expect(listPayload.noteDir).toBe(join(profilesRoot, '..', 'nodes'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
     expect(readFileSync(notePath(profilesRoot, 'runpod'), 'utf-8')).toContain('id: runpod');
@@ -132,13 +144,12 @@ kind: note
 title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
 status: active
-tags:
-  - gpu
-  - infra
 updatedAt: 2026-03-08
-metadata:
-  type: project
-  area: compute
+tags:
+  - area:compute
+  - noteType:project
+  - status:active
+  - type:note
 ---
 # Runpod
 
@@ -154,13 +165,12 @@ kind: note
 title: Desktop Machine Notes
 summary: Local Ubuntu GPU workstation details.
 status: archived
-tags:
-  - gpu
-  - desktop
 updatedAt: 2026-03-08
-metadata:
-  type: reference
-  area: compute
+tags:
+  - area:compute
+  - noteType:reference
+  - status:archived
+  - type:note
 ---
 # Desktop
 
@@ -215,9 +225,11 @@ kind: note
 title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
 status: active
-tags:
-  - gpu
 updatedAt: 2026-03-08
+tags:
+  - noteType:project
+  - status:active
+  - type:note
 links:
   related:
     - missing-parent
@@ -320,12 +332,12 @@ Runpod operational notes.
 
     const fileContent = readFileSync(payload.filePath, 'utf-8');
     expect(fileContent).toContain('id: quick-note');
-    expect(fileContent).toContain('kind: note');
+    expect(fileContent).toContain('type:note');
     expect(fileContent).toContain('summary: Tracks one-off details.');
     expect(fileContent).toContain('title: Quick Note');
-    expect(fileContent).toContain('area: notes');
-    expect(fileContent).toContain('role: structure');
-    expect(fileContent).not.toContain('tags:');
+    expect(fileContent).toContain('area:notes');
+    expect(fileContent).toContain('role:structure');
+    expect(fileContent).toContain('tags:');
     expect(fileContent).toContain('related:');
     expect(fileContent).toContain('- personal-agent');
 

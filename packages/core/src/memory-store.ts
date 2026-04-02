@@ -1,10 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { parseDocument, stringify } from 'yaml';
+import { createUnifiedNode, loadUnifiedNodes, type UnifiedNodeRecord } from './nodes.js';
 import { getDurableProfilesDir } from './runtime/paths.js';
-import { getMemoryDocsDir, migrateLegacyProfileMemoryDirs, type ResolveMemoryDocsOptions } from './memory-docs.js';
+import { getMemoryDocsDir, type ResolveMemoryDocsOptions } from './memory-docs.js';
 
-const INDEX_FILE_NAME = 'INDEX.md';
 const FRONTMATTER_DELIMITER = '---';
 const MEMORY_DOC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -124,11 +124,46 @@ export interface LintMemoryDocsResult {
   referenceErrors: MemoryDocReferenceError[];
 }
 
-function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string } {
+function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string; profilesRoot: string } {
   const profilesRoot = options.profilesRoot ?? getDurableProfilesDir();
 
   return {
     memoryDir: getMemoryDocsDir({ profilesRoot }),
+    profilesRoot,
+  };
+}
+
+function extractTagValue(tags: string[], key: string): string | undefined {
+  return tags
+    .map((tag) => tag.match(new RegExp(`^${key}:(.+)$`, 'i'))?.[1]?.trim())
+    .find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function isNoteNode(node: UnifiedNodeRecord): boolean {
+  return node.kinds.includes('note') || (!node.kinds.includes('project') && !node.kinds.includes('skill'));
+}
+
+function mapUnifiedNodeToMemoryDoc(node: UnifiedNodeRecord): ParsedMemoryDoc {
+  return {
+    filePath: node.filePath,
+    dirPath: node.dirPath,
+    fileName: basename(node.filePath),
+    packageId: node.id,
+    packagePath: node.dirPath,
+    id: node.id,
+    title: node.title,
+    summary: node.summary,
+    description: node.description,
+    type: extractTagValue(node.tags, 'noteType') ?? node.type,
+    status: node.status,
+    area: extractTagValue(node.tags, 'area'),
+    role: extractTagValue(node.tags, 'role') ?? extractTagValue(node.tags, 'noteType'),
+    parent: node.links.parent,
+    related: node.links.related,
+    updated: node.updatedAt ?? currentDateYyyyMmDd(),
+    body: node.body,
+    metadata: {},
+    referencePaths: loadMemoryPackageReferences(node.dirPath).map((reference) => reference.filePath),
   };
 }
 
@@ -200,15 +235,6 @@ function readOptionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function readRequiredString(attributes: Record<string, unknown>, key: string): string {
-  const value = readOptionalString(attributes[key]);
-  if (!value) {
-    throw new Error(`Frontmatter key ${key} is required and must be a non-empty string`);
-  }
-
-  return value;
-}
-
 function readStringArray(value: unknown, label: string): string[] {
   if (value === undefined || value === null) {
     return [];
@@ -266,83 +292,6 @@ function humanizeId(id: string): string {
 
 function normalizeMetadata(value: unknown): Record<string, unknown> {
   return isRecord(value) ? { ...value } : {};
-}
-
-function normalizeLinks(attributes: Record<string, unknown>): { parent?: string; related: string[] } {
-  const links = normalizeMetadata(attributes.links);
-  return {
-    parent: readOptionalString(links.parent),
-    related: readStringArray(links.related, 'Frontmatter key links.related'),
-  };
-}
-
-function deriveType(metadata: Record<string, unknown>): string {
-  const explicit = readOptionalString(metadata.type);
-  if (explicit) {
-    return explicit;
-  }
-
-  return 'note';
-}
-
-function deriveRole(metadata: Record<string, unknown>): string | undefined {
-  const explicit = readOptionalString(metadata.role);
-  if (!explicit) {
-    return undefined;
-  }
-
-  return explicit === 'hub' ? 'structure' : explicit;
-}
-
-function parseNoteNode(filePath: string): ParsedMemoryDoc {
-  const rawContent = readFileSync(filePath, 'utf-8');
-  const section = splitFrontmatter(rawContent);
-  const attributes = section.attributes;
-  const id = readRequiredString(attributes, 'id').toLowerCase();
-
-  if (!MEMORY_DOC_ID_PATTERN.test(id)) {
-    throw new Error(`Invalid note id: ${id}`);
-  }
-
-  const kind = readRequiredString(attributes, 'kind').toLowerCase();
-  if (kind !== 'note') {
-    throw new Error(`Expected kind: note, found: ${kind}`);
-  }
-
-  const metadata = normalizeMetadata(attributes.metadata);
-  const links = normalizeLinks(attributes);
-  const title = readOptionalString(attributes.title) ?? extractMarkdownTitle(section.body) ?? humanizeId(id);
-  const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(section.body) ?? `Durable note for ${title}.`;
-  const description = readOptionalString(attributes.description);
-  const updatedAt = readOptionalString(attributes.updatedAt)
-    ?? readOptionalString(attributes.updated)
-    ?? readOptionalString(metadata.updated)
-    ?? currentDateYyyyMmDd();
-
-  const dirPath = dirname(filePath);
-  const referencePaths = collectReferenceFiles(join(dirPath, 'references'));
-
-  return {
-    filePath,
-    dirPath,
-    fileName: basename(filePath),
-    packageId: id,
-    packagePath: dirPath,
-    id,
-    title,
-    summary,
-    ...(description ? { description } : {}),
-    type: deriveType(metadata),
-    status: readOptionalString(attributes.status) ?? 'active',
-    area: readOptionalString(metadata.area),
-    role: deriveRole(metadata),
-    parent: links.parent,
-    related: links.related,
-    updated: updatedAt,
-    body: section.body,
-    metadata,
-    referencePaths,
-  };
 }
 
 function collectReferenceFiles(rootDir: string): string[] {
@@ -413,41 +362,18 @@ export function validateMemoryDocId(id: string): void {
 }
 
 export function loadMemoryDocs(options: LoadMemoryDocsOptions = {}): LoadMemoryDocsResult {
-  const { memoryDir } = resolveMemoryContext(options);
-  migrateLegacyProfileMemoryDirs(options);
+  const { memoryDir, profilesRoot } = resolveMemoryContext(options);
+  const loaded = loadUnifiedNodes({ profilesRoot });
 
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-  }
+  const docs = loaded.nodes
+    .filter((node) => isNoteNode(node))
+    .map((node) => mapUnifiedNodeToMemoryDoc(node))
+    .sort((left, right) => left.id.localeCompare(right.id));
 
-  const docs: ParsedMemoryDoc[] = [];
-  const parseErrors: MemoryDocParseError[] = [];
-
-  for (const entry of readdirSync(memoryDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-
-    const filePath = join(memoryDir, entry.name, INDEX_FILE_NAME);
-    if (!existsSync(filePath)) {
-      continue;
-    }
-
-    try {
-      docs.push(parseNoteNode(filePath));
-    } catch (error) {
-      parseErrors.push({
-        filePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  docs.sort((left, right) => left.id.localeCompare(right.id));
   return {
     memoryDir,
     docs,
-    parseErrors,
+    parseErrors: loaded.parseErrors,
   };
 }
 
@@ -619,31 +545,29 @@ export function buildMemoryDocTemplate(options: {
   updated?: string;
 }): string {
   const description = options.description?.trim();
-  const metadata: Record<string, unknown> = {
-    ...(options.type ? { type: options.type.trim() } : {}),
-    ...(options.area ? { area: options.area.trim() } : {}),
-  };
-  const role = options.role?.trim().toLowerCase();
-  if (role) {
-    metadata.role = role === 'hub' ? 'structure' : role;
-  }
-
+  const normalizedRole = options.role?.trim().toLowerCase();
   const parent = options.parent?.trim();
   const related = normalizeCsvValues(options.related ?? []);
   const links: Record<string, unknown> = {
     ...(parent ? { parent } : {}),
     ...(related.length > 0 ? { related } : {}),
   };
+  const tags = [
+    'type:note',
+    `status:${options.status?.trim() || 'active'}`,
+    ...(options.type?.trim() ? [`noteType:${options.type.trim()}`] : []),
+    ...(options.area?.trim() ? [`area:${options.area.trim()}`] : []),
+    ...(normalizedRole ? [`role:${normalizedRole === 'hub' ? 'structure' : normalizedRole}`] : []),
+  ];
 
   return stringifyFrontmatter({
     id: options.id,
-    kind: 'note',
     title: options.title,
     summary: options.summary,
     ...(description ? { description } : {}),
     status: options.status?.trim() || 'active',
     updatedAt: options.updated?.trim() || currentDateYyyyMmDd(),
-    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+    tags,
     ...(Object.keys(links).length > 0 ? { links } : {}),
   }, `# ${options.title}\n\n${options.summary}`);
 }
@@ -661,47 +585,42 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     throw new Error('summary is required');
   }
 
-  const { memoryDir } = resolveMemoryContext(options);
-  mkdirSync(memoryDir, { recursive: true });
-  const targetDir = join(memoryDir, id);
-  const targetPath = join(targetDir, INDEX_FILE_NAME);
-  const overwrite = input.force === true;
-
-  if (existsSync(targetPath) && !overwrite) {
-    throw new Error(`Note node already exists at ${targetPath}. Pass force=true to overwrite.`);
-  }
-
-  mkdirSync(targetDir, { recursive: true });
-  writeFileSync(targetPath, buildMemoryDocTemplate({
+  const { memoryDir, profilesRoot } = resolveMemoryContext(options);
+  const role = input.role?.trim().toLowerCase();
+  const created = createUnifiedNode({
     id,
     title,
     summary,
-    description: input.description,
-    type: input.type,
-    status: input.status,
-    area: input.area,
-    role: input.role,
-    parent: input.parent,
+    description: input.description?.trim() || undefined,
+    status: input.status?.trim() || 'active',
+    tags: [
+      'type:note',
+      ...(input.type?.trim() ? [`noteType:${input.type.trim()}`] : []),
+      ...(input.area?.trim() ? [`area:${input.area.trim()}`] : []),
+      ...(role ? [`role:${role === 'hub' ? 'structure' : role}`] : []),
+    ],
+    parent: input.parent?.trim() || undefined,
     related: input.related,
-    updated: input.updated,
-  }), 'utf-8');
+    updatedAt: input.updated?.trim() || currentDateYyyyMmDd(),
+    force: input.force,
+  }, { profilesRoot });
 
-  const created = parseNoteNode(targetPath);
+  const doc = mapUnifiedNodeToMemoryDoc(created.node);
   return {
     memoryDir,
-    filePath: targetPath,
-    id: created.id,
-    title: created.title,
-    summary: created.summary,
-    description: created.description,
-    type: created.type,
-    status: created.status,
-    area: created.area,
-    role: created.role,
-    parent: created.parent,
-    related: created.related,
-    updated: created.updated,
-    overwritten: overwrite,
+    filePath: doc.filePath,
+    id: doc.id,
+    title: doc.title,
+    summary: doc.summary,
+    description: doc.description,
+    type: doc.type,
+    status: doc.status,
+    area: doc.area,
+    role: doc.role,
+    parent: doc.parent,
+    related: doc.related,
+    updated: doc.updated,
+    overwritten: created.overwritten,
   };
 }
 

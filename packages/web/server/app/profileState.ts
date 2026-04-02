@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import { getProfilesRoot, getStateRoot, listUnifiedSkillNodeDirs } from '@personal-agent/core';
+import { getProfilesRoot, getStateRoot } from '@personal-agent/core';
 import {
   listProfiles,
   materializeProfileToAgentDir,
@@ -137,10 +137,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
 
     return {
       additionalExtensionPaths: resolved.extensionEntries,
-      additionalSkillPaths: [...new Set([
-        ...listUnifiedSkillNodeDirs(profile, { profilesRoot: getProfilesRoot() }),
-        ...resolved.skillDirs,
-      ])],
+      additionalSkillPaths: [...new Set(resolved.skillDirs)],
       additionalPromptTemplatePaths: resolved.promptEntries,
       additionalThemePaths: resolved.themeEntries,
     };
