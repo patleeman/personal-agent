@@ -106,29 +106,6 @@ const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const conversationProjectsCache = new Map<string, ConversationProjectLinks>();
 
-function buildConversationPromotionBody(title: string, messages: MessageBlock[] | null | undefined): string {
-  const excerpt = (messages ?? [])
-    .filter((message) => message.type === 'user' || message.type === 'text' || message.type === 'summary' || message.type === 'context')
-    .slice(-10)
-    .map((message) => {
-      if (message.type === 'summary') {
-        return `## ${message.title}\n\n${message.text}`;
-      }
-      const label = message.type === 'user' ? 'User' : message.type === 'context' ? 'Context' : 'Assistant';
-      return `### ${label}\n\n${message.text}`;
-    })
-    .join('\n\n');
-
-  return [
-    `# ${title}`,
-    '',
-    'Promoted from a conversation.',
-    excerpt ? '' : 'Add the durable summary, decisions, and next steps here.',
-    excerpt ? '## Transcript excerpt' : '',
-    excerpt,
-  ].filter((line) => line.length > 0).join('\n\n');
-}
-
 export function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
   confirmedLive: boolean | null,
@@ -1837,7 +1814,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ?? visibleConversationBootstrap?.projects
     ?? (id ? conversationProjectsCache.get(id) ?? null : null);
   const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
-  const [promotionBusy, setPromotionBusy] = useState<'note' | 'project' | null>(null);
 
   useEffect(() => {
     if (!id || !conversationProjects) {
@@ -3472,54 +3448,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function promoteConversationToNote() {
-    if (!id || draft || promotionBusy) {
-      return;
-    }
-
-    setPromotionBusy('note');
-    try {
-      const created = await api.createNoteDoc({
-        title,
-        summary: title,
-        body: buildConversationPromotionBody(title, realMessages),
-      });
-      const relatedProjectIds = conversationProjects?.relatedProjectIds ?? [];
-      if (relatedProjectIds.length > 0) {
-        await api.saveNodeDetail(created.memory.id, {
-          relationships: relatedProjectIds.map((projectId) => ({ type: 'related', targetId: projectId })),
-        });
-      }
-      window.location.assign(`/nodes?kind=note&node=${encodeURIComponent(created.memory.id)}`);
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      setPromotionBusy(null);
-    }
-  }
-
-  async function promoteConversationToProject() {
-    if (!id || draft || promotionBusy) {
-      return;
-    }
-
-    setPromotionBusy('project');
-    try {
-      const created = await api.createProject({
-        title,
-        description: title,
-        summary: title,
-        documentContent: buildConversationPromotionBody(title, realMessages),
-      });
-      await api.addConversationProject(id, created.project.id);
-      await refetchConversationProjects({ resetLoading: false });
-      emitConversationProjectsChanged(id);
-      window.location.assign(`/nodes?kind=project&node=${encodeURIComponent(created.project.id)}`);
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-      setPromotionBusy(null);
-    }
-  }
-
   const handleExecutionTargetSelect = useCallback(async (targetId: string | null) => {
     if (executionSelectionBusy) {
       return;
@@ -4605,25 +4533,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <span className="text-dim">draft</span>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => { void promoteConversationToNote(); }}
-                  disabled={promotionBusy !== null}
-                  className="ui-toolbar-button"
-                  title={promotionBusy === 'note' ? 'Creating note from conversation' : 'Create note from conversation'}
-                >
-                  {promotionBusy === 'note' ? 'Creating note…' : 'Create note'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void promoteConversationToProject(); }}
-                  disabled={promotionBusy !== null}
-                  className="ui-toolbar-button"
-                  title={promotionBusy === 'project' ? 'Creating project from conversation' : 'Create project from conversation'}
-                >
-                  {promotionBusy === 'project' ? 'Creating project…' : 'Create project'}
-                </button>
-
                 {stream.isStreaming && (
                   <span
                     className="inline-flex items-center gap-1.5 text-accent"

@@ -263,7 +263,7 @@
   }
 
   .ui-browser-entry {
-    @apply block rounded-lg border border-border-subtle bg-base px-3 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
+    @apply block w-full rounded-lg border border-border-subtle bg-base px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base;
   }
 
   .ui-browser-entry-hover {

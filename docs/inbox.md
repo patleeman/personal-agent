@@ -325,7 +325,7 @@ These defaults are intentionally conservative.
 
 | Event | Default durable surfacing | Default interrupting notification |
 | --- | --- | --- |
-| Application restart complete | none beyond the initiating surface by default | none |
+| Application restart complete | unread inbox activity when the managed restart completes a blue/green cutover | none |
 | Application restart failed | unread inbox activity | maybe |
 | Web UI rollback or mark-bad | unread inbox activity | maybe |
 | Daemon auto-restarted to match the active profile | none by default | none |

@@ -1,12 +1,13 @@
 import { memo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { cx } from '../components/ui';
+import { BrowserRecordContent, ToolbarButton, browserRecordClass, cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
+import { CompanionSection } from './CompanionBrowser';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
@@ -402,6 +403,27 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   const messageCountLabel = `${formattedMessageCount} ${session.messageCount === 1 ? 'message' : 'messages'}`;
   const actionsId = `companion-conversation-actions-${session.id}`;
   const toggleActionsLabel = `${actionsRevealed ? 'Hide' : 'Show'} actions for ${titleText}`;
+  const unreadMessages = session.attentionUnreadMessageCount ?? 0;
+  const unreadActivity = session.attentionUnreadActivityCount ?? 0;
+  const labelText = 'Conversation';
+  const metaParts = [
+    ...flags,
+    messageCountLabel,
+    unreadMessages > 0 ? `${unreadMessages} unread message${unreadMessages === 1 ? '' : 's'}` : null,
+    unreadActivity > 0 ? `${unreadActivity} linked update${unreadActivity === 1 ? '' : 's'}` : null,
+  ].filter((value): value is string => Boolean(value));
+  const summary = deferredResumeText
+    ? (
+        <span>
+          <span className="text-dim">Wakeups </span>
+          <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-secondary'}>{deferredResumeText}</span>
+        </span>
+      )
+    : unreadMessages > 0
+      ? `${unreadMessages} new message${unreadMessages === 1 ? '' : 's'}`
+      : unreadActivity > 0
+        ? `${unreadActivity} linked update${unreadActivity === 1 ? '' : 's'}`
+        : 'Conversation transcript';
 
   const handleGestureIntent = useCallback((deltaX: number, deltaY: number) => {
     const intent = getCompanionConversationRowSwipeIntent({
@@ -538,8 +560,8 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   }, [actionsRevealed, onRevealActions]);
 
   return (
-    <div className="relative overflow-hidden border-b border-border-subtle last:border-b-0">
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
+    <div className="relative overflow-hidden rounded-lg">
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
         <div id={actionsId} role="group" aria-label={`Actions for ${titleText}`} className="pointer-events-none">
           <button
             type="button"
@@ -578,10 +600,10 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
         </div>
       </div>
 
-      <div className={cx(
-        'relative flex items-start gap-1 bg-base px-4 py-2.5 transition-transform duration-150 ease-out',
+      <div className={browserRecordClass(false, cx(
+        'relative py-3.5 transition-transform duration-150 ease-out',
         actionsRevealed ? '-translate-x-[5rem]' : 'translate-x-0',
-      )}>
+      ))}>
         <Link
           to={buildCompanionConversationPath(session.id)}
           onPointerDown={handlePointerDown}
@@ -593,84 +615,47 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchCancel}
           onClick={handleConversationClick}
-          className="min-w-0 flex-1 select-none rounded-[1.1rem] px-1 py-1 transition-[transform,color,background-color] duration-150 hover:text-primary active:scale-[0.99] active:bg-elevated/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+          className="block min-w-0 select-none rounded-md px-0.5 py-0.5 transition-[transform,color,background-color] duration-150 hover:text-primary active:scale-[0.99] active:bg-elevated/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
           style={COMPANION_TOUCH_ROW_STYLE}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{titleText}</h3>
-                {session.attentionUnreadMessageCount && session.attentionUnreadMessageCount > 0 ? (
-                  <span className="shrink-0 text-[10.5px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
-                ) : null}
-              </div>
-              {flags.length > 0 ? (
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-dim/85">
-                  {flags.map((flag) => (
-                    <span key={flag} className="uppercase tracking-[0.12em]">{flag}</span>
-                  ))}
-                </div>
-              ) : null}
-              {deferredResumeText ? (
-                <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-secondary">
-                  <span className={cx('shrink-0', hasReadyDeferredResumes ? 'text-warning' : 'text-accent')} aria-hidden="true">⏰</span>
-                  <span className="min-w-0 truncate">
-                    <span className="text-dim">Wakeups </span>
-                    <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-secondary'}>{deferredResumeText}</span>
-                  </span>
-                </p>
-              ) : null}
-            </div>
-
-            <div className="shrink-0 text-right text-[10.5px] text-dim tabular-nums">
-              <div>{formatSessionActivityAt(session)}</div>
-              <div className="mt-1 inline-flex items-center justify-end gap-1">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M7 18.5c-2.2 0-4-1.7-4-3.8V7.8C3 5.7 4.8 4 7 4h10c2.2 0 4 1.7 4 3.8v6.9c0 2.1-1.8 3.8-4 3.8H11l-4 2.5v-2.5H7Z" />
-                </svg>
-                <span aria-label={messageCountLabel}>{formattedMessageCount}</span>
-              </div>
-            </div>
-          </div>
+          <BrowserRecordContent
+            label={labelText}
+            aside={formatSessionActivityAt(session)}
+            heading={titleText}
+            summary={summary}
+            meta={metaParts.join(' · ')}
+            titleClassName="text-[15px]"
+            summaryClassName="text-[13px]"
+            metaClassName="text-[11px] break-words"
+          />
         </Link>
 
-        {canResume ? (
-          <button
-            type="button"
-            onClick={() => onResume(session)}
-            disabled={actionBusy}
-            aria-label={`Resume ${titleText}`}
-            title={`Resume ${titleText}`}
-            className="mt-0.5 inline-flex h-9 shrink-0 select-none items-center justify-center rounded-full border border-accent/25 bg-accent/10 px-3 text-[11px] font-medium text-accent transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:bg-accent/14 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+          {canResume ? (
+            <ToolbarButton
+              onClick={() => onResume(session)}
+              disabled={actionBusy}
+              aria-label={`Resume ${titleText}`}
+              title={`Resume ${titleText}`}
+              className="rounded-full"
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              {busyAction === 'resume' ? 'Resuming…' : 'Resume'}
+            </ToolbarButton>
+          ) : null}
+
+          <ToolbarButton
+            onClick={() => onRevealActions(actionsRevealed ? null : session.id)}
+            aria-label={toggleActionsLabel}
+            aria-controls={actionsId}
+            aria-expanded={actionsRevealed}
+            title={toggleActionsLabel}
+            className="rounded-full"
             style={COMPANION_TOUCH_BUTTON_STYLE}
           >
-            {busyAction === 'resume' ? 'Resuming…' : 'Resume'}
-          </button>
-        ) : null}
-
-        <button
-          type="button"
-          onClick={() => onRevealActions(actionsRevealed ? null : session.id)}
-          aria-label={toggleActionsLabel}
-          aria-controls={actionsId}
-          aria-expanded={actionsRevealed}
-          title={toggleActionsLabel}
-          className="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-dim transition-[transform,color,background-color] duration-150 hover:bg-elevated hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
-          style={COMPANION_TOUCH_BUTTON_STYLE}
-        >
-          {actionsRevealed ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="19" cy="12" r="1.5" />
-              <circle cx="5" cy="12" r="1.5" />
-            </svg>
-          )}
-        </button>
+            {actionsRevealed ? 'Hide actions' : 'Actions'}
+          </ToolbarButton>
+        </div>
       </div>
     </div>
   );
@@ -704,25 +689,22 @@ function SessionSection({
   }
 
   return (
-    <section className="pt-5 first:pt-0">
-      <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
-      <div className="mt-2 border-y border-border-subtle">
-        {sessions.map((session) => (
-          <CompanionConversationRow
-            key={session.id}
-            session={session}
-            inWorkspace={workspaceSessionIds.has(session.id)}
-            actionBusy={actionBusyId === session.id}
-            busyAction={actionBusyId === session.id ? actionBusyKind : null}
-            actionsRevealed={revealedActionId === session.id}
-            onSetArchived={onSetArchived}
-            onResume={onResume}
-            onRevealActions={onRevealActions}
-          />
-        ))}
-        {footer ? <div className="border-t border-border-subtle px-4 py-3">{footer}</div> : null}
-      </div>
-    </section>
+    <CompanionSection title={title}>
+      {sessions.map((session) => (
+        <CompanionConversationRow
+          key={session.id}
+          session={session}
+          inWorkspace={workspaceSessionIds.has(session.id)}
+          actionBusy={actionBusyId === session.id}
+          busyAction={actionBusyId === session.id ? actionBusyKind : null}
+          actionsRevealed={revealedActionId === session.id}
+          onSetArchived={onSetArchived}
+          onResume={onResume}
+          onRevealActions={onRevealActions}
+        />
+      ))}
+      {footer ? <div className="px-1 pt-1">{footer}</div> : null}
+    </CompanionSection>
   );
 }
 
@@ -927,35 +909,32 @@ export function CompanionConversationsPage() {
             ) : null}
             {visibleError ? <p className="mt-1 text-[11px] text-danger">{visibleError}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
+              <ToolbarButton
                 onClick={() => { void handleRefresh(); }}
                 disabled={refreshing}
-                className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                className="rounded-full"
                 style={COMPANION_TOUCH_BUTTON_STYLE}
               >
                 {refreshing ? 'Refreshing…' : 'Refresh'}
-              </button>
+              </ToolbarButton>
               {installAvailable ? (
-                <button
-                  type="button"
+                <ToolbarButton
                   onClick={() => { void promptInstall(); }}
                   disabled={installBusy}
-                  className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                  className="rounded-full"
                   style={COMPANION_TOUCH_BUTTON_STYLE}
                 >
                   {installBusy ? 'Installing…' : 'Install app'}
-                </button>
+                </ToolbarButton>
               ) : null}
               {notificationsSupported && secureContext && notificationPermission === 'default' ? (
-                <button
-                  type="button"
+                <ToolbarButton
                   onClick={() => { void requestNotificationPermission(); }}
-                  className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+                  className="rounded-full"
                   style={COMPANION_TOUCH_BUTTON_STYLE}
                 >
                   Enable alerts
-                </button>
+                </ToolbarButton>
               ) : null}
             </div>
           </div>
@@ -985,16 +964,15 @@ export function CompanionConversationsPage() {
               {orderedArchivedSessions.length > 0 ? (
                 <section className="pt-5">
                   <div className="px-4">
-                    <button
-                      type="button"
+                    <ToolbarButton
                       onClick={() => setShowArchived((current) => !current)}
-                      className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+                      className="rounded-full"
                       style={COMPANION_TOUCH_BUTTON_STYLE}
                     >
                       {showArchived
                         ? 'Hide archived chats'
                         : `Show ${orderedArchivedSessions.length} archived chat${orderedArchivedSessions.length === 1 ? '' : 's'}`}
-                    </button>
+                    </ToolbarButton>
                   </div>
                 </section>
               ) : null}

@@ -95,6 +95,7 @@ function readDesktopSession(req: Request, res: Response): ReturnType<typeof read
     return null;
   }
 
+  setDesktopSessionCookie(req, res, sessionToken);
   return session;
 }
 
@@ -140,6 +141,7 @@ function ensureCompanionSession(req: Request, res: Response): ReturnType<typeof 
     return null;
   }
 
+  setCompanionSessionCookie(req, res, sessionToken);
   return session;
 }
 

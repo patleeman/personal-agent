@@ -191,6 +191,7 @@ describe('registerServerRoutes smoke test', () => {
     ]);
 
     expect(liveSessionsResponse.status).toBe(200);
+    expect(liveSessionsResponse.headers.get('set-cookie')).toContain('pa_companion=');
     expect(conversationsResponse.status).toBe(200);
     expect(await liveSessionsResponse.json()).toEqual(expect.any(Array));
     expect(await conversationsResponse.json()).toEqual(expect.objectContaining({

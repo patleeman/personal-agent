@@ -315,6 +315,7 @@ export function readCompanionSession(
       const lastUsedAtMs = Date.parse(session.lastUsedAt);
       if (!Number.isFinite(lastUsedAtMs) || now.getTime() - lastUsedAtMs >= SESSION_TOUCH_INTERVAL_MS) {
         session.lastUsedAt = toIso(now);
+        session.expiresAt = toIso(new Date(now.getTime() + SESSION_TTL_MS));
       }
     }
 
