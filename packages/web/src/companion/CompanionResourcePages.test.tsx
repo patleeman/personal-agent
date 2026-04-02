@@ -109,6 +109,8 @@ describe('companion resource pages', () => {
     expect(html).toContain('type:project AND status:active');
     expect(html).toContain('Projects');
     expect(html).toContain('Active project');
+    expect(html).not.toContain('Tracked work with status, blockers, and linked conversations.');
+    expect(html).not.toContain('Durable references, distilled writeups, and structured knowledge.');
     expect(html).toContain('/app/projects/active-project');
     expect(html).not.toContain('/app/notes/memory-index');
     expect(html).not.toContain('/app/skills/agent-browser');

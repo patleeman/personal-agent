@@ -12,8 +12,12 @@ describe('shouldServeCompanionIndex', () => {
   });
 
   it('serves stripped companion routes for path-proxy deployments', () => {
+    expect(shouldServeCompanionIndex('/inbox')).toBe(true);
     expect(shouldServeCompanionIndex('/conversations')).toBe(true);
     expect(shouldServeCompanionIndex('/conversations/conv-123')).toBe(true);
+    expect(shouldServeCompanionIndex('/tasks')).toBe(true);
+    expect(shouldServeCompanionIndex('/system')).toBe(true);
+    expect(shouldServeCompanionIndex('/pages')).toBe(true);
     expect(shouldServeCompanionIndex('/capture')).toBe(true);
     expect(shouldServeCompanionIndex('/projects')).toBe(true);
     expect(shouldServeCompanionIndex('/notes/memory-index')).toBe(true);

@@ -400,41 +400,6 @@ export function CompanionKnowledgePage() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3">
-                <BrowserRecordRow
-                  to={COMPANION_PROJECTS_PATH}
-                  label="Pages"
-                  heading="Projects"
-                  summary="Tracked work with status, blockers, and linked conversations."
-                  meta={`${countsByKind.project} total`}
-                  className="py-3.5"
-                  titleClassName="text-[15px]"
-                  summaryClassName="text-[13px]"
-                  metaClassName="text-[11px] break-words"
-                />
-                <BrowserRecordRow
-                  to={COMPANION_NOTES_PATH}
-                  label="Pages"
-                  heading="Notes"
-                  summary="Durable references, distilled writeups, and structured knowledge."
-                  meta={`${countsByKind.note} total`}
-                  className="py-3.5"
-                  titleClassName="text-[15px]"
-                  summaryClassName="text-[13px]"
-                  metaClassName="text-[11px] break-words"
-                />
-                <BrowserRecordRow
-                  to={COMPANION_SKILLS_PATH}
-                  label="Pages"
-                  heading="Skills"
-                  summary="Reusable procedures, workflows, and agent operating guidance."
-                  meta={`${countsByKind.skill} total`}
-                  className="py-3.5"
-                  titleClassName="text-[15px]"
-                  summaryClassName="text-[13px]"
-                  metaClassName="text-[11px] break-words"
-                />
-              </div>
             </div>
           </section>
 
