@@ -1,11 +1,12 @@
 import type { Express } from 'express';
+import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import type { ServerRouteContext } from './context.js';
 import {
   clearInboxForCurrentProfile,
   findActivityRecord,
-  listActivityForCurrentProfile,
   markActivityReadState,
 } from '../automation/inboxService.js';
+import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { logError } from '../middleware/index.js';
 
@@ -13,18 +14,31 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for activity routes');
 };
 
-function initializeActivityRoutesContext(context: Pick<ServerRouteContext, 'getCurrentProfile'>): void {
+let getSavedWebUiPreferencesFn: () => SavedWebUiPreferences = () => ({
+  openConversationIds: [],
+  pinnedConversationIds: [],
+  archivedConversationIds: [],
+  nodeBrowserViews: [],
+});
+
+let listActivityForCurrentProfileFn: () => Array<{ read?: boolean }> = () => [];
+
+function initializeActivityRoutesContext(
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences' | 'listActivityForCurrentProfile'>,
+): void {
   getCurrentProfileFn = context.getCurrentProfile;
+  getSavedWebUiPreferencesFn = context.getSavedWebUiPreferences;
+  listActivityForCurrentProfileFn = context.listActivityForCurrentProfile;
 }
 
 export function registerActivityRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences' | 'listActivityForCurrentProfile'>,
 ): void {
   initializeActivityRoutesContext(context);
   router.get('/api/activity/count', (_req, res) => {
     try {
-      res.json({ count: listActivityForCurrentProfile(getCurrentProfileFn()).filter(a => !a.read).length });
+      res.json({ count: listActivityForCurrentProfileFn().filter((entry) => !entry.read).length });
     } catch {
       res.json({ count: 0 });
     }
@@ -32,7 +46,15 @@ export function registerActivityRoutes(
 
   router.post('/api/inbox/clear', (_req, res) => {
     try {
-      const result = clearInboxForCurrentProfile(getCurrentProfileFn());
+      const saved = getSavedWebUiPreferencesFn();
+      const result = clearInboxForCurrentProfile({
+        profile: getCurrentProfileFn(),
+        sessions: listConversationSessionsSnapshot(),
+        openConversationIds: [...saved.openConversationIds, ...saved.pinnedConversationIds],
+      });
+      if (result.deletedActivityIds.length > 0 || result.clearedConversationIds.length > 0) {
+        invalidateAppTopics('activity', 'sessions');
+      }
       res.json({
         ok: true,
         deletedActivityIds: result.deletedActivityIds,
@@ -49,7 +71,7 @@ export function registerActivityRoutes(
 
   router.get('/api/activity', (_req, res) => {
     try {
-      res.json(listActivityForCurrentProfile(getCurrentProfileFn()));
+      res.json(listActivityForCurrentProfileFn());
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -88,7 +110,7 @@ export function registerActivityRoutes(
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      invalidateAppTopics('activity');
+      invalidateAppTopics('activity', 'sessions');
       res.json({ ok: true });
     } catch (err) {
       logError('request handler error', {

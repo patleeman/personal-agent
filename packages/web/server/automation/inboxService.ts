@@ -1,107 +1,220 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { getPiAgentRuntimeDir } from '@personal-agent/core';
+import { rmSync } from 'node:fs';
+import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
+import {
+  clearActivityConversationLinks,
+  getActivityConversationLink,
+  listProfileActivityEntries,
+  loadProfileActivityReadState,
+  markConversationAttentionRead,
+  saveProfileActivityReadState,
+} from '@personal-agent/core';
+import {
+  listArchivedAttentionSessions,
+  listStandaloneActivityRecords,
+} from './inbox.js';
 
-type ActivityEntry = {
-  id: string;
-  profile: string;
-  kind: string;
-  summary: string;
-  createdAt: string;
-  details?: string;
+type ActivityEntry = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
   read?: boolean;
-  relatedProjectIds?: string[];
   relatedConversationIds?: string[];
-  notificationState?: string;
 };
 
 export type ActivityRecord = {
   entry: ActivityEntry;
-  stateRoot: string;
+  stateRoot?: string;
   read: boolean;
 };
 
-const AGENT_DIR = getPiAgentRuntimeDir();
-
-export function getInboxDirForProfile(profile: string) {
-  return join(AGENT_DIR, 'profiles', profile, 'inbox');
+function resolveDaemonRoot(): string {
+  return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
-export function listActivityForCurrentProfile(profile: string): ActivityEntry[] {
-  const inboxDir = getInboxDirForProfile(profile);
-  if (!existsSync(inboxDir)) {
+function listActivityStateRoots(): Array<string | undefined> {
+  try {
+    return [undefined, resolveDaemonRoot()];
+  } catch {
+    return [undefined];
+  }
+}
+
+function loadReadState(stateRoot: string | undefined, profile: string): Set<string> {
+  return loadProfileActivityReadState({ stateRoot, profile });
+}
+
+function saveReadState(stateRoot: string | undefined, profile: string, ids: Set<string>): void {
+  try {
+    saveProfileActivityReadState({ stateRoot, profile, ids });
+  } catch {
+    // Ignore read-state write failures for inbox best-effort mutations.
+  }
+}
+
+function attachActivityConversationLinks(
+  profile: string,
+  entry: ReturnType<typeof listProfileActivityEntries>[number]['entry'],
+  stateRoot?: string,
+): ActivityEntry {
+  const relatedConversationIds = getActivityConversationLink({
+    stateRoot,
+    profile,
+    activityId: entry.id,
+  })?.relatedConversationIds;
+
+  if (!relatedConversationIds || relatedConversationIds.length === 0) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    relatedConversationIds,
+  };
+}
+
+function listActivityRecordsForProfile(profile: string): ActivityRecord[] {
+  const records: ActivityRecord[] = [];
+
+  for (const stateRoot of listActivityStateRoots()) {
+    const readState = loadReadState(stateRoot, profile);
+    const entries = listProfileActivityEntries({ stateRoot, profile });
+
+    for (const { entry } of entries) {
+      records.push({
+        stateRoot,
+        entry: attachActivityConversationLinks(profile, entry, stateRoot),
+        read: readState.has(entry.id),
+      });
+    }
+  }
+
+  records.sort((left, right) => {
+    const timestampCompare = right.entry.createdAt.localeCompare(left.entry.createdAt);
+    if (timestampCompare !== 0) {
+      return timestampCompare;
+    }
+
+    if (left.stateRoot !== right.stateRoot) {
+      return left.stateRoot ? 1 : -1;
+    }
+
+    return right.entry.id.localeCompare(left.entry.id);
+  });
+
+  const deduped: ActivityRecord[] = [];
+  const seenIds = new Set<string>();
+
+  for (const record of records) {
+    if (seenIds.has(record.entry.id)) {
+      continue;
+    }
+
+    seenIds.add(record.entry.id);
+    deduped.push(record);
+  }
+
+  return deduped;
+}
+
+function deleteActivityIdsForProfile(profile: string, activityIds: Iterable<string>): string[] {
+  const requestedIds = [...new Set(Array.from(activityIds)
+    .filter((activityId): activityId is string => typeof activityId === 'string')
+    .map((activityId) => activityId.trim())
+    .filter((activityId) => activityId.length > 0))];
+
+  if (requestedIds.length === 0) {
     return [];
   }
 
-  const entries: ActivityEntry[] = [];
-  const files = readdirSync(inboxDir).filter((file) => file.endsWith('.json'));
+  const requestedIdSet = new Set(requestedIds);
+  const deletedIds = new Set<string>();
 
-  for (const file of files) {
-    try {
-      const content = readFileSync(join(inboxDir, file), 'utf-8');
-      const record = JSON.parse(content) as ActivityRecord;
-      entries.push({ ...record.entry, read: record.read });
-    } catch {
-      // Ignore corrupted records
+  for (const stateRoot of listActivityStateRoots()) {
+    const entries = listProfileActivityEntries({ stateRoot, profile });
+    const matchingEntries = entries.filter(({ entry }) => requestedIdSet.has(entry.id));
+    if (matchingEntries.length === 0) {
+      continue;
+    }
+
+    for (const { path, entry } of matchingEntries) {
+      rmSync(path, { force: true });
+      clearActivityConversationLinks({ stateRoot, profile, activityId: entry.id });
+      deletedIds.add(entry.id);
+    }
+
+    const readState = loadReadState(stateRoot, profile);
+    let readStateChanged = false;
+    for (const { entry } of matchingEntries) {
+      readStateChanged = readState.delete(entry.id) || readStateChanged;
+    }
+    if (readStateChanged) {
+      saveReadState(stateRoot, profile, readState);
     }
   }
 
-  return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return [...deletedIds];
+}
+
+function markConversationSessionsRead(
+  profile: string,
+  sessions: Array<{ id: string; messageCount: number }>,
+): string[] {
+  const dedupedSessions = [...new Map(sessions.map((session) => [session.id, session])).values()];
+
+  for (const session of dedupedSessions) {
+    markConversationAttentionRead({
+      profile,
+      conversationId: session.id,
+      messageCount: session.messageCount,
+    });
+  }
+
+  return dedupedSessions.map((session) => session.id);
+}
+
+export function listActivityForCurrentProfile(profile: string): ActivityEntry[] {
+  return listActivityRecordsForProfile(profile).map(({ entry, read }) => ({
+    ...entry,
+    read,
+  }));
 }
 
 export function findActivityRecord(profile: string, activityId: string): ActivityRecord | undefined {
-  const inboxDir = getInboxDirForProfile(profile);
-  const filePath = join(inboxDir, `${activityId}.json`);
-  if (!existsSync(filePath)) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as ActivityRecord;
-  } catch {
-    return undefined;
-  }
+  return listActivityRecordsForProfile(profile).find((record) => record.entry.id === activityId);
 }
 
 export function markActivityReadState(profile: string, activityId: string, read: boolean): boolean {
-  const inboxDir = getInboxDirForProfile(profile);
-  const filePath = join(inboxDir, `${activityId}.json`);
-  if (!existsSync(filePath)) {
-    return false;
-  }
+  let changed = false;
 
-  try {
-    const record = JSON.parse(readFileSync(filePath, 'utf-8')) as ActivityRecord;
-    if (record.read === read) {
-      return true;
+  for (const stateRoot of listActivityStateRoots()) {
+    const entries = listProfileActivityEntries({ stateRoot, profile });
+    if (!entries.some(({ entry }) => entry.id === activityId)) {
+      continue;
     }
 
-    record.read = read;
-    writeFileSync(filePath, JSON.stringify(record, null, 2), 'utf-8');
-    return true;
-  } catch {
-    return false;
+    const state = loadReadState(stateRoot, profile);
+    if (read) {
+      state.add(activityId);
+    } else {
+      state.delete(activityId);
+    }
+    saveReadState(stateRoot, profile, state);
+    changed = true;
   }
+
+  return changed;
 }
 
-export function clearInboxForCurrentProfile(profile: string) {
-  const inboxDir = getInboxDirForProfile(profile);
-  if (!existsSync(inboxDir)) {
-    return { deletedActivityIds: [], clearedConversationIds: [] };
-  }
+export function clearInboxForCurrentProfile(input: {
+  profile: string;
+  sessions: Array<{ id: string; messageCount: number; needsAttention?: boolean }>;
+  openConversationIds: Iterable<string>;
+}) {
+  const activityRecords = listActivityRecordsForProfile(input.profile);
+  const standaloneActivities = listStandaloneActivityRecords(activityRecords, input.sessions.map((session) => session.id));
+  const archivedAttentionSessions = listArchivedAttentionSessions(input.sessions, input.openConversationIds);
+  const deletedActivityIds = deleteActivityIdsForProfile(input.profile, standaloneActivities.map((record) => record.entry.id));
+  const clearedConversationIds = markConversationSessionsRead(input.profile, archivedAttentionSessions);
 
-  const files = readdirSync(inboxDir).filter((file) => file.endsWith('.json'));
-  const deletedActivityIds: string[] = [];
-
-  for (const file of files) {
-    const activityId = file.replace('.json', '');
-    try {
-      rmSync(join(inboxDir, file));
-      deletedActivityIds.push(activityId);
-    } catch {
-      // Ignore
-    }
-  }
-
-  return { deletedActivityIds, clearedConversationIds: [] };
+  return {
+    deletedActivityIds,
+    clearedConversationIds,
+  };
 }

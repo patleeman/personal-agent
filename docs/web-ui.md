@@ -148,6 +148,7 @@ You can:
 
 - filter unread vs all
 - mark everything read
+- clear surfaced inbox items (deletes standalone activity and marks archived attention conversations read)
 - open individual items or conversations
 
 See [Inbox and Activity](./inbox.md).
