@@ -324,6 +324,8 @@ Settings lets you change:
 
 The settings rail also links out to Runs, Scheduled tasks, Tools, and Instructions for operational work.
 
+Each settings page uses the same basic treatment: one stacked content column with muted section panels and simple dividers instead of nested cards or page-specific box patterns.
+
 Switching the active profile affects:
 
 - inbox
