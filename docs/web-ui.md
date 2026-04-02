@@ -75,6 +75,8 @@ For app-level access control on remote devices:
 - enter it once on the remote desktop browser or companion app
 - the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
 - the browser stays signed in until you revoke that paired session
+- the companion chats view mirrors desktop workspace-open conversations separately from live-but-not-open and needs-review conversations, so mobile archive/open actions track the same shared layout
+- companion setup/recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
 
