@@ -344,19 +344,9 @@ Use `--fresh` for first-time setup into a new/empty remote. Use `--bootstrap` on
 
 The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module, and enables periodic background git sync.
 
-Synced roots include:
+The managed sync repo syncs everything under `<stateRoot>/sync` by default. Typical durable paths there include `profiles/**`, `agents/**`, `settings/**`, `models/**`, `skills/**`, `notes/**`, `nodes/**`, `tasks/**`, `projects/**`, `pi-agent/sessions/**`, and `pi-agent/state/conversation-attention/**`.
 
-- `profiles/*.json`
-- `profiles/<profile>/agent/AGENTS.md`
-- `agents/**`
-- `settings/**`
-- `models/**`
-- `nodes/**`
-- `tasks/**`
-- `projects/**`
-- `pi-agent/sessions/**`
-
-Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced. Conversation attention read-state is synced so “needs review” follows across machines.
+Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Conversation attention read-state is synced so “needs review” follows across machines.
 
 See [Sync Guide](./sync.md).
 

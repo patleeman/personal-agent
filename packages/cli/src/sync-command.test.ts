@@ -96,8 +96,10 @@ describe('sync conversation attention merge command', () => {
     });
   });
 
-  it('syncs profile AGENTS files in the managed gitignore', () => {
-    expect(syncRepoGitignore()).toContain('!profiles/*/agent/AGENTS.md');
+  it('syncs everything in the managed sync repo by default', () => {
+    expect(syncRepoGitignore()).not.toContain('*\n!.gitignore');
+    expect(syncRepoGitignore()).not.toContain('!profiles/*/agent/AGENTS.md');
+    expect(syncRepoGitignore()).toContain('Sync everything under this repo by default.');
   });
 
   it('syncs conversation attention state with a semantic merge driver', () => {

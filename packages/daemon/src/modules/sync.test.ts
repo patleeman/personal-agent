@@ -239,8 +239,9 @@ describe('sync module', () => {
     await module.handleEvent(createEvent('sync.run.requested'), context);
 
     const gitignore = readFileSync(join(repoDir, '.gitignore'), 'utf-8');
-    expect(gitignore).toContain('!profiles/*/agent/AGENTS.md');
-    expect(gitignore).toContain('!pi-agent/state/conversation-attention/**');
+    expect(gitignore).toContain('Sync everything under this repo by default.');
+    expect(gitignore).not.toContain('!profiles/*/agent/AGENTS.md');
+    expect(gitignore).not.toContain('!pi-agent/state/conversation-attention/**');
 
     const gitattributes = readFileSync(join(repoDir, '.gitattributes'), 'utf-8');
     expect(gitattributes).toContain('pi-agent/sessions/**/*.jsonl text eol=lf merge=union');

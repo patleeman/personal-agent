@@ -12,20 +12,24 @@ After setup, the daemon periodically runs git sync in the background and the Web
 
 ## What gets synced
 
-The managed sync repo tracks these roots:
+The managed sync repo now syncs everything under the sync root.
 
-- `profiles/*.json`
-- `profiles/<profile>/agent/AGENTS.md`
+In practice that means anything placed under `~/.local/state/personal-agent/sync/` is eligible to sync across machines.
+Typical durable paths include:
+
+- `profiles/**`
 - `agents/**`
 - `settings/**`
 - `models/**`
+- `skills/**`
+- `notes/**`
 - `nodes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
-Machine-local runtime files stay out of the synced surface.
+Machine-local runtime files stay out of the synced surface by living outside the sync root.
 That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
 `config/config.json` remains machine-local by default.
