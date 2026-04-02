@@ -69,6 +69,7 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
   registerProjectRoutes(app, context);
 
   registerNodeRoutes(app, context);
+  registerNodeRoutes(companionApp, context);
   registerCompanionProjectRoutes(companionApp, context);
 
   registerConversationRoutes(app, context);

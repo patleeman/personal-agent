@@ -560,7 +560,7 @@ export function App() {
                       <Route path="tasks" element={suspendRoute(<CompanionTasksPage />)} />
                       <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
-                      <Route path="knowledge" element={suspendRoute(<CompanionKnowledgePage />)} />
+                      <Route path="pages" element={suspendRoute(<CompanionKnowledgePage />)} />
                       <Route path="capture" element={suspendRoute(<CompanionQuickNotePage />)} />
                       <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
