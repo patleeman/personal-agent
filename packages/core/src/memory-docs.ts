@@ -11,7 +11,7 @@ import {
 } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getDurableNodesDir, getDurableProfilesDir } from './runtime/paths.js';
+import { getDurableNotesDir, getDurableProfilesDir } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {
   profilesRoot?: string;
@@ -37,7 +37,7 @@ function resolveProfilesRootForMemory(options: ResolveMemoryDocsOptions = {}): s
 }
 
 export function getMemoryDocsDir(options: ResolveMemoryDocsOptions = {}): string {
-  return getDurableNodesDir(dirname(resolveProfilesRootForMemory(options)));
+  return getDurableNotesDir(dirname(resolveProfilesRootForMemory(options)));
 }
 
 function resolveLegacyMemoryDir(options: ResolveMemoryDocsOptions = {}): string {

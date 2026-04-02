@@ -9,11 +9,11 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, normalize } from 'node:path';
 import {
   createUnifiedNode,
+  getDurableNotesDir,
+  getDurableSkillsDir,
   getProfilesRoot,
   loadMemoryPackageReferences,
   loadUnifiedNodes,
-  migrateLegacyNodes,
-  resolveUnifiedNodesDir,
 } from '@personal-agent/core';
 import { resolveResourceProfile } from '@personal-agent/resources';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
@@ -37,10 +37,10 @@ export function isEditableMemoryFilePath(filePath: string, profile: string): boo
 
   const profilesRoot = getProfilesRoot();
   const sharedRoot = dirname(profilesRoot);
-  const noteDir = normalizeMemoryPath(resolveUnifiedNodesDir({ profilesRoot }));
+  const noteDir = normalizeMemoryPath(getDurableNotesDir(sharedRoot));
   const profileDir = normalizeMemoryPath(join(profilesRoot, profile));
   const legacyAgentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
-  const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
+  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(sharedRoot));
 
   return normalized.startsWith(`${noteDir}/`)
     || normalized.startsWith(`${profileDir}/`)
@@ -131,16 +131,13 @@ function mapLoadedMemoryDoc(doc: ReturnType<typeof loadUnifiedNodes>['nodes'][nu
   };
 }
 
-function ensureUnifiedNodesMaterialized(): string {
+function resolveMemoryDocsDir(): string {
   const profilesRoot = getProfilesRoot();
-  const memoryDir = resolveUnifiedNodesDir({ profilesRoot });
-  mkdirSync(memoryDir, { recursive: true });
-  migrateLegacyNodes({ profilesRoot });
-  return memoryDir;
+  return getDurableNotesDir(dirname(profilesRoot));
 }
 
 export function ensureMemoryDocsDir(): string {
-  return ensureUnifiedNodesMaterialized();
+  return resolveMemoryDocsDir();
 }
 
 export function clearMemoryBrowserCaches(): void {
@@ -162,7 +159,6 @@ export function buildRecentReadUsage(_paths: string[]): Map<string, RecentReadUs
 }
 
 export function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
-  ensureUnifiedNodesMaterialized();
   const docs = loadUnifiedNodes({ profilesRoot: getProfilesRoot() }).nodes
     .filter((doc) => doc.kinds.includes('note') || (!doc.kinds.includes('project') && !doc.kinds.includes('skill')))
     .map((doc) => mapLoadedMemoryDoc(doc, options.includeSearchText === true));
@@ -263,7 +259,6 @@ export interface CreatedSkillDoc {
 
 export function listSkillsForProfile(profile: string): SkillItem[] {
   const profilesRoot = getProfilesRoot();
-  ensureUnifiedNodesMaterialized();
   const resolved = resolveResourceProfile(profile, {
     repoRoot: process.cwd(),
     profilesRoot,
@@ -562,7 +557,6 @@ export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
 }
 
 export function readNoteDetail(memoryId: string, profile: string): MemoryDocDetail {
-  ensureUnifiedNodesMaterialized();
   const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
   const doc = loaded.nodes.find((entry) => entry.id === memoryId && (entry.kinds.includes('note') || (!entry.kinds.includes('project') && !entry.kinds.includes('skill'))));
   if (!doc) throw new Error('Note not found.');

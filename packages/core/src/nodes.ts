@@ -13,6 +13,7 @@ import { readProject, type ProjectDocument, type ProjectMilestoneDocument, type 
 import { getDurableNodesDir, getDurableProfilesDir, getDurableProjectsDir, getDurableNotesDir, getDurableSkillsDir } from './runtime/paths.js';
 
 const INDEX_FILE_NAME = 'INDEX.md';
+const LEGACY_SKILL_FILE_NAMES = [INDEX_FILE_NAME, 'SKILL.md'] as const;
 const FRONTMATTER_DELIMITER = '---';
 const NODE_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -407,18 +408,51 @@ function buildSearchText(node: {
     .toLowerCase();
 }
 
+function resolveNodeDirectoryPath(filePath: string): string {
+  const fileName = basename(filePath).toLowerCase();
+  if (fileName === INDEX_FILE_NAME.toLowerCase() || fileName === 'skill.md' || fileName === 'project.md') {
+    return dirname(filePath);
+  }
+
+  const siblingDir = join(dirname(filePath), basename(filePath, '.md'));
+  return existsSync(siblingDir) ? siblingDir : dirname(filePath);
+}
+
+function inferNodeId(filePath: string, attributes: Record<string, unknown>): string {
+  const explicitId = readOptionalString(attributes.id);
+  if (explicitId) {
+    return explicitId.toLowerCase();
+  }
+
+  const fileName = basename(filePath).toLowerCase();
+  if (fileName === INDEX_FILE_NAME.toLowerCase() || fileName === 'skill.md' || fileName === 'project.md') {
+    return basename(dirname(filePath)).toLowerCase();
+  }
+
+  return basename(filePath, '.md').toLowerCase();
+}
+
 function parseUnifiedNode(filePath: string): UnifiedNodeRecord {
   const rawContent = readFileSync(filePath, 'utf-8');
   const section = splitFrontmatter(rawContent);
   const attributes = section.attributes;
-  const id = (readOptionalString(attributes.id) ?? basename(dirname(filePath))).toLowerCase();
+  const id = inferNodeId(filePath, attributes);
 
   if (!NODE_ID_PATTERN.test(id)) {
     throw new Error(`Invalid node id: ${id}`);
   }
 
-  const tags = normalizeTags(readStringArray(attributes.tags));
-  const fallbackKind = readOptionalString(attributes.kind)?.toLowerCase();
+  const metadata = isRecord(attributes.metadata) ? attributes.metadata : {};
+  const metadataTags = [
+    ...(readOptionalString(metadata.type) ? [`noteType:${readOptionalString(metadata.type)}`] : []),
+    ...(readOptionalString(metadata.area) ? [`area:${readOptionalString(metadata.area)}`] : []),
+    ...(readOptionalString(metadata.role) ? [`role:${readOptionalString(metadata.role)}`] : []),
+  ];
+  const tags = normalizeTags([
+    ...readStringArray(attributes.tags),
+    ...metadataTags,
+  ]);
+  const fallbackKind = (readOptionalString(attributes.kind) ?? readOptionalString(attributes.type))?.toLowerCase();
   const kinds = collectKindsFromTags(tags, fallbackKind);
   const type = kinds[0] ?? 'note';
   const links = readLinks(attributes);
@@ -463,9 +497,100 @@ function parseUnifiedNode(filePath: string): UnifiedNodeRecord {
     },
     body: section.body,
     filePath,
+    dirPath: resolveNodeDirectoryPath(filePath),
+    searchText,
+  };
+}
+
+function parseSkillNode(filePath: string): UnifiedNodeRecord {
+  const rawContent = readFileSync(filePath, 'utf-8');
+  const section = splitFrontmatter(rawContent);
+  const attributes = section.attributes;
+  const metadata = isRecord(attributes.metadata) ? attributes.metadata : {};
+  const id = (readOptionalString(attributes.name) ?? basename(dirname(filePath))).toLowerCase();
+
+  if (!NODE_ID_PATTERN.test(id)) {
+    throw new Error(`Invalid node id: ${id}`);
+  }
+
+  const title = readOptionalString(metadata.title) ?? humanizeId(id);
+  const description = readOptionalString(attributes.description);
+  const summary = readOptionalString(metadata.summary) ?? description ?? extractFirstParagraph(section.body) ?? `Skill package for ${title}.`;
+  const status = readOptionalString(metadata.status) ?? 'active';
+  const profile = readOptionalString(metadata.profile);
+  const tags = normalizeTags([
+    'type:skill',
+    ...(status ? [`status:${status}`] : []),
+    ...(profile ? [`profile:${profile}`] : []),
+  ]);
+  const searchText = buildSearchText({
+    id,
+    title,
+    summary,
+    description,
+    status,
+    tags,
+    body: section.body,
+    related: [],
+    relationships: [],
+  });
+
+  return {
+    id,
+    title,
+    summary,
+    ...(description ? { description } : {}),
+    status,
+    createdAt: readOptionalString(metadata.createdAt),
+    updatedAt: readOptionalString(metadata.updatedAt),
+    createdBy: readOptionalString(metadata.createdBy),
+    type: 'skill',
+    kinds: ['skill'],
+    tags,
+    profiles: profile ? [profile] : [],
+    links: {
+      related: [],
+      conversations: [],
+      relationships: [],
+    },
+    body: section.body,
+    filePath,
     dirPath: dirname(filePath),
     searchText,
   };
+}
+
+function collectMarkdownFiles(rootDir: string, options: { excludeFileNames?: string[]; excludeDirs?: string[] } = {}): string[] {
+  if (!existsSync(rootDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const excludedNames = new Set((options.excludeFileNames ?? []).map((value) => value.toLowerCase()));
+  const excludedDirs = new Set((options.excludeDirs ?? []).map((value) => value.toLowerCase()));
+
+  const walk = (dirPath: string): void => {
+    for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
+      const entryPath = join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        if (excludedDirs.has(entry.name.toLowerCase())) {
+          continue;
+        }
+        walk(entryPath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.md')) {
+        continue;
+      }
+      if (excludedNames.has(entry.name.toLowerCase())) {
+        continue;
+      }
+      output.push(entryPath);
+    }
+  };
+
+  walk(rootDir);
+  return output.sort((left, right) => left.localeCompare(right));
 }
 
 function tokenizeQuery(query: string): string[] {
@@ -710,24 +835,18 @@ export function validateUnifiedNodeId(id: string): void {
 }
 
 export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnifiedNodesResult {
+  const syncRoot = resolveSyncRoot(options);
   const nodesDir = resolveUnifiedNodesDir(options);
-  if (!existsSync(nodesDir)) {
-    mkdirSync(nodesDir, { recursive: true });
-  }
+  const notesDir = getDurableNotesDir(syncRoot);
+  const projectsDir = getDurableProjectsDir(syncRoot);
+  const skillsDir = getDurableSkillsDir(syncRoot);
 
   const nodes: UnifiedNodeRecord[] = [];
   const parseErrors: UnifiedNodeParseError[] = [];
 
-  for (const entry of readdirSync(nodesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-
-    const filePath = join(nodesDir, entry.name, INDEX_FILE_NAME);
-    if (!existsSync(filePath)) {
-      continue;
-    }
-
+  for (const filePath of collectMarkdownFiles(notesDir, {
+    excludeDirs: ['references', 'assets', 'scripts', 'templates'],
+  })) {
     try {
       nodes.push(parseUnifiedNode(filePath));
     } catch (error) {
@@ -735,6 +854,63 @@ export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnified
         filePath,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  if (existsSync(projectsDir)) {
+    for (const entry of readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const projectDir = join(projectsDir, entry.name);
+      const projectFile = join(projectDir, 'project.md');
+      if (!existsSync(projectFile)) {
+        continue;
+      }
+
+      try {
+        nodes.push(parseUnifiedNode(projectFile));
+      } catch (error) {
+        parseErrors.push({
+          filePath: projectFile,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      for (const childFile of collectMarkdownFiles(projectDir, {
+        excludeFileNames: ['project.md'],
+        excludeDirs: ['references', 'assets', 'scripts', 'templates'],
+      })) {
+        try {
+          nodes.push(parseUnifiedNode(childFile));
+        } catch (error) {
+          parseErrors.push({
+            filePath: childFile,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+  }
+
+  if (existsSync(skillsDir)) {
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const skillFile = join(skillsDir, entry.name, 'SKILL.md');
+      if (!existsSync(skillFile)) {
+        continue;
+      }
+      try {
+        nodes.push(parseSkillNode(skillFile));
+      } catch (error) {
+        parseErrors.push({
+          filePath: skillFile,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 
@@ -767,9 +943,9 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     throw new Error('summary is required');
   }
 
-  const nodesDir = resolveUnifiedNodesDir(options);
-  mkdirSync(nodesDir, { recursive: true });
-  const targetPath = join(nodesDir, id, INDEX_FILE_NAME);
+  const notesDir = getDurableNotesDir(resolveSyncRoot(options));
+  mkdirSync(notesDir, { recursive: true });
+  const targetPath = join(notesDir, `${id}.md`);
   const overwrite = input.force === true;
   if (existsSync(targetPath) && !overwrite) {
     throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
@@ -791,7 +967,7 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     relationships: input.relationships,
   }), body);
 
-  return { nodesDir, node, overwritten: overwrite };
+  return { nodesDir: notesDir, node, overwritten: overwrite };
 }
 
 function readNodeFrontmatter(filePath: string): { frontmatter: Record<string, unknown>; body: string } {
@@ -803,12 +979,12 @@ function readNodeFrontmatter(filePath: string): { frontmatter: Record<string, un
 export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: ResolveNodesOptions = {}): UnifiedNodeRecord {
   validateUnifiedNodeId(input.id);
   const id = input.id.trim().toLowerCase();
-  const filePath = join(resolveUnifiedNodesDir(options), id, INDEX_FILE_NAME);
+  const current = findUnifiedNodeById(loadUnifiedNodes(options).nodes, id);
+  const filePath = current.filePath;
   if (!existsSync(filePath)) {
     throw new Error(`Node not found: ${id}`);
   }
 
-  const current = parseUnifiedNode(filePath);
   const parsed = readNodeFrontmatter(filePath);
   const nextTags = normalizeTags([
     ...current.tags.filter((tag) => !hasTag((input.removeTags ?? []).map((value) => value.trim()), tag)),
@@ -837,11 +1013,11 @@ export function updateUnifiedNode(input: UpdateUnifiedNodeInput, options: Resolv
 export function deleteUnifiedNode(id: string, options: ResolveNodesOptions = {}): { ok: true; id: string } {
   validateUnifiedNodeId(id);
   const normalized = id.trim().toLowerCase();
-  const dirPath = join(resolveUnifiedNodesDir(options), normalized);
-  if (!existsSync(dirPath)) {
+  const current = findUnifiedNodeById(loadUnifiedNodes(options).nodes, normalized);
+  if (!existsSync(current.filePath)) {
     throw new Error(`Node not found: ${normalized}`);
   }
-  rmSync(dirPath, { recursive: true, force: false });
+  rmSync(current.filePath, { force: false });
   return { ok: true, id: normalized };
 }
 
@@ -1113,8 +1289,10 @@ function collectLegacyCandidates(options: ResolveNodesOptions = {}): LegacyNodeC
   if (existsSync(skillsDir)) {
     for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const indexPath = join(skillsDir, entry.name, INDEX_FILE_NAME);
-      if (!existsSync(indexPath)) continue;
+      const indexPath = LEGACY_SKILL_FILE_NAMES
+        .map((fileName) => join(skillsDir, entry.name, fileName))
+        .find((filePath) => existsSync(filePath));
+      if (!indexPath) continue;
       const parsed = parseLegacyMarkdown(indexPath);
       const id = (readOptionalString(parsed.frontmatter.id) ?? readOptionalString(parsed.frontmatter.name) ?? entry.name).toLowerCase();
       output.push({ id, sourceKind: 'skill', sourceDir: join(skillsDir, entry.name), frontmatter: parsed.frontmatter, body: parsed.body });
@@ -1144,43 +1322,18 @@ function collectLegacyCandidates(options: ResolveNodesOptions = {}): LegacyNodeC
 }
 
 export function migrateLegacyNodes(options: ResolveNodesOptions = {}): LegacyNodeMigrationResult {
-  const nodesDir = resolveUnifiedNodesDir(options);
-  mkdirSync(nodesDir, { recursive: true });
-
-  const created: string[] = [];
-  const updated: string[] = [];
-  const skipped: string[] = [];
-  const conflicts: LegacyNodeMigrationConflict[] = [];
-  const existingKinds = new Map<string, string[]>();
-
-  for (const candidate of collectLegacyCandidates(options)) {
-    const result = copyLegacyNodeCandidate(candidate, nodesDir, existingKinds.get(candidate.id));
-    if (result.action === 'created') {
-      created.push(candidate.id);
-    } else if (result.action === 'updated') {
-      updated.push(candidate.id);
-      if (result.conflict) {
-        conflicts.push(result.conflict);
-      }
-    } else {
-      skipped.push(candidate.id);
-    }
-
-    const currentKinds = existingKinds.get(candidate.id) ?? [];
-    existingKinds.set(candidate.id, [...new Set([...currentKinds, candidate.sourceKind])]);
-  }
-
+  void copyLegacyNodeCandidate;
+  void collectLegacyCandidates;
   return {
-    nodesDir,
-    created: dedupeStrings(created).sort(),
-    updated: dedupeStrings(updated).sort(),
-    skipped: dedupeStrings(skipped).sort(),
-    conflicts,
+    nodesDir: resolveUnifiedNodesDir(options),
+    created: [],
+    updated: [],
+    skipped: [],
+    conflicts: [],
   };
 }
 
 export function listUnifiedSkillNodeDirs(profile: string, options: ResolveNodesOptions = {}): string[] {
-  migrateLegacyNodes(options);
   const loaded = loadUnifiedNodes(options);
   const normalizedProfile = profile.trim().toLowerCase();
   return loaded.nodes
