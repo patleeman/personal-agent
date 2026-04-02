@@ -174,6 +174,8 @@ If a deferred resume or reminder becomes ready while you already have that saved
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
 
+The Conversations workspace only treats conversation unread state as “needs review”. Detached background run review stays on the Runs page instead of adding workspace-wide conversation badges.
+
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
 When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.

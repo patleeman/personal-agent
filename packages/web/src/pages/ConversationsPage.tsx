@@ -85,7 +85,7 @@ function emptyStateCopy(filter: ConversationFilter, hasWorkspaceConversations: b
     case 'attention':
       return {
         title: 'Nothing needs review right now.',
-        body: 'Unread conversation updates and linked runs waiting on you will show up here.',
+        body: 'Unread conversation updates will show up here.',
       };
     case 'archived':
       return {
@@ -136,20 +136,15 @@ function sortSessions(items: SessionMeta[]): SessionMeta[] {
 }
 
 type ConversationLinkState = {
-  needsReviewCount: number;
   activeCount: number;
 };
 
-function linkedRunNeedsReview(session: SessionMeta, linkedState: ConversationLinkState | undefined): boolean {
-  return sessionNeedsAttention(session) || (linkedState?.needsReviewCount ?? 0) > 0;
+function sessionNeedsReview(session: SessionMeta): boolean {
+  return sessionNeedsAttention(session);
 }
 
 function linkedRunIsActive(session: SessionMeta, linkedState: ConversationLinkState | undefined): boolean {
   return session.isRunning || (linkedState?.activeCount ?? 0) > 0;
-}
-
-function linkedRunReviewLabel(count: number): string {
-  return `${count} linked run${count === 1 ? '' : 's'} ${count === 1 ? 'needs' : 'need'} review`;
 }
 
 function linkedRunActiveLabel(count: number): string {
@@ -160,13 +155,12 @@ function buildConversationLinkStates(items: ConversationWorkItem[]): Map<string,
   const states = new Map<string, ConversationLinkState>();
 
   for (const item of items) {
-    const current = states.get(item.conversationId) ?? { needsReviewCount: 0, activeCount: 0 };
-    if (item.needsReview) {
-      current.needsReviewCount += 1;
+    if (!item.active) {
+      continue;
     }
-    if (item.active) {
-      current.activeCount += 1;
-    }
+
+    const current = states.get(item.conversationId) ?? { activeCount: 0 };
+    current.activeCount += 1;
     states.set(item.conversationId, current);
   }
 
@@ -176,7 +170,6 @@ function buildConversationLinkStates(items: ConversationWorkItem[]): Map<string,
 function filterSessions(
   items: SessionMeta[],
   query: string,
-  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>,
   options: {
     attentionOnly?: boolean;
     excludedSessionIds?: ReadonlySet<string>;
@@ -193,7 +186,7 @@ function filterSessions(
       return false;
     }
 
-    return linkedRunNeedsReview(session, conversationLinkStates.get(session.id));
+    return sessionNeedsReview(session);
   });
 }
 
@@ -202,7 +195,7 @@ function sectionDotClass(
   section: ConversationSection,
   linkedState: ConversationLinkState | undefined,
 ): string {
-  if (linkedRunNeedsReview(session, linkedState)) {
+  if (sessionNeedsReview(session)) {
     return 'bg-warning';
   }
 
@@ -234,10 +227,6 @@ function sectionMeta(
 
   if (sessionNeedsAttention(session)) {
     parts.push('review');
-  }
-
-  if ((linkedState?.needsReviewCount ?? 0) > 0) {
-    parts.push(linkedRunReviewLabel(linkedState?.needsReviewCount ?? 0));
   }
 
   if (session.isRunning && (linkedState?.activeCount ?? 0) === 0) {
@@ -421,7 +410,7 @@ function ConversationRows({
             timestamp={formatSessionTimestamp(session)}
             actions={(
               <>
-                {linkedRunNeedsReview(session, linkedState) ? (
+                {sessionNeedsReview(session) ? (
                   <button
                     type="button"
                     className={INLINE_ACTION_CLASS}
@@ -788,18 +777,18 @@ export function ConversationsPage() {
     [conversationWorkItems],
   );
   const pinnedVisible = useMemo(
-    () => filterSessions(pinnedSessions, query, conversationLinkStates, { attentionOnly: filter === 'attention' }),
-    [conversationLinkStates, filter, pinnedSessions, query],
+    () => filterSessions(pinnedSessions, query, { attentionOnly: filter === 'attention' }),
+    [filter, pinnedSessions, query],
   );
   const openVisible = useMemo(
-    () => filterSessions(tabs, query, conversationLinkStates, { attentionOnly: filter === 'attention' }),
-    [conversationLinkStates, filter, query, tabs],
+    () => filterSessions(tabs, query, { attentionOnly: filter === 'attention' }),
+    [filter, query, tabs],
   );
   const archivedVisible = useMemo(
     () => filter === 'attention'
-      ? filterSessions(archivedSessions, query, conversationLinkStates, { attentionOnly: true, excludedSessionIds: archivedConversationIdSet })
-      : filterSessions(archivedSessions, query, conversationLinkStates),
-    [archivedConversationIdSet, archivedSessions, conversationLinkStates, filter, query],
+      ? filterSessions(archivedSessions, query, { attentionOnly: true, excludedSessionIds: archivedConversationIdSet })
+      : filterSessions(archivedSessions, query),
+    [archivedConversationIdSet, archivedSessions, filter, query],
   );
   const openEntries = useMemo(
     () => filter === 'archived'
@@ -813,10 +802,6 @@ export function ConversationsPage() {
   const archivedEntries = useMemo(
     () => buildConversationEntries(archivedVisible, 'archived'),
     [archivedVisible],
-  );
-  const conversationRunReviewCount = useMemo(
-    () => conversationWorkItems.filter((item) => item.needsReview).length,
-    [conversationWorkItems],
   );
   const archivedRunningConversationCount = useMemo(
     () => new Set(conversationWorkItems.filter((item) => item.workspace === 'archived' && item.active).map((item) => item.conversationId)).size,
@@ -874,7 +859,7 @@ export function ConversationsPage() {
       ? (sessionsResult.reason instanceof Error ? sessionsResult.reason.message : 'Could not refresh conversations.')
       : null;
     const runsError = runsResult.status === 'rejected'
-      ? (runsResult.reason instanceof Error ? runsResult.reason.message : 'Could not refresh linked runs.')
+      ? (runsResult.reason instanceof Error ? runsResult.reason.message : 'Could not refresh background runs.')
       : null;
 
     if (sessionError || runsError) {
@@ -902,7 +887,6 @@ export function ConversationsPage() {
             <>
               {pinnedSessions.length} pinned · {tabs.length} open · {archivedSessions.length} archived
               {totalAttention > 0 && <span className="ml-2 text-warning">· {totalAttention} conversation{totalAttention === 1 ? '' : 's'} need review</span>}
-              {conversationRunReviewCount > 0 && <span className="ml-2 text-warning">· {conversationRunReviewCount} linked run{conversationRunReviewCount === 1 ? '' : 's'} need review workspace-wide</span>}
               {archivedRunningConversationCount > 0 && <span className="ml-2 text-secondary">· {archivedRunningConversationCount} archived still running</span>}
             </>
           )}
