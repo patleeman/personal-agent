@@ -4,9 +4,9 @@ import {
   createInitialProject,
   deleteUnifiedNode,
   findUnifiedNodeById,
+  getDurableProjectsDir,
   loadUnifiedNodes,
   migrateLegacyNodes,
-  resolveUnifiedNodesDir,
   updateUnifiedNode,
   type ProjectDocument,
   type ProjectMilestoneDocument,
@@ -354,7 +354,7 @@ function listProjectChildPages(options: { repoRoot?: string; profile: string; ow
 
 export function resolveProjectNodePaths(options: { repoRoot?: string; profile: string; projectId: string }): ProjectNodePaths {
   validateProjectId(options.projectId);
-  const nodesDir = resolveUnifiedNodesDir();
+  const nodesDir = getDurableProjectsDir();
   const projectDir = join(nodesDir, options.projectId);
   return {
     repoRoot: options.repoRoot ?? process.cwd(),
@@ -362,8 +362,8 @@ export function resolveProjectNodePaths(options: { repoRoot?: string; profile: s
     projectId: options.projectId,
     nodesDir,
     projectDir,
-    projectFile: join(projectDir, 'INDEX.md'),
-    documentFile: join(projectDir, 'documents', PROJECT_DOCUMENT_FILE),
+    projectFile: join(projectDir, 'project.md'),
+    documentFile: join(projectDir, 'project.md'),
     filesDir: join(projectDir, 'files'),
     attachmentsDir: join(projectDir, 'attachments'),
     artifactsDir: join(projectDir, 'artifacts'),

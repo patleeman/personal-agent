@@ -6,13 +6,13 @@ import {
   findUnifiedNodeById,
   loadUnifiedNodes,
   migrateLegacyNodes,
-  resolveUnifiedNodesDir,
 } from './nodes.js';
 import {
   createInitialProject,
   readProject,
   writeProject,
 } from './project-artifacts.js';
+import { getDurableProjectsDir } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -191,7 +191,7 @@ function formatIsoTimestamp(date: Date): string {
 
 export function resolveProfileProjectsDir(options: ResolveProjectOptions): string {
   validateProfileName(options.profile);
-  return resolveUnifiedNodesDir();
+  return getDurableProjectsDir();
 }
 
 function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): DurableProjectPaths {
@@ -200,7 +200,7 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
   }
 
   const normalizedRepoRoot = getRepoRoot(repoRoot);
-  const projectsDir = resolveUnifiedNodesDir();
+  const projectsDir = getDurableProjectsDir();
   const projectDir = projectId ? join(projectsDir, projectId) : projectsDir;
   const preferredProjectFile = join(projectDir, 'state.yaml');
   const legacyProjectFile = join(projectDir, 'documents', 'legacy-state.yaml');
@@ -210,7 +210,7 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
     projectsDir,
     projectDir,
     projectFile: existsSync(preferredProjectFile) ? preferredProjectFile : (existsSync(legacyProjectFile) ? legacyProjectFile : preferredProjectFile),
-    documentFile: join(projectDir, 'INDEX.md'),
+    documentFile: join(projectDir, 'project.md'),
     tasksDir: join(projectDir, 'tasks'),
     filesDir: join(projectDir, 'files'),
     attachmentsDir: join(projectDir, 'attachments'),
