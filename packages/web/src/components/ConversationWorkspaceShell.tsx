@@ -102,21 +102,20 @@ function ResizeHandle({
 
   return (
     <div
-      className="group relative z-10 w-[5px] flex-shrink-0 cursor-col-resize select-none"
+      className="group relative z-10 w-4 flex-shrink-0 cursor-col-resize select-none"
       onMouseDown={onMouseDown}
       onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <div className="absolute inset-y-0 -left-1.5 -right-1.5" />
+      <div className="absolute inset-y-0 left-0 right-0" />
       <div
-        className="absolute inset-y-0 left-[2px] transition-all duration-100"
+        className="absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full transition-all duration-100"
         style={{
           background: hovered
-            ? 'rgb(var(--color-accent) / 0.5)'
-            : 'rgb(var(--color-border-subtle))',
+            ? 'rgb(var(--color-accent) / 0.45)'
+            : 'rgb(var(--color-border-subtle) / 0.45)',
           width: hovered ? '2px' : '1px',
-          left: hovered ? '1.5px' : '2px',
         }}
       />
     </div>
@@ -148,7 +147,7 @@ export function ConversationWorkspaceShell({ children }: { children: ReactNode }
       <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
       <aside
         style={{ width: railWidth }}
-        className="min-h-0 flex-shrink-0 overflow-hidden border-l border-border-subtle bg-surface/35"
+        className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"
         aria-label="Conversation context"
       >
         <ContextRail />

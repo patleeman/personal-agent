@@ -6,11 +6,12 @@ This is personal software, built for Patrick by Patrick.
 
 - Prefer correct full implementations over backwards-compatibility layers. I don't want to implement the fastest smallest improvement most of the time.
 - For web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
+- I often work on multiple features at the same time. Check other active runs and coordinate your work if you start seeing unintended changes to files you're editing.
 
 ## Always validate your work!
 
 - After you complete a feature, make sure you actually inspect your work. 
-- If you're working in the web-ui, ppin up the UI on a separate port and use agent-browser to inspect and interact with your changes. 
+- If you're working in the web-ui, ppin up the UI on a separate port and use the agent-browser CLI tool to inspect and interact with your changes. Read the agent-browser skill for more information.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
 ## UI Design Bans

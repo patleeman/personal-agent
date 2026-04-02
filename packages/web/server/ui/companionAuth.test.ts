@@ -83,6 +83,34 @@ describe('companion auth', () => {
     expect(readCompanionSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z'), surface: 'companion' })).toBeNull();
   });
 
+  it('extends active session expiry when the paired device is used again', () => {
+    const stateRoot = createTempDir('pa-companion-auth-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const exchanged = exchangeCompanionPairingCode(
+      createCompanionPairingCode({ now: new Date('2026-03-25T12:00:00.000Z') }).code,
+      {
+        deviceLabel: 'Patrick iPhone',
+        now: new Date('2026-03-25T12:01:00.000Z'),
+      },
+    );
+
+    const refreshed = readCompanionSession(exchanged.sessionToken, {
+      now: new Date('2026-04-23T12:10:00.000Z'),
+      surface: 'companion',
+    });
+    expect(refreshed).toEqual(expect.objectContaining({
+      id: exchanged.session.id,
+      lastUsedAt: '2026-04-23T12:10:00.000Z',
+      expiresAt: '2026-05-23T12:10:00.000Z',
+    }));
+
+    expect(readCompanionSession(exchanged.sessionToken, {
+      now: new Date('2026-04-24T12:02:00.000Z'),
+      surface: 'companion',
+    })).toEqual(expect.objectContaining({ id: exchanged.session.id }));
+  });
+
   it('revokes sessions by id and by token', () => {
     const stateRoot = createTempDir('pa-companion-auth-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

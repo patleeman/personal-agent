@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { BrowserRecordContent, ToolbarButton, browserRecordClass, cx } from '../components/ui';
 import { useAppData, useAppEvents, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { kindMeta, timeAgo } from '../utils';
 import type { ActivityEntry, CompanionConversationListResult, SessionMeta } from '../types';
+import { CompanionCardStack } from './CompanionBrowser';
 import { buildCompanionConversationPath, COMPANION_INBOX_PATH } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
 
@@ -69,6 +71,26 @@ function collectConversationIds(result: CompanionConversationListResult | null):
     ...result.active,
     ...result.archived,
   ].map((session) => session.id));
+}
+
+function buildConversationMeta(session: SessionMeta): string {
+  const parts: string[] = [];
+
+  if (session.messageCount > 0) {
+    parts.push(`${session.messageCount} message${session.messageCount === 1 ? '' : 's'}`);
+  }
+
+  if ((session.attentionUnreadActivityCount ?? 0) > 0) {
+    const count = session.attentionUnreadActivityCount ?? 0;
+    parts.push(`${count} linked update${count === 1 ? '' : 's'}`);
+  }
+
+  if ((session.attentionUnreadMessageCount ?? 0) > 0) {
+    const count = session.attentionUnreadMessageCount ?? 0;
+    parts.push(`${count} unread message${count === 1 ? '' : 's'}`);
+  }
+
+  return parts.join(' · ') || 'Conversation';
 }
 
 export function CompanionInboxPage() {
@@ -272,47 +294,43 @@ export function CompanionInboxPage() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
-          <div className="mb-2 flex items-center gap-2 px-4">
-            <div className="inline-flex rounded-full border border-border-subtle bg-surface p-1">
-              <button
-                type="button"
-                onClick={() => setFilter('unread')}
-                className={filter === 'unread'
-                  ? 'rounded-full bg-base px-3 py-1.5 text-[11px] font-medium text-primary shadow-sm'
-                  : 'rounded-full px-3 py-1.5 text-[11px] font-medium text-dim transition-colors hover:text-primary'}
-              >
-                Unread
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilter('all')}
-                className={filter === 'all'
-                  ? 'rounded-full bg-base px-3 py-1.5 text-[11px] font-medium text-primary shadow-sm'
-                  : 'rounded-full px-3 py-1.5 text-[11px] font-medium text-dim transition-colors hover:text-primary'}
-              >
-                All
-              </button>
+          <div className="mb-2 px-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="ui-segmented-control">
+                <button
+                  type="button"
+                  onClick={() => setFilter('unread')}
+                  className={cx('ui-segmented-button', filter === 'unread' && 'ui-segmented-button-active')}
+                >
+                  Unread
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className={cx('ui-segmented-button', filter === 'all' && 'ui-segmented-button-active')}
+                >
+                  All
+                </button>
+              </div>
+              {unreadCount > 0 ? (
+                <ToolbarButton
+                  onClick={() => { void markAllRead(); }}
+                  disabled={markingAll}
+                  className="rounded-full"
+                >
+                  {markingAll ? 'Marking…' : 'Mark all read'}
+                </ToolbarButton>
+              ) : null}
+              {allItems.length > 0 ? (
+                <ToolbarButton
+                  onClick={() => { void clearInbox(); }}
+                  disabled={clearingInbox}
+                  className="rounded-full"
+                >
+                  {clearingInbox ? 'Clearing…' : 'Clear'}
+                </ToolbarButton>
+              ) : null}
             </div>
-            {unreadCount > 0 ? (
-              <button
-                type="button"
-                onClick={() => { void markAllRead(); }}
-                disabled={markingAll}
-                className="rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:opacity-45"
-              >
-                {markingAll ? 'Marking…' : 'Mark all read'}
-              </button>
-            ) : null}
-            {allItems.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => { void clearInbox(); }}
-                disabled={clearingInbox}
-                className="rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:opacity-45"
-              >
-                {clearingInbox ? 'Clearing…' : 'Clear'}
-              </button>
-            ) : null}
           </div>
 
           {isLoading ? <p className="px-4 text-[13px] text-dim">Loading inbox…</p> : null}
@@ -334,7 +352,7 @@ export function CompanionInboxPage() {
             </div>
           ) : null}
           {!isLoading && visibleItems.length > 0 ? (
-            <div className="border-y border-border-subtle">
+            <CompanionCardStack>
               {visibleItems.map((item) => {
                 if (item.type === 'conversation') {
                   const busy = pendingConversationId === item.session.id;
@@ -344,21 +362,18 @@ export function CompanionInboxPage() {
                       type="button"
                       onClick={() => { void handleOpenConversation(item.session); }}
                       disabled={busy}
-                      className="flex w-full items-start gap-3 border-b border-border-subtle px-4 py-3.5 text-left transition-colors last:border-b-0 hover:bg-surface/55 disabled:cursor-default disabled:opacity-60"
+                      className={browserRecordClass(false, 'py-3.5 disabled:cursor-default disabled:opacity-60')}
                     >
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-warning" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <h2 className="truncate text-[15px] font-medium leading-tight text-primary">{item.session.title}</h2>
-                            <p className="mt-1 text-[12px] leading-relaxed text-secondary">{buildConversationReason(item.session)}</p>
-                            <p className="mt-2 break-words text-[11px] text-dim">Conversation · {timeAgo(item.sortAt)}</p>
-                          </div>
-                          <span className="shrink-0 rounded-full bg-warning/10 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-warning">
-                            {busy ? 'opening' : 'open'}
-                          </span>
-                        </div>
-                      </div>
+                      <BrowserRecordContent
+                        label="Conversation"
+                        aside={busy ? 'Opening…' : timeAgo(item.sortAt)}
+                        heading={item.session.title}
+                        summary={buildConversationReason(item.session)}
+                        meta={buildConversationMeta(item.session)}
+                        titleClassName="text-[15px]"
+                        summaryClassName="text-[13px]"
+                        metaClassName="text-[11px] break-words"
+                      />
                     </button>
                   );
                 }
@@ -369,46 +384,40 @@ export function CompanionInboxPage() {
                 const busy = pendingActivityId === item.entry.id;
 
                 return (
-                  <div key={item.key} className="border-b border-border-subtle px-4 py-3.5 last:border-b-0">
-                    <div className="flex items-start gap-3">
-                      <span className={item.entry.read ? 'mt-1.5 h-2 w-2 shrink-0 rounded-full border border-border-default bg-transparent' : `mt-1.5 h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <h2 className={item.entry.read ? 'truncate text-[15px] font-medium leading-tight text-secondary' : 'truncate text-[15px] font-medium leading-tight text-primary'}>{item.entry.summary}</h2>
-                            <p className="mt-2 break-words text-[11px] text-dim">
-                              <span className={`rounded-full px-2 py-1 ${meta.color}`}>{meta.label}</span>
-                              <span className="mx-1.5 opacity-40">·</span>
-                              {timeAgo(item.entry.createdAt)}
-                            </p>
-                            {detail ? <p className="mt-2 text-[12px] leading-relaxed text-secondary">{detail}</p> : null}
-                          </div>
-                          {!item.entry.read ? <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" /> : null}
-                        </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => { void handleActivityAction(item.entry); }}
-                            disabled={busy}
-                            className="rounded-full bg-accent px-3 py-1.5 text-[11px] font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-45"
-                          >
-                            {busy ? 'Working…' : linkedConversationId ? 'Open conversation' : 'Start conversation'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { void handleToggleActivityRead(item.entry); }}
-                            disabled={busy}
-                            className="rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:opacity-45"
-                          >
-                            {item.entry.read ? 'Mark unread' : 'Mark read'}
-                          </button>
-                        </div>
-                      </div>
+                  <div
+                    key={item.key}
+                    className={browserRecordClass(false, cx('py-3.5', item.entry.read ? 'opacity-80' : ''))}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => { void handleActivityAction(item.entry); }}
+                      disabled={busy}
+                      className="block w-full text-left disabled:cursor-default"
+                    >
+                      <BrowserRecordContent
+                        label={meta.label}
+                        aside={busy ? 'Working…' : timeAgo(item.entry.createdAt)}
+                        heading={item.entry.summary}
+                        summary={detail ?? undefined}
+                        meta={linkedConversationId ? 'Open conversation' : 'Start conversation'}
+                        titleClassName={cx('text-[15px]', item.entry.read ? 'text-secondary' : undefined)}
+                        summaryClassName="text-[13px]"
+                        metaClassName="text-[11px] break-words"
+                      />
+                    </button>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+                      <ToolbarButton
+                        onClick={() => { void handleToggleActivityRead(item.entry); }}
+                        disabled={busy}
+                        className="rounded-full"
+                      >
+                        {item.entry.read ? 'Mark unread' : 'Mark read'}
+                      </ToolbarButton>
                     </div>
                   </div>
                 );
               })}
-            </div>
+            </CompanionCardStack>
           ) : null}
         </div>
       </div>

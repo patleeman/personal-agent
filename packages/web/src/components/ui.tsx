@@ -177,6 +177,46 @@ function rowClass(selected: boolean | undefined, className?: string) {
   return cx('group', 'ui-list-row', selected ? 'ui-list-row-selected' : 'ui-list-row-hover', className);
 }
 
+export function browserRecordClass(selected: boolean | undefined, className?: string) {
+  return cx('group', 'ui-browser-entry', selected ? 'ui-browser-entry-selected' : 'ui-browser-entry-hover', className);
+}
+
+export function BrowserRecordContent({
+  label,
+  aside,
+  heading,
+  summary,
+  meta,
+  headerClassName,
+  titleClassName,
+  summaryClassName,
+  metaClassName,
+}: {
+  label?: ReactNode;
+  aside?: ReactNode;
+  heading: ReactNode;
+  summary?: ReactNode;
+  meta?: ReactNode;
+  headerClassName?: string;
+  titleClassName?: string;
+  summaryClassName?: string;
+  metaClassName?: string;
+}) {
+  return (
+    <>
+      {(label || aside) && (
+        <div className={cx('ui-browser-entry-header', headerClassName)}>
+          {label ? <p className="ui-browser-entry-label">{label}</p> : null}
+          {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
+        </div>
+      )}
+      <p className={cx('ui-browser-entry-title', titleClassName)}>{heading}</p>
+      {summary ? <p className={cx('ui-browser-entry-summary', summaryClassName)}>{summary}</p> : null}
+      {meta ? <div className={cx('ui-browser-entry-meta', metaClassName)}>{meta}</div> : null}
+    </>
+  );
+}
+
 interface BaseRowProps {
   selected?: boolean;
   leading?: ReactNode;
@@ -215,18 +255,20 @@ export function BrowserRecordRow({
   return (
     <Link
       to={to}
-      className={cx('group', 'ui-browser-entry', selected ? 'ui-browser-entry-selected' : 'ui-browser-entry-hover', className)}
+      className={browserRecordClass(selected, className)}
       {...props}
     >
-      {(label || aside) && (
-        <div className={cx('ui-browser-entry-header', headerClassName)}>
-          {label ? <p className="ui-browser-entry-label">{label}</p> : null}
-          {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
-        </div>
-      )}
-      <p className={cx('ui-browser-entry-title', titleClassName)}>{heading}</p>
-      {summary ? <p className={cx('ui-browser-entry-summary', summaryClassName)}>{summary}</p> : null}
-      {meta ? <div className={cx('ui-browser-entry-meta', metaClassName)}>{meta}</div> : null}
+      <BrowserRecordContent
+        label={label}
+        aside={aside}
+        heading={heading}
+        summary={summary}
+        meta={meta}
+        headerClassName={headerClassName}
+        titleClassName={titleClassName}
+        summaryClassName={summaryClassName}
+        metaClassName={metaClassName}
+      />
     </Link>
   );
 }
