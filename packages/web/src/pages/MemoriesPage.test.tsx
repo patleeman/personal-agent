@@ -78,6 +78,55 @@ describe('MemoriesPage', () => {
         };
       }
 
+      if (key === 'note-properties:memory-index') {
+        return {
+          data: {
+            node: {
+              kind: 'note',
+              kinds: ['note'],
+              id: 'memory-index',
+              title: 'Memory index',
+              summary: 'Top-level knowledge hub.',
+              description: 'Use this note as the top-level routing document for durable memory.',
+              status: 'active',
+              path: '/tmp/memory-index/INDEX.md',
+              tags: ['type:note', 'notes', 'index', 'structure', 'status:active'],
+              profiles: ['assistant'],
+              parent: undefined,
+              searchText: 'memory index',
+            },
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      if (key === 'note-property-options') {
+        return {
+          data: {
+            tagKeys: ['type', 'status'],
+            nodes: [{
+              kind: 'note',
+              kinds: ['note'],
+              id: 'another-note',
+              title: 'Another note',
+              summary: 'Another note summary.',
+              status: 'active',
+              path: '/tmp/another-note/INDEX.md',
+              tags: ['type:note', 'topic:test'],
+              profiles: ['assistant'],
+              searchText: 'another note',
+            }],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
       return {
         data: {
           memories: [
@@ -117,8 +166,13 @@ describe('MemoriesPage', () => {
     expect(html).toContain('aria-label="Delete note"');
     expect(html).toContain('/tmp/memory-index/INDEX.md');
     expect(html).toContain('Properties');
+    expect(html).toContain('Status');
+    expect(html).toContain('Tags');
     expect(html).not.toContain('References');
     expect(html).not.toContain('Relationships');
+    expect(html).not.toContain('Node metadata');
+    expect(html).not.toContain('Capture triage');
+    expect(html).not.toContain('Node graph');
     expect(html).not.toContain('Browse durable notes');
     expect(html).not.toContain('Search notes');
     expect(html).not.toContain('Back to notes');
