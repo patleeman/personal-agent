@@ -39,11 +39,11 @@ function createTempRepo(): string {
 }
 
 describe('resolveProfileProjectsDir', () => {
-  it('returns the durable projects directory', () => {
+  it('returns the unified nodes directory for projects', () => {
     const repo = createTempRepo();
     const result = resolveProfileProjectsDir({ repoRoot: repo, profile: 'datadog' });
 
-    expect(result).toBe(join(repo, 'sync', 'projects'));
+    expect(result).toBe(join(repo, 'sync', 'nodes'));
   });
 
   it('rejects invalid profile names', () => {
@@ -76,7 +76,7 @@ describe('validateTaskId', () => {
 });
 
 describe('resolveProjectPaths', () => {
-  it('builds the expected file layout for a project', () => {
+  it('builds the expected file layout for a project node package', () => {
     const repo = createTempRepo();
     const paths = resolveProjectPaths({
       repoRoot: repo,
@@ -84,7 +84,7 @@ describe('resolveProjectPaths', () => {
       projectId: 'artifact-model',
     });
 
-    expect(paths.projectDir).toBe(join(repo, 'sync', 'projects', 'artifact-model'));
+    expect(paths.projectDir).toBe(join(repo, 'sync', 'nodes', 'artifact-model'));
     expect(paths.projectFile).toBe(join(paths.projectDir, 'state.yaml'));
     expect(paths.documentFile).toBe(join(paths.projectDir, 'INDEX.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
@@ -102,7 +102,7 @@ describe('resolveProjectPaths', () => {
       taskId: 'implement-activity',
     });
 
-    expect(path).toBe(join(repo, 'sync', 'projects', 'artifact-model', 'tasks', 'implement-activity.yaml'));
+    expect(path).toBe(join(repo, 'sync', 'nodes', 'artifact-model', 'tasks', 'implement-activity.yaml'));
   });
 });
 
@@ -135,13 +135,13 @@ describe('listResolvedProjectRepoRoots', () => {
       description: 'Beta objective',
     });
 
-    writeFileSync(first.paths.projectFile, readFileSync(first.paths.projectFile, 'utf-8').replace(
-      'description: Alpha objective\n',
-      'description: Alpha objective\nrepoRoot: ../workspace/alpha\n',
+    writeFileSync(first.paths.documentFile, readFileSync(first.paths.documentFile, 'utf-8').replace(
+      '  - type:project\n',
+      '  - type:project\n  - cwd:../workspace/alpha\n',
     ));
-    writeFileSync(second.paths.projectFile, readFileSync(second.paths.projectFile, 'utf-8').replace(
-      'description: Beta objective\n',
-      'description: Beta objective\nrepoRoot: ../workspace/alpha\n',
+    writeFileSync(second.paths.documentFile, readFileSync(second.paths.documentFile, 'utf-8').replace(
+      '  - type:project\n',
+      '  - type:project\n  - cwd:../workspace/alpha\n',
     ));
 
     expect(listResolvedProjectRepoRoots({
@@ -161,9 +161,9 @@ describe('listResolvedProjectRepoRoots', () => {
       description: 'Shared objective',
     });
 
-    writeFileSync(project.paths.projectFile, readFileSync(project.paths.projectFile, 'utf-8').replace(
-      'description: Shared objective\n',
-      'description: Shared objective\nrepoRoot: ../workspace/shared-objective\n',
+    writeFileSync(project.paths.documentFile, readFileSync(project.paths.documentFile, 'utf-8').replace(
+      '  - type:project\n',
+      '  - type:project\n  - cwd:../workspace/shared-objective\n',
     ));
 
     expect(listResolvedProjectRepoRoots({
@@ -175,7 +175,7 @@ describe('listResolvedProjectRepoRoots', () => {
 });
 
 describe('createProjectScaffold', () => {
-  it('creates the initial project files and directories', () => {
+  it('creates the initial project files and directories in the unified node package', () => {
     const repo = createTempRepo();
     const result = createProjectScaffold({
       repoRoot: repo,
@@ -187,7 +187,8 @@ describe('createProjectScaffold', () => {
     });
 
     expect(result.writtenFiles).toEqual([
-      join(repo, 'sync', 'projects', 'artifact-model', 'state.yaml'),
+      join(repo, 'sync', 'nodes', 'artifact-model', 'state.yaml'),
+      join(repo, 'sync', 'nodes', 'artifact-model', 'INDEX.md'),
     ]);
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
@@ -195,15 +196,17 @@ describe('createProjectScaffold', () => {
     expect(existsSync(result.paths.notesDir)).toBe(true);
     expect(existsSync(result.paths.attachmentsDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
+    expect(existsSync(join(repo, 'sync', 'projects'))).toBe(false);
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
     const indexFile = readFileSync(result.paths.documentFile, 'utf-8');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
     expect(projectFile).toContain('milestones: []');
     expect(indexFile).toContain('id: artifact-model');
-    expect(indexFile).toContain('ownerProfile: datadog');
     expect(indexFile).toContain('title: Artifact model');
     expect(indexFile).toContain('summary: Create a durable artifact model for ongoing work.');
+    expect(indexFile).toContain('type:project');
+    expect(indexFile).toContain('profile:datadog');
   });
 
   it('rejects empty titles', () => {
@@ -355,7 +358,7 @@ describe('listProjectIds', () => {
 });
 
 describe('projectExists', () => {
-  it('returns true when the project directory exists', () => {
+  it('returns true when the project node exists', () => {
     const repo = createTempRepo();
     createProjectScaffold({
       repoRoot: repo,

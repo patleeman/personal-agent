@@ -32,7 +32,6 @@ Mutable durable resources default to the synced durable-state home:
 - `~/.local/state/personal-agent/sync/models/**`
 - `~/.local/state/personal-agent/sync/nodes/**`
 - `~/.local/state/personal-agent/sync/tasks/**`
-- `~/.local/state/personal-agent/sync/projects/**`
 
 ### Local runtime state
 
