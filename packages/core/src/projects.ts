@@ -1,12 +1,18 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
+import {
+  createUnifiedNode,
+  findUnifiedNodeById,
+  loadUnifiedNodes,
+  migrateLegacyNodes,
+  resolveUnifiedNodesDir,
+} from './nodes.js';
 import {
   createInitialProject,
   readProject,
   writeProject,
 } from './project-artifacts.js';
-import { getDurableProjectsDir } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -94,6 +100,40 @@ export function resolveProjectRepoRoot(options: ResolveProjectRepoRootOptions): 
   return resolve(getRepoRoot(options.repoRoot), expandHome(projectRepoRoot));
 }
 
+function extractTagValue(tags: string[], key: string): string | undefined {
+  return tags
+    .map((tag) => tag.match(new RegExp(`^${key}:(.+)$`, 'i'))?.[1]?.trim())
+    .find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function loadProjectNodes() {
+  migrateLegacyNodes();
+  return loadUnifiedNodes().nodes.filter((node) => node.kinds.includes('project'));
+}
+
+function readProjectNode(projectId: string) {
+  return findUnifiedNodeById(loadProjectNodes(), projectId);
+}
+
+function readProjectRepoRoot(projectId: string, repoRoot?: string): string | undefined {
+  const projectNode = readProjectNode(projectId);
+  const taggedRepoRoot = extractTagValue(projectNode.tags, 'cwd');
+  if (taggedRepoRoot) {
+    return taggedRepoRoot;
+  }
+
+  const paths = resolveDurableProjectPaths(repoRoot, projectId);
+  if (existsSync(paths.projectFile)) {
+    try {
+      return readProject(paths.projectFile).repoRoot;
+    } catch {
+      // Ignore invalid compatibility state when deriving cwd.
+    }
+  }
+
+  return undefined;
+}
+
 export interface ListResolvedProjectRepoRootsOptions extends ResolveProjectOptions {
   projectIds: string[];
 }
@@ -104,21 +144,9 @@ export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRoo
 
   for (const projectId of options.projectIds) {
     try {
-      const projectFile = resolveDurableProjectPaths(options.repoRoot, projectId).projectFile;
-      let projectRepoRoot = '';
-
-      try {
-        const project = readProject(projectFile);
-        projectRepoRoot = project.repoRoot ?? '';
-      } catch {
-        const raw = existsSync(projectFile) ? readFileSync(projectFile, 'utf-8') : '';
-        const match = raw.match(/^repoRoot:\s*(.+)$/m);
-        projectRepoRoot = match?.[1]?.trim() ?? '';
-      }
-
       const resolvedProjectRepoRoot = resolveProjectRepoRoot({
         repoRoot: options.repoRoot,
-        projectRepoRoot,
+        projectRepoRoot: readProjectRepoRoot(projectId, options.repoRoot),
       });
 
       if (!resolvedProjectRepoRoot || seen.has(resolvedProjectRepoRoot)) {
@@ -165,7 +193,7 @@ function formatIsoTimestamp(date: Date): string {
 
 export function resolveProfileProjectsDir(options: ResolveProjectOptions): string {
   validateProfileName(options.profile);
-  return getDurableProjectsDir();
+  return resolveUnifiedNodesDir();
 }
 
 function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): DurableProjectPaths {
@@ -174,14 +202,16 @@ function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): Dura
   }
 
   const normalizedRepoRoot = getRepoRoot(repoRoot);
-  const projectsDir = getDurableProjectsDir();
+  const projectsDir = resolveUnifiedNodesDir();
   const projectDir = projectId ? join(projectsDir, projectId) : projectsDir;
+  const preferredProjectFile = join(projectDir, 'state.yaml');
+  const legacyProjectFile = join(projectDir, 'documents', 'legacy-state.yaml');
 
   return {
     repoRoot: normalizedRepoRoot,
     projectsDir,
     projectDir,
-    projectFile: join(projectDir, 'state.yaml'),
+    projectFile: existsSync(preferredProjectFile) ? preferredProjectFile : (existsSync(legacyProjectFile) ? legacyProjectFile : preferredProjectFile),
     documentFile: join(projectDir, 'INDEX.md'),
     tasksDir: join(projectDir, 'tasks'),
     notesDir: join(projectDir, 'notes'),
@@ -202,29 +232,19 @@ export function resolveProjectPaths(options: ResolveProjectPathsOptions): Projec
   };
 }
 
-export function listAllProjectIds(options: { repoRoot?: string } = {}): string[] {
-  const { projectsDir } = resolveDurableProjectPaths(options.repoRoot);
-
-  if (!existsSync(projectsDir)) {
-    return [];
-  }
-
-  return readdirSync(projectsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && PROJECT_ID_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
+export function listAllProjectIds(_options: { repoRoot?: string } = {}): string[] {
+  return loadProjectNodes()
+    .map((node) => node.id)
     .sort((left, right) => left.localeCompare(right));
 }
 
 export function readProjectOwnerProfile(options: { repoRoot?: string; projectId: string }): string {
-  return readProject(resolveDurableProjectPaths(options.repoRoot, options.projectId).projectFile).ownerProfile;
+  const projectNode = readProjectNode(options.projectId);
+  return extractTagValue(projectNode.tags, 'profile') ?? 'shared';
 }
 
 export function listProjectIds(options: ResolveProjectOptions): string[] {
-  const projectsDir = resolveProfileProjectsDir(options);
-
-  if (!existsSync(projectsDir)) {
-    return [];
-  }
+  resolveProfileProjectsDir(options);
 
   return listAllProjectIds({ repoRoot: options.repoRoot })
     .filter((projectId) => {
@@ -250,13 +270,25 @@ function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): voi
     return;
   }
 
-  if (existsSync(paths.projectFile)) {
-    throw new Error(`Project already exists at ${paths.projectDir}. Existing file: ${paths.projectFile}`);
+  if (existsSync(paths.documentFile)) {
+    throw new Error(`Project already exists at ${paths.projectDir}. Existing file: ${paths.documentFile}`);
   }
 
   if (existsSync(paths.projectDir) && readdirSync(paths.projectDir).length > 0) {
     throw new Error(`Project directory already exists and is not empty: ${paths.projectDir}`);
   }
+}
+
+function buildProjectNodeBody(title: string, description: string): string {
+  return [
+    `# ${title}`,
+    '',
+    description,
+    '',
+    '## Goal',
+    '',
+    description,
+  ].join('\n');
 }
 
 export function createProjectScaffold(
@@ -275,12 +307,18 @@ export function createProjectScaffold(
 
   const paths = resolveProjectPaths(options);
   const overwrite = options.overwrite ?? false;
+  migrateLegacyNodes();
+  const existingNode = loadUnifiedNodes().nodes.find((node) => node.id === options.projectId);
+  if (existingNode && !existingNode.kinds.includes('project')) {
+    throw new Error(`A non-project node already exists at ${paths.projectDir}.`);
+  }
   assertProjectCanBeCreated(paths, overwrite);
 
   const timestamp = formatIsoTimestamp(options.now ?? new Date());
   const writtenFiles: string[] = [];
 
   mkdirSync(paths.projectDir, { recursive: true });
+  mkdirSync(join(paths.projectDir, 'documents'), { recursive: true });
   mkdirSync(paths.tasksDir, { recursive: true });
   mkdirSync(paths.notesDir, { recursive: true });
   mkdirSync(paths.filesDir, { recursive: true });
@@ -300,6 +338,19 @@ export function createProjectScaffold(
   );
   writtenFiles.push(paths.projectFile);
 
+  createUnifiedNode({
+    id: options.projectId,
+    title,
+    summary: description,
+    status: 'active',
+    tags: [`type:project`, `profile:${options.profile}`],
+    body: buildProjectNodeBody(title, description),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    force: true,
+  });
+  writtenFiles.push(paths.documentFile);
+
   return {
     paths,
     writtenFiles,
@@ -313,7 +364,7 @@ export function projectExists(options: ResolveProjectPathsOptions): boolean {
   }
 
   try {
-    return readProject(paths.projectFile).ownerProfile === options.profile;
+    return readProjectOwnerProfile({ repoRoot: options.repoRoot, projectId: options.projectId }) === options.profile;
   } catch {
     return false;
   }

@@ -4,7 +4,7 @@ Projects are the durable home for ongoing work in `personal-agent`.
 
 Use a project when a thread of work should survive the current conversation and you want durable status, next steps, blockers, notes, or project files.
 
-Do not use a project for general reusable knowledge. That belongs in a note node. Do not keep the same topic as both a top-level note and a project unless they are genuinely different things.
+Do not use a project for general reusable knowledge. That belongs in a note page. Do not keep the same topic as both a top-level note and a project unless they are genuinely different things.
 
 ## Mental model
 
@@ -19,56 +19,38 @@ If the work should still make sense next week and has an active plan, it probabl
 
 ## On-disk shape
 
-Projects live under:
+Projects are project pages stored in the unified node tree:
 
-- `~/.local/state/personal-agent/sync/projects/<projectId>/state.yaml`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/INDEX.md`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/notes/`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/attachments/`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/artifacts/`
+- `~/.local/state/personal-agent/sync/nodes/<projectId>/INDEX.md`
+- `~/.local/state/personal-agent/sync/nodes/<projectId>/notes/`
+- `~/.local/state/personal-agent/sync/nodes/<projectId>/attachments/`
+- `~/.local/state/personal-agent/sync/nodes/<projectId>/artifacts/`
+- optional supporting files under `~/.local/state/personal-agent/sync/nodes/<projectId>/documents/`
 
-`state.yaml` is the structured project state.
+`INDEX.md` is the canonical project page.
 
-`INDEX.md` is the human-readable overview and handoff document.
+The old top-level `sync/projects/` tree was a legacy layout. Projects now live with notes and skills in `sync/nodes/`.
 
 ## What goes where
 
-### `state.yaml`
-
-Use `state.yaml` for compact structured state such as:
-
-- `description`
-- `repoRoot`
-- `requirements.goal`
-- `requirements.acceptanceCriteria[]`
-- `blockers`
-- `currentFocus`
-- `recentProgress`
-- `planSummary`
-- `completionSummary`
-- `plan.milestones[]`
-- `plan.tasks[]`
-
-Keep it concise. Projects are not meant to become mini PM systems.
-
 ### `INDEX.md`
 
-Use `INDEX.md` for the durable human story:
+Use `INDEX.md` for the durable project record:
 
 - what the project is
 - why it exists
 - the current direction
 - the most important constraints or decisions
 - the shipped result or final decision when it is done
+- compact structured sections like goal, blockers, progress, milestones, and tasks
 
 The frontmatter is also where project identity lives:
 
 - `id`
-- `kind: project`
 - `title`
 - `summary`
 - `status`
-- `ownerProfile`
+- project tags like `type:project`, `profile:<profile>`, and optional `cwd:<repoRoot>`
 - `createdAt`
 - `updatedAt`
 
@@ -95,6 +77,10 @@ Use these for project-specific files you want to keep with the work:
 
 These are durable project files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](./artifacts.md).
 
+### `documents/`
+
+Use `documents/` sparingly for supporting project files that should live with the project package but do not belong in the main page or project notes.
+
 ## Writing style
 
 Use these defaults:
@@ -105,7 +91,7 @@ Use these defaults:
 - keep `INDEX.md` high-signal and move long detail into project notes
 - avoid template filler and empty headings
 - prefer a few concrete bullets over bloated PM boilerplate
-- keep `currentFocus` and `recentProgress` truthful and current
+- keep current status and recent progress truthful and current
 - when a project is done, say what shipped or what decision was made
 
 A bad project doc reads like scaffolding. A good project doc reads like a concise handoff.
@@ -148,7 +134,7 @@ Conversations can reference one or more projects.
 
 Those conversation ↔ project links stay in local runtime state, not in portable project files.
 
-Do not store conversation ids or session ids in `state.yaml`, `INDEX.md`, or project note frontmatter.
+Do not store conversation ids or session ids in project pages or project note frontmatter.
 
 ## Validation
 
@@ -157,7 +143,7 @@ Validate projects with:
 ```bash
 node scripts/validate-projects.mjs --profile <profile>
 node scripts/validate-projects.mjs --profile <profile> --project <projectId>
-node scripts/validate-projects.mjs --path <absolute-path-to-state.yaml>
+node scripts/validate-projects.mjs --path <absolute-path-to-project-state.yaml>
 ```
 
 ## Scheduled tasks vs project tasks

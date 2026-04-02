@@ -1,9 +1,9 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createProjectScaffold, readProject, writeProject } from '@personal-agent/core';
+import { createProjectScaffold } from '@personal-agent/core';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 
 const originalEnv = process.env;
@@ -15,6 +15,17 @@ function createTempRepo(): string {
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
   return dir;
+}
+
+function setProjectRepoRoot(documentFile: string, repoRoot: string): void {
+  const current = readFileSync(documentFile, 'utf-8');
+  if (current.includes(`cwd:${repoRoot}`)) {
+    return;
+  }
+  writeFileSync(documentFile, current.replace(
+    '  - type:project\n',
+    `  - type:project\n  - cwd:${repoRoot}\n`,
+  ));
 }
 
 beforeEach(() => {
@@ -56,11 +67,7 @@ describe('resolveConversationCwd', () => {
       title: 'Ship the web UI',
       description: 'Ship the web UI',
     });
-    const project = readProject(scaffold.paths.projectFile);
-    writeProject(scaffold.paths.projectFile, {
-      ...project,
-      repoRoot: '../workspace/web-ui',
-    });
+    setProjectRepoRoot(scaffold.paths.documentFile, '../workspace/web-ui');
 
     expect(resolveConversationCwd({
       repoRoot,
@@ -87,14 +94,8 @@ describe('resolveConversationCwd', () => {
       description: 'Ship the API',
     });
 
-    writeProject(first.paths.projectFile, {
-      ...readProject(first.paths.projectFile),
-      repoRoot: '../workspace/web-ui',
-    });
-    writeProject(second.paths.projectFile, {
-      ...readProject(second.paths.projectFile),
-      repoRoot: '../workspace/api'
-    });
+    setProjectRepoRoot(first.paths.documentFile, '../workspace/web-ui');
+    setProjectRepoRoot(second.paths.documentFile, '../workspace/api');
 
     expect(resolveConversationCwd({
       repoRoot,
@@ -121,10 +122,7 @@ describe('resolveConversationCwd', () => {
       description: 'Track notes',
     });
 
-    writeProject(first.paths.projectFile, {
-      ...readProject(first.paths.projectFile),
-      repoRoot: '../workspace/web-ui',
-    });
+    setProjectRepoRoot(first.paths.documentFile, '../workspace/web-ui');
 
     expect(resolveConversationCwd({
       repoRoot,

@@ -21,7 +21,7 @@ If you are not sure which surface to use, start here.
 | If you need to… | Use | Durable home | Do not default to |
 | --- | --- | --- | --- |
 | Work with the agent right now | conversation | conversation/session state | inbox, note, or project as the primary work surface |
-| Keep ongoing work alive across conversations | project | `sync/projects/<id>/` | top-level note or long conversation history |
+| Keep ongoing work alive across conversations | project | `sync/nodes/<id>/` tagged `type:project` | top-level note or long conversation history |
 | Save reusable knowledge or references | note page | `sync/nodes/<id>/` tagged `type:note` | project docs or random conversation text |
 | Save reusable workflow instructions | skill page | `sync/nodes/<id>/` tagged `type:skill` | AGENTS or ad hoc notes |
 | Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | note pages or project state |
@@ -32,7 +32,7 @@ If you are not sure which surface to use, start here.
 | Run something later or repeatedly | scheduled task | `sync/tasks/*.task.md` | run |
 | Work on local repo files in the web UI | workspace | local repo/filesystem view | project docs or notes |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | project artifact directory as the first stop |
-| Keep a file with a specific project | project attachment or project artifact | `sync/projects/<id>/attachments|artifacts/` | top-level note assets |
+| Keep a file with a specific project | project attachment or project artifact | `sync/nodes/<id>/attachments|artifacts/` | top-level note assets |
 | Offload a conversation to another machine | execution target | machine-local execution-target config | scheduled task or run |
 | Call external tool servers through MCP | MCP server config + MCP calls | MCP config + auth state | hand-rolled shell scripts by default |
 
