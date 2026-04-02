@@ -18,8 +18,8 @@ Use the CLI mainly for:
 
 | Job | Preferred tool | Durable home | Notes |
 | --- | --- | --- | --- |
-| Track ongoing work, status, blockers, milestones, project notes | `project` | project page backed by `sync/nodes/**` | use projects for durable tracked work |
-| Find or create durable note pages | `note` | note pages backed by `sync/nodes/**` | find/show before new |
+| Track ongoing work, status, blockers, milestones, child pages | `project` | tracked page backed by `sync/nodes/**` | use tracked pages for durable ongoing work |
+| Find or create durable pages | `note` | page backed by `sync/nodes/**` | find/show before new |
 | Create passive async attention items | `activity` | local inbox/activity state | use for async outcomes worth noticing later |
 | Schedule unattended automation | `scheduled_task` | `sync/tasks/*.task.md` + daemon state | use for later or recurring work |
 | Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
@@ -79,5 +79,5 @@ Use the feature docs to decide whether the underlying product surface is correct
 - [Async Attention and Wakeups](./async-attention.md)
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
-- [Projects](./projects.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Tracked Pages](./projects.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)

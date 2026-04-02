@@ -31,13 +31,13 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
     },
     profile: 'assistant',
     taskCount: 0,
-    noteCount: 0,
+    childPageCount: 0,
     fileCount: 0,
     attachmentCount: 0,
     artifactCount: 0,
     tasks: [],
     document: null,
-    notes: [],
+    childPages: [],
     files: [],
     attachments: [],
     artifacts: [],
@@ -99,8 +99,8 @@ describe('project detail timeline helpers', () => {
           title: 'Project created',
         },
         {
-          id: 'note:decision-log',
-          kind: 'note',
+          id: 'page:decision-log',
+          kind: 'page',
           createdAt: '2026-03-16T10:00:00.000Z',
           title: 'Decision log',
         },
@@ -118,7 +118,7 @@ describe('project detail timeline helpers', () => {
 
     expect(buildActivityItems(detail).map((item) => item.id)).toEqual([
       'conversation:conv-1',
-      'timeline:note:decision-log',
+      'timeline:page:decision-log',
       'timeline:project:demo-project',
     ]);
   });

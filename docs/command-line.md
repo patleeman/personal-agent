@@ -236,7 +236,7 @@ pa note new note-index --title "Note index" --summary "Top-level note table of c
 pa note lint
 ```
 
-See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
 ### `pa mcp [list|info|grep|call|auth|logout]`
 

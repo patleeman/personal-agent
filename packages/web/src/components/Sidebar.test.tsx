@@ -285,13 +285,13 @@ describe('Sidebar', () => {
     expect(html).toContain('repo');
   });
 
-  it('shows a draft note row in the sidebar while creating a new note', () => {
-    const html = renderSidebar('/notes?new=1');
+  it('shows a draft page row in the sidebar while creating a new note page', () => {
+    const html = renderSidebar('/pages?new=1&createType=note');
 
     expect(html).toContain('Open Pages');
-    expect(html).toContain('new note');
-    expect(html).toContain('Draft note');
-    expect(html).toContain('href="/notes?new=1"');
+    expect(html).toContain('new page');
+    expect(html).toContain('Draft page');
+    expect(html).toContain('href="/pages?new=1&amp;createType=note"');
   });
 
   it('keeps the workspace nav simple on workspace routes', () => {

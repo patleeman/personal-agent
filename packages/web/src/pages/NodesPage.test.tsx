@@ -104,7 +104,7 @@ function createProjectDetail() {
       },
     },
     taskCount: 1,
-    noteCount: 0,
+    childPageCount: 0,
     fileCount: 0,
     attachmentCount: 0,
     artifactCount: 0,
@@ -120,7 +120,7 @@ function createProjectDetail() {
       updatedAt: '2026-03-16T11:30:00.000Z',
       content: '# Active project\n\nStill being worked on.',
     },
-    notes: [],
+    childPages: [],
     files: [],
     attachments: [],
     artifacts: [],
@@ -316,7 +316,7 @@ describe('NodesPage', () => {
     expect(html).not.toContain('New note');
     expect(html).not.toContain('New project');
     expect(html).not.toContain('New skill');
-    expect(html).toContain('3 pages · 1 notes · 1 projects · 1 skills');
+    expect(html).toContain('3 total · 2 pages · 1 skill');
     expect(html).toContain('Lucene query');
     expect(html).toContain('aria-label="Pages view"');
     expect(html).toContain('Insert field');
@@ -326,18 +326,10 @@ describe('NodesPage', () => {
     expect(html).toContain('Save view');
     expect(html).toContain('Actions');
     expect((html.match(/<table/g) ?? []).length).toBe(1);
-    expect(html).toContain('Notes');
-    expect(html).toContain('Projects');
+    expect(html).toContain('Pages');
     expect(html).toContain('Skills');
-    expect(html).toContain('aria-label="View note"');
-    expect(html).toContain('aria-label="Edit note"');
-    expect(html).toContain('aria-label="Delete note"');
-    expect(html).toContain('aria-label="View project"');
-    expect(html).toContain('aria-label="Edit project"');
-    expect(html).toContain('aria-label="Delete project"');
-    expect(html).toContain('aria-label="View skill"');
-    expect(html).toContain('aria-label="Edit skill"');
-    expect(html).not.toContain('aria-label="Delete skill"');
+    expect((html.match(/aria-label="Open page"/g) ?? []).length).toBe(3);
+    expect((html.match(/aria-label="Delete page"/g) ?? []).length).toBe(2);
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
     expect(html).toContain('Agent Browser');
@@ -350,8 +342,8 @@ describe('NodesPage', () => {
     expect(html).toContain('New page');
     expect(html).toContain('Create page');
     expect(html).toContain('aria-label="Page type"');
-    expect(html).toContain('Note title');
-    expect(html).toContain('What this note is for and how the agent should use it.');
+    expect(html).toContain('Page title');
+    expect(html).toContain('What this page is for and how the agent should use it.');
   });
 
   it('renders the selected note in the dedicated note workspace', () => {

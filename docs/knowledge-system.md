@@ -67,9 +67,9 @@ A skill answers:
 
 > how should the agent do this kind of task?
 
-### 4. Project nodes = working memory for real work
+### 4. Tracked pages = working memory for real work
 
-Projects are durable tracked work.
+Tracked pages are durable tracked work.
 
 Use them for:
 
@@ -78,9 +78,9 @@ Use them for:
 - current focus
 - recent progress
 - milestones and tasks
-- project-specific notes and files
+- work-specific pages and files
 
-A project answers:
+A tracked page answers:
 
 > what is happening in this active workstream?
 
@@ -104,16 +104,16 @@ A simple way to say it:
 
 - **page** = product primitive
 - **node** = storage / compatibility term
-- **note / skill / project** = memory role
+- **page / skill / tracked page** = memory role
 
 ## The four main durable homes
 
 | Memory role | Durable home | Use it for | Do not default to |
 | --- | --- | --- | --- |
 | Behavioral memory | `AGENTS.md` | preferences, policy, durable behavior | node content or project state |
-| Knowledge memory | note pages backed by `sync/nodes/` | reusable facts and references | projects for generic knowledge |
+| Knowledge memory | pages backed by `sync/nodes/` | reusable facts and references | tracked pages for generic knowledge |
 | Procedural memory | skill pages backed by `sync/nodes/` | reusable workflows | AGENTS for long procedures |
-| Working memory | project pages backed by `sync/nodes/` | active tracked work | top-level notes for live project state |
+| Working memory | tracked pages backed by `sync/nodes/` | active tracked work | top-level reusable pages for live project state |
 
 ## What makes this a knowledge-management system
 
@@ -122,9 +122,9 @@ The point is giving the agent one sparse, durable place for each kind of memory.
 
 The system works when these boundaries stay clear:
 
-- reusable knowledge goes in **notes**
+- reusable knowledge goes in **pages**
 - reusable procedure goes in **skills**
-- active tracked work goes in **projects**
+- active tracked work goes in **tracked pages**
 - stable behavioral guidance goes in **AGENTS**
 
 That gives the agent a durable map of:
@@ -140,18 +140,18 @@ These memory types should reinforce each other instead of duplicating each other
 
 Typical patterns:
 
-- a **project** links to or cites **notes** it depends on
-- a **skill** can reference **notes** for deeper background
-- a **project** can depend on a **skill** as the recommended procedure
-- `AGENTS.md` can instruct the agent which notes or skills matter more in a profile
+- a **tracked page** links to or cites **pages** it depends on
+- a **skill** can reference **pages** for deeper background
+- a **tracked page** can depend on a **skill** as the recommended procedure
+- `AGENTS.md` can instruct the agent which pages or skills matter more in a profile
 
 A healthy pattern looks like this:
 
 - **AGENTS** gives the behavioral lens
 - **pages** provide one flexible durable unit
-- **notes** provide durable facts
+- **pages** provide durable facts and context
 - **skills** provide durable methods
-- **projects** provide current work context
+- **tracked pages** provide current work context
 
 ## The anti-duplication rule
 
@@ -159,10 +159,10 @@ The system gets messy when the same topic exists in multiple top-level homes wit
 
 Avoid this by default:
 
-- do not keep the same active work as both a top-level note and a project
+- do not keep the same active work as both a reusable page and a tracked page
 - do not copy a long procedure into both AGENTS and a skill
-- do not store reusable knowledge inside a project unless it is truly project-specific
-- do not create empty structure notes just to point at a project or skill
+- do not store reusable knowledge inside a tracked page unless it is truly work-specific
+- do not create empty structure pages just to point at another page or skill
 
 Prefer one canonical home per topic.
 
@@ -172,49 +172,49 @@ If supporting material belongs elsewhere, link to it instead of copying it.
 
 This is the part that makes the system feel alive instead of static.
 
-### Conversation → note
+### Conversation → page
 
-When a conversation clearly produces reusable knowledge, distill it into a note.
+When a conversation clearly produces reusable knowledge, distill it into a page.
 Keep raw conversations raw by default. Do not passively mine every transcript.
-The web UI now exposes a direct conversation → note promotion flow.
+The web UI now exposes a direct conversation → page promotion flow.
 
-### Conversation → project
+### Conversation → tracked page
 
-When a conversation turns into ongoing work, create or update a project.
-The web UI now exposes a direct conversation → project promotion flow.
+When a conversation turns into ongoing work, create or update a tracked page.
+The web UI now exposes a direct conversation → tracked-page promotion flow.
 
 ### Repeated manual process → skill
 
 When the same procedure keeps happening, extract it into a skill.
-The current product path is usually note → skill once the workflow is stable enough to trust.
+The current product path is usually page → skill once the workflow is stable enough to trust.
 
 ### Repeated standing preference → `AGENTS.md`
 
 When a pattern is really a durable user preference or standing instruction, put it in `AGENTS.md`.
 
-### Note → project
+### Page → tracked page
 
-If a note grows active status, blockers, and next steps, it probably wants to become a project.
-The web UI now supports note → project promotion directly from the note workspace.
+If a page grows active status, blockers, and next steps, it probably wants to become a tracked page.
+The web UI now supports page → tracked-page promotion directly from the page workspace.
 
-### Project → note
+### Tracked page → page
 
-If project-specific material becomes generally reusable knowledge, distill it into a note.
-That same high bar applies here too: prefer a small explicit durable update over broad transcript-to-note dumping.
-The web UI now supports project → note promotion directly from the project workspace.
+If work-specific material becomes generally reusable knowledge, distill it into a normal page.
+That same high bar applies here too: prefer a small explicit durable update over broad transcript-to-page dumping.
+The web UI now supports tracked-page → page promotion directly from the tracked-page workspace.
 
 That movement is normal. The system should stay sparse, but it does evolve.
 
 ## Fast capture and URL capture
 
-Not every durable input should start life as a polished note or project.
+Not every durable input should start life as a polished page or tracked page.
 
 The web UI now supports two low-friction capture paths:
 
 - **quick capture** for rough ideas or half-baked thoughts
 - **URL capture** for saving a web page into the node system with a local archived reference copy
 
-Captured items land as inbox-style note pages so they can be triaged later into a normal note, promoted into a project, or ignored.
+Captured items land as inbox-style pages so they can be triaged later into a normal page, promoted into a tracked page, or ignored.
 
 ## Shared knowledge vs active work
 
@@ -226,7 +226,7 @@ Shared knowledge should still make sense outside the current workstream.
 
 That belongs in:
 
-- notes
+- pages
 - skills
 - AGENTS
 
@@ -236,11 +236,11 @@ Active work is tied to one piece of ongoing execution.
 
 That belongs in:
 
-- projects
-- project notes
-- project attachments/artifacts
+- tracked pages
+- tracked-page child pages
+- tracked-page attachments/artifacts
 
-If something should still be useful next month even after the current project ends, it probably belongs outside the project.
+If something should still be useful next month even after the current tracked page ends, it probably belongs outside the tracked page.
 
 ## Retrieval model for agents
 
@@ -248,8 +248,8 @@ When an agent needs context, the intended retrieval pattern is:
 
 1. load relevant `AGENTS.md` for behavior and preferences
 2. load relevant skill pages for procedure
-3. load relevant note pages for durable knowledge
-4. load the project node if the task is about active work
+3. load relevant pages for durable knowledge
+4. load the tracked page if the task is about active work
 5. expand through explicit node relationships when graph context is likely to matter
 
 This is why the docs should describe these as one knowledge system rather than separate product features.
@@ -260,14 +260,14 @@ The old naming can be confusing.
 
 `pa note` operates on the shared **note subset**. The canonical shared store is still `sync/nodes/`, and `pa page` is now the preferred unified surface.
 
-That does **not** mean the whole durable memory system is only note pages.
+That does **not** mean the whole durable memory system is only one narrow page subset.
 
 The broader memory system is:
 
 - `AGENTS.md`
-- note pages
+- pages
 - skill pages
-- project pages
+- tracked pages
 
 `pa note` is just the CLI surface for one part of it.
 
@@ -302,5 +302,5 @@ That is the whole system.
 - [Pages](./pages.md)
 - [Pages](./pages.md)
 - [Nodes](./nodes.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
-- [Projects](./projects.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+- [Tracked Pages](./projects.md)

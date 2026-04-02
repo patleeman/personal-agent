@@ -158,37 +158,10 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       id: 'nav:nodes',
       section: 'nav',
       title: 'Pages',
-      subtitle: 'Browse notes, projects, and skills together',
-      keywords: ['pages', 'knowledge', 'knowledge base', 'nodes', 'notes', 'projects', 'skills'],
+      subtitle: 'Browse pages and skills together',
+      keywords: ['pages', 'knowledge', 'knowledge base', 'nodes', 'page', 'skill', 'skills'],
       order: 4,
       action: { kind: 'navigate', to: '/pages' },
-    },
-    {
-      id: 'nav:projects',
-      section: 'nav',
-      title: 'Projects',
-      subtitle: 'Browse durable work hubs and plans',
-      keywords: ['knowledge', 'workspaces', 'milestones', 'tasks'],
-      order: 5,
-      action: { kind: 'navigate', to: '/projects' },
-    },
-    {
-      id: 'nav:notes',
-      section: 'nav',
-      title: 'Notes',
-      subtitle: 'Browse durable note pages',
-      keywords: ['memory', 'knowledge', 'distilled', 'references'],
-      order: 6,
-      action: { kind: 'navigate', to: '/notes' },
-    },
-    {
-      id: 'nav:skills',
-      section: 'nav',
-      title: 'Skills',
-      subtitle: 'Browse reusable workflows',
-      keywords: ['knowledge', 'skills', 'workflows', 'procedures'],
-      order: 7,
-      action: { kind: 'navigate', to: '/skills' },
     },
     {
       id: 'nav:scheduled',
@@ -344,7 +317,7 @@ function buildConversationItems(
 
 function buildNodeItems(memoryData: MemoryData | null, projects: ProjectRecord[]): CommandPaletteItem<CommandPaletteAction>[] {
   const noteItems = (memoryData?.memoryDocs ?? []).map((memory) => {
-    const metaParts = ['note'];
+    const metaParts = ['page'];
     if (memory.updated) {
       metaParts.push(timeAgo(memory.updated));
     } else if (memory.usedInLastSession) {
@@ -360,7 +333,7 @@ function buildNodeItems(memoryData: MemoryData | null, projects: ProjectRecord[]
       subtitle: excerpt(memory.summary, 120),
       meta: metaParts.join(' · '),
       keywords: [
-        'note',
+        'page',
         memory.id,
         memory.title,
         memory.summary,
@@ -376,7 +349,7 @@ function buildNodeItems(memoryData: MemoryData | null, projects: ProjectRecord[]
   const projectItems = projects.map((project) => {
     const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
     const archived = isProjectArchived(project);
-    const metaParts = ['project', formatProjectStatus(project.status), project.id];
+    const metaParts = ['page', formatProjectStatus(project.status), project.id];
     if (project.updatedAt) {
       metaParts.push(timeAgo(project.updatedAt));
     }
@@ -393,7 +366,7 @@ function buildNodeItems(memoryData: MemoryData | null, projects: ProjectRecord[]
       subtitle: excerpt(summarizeProjectPreview(project), 120),
       meta: metaParts.join(' · '),
       keywords: [
-        'project',
+        'page',
         project.id,
         project.title,
         project.description,

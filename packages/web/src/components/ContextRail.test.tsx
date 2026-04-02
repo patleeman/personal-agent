@@ -286,21 +286,22 @@ describe('ContextRail run detail', () => {
   it('shows note resources in the notes rail instead of the note editor', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
-        memories: [{
+        profile: 'shared',
+        tagKeys: [],
+        nodes: [{
+          kind: 'note',
+          kinds: ['note'],
           id: 'personal-agent',
           title: 'Personal-agent knowledge hub',
           summary: 'Durable knowledge hub for personal-agent.',
-          tags: ['personal-agent', 'web-ui'],
-          path: '/tmp/personal-agent/INDEX.md',
-          type: 'project',
           status: 'active',
-          area: 'personal-agent',
-          role: 'hub',
-          related: ['personal-agent-web-ui-preferences'],
-          referenceCount: 1,
-          updated: '2026-03-18T12:00:00.000Z',
+          path: '/tmp/personal-agent/INDEX.md',
+          tags: ['personal-agent', 'web-ui'],
+          profiles: ['shared'],
+          searchText: 'Personal-agent knowledge hub Durable knowledge hub for personal-agent.',
+          note: { area: 'personal-agent', role: 'hub', referenceCount: 1 },
+          updatedAt: '2026-03-18T12:00:00.000Z',
         }],
-        memoryQueue: [],
       },
       loading: false,
       refreshing: false,
@@ -330,10 +331,10 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse notes and open them in the main workspace.');
+    expect(html).toContain('Browse pages and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Note');
-    expect(html).toContain('1 notes.');
+    expect(html).toContain('Page');
+    expect(html).toContain('1 pages.');
     expect(html).not.toContain('Note info');
     expect(html).not.toContain('INDEX.md');
   });
@@ -359,9 +360,9 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
-    expect(html).toContain('No referenced projects.');
+    expect(html.indexOf('Referenced pages')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced pages'));
+    expect(html).toContain('No referenced pages.');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {
@@ -405,18 +406,22 @@ describe('ContextRail run detail', () => {
   it('renders the notes browser rail with selected note resources', () => {
     vi.mocked(useApi).mockImplementation(() => ({
       data: {
-        memories: [{
+        profile: 'shared',
+        tagKeys: [],
+        nodes: [{
+          kind: 'note',
+          kinds: ['note'],
           id: 'personal-agent',
           title: 'Personal-agent knowledge hub',
           summary: 'Durable knowledge hub for personal-agent.',
-          tags: ['personal-agent'],
-          path: '/tmp/personal-agent/INDEX.md',
-          type: 'project',
           status: 'active',
-          referenceCount: 1,
-          updated: '2026-03-18T12:00:00.000Z',
+          path: '/tmp/personal-agent/INDEX.md',
+          tags: ['personal-agent'],
+          profiles: ['shared'],
+          searchText: 'Personal-agent knowledge hub Durable knowledge hub for personal-agent.',
+          note: { referenceCount: 1 },
+          updatedAt: '2026-03-18T12:00:00.000Z',
         }],
-        memoryQueue: [],
       },
       loading: false,
       refreshing: false,
@@ -446,10 +451,10 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse notes and open them in the main workspace.');
+    expect(html).toContain('Browse pages and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Note');
-    expect(html).toContain('1 notes.');
+    expect(html).toContain('Page');
+    expect(html).toContain('1 pages.');
     expect(html).not.toContain('INDEX.md');
   });
 

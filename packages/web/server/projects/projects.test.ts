@@ -46,7 +46,7 @@ describe('sortProjectTasks', () => {
 });
 
 describe('readProjectDetailFromProject', () => {
-  it('returns the project document, files, notes, and flat tasks from project storage', () => {
+  it('returns the project document, child pages, files, and flat tasks from project storage', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
@@ -85,7 +85,7 @@ describe('readProjectDetailFromProject', () => {
       },
     ]);
     expect(detail.taskCount).toBe(1);
-    expect(detail.noteCount).toBe(0);
+    expect(detail.childPageCount).toBe(0);
     expect(detail.fileCount).toBe(0);
     expect(detail.document?.content).toContain('Ship the project UI');
   });

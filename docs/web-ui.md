@@ -230,30 +230,30 @@ From the Pages page you can:
 - save reusable browser views on the server so they follow the active profile instead of the current browser tab
 - keep the table in either a roomier or denser row layout
 - start from one unified new-page screen that can create notes, projects, or skills
-- use compact per-row icon actions to view a page in the shared workspace, jump into the dedicated editor, or delete supported page types directly from the table
-- open any row into a shared page workspace with the main content in the center and metadata on the right
+- use compact per-row icon actions to open a page in the shared workspace or delete supported page types directly from the table
+- open any row into one shared page workspace with the main content in the center and metadata on the right
+- let that workspace adapt to the page role instead of switching to unrelated top-level product areas
 - edit shared page metadata there, including title/summary/description where appropriate, status, parent, and structured `key:value` tags with separate key/value inputs
-- keep recently opened notes, projects, and skills together in the sidebar’s unified Open Pages shelf
-- hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
+- keep recently opened pages and skills together in the sidebar’s unified Open Pages shelf
+- keep page bodies, skill definition/reference files, and tracked-page documents on the same shared markdown editor surface instead of three unrelated editors
+- use `/pages` as the only first-class browser URL for page and skill workspaces
 
-### Projects
+### Tracked page workspaces
 
-Projects are durable cross-conversation work hubs.
+Tracked pages are durable cross-conversation work hubs, and in the UI they open directly inside `/pages`.
 
-From the Projects page you can:
+From a tracked page workspace you can:
 
-- create a project from a short title plus a longer description
-- promote a project into a reusable note when project-specific material becomes generally useful knowledge
 - inspect current status, blockers, optional milestones, and tasks
-- edit the raw project page source (`INDEX.md` frontmatter + markdown body)
-- edit or regenerate the project document when present
-- append project notes
-- upload attachments and project artifacts
-- see linked conversations for the project
-- start a new conversation directly from the project
-- view a combined project timeline
+- edit the raw tracked-page source (`INDEX.md` frontmatter + markdown body)
+- edit or regenerate the tracked-page document when present
+- create child pages under the current page
+- upload attachments and page artifacts
+- see linked conversations for the page
+- start a new conversation directly from the page
+- view a combined page timeline
 
-See [Projects](./projects.md) and [Artifacts and Rendered Outputs](./artifacts.md).
+See [Tracked Pages](./projects.md) and [Artifacts and Rendered Outputs](./artifacts.md).
 
 ### Scheduled
 
@@ -294,15 +294,15 @@ The advanced pages still exist for subsystem-specific setup and controls:
 
 See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), and [Execution Targets](./execution-targets.md).
 
-### Notes
+### Note workspaces
 
-The Notes page is now the dedicated note workspace.
+Note pages also open inside `/pages`.
 
-Use it when you want note-specific editing, note creation, or explicit note-distillation and recovery work that is still running or needs attention.
+Use a note page workspace when you want note-specific editing or explicit note-distillation and recovery work that is still running or needs attention.
 
-The broader shared browser for notes, projects, and skills now lives on the Pages page.
+Use `/pages` for note work. The old note-specific browser URL is no longer part of the intended product surface.
 
-See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
 ### Tools
 
@@ -339,8 +339,8 @@ The Instructions page follows the same pattern: a stacked source picker and a fu
 Switching the active profile affects:
 
 - inbox
-- projects
-- the AGENTS/skills lens used around note pages
+- tracked pages
+- the AGENTS/skills lens used around pages
 - new live sessions
 
 ## Prompt references in conversations
@@ -349,9 +349,8 @@ The composer supports `@` references.
 
 You can reference:
 
-- projects
+- pages
 - scheduled tasks
-- note pages
 - skills
 - profiles
 
@@ -427,7 +426,7 @@ So, for example:
 - [Workspace](./workspace.md)
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Execution Targets](./execution-targets.md)
 - [MCP](./mcp.md)
 - [Inbox and Activity](./inbox.md)

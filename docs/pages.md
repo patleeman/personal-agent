@@ -48,9 +48,9 @@ Everything else should be layered on top of it.
 
 `personal-agent` still has recognizable constructs, but they are not separate storage objects anymore.
 
-### Note pages
+### Pages
 
-Use note pages for reusable knowledge.
+Use pages for reusable knowledge.
 
 Examples:
 
@@ -82,9 +82,9 @@ Convention:
 - keep Pi-compatible `name` and `description` frontmatter when runtime loading needs it
 - store scripts and references alongside the page
 
-### Project pages
+### Tracked pages
 
-Use project pages for tracked work.
+Use tracked pages for tracked work.
 
 Examples:
 
@@ -225,7 +225,13 @@ From there you can:
 - create a new page and shape it toward a note, project, or skill
 - open shared page metadata on the right
 - edit parent, status, and structured tags
-- move into dedicated note / project / skill editors when needed
+- open any page into a role-aware page workspace when needed
+
+Those role-aware workspaces are converging on the same page-editing primitives:
+
+- shared workspace chrome
+- shared page metadata and relationship rails
+- shared markdown document editor surface for note bodies, skill definitions/references, and project documents
 
 ## Migration and compatibility
 
@@ -234,12 +240,13 @@ Current compatibility rules:
 - storage remains under `sync/nodes/`
 - `pa page` is the preferred CLI surface
 - `pa node` remains as a compatibility alias
-- older `/nodes` URLs redirect to `/pages`
+- `/pages` is the browser URL for durable page work
+- note, project, and skill workspaces are all addressed inside that one surface
 
 ## Related docs
 
 - [Knowledge Management System](./knowledge-system.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
-- [Projects](./projects.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+- [Tracked Pages](./projects.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Nodes (legacy/internal term)](./nodes.md)

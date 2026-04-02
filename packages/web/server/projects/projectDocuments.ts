@@ -97,8 +97,8 @@ function buildProjectDigest(
   const taskLines = detail.tasks.slice(0, DEFAULT_MAX_ITEMS).map((task) => (
     `- ${task.title} [${task.status}]`
   ));
-  const noteLines = detail.notes.slice(0, DEFAULT_MAX_ITEMS).map((note) => (
-    `- ${note.title} [${note.kind}] — ${truncate(note.body, 180) || 'No body.'}`
+  const childPageLines = detail.childPages.slice(0, DEFAULT_MAX_ITEMS).map((page) => (
+    `- ${page.title} [${page.kind}] — ${truncate(page.summary || page.body, 180) || 'No content.'}`
   ));
   const fileLines = detail.files.slice(0, DEFAULT_MAX_ITEMS).map((file) => (
     `- ${file.title} (${file.originalName}, ${file.sizeBytes} bytes)${file.description ? ` — ${truncate(file.description, 140)}` : ''}`
@@ -123,8 +123,8 @@ function buildProjectDigest(
     'Existing project doc:',
     detail.document ? truncate(detail.document.content, 2_000) : 'No project doc exists yet.',
     '',
-    'Recent notes:',
-    formatList(noteLines, '- none'),
+    'Child pages:',
+    formatList(childPageLines, '- none'),
     '',
     'Files:',
     formatList(fileLines, '- none'),

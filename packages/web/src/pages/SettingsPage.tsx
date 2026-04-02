@@ -1255,7 +1255,7 @@ export function SettingsPage() {
 
                 <SettingsPanel
                   title="Default working directory"
-                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced project repo root still takes priority."
+                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-page repo root still takes priority."
                 >
                   {defaultCwdLoading && !defaultCwdState ? (
                     <p className="ui-card-meta">Loading default working directory…</p>
@@ -2149,7 +2149,7 @@ export function SettingsPage() {
 
             <SettingsPanel
               title="Reset saved UI preferences"
-              description="These actions clear saved UI state. They do not delete conversations, project pages, note pages, skill pages, or agent data."
+              description="These actions clear saved UI state. They do not delete conversations, pages, or agent data."
             >
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
 

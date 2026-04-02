@@ -80,7 +80,7 @@ Common durable roots:
 - `tasks/`
 - `projects/`
 
-See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
+See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
 ## Layering and precedence
 
@@ -268,7 +268,7 @@ For most setups:
 
 - [Decision Guide](./decision-guide.md)
 - [Getting Started](./getting-started.md)
-- [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Execution Targets](./execution-targets.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)

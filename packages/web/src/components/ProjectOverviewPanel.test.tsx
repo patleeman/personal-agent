@@ -30,7 +30,7 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
       },
     },
     taskCount: 2,
-    noteCount: 1,
+    childPageCount: 1,
     fileCount: 1,
     attachmentCount: 0,
     artifactCount: 1,
@@ -53,7 +53,21 @@ function createProjectDetail(overrides: Partial<ProjectDetail> = {}): ProjectDet
 
 Make the active project easy to scan from the conversation sidebar.`,
     },
-    notes: [],
+    childPages: [
+      {
+        id: 'sidebar-refresh-notes',
+        kind: 'note',
+        kinds: ['note'],
+        path: '/tmp/sidebar-refresh-notes/INDEX.md',
+        title: 'Sidebar refresh notes',
+        summary: 'Extra implementation context.',
+        status: 'active',
+        tags: ['type:note'],
+        parent: 'sidebar-refresh',
+        body: '# Sidebar refresh notes\n\nExtra implementation context.',
+        updatedAt: '2026-03-16T09:45:00.000Z',
+      },
+    ],
     files: [
       {
         id: 'file-1',
@@ -116,6 +130,7 @@ describe('ProjectOverviewPanel', () => {
     expect(html).toContain('Tasks');
     expect(html).toContain('Implement the richer summary panel');
     expect(html).toContain('Review project sidebar copy');
+    expect(html).toContain('1 page');
     expect(html).toContain('1 file');
     expect(html).toContain('1 conversation');
   });

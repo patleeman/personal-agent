@@ -24,10 +24,7 @@ import {
   updateProjectTaskRecord,
 } from '../projects/projects.js';
 import {
-  createProjectNoteRecord,
-  deleteProjectNoteRecord,
   saveProjectDocument,
-  updateProjectNoteRecord,
 } from '../projects/projectResources.js';
 
 const PROJECT_ACTION_VALUES = [
@@ -41,9 +38,6 @@ const PROJECT_ACTION_VALUES = [
   'reference',
   'unreference',
   'save_document',
-  'create_note',
-  'update_note',
-  'delete_note',
   'add_milestone',
   'update_milestone',
   'delete_milestone',
@@ -77,8 +71,6 @@ const ProjectToolParams = Type.Object({
   recentProgress: Type.Optional(Type.Array(Type.String())),
   milestoneId: Type.Optional(Type.String()),
   taskId: Type.Optional(Type.String()),
-  noteId: Type.Optional(Type.String()),
-  kind: Type.Optional(Type.String()),
   body: Type.Optional(Type.String()),
   makeCurrent: Type.Optional(Type.Boolean()),
   direction: Type.Optional(Type.Union(MOVE_DIRECTION_VALUES.map((value) => Type.Literal(value)))),
@@ -193,8 +185,8 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     lines.push(`tasks: ${detail.tasks.map((task) => `${task.id}:${task.status}`).join(', ')}`);
   }
 
-  if (detail.notes.length > 0) {
-    lines.push(`notes: ${detail.notes.map((note) => note.id).join(', ')}`);
+  if (detail.childPages.length > 0) {
+    lines.push(`pages: ${detail.childPages.map((page) => page.id).join(', ')}`);
   }
 
   if (detail.document) {
@@ -223,11 +215,11 @@ export function createProjectAgentExtension(options: {
       name: 'project',
       label: 'Project',
       description: 'Inspect, manage, and reference durable projects for the active profile.',
-      promptSnippet: 'Use the project tool for durable project CRUD, tasks, notes, document edits, files, and current-conversation references.',
+      promptSnippet: 'Use the project tool for durable project CRUD, tasks, document edits, files, and current-conversation references.',
       promptGuidelines: [
         'Use this tool for structured project management instead of hand-editing project state.yaml for normal cases.',
         'Use reference and unreference to manage current conversation ↔ project links.',
-        'Use create/update/get/list/archive/unarchive for project state, create/update/delete_task for flat task management, and note/document actions for durable context.',
+        'Use create/update/get/list/archive/unarchive for project state, create/update/delete_task for flat task management, and save_document for the canonical project doc.',
       ],
       parameters: ProjectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -264,7 +256,7 @@ export function createProjectAgentExtension(options: {
                   profile,
                   projectId,
                   taskCount: detail.taskCount,
-                  noteCount: detail.noteCount,
+                  childPageCount: detail.childPageCount,
                 },
               };
             }
@@ -437,73 +429,6 @@ export function createProjectAgentExtension(options: {
                   profile,
                   projectId,
                   path: document.path,
-                },
-              };
-            }
-
-            case 'create_note': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const note = createProjectNoteRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                title: readRequiredString(params.title, 'title'),
-                kind: readRequiredString(params.kind, 'kind'),
-                body: params.body,
-              });
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Created note ${note.id} for @${projectId}.` }],
-                details: {
-                  action: 'create_note',
-                  profile,
-                  projectId,
-                  noteId: note.id,
-                },
-              };
-            }
-
-            case 'update_note': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const noteId = readRequiredString(params.noteId, 'noteId');
-              const note = updateProjectNoteRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                noteId,
-                title: params.title,
-                kind: params.kind,
-                body: params.body,
-              });
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Updated note ${note.id} for @${projectId}.` }],
-                details: {
-                  action: 'update_note',
-                  profile,
-                  projectId,
-                  noteId: note.id,
-                },
-              };
-            }
-
-            case 'delete_note': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const noteId = readRequiredString(params.noteId, 'noteId');
-              deleteProjectNoteRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                noteId,
-              });
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Deleted note ${noteId} from @${projectId}.` }],
-                details: {
-                  action: 'delete_note',
-                  profile,
-                  projectId,
-                  noteId,
                 },
               };
             }

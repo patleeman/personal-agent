@@ -193,8 +193,8 @@ After this page:
 5. [Conversations](./conversations.md)
 7. [Web UI Guide](./web-ui.md)
 8. [Sync Guide](./sync.md)
-9. [Projects](./projects.md)
-10. [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+9. [Tracked Pages](./projects.md)
+10. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 11. [Scheduled Tasks](./scheduled-tasks.md)
 
 ## If something fails

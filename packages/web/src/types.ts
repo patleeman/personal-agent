@@ -196,14 +196,20 @@ export interface ProjectDocumentRecord {
   updatedAt: string;
 }
 
-export interface ProjectNote {
+export interface ProjectChildPage {
   id: string;
+  kind: 'note' | 'project' | 'skill';
+  kinds: string[];
   path: string;
   title: string;
-  kind: string;
+  summary: string;
+  description?: string;
+  status: string;
+  tags: string[];
+  parent: string;
   body: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProjectFile {
@@ -234,7 +240,7 @@ export interface ProjectLinkedConversation {
 
 export interface ProjectTimelineEntry {
   id: string;
-  kind: 'project' | 'document' | 'task' | 'note' | 'file' | 'conversation' | 'activity';
+  kind: 'project' | 'document' | 'task' | 'page' | 'file' | 'conversation' | 'activity';
   createdAt: string;
   title: string;
   href?: string;
@@ -244,13 +250,13 @@ export interface ProjectDetail {
   profile: string;
   project: ProjectRecord;
   taskCount: number;
-  noteCount: number;
+  childPageCount: number;
   fileCount: number;
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
   document: ProjectDocumentRecord | null;
-  notes: ProjectNote[];
+  childPages: ProjectChildPage[];
   files: ProjectFile[];
   attachments: ProjectFile[];
   artifacts: ProjectFile[];

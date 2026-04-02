@@ -49,13 +49,11 @@ export function ProjectOverviewPanel({
   removeDisabled?: boolean;
 }) {
   const record = project.project;
-  const projectHref = record.profile
-    ? `/projects/${encodeURIComponent(record.id)}?viewProfile=${encodeURIComponent(record.profile)}`
-    : `/projects/${encodeURIComponent(record.id)}`;
+  const projectHref = `/pages?kind=project&page=${encodeURIComponent(record.id)}`;
   const isArchived = isProjectArchived(record);
   const documentRecord = project.document;
   const taskCount = project.taskCount ?? project.tasks.length;
-  const noteCount = project.noteCount ?? project.notes.length;
+  const childPageCount = project.childPageCount ?? project.childPages.length;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
   const projectSummary = record.summary.trim() || record.description.trim();
   const documentPreview = previewLine(documentRecord?.content ?? '') || projectSummary;
@@ -63,7 +61,7 @@ export function ProjectOverviewPanel({
   const hiddenTasks = Math.max(0, project.tasks.length - tasks.length);
   const metrics = [
     `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`,
-    ...(noteCount > 0 ? [`${noteCount} ${noteCount === 1 ? 'note' : 'notes'}`] : []),
+    ...(childPageCount > 0 ? [`${childPageCount} ${childPageCount === 1 ? 'page' : 'pages'}`] : []),
     ...(fileCount > 0 ? [`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`] : []),
     ...(project.linkedConversations.length > 0 ? [`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`] : []),
   ];
@@ -85,7 +83,7 @@ export function ProjectOverviewPanel({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link to={projectHref} className="ui-action-button text-accent hover:text-accent/80">
-              open project
+              open page
             </Link>
             {onRemove && (
               <IconButton
@@ -128,7 +126,7 @@ export function ProjectOverviewPanel({
       <section className="border-t border-border-subtle px-3.5 py-3.5 space-y-3">
         <div>
           <p className="ui-section-label">Tasks</p>
-          <p className="ui-card-meta mt-1">Flat project todo list</p>
+          <p className="ui-card-meta mt-1">Flat page task list</p>
         </div>
 
         {tasks.length > 0 ? (
@@ -139,7 +137,7 @@ export function ProjectOverviewPanel({
                 <span className="shrink-0 text-dim">{formatProjectStatus(task.status)}</span>
               </div>
             ))}
-            {hiddenTasks > 0 && <p className="ui-card-meta">+{hiddenTasks} more in the full project view</p>}
+            {hiddenTasks > 0 && <p className="ui-card-meta">+{hiddenTasks} more in the full page view</p>}
           </div>
         ) : (
           <p className="ui-card-meta">No tasks yet.</p>

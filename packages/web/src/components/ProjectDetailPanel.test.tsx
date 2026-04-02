@@ -32,7 +32,7 @@ function createProjectDetail(): ProjectDetail {
       },
     },
     taskCount: 1,
-    noteCount: 1,
+    childPageCount: 1,
     fileCount: 1,
     attachmentCount: 1,
     artifactCount: 0,
@@ -54,13 +54,18 @@ Ship a tight prototype that proves whether proactive help feels useful.
 
 - Push secondary detail behind explicit reveals.`,
     },
-    notes: [
+    childPages: [
       {
         id: 'note-1',
-        path: '/tmp/bloodhound-prototype/notes/note-1.md',
+        path: '/tmp/bloodhound-prototype-note-1/INDEX.md',
         title: 'Teammate feel',
         kind: 'note',
-        body: 'Hidden note body that should not render in the compact sidebar list.',
+        kinds: ['note'],
+        summary: 'Hidden note body that should not render in the compact sidebar list.',
+        status: 'active',
+        tags: ['type:note'],
+        parent: 'bloodhound-prototype',
+        body: '# Teammate feel\n\nHidden note body that should not render in the compact sidebar list.',
         createdAt: '2026-03-23T15:46:00.000Z',
         updatedAt: '2026-03-23T15:46:00.000Z',
       },
@@ -142,14 +147,16 @@ describe('ProjectDetailPanel', () => {
     expect(html).toContain('Collapse secondary sections by default');
     expect(html).toContain('Dense design notes');
     expect(html).toContain('Prototype review thread');
-    expect(html).toContain('aria-label="Project title"');
+    expect(html).toContain('Pages');
+    expect(html).toContain('Open page');
+    expect(html).toContain('aria-label="Page title"');
     expect(html).toContain('name="project-status"');
     expect(html).not.toContain('Edit project');
     expect(html).not.toContain('Regenerate');
     expect(html).not.toContain('Edit document');
     expect(html).not.toContain('Current focus · Tighten the main project workspace.');
     expect(html).toContain('ui-note-editor-frame');
-    expect(html).not.toContain('Hidden note body that should not render in the compact sidebar list.');
+    expect(html).toContain('Hidden note body that should not render in the compact sidebar list.');
     expect(html).not.toContain('<h2 class="text-[20px] font-semibold tracking-tight text-primary">Document</h2>');
     expect(html).not.toContain('>Project doc<');
     expect(html.indexOf('ui-note-editor-frame')).toBeLessThan(html.indexOf('>Activity<'));

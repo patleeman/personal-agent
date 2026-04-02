@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import type { ProjectFile, ProjectNote } from '../types';
-import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
+import type { ProjectFile } from '../types';
+import { ProjectFileRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
-import { NoteEditorDocument } from './NoteEditorDocument';
+import { PageEditorDocument } from './PageEditorDocument';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import type { ProjectActivityItemShape } from './projectDetailState';
@@ -97,8 +97,8 @@ export function ProjectRequirementsContent({
   if (!content && acceptanceCriteria.length === 0) {
     return (
       <EmptyState
-        title="No project doc yet."
-        body="Write a short project note so future work has durable context."
+        title="No page doc yet."
+        body="Write a short page overview so future work has durable context."
         className="max-w-3xl py-8"
       />
     );
@@ -250,7 +250,7 @@ export function ProjectActivityContent({
       <div className="max-w-5xl py-4">
         <EmptyState
           title="No activity yet."
-          body="Notes, files, document edits, and linked conversations will show up here."
+          body="Pages, files, document edits, and linked conversations will show up here."
           className="max-w-3xl py-8"
         />
       </div>
@@ -326,7 +326,7 @@ export function ProjectDocumentContent({
   onChange: (value: string) => void;
 }) {
   return (
-    <NoteEditorDocument
+    <PageEditorDocument
       title=""
       onTitleChange={() => undefined}
       description=""
@@ -413,74 +413,15 @@ export function ProjectNodeLinksContent({
         title="Links to"
         items={links?.outgoing}
         surface="main"
-        emptyText="This project does not reference other pages yet."
+        emptyText="This page does not reference other pages yet."
       />
       <NodeLinkList
         title="Linked from"
         items={links?.incoming}
         surface="main"
-        emptyText="No other pages link to this project yet."
+        emptyText="No other pages link to this page yet."
       />
       <UnresolvedNodeLinks ids={links?.unresolved} />
-    </div>
-  );
-}
-
-export function ProjectNotesContent({
-  notes,
-  noteEditor,
-  noteEditorForm,
-  noteBusy,
-  noteError,
-  onEditNote,
-  onDeleteNote,
-}: {
-  notes: ProjectNote[];
-  noteEditor: { mode: 'add' } | { mode: 'edit'; noteId: string } | null;
-  noteEditorForm: ReactNode;
-  noteBusy: boolean;
-  noteError: string | null;
-  onEditNote: (note: ProjectNote) => void;
-  onDeleteNote: (noteId: string) => void;
-}) {
-  return (
-    <div className="max-w-5xl space-y-5">
-      {noteEditor?.mode === 'add' && noteEditorForm}
-
-      {notes.length === 0 && !noteEditor ? (
-        <EmptyState
-          title="No notes yet."
-          body="Add running notes, decisions, and questions as the project evolves."
-          className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-        />
-      ) : (
-        <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-          {notes.map((note) => {
-            const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
-            if (isEditing) {
-              return (
-                <div key={note.id} id={`project-note-${note.id}`} className="py-4 scroll-mt-6">
-                  {noteEditorForm}
-                </div>
-              );
-            }
-
-            return (
-              <ProjectNoteRow
-                key={note.id}
-                note={note}
-                busy={noteBusy}
-                onEdit={() => onEditNote(note)}
-                onDelete={() => onDeleteNote(note.id)}
-              >
-                {note.body.length > 0 ? <ProjectMarkdown body={note.body} /> : null}
-              </ProjectNoteRow>
-            );
-          })}
-        </div>
-      )}
-
-      {noteError && !noteEditor && <p className="text-[12px] text-danger">{noteError}</p>}
     </div>
   );
 }

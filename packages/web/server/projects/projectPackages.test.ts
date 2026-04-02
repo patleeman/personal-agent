@@ -16,7 +16,7 @@ import {
   createProjectTaskRecord,
 } from './projects.js';
 import {
-  createProjectNoteRecord,
+  migrateLegacyProjectPages,
   saveProjectDocument,
   uploadProjectFile,
 } from './projectResources.js';
@@ -165,13 +165,20 @@ describe('project share packages', () => {
       content: '# Shareable work\n\n## Requirements\n\nPortable handoff package.\n',
     });
 
-    createProjectNoteRecord({
+    mkdirSync(join(rootDir, 'state', 'sync', 'nodes', 'shareable-work', 'notes'), { recursive: true });
+    writeFileSync(join(rootDir, 'state', 'sync', 'nodes', 'shareable-work', 'notes', 'packaging-decision.md'), `---
+id: packaging-decision
+title: Packaging decision
+kind: decision
+createdAt: 2026-03-16T14:30:00.000Z
+updatedAt: 2026-03-16T14:45:00.000Z
+---
+Use one JSON file so humans and agents can ingest it easily.
+`);
+    migrateLegacyProjectPages({
       repoRoot,
       profile: 'datadog',
       projectId: 'shareable-work',
-      title: 'Packaging decision',
-      kind: 'decision',
-      body: 'Use one JSON file so humans and agents can ingest it easily.',
     });
 
     uploadProjectFile({
@@ -250,13 +257,15 @@ describe('project share packages', () => {
     expect('repoRoot' in pkg.project).toBe(false);
 
     expect(pkg.document?.content).toContain('Portable handoff package');
-    expect(pkg.notes).toEqual([
+    expect(pkg.pages).toEqual([
       expect.objectContaining({
         title: 'Packaging decision',
-        kind: 'decision',
+        kind: 'note',
+        parent: 'shareable-work',
       }),
     ]);
-    expect('path' in pkg.notes[0]!).toBe(false);
+    expect(pkg.pages[0]?.tags).toContain('noteType:decision');
+    expect('path' in pkg.pages[0]!).toBe(false);
 
     expect(pkg.attachments).toEqual([
       expect.objectContaining({

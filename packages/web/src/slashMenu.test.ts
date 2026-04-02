@@ -70,7 +70,7 @@ describe('buildSlashMenuItems', () => {
   });
 
   it('includes matching skills alongside slash commands', () => {
-    const items = buildSlashMenuItems('/pro', [
+    const items = buildSlashMenuItems('/pag', [
       ...SKILLS,
       {
         source: 'shared',
@@ -80,7 +80,7 @@ describe('buildSlashMenuItems', () => {
       },
     ]);
 
-    expect(items.some((item) => item.displayCmd === '/project')).toBe(true);
+    expect(items.some((item) => item.displayCmd === '/page')).toBe(true);
     expect(items.some((item) => item.displayCmd === '/skill:project-planning')).toBe(true);
   });
 

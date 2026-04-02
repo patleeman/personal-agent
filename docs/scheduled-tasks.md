@@ -227,5 +227,5 @@ pa tasks validate --all
 - [Async Attention and Wakeups](./async-attention.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Inbox and Activity](./inbox.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Runs](./runs.md)

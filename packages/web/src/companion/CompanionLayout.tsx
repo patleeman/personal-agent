@@ -15,13 +15,11 @@ import {
   isCompanionStandalone,
 } from './pwa';
 import {
+  buildCompanionPagesFilterPath,
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_INBOX_PATH,
-  COMPANION_NOTES_PATH,
   COMPANION_PAGES_PATH,
-  COMPANION_PROJECTS_PATH,
   COMPANION_QUICK_NOTE_PATH,
-  COMPANION_SKILLS_PATH,
   COMPANION_SYSTEM_PATH,
   COMPANION_TASKS_PATH,
 } from './routes';
@@ -126,16 +124,6 @@ function KnowledgeIcon({ active }: { active: boolean }) {
   );
 }
 
-function MemoriesIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
-      <path d="M6 4.5h8a3 3 0 0 1 3 3v12l-5-2.6-5 2.6v-15Z" />
-      <path d="M9 8h5" />
-      <path d="M9 11h5" />
-    </svg>
-  );
-}
-
 function SkillsIcon({ active }: { active: boolean }) {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
@@ -192,9 +180,6 @@ const TOP_BAR_ITEMS: Array<{ pathPrefix: string; label: string; hasBack: boolean
   { pathPrefix: COMPANION_INBOX_PATH, label: 'Inbox', hasBack: false },
   { pathPrefix: COMPANION_CONVERSATIONS_PATH, label: 'Chats', hasBack: false },
   { pathPrefix: COMPANION_PAGES_PATH, label: 'Pages', hasBack: false },
-  { pathPrefix: COMPANION_NOTES_PATH, label: 'Notes', hasBack: true },
-  { pathPrefix: COMPANION_PROJECTS_PATH, label: 'Projects', hasBack: true },
-  { pathPrefix: COMPANION_SKILLS_PATH, label: 'Skills', hasBack: true },
   { pathPrefix: COMPANION_SYSTEM_PATH, label: 'System', hasBack: true },
   { pathPrefix: COMPANION_TASKS_PATH, label: 'Tasks', hasBack: true },
 ];
@@ -545,10 +530,7 @@ export function CompanionLayout() {
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
   const noteActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
-  const knowledgeActive = location.pathname.startsWith(COMPANION_PAGES_PATH)
-    || location.pathname.startsWith(COMPANION_PROJECTS_PATH)
-    || location.pathname.startsWith(COMPANION_NOTES_PATH)
-    || location.pathname.startsWith(COMPANION_SKILLS_PATH);
+  const knowledgeActive = location.pathname.startsWith(COMPANION_PAGES_PATH);
 
   const navItems = [
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
@@ -739,14 +721,13 @@ export function CompanionLayout() {
               <DrawerSection title="Navigate">
                 <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and workspace chats." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_PAGES_PATH} label="Pages" detail="Browse all durable pages, then jump into projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_PAGES_PATH} label="Pages" detail="Browse all durable pages, then filter to pages or skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
-              <DrawerSection title="Pages">
-                <DrawerLink to={COMPANION_PROJECTS_PATH} label="Projects" detail="Read current focus, blockers, notes, and linked conversations." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note pages and distilled references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
+              <DrawerSection title="Page lenses">
+                <DrawerLink to={buildCompanionPagesFilterPath('page')} label="Pages" detail="Durable work, references, and tracked page detail." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={buildCompanionPagesFilterPath('skill')} label="Skills" detail="Reusable workflows and operating guidance." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
               <DrawerSection title="Companion">

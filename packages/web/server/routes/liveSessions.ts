@@ -262,11 +262,6 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
         profile: projectProfile,
         projectId,
       }).projectFile,
-      notesDir: resolveProjectNodePaths({
-        repoRoot: getRepoRootFn(),
-        profile: projectProfile,
-        projectId,
-      }).notesDir,
       filesDir: resolveProjectNodePaths({
         repoRoot: getRepoRootFn(),
         profile: projectProfile,
@@ -292,8 +287,8 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
       if (detail.document) {
         lineParts.push(`  document: ${relative(getRepoRootFn(), detail.document.path)}`);
       }
-      if (detail.noteCount > 0) {
-        lineParts.push(`  notesDir: ${relative(getRepoRootFn(), paths.notesDir)} (${detail.noteCount} notes)`);
+      if (detail.childPageCount > 0) {
+        lineParts.push(`  childPages: ${detail.childPageCount}`);
       }
       if (detail.fileCount > 0) {
         lineParts.push(`  filesDir: ${relative(getRepoRootFn(), paths.filesDir)} (${detail.fileCount} files)`);
@@ -306,9 +301,9 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
   });
 
   return [
-    'Referenced projects for this conversation:',
+    'Referenced pages for this conversation:',
     ...lines,
-    'Projects are durable cross-conversation hubs. Read the structured project fields, handoff doc, and notes when you need continuity, and use the project tool for structured project CRUD plus conversation reference changes.',
+    'Pages are durable cross-conversation hubs. Read the structured fields, handoff doc, and child pages when you need continuity, and use the project tool for tracked-page CRUD plus conversation reference changes.',
   ].join('\n');
 }
 

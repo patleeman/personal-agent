@@ -5,11 +5,11 @@ import { useApi } from '../hooks';
 import { BrowserRecordRow, EmptyState, ErrorState, LoadingState, ToolbarButton } from './ui';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import {
-  buildSkillsSearch,
   matchesSkill,
   SKILL_ITEM_SEARCH_PARAM,
   sortSkills,
 } from '../skillWorkspaceState';
+import { buildNodesHref, readSelectedNode } from '../nodeWorkspaceState';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
@@ -23,7 +23,13 @@ export function SkillsBrowserRail() {
   const [query, setQuery] = useState('');
   const skills = useMemo(() => sortSkills(data?.skills ?? []), [data?.skills]);
   const filteredSkills = useMemo(() => skills.filter((skill) => matchesSkill(skill, query)), [query, skills]);
-  const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get('skill')?.trim() || null, [location.search]);
+  const selectedSkillName = useMemo(() => {
+    const selected = readSelectedNode(location.search);
+    if (selected?.kind === 'skill') {
+      return selected.id;
+    }
+    return new URLSearchParams(location.search).get('skill')?.trim() || null;
+  }, [location.search]);
   const selectedItem = useMemo(() => new URLSearchParams(location.search).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null, [location.search]);
   const selectedSkill = skills.find((skill) => skill.name === selectedSkillName) ?? null;
 
@@ -71,7 +77,7 @@ export function SkillsBrowserRail() {
             {filteredSkills.map((skill) => (
               <BrowserRecordRow
                 key={skill.name}
-                to={`/skills${buildSkillsSearch(location.search, { skillName: skill.name, view: null, item: null })}`}
+                to={buildNodesHref('skill', skill.name)}
                 selected={skill.name === selectedSkillName}
                 label={skillRecordLabel(skill.source)}
                 aside={skill.usedInLastSession ? 'Used recently' : null}

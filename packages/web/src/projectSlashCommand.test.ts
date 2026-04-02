@@ -6,8 +6,8 @@ describe('parseProjectSlashCommand', () => {
     expect(parseProjectSlashCommand('/model gpt-5.4')).toBeNull();
   });
 
-  it('parses project creation commands', () => {
-    expect(parseProjectSlashCommand('/project new Build the web UI shell')).toEqual({
+  it('parses page creation commands', () => {
+    expect(parseProjectSlashCommand('/page new Build the web UI shell')).toEqual({
       kind: 'command',
       command: {
         action: 'new',
@@ -16,8 +16,8 @@ describe('parseProjectSlashCommand', () => {
     });
   });
 
-  it('parses project reference commands', () => {
-    expect(parseProjectSlashCommand('/project reference artifact-model')).toEqual({
+  it('parses page reference commands', () => {
+    expect(parseProjectSlashCommand('/page reference artifact-model')).toEqual({
       kind: 'command',
       command: {
         action: 'reference',
@@ -26,8 +26,8 @@ describe('parseProjectSlashCommand', () => {
     });
   });
 
-  it('parses project unreference aliases', () => {
-    expect(parseProjectSlashCommand('/project remove artifact-model')).toEqual({
+  it('parses page unreference aliases', () => {
+    expect(parseProjectSlashCommand('/page remove artifact-model')).toEqual({
       kind: 'command',
       command: {
         action: 'unreference',
@@ -37,13 +37,13 @@ describe('parseProjectSlashCommand', () => {
   });
 
   it('returns usage for invalid commands', () => {
-    expect(parseProjectSlashCommand('/project')).toEqual({
+    expect(parseProjectSlashCommand('/page')).toEqual({
       kind: 'invalid',
       message: PROJECT_SLASH_USAGE,
     });
-    expect(parseProjectSlashCommand('/project new')).toEqual({
+    expect(parseProjectSlashCommand('/page new')).toEqual({
       kind: 'invalid',
-      message: 'Usage: /project new <title>',
+      message: 'Usage: /page new <title>',
     });
   });
 });

@@ -15,12 +15,11 @@ import {
 } from '@personal-agent/core';
 import {
   listProjectFiles,
-  listProjectNotes,
+  migrateLegacyProjectPages,
   readProjectDocument,
   saveProjectDocument,
   type ProjectDocumentRecord,
   type ProjectFileRecord,
-  type ProjectNoteRecord,
 } from './projectResources.js';
 
 export interface ProjectLinkedConversation {
@@ -36,22 +35,38 @@ export interface ProjectLinkedConversation {
 
 export interface ProjectTimelineEntry {
   id: string;
-  kind: 'project' | 'document' | 'task' | 'note' | 'file' | 'conversation' | 'activity';
+  kind: 'project' | 'document' | 'task' | 'page' | 'file' | 'conversation' | 'activity';
   createdAt: string;
   title: string;
   href?: string;
 }
 
+export interface ProjectChildPageRecord {
+  id: string;
+  kind: 'note' | 'project' | 'skill';
+  kinds: string[];
+  title: string;
+  summary: string;
+  description?: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  path: string;
+  tags: string[];
+  parent: string;
+  body: string;
+}
+
 export interface ProjectDetail {
   project: ProjectDocument;
   taskCount: number;
-  noteCount: number;
+  childPageCount: number;
   fileCount: number;
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTaskDocument[];
   document: ProjectDocumentRecord | null;
-  notes: ProjectNoteRecord[];
+  childPages: ProjectChildPageRecord[];
   files: ProjectFileRecord[];
   attachments: ProjectFileRecord[];
   artifacts: ProjectFileRecord[];
@@ -213,7 +228,6 @@ export interface ProjectNodePaths {
   projectDir: string;
   projectFile: string;
   documentFile: string;
-  notesDir: string;
   filesDir: string;
   attachmentsDir: string;
   artifactsDir: string;
@@ -298,6 +312,46 @@ function matchesProjectProfile(tags: string[], profile: string): boolean {
   return profileTags.includes(profile);
 }
 
+function isNodeVisibleInProfile(node: ReturnType<typeof loadUnifiedNodes>['nodes'][number], profile: string): boolean {
+  return node.profiles.length === 0 || node.profiles.includes(profile);
+}
+
+function resolveProjectChildPageKind(node: Pick<ReturnType<typeof loadUnifiedNodes>['nodes'][number], 'type' | 'kinds'>): 'note' | 'project' | 'skill' {
+  if (node.type === 'project' || node.kinds.includes('project')) {
+    return 'project';
+  }
+  if (node.type === 'skill' || node.kinds.includes('skill')) {
+    return 'skill';
+  }
+  return 'note';
+}
+
+function listProjectChildPages(options: { repoRoot?: string; profile: string; ownerProfile: string; projectId: string }): ProjectChildPageRecord[] {
+  migrateLegacyProjectPages({ ...options, profile: options.ownerProfile });
+  const loaded = loadUnifiedNodes();
+
+  return loaded.nodes
+    .filter((node) => node.id !== options.projectId)
+    .filter((node) => node.links.parent === options.projectId)
+    .filter((node) => isNodeVisibleInProfile(node, options.profile))
+    .map((node) => ({
+      id: node.id,
+      kind: resolveProjectChildPageKind(node),
+      kinds: [...node.kinds],
+      title: node.title,
+      summary: node.summary,
+      ...(node.description ? { description: node.description } : {}),
+      status: node.status,
+      createdAt: node.createdAt,
+      updatedAt: node.updatedAt,
+      path: node.filePath,
+      tags: [...node.tags],
+      parent: options.projectId,
+      body: node.body,
+    }))
+    .sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '') || left.title.localeCompare(right.title) || left.id.localeCompare(right.id));
+}
+
 export function resolveProjectNodePaths(options: { repoRoot?: string; profile: string; projectId: string }): ProjectNodePaths {
   validateProjectId(options.projectId);
   const nodesDir = resolveUnifiedNodesDir();
@@ -310,7 +364,6 @@ export function resolveProjectNodePaths(options: { repoRoot?: string; profile: s
     projectDir,
     projectFile: join(projectDir, 'INDEX.md'),
     documentFile: join(projectDir, 'documents', PROJECT_DOCUMENT_FILE),
-    notesDir: join(projectDir, 'notes'),
     filesDir: join(projectDir, 'files'),
     attachmentsDir: join(projectDir, 'attachments'),
     artifactsDir: join(projectDir, 'artifacts'),
@@ -714,7 +767,7 @@ export function sortProjectTasks(tasks: ProjectTaskDocument[]): ProjectTaskDocum
 export function readProjectDetailFromProject(options: { repoRoot?: string; profile: string; projectId: string }): ProjectDetail {
   const { project } = readProjectNodeRecord(options);
   const tasks = sortProjectTasks(project.plan.tasks ?? []);
-  const notes = listProjectNotes(options);
+  const childPages = listProjectChildPages({ ...options, ownerProfile: project.ownerProfile });
   const files = listProjectFiles(options);
   const attachments = files.filter((file) => file.sourceKind !== 'artifact');
   const artifacts = files.filter((file) => file.sourceKind === 'artifact');
@@ -723,13 +776,13 @@ export function readProjectDetailFromProject(options: { repoRoot?: string; profi
   return {
     project,
     taskCount: tasks.length,
-    noteCount: notes.length,
+    childPageCount: childPages.length,
     fileCount: files.length,
     attachmentCount: attachments.length,
     artifactCount: artifacts.length,
     tasks,
     document,
-    notes,
+    childPages,
     files,
     attachments,
     artifacts,

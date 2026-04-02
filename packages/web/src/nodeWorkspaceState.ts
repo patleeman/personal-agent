@@ -1,6 +1,6 @@
 import type { NodeBrowserSummary, NodeLinkKind } from './types';
 
-export type NodeBrowserFilter = 'all' | NodeLinkKind;
+export type NodeBrowserFilter = 'all' | 'page' | 'skill';
 export type NodeBrowserSort = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc' | 'title_asc' | 'title_desc' | 'status_asc';
 export type NodeBrowserDateField = 'updated' | 'created';
 export type NodeBrowserGroupBy = 'none' | 'kind' | 'status' | 'profile' | 'area' | `tag:${string}`;
@@ -17,13 +17,18 @@ export const NODE_DATE_FIELD_SEARCH_PARAM = 'dateField';
 export const NODE_DATE_FROM_SEARCH_PARAM = 'from';
 export const NODE_DATE_TO_SEARCH_PARAM = 'to';
 export const NODE_DENSITY_SEARCH_PARAM = 'density';
+export const CREATE_NODE_SEARCH_PARAM = 'new';
+export const CREATE_NODE_KIND_SEARCH_PARAM = 'createType';
+export const CREATE_NODE_PARENT_SEARCH_PARAM = 'parent';
 
 function normalizeFilter(value: string | null): NodeBrowserFilter {
   switch (value?.trim()) {
+    case 'page':
     case 'note':
     case 'project':
+      return 'page';
     case 'skill':
-      return value;
+      return 'skill';
     default:
       return 'all';
   }
@@ -251,6 +256,64 @@ export function buildNodesHref(kind: NodeLinkKind | null | undefined, nodeId: st
   })}`;
 }
 
+export function readCreateNodeParent(search: string): string | null {
+  const value = new URLSearchParams(search).get(CREATE_NODE_PARENT_SEARCH_PARAM)?.trim().toLowerCase();
+  return value ? value : null;
+}
+
+export function readCreatingNode(search: string): boolean {
+  return new URLSearchParams(search).get(CREATE_NODE_SEARCH_PARAM) === '1';
+}
+
+export function readCreateNodeKind(search: string): NodeLinkKind {
+  const value = new URLSearchParams(search).get(CREATE_NODE_KIND_SEARCH_PARAM)?.trim();
+  if (value === 'project' || value === 'skill') {
+    return value;
+  }
+  return 'note';
+}
+
+export function buildNodeCreateSearch(
+  currentSearch: string,
+  updates: { creating?: boolean | null; createKind?: NodeLinkKind | null; parent?: string | null },
+): string {
+  const params = new URLSearchParams(buildNodesSearch(currentSearch, {
+    filter: readNodeBrowserFilter(currentSearch),
+    kind: null,
+    nodeId: null,
+  }));
+
+  if (updates.creating !== undefined) {
+    if (updates.creating) {
+      params.set(CREATE_NODE_SEARCH_PARAM, '1');
+    } else {
+      params.delete(CREATE_NODE_SEARCH_PARAM);
+      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
+      params.delete(CREATE_NODE_PARENT_SEARCH_PARAM);
+    }
+  }
+
+  if (updates.createKind !== undefined) {
+    if (updates.createKind) {
+      params.set(CREATE_NODE_KIND_SEARCH_PARAM, updates.createKind);
+    } else {
+      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
+    }
+  }
+
+  if (updates.parent !== undefined) {
+    const normalizedParent = updates.parent?.trim().toLowerCase();
+    if (normalizedParent) {
+      params.set(CREATE_NODE_PARENT_SEARCH_PARAM, normalizedParent);
+    } else {
+      params.delete(CREATE_NODE_PARENT_SEARCH_PARAM);
+    }
+  }
+
+  const next = params.toString();
+  return next ? `?${next}` : '';
+}
+
 function tokenizeQuery(query: string): string[] {
   const tokens: string[] = [];
   const normalized = query.trim();
@@ -308,6 +371,9 @@ function buildTokenPredicate(token: string): QueryPredicate {
         return node.description?.toLowerCase().includes(value) ?? false;
       case 'type':
       case 'kind':
+        if (value === 'page') {
+          return node.kind !== 'skill';
+        }
         return node.kinds.some((kind) => matches(kind)) || matches(node.kind);
       case 'status':
         return matches(node.status) || Boolean(extractTagValue(node.tags, 'status') && matches(extractTagValue(node.tags, 'status')));

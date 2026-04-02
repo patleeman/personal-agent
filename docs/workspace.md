@@ -102,6 +102,6 @@ Use projects, notes, skills, or artifacts when the result needs a durable concep
 
 - [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
-- [Projects](./projects.md)
+- [Tracked Pages](./projects.md)
 - [Web UI Guide](./web-ui.md)
 - [Command-Line Guide (`pa`)](./command-line.md)

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { NoteEditorDocument } from '../components/NoteEditorDocument';
 import type { MemoryDocDetail } from '../types';
-import { buildCompanionNotePath, COMPANION_NOTES_PATH } from './routes';
+import { buildCompanionPagePath, COMPANION_PAGES_PATH } from './routes';
 
 const COMPANION_QUICK_NOTE_DRAFT_STORAGE_KEY = 'pa-companion-quick-note-draft';
 const DEFAULT_QUICK_NOTE_TITLE = 'Quick note';
@@ -75,7 +75,7 @@ export function CompanionQuickNotePage() {
     <div className="flex h-full min-h-0 flex-col bg-base">
       <div className="border-b border-border-subtle px-4 pb-2 pt-[calc(env(safe-area-inset-top)+0.625rem)]">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3">
-          <Link to={COMPANION_NOTES_PATH} className="text-[12px] font-medium text-accent">← Notes</Link>
+          <Link to={COMPANION_PAGES_PATH} className="text-[12px] font-medium text-accent">← Pages</Link>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -107,10 +107,10 @@ export function CompanionQuickNotePage() {
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Saved to notes</p>
+                  <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300">Saved to pages</p>
                   <p className="truncate text-[13px] text-primary">{savedNote.memory.id}</p>
                 </div>
-                <Link to={buildCompanionNotePath(savedNote.memory.id)} className="shrink-0 text-[12px] font-medium text-accent">Open</Link>
+                <Link to={buildCompanionPagePath('note', savedNote.memory.id)} className="shrink-0 text-[12px] font-medium text-accent">Open</Link>
               </div>
             </div>
           ) : null}
