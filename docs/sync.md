@@ -30,7 +30,7 @@ Typical durable paths include:
 - `pi-agent/state/conversation-attention/**`
 
 Machine-local runtime files stay out of the synced surface by living outside the sync root.
-That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
+That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index. Under `pi-agent/state`, only `conversation-attention/**` should remain in the sync repo.
 
 `config/config.json` remains machine-local by default.
 
