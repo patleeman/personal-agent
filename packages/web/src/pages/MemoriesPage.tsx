@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
@@ -34,11 +34,9 @@ import { readEditableNoteBody } from '../noteDocument';
 import { normalizeMarkdownValue } from '../markdownDocument';
 import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
-import { NodeRelationshipsPanel } from '../components/NodeRelationshipsPanel';
-import { NodeMetadataPanel } from '../components/NodeMetadataPanel';
-import { NodeCaptureTriagePanel } from '../components/NodeCaptureTriagePanel';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const NOTE_STATUS_OPTIONS = ['inbox', 'active', 'draft', 'archived', 'ignored'] as const;
 
 function memoryWorkItemDotClass(item: MemoryWorkItem): string {
   switch (item.status) {
@@ -351,6 +349,327 @@ function NoteReferenceList({
   );
 }
 
+function normalizeNoteCustomTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const entry of tags) {
+    const value = entry.trim();
+    if (!value || /^parent:/i.test(value) || /^status:/i.test(value) || /^type:note$/i.test(value) || /^notetype:/i.test(value)) {
+      continue;
+    }
+
+    const key = value.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(value);
+  }
+
+  return normalized.sort((left, right) => left.localeCompare(right));
+}
+
+function sameStringArray(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
+function humanizeNoteStatus(status: string): string {
+  const normalized = status.replace(/[_-]+/g, ' ').trim();
+  if (!normalized) {
+    return 'Unknown';
+  }
+  return normalized.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function NotePropertiesPanel({
+  nodeId,
+  onChanged,
+}: {
+  nodeId: string;
+  onChanged?: () => void;
+}) {
+  const detailApi = useApi(() => api.nodeDetail(nodeId), `note-properties:${nodeId}`);
+  const nodesApi = useApi(api.nodes, 'note-property-options');
+  const node = detailApi.data?.node ?? null;
+  const [status, setStatus] = useState('active');
+  const [parent, setParent] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!node) {
+      return;
+    }
+
+    setStatus(node.status || 'active');
+    setParent(node.parent ?? '');
+    setTags(normalizeNoteCustomTags(node.tags));
+    setTagInput('');
+    setSaveError(null);
+    setSaveNotice(null);
+  }, [node]);
+
+  const parentOptions = useMemo(() => {
+    return (nodesApi.data?.nodes ?? [])
+      .filter((candidate) => candidate.id !== nodeId)
+      .sort((left, right) => left.title.localeCompare(right.title) || left.id.localeCompare(right.id));
+  }, [nodeId, nodesApi.data?.nodes]);
+  const parentMatch = useMemo(
+    () => parentOptions.find((candidate) => candidate.id === parent.trim().toLowerCase()) ?? null,
+    [parent, parentOptions],
+  );
+  const tagSuggestions = useMemo(() => {
+    const allTags = (nodesApi.data?.nodes ?? []).flatMap((candidate) => candidate.tags);
+    return normalizeNoteCustomTags(allTags);
+  }, [nodesApi.data?.nodes]);
+  const filteredTagSuggestions = useMemo(() => {
+    const selected = new Set(tags.map((entry) => entry.toLowerCase()));
+    const query = tagInput.trim().toLowerCase();
+    return tagSuggestions
+      .filter((entry) => !selected.has(entry.toLowerCase()))
+      .filter((entry) => query.length === 0 || entry.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [tagInput, tagSuggestions, tags]);
+  const savedTags = useMemo(() => normalizeNoteCustomTags(node?.tags ?? []), [node?.tags]);
+  const normalizedTags = useMemo(() => normalizeNoteCustomTags(tags), [tags]);
+  const normalizedParent = parent.trim().toLowerCase();
+  const statusOptions = useMemo(() => {
+    const options = new Set<string>(NOTE_STATUS_OPTIONS);
+    if (node?.status?.trim()) {
+      options.add(node.status.trim());
+    }
+    return [...options].sort((left, right) => left.localeCompare(right));
+  }, [node?.status]);
+  const dirty = Boolean(node) && (
+    status !== (node?.status || 'active')
+    || normalizedParent !== (node?.parent ?? '')
+    || !sameStringArray(normalizedTags, savedTags)
+  );
+
+  const addTag = useCallback((value: string) => {
+    const nextValue = value.trim();
+    if (!nextValue) {
+      return;
+    }
+
+    setTags((current) => normalizeNoteCustomTags([...current, nextValue]));
+    setTagInput('');
+    setSaveError(null);
+    setSaveNotice(null);
+  }, []);
+
+  const removeTag = useCallback((value: string) => {
+    setTags((current) => current.filter((entry) => entry.toLowerCase() !== value.toLowerCase()));
+    setSaveError(null);
+    setSaveNotice(null);
+  }, []);
+
+  const handleTagInputKeyDown = useCallback((event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' && event.key !== ',') {
+      return;
+    }
+
+    event.preventDefault();
+    addTag(tagInput);
+  }, [addTag, tagInput]);
+
+  const handleSave = useCallback(async () => {
+    if (!node || !dirty || saveBusy) {
+      return;
+    }
+
+    if (normalizedParent && !parentOptions.some((candidate) => candidate.id === normalizedParent)) {
+      setSaveError('Choose an existing parent node.');
+      setSaveNotice(null);
+      return;
+    }
+
+    setSaveBusy(true);
+    setSaveError(null);
+    setSaveNotice(null);
+    try {
+      const removeTags = savedTags.filter((tag) => !normalizedTags.includes(tag));
+      if (status !== 'inbox' && node.tags.some((tag) => /^notetype:capture$/i.test(tag))) {
+        removeTags.push('noteType:capture');
+      }
+
+      await api.saveNodeDetail(node.id, {
+        status,
+        parent: normalizedParent || null,
+        addTags: normalizedTags.filter((tag) => !savedTags.includes(tag)),
+        removeTags,
+      });
+      await detailApi.refetch({ resetLoading: false });
+      emitMemoriesChanged();
+      onChanged?.();
+      setSaveNotice('Saved properties.');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaveBusy(false);
+    }
+  }, [detailApi, dirty, node, normalizedParent, normalizedTags, onChanged, parentOptions, saveBusy, savedTags, status]);
+
+  if (!node) {
+    return <p className="text-[12px] text-dim">Loading properties…</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <label className="grid gap-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-dim">Status</span>
+        <select
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value);
+            setSaveError(null);
+            setSaveNotice(null);
+          }}
+          className={INPUT_CLASS}
+        >
+          {statusOptions.map((value) => (
+            <option key={value} value={value}>{humanizeNoteStatus(value)}</option>
+          ))}
+        </select>
+      </label>
+
+      <label className="grid gap-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-dim">Parent</span>
+        <input
+          list={`note-parent-options-${nodeId}`}
+          value={parent}
+          onChange={(event) => {
+            setParent(event.target.value);
+            setSaveError(null);
+            setSaveNotice(null);
+          }}
+          className={`${INPUT_CLASS} font-mono`}
+          placeholder="Search nodes by id"
+          spellCheck={false}
+        />
+        <datalist id={`note-parent-options-${nodeId}`}>
+          {parentOptions.map((option) => (
+            <option key={option.id} value={option.id}>{`${option.title} (${option.kind})`}</option>
+          ))}
+        </datalist>
+        {parentMatch ? (
+          <p className="text-[11px] text-secondary">{parentMatch.title} · {parentMatch.kind}</p>
+        ) : parent.trim().length > 0 ? (
+          <p className="text-[11px] text-dim">No matching node.</p>
+        ) : null}
+      </label>
+
+      <div className="grid gap-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-dim">Tags</span>
+        <div className="flex items-center gap-2">
+          <input
+            list={`note-tag-options-${nodeId}`}
+            value={tagInput}
+            onChange={(event) => {
+              setTagInput(event.target.value);
+              setSaveError(null);
+            }}
+            onKeyDown={handleTagInputKeyDown}
+            className={INPUT_CLASS}
+            placeholder="Add a tag"
+            spellCheck={false}
+          />
+          <ToolbarButton onClick={() => addTag(tagInput)} disabled={tagInput.trim().length === 0}>Add</ToolbarButton>
+        </div>
+        <datalist id={`note-tag-options-${nodeId}`}>
+          {tagSuggestions.map((tag) => (
+            <option key={tag} value={tag} />
+          ))}
+        </datalist>
+        {filteredTagSuggestions.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-secondary">
+            <span className="text-dim">Suggested</span>
+            {filteredTagSuggestions.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => addTag(tag)}
+                className="transition-colors hover:text-primary"
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {normalizedTags.length === 0 ? (
+          <p className="text-[12px] text-dim">No custom tags.</p>
+        ) : (
+          <div className="space-y-px">
+            {normalizedTags.map((tag) => (
+              <div key={tag} className="ui-list-row -mx-1 flex items-center justify-between gap-3 px-2 py-2">
+                <span className="min-w-0 break-all text-[12px] text-primary">{tag}</span>
+                <button
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  className="shrink-0 text-[12px] text-dim transition-colors hover:text-danger"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <ToolbarButton onClick={() => { void handleSave(); }} disabled={!dirty || saveBusy} className="text-accent">
+          {saveBusy ? 'Saving…' : 'Save properties'}
+        </ToolbarButton>
+        {saveNotice ? <span className="text-[12px] text-secondary">{saveNotice}</span> : null}
+      </div>
+      {saveError ? <p className="text-[12px] text-danger">{saveError}</p> : null}
+    </div>
+  );
+}
+
+function NoteReferencesPanel({
+  detail,
+}: {
+  detail: MemoryDocDetail;
+}) {
+  const supportingReferences = detail.references ?? [];
+  const links = detail.links;
+  const hasLinkedNodes = (links?.outgoing?.length ?? 0) > 0 || (links?.incoming?.length ?? 0) > 0 || (links?.unresolved?.length ?? 0) > 0;
+
+  if (!hasLinkedNodes && supportingReferences.length === 0) {
+    return null;
+  }
+
+  return (
+    <NodeRailSection title="References">
+      <div className="space-y-4">
+        {hasLinkedNodes ? (
+          <>
+            <NodeLinkList title="Links to" items={links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
+            <NodeLinkList title="Linked from" items={links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+            <UnresolvedNodeLinks ids={links?.unresolved} />
+          </>
+        ) : null}
+        {supportingReferences.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">Files</p>
+            <NoteReferenceList references={supportingReferences} />
+          </div>
+        ) : null}
+      </div>
+    </NodeRailSection>
+  );
+}
+
 export function NoteWorkspace({
   detail,
   onNavigate,
@@ -622,17 +941,11 @@ export function NoteWorkspace({
           ? { text: 'Autosave failed', className: 'text-danger' }
           : { text: 'All changes saved', className: 'text-dim' };
 
-  const noteProperties = memory ? [
+  const noteDetails = memory ? [
     { label: 'Reference', value: <span className="font-mono text-[12px]">@{memory.id}</span> },
     ...(memory.updated ? [{ label: 'Updated', value: timeAgo(memory.updated) }] : []),
     ...(memory.path ? [{ label: 'Path', value: <span className="break-all font-mono text-[12px] leading-6 text-secondary">{memory.path}</span> }] : []),
   ] : [];
-  const hasReferences = detail?.references.length ?? 0 > 0;
-  const hasRelationships = Boolean(
-    (detail?.links?.outgoing?.length ?? 0) > 0
-      || (detail?.links?.incoming?.length ?? 0) > 0
-      || (detail?.links?.unresolved?.length ?? 0) > 0,
-  );
 
   return (
     <NodeWorkspaceShell
@@ -730,44 +1043,20 @@ export function NoteWorkspace({
       inspector={!isCreating && (
         <>
           <NodeRailSection title="Properties">
-            <NodePropertyList items={noteProperties} />
+            <NotePropertiesPanel nodeId={detail.memory.id} onChanged={onRefetched} />
           </NodeRailSection>
 
-          {hasReferences ? (
-            <NodeRailSection title="References" meta={`${detail?.references.length}`}>
-              <NoteReferenceList references={detail?.references ?? []} />
-            </NodeRailSection>
-          ) : null}
-          <NodeRailSection title="Node metadata">
-            <NodeMetadataPanel
-              nodeId={detail.memory.id}
-              onChanged={onRefetched}
-              showTitle={false}
-              showDescription={false}
-            />
-          </NodeRailSection>
-          {detail.memory.type === 'capture' || detail.memory.status === 'inbox' ? (
-            <NodeRailSection title="Capture triage">
-              <NodeCaptureTriagePanel nodeId={detail.memory.id} onChanged={onRefetched} />
-            </NodeRailSection>
-          ) : null}
-          {hasRelationships ? (
-            <NodeRailSection title="Relationships">
-              <div className="space-y-4">
-                <NodeLinkList title="Links to" items={detail?.links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-                <NodeLinkList title="Linked from" items={detail?.links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
-                <UnresolvedNodeLinks ids={detail?.links?.unresolved} />
-              </div>
-            </NodeRailSection>
-          ) : null}
-          <NodeRailSection title="Node graph">
-            <NodeRelationshipsPanel
-              nodeId={detail.memory.id}
-              emptyOutgoingText="No typed node links yet."
-              emptyIncomingText="No typed links point here yet."
-              onChanged={onRefetched}
-            />
-          </NodeRailSection>
+          <details className="ui-disclosure">
+            <summary className="ui-disclosure-summary">
+              <span>Details</span>
+              <span className="ui-disclosure-meta">Reference, path, updated</span>
+            </summary>
+            <div className="ui-disclosure-body">
+              <NodePropertyList items={noteDetails} />
+            </div>
+          </details>
+
+          <NoteReferencesPanel detail={detail} />
         </>
       )}
     >

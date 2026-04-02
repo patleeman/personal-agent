@@ -120,6 +120,16 @@ The model is closer to Datadog-style event tags than a rigid schema.
 
 In the UI, the shared node editor on `/nodes` also treats `parent` and `status` as first-class fields instead of making you edit their reserved tags by hand.
 
+The dedicated note workspace on `/notes` is intentionally leaner:
+
+- the right rail is for editable note properties first, not raw node internals
+- status is surfaced as a constrained workflow field while still persisting as reserved `status:*` tag state
+- parent is picked from other nodes via a searchable dropdown
+- custom tags are added one at a time with suggestions instead of editing a freeform textarea
+- system details like path and node id are collapsed into a secondary details disclosure
+- note references are shown at the bottom and are derived from `@node-id` mentions in the markdown body plus supporting files under `references/`
+- the note editor does not expose manual typed-link editing in the sidebar
+
 ## Parent/child hierarchy
 
 Relationships are stored child → parent only.
