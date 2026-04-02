@@ -11,7 +11,7 @@ import {
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const DOCUMENT_VERSION = 1 as const;
 
-export const CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX = 'Recover node distillation:';
+export const CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX = 'Recover page distillation:';
 export const LEGACY_CONVERSATION_MEMORY_DISTILL_RECOVERY_TITLE_PREFIX = 'Recover memory distillation:';
 
 export type ConversationMemoryMaintenanceTrigger = 'manual' | 'turn_end' | 'auto_compaction_end';

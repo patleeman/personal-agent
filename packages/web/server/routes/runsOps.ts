@@ -64,10 +64,10 @@ export function registerRunsOpsRoutes(
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
       const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
-      if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
-      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be retried.' }); return; }
+      if (!distillInput) { res.status(409).json({ error: 'This run is not a page distillation run.' }); return; }
+      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted page distillation runs can be retried.' }); return; }
       const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
-      if (existing.running) { res.status(409).json({ error: 'A node distillation is already running for this conversation.' }); return; }
+      if (existing.running) { res.status(409).json({ error: 'A page distillation is already running for this conversation.' }); return; }
       const result = await startConversationMemoryDistillRun({
         conversationId: distillInput.conversationId,
         profile,
@@ -82,7 +82,7 @@ export function registerRunsOpsRoutes(
         port: context.getServerPort(),
       });
       if (!result.accepted || !result.runId) {
-        const error = result.reason ?? 'Could not retry conversation node distillation.';
+        const error = result.reason ?? 'Could not retry conversation page distillation.';
         markConversationMemoryMaintenanceRunFailed({ profile, conversationId: distillInput.conversationId, checkpointId: distillInput.checkpointId, error });
         if (distillInput.emitActivity) {
           try {
@@ -106,7 +106,7 @@ export function registerRunsOpsRoutes(
       const message = err instanceof Error ? err.message : String(err);
       const status = message.includes('not found')
         ? 404
-        : message.includes('already running') || message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
+        : message.includes('already running') || message.includes('not a page distillation run') || message.includes('Only failed or interrupted')
           ? 409
           : 500;
       res.status(status).json({ error: message });
@@ -124,15 +124,15 @@ export function registerRunsOpsRoutes(
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
       const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
-      if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
+      if (!distillInput) { res.status(409).json({ error: 'This run is not a page distillation run.' }); return; }
       const maintenanceState = readConversationMemoryMaintenanceState({ profile, conversationId: distillInput.conversationId });
       if (maintenanceState?.lastCompletedCheckpointId === distillInput.checkpointId && maintenanceState.status !== 'failed') {
         res.json({ ok: true, runId: run.runId, conversationId: distillInput.conversationId, resolved: 'already-completed', ...(maintenanceState.promotedMemoryId ? { memoryId: maintenanceState.promotedMemoryId } : {}), ...(maintenanceState.promotedReferencePath ? { referencePath: maintenanceState.promotedReferencePath } : {}) });
         return;
       }
-      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered automatically.' }); return; }
+      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted page distillation runs can be recovered automatically.' }); return; }
       const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
-      if (existing.running) { res.status(409).json({ error: 'A node distillation is already running for this conversation.' }); return; }
+      if (existing.running) { res.status(409).json({ error: 'A page distillation is already running for this conversation.' }); return; }
       const recovered = await distillConversationMemoryNow({
         conversationId: distillInput.conversationId,
         profile,
@@ -172,7 +172,7 @@ export function registerRunsOpsRoutes(
 
       const status = message.includes('not found')
         ? 404
-        : message.includes('already running') || message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
+        : message.includes('already running') || message.includes('not a page distillation run') || message.includes('Only failed or interrupted')
           ? 409
           : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
             ? 400
@@ -188,13 +188,13 @@ export function registerRunsOpsRoutes(
       if (!detail) { res.status(404).json({ error: 'Run not found' }); return; }
       const run = detail.run;
       const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
-      if (!distillInput) { res.status(409).json({ error: 'This run is not a node distillation run.' }); return; }
-      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted node distillation runs can be recovered in a conversation.' }); return; }
+      if (!distillInput) { res.status(409).json({ error: 'This run is not a page distillation run.' }); return; }
+      if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') { res.status(409).json({ error: 'Only failed or interrupted page distillation runs can be recovered in a conversation.' }); return; }
       const maintenanceState = readConversationMemoryMaintenanceState({ profile, conversationId: distillInput.conversationId });
       const sessionFile = resolveConversationSessionFile(distillInput.conversationId)
         ?? maintenanceState?.latestSessionFile
         ?? run.manifest?.source?.filePath;
-      if (!sessionFile || !sessionFile.trim() || !(await import('node:fs')).existsSync(sessionFile)) { res.status(404).json({ error: 'Conversation not found for this node distillation run.' }); return; }
+      if (!sessionFile || !sessionFile.trim() || !(await import('node:fs')).existsSync(sessionFile)) { res.status(404).json({ error: 'Conversation not found for this page distillation run.' }); return; }
       const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === distillInput.conversationId);
       const cwd = sourceSession?.cwd
         ?? maintenanceState?.latestCwd
@@ -256,7 +256,7 @@ export function registerRunsOpsRoutes(
       const message = err instanceof Error ? err.message : String(err);
       const status = message.includes('not found')
         ? 404
-        : message.includes('not a node distillation run') || message.includes('Only failed or interrupted')
+        : message.includes('not a page distillation run') || message.includes('Only failed or interrupted')
           ? 409
           : 500;
       res.status(status).json({ error: message });

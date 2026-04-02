@@ -30,13 +30,14 @@ export function getRailPageKey(pathname: string): string {
     case 'system':
     case 'skills':
     case 'nodes':
+    case 'pages':
     case 'instructions':
     case 'tools':
     case 'settings':
     case 'memory':
     case 'knowledge':
     case 'capabilities':
-      return section;
+      return section === 'pages' ? 'nodes' : section;
     case 'notes':
     case 'memories':
       return 'notes';

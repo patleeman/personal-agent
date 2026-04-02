@@ -44,7 +44,7 @@ function readFrontmatterField(frontmatter: string | null, key: string): string {
   }
 
   const match = frontmatter.match(new RegExp(`^${key}:\\s*(.*)$`, 'm'));
-  return match?.[1]?.trim().replace(/^['\"]|['\"]$/g, '') ?? '';
+  return match?.[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '';
 }
 
 function writeFrontmatterField(frontmatter: string | null, key: string, value: string): string {
@@ -503,7 +503,7 @@ export function SkillWorkspace({
               { label: 'Source', value: detail.skill.source },
             ]} />
           </NodeRailSection>
-          <NodeRailSection title="Node metadata">
+          <NodeRailSection title="Page metadata">
             <NodeMetadataPanel
               nodeId={detail.skill.name}
               onChanged={onRefetched}
@@ -524,16 +524,16 @@ export function SkillWorkspace({
           {hasRelationships ? (
             <NodeRailSection title="Relationships">
               <div className="space-y-4">
-                <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
-                <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
+                <NodeLinkList title="Links to" items={detail.links?.outgoing} surface="main" emptyText="This skill does not reference other pages yet." />
+                <NodeLinkList title="Linked from" items={detail.links?.incoming} surface="main" emptyText="No other pages link to this skill yet." />
                 <UnresolvedNodeLinks ids={detail.links?.unresolved} />
               </div>
             </NodeRailSection>
           ) : null}
-          <NodeRailSection title="Node graph">
+          <NodeRailSection title="Page graph">
             <NodeRelationshipsPanel
               nodeId={detail.skill.name}
-              emptyOutgoingText="No typed node links yet."
+              emptyOutgoingText="No typed page links yet."
               emptyIncomingText="No typed links point here yet."
               onChanged={onRefetched}
             />

@@ -145,7 +145,7 @@ function emptyApiResult(data: unknown = null) {
   };
 }
 
-function installUseApiMock(path: string) {
+function installUseApiMock(_path: string) {
   const nodes = createNodeBrowserData();
   vi.mocked(useApi).mockImplementation((_, key) => {
     if (key == null) {
@@ -297,7 +297,7 @@ describe('NodesPage', () => {
         }}>
           <MemoryRouter initialEntries={[path]}>
             <Routes>
-              <Route path="/nodes" element={<NodesPage />} />
+              <Route path="/pages" element={<NodesPage />} />
             </Routes>
           </MemoryRouter>
         </AppDataContext.Provider>
@@ -305,51 +305,85 @@ describe('NodesPage', () => {
     );
   }
 
-  it('renders a richer unified browser with dense and saved-view controls', () => {
-    const html = renderPage('/nodes');
+  it('renders the unified browser with one new-page entrypoint and table actions', () => {
+    const html = renderPage('/pages');
 
-    expect(html).toContain('Knowledge Base');
+    expect(html).toContain('Pages');
     expect(html).toContain('Refresh');
-    expect(html).toContain('3 nodes · 1 notes · 1 projects · 1 skills');
+    expect(html).toContain('New page');
+    expect(html).not.toContain('Quick capture');
+    expect(html).not.toContain('Save URL');
+    expect(html).not.toContain('New note');
+    expect(html).not.toContain('New project');
+    expect(html).not.toContain('New skill');
+    expect(html).toContain('3 pages · 1 notes · 1 projects · 1 skills');
     expect(html).toContain('Lucene query');
+    expect(html).toContain('aria-label="Pages view"');
+    expect(html).toContain('Insert field');
+    expect(html).not.toContain('Fields: type, status, profile, area, parent, tag, id, title');
     expect(html).toContain('Group by');
     expect(html).toContain('Density');
     expect(html).toContain('Save view');
+    expect(html).toContain('Actions');
+    expect((html.match(/<table/g) ?? []).length).toBe(1);
+    expect(html).toContain('Notes');
+    expect(html).toContain('Projects');
+    expect(html).toContain('Skills');
+    expect(html).toContain('aria-label="View note"');
+    expect(html).toContain('aria-label="Edit note"');
+    expect(html).toContain('aria-label="Delete note"');
+    expect(html).toContain('aria-label="View project"');
+    expect(html).toContain('aria-label="Edit project"');
+    expect(html).toContain('aria-label="Delete project"');
+    expect(html).toContain('aria-label="View skill"');
+    expect(html).toContain('aria-label="Edit skill"');
+    expect(html).not.toContain('aria-label="Delete skill"');
     expect(html).toContain('Memory index');
     expect(html).toContain('Active project');
     expect(html).toContain('Agent Browser');
   });
 
+  it('renders the unified new-page creation screen', () => {
+    const html = renderPage('/pages?new=1');
+
+    expect(html).not.toContain('Lucene query');
+    expect(html).toContain('New page');
+    expect(html).toContain('Create page');
+    expect(html).toContain('aria-label="Page type"');
+    expect(html).toContain('Note title');
+    expect(html).toContain('What this note is for and how the agent should use it.');
+  });
+
   it('renders the selected note in the dedicated note workspace', () => {
-    const html = renderPage('/nodes?kind=note&node=memory-index');
+    const html = renderPage('/pages?kind=note&page=memory-index');
 
     expect(html).not.toContain('Lucene query');
     expect(html).toContain('Memory index');
     expect(html).toContain('Top-level knowledge hub.');
-    expect(html).toContain('Back to table');
+    expect(html).toContain('Back to pages');
     expect(html).toContain('overview.md');
-    expect(html).toContain('Node graph');
+    expect(html).toContain('References');
   });
 
   it('renders the selected project with the dedicated project detail page', () => {
-    const html = renderPage('/nodes?kind=project&node=active-project');
+    const html = renderPage('/pages?kind=project&page=active-project');
 
     expect(html).not.toContain('Lucene query');
     expect(html).toContain('Active project');
-    expect(html).toContain('aria-label="Back to table"');
+    expect(html).toContain('aria-label="Back to pages"');
     expect(html).toContain('Tasks');
     expect(html).toContain('Properties');
-    expect(html).toContain('Node graph');
+    expect(html).toContain('Page graph');
   });
 
   it('renders the selected skill without the embedded knowledge browser', () => {
-    const html = renderPage('/nodes?kind=skill&node=agent-browser');
+    const html = renderPage('/pages?kind=skill&page=agent-browser');
 
     expect(html).not.toContain('Lucene query');
-    expect(html).toContain('Back to table');
+    expect(html).toContain('Back to pages');
     expect(html).toContain('agent-browser');
     expect(html).toContain('Reload');
     expect(html).toContain('Properties');
-    expect(html).toContain('Node graph');
+    expect(html).toContain('Page graph');
   });
 });

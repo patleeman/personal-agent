@@ -1040,7 +1040,7 @@ export function ProjectDetailPanel({
       await api.saveNodeDetail(created.memory.id, {
         relationships: [{ type: 'derived-from', targetId: record.id }],
       });
-      window.location.assign(`/nodes?kind=note&node=${encodeURIComponent(created.memory.id)}`);
+      window.location.assign(`/pages?kind=note&page=${encodeURIComponent(created.memory.id)}`);
     } catch (error) {
       setConversationError(error instanceof Error ? error.message : String(error));
       setPromotionBusy(false);
@@ -1474,7 +1474,7 @@ export function ProjectDetailPanel({
           </div>
         </ProjectRailSection>
 
-        <ProjectRailSection title="Node metadata">
+        <ProjectRailSection title="Page metadata">
           <NodeMetadataPanel
             nodeId={record.id}
             onChanged={onChanged}
@@ -1552,10 +1552,10 @@ export function ProjectDetailPanel({
           </ProjectRailSection>
         ) : null}
 
-        <ProjectRailSection title="Node graph">
+        <ProjectRailSection title="Page graph">
           <NodeRelationshipsPanel
             nodeId={record.id}
-            emptyOutgoingText="No typed node links yet."
+            emptyOutgoingText="No typed page links yet."
             emptyIncomingText="No typed links point here yet."
             onChanged={onChanged}
           />

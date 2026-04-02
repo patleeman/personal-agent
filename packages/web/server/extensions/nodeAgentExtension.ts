@@ -17,19 +17,19 @@ type NodeAction = (typeof NODE_ACTION_VALUES)[number];
 
 const NodeToolParams = Type.Object({
   action: Type.Union(NODE_ACTION_VALUES.map((value) => Type.Literal(value))),
-  nodeId: Type.Optional(Type.String({ description: 'Node id for show/get/new/update/delete/tag actions.' })),
-  title: Type.Optional(Type.String({ description: 'Display title stored in node frontmatter.' })),
-  summary: Type.Optional(Type.String({ description: 'One-sentence node summary.' })),
-  description: Type.Optional(Type.String({ description: 'Optional agent-facing guidance for how to use the node.' })),
-  status: Type.Optional(Type.String({ description: 'Status field for the node.' })),
-  query: Type.Optional(Type.String({ description: 'Lucene-style node query for list/find.' })),
+  nodeId: Type.Optional(Type.String({ description: 'Page id for show/get/new/update/delete/tag actions.' })),
+  title: Type.Optional(Type.String({ description: 'Display title stored in page frontmatter.' })),
+  summary: Type.Optional(Type.String({ description: 'One-sentence page summary.' })),
+  description: Type.Optional(Type.String({ description: 'Optional agent-facing guidance for how to use the page.' })),
+  status: Type.Optional(Type.String({ description: 'Status field for the page.' })),
+  query: Type.Optional(Type.String({ description: 'Lucene-style page query for list/find.' })),
   body: Type.Optional(Type.String({ description: 'Full markdown body for create/update.' })),
   addTags: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
   removeTags: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
   tags: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-  parent: Type.Optional(Type.String({ description: 'Optional parent node id.' })),
+  parent: Type.Optional(Type.String({ description: 'Optional parent page id.' })),
   related: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing node when action=new.' })),
+  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing page when action=new.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -76,7 +76,7 @@ function formatNodePackage(node: {
   updatedAt?: string;
 }): string {
   return [
-    `Node @${node.id}`,
+    `Page @${node.id}`,
     `title: ${node.title}`,
     `types: ${node.kinds.join(', ')}`,
     `status: ${node.status}`,
@@ -98,13 +98,13 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
       name: 'node',
-      label: 'Node',
-      description: 'Inspect, search, create, update, and validate unified durable nodes.',
-      promptSnippet: 'Use the node tool for durable note/project/skill discovery and CRUD instead of shelling out to pa node.',
+      label: 'Page',
+      description: 'Inspect, search, create, update, and validate unified durable pages.',
+      promptSnippet: 'Use this tool for durable page discovery and CRUD instead of shelling out to pa node.',
       promptGuidelines: [
-        'Use this tool for durable node discovery and validation instead of running pa node through bash.',
-        'Prefer find/show before creating a new node so you do not duplicate durable knowledge.',
-        'Use tag or update when you only need to change metadata or body for an existing node.',
+        'Use this tool for durable page discovery and validation instead of running pa node through bash.',
+        'Prefer find/show before creating a new page so you do not duplicate durable knowledge.',
+        'Use tag or update when you only need to change metadata or body for an existing page.',
       ],
       parameters: NodeToolParams,
       async execute(_toolCallId, params) {
@@ -113,7 +113,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
             case 'list': {
               const loaded = loadUnifiedNodes();
               const nodes = findUnifiedNodes(loaded.nodes, params.query);
-              const lines = nodes.length > 0 ? ['Unified nodes:', ...formatNodeSummaryList(nodes)] : ['No unified nodes found.'];
+              const lines = nodes.length > 0 ? ['Unified pages:', ...formatNodeSummaryList(nodes)] : ['No unified pages found.'];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) lines.push('', ...parseErrorLines);
               return {
@@ -132,10 +132,10 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
               const loaded = loadUnifiedNodes();
               const nodes = findUnifiedNodes(loaded.nodes, query);
               const lines = [
-                'Unified node search:',
+                'Unified page search:',
                 `query: ${query}`,
                 '',
-                ...(nodes.length > 0 ? formatNodeSummaryList(nodes) : ['No unified nodes matched the supplied query.']),
+                ...(nodes.length > 0 ? formatNodeSummaryList(nodes) : ['No unified pages matched the supplied query.']),
               ];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) lines.push('', ...parseErrorLines);
@@ -185,7 +185,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
                 force: params.force,
               });
               return {
-                content: [{ type: 'text' as const, text: `${result.overwritten ? 'Updated' : 'Created'} node @${result.node.id}.\nfile: ${result.node.filePath}` }],
+                content: [{ type: 'text' as const, text: `${result.overwritten ? 'Updated' : 'Created'} page @${result.node.id}.\nfile: ${result.node.filePath}` }],
                 details: details({
                   action: 'new',
                   nodesDir: result.nodesDir,
@@ -210,7 +210,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
                 related: params.related,
               });
               return {
-                content: [{ type: 'text' as const, text: `Updated node @${node.id}.\nfile: ${node.filePath}` }],
+                content: [{ type: 'text' as const, text: `Updated page @${node.id}.\nfile: ${node.filePath}` }],
                 details: details({
                   action: 'update',
                   nodeId: node.id,
@@ -222,7 +222,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
             case 'delete': {
               const result = deleteUnifiedNode(readRequiredString(params.nodeId, 'nodeId'));
               return {
-                content: [{ type: 'text' as const, text: `Deleted node @${result.id}.` }],
+                content: [{ type: 'text' as const, text: `Deleted page @${result.id}.` }],
                 details: details(result),
               };
             }
@@ -245,7 +245,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
               const result = lintUnifiedNodes();
               const hasIssues = result.parseErrors.length > 0 || result.duplicateIds.length > 0 || result.referenceErrors.length > 0;
               const lines = [
-                'Unified node validation',
+                'Unified page validation',
                 `nodesDir: ${result.nodesDir}`,
                 `nodesParsed: ${result.validNodes}`,
                 `parseErrors: ${result.parseErrors.length}`,
@@ -253,7 +253,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
                 `referenceErrors: ${result.referenceErrors.length}`,
               ];
               if (!hasIssues) {
-                lines.push('', 'All unified nodes are valid.');
+                lines.push('', 'All unified pages are valid.');
               }
               if (result.parseErrors.length > 0) {
                 lines.push('', 'Parse errors:');
@@ -281,7 +281,7 @@ export function createNodeAgentExtension(): (pi: ExtensionAPI) => void {
               };
             }
             default:
-              throw new Error(`Unsupported node action: ${String(params.action)}`);
+              throw new Error(`Unsupported page action: ${String(params.action)}`);
           }
         } catch (error) {
           return {

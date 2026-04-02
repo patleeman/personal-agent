@@ -58,13 +58,13 @@ function memoryWorkItemLabel(item: MemoryWorkItem): string {
     case 'interrupted':
       return 'Node distillation interrupted';
     case 'queued':
-      return 'Queued for node distillation';
+      return 'Queued for page distillation';
     case 'waiting':
-      return 'Waiting to resume node distillation';
+      return 'Waiting to resume page distillation';
     case 'recovering':
-      return 'Recovering node distillation';
+      return 'Recovering page distillation';
     default:
-      return 'Distilling into a note node';
+      return 'Distilling into a note page';
   }
 }
 
@@ -116,7 +116,7 @@ function NoteWorkQueuePanel({
       const result = await api.retryNodeDistillRun(item.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (retryError) {
-      setQueueError(retryError instanceof Error ? retryError.message : 'Could not retry node distillation.');
+      setQueueError(retryError instanceof Error ? retryError.message : 'Could not retry page distillation.');
       setPendingQueueAction(null);
       onRefresh();
     }
@@ -185,7 +185,7 @@ function NoteWorkQueuePanel({
             const activeAction = pendingQueueAction?.runId === item.runId ? pendingQueueAction.kind : null;
             const retryable = canRetryMemoryWorkItem(item);
             const summary = activeAction === 'retry'
-              ? 'Queueing node distillation…'
+              ? 'Queueing page distillation…'
               : item.lastError || memoryWorkItemLabel(item);
             const status = activeAction === 'retry' ? 'queueing' : item.status;
 
@@ -208,7 +208,7 @@ function NoteWorkQueuePanel({
                     className="shrink-0 self-center"
                     onClick={() => { void retryMemoryWorkItem(item); }}
                     disabled={queueBusy}
-                    title="Retry this node distillation"
+                    title="Retry this page distillation"
                   >
                     {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
                   </ToolbarButton>
@@ -488,7 +488,7 @@ function NotePropertiesPanel({
     }
 
     if (normalizedParent && !parentOptions.some((candidate) => candidate.id === normalizedParent)) {
-      setSaveError('Choose an existing parent node.');
+      setSaveError('Choose an existing parent page.');
       setSaveNotice(null);
       return;
     }
@@ -553,7 +553,7 @@ function NotePropertiesPanel({
             setSaveNotice(null);
           }}
           className={`${INPUT_CLASS} font-mono`}
-          placeholder="Search nodes by id"
+          placeholder="Search pages by id"
           spellCheck={false}
         />
         <datalist id={`note-parent-options-${nodeId}`}>
@@ -564,7 +564,7 @@ function NotePropertiesPanel({
         {parentMatch ? (
           <p className="text-[11px] text-secondary">{parentMatch.title} · {parentMatch.kind}</p>
         ) : parent.trim().length > 0 ? (
-          <p className="text-[11px] text-dim">No matching node.</p>
+          <p className="text-[11px] text-dim">No matching page.</p>
         ) : null}
       </label>
 
@@ -654,8 +654,8 @@ function NoteReferencesPanel({
       <div className="space-y-4">
         {hasLinkedNodes ? (
           <>
-            <NodeLinkList title="Links to" items={links?.outgoing} surface="main" emptyText="This note does not reference other nodes yet." />
-            <NodeLinkList title="Linked from" items={links?.incoming} surface="main" emptyText="No other nodes link to this note yet." />
+            <NodeLinkList title="Links to" items={links?.outgoing} surface="main" emptyText="This note does not reference other pages yet." />
+            <NodeLinkList title="Linked from" items={links?.incoming} surface="main" emptyText="No other pages link to this note yet." />
             <UnresolvedNodeLinks ids={links?.unresolved} />
           </>
         ) : null}
@@ -850,7 +850,7 @@ export function NoteWorkspace({
       return;
     }
 
-    if (!window.confirm(`Delete note node @${memory.id}?`)) {
+    if (!window.confirm(`Delete note page @${memory.id}?`)) {
       return;
     }
 
@@ -901,7 +901,7 @@ export function NoteWorkspace({
         relationships: [{ type: 'derived-from', targetId: memory.id }],
       });
       emitProjectsChanged();
-      window.location.assign(`/nodes${buildNodesSearch('', { kind: 'project', nodeId: created.project.id })}`);
+      window.location.assign(`/pages${buildNodesSearch('', { kind: 'project', nodeId: created.project.id })}`);
     } catch (error) {
       setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
       setPromotionBusy(null);
@@ -924,7 +924,7 @@ export function NoteWorkspace({
       await api.saveNodeDetail(created.skill.name, {
         relationships: [{ type: 'derived-from', targetId: memory.id }],
       });
-      window.location.assign(`/nodes${buildNodesSearch('', { kind: 'skill', nodeId: created.skill.name })}`);
+      window.location.assign(`/pages${buildNodesSearch('', { kind: 'skill', nodeId: created.skill.name })}`);
     } catch (error) {
       setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
       setPromotionBusy(null);

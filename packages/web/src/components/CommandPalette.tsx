@@ -157,11 +157,11 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
     {
       id: 'nav:nodes',
       section: 'nav',
-      title: 'Knowledge Base',
+      title: 'Pages',
       subtitle: 'Browse notes, projects, and skills together',
-      keywords: ['knowledge', 'knowledge base', 'nodes', 'notes', 'projects', 'skills'],
+      keywords: ['pages', 'knowledge', 'knowledge base', 'nodes', 'notes', 'projects', 'skills'],
       order: 4,
-      action: { kind: 'navigate', to: '/nodes' },
+      action: { kind: 'navigate', to: '/pages' },
     },
     {
       id: 'nav:projects',
@@ -176,7 +176,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       id: 'nav:notes',
       section: 'nav',
       title: 'Notes',
-      subtitle: 'Browse durable note nodes',
+      subtitle: 'Browse durable note pages',
       keywords: ['memory', 'knowledge', 'distilled', 'references'],
       order: 6,
       action: { kind: 'navigate', to: '/notes' },
@@ -220,9 +220,9 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
     {
       id: 'nav:search-nodes',
       section: 'nav',
-      title: 'Search nodes',
+      title: 'Search pages',
       subtitle: 'Fuzzy search notes, projects, and skills together',
-      keywords: ['nodes', 'knowledge', 'knowledge base', 'notes', 'projects', 'skills', 'fuzzy'],
+      keywords: ['pages', 'nodes', 'knowledge', 'knowledge base', 'notes', 'projects', 'skills', 'fuzzy'],
       order: 11,
       action: { kind: 'setScope', scope: 'nodes' },
     },
@@ -499,7 +499,7 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
       case 'archived':
         return `No archived conversations match “${query}”.`;
       case 'nodes':
-        return `No nodes match “${query}”.`;
+        return `No pages match “${query}”.`;
       case 'tasks':
         return `No scheduled tasks match “${query}”.`;
       default:
@@ -513,7 +513,7 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
     case 'archived':
       return 'No archived conversations yet.';
     case 'nodes':
-      return 'No nodes yet.';
+      return 'No pages yet.';
     case 'tasks':
       return 'No scheduled tasks yet.';
     default:
@@ -928,7 +928,7 @@ export function CommandPalette() {
             <div>
               <p className="ui-section-label text-[11px]">Command palette</p>
               <p className="text-[12px] text-secondary mt-1">
-                Unified search for navigation, chats, archived history, nodes, and scheduled tasks.
+                Unified search for navigation, chats, archived history, pages, and scheduled tasks.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
@@ -1066,9 +1066,9 @@ export function CommandPalette() {
           {knowledgeError && (scope === 'all' || scope === 'nodes') && (
             <section className="py-1">
               <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">Nodes</p>
+                <p className="ui-section-label">Pages</p>
               </div>
-              <p className="px-5 py-3 text-[12px] text-danger">Failed to load nodes: {knowledgeError}</p>
+              <p className="px-5 py-3 text-[12px] text-danger">Failed to load pages: {knowledgeError}</p>
             </section>
           )}
 

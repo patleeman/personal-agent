@@ -4,7 +4,7 @@ Profiles are how `personal-agent` changes behavior, prompting, defaults, and reu
 
 A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based synced resources plus machine-local overlays.
 
-See [Nodes](./nodes.md) for the canonical on-disk node spec.
+See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the storage compatibility term.
 
 If you want the single conceptual overview of notes, skills, projects, and `AGENTS.md` as one memory system, start with [Knowledge Management System](./knowledge-system.md).
 
@@ -32,8 +32,7 @@ The synced durable store can contain:
 - `agents/**`
 - `settings/**`
 - `models/**`
-- `skills/**`
-- `notes/**`
+- `nodes/**`
 - `tasks/*.task.md`
 - `projects/<projectId>/{INDEX.md,state.yaml}`
 
@@ -61,8 +60,7 @@ Repo built-ins still provide:
     ├── agents/
     ├── settings/
     ├── models/
-    ├── skills/
-    ├── notes/
+    ├── nodes/
     ├── tasks/
     └── projects/
 ```
@@ -72,10 +70,10 @@ Repo built-ins still provide:
 | Place | Use it for |
 | --- | --- |
 | `agents/**` | durable role, behavior rules, and operating policy fragments |
-| `skills/<id>/INDEX.md` | reusable workflow skill nodes |
-| `notes/<id>/INDEX.md` | shared durable note nodes |
-| `notes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that note |
-| `notes/<id>/assets/**` | non-markdown assets used by that note node |
+| `nodes/<id>/INDEX.md` tagged `type:skill` | reusable workflow skill pages |
+| `nodes/<id>/INDEX.md` tagged `type:note` | shared durable note pages |
+| `nodes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that page |
+| `nodes/<id>/assets/**` | non-markdown assets used by that page |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
 | `settings/**` | default model, thinking, theme, and other runtime defaults |
@@ -97,9 +95,9 @@ Do not use it for:
 - one-off reminders
 - conversation-local context
 
-## Skill nodes: reusable workflows
+## Skill pages: reusable workflows
 
-Skills are reusable, named workflow nodes the agent can invoke when appropriate.
+Skills are reusable, named workflow pages the agent can invoke when appropriate.
 
 Use a skill node when you want something that is:
 
@@ -114,7 +112,7 @@ Examples:
 - a Git or release workflow
 - a browser-automation workflow
 
-Skill nodes live under `skills/<id>/INDEX.md` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
+Skill pages live under `sync/nodes/<id>/INDEX.md` with tag `type:skill` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
 
 For Pi compatibility, skill node frontmatter keeps:
 
@@ -142,7 +140,7 @@ Use them for:
 - distilled conversation captures
 - structure notes / maps of content when they genuinely help
 
-A note node is a directory with an `INDEX.md` file. Supporting directories are freeform.
+A note page is a directory with an `INDEX.md` file. Supporting directories are freeform.
 
 Notes may also include an optional `description` field for agent-facing guidance about how the note should be used or when it should be consulted.
 
@@ -179,9 +177,9 @@ There is no separate hub kind.
 
 Do not create empty hub or index notes by default. If a topic already has a real project or skill home, put the content there instead of duplicating it as a top-level note.
 
-## Project nodes
+## Project pages
 
-Projects are project nodes with:
+Projects are project pages with:
 
 - `projects/<id>/INDEX.md` for the human handoff / overview
 - `projects/<id>/state.yaml` for structured state
@@ -195,12 +193,12 @@ Important convention:
 
 - shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
 - profile-targeted durable resources are selected by filename or metadata applicability
-- durable note nodes live in the synced shared notes store at `sync/notes/`
+- durable note and skill pages live in the synced shared nodes store at `sync/nodes/`
 
 In particular:
 
 - there is no profile-local synced `memory/` directory
-- behavior targeting belongs in durable `agents/**`, `settings/**`, `models/**`, and `skills/**`
+- behavior targeting belongs in durable `agents/**`, `settings/**`, `models/**`, and tagged nodes under `nodes/**`
 
 ## Notes vs projects vs inbox
 
@@ -208,14 +206,14 @@ This distinction still matters.
 
 Use:
 
-- **note nodes** for reusable durable knowledge
-- **project nodes** for current tracked work state, handoff context, project notes, and project files
+- **note pages** for reusable durable knowledge
+- **project pages** for current tracked work state, handoff context, project notes, and project files
 - **inbox** for asynchronous outcomes that need attention later
 
 A good rule:
 
-- if it is reusable knowledge, store it in a note node
-- if it is about one piece of ongoing work, store it in a project node
+- if it is reusable knowledge, store it in a note page
+- if it is about one piece of ongoing work, store it in a project page
 - if it is an async event worth noticing, surface it in the inbox
 - if it already has a project or skill home, do not also keep it as a duplicate top-level note
 
@@ -250,9 +248,9 @@ pa note new <id> --title "..." --summary "..." --type reference
 pa note lint
 ```
 
-Use `pa note` to operate on shared note nodes under `sync/notes/`.
+Use `pa note` to operate on shared note pages under `sync/nodes/`.
 
-`pa note new` scaffolds `notes/<note-id>/INDEX.md`.
+`pa note new` scaffolds `nodes/<note-id>/INDEX.md`.
 
 ## Local overlay
 
@@ -277,7 +275,7 @@ Do not store conversation ids or session ids in portable durable files.
 That includes:
 
 - note-node frontmatter/metadata
-- project node files
+- project page files
 - activity frontmatter
 - any profile-local schema meant to be portable
 

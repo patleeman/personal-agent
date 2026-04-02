@@ -90,7 +90,7 @@ import {
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { noteCommand } from './note.js';
-import { nodeCommand } from './node.js';
+import { nodeCommand, pageCommand } from './node.js';
 import { mcpCommand } from './mcp-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import {
@@ -5020,9 +5020,17 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: 'note',
       category: 'data',
       usage: 'note [list|find|show|new|lint|help] [args...]',
-      description: 'Inspect note nodes',
+      description: 'Inspect note pages',
       disableBuiltInHelp: true,
       run: noteCommand,
+    },
+    {
+      name: 'page',
+      category: 'data',
+      usage: 'page [list|find|show|get|new|update|delete|tag|lint|migrate|help] [args...]',
+      description: 'Inspect unified durable pages',
+      disableBuiltInHelp: true,
+      run: pageCommand,
     },
     {
       name: 'node',

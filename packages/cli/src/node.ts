@@ -13,31 +13,56 @@ import {
 } from '@personal-agent/core';
 import { bullet, dim, formatHint, keyValue, printDenseCommandList, printDenseUsage, section, success, warning } from './ui.js';
 
-function nodeUsageText(): string {
-  return 'Usage: pa node [list|find|show|get|new|update|delete|tag|lint|migrate|help] [args...]';
+type UnifiedStoreCommandConfig = {
+  commandName: 'node' | 'page';
+  title: 'Node' | 'Page';
+  singular: 'node' | 'page';
+  plural: 'nodes' | 'pages';
+};
+
+const NODE_COMMAND_CONFIG: UnifiedStoreCommandConfig = {
+  commandName: 'node',
+  title: 'Node',
+  singular: 'node',
+  plural: 'nodes',
+};
+
+const PAGE_COMMAND_CONFIG: UnifiedStoreCommandConfig = {
+  commandName: 'page',
+  title: 'Page',
+  singular: 'page',
+  plural: 'pages',
+};
+
+function usageText(config: UnifiedStoreCommandConfig): string {
+  return `Usage: pa ${config.commandName} [list|find|show|get|new|update|delete|tag|lint|migrate|help] [args...]`;
 }
 
-function isNodeHelpToken(value: string | undefined): boolean {
+function subcommandUsage(config: UnifiedStoreCommandConfig, subcommand: string, rest: string): string {
+  return `Usage: pa ${config.commandName} ${subcommand}${rest}`;
+}
+
+function isHelpToken(value: string | undefined): boolean {
   return value === 'help' || value === '--help' || value === '-h';
 }
 
-function printNodeHelp(): void {
-  console.log('Node');
+function printHelp(config: UnifiedStoreCommandConfig): void {
+  console.log(config.title);
   console.log('');
-  printDenseUsage('pa node [list|find|show|get|new|update|delete|tag|lint|migrate|help]');
+  printDenseUsage(`pa ${config.commandName} [list|find|show|get|new|update|delete|tag|lint|migrate|help]`);
   console.log('');
   printDenseCommandList('Commands', [
-    { usage: 'list [--query <expr>] [--json]', description: 'List unified durable nodes' },
-    { usage: 'find <query> [--json]', description: 'Search nodes with tag + full-text query syntax' },
-    { usage: 'show <id> [--json]', description: 'Show one node with parsed metadata' },
-    { usage: 'get <id> [--json]', description: 'Show one node without extra formatting' },
-    { usage: 'new <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]', description: 'Create a unified node scaffold' },
-    { usage: 'update <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]', description: 'Update node metadata, tags, and body' },
-    { usage: 'delete <id> [--json]', description: 'Delete a unified node' },
-    { usage: 'tag <id> [--add <key:value>] [--remove <key:value>] [--json]', description: 'Add or remove node tags' },
-    { usage: 'lint [--json]', description: 'Validate node frontmatter, duplicate ids, and references' },
+    { usage: 'list [--query <expr>] [--json]', description: `List unified durable ${config.plural}` },
+    { usage: 'find <query> [--json]', description: `Search ${config.plural} with tag + full-text query syntax` },
+    { usage: 'show <id> [--json]', description: `Show one ${config.singular} with parsed metadata` },
+    { usage: 'get <id> [--json]', description: `Show one ${config.singular} without extra formatting` },
+    { usage: 'new <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]', description: `Create a unified ${config.singular} scaffold` },
+    { usage: 'update <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]', description: `Update ${config.singular} metadata, tags, and body` },
+    { usage: 'delete <id> [--json]', description: `Delete a unified ${config.singular}` },
+    { usage: 'tag <id> [--add <key:value>] [--remove <key:value>] [--json]', description: `Add or remove ${config.singular} tags` },
+    { usage: 'lint [--json]', description: `Validate ${config.singular} frontmatter, duplicate ids, and references` },
     { usage: 'migrate [--json]', description: 'Copy legacy notes, skills, and projects into /sync/nodes' },
-    { usage: 'help', description: 'Show node help' },
+    { usage: 'help', description: `Show ${config.commandName} help` },
   ]);
 }
 
@@ -49,7 +74,7 @@ function formatTags(tags: string[]): string {
   return tags.length > 0 ? tags.join(', ') : 'none';
 }
 
-function printNodeSummary(node: {
+function printItemSummary(item: {
   id: string;
   title: string;
   summary: string;
@@ -59,30 +84,30 @@ function printNodeSummary(node: {
   updatedAt?: string;
   filePath: string;
 }): void {
-  console.log(bullet(`${node.id}: ${node.title}`));
-  console.log(keyValue('Types', node.kinds.join(', '), 4));
-  console.log(keyValue('Status', node.status, 4));
-  console.log(keyValue('Tags', formatTags(node.tags), 4));
-  if (node.updatedAt) {
-    console.log(keyValue('Updated', node.updatedAt, 4));
+  console.log(bullet(`${item.id}: ${item.title}`));
+  console.log(keyValue('Types', item.kinds.join(', '), 4));
+  console.log(keyValue('Status', item.status, 4));
+  console.log(keyValue('Tags', formatTags(item.tags), 4));
+  if (item.updatedAt) {
+    console.log(keyValue('Updated', item.updatedAt, 4));
   }
-  console.log(keyValue('Summary', node.summary, 4));
-  console.log(keyValue('File', node.filePath, 4));
+  console.log(keyValue('Summary', item.summary, 4));
+  console.log(keyValue('File', item.filePath, 4));
 }
 
-export async function nodeCommand(args: string[]): Promise<number> {
+async function runUnifiedStoreCommand(args: string[], config: UnifiedStoreCommandConfig): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
-    printNodeHelp();
+    printHelp(config);
     return 0;
   }
 
-  if (isNodeHelpToken(subcommand)) {
+  if (isHelpToken(subcommand)) {
     if (rest.length > 0) {
-      throw new Error(nodeUsageText());
+      throw new Error(usageText(config));
     }
-    printNodeHelp();
+    printHelp(config);
     return 0;
   }
 
@@ -99,7 +124,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       if (arg === '--query') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
-          throw new Error('Usage: pa node list [--query <expr>] [--json]');
+          throw new Error(subcommandUsage(config, 'list', ' [--query <expr>] [--json]'));
         }
         query = value;
         index += 1;
@@ -109,7 +134,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
         query = arg.slice('--query='.length).trim();
         continue;
       }
-      throw new Error('Usage: pa node list [--query <expr>] [--json]');
+      throw new Error(subcommandUsage(config, 'list', ' [--query <expr>] [--json]'));
     }
 
     const loaded = loadUnifiedNodes();
@@ -120,19 +145,19 @@ export async function nodeCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Unified nodes'));
+    console.log(section(`Unified ${config.plural}`));
     console.log(keyValue('Nodes dir', loaded.nodesDir));
     console.log(keyValue('Query', query ?? 'none'));
     if (nodes.length === 0) {
-      console.log(dim('No unified nodes matched.'));
+      console.log(dim(`No unified ${config.plural} matched.`));
     }
     for (const node of nodes) {
       console.log('');
-      printNodeSummary(node);
+      printItemSummary(node);
     }
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} node(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} ${config.singular}(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -151,7 +176,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       positional.push(arg);
     }
     if (positional.length === 0) {
-      throw new Error('Usage: pa node find <query> [--json]');
+      throw new Error(subcommandUsage(config, 'find', ' <query> [--json]'));
     }
     const query = positional.join(' ');
     const loaded = loadUnifiedNodes();
@@ -161,15 +186,15 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log(JSON.stringify(payload, null, 2));
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
-    console.log(section('Unified node search'));
+    console.log(section(`Unified ${config.singular} search`));
     console.log(keyValue('Nodes dir', loaded.nodesDir));
     console.log(keyValue('Query', query));
     if (nodes.length === 0) {
-      console.log(dim('No unified nodes matched the supplied query.'));
+      console.log(dim(`No unified ${config.plural} matched the supplied query.`));
     }
     for (const node of nodes) {
       console.log('');
-      printNodeSummary(node);
+      printItemSummary(node);
     }
     return loaded.parseErrors.length > 0 ? 1 : 0;
   }
@@ -185,7 +210,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       positional.push(arg);
     }
     if (positional.length !== 1) {
-      throw new Error(`Usage: pa node ${subcommand} <id> [--json]`);
+      throw new Error(subcommandUsage(config, subcommand, ' <id> [--json]'));
     }
     const loaded = loadUnifiedNodes();
     const node = findUnifiedNodeById(loaded.nodes, positional[0] as string);
@@ -195,7 +220,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section(`Unified node: ${node.id}`));
+    console.log(section(`Unified ${config.singular}: ${node.id}`));
     console.log(keyValue('Title', node.title));
     console.log(keyValue('Types', node.kinds.join(', ')));
     console.log(keyValue('Status', node.status));
@@ -269,13 +294,13 @@ export async function nodeCommand(args: string[]): Promise<number> {
         continue;
       }
       if (arg.startsWith('-')) {
-        throw new Error('Usage: pa node new <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]');
+        throw new Error(subcommandUsage(config, 'new', ' <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]'));
       }
       positional.push(arg);
     }
 
     if (positional.length !== 1 || !title?.trim() || !summary?.trim()) {
-      throw new Error('Usage: pa node new <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]');
+      throw new Error(subcommandUsage(config, 'new', ' <id> --title <title> --summary <summary> [--description <text>] [--status <status>] [--tag <key:value>] [--parent <id>] [--related <id1,id2>] [--body <markdown>] [--force] [--json]'));
     }
 
     const id = positional[0] as string;
@@ -297,10 +322,10 @@ export async function nodeCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Unified node ${result.overwritten ? 'updated' : 'created'}`));
-    printNodeSummary(result.node);
+    console.log(section(`Unified ${config.singular} ${result.overwritten ? 'updated' : 'created'}`));
+    printItemSummary(result.node);
     console.log('');
-    console.log(success(`Unified node ${result.overwritten ? 'updated' : 'created'}:`, result.node.id));
+    console.log(success(`Unified ${config.singular} ${result.overwritten ? 'updated' : 'created'}:`, result.node.id));
     console.log(`  ${formatHint(`Edit ${result.node.filePath} to add details`)}`);
     return 0;
   }
@@ -334,12 +359,12 @@ export async function nodeCommand(args: string[]): Promise<number> {
       if (arg === '--related' || arg.startsWith('--related=')) { rawRelated.push(arg === '--related' ? String(rest[index + 1] ?? '') : arg.slice('--related='.length)); if (arg === '--related') index += 1; continue; }
       if (arg === '--add-tag' || arg.startsWith('--add-tag=')) { addTags.push(arg === '--add-tag' ? String(rest[index + 1] ?? '') : arg.slice('--add-tag='.length)); if (arg === '--add-tag') index += 1; continue; }
       if (arg === '--remove-tag' || arg.startsWith('--remove-tag=')) { removeTags.push(arg === '--remove-tag' ? String(rest[index + 1] ?? '') : arg.slice('--remove-tag='.length)); if (arg === '--remove-tag') index += 1; continue; }
-      if (arg.startsWith('-')) throw new Error('Usage: pa node update <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]');
+      if (arg.startsWith('-')) throw new Error(subcommandUsage(config, 'update', ' <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]'));
       positional.push(arg);
     }
 
     if (positional.length !== 1) {
-      throw new Error('Usage: pa node update <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]');
+      throw new Error(subcommandUsage(config, 'update', ' <id> [--title <title>] [--summary <summary>] [--description <text>] [--status <status>] [--add-tag <key:value>] [--remove-tag <key:value>] [--parent <id>] [--clear-parent] [--related <id1,id2>] [--body <markdown>] [--json]'));
     }
 
     const node = updateUnifiedNode({
@@ -358,8 +383,8 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log(JSON.stringify({ node }, null, 2));
       return 0;
     }
-    console.log(section('Unified node updated'));
-    printNodeSummary(node);
+    console.log(section(`Unified ${config.singular} updated`));
+    printItemSummary(node);
     return 0;
   }
 
@@ -371,14 +396,14 @@ export async function nodeCommand(args: string[]): Promise<number> {
       positional.push(arg);
     }
     if (positional.length !== 1) {
-      throw new Error('Usage: pa node delete <id> [--json]');
+      throw new Error(subcommandUsage(config, 'delete', ' <id> [--json]'));
     }
     const result = deleteUnifiedNode(positional[0] as string);
     if (jsonMode) {
       console.log(JSON.stringify(result, null, 2));
       return 0;
     }
-    console.log(success('Deleted unified node:', result.id));
+    console.log(success(`Deleted unified ${config.singular}:`, result.id));
     return 0;
   }
 
@@ -392,19 +417,19 @@ export async function nodeCommand(args: string[]): Promise<number> {
       if (arg === '--json') { jsonMode = true; continue; }
       if (arg === '--add' || arg.startsWith('--add=')) { add.push(arg === '--add' ? String(rest[index + 1] ?? '') : arg.slice('--add='.length)); if (arg === '--add') index += 1; continue; }
       if (arg === '--remove' || arg.startsWith('--remove=')) { remove.push(arg === '--remove' ? String(rest[index + 1] ?? '') : arg.slice('--remove='.length)); if (arg === '--remove') index += 1; continue; }
-      if (arg.startsWith('-')) throw new Error('Usage: pa node tag <id> [--add <key:value>] [--remove <key:value>] [--json]');
+      if (arg.startsWith('-')) throw new Error(subcommandUsage(config, 'tag', ' <id> [--add <key:value>] [--remove <key:value>] [--json]'));
       positional.push(arg);
     }
     if (positional.length !== 1) {
-      throw new Error('Usage: pa node tag <id> [--add <key:value>] [--remove <key:value>] [--json]');
+      throw new Error(subcommandUsage(config, 'tag', ' <id> [--add <key:value>] [--remove <key:value>] [--json]'));
     }
     const node = tagUnifiedNode({ id: positional[0] as string, add: normalizeCsvValues(add), remove: normalizeCsvValues(remove) });
     if (jsonMode) {
       console.log(JSON.stringify({ node }, null, 2));
       return 0;
     }
-    console.log(section('Unified node retagged'));
-    printNodeSummary(node);
+    console.log(section(`Unified ${config.singular} retagged`));
+    printItemSummary(node);
     return 0;
   }
 
@@ -412,7 +437,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
     let jsonMode = false;
     for (const arg of rest) {
       if (arg === '--json') { jsonMode = true; continue; }
-      throw new Error('Usage: pa node lint [--json]');
+      throw new Error(subcommandUsage(config, 'lint', ' [--json]'));
     }
     const result = lintUnifiedNodes();
     const hasIssues = result.parseErrors.length > 0 || result.duplicateIds.length > 0 || result.referenceErrors.length > 0;
@@ -420,7 +445,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
       console.log(JSON.stringify(result, null, 2));
       return hasIssues ? 1 : 0;
     }
-    console.log(section('Unified node validation'));
+    console.log(section(`Unified ${config.singular} validation`));
     console.log(keyValue('Nodes dir', result.nodesDir));
     console.log(keyValue('Nodes parsed', result.validNodes));
     console.log(keyValue('Parse errors', result.parseErrors.length));
@@ -428,7 +453,7 @@ export async function nodeCommand(args: string[]): Promise<number> {
     console.log(keyValue('Reference errors', result.referenceErrors.length));
     if (!hasIssues) {
       console.log('');
-      console.log(success('All unified nodes are valid'));
+      console.log(success(`All unified ${config.plural} are valid`));
       return 0;
     }
     if (result.parseErrors.length > 0) {
@@ -459,14 +484,14 @@ export async function nodeCommand(args: string[]): Promise<number> {
     let jsonMode = false;
     for (const arg of rest) {
       if (arg === '--json') { jsonMode = true; continue; }
-      throw new Error('Usage: pa node migrate [--json]');
+      throw new Error(subcommandUsage(config, 'migrate', ' [--json]'));
     }
     const result = migrateLegacyNodes();
     if (jsonMode) {
       console.log(JSON.stringify(result, null, 2));
       return 0;
     }
-    console.log(section('Legacy node migration'));
+    console.log(section(`Legacy ${config.singular} migration`));
     console.log(keyValue('Nodes dir', result.nodesDir));
     console.log(keyValue('Created', result.created.length));
     console.log(keyValue('Updated', result.updated.length));
@@ -484,5 +509,13 @@ export async function nodeCommand(args: string[]): Promise<number> {
     return 0;
   }
 
-  throw new Error(`${nodeUsageText()}\nUnknown node subcommand: ${subcommand}`);
+  throw new Error(`${usageText(config)}\nUnknown ${config.commandName} subcommand: ${subcommand}`);
+}
+
+export async function nodeCommand(args: string[]): Promise<number> {
+  return runUnifiedStoreCommand(args, NODE_COMMAND_CONFIG);
+}
+
+export async function pageCommand(args: string[]): Promise<number> {
+  return runUnifiedStoreCommand(args, PAGE_COMMAND_CONFIG);
 }

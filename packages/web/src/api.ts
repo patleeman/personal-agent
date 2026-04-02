@@ -587,8 +587,8 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  nodes: (options?: { profile?: string }) => get<NodeBrowserData>(withViewProfile('/nodes', options?.profile)),
-  nodeDetail: (nodeId: string, options?: { profile?: string }) => get<NodeBrowserDetail>(withViewProfile(`/nodes/${encodeURIComponent(nodeId)}`, options?.profile)),
+  nodes: (options?: { profile?: string }) => get<NodeBrowserData>(withViewProfile('/pages', options?.profile)),
+  nodeDetail: (nodeId: string, options?: { profile?: string }) => get<NodeBrowserDetail>(withViewProfile(`/pages/${encodeURIComponent(nodeId)}`, options?.profile)),
   saveNodeDetail: (nodeId: string, input: {
     title?: string;
     summary?: string;
@@ -599,10 +599,10 @@ export const api = {
     removeTags?: string[];
     parent?: string | null;
     relationships?: Array<{ type: string; targetId: string }>;
-  }, options?: { profile?: string }) => patch<NodeBrowserDetail>(withViewProfile(`/nodes/${encodeURIComponent(nodeId)}`, options?.profile), input),
-  nodeViews: () => get<{ views: SavedNodeBrowserView[] }>('/nodes/views'),
-  saveNodeView: (input: { id?: string; name: string; search: string }) => post<{ views: SavedNodeBrowserView[] }>('/nodes/views', input),
-  deleteNodeView: (viewId: string) => del<{ views: SavedNodeBrowserView[] }>(`/nodes/views/${encodeURIComponent(viewId)}`),
+  }, options?: { profile?: string }) => patch<NodeBrowserDetail>(withViewProfile(`/pages/${encodeURIComponent(nodeId)}`, options?.profile), input),
+  nodeViews: () => get<{ views: SavedNodeBrowserView[] }>('/pages/views'),
+  saveNodeView: (input: { id?: string; name: string; search: string }) => post<{ views: SavedNodeBrowserView[] }>('/pages/views', input),
+  deleteNodeView: (viewId: string) => del<{ views: SavedNodeBrowserView[] }>(`/pages/views/${encodeURIComponent(viewId)}`),
   notes: () => get<{ memories: MemoryDocItem[]; memoryQueue?: MemoryWorkItem[] }>('/notes'),
   noteWorkQueue: () => get<{ memoryQueue: MemoryWorkItem[] }>('/notes/work-queue'),
   recoverFailedNodeDistills: () =>

@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
+import { emitMemoriesChanged, MEMORIES_CHANGED_EVENT } from '../memoryDocEvents';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import {
   EmptyState,
   ErrorState,
-  ListLinkRow,
   LoadingState,
   PageHeader,
   PageHeading,
-  SectionLabel,
   ToolbarButton,
+  cx,
 } from '../components/ui';
 import type {
   NodeBrowserData,
@@ -41,8 +40,9 @@ import {
 } from '../nodeWorkspaceState';
 import { buildOpenNodeShelfId, ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { ProjectDetailPanel } from '../components/ProjectDetailPanel';
+import { RichMarkdownEditor } from '../components/editor/RichMarkdownEditor';
 import { NoteWorkspace } from './MemoriesPage';
-import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
+import { buildNoteSearch, NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import {
   buildSkillsSearch,
   readSkillView,
@@ -50,6 +50,7 @@ import {
   SKILL_SEARCH_PARAM,
   SKILL_VIEW_SEARCH_PARAM,
 } from '../skillWorkspaceState';
+import { buildProjectsHref } from '../projectWorkspaceState';
 import { SkillWorkspace } from './SkillsPage';
 import { timeAgo } from '../utils';
 import type { SavedNodeBrowserView } from '../types';
@@ -74,11 +75,32 @@ const SORT_OPTIONS: Array<{ value: NodeBrowserSort; label: string }> = [
   { value: 'title_desc', label: 'Title (Z–A)' },
   { value: 'status_asc', label: 'Status' },
 ];
+const CREATE_NODE_SEARCH_PARAM = 'new';
+const CREATE_NODE_KIND_SEARCH_PARAM = 'createType';
+
+const BUILT_IN_VIEW_OPTIONS: Array<{ value: NodeBrowserFilter; label: string }> = [
+  { value: 'all', label: 'All pages' },
+  { value: 'note', label: 'Notes' },
+  { value: 'project', label: 'Projects' },
+  { value: 'skill', label: 'Skills' },
+];
+const CORE_QUERY_FIELDS = [
+  { key: 'type', detail: 'note, project, or skill' },
+  { key: 'status', detail: 'active, inbox, done, archived…' },
+  { key: 'profile', detail: 'profile ownership tag' },
+  { key: 'area', detail: 'domain or work area' },
+  { key: 'parent', detail: 'parent page id' },
+  { key: 'tag', detail: 'raw tag value' },
+  { key: 'id', detail: 'page id' },
+  { key: 'title', detail: 'title text' },
+] as const;
 
 type SelectedNodeDetail =
   | { kind: 'note'; detail: Awaited<ReturnType<typeof api.noteDoc>> }
   | { kind: 'skill'; detail: SkillDetail }
   | { kind: 'project'; detail: ProjectDetail };
+
+type GroupedNodeEntry = { key: string; label: string; items: NodeBrowserSummary[] };
 
 function kindLabel(kind: NodeLinkKind): string {
   switch (kind) {
@@ -119,19 +141,49 @@ function stripWorkspaceParams(search: string): string {
   params.delete('memory');
   params.delete('item');
   params.delete('view');
-  params.delete('new');
+  params.delete(CREATE_NODE_SEARCH_PARAM);
+  params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
   const next = params.toString();
   return next ? `?${next}` : '';
 }
 
-function extractTagValue(tags: string[], key: string): string | null {
-  for (const tag of tags) {
-    const match = tag.match(new RegExp(`^${key}:(.+)$`, 'i'));
-    if (match?.[1]?.trim()) {
-      return match[1].trim();
+function readCreatingNode(search: string): boolean {
+  return new URLSearchParams(search).get(CREATE_NODE_SEARCH_PARAM) === '1';
+}
+
+function readCreateNodeKind(search: string): NodeLinkKind {
+  const value = new URLSearchParams(search).get(CREATE_NODE_KIND_SEARCH_PARAM)?.trim();
+  if (value === 'project' || value === 'skill') {
+    return value;
+  }
+  return 'note';
+}
+
+function buildNodeCreateSearch(
+  currentSearch: string,
+  updates: { creating?: boolean | null; createKind?: NodeLinkKind | null },
+): string {
+  const params = new URLSearchParams(buildNodesSearch(currentSearch, { kind: null, nodeId: null }));
+
+  if (updates.creating !== undefined) {
+    if (updates.creating) {
+      params.set(CREATE_NODE_SEARCH_PARAM, '1');
+    } else {
+      params.delete(CREATE_NODE_SEARCH_PARAM);
+      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
     }
   }
-  return null;
+
+  if (updates.createKind !== undefined) {
+    if (updates.createKind) {
+      params.set(CREATE_NODE_KIND_SEARCH_PARAM, updates.createKind);
+    } else {
+      params.delete(CREATE_NODE_KIND_SEARCH_PARAM);
+    }
+  }
+
+  const next = params.toString();
+  return next ? `?${next}` : '';
 }
 
 function summarizeNodeContext(node: NodeBrowserSummary): { primary: string; secondary: string | null; tags: string[] } {
@@ -142,7 +194,7 @@ function summarizeNodeContext(node: NodeBrowserSummary): { primary: string; seco
   switch (node.kind) {
     case 'note': {
       const referenceCount = node.note?.referenceCount ?? 0;
-      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Shared note node';
+      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Note page';
       return { primary, secondary: humanizeStatus(node.status), tags: visibleTags };
     }
     case 'skill': {
@@ -238,9 +290,9 @@ function sortGroupEntries(left: { key: string }, right: { key: string }, groupBy
   return left.key.localeCompare(right.key);
 }
 
-function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGroupBy): Array<{ key: string; label: string; items: NodeBrowserSummary[] }> {
+function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGroupBy): GroupedNodeEntry[] {
   if (groupBy === 'none') {
-    return [{ key: 'all', label: 'All nodes', items: nodes }];
+    return [{ key: 'all', label: 'All pages', items: nodes }];
   }
 
   const map = new Map<string, NodeBrowserSummary[]>();
@@ -268,7 +320,7 @@ function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGrou
 
 function buildNodeHref(locationSearch: string, item: { kind: NodeLinkKind; id: string }): string {
   const baseSearch = stripWorkspaceParams(locationSearch);
-  return `/nodes${buildNodesSearch(baseSearch, {
+  return `/pages${buildNodesSearch(baseSearch, {
     kind: item.kind,
     nodeId: item.id,
   })}`;
@@ -276,7 +328,7 @@ function buildNodeHref(locationSearch: string, item: { kind: NodeLinkKind; id: s
 
 function buildOverviewHref(locationSearch: string): string {
   const baseSearch = stripWorkspaceParams(locationSearch);
-  return `/nodes${buildNodesSearch(baseSearch, {
+  return `/pages${buildNodesSearch(baseSearch, {
     kind: null,
     nodeId: null,
   })}`;
@@ -290,55 +342,287 @@ function buildSavedBrowserViewSearch(locationSearch: string): string {
   });
 }
 
-function NodeBrowserListItem({
-  item,
-  selected,
-  locationSearch,
+function buildDedicatedNodeHref(item: NodeBrowserSummary, currentProfile: string | null): string {
+  switch (item.kind) {
+    case 'note':
+      return `/notes${buildNoteSearch('', { memoryId: item.id, creating: false })}`;
+    case 'skill':
+      return `/skills${buildSkillsSearch('', { skillName: item.id, view: null, item: null })}`;
+    case 'project': {
+      const profile = item.project?.profile ?? currentProfile;
+      return profile ? buildProjectsHref(profile, item.id) : `/projects/${encodeURIComponent(item.id)}`;
+    }
+  }
+}
+
+function readQueryToken(query: string, cursor: number) {
+  const clampedCursor = Math.max(0, Math.min(cursor, query.length));
+  const beforeCursor = query.slice(0, clampedCursor);
+  const match = beforeCursor.match(/(^|[\s(])([^\s()]*)$/);
+  const token = match?.[2] ?? '';
+  return {
+    start: clampedCursor - token.length,
+    end: clampedCursor,
+    token,
+  };
+}
+
+function buildQueryFieldInsertion(query: string, cursor: number, fieldKey: string) {
+  const snippet = `${fieldKey}:`;
+  const { start, end, token } = readQueryToken(query, cursor);
+  const normalizedToken = token.replace(/^[+-]/, '');
+  const shouldReplaceToken = normalizedToken.length > 0 && !normalizedToken.includes(':');
+  const insertStart = shouldReplaceToken ? start : end;
+  const prefix = query.slice(0, insertStart);
+  const suffix = query.slice(end);
+  const separator = prefix.length > 0 && !/[\s(]$/.test(prefix) ? ' ' : '';
+  const nextQuery = `${prefix}${separator}${snippet}${suffix}`;
+  return {
+    nextQuery,
+    nextCursor: prefix.length + separator.length + snippet.length,
+  };
+}
+
+function LuceneQueryInput({
+  query,
+  visibleCount,
+  onQueryChange,
 }: {
-  item: NodeBrowserSummary;
-  selected: boolean;
-  locationSearch: string;
+  query: string;
+  visibleCount: number;
+  onQueryChange: (value: string) => void;
 }) {
-  const href = buildNodeHref(locationSearch, item);
-  const context = summarizeNodeContext(item);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [focused, setFocused] = useState(false);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
+
+  const suggestions = useMemo(() => {
+    if (!focused) {
+      return [];
+    }
+    const { token } = readQueryToken(query, cursor ?? query.length);
+    const normalizedToken = token.replace(/^[+-]/, '').toLowerCase();
+    if (normalizedToken.includes(':')) {
+      return [];
+    }
+    return CORE_QUERY_FIELDS.filter((field) => normalizedToken.length === 0 || field.key.startsWith(normalizedToken));
+  }, [cursor, focused, query]);
+
+  useEffect(() => {
+    if (suggestions.length === 0) {
+      setActiveSuggestionIndex(0);
+      return;
+    }
+    setActiveSuggestionIndex((current) => Math.min(current, suggestions.length - 1));
+  }, [suggestions]);
+
+  const applyField = useCallback((fieldKey: string) => {
+    const currentCursor = inputRef.current?.selectionStart ?? cursor ?? query.length;
+    const insertion = buildQueryFieldInsertion(query, currentCursor, fieldKey);
+    onQueryChange(insertion.nextQuery);
+    setCursor(insertion.nextCursor);
+    setActiveSuggestionIndex(0);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(insertion.nextCursor, insertion.nextCursor);
+    });
+  }, [cursor, onQueryChange, query]);
+
+  const activeSuggestion = suggestions[activeSuggestionIndex] ?? null;
 
   return (
-    <ListLinkRow to={href} selected={selected}>
-      <div className="flex items-start justify-between gap-3">
-        <p className="ui-row-title break-words">{item.title}</p>
-        <span className="shrink-0 text-[11px] text-dim">{item.updatedAt ? timeAgo(item.updatedAt) : '—'}</span>
-      </div>
-      {item.summary ? <p className="ui-row-summary">{item.summary}</p> : null}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">{kindLabel(item.kind)}</span>
+    <div className="space-y-2">
+      <label className="flex min-w-0 flex-col gap-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">Lucene query</span>
+        <div className="relative">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => {
+              setCursor(event.target.selectionStart ?? event.target.value.length);
+              onQueryChange(event.target.value);
+            }}
+            onFocus={(event) => {
+              setFocused(true);
+              setCursor(event.target.selectionStart ?? event.target.value.length);
+            }}
+            onClick={(event) => setCursor(event.currentTarget.selectionStart ?? event.currentTarget.value.length)}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+
+              if (suggestions.length === 0) {
+                return;
+              }
+
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActiveSuggestionIndex((current) => (current + 1) % suggestions.length);
+                return;
+              }
+
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActiveSuggestionIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+                return;
+              }
+
+              if ((event.key === 'Enter' || event.key === 'Tab') && activeSuggestion) {
+                event.preventDefault();
+                applyField(activeSuggestion.key);
+                return;
+              }
+
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                setFocused(false);
+                setActiveSuggestionIndex(0);
+              }
+            }}
+            onKeyUp={(event) => setCursor(event.currentTarget.selectionStart ?? event.currentTarget.value.length)}
+            onBlur={() => setFocused(false)}
+            placeholder='type:project AND status:active AND area:architecture'
+            aria-label="Lucene query"
+            aria-autocomplete="list"
+            aria-expanded={suggestions.length > 0}
+            aria-activedescendant={activeSuggestion ? `lucene-query-suggestion-${activeSuggestion.key}` : undefined}
+            className={QUERY_INPUT_CLASS}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {suggestions.length > 0 ? (
+            <div className="absolute left-0 right-0 top-full z-10 mt-2 overflow-hidden rounded-xl border border-border-default bg-surface shadow-lg shadow-black/20" role="listbox" aria-label="Lucene query field suggestions">
+              {suggestions.map((field, index) => {
+                const selected = index === activeSuggestionIndex;
+                return (
+                  <button
+                    key={field.key}
+                    id={`lucene-query-suggestion-${field.key}`}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onMouseEnter={() => setActiveSuggestionIndex(index)}
+                    onClick={() => applyField(field.key)}
+                    className={cx(
+                      'flex w-full items-start justify-between gap-3 border-t border-border-subtle px-3 py-2 text-left first:border-t-0 hover:bg-surface-hover',
+                      selected && 'bg-surface-hover',
+                    )}
+                  >
+                    <span className="font-mono text-[12px] text-primary">{field.key}:</span>
+                    <span className="text-[11px] text-dim">{field.detail}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </label>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-dim">
+        <span>{visibleCount} visible</span>
         <span className="opacity-40">·</span>
-        <span>{context.primary}</span>
-        {context.secondary ? (
-          <>
-            <span className="opacity-40">·</span>
-            <span>{context.secondary}</span>
-          </>
-        ) : null}
-        <span className="opacity-40">·</span>
-        <span className="font-mono" title={`@${item.id}`}>{`@${item.id}`}</span>
-        {context.tags.map((tag) => (
-          <span key={`${item.kind}:${item.id}:${tag}`} className="contents">
-            <span className="opacity-40">·</span>
-            <span className="font-mono">{tag}</span>
-          </span>
+        <span>Insert field</span>
+        {CORE_QUERY_FIELDS.map((field) => (
+          <button
+            key={field.key}
+            type="button"
+            onClick={() => applyField(field.key)}
+            className="font-mono text-secondary transition-colors hover:text-primary"
+          >
+            {field.key}:
+          </button>
         ))}
       </div>
-    </ListLinkRow>
+    </div>
   );
 }
 
-function DenseNodeTable({
-  items,
-  locationSearch,
+const TABLE_ACTION_ICON_CLASS = 'inline-flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle bg-base/40 text-secondary transition-colors hover:bg-surface hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-default disabled:opacity-40';
+
+function TableActionIcon({ paths }: { paths: string[] }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths.map((path) => (
+        <path key={path} d={path} />
+      ))}
+    </svg>
+  );
+}
+
+function NodeActionIconLink({
+  to,
+  label,
+  tone = 'default',
+  children,
 }: {
-  items: NodeBrowserSummary[];
-  locationSearch: string;
+  to: string;
+  label: string;
+  tone?: 'default' | 'danger';
+  children: ReactNode;
 }) {
+  return (
+    <Link
+      to={to}
+      aria-label={label}
+      title={label}
+      className={cx(
+        TABLE_ACTION_ICON_CLASS,
+        tone === 'danger' && 'text-danger hover:bg-danger/10 hover:text-danger',
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function NodeActionIconButton({
+  label,
+  tone = 'default',
+  className,
+  children,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  label: string;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={cx(
+        TABLE_ACTION_ICON_CLASS,
+        tone === 'danger' && 'text-danger hover:bg-danger/10 hover:text-danger',
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+}
+
+function NodesTable({
+  groups,
+  groupBy,
+  locationSearch,
+  currentProfile,
+  density,
+  deletingKey,
+  onDelete,
+}: {
+  groups: GroupedNodeEntry[];
+  groupBy: NodeBrowserGroupBy;
+  locationSearch: string;
+  currentProfile: string | null;
+  density: NodeBrowserDensity;
+  deletingKey: string | null;
+  onDelete: (item: NodeBrowserSummary) => Promise<void> | void;
+}) {
+  const cellClassName = density === 'dense' ? 'px-3 py-2 align-top' : 'px-3 py-3 align-top';
+  const showGroupHeaders = groupBy !== 'none';
+
   return (
     <div className="overflow-x-auto rounded-xl border border-border-subtle">
       <table className="min-w-full border-collapse text-left text-[12px]">
@@ -349,29 +633,102 @@ function DenseNodeTable({
             <th className="px-3 py-2.5 font-medium">Status</th>
             <th className="px-3 py-2.5 font-medium">Updated</th>
             <th className="px-3 py-2.5 font-medium">Context</th>
+            <th className="px-3 py-2.5 font-medium">Tags</th>
+            <th className="w-[7.5rem] px-3 py-2.5 font-medium text-right whitespace-nowrap">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => {
-            const context = summarizeNodeContext(item);
-            return (
-              <tr key={`${item.kind}:${item.id}`} className="border-t border-border-subtle align-top">
-                <td className="px-3 py-2.5">
-                  <Link to={buildNodeHref(locationSearch, item)} className="font-medium text-primary hover:underline">
-                    {item.title}
-                  </Link>
-                  <div className="mt-0.5 font-mono text-[11px] text-dim">@{item.id}</div>
-                </td>
-                <td className="px-3 py-2.5 text-secondary">{kindLabel(item.kind)}</td>
-                <td className="px-3 py-2.5 text-secondary">{humanizeStatus(item.status)}</td>
-                <td className="px-3 py-2.5 text-secondary">{item.updatedAt ? timeAgo(item.updatedAt) : '—'}</td>
-                <td className="px-3 py-2.5 text-secondary">
-                  <div>{context.primary}</div>
-                  {context.secondary ? <div className="mt-0.5 text-[11px] text-dim">{context.secondary}</div> : null}
-                </td>
-              </tr>
-            );
-          })}
+          {groups.map((group, groupIndex) => (
+            <Fragment key={group.key}>
+              {showGroupHeaders ? (
+                <tr className={cx(groupIndex > 0 && 'border-t border-border-default')}>
+                  <th colSpan={7} className="bg-base/35 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-dim">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{group.label}</span>
+                      <span className="font-mono text-[10px] text-dim">{group.items.length}</span>
+                    </div>
+                  </th>
+                </tr>
+              ) : null}
+
+              {group.items.map((item) => {
+                const context = summarizeNodeContext(item);
+                const rowKey = `${item.kind}:${item.id}`;
+                const canDelete = item.kind !== 'skill';
+                const editHref = buildDedicatedNodeHref(item, currentProfile);
+                const itemKindLabel = kindLabel(item.kind).toLowerCase();
+                const deleting = deletingKey === rowKey;
+
+                return (
+                  <tr key={rowKey} className="border-t border-border-subtle">
+                    <td className={cellClassName}>
+                      <Link to={buildNodeHref(locationSearch, item)} className="font-medium text-primary hover:underline">
+                        {item.title}
+                      </Link>
+                      <div className="mt-0.5 font-mono text-[11px] text-dim">@{item.id}</div>
+                      {item.summary ? <div className="mt-1 text-[12px] text-secondary">{item.summary}</div> : null}
+                    </td>
+                    <td className={cellClassName}>
+                      <span className="text-secondary">{kindLabel(item.kind)}</span>
+                    </td>
+                    <td className={cellClassName}>
+                      <span className="text-secondary">{humanizeStatus(item.status)}</span>
+                    </td>
+                    <td className={cellClassName}>
+                      <span className="text-secondary">{item.updatedAt ? timeAgo(item.updatedAt) : '—'}</span>
+                    </td>
+                    <td className={cellClassName}>
+                      <div className="text-secondary">{context.primary}</div>
+                      {context.secondary ? <div className="mt-0.5 text-[11px] text-dim">{context.secondary}</div> : null}
+                    </td>
+                    <td className={cellClassName}>
+                      {context.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-dim">
+                          {context.tags.map((tag) => (
+                            <span key={`${rowKey}:${tag}`} className="font-mono">{tag}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-dim">—</span>
+                      )}
+                    </td>
+                    <td className={`${cellClassName} w-[7.5rem] text-right`}>
+                      <div className="flex justify-end gap-1 whitespace-nowrap">
+                        <NodeActionIconLink to={buildNodeHref(locationSearch, item)} label={`View ${itemKindLabel}`}>
+                          <TableActionIcon paths={[
+                            'M2.06 12.35C3.43 9.51 6.52 6 12 6s8.57 3.51 9.94 5.65c.09.14.09.56 0 .7C20.57 14.49 17.48 18 12 18s-8.57-3.51-9.94-5.65a.75.75 0 0 1 0-.7Z',
+                            'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+                          ]} />
+                        </NodeActionIconLink>
+                        <NodeActionIconLink to={editHref} label={`Edit ${itemKindLabel}`}>
+                          <TableActionIcon paths={[
+                            'M12 20h9',
+                            'M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z',
+                          ]} />
+                        </NodeActionIconLink>
+                        {canDelete ? (
+                          <NodeActionIconButton
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void onDelete(item);
+                            }}
+                            disabled={deleting}
+                            label={deleting ? `Deleting ${itemKindLabel}` : `Delete ${itemKindLabel}`}
+                            tone="danger"
+                          >
+                            <span className={deleting ? 'animate-pulse' : undefined}>
+                              <TableActionIcon paths={['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6']} />
+                            </span>
+                          </NodeActionIconButton>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </Fragment>
+          ))}
         </tbody>
       </table>
     </div>
@@ -380,10 +737,11 @@ function DenseNodeTable({
 
 function SavedViewsBar({
   savedViews,
-  activeViewId,
+  selectedView,
+  activeSavedViewId,
   savingView,
   savingName,
-  onActiveViewChange,
+  onViewChange,
   onStartSave,
   onCancelSave,
   onSavingNameChange,
@@ -391,10 +749,11 @@ function SavedViewsBar({
   onDelete,
 }: {
   savedViews: SavedNodeBrowserView[];
-  activeViewId: string;
+  selectedView: string;
+  activeSavedViewId: string | null;
   savingView: boolean;
   savingName: string;
-  onActiveViewChange: (value: string) => void;
+  onViewChange: (value: string) => void;
   onStartSave: () => void;
   onCancelSave: () => void;
   onSavingNameChange: (value: string) => void;
@@ -404,20 +763,26 @@ function SavedViewsBar({
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-dim">
-        <span className="font-semibold uppercase tracking-[0.12em] text-dim">Views</span>
+        <span className="font-semibold uppercase tracking-[0.12em] text-dim">View</span>
         <select
-          value={activeViewId}
-          onChange={(event) => onActiveViewChange(event.target.value)}
-          aria-label="Saved views"
+          value={selectedView}
+          onChange={(event) => onViewChange(event.target.value)}
+          aria-label="Pages view"
           className={SELECT_CLASS}
         >
-          <option value="">Current view</option>
-          {savedViews.map((view) => (
-            <option key={view.id} value={view.id}>{view.name}</option>
+          {BUILT_IN_VIEW_OPTIONS.map((view) => (
+            <option key={view.value} value={`builtin:${view.value}`}>{view.label}</option>
           ))}
+          {savedViews.length > 0 ? (
+            <optgroup label="Saved views">
+              {savedViews.map((view) => (
+                <option key={view.id} value={`saved:${view.id}`}>{view.name}</option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
         <ToolbarButton onClick={onStartSave}>Save view</ToolbarButton>
-        <ToolbarButton onClick={onDelete} disabled={!activeViewId}>Delete view</ToolbarButton>
+        <ToolbarButton onClick={onDelete} disabled={!activeSavedViewId}>Delete view</ToolbarButton>
       </div>
 
       {savingView ? (
@@ -433,6 +798,131 @@ function SavedViewsBar({
           <ToolbarButton onClick={onCancelSave}>Cancel</ToolbarButton>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function NodeCreatePage({
+  createKind,
+  currentProfile,
+  busy,
+  error,
+  onCreate,
+  onCancel,
+  onCreateKindChange,
+}: {
+  createKind: NodeLinkKind;
+  currentProfile: string | null;
+  busy: boolean;
+  error: string | null;
+  onCreate: (input: { kind: NodeLinkKind; title: string; summary: string; body: string; repoRoot: string }) => void;
+  onCancel: () => void;
+  onCreateKindChange: (value: NodeLinkKind) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [summary, setSummary] = useState('');
+  const [body, setBody] = useState('');
+  const [repoRoot, setRepoRoot] = useState('');
+
+  const heading = 'New page';
+  const meta = createKind === 'project'
+    ? `Start a durable project page${currentProfile ? ` for profile ${currentProfile}` : ''}.`
+    : createKind === 'skill'
+      ? 'Create a reusable workflow page.'
+      : 'Create a shared note page.';
+  const summaryLabel = createKind === 'project' ? 'Summary' : 'Description';
+  const summaryPlaceholder = createKind === 'project'
+    ? 'Short summary shown in project lists.'
+    : createKind === 'skill'
+      ? 'What this skill is for and when to use it.'
+      : 'What this note is for and how the agent should use it.';
+  const bodyPlaceholder = createKind === 'project'
+    ? 'Optional. Add the initial project plan, context, or working notes.'
+    : createKind === 'skill'
+      ? 'Document the workflow, steps, and sharp edges.'
+      : 'Optional. Add the initial note content.';
+
+  return (
+    <div className="min-h-0 flex h-full flex-col overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+          <PageHeader
+            actions={(
+              <div className="flex items-center gap-2">
+                <ToolbarButton onClick={onCancel}>Cancel</ToolbarButton>
+                <ToolbarButton
+                  onClick={() => onCreate({ kind: createKind, title, summary, body, repoRoot })}
+                  disabled={busy || title.trim().length === 0}
+                  className="text-accent"
+                >
+                  {busy ? 'Creating…' : 'Create page'}
+                </ToolbarButton>
+              </div>
+            )}
+          >
+            <PageHeading title={heading} meta={meta} />
+          </PageHeader>
+
+          <div className="space-y-4 rounded-2xl border border-border-subtle px-5 py-5">
+            <label className="flex max-w-xs flex-col gap-1.5 text-[12px] text-dim">
+              <span>Type</span>
+              <select
+                value={createKind}
+                onChange={(event) => onCreateKindChange(event.target.value as NodeLinkKind)}
+                className={SELECT_CLASS}
+                aria-label="Page type"
+              >
+                <option value="note">Note</option>
+                <option value="project">Project</option>
+                <option value="skill">Skill</option>
+              </select>
+            </label>
+
+            <div className="space-y-1.5">
+              <label className="text-[12px] text-dim" htmlFor="new-node-title">Title</label>
+              <input
+                id="new-node-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className={INPUT_CLASS}
+                placeholder={createKind === 'project' ? 'Short project title' : createKind === 'skill' ? 'Skill title' : 'Note title'}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[12px] text-dim" htmlFor="new-node-summary">{summaryLabel}</label>
+              <textarea
+                id="new-node-summary"
+                value={summary}
+                onChange={(event) => setSummary(event.target.value)}
+                rows={3}
+                className={`${INPUT_CLASS} resize-y leading-relaxed`}
+                placeholder={summaryPlaceholder}
+              />
+            </div>
+
+            {createKind === 'project' ? (
+              <div className="space-y-1.5">
+                <label className="text-[12px] text-dim" htmlFor="new-node-repo-root">Repo root</label>
+                <input
+                  id="new-node-repo-root"
+                  value={repoRoot}
+                  onChange={(event) => setRepoRoot(event.target.value)}
+                  className={INPUT_CLASS}
+                  placeholder="Optional. Absolute path or a path relative to the repo."
+                />
+              </div>
+            ) : null}
+
+            <div className="space-y-1.5">
+              <label className="text-[12px] text-dim">Body</label>
+              <RichMarkdownEditor value={body} onChange={setBody} placeholder={bodyPlaceholder} variant="panel" />
+            </div>
+
+            {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -453,10 +943,14 @@ function KnowledgeBrowserPage({
   error,
   refreshing,
   pageMeta,
+  currentProfile,
   savedViews,
-  activeViewId,
+  selectedView,
+  activeSavedViewId,
   savingView,
   savingName,
+  actionError,
+  deletingKey,
   onRefresh,
   onQueryChange,
   onSortChange,
@@ -465,24 +959,9 @@ function KnowledgeBrowserPage({
   onDateFromChange,
   onDateToChange,
   onDensityChange,
-  onFilterChange,
-  onCreateNote,
-  onCreateProject,
-  onCreateSkill,
-  captureMode,
-  captureTitle,
-  captureBody,
-  captureUrl,
-  captureBusy,
-  captureError,
-  onOpenQuickCapture,
-  onOpenUrlCapture,
-  onCloseCapture,
-  onCaptureTitleChange,
-  onCaptureBodyChange,
-  onCaptureUrlChange,
-  onSubmitCapture,
-  onActiveViewChange,
+  onViewChange,
+  onDeleteNode,
+  onCreateNode,
   onStartSaveView,
   onCancelSaveView,
   onSavingNameChange,
@@ -504,10 +983,14 @@ function KnowledgeBrowserPage({
   error: string | null;
   refreshing: boolean;
   pageMeta: string;
+  currentProfile: string | null;
   savedViews: SavedNodeBrowserView[];
-  activeViewId: string;
+  selectedView: string;
+  activeSavedViewId: string | null;
   savingView: boolean;
   savingName: string;
+  actionError: string | null;
+  deletingKey: string | null;
   onRefresh: () => void;
   onQueryChange: (value: string) => void;
   onSortChange: (value: NodeBrowserSort) => void;
@@ -516,24 +999,9 @@ function KnowledgeBrowserPage({
   onDateFromChange: (value: string | null) => void;
   onDateToChange: (value: string | null) => void;
   onDensityChange: (value: NodeBrowserDensity) => void;
-  onFilterChange: (value: NodeBrowserFilter) => void;
-  onCreateNote: () => void;
-  onCreateProject: () => void;
-  onCreateSkill: () => void;
-  captureMode: 'text' | 'url' | null;
-  captureTitle: string;
-  captureBody: string;
-  captureUrl: string;
-  captureBusy: boolean;
-  captureError: string | null;
-  onOpenQuickCapture: () => void;
-  onOpenUrlCapture: () => void;
-  onCloseCapture: () => void;
-  onCaptureTitleChange: (value: string) => void;
-  onCaptureBodyChange: (value: string) => void;
-  onCaptureUrlChange: (value: string) => void;
-  onSubmitCapture: () => void;
-  onActiveViewChange: (value: string) => void;
+  onViewChange: (value: string) => void;
+  onDeleteNode: (item: NodeBrowserSummary) => void;
+  onCreateNode: () => void;
   onStartSaveView: () => void;
   onCancelSaveView: () => void;
   onSavingNameChange: (value: string) => void;
@@ -550,28 +1018,25 @@ function KnowledgeBrowserPage({
       <PageHeader
         actions={(
           <div className="flex items-center gap-2">
-            <ToolbarButton onClick={onCreateNote} className="text-accent">New note</ToolbarButton>
-            <ToolbarButton onClick={onCreateProject}>New project</ToolbarButton>
-            <ToolbarButton onClick={onCreateSkill}>New skill</ToolbarButton>
-            <ToolbarButton onClick={onOpenQuickCapture}>Quick capture</ToolbarButton>
-            <ToolbarButton onClick={onOpenUrlCapture}>Save URL</ToolbarButton>
-            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh knowledge base">
+            <ToolbarButton onClick={onCreateNode} className="text-accent">New page</ToolbarButton>
+            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh pages">
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </ToolbarButton>
           </div>
         )}
       >
-        <PageHeading title="Knowledge Base" meta={pageMeta} />
+        <PageHeading title="Pages" meta={pageMeta} />
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4">
           <SavedViewsBar
             savedViews={savedViews}
-            activeViewId={activeViewId}
+            selectedView={selectedView}
+            activeSavedViewId={activeSavedViewId}
             savingView={savingView}
             savingName={savingName}
-            onActiveViewChange={onActiveViewChange}
+            onViewChange={onViewChange}
             onStartSave={onStartSaveView}
             onCancelSave={onCancelSaveView}
             onSavingNameChange={onSavingNameChange}
@@ -579,191 +1044,86 @@ function KnowledgeBrowserPage({
             onDelete={onDeleteView}
           />
 
-          {captureMode ? (
-            <div className="rounded-xl border border-border-subtle px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[12px] font-medium text-primary">{captureMode === 'text' ? 'Quick capture' : 'Save URL'}</p>
-                  <p className="mt-1 text-[12px] text-secondary">
-                    {captureMode === 'text'
-                      ? 'Capture a rough idea without forcing structure up front.'
-                      : 'Archive a URL into an inbox capture with a local reference copy.'}
-                  </p>
-                </div>
-                <ToolbarButton onClick={onCloseCapture}>Close</ToolbarButton>
-              </div>
-              <div className="mt-4 space-y-3 max-w-3xl">
-                <input
-                  value={captureTitle}
-                  onChange={(event) => onCaptureTitleChange(event.target.value)}
-                  placeholder={captureMode === 'text' ? 'Optional title' : 'Optional title override'}
-                  aria-label="Capture title"
-                  className={INPUT_CLASS}
-                />
-                {captureMode === 'url' ? (
-                  <input
-                    value={captureUrl}
-                    onChange={(event) => onCaptureUrlChange(event.target.value)}
-                    placeholder="https://example.com/article"
-                    aria-label="Capture URL"
-                    className={`${INPUT_CLASS} font-mono`}
-                    spellCheck={false}
-                  />
-                ) : (
-                  <textarea
-                    value={captureBody}
-                    onChange={(event) => onCaptureBodyChange(event.target.value)}
-                    placeholder="Drop in the raw thought, rough note, or follow-up to triage later."
-                    aria-label="Capture body"
-                    rows={6}
-                    className={`${INPUT_CLASS} resize-y`}
-                  />
-                )}
-                {captureError ? <p className="text-[12px] text-danger">{captureError}</p> : null}
-                <div>
-                  <ToolbarButton onClick={onSubmitCapture} disabled={captureBusy} className="text-accent">
-                    {captureBusy ? (captureMode === 'text' ? 'Capturing…' : 'Saving…') : (captureMode === 'text' ? 'Capture' : 'Save URL')}
-                  </ToolbarButton>
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <LuceneQueryInput query={query} visibleCount={filteredNodes.length} onQueryChange={onQueryChange} />
 
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <label className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">Lucene query</span>
-              <input
-                value={query}
-                onChange={(event) => onQueryChange(event.target.value)}
-                placeholder='type:project AND status:active AND area:architecture'
-                aria-label="Lucene query"
-                className={QUERY_INPUT_CLASS}
-                autoComplete="off"
-                spellCheck={false}
-              />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>Sort</span>
+              <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort pages">
+                {SORT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
             </label>
-            <div className="text-[11px] text-dim xl:pl-4 xl:text-right">
-              <p>{filteredNodes.length} visible</p>
-              <p className="font-mono text-[10px] text-dim">Fields: type, status, profile, area, parent, tag, id, title</p>
-            </div>
-          </div>
 
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div className="ui-segmented-control" role="group" aria-label="Node filter">
-              {([
-                ['all', 'All'],
-                ['note', 'Notes'],
-                ['project', 'Projects'],
-                ['skill', 'Skills'],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onFilterChange(value)}
-                  className={filter === value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>Group by</span>
+              <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group pages">
+                {[...GROUP_BY_OPTIONS, ...tagGroupOptions].map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
 
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>Sort</span>
-                <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort nodes">
-                  {SORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>Density</span>
+              <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Page density">
+                <option value="comfortable">Comfortable</option>
+                <option value="dense">Dense table</option>
+              </select>
+            </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>Group by</span>
-                <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group nodes">
-                  {[...GROUP_BY_OPTIONS, ...tagGroupOptions].map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>Date field</span>
+              <select value={dateField} onChange={(event) => onDateFieldChange(event.target.value as NodeBrowserDateField)} className={SELECT_CLASS} aria-label="Date field">
+                <option value="updated">Updated</option>
+                <option value="created">Created</option>
+              </select>
+            </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>Density</span>
-                <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Node density">
-                  <option value="comfortable">Comfortable</option>
-                  <option value="dense">Dense table</option>
-                </select>
-              </label>
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>From</span>
+              <input type="date" value={dateRange.from ?? ''} onChange={(event) => onDateFromChange(event.target.value || null)} className={SELECT_CLASS} aria-label="From date" />
+            </label>
 
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>Date field</span>
-                <select value={dateField} onChange={(event) => onDateFieldChange(event.target.value as NodeBrowserDateField)} className={SELECT_CLASS} aria-label="Date field">
-                  <option value="updated">Updated</option>
-                  <option value="created">Created</option>
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>From</span>
-                <input type="date" value={dateRange.from ?? ''} onChange={(event) => onDateFromChange(event.target.value || null)} className={SELECT_CLASS} aria-label="From date" />
-              </label>
-
-              <label className="flex flex-col gap-1 text-[11px] text-dim">
-                <span>To</span>
-                <input type="date" value={dateRange.to ?? ''} onChange={(event) => onDateToChange(event.target.value || null)} className={SELECT_CLASS} aria-label="To date" />
-              </label>
-            </div>
+            <label className="flex flex-col gap-1 text-[11px] text-dim">
+              <span>To</span>
+              <input type="date" value={dateRange.to ?? ''} onChange={(event) => onDateToChange(event.target.value || null)} className={SELECT_CLASS} aria-label="To date" />
+            </label>
           </div>
 
           {error && data && data.nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
+          {actionError ? <p className="text-[11px] text-danger">{actionError}</p> : null}
 
-          {loading && !data ? <LoadingState label="Loading knowledge base…" className="py-10" /> : null}
-          {error && !data ? <ErrorState message={`Unable to load knowledge base: ${error}`} className="py-10" /> : null}
+          {loading && !data ? <LoadingState label="Loading pages…" className="py-10" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load pages: ${error}`} className="py-10" /> : null}
 
           {!loading && !error && data && data.nodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No nodes yet"
-              body="Create a note or project, or add a skill, to start building the shared knowledge base."
+              title="No pages yet"
+              body="Create a note, project, or skill page to start shaping your durable layer."
             />
           ) : null}
 
           {!loading && !error && data && data.nodes.length > 0 && filteredNodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No matching nodes"
+              title="No matching pages"
               body={`No ${filterLabel.toLowerCase()} match the current query, grouping, and date range.`}
             />
           ) : null}
 
           {!loading && !error && filteredNodes.length > 0 ? (
-            groupBy === 'none' ? (
-              density === 'dense' ? (
-                <DenseNodeTable items={filteredNodes} locationSearch={locationSearch} />
-              ) : (
-                <div className="space-y-0.5">
-                  {filteredNodes.map((item) => (
-                    <NodeBrowserListItem key={`${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
-                  ))}
-                </div>
-              )
-            ) : (
-              <div className="space-y-5">
-                {groupedNodes.map((entry) => (
-                  <div key={entry.key} className="space-y-1">
-                    <SectionLabel label={entry.label} count={entry.items.length} className="px-3 pb-1" />
-                    {density === 'dense' ? (
-                      <DenseNodeTable items={entry.items} locationSearch={locationSearch} />
-                    ) : (
-                      <div className="space-y-0.5">
-                        {entry.items.map((item) => (
-                          <NodeBrowserListItem key={`${entry.key}:${item.kind}:${item.id}`} item={item} selected={false} locationSearch={locationSearch} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )
+            <NodesTable
+              groups={groupBy === 'none' ? [{ key: 'all', label: 'All pages', items: filteredNodes }] : groupedNodes}
+              groupBy={groupBy}
+              locationSearch={locationSearch}
+              currentProfile={currentProfile}
+              density={density}
+              deletingKey={deletingKey}
+              onDelete={onDeleteNode}
+            />
           ) : null}
         </div>
       </div>
@@ -790,17 +1150,17 @@ function SelectedNodeView({
 }) {
   const navigate = useNavigate();
   const baseSearch = useMemo(() => stripWorkspaceParams(locationSearch), [locationSearch]);
-  const overviewHref = `/nodes${buildNodesSearch(baseSearch, { kind: null, nodeId: null })}`;
+  const overviewHref = `/pages${buildNodesSearch(baseSearch, { kind: null, nodeId: null })}`;
 
   if (loading && !detail) {
-    return <LoadingState label="Loading node…" className="min-h-[18rem]" />;
+    return <LoadingState label="Loading page…" className="min-h-[18rem]" />;
   }
 
   if (error || !detail) {
     return (
       <div className="space-y-3">
-        <ErrorState message={`Failed to load node: ${error ?? `@${selection.id} not found.`}`} />
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to table</Link>
+        <ErrorState message={`Failed to load page: ${error ?? `@${selection.id} not found.`}`} />
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to pages</Link>
       </div>
     );
   }
@@ -810,10 +1170,10 @@ function SelectedNodeView({
       <NoteWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to table"
+        backLabel="Back to pages"
         onNavigate={(updates, replace) => {
           const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
-          navigate(`/nodes${buildNodesSearch(baseSearch, {
+          navigate(`/pages${buildNodesSearch(baseSearch, {
             kind: nextMemoryId ? 'note' : null,
             nodeId: nextMemoryId ?? null,
           })}`, { replace });
@@ -831,13 +1191,13 @@ function SelectedNodeView({
       <SkillWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to table"
+        backLabel="Back to pages"
         selectedView={readSkillView(locationSearch)}
         selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
         onNavigate={(updates, replace) => {
           const nextSkillName = updates.skillName === undefined ? detail.detail.skill.name : updates.skillName;
           const nextSkillSearch = buildSkillsSearch(locationSearch, updates);
-          navigate(`/nodes${buildNodesSearch(nextSkillSearch, {
+          navigate(`/pages${buildNodesSearch(nextSkillSearch, {
             kind: nextSkillName ? 'skill' : null,
             nodeId: nextSkillName ?? null,
           })}`, { replace });
@@ -852,7 +1212,7 @@ function SelectedNodeView({
       project={detail.detail}
       activeProfile={currentProfile ?? undefined}
       backHref={overviewHref}
-      backLabel="Back to table"
+      backLabel="Back to pages"
       onChanged={() => {
         emitProjectsChanged();
         onRefreshAll();
@@ -877,6 +1237,8 @@ export function NodesPage() {
 
   const filter = useMemo(() => readNodeBrowserFilter(location.search), [location.search]);
   const selected = useMemo(() => readSelectedNode(location.search), [location.search]);
+  const creatingNode = useMemo(() => readCreatingNode(location.search), [location.search]);
+  const createKind = useMemo(() => readCreateNodeKind(location.search), [location.search]);
   const query = useMemo(() => readNodeBrowserQuery(location.search), [location.search]);
   const sort = useMemo(() => readNodeBrowserSort(location.search), [location.search]);
   const groupBy = useMemo(() => readNodeBrowserGroupBy(location.search), [location.search]);
@@ -884,18 +1246,21 @@ export function NodesPage() {
   const dateRange = useMemo(() => readNodeBrowserDateRange(location.search), [location.search]);
   const density = useMemo(() => readNodeBrowserDensity(location.search), [location.search]);
   const nodeViewsApi = useApi(api.nodeViews, 'node-browser-views');
-  const [activeViewId, setActiveViewId] = useState('');
   const [savingView, setSavingView] = useState(false);
   const [savingName, setSavingName] = useState('');
-  const [captureMode, setCaptureMode] = useState<'text' | 'url' | null>(null);
-  const [captureTitle, setCaptureTitle] = useState('');
-  const [captureBody, setCaptureBody] = useState('');
-  const [captureUrl, setCaptureUrl] = useState('');
-  const [captureBusy, setCaptureBusy] = useState(false);
-  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   const data = nodesApi.data ?? null;
   const savedViews = nodeViewsApi.data?.views ?? [];
+  const currentBrowserSearch = useMemo(() => buildSavedBrowserViewSearch(location.search), [location.search]);
+  const matchedSavedView = useMemo(
+    () => savedViews.find((view) => view.search === currentBrowserSearch) ?? null,
+    [currentBrowserSearch, savedViews],
+  );
+  const selectedView = matchedSavedView ? `saved:${matchedSavedView.id}` : `builtin:${filter}`;
   const nodes = data?.nodes ?? [];
   const filteredNodes = useMemo(
     () => nodes
@@ -921,12 +1286,12 @@ export function NodesPage() {
       return 'Loading knowledge base…';
     }
     if (counts.all === 0) {
-      return 'No nodes yet.';
+      return 'No pages yet.';
     }
     if (query.trim() || filter !== 'all' || dateRange.from || dateRange.to || groupBy !== 'kind' || sort !== 'updated_desc') {
-      return `${filteredNodes.length} visible · ${counts.all} total nodes`;
+      return `${filteredNodes.length} visible · ${counts.all} total pages`;
     }
-    return `${counts.all} nodes · ${counts.note} notes · ${counts.project} projects · ${counts.skill} skills`;
+    return `${counts.all} pages · ${counts.note} notes · ${counts.project} projects · ${counts.skill} skills`;
   }, [counts.all, counts.note, counts.project, counts.skill, dataLoading, dateRange.from, dateRange.to, filter, filteredNodes.length, groupBy, query, sort]);
 
   const detailApi = useApi(async () => {
@@ -959,84 +1324,142 @@ export function NodesPage() {
   }, [detailApi, nodesApi]);
 
   const navigateBrowser = useCallback((updates: Parameters<typeof buildNodesSearch>[1]) => {
-    navigate(`/nodes${buildNodesSearch(location.search, updates)}`, { replace: true });
+    navigate(`/pages${buildNodesSearch(location.search, updates)}`, { replace: true });
   }, [location.search, navigate]);
 
-  const handleFilterChange = useCallback((nextFilter: NodeBrowserFilter) => {
-    const nextSelection = selected && (nextFilter === 'all' || selected.kind === nextFilter) ? selected : null;
-    navigateBrowser({ filter: nextFilter, kind: nextSelection?.kind ?? null, nodeId: nextSelection?.id ?? null });
-  }, [navigateBrowser, selected]);
+  const handleOpenCreateNode = useCallback(() => {
+    navigate(`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`, { replace: true });
+  }, [location.search, navigate]);
 
-  const handleCreateNote = useCallback(() => navigate('/notes?creating=true'), [navigate]);
-  const handleCreateProject = useCallback(() => navigate('/projects?creating=true'), [navigate]);
-  const handleCreateSkill = useCallback(() => navigate('/skills?creating=true'), [navigate]);
+  const handleCancelCreateNode = useCallback(() => {
+    setCreateError(null);
+    navigate(`/pages${buildNodeCreateSearch(location.search, { creating: false, createKind: null })}`, { replace: true });
+  }, [location.search, navigate]);
 
   const handleSaveView = useCallback(async () => {
     const result = await api.saveNodeView({
       name: savingName,
-      search: buildSavedBrowserViewSearch(location.search),
+      search: currentBrowserSearch,
     });
     nodeViewsApi.replaceData(result);
-    const nextActive = result.views.find((view) => view.name.toLowerCase() === savingName.trim().toLowerCase());
-    setActiveViewId(nextActive?.id ?? '');
     setSavingView(false);
     setSavingName('');
-  }, [location.search, nodeViewsApi, savingName]);
+  }, [currentBrowserSearch, nodeViewsApi, savingName]);
 
   const handleDeleteView = useCallback(async () => {
-    if (!activeViewId) {
+    if (!matchedSavedView) {
       return;
     }
-    const result = await api.deleteNodeView(activeViewId);
+    const result = await api.deleteNodeView(matchedSavedView.id);
     nodeViewsApi.replaceData(result);
-    setActiveViewId('');
-  }, [activeViewId, nodeViewsApi]);
+  }, [matchedSavedView, nodeViewsApi]);
 
-  const handleActiveViewChange = useCallback((value: string) => {
-    setActiveViewId(value);
-    if (!value) {
+  const handleViewChange = useCallback((value: string) => {
+    if (value.startsWith('saved:')) {
+      const viewId = value.slice('saved:'.length);
+      const view = savedViews.find((entry) => entry.id === viewId);
+      if (view) {
+        navigate(`/pages${view.search}`, { replace: true });
+      }
       return;
     }
-    const view = savedViews.find((entry) => entry.id === value);
-    if (view) {
-      navigate(`/nodes${view.search}`, { replace: true });
-    }
-  }, [navigate, savedViews]);
 
-  useEffect(() => {
-    if (savedViews.some((view) => view.id === activeViewId)) {
+    const nextFilter = value.replace(/^builtin:/, '') as NodeBrowserFilter;
+    navigateBrowser({ filter: nextFilter, kind: null, nodeId: null });
+  }, [navigate, navigateBrowser, savedViews]);
+
+  const handleDeleteNode = useCallback(async (item: NodeBrowserSummary) => {
+    if (item.kind === 'skill') {
       return;
     }
-    if (!activeViewId) {
+
+    const rowKey = `${item.kind}:${item.id}`;
+    const itemLabel = item.kind === 'project' ? 'project' : 'note';
+    if (!window.confirm(`Delete ${itemLabel} @${item.id}?`)) {
       return;
     }
-    setActiveViewId('');
-  }, [activeViewId, savedViews]);
 
-  const closeCapture = useCallback(() => {
-    setCaptureMode(null);
-    setCaptureTitle('');
-    setCaptureBody('');
-    setCaptureUrl('');
-    setCaptureError(null);
-    setCaptureBusy(false);
-  }, []);
-
-  const handleSubmitCapture = useCallback(async () => {
-    setCaptureBusy(true);
-    setCaptureError(null);
+    setActionError(null);
+    setDeletingKey(rowKey);
     try {
-      const created = captureMode === 'url'
-        ? await api.captureUrl({ url: captureUrl, title: captureTitle || undefined })
-        : await api.captureNote({ title: captureTitle || undefined, body: captureBody });
-      closeCapture();
+      if (item.kind === 'note') {
+        await api.deleteNoteDoc(item.id);
+        emitMemoriesChanged({ memoryId: item.id });
+      } else {
+        const projectProfile = item.project?.profile ?? currentProfile ?? undefined;
+        await api.deleteProject(item.id, projectProfile ? { profile: projectProfile } : undefined);
+        emitProjectsChanged();
+      }
+
+      if (data) {
+        nodesApi.replaceData({
+          ...data,
+          nodes: data.nodes.filter((node) => !(node.kind === item.kind && node.id === item.id)),
+        });
+      }
+
       await refreshAll();
-      navigate(`/nodes${buildNodesSearch('', { kind: 'note', nodeId: created.memory.id })}`);
     } catch (error) {
-      setCaptureError(error instanceof Error ? error.message : String(error));
-      setCaptureBusy(false);
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDeletingKey(null);
     }
-  }, [captureBody, captureMode, captureTitle, captureUrl, closeCapture, navigate, refreshAll]);
+  }, [data, nodesApi, refreshAll]);
+
+  const handleCreateNode = useCallback(async (input: {
+    kind: NodeLinkKind;
+    title: string;
+    summary: string;
+    body: string;
+    repoRoot: string;
+  }) => {
+    const title = input.title.trim();
+    if (!title) {
+      return;
+    }
+
+    setCreateBusy(true);
+    setCreateError(null);
+    try {
+      if (input.kind === 'note') {
+        const created = await api.createNoteDoc({
+          title,
+          summary: input.summary.trim() || undefined,
+          description: input.summary.trim() || undefined,
+          body: input.body.trim() || undefined,
+        });
+        emitMemoriesChanged({ memoryId: created.memory.id });
+        await refreshAll();
+        navigate(`/pages${buildNodesSearch('', { kind: 'note', nodeId: created.memory.id })}`, { replace: true });
+        return;
+      }
+
+      if (input.kind === 'project') {
+        const created = await api.createProject({
+          title,
+          description: input.summary.trim() || title,
+          summary: input.summary.trim() || undefined,
+          documentContent: input.body.trim() || undefined,
+          repoRoot: input.repoRoot.trim() || undefined,
+        }, currentProfile ? { profile: currentProfile } : undefined);
+        emitProjectsChanged();
+        await refreshAll();
+        navigate(`/pages${buildNodesSearch('', { kind: 'project', nodeId: created.project.id })}`, { replace: true });
+        return;
+      }
+
+      const created = await api.createSkill({
+        title,
+        description: input.summary.trim() || undefined,
+        body: input.body.trim() || undefined,
+      });
+      await refreshAll();
+      navigate(`/pages${buildNodesSearch('', { kind: 'skill', nodeId: created.skill.name })}`, { replace: true });
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : String(error));
+      setCreateBusy(false);
+    }
+  }, [currentProfile, navigate, refreshAll]);
 
   useEffect(() => {
     if (!selected) {
@@ -1055,7 +1478,7 @@ export function NodesPage() {
       window.removeEventListener(MEMORIES_CHANGED_EVENT, handleNodesChanged);
       window.removeEventListener(PROJECTS_CHANGED_EVENT, handleNodesChanged);
     };
-  }, [refreshAll]);
+  }, [currentProfile, refreshAll]);
 
   useEffect(() => {
     if (!selected || nodes.length === 0) {
@@ -1087,6 +1510,23 @@ export function NodesPage() {
     );
   }
 
+  if (creatingNode) {
+    return (
+      <NodeCreatePage
+        createKind={createKind}
+        currentProfile={currentProfile}
+        busy={createBusy}
+        error={createError}
+        onCreate={(input) => { void handleCreateNode(input); }}
+        onCancel={handleCancelCreateNode}
+        onCreateKindChange={(value) => {
+          setCreateError(null);
+          navigate(`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: value })}`, { replace: true });
+        }}
+      />
+    );
+  }
+
   return (
     <KnowledgeBrowserPage
       data={data}
@@ -1104,10 +1544,14 @@ export function NodesPage() {
       error={combinedError}
       refreshing={nodesApi.refreshing}
       pageMeta={pageMeta}
+      currentProfile={currentProfile}
       savedViews={savedViews}
-      activeViewId={activeViewId}
+      selectedView={selectedView}
+      activeSavedViewId={matchedSavedView?.id ?? null}
       savingView={savingView}
       savingName={savingName}
+      actionError={actionError}
+      deletingKey={deletingKey}
       onRefresh={() => { void refreshAll(); }}
       onQueryChange={(value) => navigateBrowser({ query: value })}
       onSortChange={(value) => navigateBrowser({ sort: value })}
@@ -1116,24 +1560,9 @@ export function NodesPage() {
       onDateFromChange={(value) => navigateBrowser({ dateFrom: value })}
       onDateToChange={(value) => navigateBrowser({ dateTo: value })}
       onDensityChange={(value) => navigateBrowser({ density: value })}
-      onFilterChange={handleFilterChange}
-      onCreateNote={handleCreateNote}
-      onCreateProject={handleCreateProject}
-      onCreateSkill={handleCreateSkill}
-      captureMode={captureMode}
-      captureTitle={captureTitle}
-      captureBody={captureBody}
-      captureUrl={captureUrl}
-      captureBusy={captureBusy}
-      captureError={captureError}
-      onOpenQuickCapture={() => setCaptureMode('text')}
-      onOpenUrlCapture={() => setCaptureMode('url')}
-      onCloseCapture={closeCapture}
-      onCaptureTitleChange={setCaptureTitle}
-      onCaptureBodyChange={setCaptureBody}
-      onCaptureUrlChange={setCaptureUrl}
-      onSubmitCapture={() => { void handleSubmitCapture(); }}
-      onActiveViewChange={handleActiveViewChange}
+      onViewChange={handleViewChange}
+      onDeleteNode={handleDeleteNode}
+      onCreateNode={handleOpenCreateNode}
       onStartSaveView={() => setSavingView(true)}
       onCancelSaveView={() => { setSavingView(false); setSavingName(''); }}
       onSavingNameChange={setSavingName}

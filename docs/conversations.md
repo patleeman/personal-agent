@@ -61,8 +61,8 @@ Conversations can reference durable objects with `@` references.
 Typical references include:
 
 - projects
-- note nodes
-- skill nodes
+- note pages
+- skill pages
 - scheduled tasks
 - profiles
 

@@ -38,7 +38,7 @@ export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, strin
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  nodes: 'Nodes',
+  nodes: 'Pages',
   tasks: 'Scheduled tasks',
 };
 
@@ -47,7 +47,7 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'nodes', label: 'Nodes' },
+  { value: 'nodes', label: 'Pages' },
   { value: 'tasks', label: 'Scheduled' },
 ];
 

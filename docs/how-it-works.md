@@ -30,8 +30,7 @@ Mutable durable resources default to the synced durable-state home:
 - `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md`
 - `~/.local/state/personal-agent/sync/settings/**`
 - `~/.local/state/personal-agent/sync/models/**`
-- `~/.local/state/personal-agent/sync/skills/**`
-- `~/.local/state/personal-agent/sync/notes/**`
+- `~/.local/state/personal-agent/sync/nodes/**`
 - `~/.local/state/personal-agent/sync/tasks/**`
 - `~/.local/state/personal-agent/sync/projects/**`
 
@@ -110,20 +109,20 @@ If the work should still make sense next week, it probably belongs in a project.
 
 See [Projects](./projects.md).
 
-### Nodes
+### Pages
 
-Nodes are the unified durable file model for notes, projects, and skills.
+Pages are the unified durable product model for notes, projects, and skills.
 
 Use them for:
 
 - profile behavior files in `sync/profiles/<profile>/agent/AGENTS.md`
-- reusable workflow skill nodes in `sync/skills/**`
-- durable note nodes in `sync/notes/<note-id>/INDEX.md` plus package-local `references/`
-- structured project nodes in `sync/projects/<project-id>/{INDEX.md,state.yaml}`
+- reusable workflow skill pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:skill`
+- durable note pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:note` plus package-local `references/`
+- structured project pages backed by `sync/nodes/<id>/INDEX.md` plus supporting files
 
-Note nodes are not the same as project nodes.
+The storage still lives under `sync/nodes/`, but the user-facing model is pages.
 
-See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
+See [Pages](./pages.md) and [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
 ### Scheduled task
 
@@ -168,7 +167,7 @@ See [Sync Guide](./sync.md).
 | --- | --- | --- |
 | Work with the agent right now | conversation | best place for active interaction |
 | Track a real piece of ongoing work | project | durable plan, brief, notes, files, blockers, status, and linked conversations |
-| Save something the agent should know later | note node / skill node / AGENTS | reusable durable knowledge |
+| Save something the agent should know later | note page / skill page / AGENTS | reusable durable knowledge |
 | Interrupt yourself later for a reminder or callback | reminder / alert | conversation-bound wakeup plus a disruptive attention surface |
 | Notice async outcomes later without interrupting yourself | inbox/activity | passive attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
@@ -181,7 +180,7 @@ Think about the system this way:
 - **conversation** = active work
 - **project** = durable work plan
 - **notes + skills** = durable knowledge and reusable procedures
-- **project nodes** = durable tracked work
+- **project pages** = durable tracked work
 - **alerts** = interrupting reminders and callbacks that need acknowledgement
 - **inbox** = durable passive attention for async events
 - **scheduled task** = durable automation definition
@@ -197,7 +196,7 @@ Portable durable files should not store conversation ids or session ids.
 That means:
 
 - do not put conversation ids in project `state.yaml` or `INDEX.md`
-- do not put conversation ids in note-node frontmatter, state, or metadata
+- do not put conversation ids in note-page frontmatter, state, or metadata
 - do not key repo files by conversation id
 
 If you need conversation-local bindings, keep them in local runtime state.
@@ -216,7 +215,7 @@ A common workflow looks like this:
 
 1. Start in a conversation through the web UI or TUI.
 2. Create or reference a project if the work is ongoing.
-3. Use the active profile's AGENTS, skill nodes, and shared note nodes to guide behavior and bring in durable knowledge.
+3. Use the active profile's AGENTS, skill pages, and shared note pages to guide behavior and bring in durable knowledge.
 4. If the work should happen later, put it into a scheduled task.
 5. When asynchronous work finishes, the result shows up in the inbox or, for higher-signal reminders/callbacks, as an alert tied back to the originating conversation.
 

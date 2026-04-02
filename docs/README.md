@@ -19,7 +19,7 @@ Use these other places for adjacent concerns:
 
 - active profile `AGENTS.md` — Patrick-specific preferences, durable behavior, standing instructions
 - repo `AGENTS.md` — repo-specific development rules
-- skill nodes under `sync/skills/` — reusable workflows and procedures
+- skill pages under `sync/nodes/` tagged `type:skill` — reusable workflows and procedures
 - tool schemas / runtime prompt material — exact tool arguments and live agent capabilities
 - `nodes.md`, `configuration.md`, and task docs — on-disk format and config details
 
@@ -44,6 +44,7 @@ Those four pages should answer most agent questions quickly.
 - [Knowledge Management System](./knowledge-system.md)
 - [Projects](./projects.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
+- [Pages](./pages.md)
 - [Nodes](./nodes.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Runs](./runs.md)
@@ -72,11 +73,11 @@ Those four pages should answer most agent questions quickly.
 | Question | Start here | Then go deeper in |
 | --- | --- | --- |
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
-| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Nodes](./nodes.md), [Configuration](./configuration.md) |
-| How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Nodes](./nodes.md), [Projects](./projects.md) |
-| How do unified durable nodes work? | [Nodes](./nodes.md) | [Command-Line Guide (`pa`)](./command-line.md), [Knowledge Management System](./knowledge-system.md) |
+| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Pages](./pages.md), [Configuration](./configuration.md) |
+| How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Pages](./pages.md), [Projects](./projects.md) |
+| How do unified durable pages work? | [Pages](./pages.md) | [Command-Line Guide (`pa`)](./command-line.md), [Knowledge Management System](./knowledge-system.md) |
 | Where should ongoing work live? | [Projects](./projects.md) | [Conversations](./conversations.md) |
-| Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Nodes](./nodes.md) |
+| Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md), [Pages](./pages.md) |
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Inbox and Activity](./inbox.md), [Alerts and Reminders](./alerts.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
@@ -91,8 +92,8 @@ Those four pages should answer most agent questions quickly.
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
 | Work on local repo files in the web UI | workspace | local filesystem / git-backed workspace state |
-| Track ongoing work or reusable knowledge in the shared durable layer | unified node | `~/.local/state/personal-agent/sync/nodes/**` |
-| Store durable behavior or preferences | `AGENTS.md`, settings, skill nodes | repo defaults + `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md` + `sync/{agents,settings,skills}/**` |
+| Track ongoing work or reusable knowledge in the shared durable layer | page | `~/.local/state/personal-agent/sync/nodes/**` |
+| Store durable behavior or preferences | `AGENTS.md`, settings, skill pages | repo defaults + `~/.local/state/personal-agent/sync/profiles/<profile>/agent/AGENTS.md` + `sync/{agents,settings,skills}/**` |
 | Render inspectable outputs in the current conversation | conversation artifact | local conversation-artifact state |
 | Notice async outcomes later without interrupting yourself | inbox/activity | local runtime inbox state |
 | Interrupt yourself later or wake a conversation back up | reminder / alert / deferred resume | local runtime alert + wakeup state |
@@ -106,7 +107,7 @@ The highest-value rules are:
 
 - use the smallest correct durable surface
 - keep conversations for active work, not durable storage
-- use projects for tracked work, notes for reusable knowledge, and skills for reusable procedures
+- use pages as the primitive, with projects for tracked work, notes for reusable knowledge, and skills for reusable procedures
 - use activity for passive async attention and reminders/alerts for interrupting attention
 - use scheduled tasks for later/scheduled automation and runs for detached work started now
 - keep conversation ids and other machine-local bindings out of portable durable files

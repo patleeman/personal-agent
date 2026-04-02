@@ -45,10 +45,10 @@ On the companion surface, the `/api/events` stream also needs to carry the opera
 | `routes/conversationState.ts` | conversation bootstrap, recover, execution target state, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel/import; companion surface is read-focused |
-| `routes/runsOps.ts` | run attention + node-distill retry/recover + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
+| `routes/runsOps.ts` | run attention + page-distill retry/recover + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
 | `routes/workspace.ts` | workspace browsing and git operations | Injects cwd helpers and commit-message drafting |
 | `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session/project helpers that were previously inline |
-| `routes/nodes.ts` | unified node-browser dataset for the Knowledge Base page | Returns the mixed note/project/skill table data with tags and node metadata |
+| `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/project/skill table data with tags and page metadata |
 | `routes/folderPicker.ts` | folder picker endpoint | Small wrapper around the folder picker service |
 | `routes/shell.ts` | ad-hoc shell command execution | Wrapper for the `/api/run` endpoint |
 | `routes/tasks.ts` | scheduled tasks and companion task run trigger | Shares task lookup logic through `taskService.ts` |

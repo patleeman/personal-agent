@@ -1,5 +1,6 @@
 import { BrowserRecordRow } from '../components/ui';
 import { useAppData } from '../contexts';
+import { CompanionCardStack } from './CompanionBrowser';
 import { COMPANION_NOTES_PATH, COMPANION_PROJECTS_PATH, COMPANION_SKILLS_PATH } from './routes';
 
 export function CompanionKnowledgePage() {
@@ -10,7 +11,7 @@ export function CompanionKnowledgePage() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
-          <div className="space-y-2 px-4">
+          <CompanionCardStack>
             <BrowserRecordRow
               to={COMPANION_PROJECTS_PATH}
               label="Knowledge"
@@ -27,7 +28,7 @@ export function CompanionKnowledgePage() {
               to={COMPANION_NOTES_PATH}
               label="Knowledge"
               heading="Notes"
-              summary="Browse durable note nodes and distilled references."
+              summary="Browse durable note pages and distilled references."
               meta="Shared knowledge"
               className="py-3.5"
               titleClassName="text-[15px]"
@@ -45,7 +46,7 @@ export function CompanionKnowledgePage() {
               summaryClassName="text-[13px]"
               metaClassName="text-[11px] break-words"
             />
-          </div>
+          </CompanionCardStack>
         </div>
       </div>
     </div>

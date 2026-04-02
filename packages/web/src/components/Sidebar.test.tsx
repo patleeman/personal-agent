@@ -193,14 +193,14 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Knowledge Base'));
-    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Pages'));
+    expect(html.indexOf('Pages')).toBeLessThan(html.indexOf('Workspace'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
-    expect(html).toContain('Knowledge Base');
+    expect(html).toContain('Pages');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');
@@ -269,7 +269,7 @@ describe('Sidebar', () => {
     expect(html).toContain('padding-left:14px');
   });
 
-  it('renders grouped open shelves for nodes and workspaces', () => {
+  it('renders grouped open shelves for pages and workspaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
@@ -277,10 +277,10 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/inbox');
 
-    expect(html).toContain('Open Nodes');
+    expect(html).toContain('Open Pages');
     expect(html).toContain('note-index');
-    expect(html).toContain('Active project');
-    expect(html).toContain('Agent Browser');
+    expect(html).toContain('active-project');
+    expect(html).toContain('agent-browser');
     expect(html).toContain('Open Workspaces');
     expect(html).toContain('repo');
   });
@@ -288,7 +288,7 @@ describe('Sidebar', () => {
   it('shows a draft note row in the sidebar while creating a new note', () => {
     const html = renderSidebar('/notes?new=1');
 
-    expect(html).toContain('Open Nodes');
+    expect(html).toContain('Open Pages');
     expect(html).toContain('new note');
     expect(html).toContain('Draft note');
     expect(html).toContain('href="/notes?new=1"');

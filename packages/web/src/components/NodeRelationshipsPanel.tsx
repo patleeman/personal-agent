@@ -155,7 +155,7 @@ export function NodeRelationshipsPanel({
                       setDraftRelationships(next);
                       setSaveNotice(null);
                     }}
-                    placeholder="target node id"
+                    placeholder="target page id"
                     aria-label={`Relationship target ${index + 1}`}
                     className="flex-1 rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary"
                     spellCheck={false}

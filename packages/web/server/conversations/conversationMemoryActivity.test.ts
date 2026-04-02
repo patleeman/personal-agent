@@ -64,7 +64,7 @@ describe('conversation memory activity', () => {
     expect(entries[0]?.entry).toMatchObject({
       id: activityId,
       kind: 'conversation-node-distill-failed',
-      summary: 'Conversation node distillation failed',
+      summary: 'Conversation page distillation failed',
       details: 'Distillation failed for this conversation.\nError: runner missing',
       relatedProjectIds: ['project-beta'],
     });

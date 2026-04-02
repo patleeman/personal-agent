@@ -45,6 +45,11 @@ function LegacyNotesRouteRedirect() {
   return <Navigate to={{ pathname: '/notes', search: location.search }} replace />;
 }
 
+function LegacyNodesRouteRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: '/pages', search: location.search }} replace />;
+}
+
 function LegacyCompanionNotesRouteRedirect() {
   const { id } = useParams<{ id?: string }>();
   const location = useLocation();
@@ -181,7 +186,7 @@ function DesktopPairingScreen() {
             Enter a short-lived pairing code from the machine hosting Pi to unlock the full desktop web UI over your tailnet.
           </p>
           <p className="mt-2 text-[12px] leading-relaxed text-secondary">
-            Generate a code from the local web UI or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>. Once paired, this browser stays signed in until you revoke it.
+            Generate a code from the local web UI or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>. Active pairings refresh while you use them; idle pairings expire after 30 days unless you revoke them sooner.
           </p>
           <label className="mt-5 block">
             <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Pairing code</span>
@@ -581,7 +586,8 @@ export function App() {
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
-                      <Route path="nodes" element={suspendRoute(<NodesPage />)} />
+                      <Route path="pages" element={suspendRoute(<NodesPage />)} />
+                      <Route path="nodes" element={<LegacyNodesRouteRedirect />} />
                       <Route path="notes" element={suspendRoute(<MemoriesPage />)} />
                       <Route path="memories" element={<LegacyNotesRouteRedirect />} />
                       <Route path="skills" element={suspendRoute(<SkillsPage />)} />
