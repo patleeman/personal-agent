@@ -62,9 +62,9 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
     writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Durable datadog\n');
-    writeFile(join(syncRoot, 'settings', 'global.json'), JSON.stringify({ nested: { two: true } }));
-    writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Durable datadog\n');
+    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
+    writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
     writeFile(join(syncRoot, 'nodes', 'shared-skill', 'INDEX.md'), '---\nid: shared-skill\ntitle: Shared skill\nsummary: Shared\ndescription: Shared\ntags:\n  - type:skill\n  - profile:shared\n---\n');
     writeFile(join(syncRoot, 'nodes', 'datadog-skill', 'INDEX.md'), '---\nid: datadog-skill\ntitle: Datadog skill\nsummary: Datadog\ndescription: Datadog\ntags:\n  - type:skill\n  - profile:datadog\n---\n');
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
@@ -79,13 +79,13 @@ describe('resources profile loader', () => {
     expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'durable', 'local']);
     expect(resolved.agentsFiles).toEqual([
       join(repo, 'defaults/agent/AGENTS.md'),
-      join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'),
+      join(profilesRoot, 'datadog', 'AGENTS.md'),
       join(local, 'agent', 'AGENTS.md'),
     ]);
     expect(resolved.settingsFiles).toEqual([
       join(repo, 'defaults/agent/settings.json'),
-      join(syncRoot, 'settings', 'datadog.json'),
-      join(syncRoot, 'settings', 'global.json'),
+      join(profilesRoot, 'shared', 'settings.json'),
+      join(profilesRoot, 'datadog', 'settings.json'),
       join(local, 'agent', 'settings.json'),
     ]);
     expect(resolved.skillDirs).toEqual([
@@ -147,8 +147,8 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
-    writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({
+    writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Datadog\n');
+    writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({
       datadog: true,
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
@@ -213,13 +213,12 @@ tags:
   it('installs package sources into the selected durable settings file', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
-    const syncRoot = join(profilesRoot, '..');
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'assistant.json'), '{"title":"Assistant"}\n');
-    writeFile(join(syncRoot, 'settings', 'assistant.json'), JSON.stringify({ packages: ['/existing-package'] }));
+    writeFile(join(profilesRoot, 'assistant', 'settings.json'), JSON.stringify({ packages: ['/existing-package'] }));
 
     const profileInstall = installPackageSource({
       repoRoot: repo,
@@ -232,7 +231,7 @@ tags:
     });
 
     expect(profileInstall.installed).toBe(true);
-    expect(profileInstall.settingsPath).toBe(join(syncRoot, 'settings', 'assistant.json'));
+    expect(profileInstall.settingsPath).toBe(join(profilesRoot, 'assistant', 'settings.json'));
 
     const profileState = readPackageSourceTargetState('profile', 'assistant', { repoRoot: repo, profilesRoot, localProfileDir: local });
     expect(profileState.packages).toEqual([

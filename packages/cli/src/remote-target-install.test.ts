@@ -66,8 +66,8 @@ describe('remote target install bundles', () => {
     const profilesRoot = join(syncRoot, 'profiles');
 
     mkdirSync(syncRoot, { recursive: true });
-    writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
-    writeFile(join(syncRoot, 'notes', 'personal-agent', 'INDEX.md'), '# Note\n');
+    writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Datadog\n');
+    writeFile(join(syncRoot, 'nodes', 'personal-agent', 'INDEX.md'), '# Note\n');
     symlinkSync(profilesRoot, join(stateRoot, 'profiles'), 'dir');
     writeFile(join(stateRoot, 'config', 'local', 'settings.json'), '{}\n');
     writeFile(join(stateRoot, 'config', 'config.json'), '{"defaultProfile":"datadog"}\n');
@@ -76,8 +76,8 @@ describe('remote target install bundles', () => {
     const bundle = await createRemoteStateBundle({ stateRoot });
     const entries = listTarEntries(bundle.tarPath);
 
-    expect(entries).toContain('./profiles/datadog/agent/AGENTS.md');
-    expect(entries).toContain('./notes/personal-agent/INDEX.md');
+    expect(entries).toContain('./profiles/datadog/AGENTS.md');
+    expect(entries).toContain('./nodes/personal-agent/INDEX.md');
     expect(entries).toContain('./config/local/settings.json');
     expect(entries).toContain('./config/config.json');
     expect(entries).toContain('./pi-agent-runtime/auth.json');

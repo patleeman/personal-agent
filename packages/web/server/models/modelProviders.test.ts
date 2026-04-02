@@ -25,10 +25,11 @@ function createTempDir(): string {
 }
 
 describe('resolveModelProvidersFilePath', () => {
-  it('uses global.json for the shared profile', () => {
+  it('uses per-profile models.json paths', () => {
     const dir = createTempDir();
 
-    expect(resolveModelProvidersFilePath('shared', { modelsDir: dir })).toBe(join(dir, 'global.json'));
+    expect(resolveModelProvidersFilePath('shared', { profilesDir: dir })).toBe(join(dir, 'shared', 'models.json'));
+    expect(resolveModelProvidersFilePath('assistant', { profilesDir: dir })).toBe(join(dir, 'assistant', 'models.json'));
   });
 });
 
@@ -36,9 +37,9 @@ describe('readModelProvidersState', () => {
   it('returns an empty state when the file is missing', () => {
     const dir = createTempDir();
 
-    expect(readModelProvidersState('assistant', { modelsDir: dir })).toEqual({
+    expect(readModelProvidersState('assistant', { profilesDir: dir })).toEqual({
       profile: 'assistant',
-      filePath: join(dir, 'assistant.json'),
+      filePath: join(dir, 'assistant', 'models.json'),
       providers: [],
     });
   });
@@ -59,7 +60,7 @@ describe('upsertModelProvider', () => {
       compat: {
         supportsDeveloperRole: false,
       },
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     expect(state.providers).toEqual([
       {
@@ -79,7 +80,7 @@ describe('upsertModelProvider', () => {
       },
     ]);
 
-    expect(JSON.parse(readFileSync(join(dir, 'assistant.json'), 'utf-8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, 'assistant', 'models.json'), 'utf-8'))).toEqual({
       providers: {
         openrouter: {
           baseUrl: 'https://openrouter.ai/api/v1',
@@ -106,12 +107,12 @@ describe('upsertModelProvider', () => {
       input: ['text'],
       contextWindow: 262144,
       maxTokens: 32768,
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     const state = upsertModelProvider('assistant', 'desktop', {
       baseUrl: 'http://desktop:8000/v1',
       api: 'openai-completions',
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     expect(state.providers[0]?.models.map((model) => model.id)).toEqual(['qwen-reap']);
   });
@@ -125,7 +126,7 @@ describe('upsertModelProviderModel', () => {
       baseUrl: 'http://desktop:8000/v1',
       api: 'openai-completions',
       apiKey: 'local-dev',
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     const first = upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
       name: 'Qwen 3.5 28B A3B REAP (Desktop)',
@@ -140,7 +141,7 @@ describe('upsertModelProviderModel', () => {
       compat: {
         supportsDeveloperRole: false,
       },
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     expect(first.providers[0]?.models).toEqual([
       {
@@ -171,7 +172,7 @@ describe('upsertModelProviderModel', () => {
       input: ['text', 'image'],
       contextWindow: 131072,
       maxTokens: 16384,
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
     expect(second.providers[0]?.models[0]).toMatchObject({
       id: 'qwen-reap',
@@ -191,13 +192,13 @@ describe('removeModelProvider', () => {
     upsertModelProvider('assistant', 'desktop', {
       baseUrl: 'http://desktop:8000/v1',
       api: 'openai-completions',
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
-    const result = removeModelProvider('assistant', 'desktop', { modelsDir: dir });
+    const result = removeModelProvider('assistant', 'desktop', { profilesDir: dir });
 
     expect(result.removed).toBe(true);
     expect(result.state.providers).toEqual([]);
-    expect(JSON.parse(readFileSync(join(dir, 'assistant.json'), 'utf-8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, 'assistant', 'models.json'), 'utf-8'))).toEqual({
       providers: {},
     });
   });
@@ -210,14 +211,14 @@ describe('removeModelProviderModel', () => {
     upsertModelProvider('assistant', 'desktop', {
       baseUrl: 'http://desktop:8000/v1',
       api: 'openai-completions',
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
     upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
       name: 'Qwen REAP',
       reasoning: true,
       input: ['text'],
-    }, { modelsDir: dir });
+    }, { profilesDir: dir });
 
-    const result = removeModelProviderModel('assistant', 'desktop', 'qwen-reap', { modelsDir: dir });
+    const result = removeModelProviderModel('assistant', 'desktop', 'qwen-reap', { profilesDir: dir });
 
     expect(result.removed).toBe(true);
     expect(result.state.providers).toEqual([

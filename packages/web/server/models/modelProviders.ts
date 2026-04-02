@@ -1,6 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getDurableModelsDir } from '@personal-agent/core';
+import {
+  getDurableModelsDir,
+  getDurableProfilesDir,
+} from '@personal-agent/core';
 
 export type ModelProviderApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
 export type ModelProviderInputType = 'text' | 'image';
@@ -68,6 +71,7 @@ export interface EditableModelProviderModelConfig {
 }
 
 export interface ModelProviderFileOptions {
+  profilesDir?: string;
   modelsDir?: string;
 }
 
@@ -97,7 +101,21 @@ function normalizeModelId(modelId: string): string {
   return normalized;
 }
 
-function resolveModelsDir(options: ModelProviderFileOptions = {}): string {
+function resolveProfilesDir(options: ModelProviderFileOptions = {}): string {
+  const explicitProfilesDir = options.profilesDir?.trim();
+  if (explicitProfilesDir) {
+    return explicitProfilesDir;
+  }
+
+  const explicitLegacyModelsDir = options.modelsDir?.trim();
+  if (explicitLegacyModelsDir) {
+    return explicitLegacyModelsDir;
+  }
+
+  return getDurableProfilesDir();
+}
+
+function resolveLegacyModelsDir(options: ModelProviderFileOptions = {}): string {
   const normalized = options.modelsDir?.trim();
   if (normalized) {
     return normalized;
@@ -105,12 +123,14 @@ function resolveModelsDir(options: ModelProviderFileOptions = {}): string {
   return getDurableModelsDir();
 }
 
-function fileNameForProfile(profile: string): string {
-  return profile === 'shared' ? 'global.json' : `${profile}.json`;
+function resolveLegacyModelProvidersFilePath(profile: string, options: ModelProviderFileOptions = {}): string {
+  const normalizedProfile = normalizeProfile(profile);
+  const fileName = normalizedProfile === 'shared' ? 'global.json' : `${normalizedProfile}.json`;
+  return join(resolveLegacyModelsDir(options), fileName);
 }
 
 export function resolveModelProvidersFilePath(profile: string, options: ModelProviderFileOptions = {}): string {
-  return join(resolveModelsDir(options), fileNameForProfile(normalizeProfile(profile)));
+  return join(resolveProfilesDir(options), normalizeProfile(profile), 'models.json');
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -130,9 +150,30 @@ function readRawConfig(filePath: string): JsonRecord {
   return parsed;
 }
 
+function readWritableRawConfig(profile: string, options: ModelProviderFileOptions = {}): JsonRecord {
+  const canonicalPath = resolveModelProvidersFilePath(profile, options);
+  if (existsSync(canonicalPath)) {
+    return readRawConfig(canonicalPath);
+  }
+
+  const legacyPath = resolveLegacyModelProvidersFilePath(profile, options);
+  if (existsSync(legacyPath)) {
+    return readRawConfig(legacyPath);
+  }
+
+  return {};
+}
+
 function writeRawConfig(filePath: string, config: JsonRecord): void {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`);
+}
+
+function finalizeCanonicalWrite(profile: string, filePath: string, options: ModelProviderFileOptions = {}): void {
+  const legacyPath = resolveLegacyModelProvidersFilePath(profile, options);
+  if (legacyPath !== filePath && existsSync(legacyPath)) {
+    rmSync(legacyPath, { force: true });
+  }
 }
 
 function ensureProvidersObject(config: JsonRecord): Record<string, unknown> {
@@ -269,7 +310,7 @@ function readProviderConfig(providerId: string, value: unknown): ModelProviderCo
 export function readModelProvidersState(profile: string, options: ModelProviderFileOptions = {}): ModelProviderState {
   const normalizedProfile = normalizeProfile(profile);
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
-  const config = readRawConfig(filePath);
+  const config = readWritableRawConfig(normalizedProfile, options);
   const providersSource = isRecord(config.providers) ? config.providers : {};
 
   const providers = Object.entries(providersSource)
@@ -366,13 +407,14 @@ export function upsertModelProvider(
   const normalizedProfile = normalizeProfile(profile);
   const normalizedProviderId = normalizeProviderId(providerId);
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
-  const config = readRawConfig(filePath);
+  const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
   const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : {};
 
   applyProviderUpdate(provider, update);
   providers[normalizedProviderId] = provider;
   writeRawConfig(filePath, config);
+  finalizeCanonicalWrite(normalizedProfile, filePath, options);
   return readModelProvidersState(normalizedProfile, options);
 }
 
@@ -384,12 +426,13 @@ export function removeModelProvider(
   const normalizedProfile = normalizeProfile(profile);
   const normalizedProviderId = normalizeProviderId(providerId);
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
-  const config = readRawConfig(filePath);
+  const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
   const removed = Object.prototype.hasOwnProperty.call(providers, normalizedProviderId);
 
   delete providers[normalizedProviderId];
   writeRawConfig(filePath, config);
+  finalizeCanonicalWrite(normalizedProfile, filePath, options);
 
   return {
     removed,
@@ -408,7 +451,7 @@ export function upsertModelProviderModel(
   const normalizedProviderId = normalizeProviderId(providerId);
   const normalizedModelId = normalizeModelId(modelId);
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
-  const config = readRawConfig(filePath);
+  const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
   const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : {};
   const models = Array.isArray(provider.models)
@@ -428,6 +471,7 @@ export function upsertModelProviderModel(
   provider.models = models;
   providers[normalizedProviderId] = provider;
   writeRawConfig(filePath, config);
+  finalizeCanonicalWrite(normalizedProfile, filePath, options);
   return readModelProvidersState(normalizedProfile, options);
 }
 
@@ -441,7 +485,7 @@ export function removeModelProviderModel(
   const normalizedProviderId = normalizeProviderId(providerId);
   const normalizedModelId = normalizeModelId(modelId);
   const filePath = resolveModelProvidersFilePath(normalizedProfile, options);
-  const config = readRawConfig(filePath);
+  const config = readWritableRawConfig(normalizedProfile, options);
   const providers = ensureProvidersObject(config);
   const provider = isRecord(providers[normalizedProviderId]) ? providers[normalizedProviderId] as JsonRecord : null;
 
@@ -461,6 +505,7 @@ export function removeModelProviderModel(
   provider.models = remainingModels;
   providers[normalizedProviderId] = provider;
   writeRawConfig(filePath, config);
+  finalizeCanonicalWrite(normalizedProfile, filePath, options);
 
   return {
     removed,

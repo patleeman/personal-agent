@@ -1,9 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import {
-  getDurableModelsDir as getCanonicalDurableModelsDir,
+  getDurableModelsDir as getCanonicalLegacyDurableModelsDir,
   getDurableNodesDir as getCanonicalDurableNodesDir,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
-  getDurableSettingsDir as getCanonicalDurableSettingsDir,
+  getDurableProfileDir,
+  getDurableProfileAgentFilePath,
+  getDurableProfileModelsFilePath,
+  getDurableProfileSettingsFilePath,
+  getDurableSettingsDir as getCanonicalLegacyDurableSettingsDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
   listUnifiedSkillNodeDirs,
 } from '@personal-agent/core';
@@ -251,18 +255,33 @@ export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptio
   return join(localProfileDir, 'settings.json');
 }
 
-function settingsFileNameForProfile(profileName: string): string {
+function legacyScopedFileNameForProfile(profileName: string): string {
   return profileName === 'shared' ? 'global.json' : `${profileName}.json`;
+}
+
+function resolveLegacyProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
+  validateProfileName(profileName || 'shared');
+  return join(getLegacySettingsRoot(options), legacyScopedFileNameForProfile(profileName || 'shared'));
+}
+
+function resolveLegacyProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
+  validateProfileName(profileName || 'shared');
+  return join(getProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
 }
 
 export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return join(getSettingsRoot(options), settingsFileNameForProfile(profileName || 'shared'));
+  return getDurableProfileSettingsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+}
+
+export function resolveProfileModelsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
+  validateProfileName(profileName || 'shared');
+  return getDurableProfileModelsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
 export function resolveProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return join(getProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
+  return getDurableProfileAgentFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
@@ -278,6 +297,34 @@ function readConfiguredPackageEntries(settingsPath: string): unknown[] {
   }
 
   return [...value];
+}
+
+function readWritableProfileSettingsObject(profileName: string, options: ResolveProfileOptions = {}): Record<string, unknown> {
+  const canonicalPath = resolveProfileSettingsFilePath(profileName, options);
+  if (existsSync(canonicalPath)) {
+    return readSettingsObject(canonicalPath);
+  }
+
+  const legacyPath = resolveLegacyProfileSettingsFilePath(profileName, options);
+  if (existsSync(legacyPath)) {
+    return readSettingsObject(legacyPath);
+  }
+
+  return {};
+}
+
+function readWritableProfilePackageEntries(profileName: string, options: ResolveProfileOptions = {}): unknown[] {
+  const canonicalPath = resolveProfileSettingsFilePath(profileName, options);
+  if (existsSync(canonicalPath)) {
+    return readConfiguredPackageEntries(canonicalPath);
+  }
+
+  const legacyPath = resolveLegacyProfileSettingsFilePath(profileName, options);
+  if (existsSync(legacyPath)) {
+    return readConfiguredPackageEntries(legacyPath);
+  }
+
+  return [];
 }
 
 export function readConfiguredPackageSources(settingsPath: string): ConfiguredPackageSource[] {
@@ -322,16 +369,44 @@ export function readPackageSourceTargetState(
   return {
     target,
     settingsPath,
-    packages: readConfiguredPackageSources(settingsPath),
+    packages: target === 'local'
+      ? readConfiguredPackageSources(settingsPath)
+      : readWritableProfilePackageEntries(profileName ?? 'shared', options)
+        .map((entry) => {
+          if (typeof entry === 'string') {
+            return {
+              source: entry,
+              filtered: false,
+            } satisfies ConfiguredPackageSource;
+          }
+
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return null;
+          }
+
+          const source = extractPackageSource(entry);
+          if (!source) {
+            return null;
+          }
+
+          return {
+            source,
+            filtered: true,
+          } satisfies ConfiguredPackageSource;
+        })
+        .filter((entry): entry is ConfiguredPackageSource => entry !== null),
   };
 }
 
 export function installPackageSource(options: InstallPackageSourceOptions): InstallPackageSourceResult {
+  const profileName = options.profileName ?? 'shared';
   const settingsPath = options.target === 'local'
     ? resolveLocalProfileSettingsFilePath(options)
-    : resolveProfileSettingsFilePath(options.profileName ?? 'shared', options);
+    : resolveProfileSettingsFilePath(profileName, options);
   const normalizedSource = normalizePackageSource(options.source, options.sourceBaseDir ?? process.cwd());
-  const configuredPackages = readConfiguredPackageEntries(settingsPath);
+  const configuredPackages = options.target === 'local'
+    ? readConfiguredPackageEntries(settingsPath)
+    : readWritableProfilePackageEntries(profileName, options);
   const settingsDir = dirname(settingsPath);
   const alreadyPresent = configuredPackages.some((entry) => {
     const source = extractPackageSource(entry);
@@ -352,7 +427,9 @@ export function installPackageSource(options: InstallPackageSourceOptions): Inst
     };
   }
 
-  const settings = readSettingsObject(settingsPath);
+  const settings = options.target === 'local'
+    ? readSettingsObject(settingsPath)
+    : readWritableProfileSettingsObject(profileName, options);
   settings.packages = [...configuredPackages, normalizedSource];
   writeSettingsObject(settingsPath, settings);
 
@@ -387,12 +464,16 @@ function getSyncRootFromProfilesRoot(profilesRoot: string): string {
   return dirname(resolve(profilesRoot));
 }
 
-function getSettingsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableSettingsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+function getLegacySettingsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalLegacyDurableSettingsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
-function getModelsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableModelsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+function getLegacyModelsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalLegacyDurableModelsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+}
+
+function getProfileDir(profileName: string, options: ResolveProfileOptions = {}): string {
+  return getDurableProfileDir(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
 function getNodesRoot(options: ResolveProfileOptions = {}): string {
@@ -404,11 +485,23 @@ function listProfilesInRoot(root: string): string[] {
     return [];
   }
 
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => entry.name.slice(0, -'.json'.length))
-    .filter((name) => /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(name))
-    .sort((left, right) => left.localeCompare(right));
+  const profiles = new Set<string>();
+
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(entry.name)) {
+      profiles.add(entry.name);
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith('.json')) {
+      const name = entry.name.slice(0, -'.json'.length);
+      if (/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(name)) {
+        profiles.add(name);
+      }
+    }
+  }
+
+  return [...profiles].sort((left, right) => left.localeCompare(right));
 }
 
 function rootHasSharedDurableResources(root: string, extensions: string[]): boolean {
@@ -459,8 +552,8 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   if (
     repoDefaultsAgentDir
-    || rootHasSharedDurableResources(getSettingsRoot(options), ['.json'])
-    || rootHasSharedDurableResources(getModelsRoot(options), ['.json'])
+    || rootHasSharedDurableResources(getLegacySettingsRoot(options), ['.json'])
+    || rootHasSharedDurableResources(getLegacyModelsRoot(options), ['.json'])
     || existsSync(getNodesRoot(options))
   ) {
     profiles.add('shared');
@@ -655,6 +748,55 @@ function validateProfileName(profileName: string): void {
   }
 }
 
+function resolveDurableAgentFile(profileName: string, options: ResolveProfileOptions = {}): string | undefined {
+  return existingFile(resolveProfileAgentFilePath(profileName, options))
+    ?? existingFile(resolveLegacyProfileAgentFilePath(profileName, options));
+}
+
+function resolveDurableSettingsFiles(profileName: string, knownProfiles: Set<string>, options: ResolveProfileOptions = {}): string[] {
+  const output: string[] = [];
+  const sharedSettings = existingFile(resolveProfileSettingsFilePath('shared', options));
+  const profileSettings = existingFile(resolveProfileSettingsFilePath(profileName, options));
+
+  if (profileName === 'shared') {
+    if (sharedSettings) {
+      output.push(sharedSettings);
+    }
+  } else {
+    if (sharedSettings) {
+      output.push(sharedSettings);
+    }
+    if (profileSettings) {
+      output.push(profileSettings);
+    }
+  }
+
+  output.push(...collectScopedFiles(getLegacySettingsRoot(options), ['.json'], profileName, knownProfiles));
+  return dedupe(output);
+}
+
+function resolveDurableModelsFiles(profileName: string, knownProfiles: Set<string>, options: ResolveProfileOptions = {}): string[] {
+  const output: string[] = [];
+  const sharedModels = existingFile(resolveProfileModelsFilePath('shared', options));
+  const profileModels = existingFile(resolveProfileModelsFilePath(profileName, options));
+
+  if (profileName === 'shared') {
+    if (sharedModels) {
+      output.push(sharedModels);
+    }
+  } else {
+    if (sharedModels) {
+      output.push(sharedModels);
+    }
+    if (profileModels) {
+      output.push(profileModels);
+    }
+  }
+
+  output.push(...collectScopedFiles(getLegacyModelsRoot(options), ['.json'], profileName, knownProfiles));
+  return dedupe(output);
+}
+
 export function resolveResourceProfile(
   name: string,
   options: ResolveProfileOptions = {},
@@ -668,7 +810,7 @@ export function resolveResourceProfile(
   const declaredProfiles = listProfilesInRoot(profilesRoot);
   if (profileName !== 'shared' && !declaredProfiles.includes(profileName)) {
     throw new Error(
-      `Profile not found: ${profileName}. Checked ${join(profilesRoot, `${profileName}.json`)}`,
+      `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName)}`,
     );
   }
 
@@ -682,14 +824,9 @@ export function resolveResourceProfile(
   const localBase = resolveLocalProfileDir(options);
   const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
 
-  const settingsRoot = getSettingsRoot(options);
-  const modelsRoot = getModelsRoot(options);
-
-  const durableAgentFile = profileName === 'shared'
-    ? undefined
-    : existingFile(resolveProfileAgentFilePath(profileName, options));
-  const durableSettingsFiles = collectScopedFiles(settingsRoot, ['.json'], profileName, knownProfiles);
-  const durableModelsFiles = collectScopedFiles(modelsRoot, ['.json'], profileName, knownProfiles);
+  const durableAgentFile = resolveDurableAgentFile(profileName, options);
+  const durableSettingsFiles = resolveDurableSettingsFiles(profileName, knownProfiles, options);
+  const durableModelsFiles = resolveDurableModelsFiles(profileName, knownProfiles, options);
   const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { profilesRoot });
 
   const layers: ProfileLayer[] = [];
@@ -703,6 +840,7 @@ export function resolveResourceProfile(
     || durableSettingsFiles.length > 0
     || durableModelsFiles.length > 0
     || durableSkillDirs.length > 0
+    || existsSync(getProfileDir(profileName, options))
     || existsSync(join(profilesRoot, `${profileName}.json`))
     || profileName === 'shared'
   ) {

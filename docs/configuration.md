@@ -72,11 +72,10 @@ Profile resources resolve from repo defaults plus synced durable roots:
 
 Common durable roots:
 
-- `profiles/*.json`
-- `profiles/<profile>/agent/AGENTS.md`
+- `profiles/<profile>/AGENTS.md`
+- `profiles/<profile>/settings.json`
+- `profiles/<profile>/models.json`
 - `agents/**`
-- `settings/**`
-- `models/**`
 - `nodes/**`
 - `tasks/`
 - `projects/`
@@ -162,12 +161,7 @@ Typical durable paths there include:
 
 - `profiles/**`
 - `agents/**`
-- `settings/**`
-- `models/**`
-- `skills/**`
-- `notes/**`
 - `nodes/**`
-- `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`

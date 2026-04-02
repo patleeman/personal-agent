@@ -38,11 +38,13 @@ export function isEditableMemoryFilePath(filePath: string, profile: string): boo
   const profilesRoot = getProfilesRoot();
   const sharedRoot = dirname(profilesRoot);
   const noteDir = normalizeMemoryPath(resolveUnifiedNodesDir({ profilesRoot }));
-  const agentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
+  const profileDir = normalizeMemoryPath(join(profilesRoot, profile));
+  const legacyAgentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
   const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
 
   return normalized.startsWith(`${noteDir}/`)
-    || normalized.startsWith(`${agentDir}/`)
+    || normalized.startsWith(`${profileDir}/`)
+    || normalized.startsWith(`${legacyAgentDir}/`)
     || normalized.startsWith(`${sharedSkillsDir}/`);
 }
 
@@ -186,12 +188,17 @@ export function findMemoryDocById(
 function inferSkillSource(filePath: string, profile: string): string {
   const profilesRoot = getProfilesRoot();
   const sharedRoot = dirname(profilesRoot);
-  const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
-  const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
+  const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'skills'));
+  const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
+  const profileLegacyHiddenSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
   const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
   const normalizedFilePath = normalizeMemoryPath(filePath);
 
-  if (normalizedFilePath.startsWith(`${profileSkillDir}/`) || normalizedFilePath.startsWith(`${profileLegacySkillDir}/`)) {
+  if (
+    normalizedFilePath.startsWith(`${profileSkillDir}/`)
+    || normalizedFilePath.startsWith(`${profileLegacySkillDir}/`)
+    || normalizedFilePath.startsWith(`${profileLegacyHiddenSkillDir}/`)
+  ) {
     return 'profile';
   }
   if (normalizedFilePath.startsWith(`${sharedSkillsDir}/`)) {
