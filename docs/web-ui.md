@@ -76,7 +76,7 @@ For app-level access control on remote devices:
 - the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
 - active paired browsers and devices refresh their session while in use; idle pairings expire after 30 days unless you revoke them sooner
 - the companion chats view mirrors desktop workspace-open conversations separately from live-but-not-open and needs-review conversations, so mobile archive/open actions track the same shared layout
-- the companion knowledge browser card treatment is also the shared visual pattern for inbox and chats, so browse-style mobile pages keep one consistent hierarchy and row shell
+- the companion pages browser uses the same row shell as inbox and chats, and now supports the same Lucene-style page querying model as the desktop pages browser in a mobile-first layout
 - companion setup/recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.

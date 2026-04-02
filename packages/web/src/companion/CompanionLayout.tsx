@@ -17,8 +17,8 @@ import {
 import {
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_INBOX_PATH,
-  COMPANION_KNOWLEDGE_PATH,
   COMPANION_NOTES_PATH,
+  COMPANION_PAGES_PATH,
   COMPANION_PROJECTS_PATH,
   COMPANION_QUICK_NOTE_PATH,
   COMPANION_SKILLS_PATH,
@@ -191,7 +191,7 @@ function formatBadgeCount(count: number): string {
 const TOP_BAR_ITEMS: Array<{ pathPrefix: string; label: string; hasBack: boolean }> = [
   { pathPrefix: COMPANION_INBOX_PATH, label: 'Inbox', hasBack: false },
   { pathPrefix: COMPANION_CONVERSATIONS_PATH, label: 'Chats', hasBack: false },
-  { pathPrefix: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', hasBack: false },
+  { pathPrefix: COMPANION_PAGES_PATH, label: 'Pages', hasBack: false },
   { pathPrefix: COMPANION_NOTES_PATH, label: 'Notes', hasBack: true },
   { pathPrefix: COMPANION_PROJECTS_PATH, label: 'Projects', hasBack: true },
   { pathPrefix: COMPANION_SKILLS_PATH, label: 'Skills', hasBack: true },
@@ -545,7 +545,7 @@ export function CompanionLayout() {
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
   const noteActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
-  const knowledgeActive = location.pathname.startsWith(COMPANION_KNOWLEDGE_PATH)
+  const knowledgeActive = location.pathname.startsWith(COMPANION_PAGES_PATH)
     || location.pathname.startsWith(COMPANION_PROJECTS_PATH)
     || location.pathname.startsWith(COMPANION_NOTES_PATH)
     || location.pathname.startsWith(COMPANION_SKILLS_PATH);
@@ -554,7 +554,7 @@ export function CompanionLayout() {
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chat', ariaLabel: 'New chat', Icon: PlusIcon, badgeCount: 0, active: false, isAccent: true },
     { to: COMPANION_QUICK_NOTE_PATH, label: 'Note', ariaLabel: 'Quick note', Icon: PlusIcon, badgeCount: 0, active: noteActive, isAccent: true },
-    { to: COMPANION_KNOWLEDGE_PATH, label: 'Knowledge', ariaLabel: 'Open knowledge', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
+    { to: COMPANION_PAGES_PATH, label: 'Pages', ariaLabel: 'Open pages', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
   ];
 
   useEffect(() => {
@@ -739,11 +739,11 @@ export function CompanionLayout() {
               <DrawerSection title="Navigate">
                 <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and workspace chats." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_KNOWLEDGE_PATH} label="Knowledge" detail="Browse projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_PAGES_PATH} label="Pages" detail="Browse all durable pages, then jump into projects, notes, and skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
-              <DrawerSection title="Knowledge">
+              <DrawerSection title="Pages">
                 <DrawerLink to={COMPANION_PROJECTS_PATH} label="Projects" detail="Read current focus, blockers, notes, and linked conversations." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note pages and distilled references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
