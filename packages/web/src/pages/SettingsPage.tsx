@@ -2149,7 +2149,7 @@ export function SettingsPage() {
 
             <SettingsPanel
               title="Reset saved UI preferences"
-              description="These actions clear saved UI state. They do not delete conversations, project nodes, note nodes, skill nodes, or agent data."
+              description="These actions clear saved UI state. They do not delete conversations, project pages, note pages, skill pages, or agent data."
             >
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
 

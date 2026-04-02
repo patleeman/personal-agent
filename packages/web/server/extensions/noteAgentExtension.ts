@@ -14,14 +14,14 @@ type NoteAction = (typeof NOTE_ACTION_VALUES)[number];
 
 const NoteToolParams = Type.Object({
   action: Type.Union(NOTE_ACTION_VALUES.map((value) => Type.Literal(value))),
-  noteId: Type.Optional(Type.String({ description: 'Note node id for show/new actions.' })),
+  noteId: Type.Optional(Type.String({ description: 'Note page id for show/new actions.' })),
   title: Type.Optional(Type.String({ description: 'Display title stored in note frontmatter for new.' })),
-  summary: Type.Optional(Type.String({ description: 'Note node summary for new.' })),
+  summary: Type.Optional(Type.String({ description: 'Note page summary for new.' })),
   description: Type.Optional(Type.String({ description: 'Optional agent-facing guidance for how to use the note.' })),
   type: Type.Optional(Type.String({ description: 'Type filter for find or note metadata type for new.' })),
   status: Type.Optional(Type.String({ description: 'Status filter for find or note status for new.' })),
   text: Type.Optional(Type.String({ description: 'Metadata text query for find. Matches id, title, summary, and other note metadata.' })),
-  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing note node when action=new.' })),
+  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing note page when action=new.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -74,7 +74,7 @@ function formatNotePackage(doc: {
   body: string;
 }): string {
   return [
-    `Note node @${doc.id}`,
+    `Note page @${doc.id}`,
     `title: ${doc.title}`,
     `type: ${doc.type}`,
     `status: ${doc.status}`,
@@ -92,12 +92,12 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
     pi.registerTool({
       name: 'note',
       label: 'Note',
-      description: 'Inspect, search, create, and validate shared note nodes.',
-      promptSnippet: 'Use the note tool when you need to inspect or update durable shared note nodes instead of shelling out to pa note.',
+      description: 'Inspect, search, create, and validate shared note pages.',
+      promptSnippet: 'Use the note tool when you need to inspect or update durable shared note pages instead of shelling out to pa note.',
       promptGuidelines: [
-        'Use this tool for shared note-node discovery and validation instead of running pa note through bash.',
-        'Prefer find/show before creating a new note node so you do not duplicate durable knowledge.',
-        'Use new to scaffold a valid note node with INDEX.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
+        'Use this tool for shared note-page discovery and validation instead of running pa note through bash.',
+        'Prefer find/show before creating a new note page so you do not duplicate durable knowledge.',
+        'Use new to scaffold a valid note page with INDEX.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
       ],
       parameters: NoteToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -106,8 +106,8 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
             case 'list': {
               const loaded = loadMemoryDocs();
               const lines = loaded.docs.length > 0
-                ? ['Note nodes:', ...formatNoteSummaryList(loaded.docs)]
-                : ['No note nodes found.'];
+                ? ['Note pages:', ...formatNoteSummaryList(loaded.docs)]
+                : ['No note pages found.'];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
                 lines.push('', ...parseErrorLines);
@@ -134,14 +134,14 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
               });
 
               const lines = [
-                'Note node search:',
+                'Note page search:',
                 `type: ${params.type?.trim() || 'none'}`,
                 `status: ${params.status?.trim() || 'none'}`,
                 `text: ${params.text?.trim() || 'none'}`,
                 '',
                 ...(filteredDocs.length > 0
                   ? formatNoteSummaryList(filteredDocs)
-                  : ['No note nodes matched the supplied filters.']),
+                  : ['No note pages matched the supplied filters.']),
               ];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
@@ -208,7 +208,7 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
                 content: [{
                   type: 'text' as const,
                   text: [
-                    `${result.overwritten ? 'Updated' : 'Created'} note node @${result.id}.`,
+                    `${result.overwritten ? 'Updated' : 'Created'} note page @${result.id}.`,
                     `file: ${result.filePath}`,
                     `type: ${result.type}`,
                     `status: ${result.status}`,
@@ -232,7 +232,7 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
               const result = lintMemoryDocs();
               const hasIssues = result.parseErrors.length > 0 || result.duplicateIds.length > 0 || result.referenceErrors.length > 0;
               const lines = [
-                'Note node validation',
+                'Note page validation',
                 `noteDir: ${result.memoryDir}`,
                 `docsParsed: ${result.validDocs}`,
                 `parseErrors: ${result.parseErrors.length}`,
@@ -241,7 +241,7 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
               ];
 
               if (!hasIssues) {
-                lines.push('', 'All note nodes are valid.');
+                lines.push('', 'All note pages are valid.');
               }
 
               if (result.parseErrors.length > 0) {

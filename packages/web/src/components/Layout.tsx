@@ -404,6 +404,7 @@ export function Layout() {
     location.pathname.startsWith('/conversations')
     || location.pathname.startsWith('/notes')
     || location.pathname.startsWith('/memories')
+    || location.pathname.startsWith('/pages')
     || location.pathname.startsWith('/nodes')
     || location.pathname.startsWith('/projects')
     || location.pathname.startsWith('/settings')

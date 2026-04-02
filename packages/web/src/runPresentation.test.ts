@@ -442,7 +442,7 @@ describe('runPresentation', () => {
     });
   });
 
-  it('shows conversation node distillation runs with a dedicated headline', () => {
+  it('shows conversation page distillation runs with a dedicated headline', () => {
     const sessions: SessionMeta[] = [{
       id: 'conv-123',
       file: '/tmp/sessions/conv-123.jsonl',
@@ -479,8 +479,8 @@ describe('runPresentation', () => {
     });
 
     expect(getRunHeadline(run, { sessions })).toEqual({
-      title: 'Distill node: Notes pipeline cleanup',
-      summary: 'Conversation node distillation',
+      title: 'Distill page: Notes pipeline cleanup',
+      summary: 'Conversation page distillation',
     });
   });
 

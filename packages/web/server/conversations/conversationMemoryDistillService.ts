@@ -232,7 +232,7 @@ export function buildConversationMemoryDistillRecoveryVisibleMessage(input: {
   error?: string;
 }): string {
   return [
-    `Run ${input.runId} did not finish its node distillation.`,
+    `Run ${input.runId} did not finish its page distillation.`,
     `Status: ${input.status}`,
     `Source conversation: ${input.sourceConversationTitle ?? input.sourceConversationId}`,
     `Checkpoint: ${input.checkpointId}`,
@@ -255,7 +255,7 @@ export function buildConversationMemoryDistillRecoveryHiddenContext(input: {
   error?: string;
 }): string {
   return [
-    'You are helping recover a conversation node distillation that did not complete cleanly.',
+    'You are helping recover a conversation page distillation that did not complete cleanly.',
     '',
     'This conversation is a fork of the source conversation, so the relevant transcript history is already available above.',
     '',
@@ -269,7 +269,7 @@ export function buildConversationMemoryDistillRecoveryHiddenContext(input: {
     input.summary ? `- requested summary: ${input.summary}` : undefined,
     input.error ? `- last error: ${input.error}` : undefined,
     '',
-    'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable note-node update.',
+    'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable note-page update.',
     `If you need the raw log, inspect durable run ${input.runId}.`,
     'Prefer targeted fixes over broad rewrites.',
   ].filter((line): line is string => Boolean(line)).join('\n');

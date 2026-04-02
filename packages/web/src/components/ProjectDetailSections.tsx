@@ -413,13 +413,13 @@ export function ProjectNodeLinksContent({
         title="Links to"
         items={links?.outgoing}
         surface="main"
-        emptyText="This project does not reference other nodes yet."
+        emptyText="This project does not reference other pages yet."
       />
       <NodeLinkList
         title="Linked from"
         items={links?.incoming}
         surface="main"
-        emptyText="No other nodes link to this project yet."
+        emptyText="No other pages link to this project yet."
       />
       <UnresolvedNodeLinks ids={links?.unresolved} />
     </div>

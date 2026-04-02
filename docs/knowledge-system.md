@@ -5,10 +5,10 @@ This page explains `personal-agent`'s durable knowledge system as one cohesive m
 The short version is:
 
 - **AGENTS** stores durable behavior and preferences
+- **pages** are the universal durable unit
 - **notes** store reusable knowledge
 - **skills** store reusable procedures
 - **projects** store active tracked work
-- **nodes** are the canonical shared storage model under `sync/nodes/`
 
 The system only feels fragmented if you look at the files first.
 The real model is simpler: one durable memory system, with a few different homes for different kinds of memory.
@@ -84,11 +84,11 @@ A project answers:
 
 > what is happening in this active workstream?
 
-## Nodes are the file model, not the whole mental model
+## Pages are the product model; nodes are the storage term
 
-Notes, skills, and projects are all **nodes**.
+Notes, skills, and projects are all **pages** in the product model.
 
-That means they share a common durable structure:
+Internally they still share the same node-backed durable structure:
 
 - directory-based storage
 - `INDEX.md` as the canonical human entrypoint
@@ -97,12 +97,13 @@ That means they share a common durable structure:
 
 This is why the system is cohesive.
 
-Nodes are not separate systems for notes, skills, and projects.
-They are one file model with different semantic roles and tag-based distinctions.
+Pages are not separate systems for notes, skills, and projects.
+They are one durable thing with different semantic roles and workflows.
 
 A simple way to say it:
 
-- **node** = storage format
+- **page** = product primitive
+- **node** = storage / compatibility term
 - **note / skill / project** = memory role
 
 ## The four main durable homes
@@ -110,9 +111,9 @@ A simple way to say it:
 | Memory role | Durable home | Use it for | Do not default to |
 | --- | --- | --- | --- |
 | Behavioral memory | `AGENTS.md` | preferences, policy, durable behavior | node content or project state |
-| Knowledge memory | unified nodes tagged for note/reference roles under `sync/nodes/` | reusable facts and references | projects for generic knowledge |
-| Procedural memory | unified nodes tagged `type:skill` under `sync/nodes/` | reusable workflows | AGENTS for long procedures |
-| Working memory | unified nodes tagged `type:project` under `sync/nodes/` | active tracked work | top-level notes for live project state |
+| Knowledge memory | note pages backed by `sync/nodes/` | reusable facts and references | projects for generic knowledge |
+| Procedural memory | skill pages backed by `sync/nodes/` | reusable workflows | AGENTS for long procedures |
+| Working memory | project pages backed by `sync/nodes/` | active tracked work | top-level notes for live project state |
 
 ## What makes this a knowledge-management system
 
@@ -147,6 +148,7 @@ Typical patterns:
 A healthy pattern looks like this:
 
 - **AGENTS** gives the behavioral lens
+- **pages** provide one flexible durable unit
 - **notes** provide durable facts
 - **skills** provide durable methods
 - **projects** provide current work context
@@ -212,7 +214,7 @@ The web UI now supports two low-friction capture paths:
 - **quick capture** for rough ideas or half-baked thoughts
 - **URL capture** for saving a web page into the node system with a local archived reference copy
 
-Captured items land as inbox-style note nodes so they can be triaged later into a normal note, promoted into a project, or ignored.
+Captured items land as inbox-style note pages so they can be triaged later into a normal note, promoted into a project, or ignored.
 
 ## Shared knowledge vs active work
 
@@ -245,8 +247,8 @@ If something should still be useful next month even after the current project en
 When an agent needs context, the intended retrieval pattern is:
 
 1. load relevant `AGENTS.md` for behavior and preferences
-2. load relevant skill nodes for procedure
-3. load relevant note nodes for durable knowledge
+2. load relevant skill pages for procedure
+3. load relevant note pages for durable knowledge
 4. load the project node if the task is about active work
 5. expand through explicit node relationships when graph context is likely to matter
 
@@ -256,16 +258,16 @@ This is why the docs should describe these as one knowledge system rather than s
 
 The old naming can be confusing.
 
-`pa note` operates on the shared **note subset**. The canonical shared store is now `sync/nodes/`, and `pa node` is the primary unified surface.
+`pa note` operates on the shared **note subset**. The canonical shared store is still `sync/nodes/`, and `pa page` is now the preferred unified surface.
 
-That does **not** mean the whole durable memory system is only note nodes.
+That does **not** mean the whole durable memory system is only note pages.
 
 The broader memory system is:
 
 - `AGENTS.md`
-- note nodes
-- skill nodes
-- project nodes
+- note pages
+- skill pages
+- project pages
 
 `pa note` is just the CLI surface for one part of it.
 
@@ -297,6 +299,8 @@ That is the whole system.
 
 - [Decision Guide](./decision-guide.md)
 - [How personal-agent works](./how-it-works.md)
+- [Pages](./pages.md)
+- [Pages](./pages.md)
 - [Nodes](./nodes.md)
 - [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md)
 - [Projects](./projects.md)

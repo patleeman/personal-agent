@@ -335,9 +335,9 @@ export function readNodeBrowserDetail(profile: string, nodeId: string): NodeBrow
   const current = nodesById.get(nodeId) ?? (() => {
     const fallback = allNodesById.get(nodeId);
     if (!fallback) {
-      throw new Error(`Node not found: ${nodeId}`);
+      throw new Error(`Page not found: ${nodeId}`);
     }
-    throw new Error(`Node @${nodeId} is not available in profile ${profile}.`);
+    throw new Error(`Page @${nodeId} is not available in profile ${profile}.`);
   })();
   const currentRecord = findUnifiedNodeById(allNodes, nodeId);
 

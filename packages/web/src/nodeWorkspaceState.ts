@@ -8,7 +8,8 @@ export type NodeBrowserDensity = 'comfortable' | 'dense';
 
 export const NODE_FILTER_SEARCH_PARAM = 'type';
 export const NODE_KIND_SEARCH_PARAM = 'kind';
-export const NODE_ID_SEARCH_PARAM = 'node';
+export const NODE_ID_SEARCH_PARAM = 'page';
+const LEGACY_NODE_ID_SEARCH_PARAM = 'node';
 export const NODE_QUERY_SEARCH_PARAM = 'q';
 export const NODE_SORT_SEARCH_PARAM = 'sort';
 export const NODE_GROUP_SEARCH_PARAM = 'group';
@@ -97,7 +98,7 @@ export function readNodeBrowserFilter(search: string): NodeBrowserFilter {
 export function readSelectedNode(search: string): { kind: NodeLinkKind; id: string } | null {
   const params = new URLSearchParams(search);
   const kind = normalizeNodeKind(params.get(NODE_KIND_SEARCH_PARAM));
-  const id = params.get(NODE_ID_SEARCH_PARAM)?.trim();
+  const id = (params.get(NODE_ID_SEARCH_PARAM) ?? params.get(LEGACY_NODE_ID_SEARCH_PARAM))?.trim();
   if (!kind || !id) {
     return null;
   }
@@ -173,6 +174,7 @@ export function buildNodesSearch(
 
   if (updates.nodeId !== undefined) {
     const normalizedNodeId = updates.nodeId?.trim();
+    params.delete(LEGACY_NODE_ID_SEARCH_PARAM);
     if (!normalizedNodeId) {
       params.delete(NODE_ID_SEARCH_PARAM);
     } else {
@@ -242,7 +244,7 @@ export function buildNodesSearch(
 }
 
 export function buildNodesHref(kind: NodeLinkKind | null | undefined, nodeId: string | null | undefined, filter?: NodeBrowserFilter): string {
-  return `/nodes${buildNodesSearch('', {
+  return `/pages${buildNodesSearch('', {
     ...(filter ? { filter } : {}),
     kind: kind ?? null,
     nodeId: nodeId ?? null,
@@ -390,7 +392,7 @@ export function matchesNodeBrowserQuery(node: NodeBrowserSummary, query: string)
 export function getNodeGroupValue(node: NodeBrowserSummary, groupBy: NodeBrowserGroupBy): string {
   switch (groupBy) {
     case 'none':
-      return 'All nodes';
+      return 'All pages';
     case 'kind':
       return node.kind;
     case 'status':
@@ -403,6 +405,6 @@ export function getNodeGroupValue(node: NodeBrowserSummary, groupBy: NodeBrowser
       if (groupBy.startsWith('tag:')) {
         return extractTagValue(node.tags, groupBy.slice(4)) ?? 'untagged';
       }
-      return 'All nodes';
+      return 'All pages';
   }
 }

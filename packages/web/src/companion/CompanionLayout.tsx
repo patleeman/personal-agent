@@ -175,14 +175,6 @@ function SystemIcon({ active }: { active: boolean }) {
   );
 }
 
-function ChevronLeftIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
 function PlusIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -505,7 +497,6 @@ export function CompanionLayout() {
 
   const showPrimaryNav = companionSession !== null;
   const isConversationsPage = location.pathname === COMPANION_CONVERSATIONS_PATH;
-  const isConversationDetailPage = location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`) && location.pathname !== COMPANION_CONVERSATIONS_PATH;
   const isCapturePage = location.pathname === COMPANION_QUICK_NOTE_PATH;
   const topBarConfig = readTopBarConfig(location.pathname);
 
@@ -551,15 +542,6 @@ export function CompanionLayout() {
     );
   }
   const inboxBadgeCount = activity?.unreadCount ?? 0;
-  const settingsBadge = (tasks ?? []).filter((task) => task.running || task.lastStatus === 'failure').length;
-  const menuHasAttention = (daemon?.warnings.length ?? 0) > 0
-    || (sync?.warnings.length ?? 0) > 0
-    || (webUi?.warnings.length ?? 0) > 0
-    || settingsBadge > 0
-    || ((runs?.summary.recoveryActions.resume ?? 0)
-      + (runs?.summary.recoveryActions.rerun ?? 0)
-      + (runs?.summary.recoveryActions.attention ?? 0)
-      + (runs?.summary.recoveryActions.invalid ?? 0)) > 0;
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
   const noteActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
@@ -567,9 +549,6 @@ export function CompanionLayout() {
     || location.pathname.startsWith(COMPANION_PROJECTS_PATH)
     || location.pathname.startsWith(COMPANION_NOTES_PATH)
     || location.pathname.startsWith(COMPANION_SKILLS_PATH);
-  const settingsActive = menuOpen
-    || location.pathname.startsWith(COMPANION_SYSTEM_PATH)
-    || location.pathname.startsWith(COMPANION_TASKS_PATH);
 
   const navItems = [
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
@@ -766,7 +745,7 @@ export function CompanionLayout() {
 
               <DrawerSection title="Knowledge">
                 <DrawerLink to={COMPANION_PROJECTS_PATH} label="Projects" detail="Read current focus, blockers, notes, and linked conversations." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note nodes and distilled references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_NOTES_PATH} label="Notes" detail="Browse durable note pages and distilled references." Icon={MemoriesIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SKILLS_PATH} label="Skills" detail="Review reusable workflows." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 

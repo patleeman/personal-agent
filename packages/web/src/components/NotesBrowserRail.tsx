@@ -43,17 +43,17 @@ function memoryWorkItemDotClass(item: MemoryWorkItem): string {
 function memoryWorkItemLabel(item: MemoryWorkItem): string {
   switch (item.status) {
     case 'failed':
-      return 'Node distillation failed';
+      return 'Page distillation failed';
     case 'interrupted':
-      return 'Node distillation interrupted';
+      return 'Page distillation interrupted';
     case 'queued':
-      return 'Queued for node distillation';
+      return 'Queued for page distillation';
     case 'waiting':
-      return 'Waiting to resume node distillation';
+      return 'Waiting to resume page distillation';
     case 'recovering':
-      return 'Recovering node distillation';
+      return 'Recovering page distillation';
     default:
-      return 'Distilling into a note node';
+      return 'Distilling into a note page';
   }
 }
 
@@ -82,7 +82,7 @@ function NoteWorkQueueRow({
 }) {
   const retryable = canRetryMemoryWorkItem(item);
   const summary = activeAction === 'retry'
-    ? 'Queueing node distillation…'
+    ? 'Queueing page distillation…'
     : item.lastError || memoryWorkItemLabel(item);
   const status = activeAction === 'retry' ? 'queueing' : item.status;
 
@@ -105,7 +105,7 @@ function NoteWorkQueueRow({
           className="shrink-0 self-center"
           onClick={() => onRetry(item)}
           disabled={actionDisabled}
-          title="Retry this node distillation"
+          title="Retry this page distillation"
         >
           {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
         </ToolbarButton>
@@ -167,7 +167,7 @@ export function NotesBrowserRailContent({
       const result = await api.retryNodeDistillRun(item.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}?run=${encodeURIComponent(result.runId)}`);
     } catch (retryError) {
-      setQueueError(retryError instanceof Error ? retryError.message : 'Could not retry node distillation.');
+      setQueueError(retryError instanceof Error ? retryError.message : 'Could not retry page distillation.');
       setPendingQueueAction(null);
       await refetchQueue({ resetLoading: false });
     }

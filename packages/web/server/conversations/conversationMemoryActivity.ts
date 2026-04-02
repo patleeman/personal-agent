@@ -71,7 +71,7 @@ export function writeConversationMemoryDistillFailureActivity(options: {
     profile: options.profile,
     conversationId: options.conversationId,
     kind: 'conversation-node-distill-failed',
-    summary: 'Conversation node distillation failed',
+    summary: 'Conversation page distillation failed',
     details: buildConversationMemoryDistillFailureDetails(options.error),
     relatedProjectIds: options.relatedProjectIds,
   });

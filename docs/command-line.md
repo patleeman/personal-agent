@@ -40,7 +40,8 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa note ...`
-- `pa node ...`
+- `pa page ...`
+- `pa node ...` (compatibility alias)
 - `pa mcp ...`
 - `pa runs ...`
 - `pa targets ...`
@@ -67,7 +68,7 @@ pa ui --open
 pa tui
 pa tui -p "hello"
 pa inbox list
-pa node list
+pa page list
 pa mcp list
 pa tasks list
 pa targets list
@@ -201,27 +202,29 @@ pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 
 See [Web UI Guide](./web-ui.md).
 
-### `pa node [list|find|show|get|new|update|delete|tag|lint|migrate]`
+### `pa page [list|find|show|get|new|update|delete|tag|lint|migrate]`
 
-Work with the unified durable node store under `sync/nodes/`.
+Work with the unified durable page store backed by `sync/nodes/`.
 
 Examples:
 
 ```bash
-pa node list
-pa node find "type:skill AND profile:assistant"
-pa node show agent-browser
-pa node new quick-note --title "Quick note" --summary "Captured thought." --tag type:note
-pa node tag quick-note --add area:notes
-pa node migrate
-pa node lint
+pa page list
+pa page find "type:skill AND profile:assistant"
+pa page show agent-browser
+pa page new quick-note --title "Quick note" --summary "Captured thought." --tag type:note
+pa page tag quick-note --add area:notes
+pa page migrate
+pa page lint
 ```
 
-See [Nodes](./nodes.md).
+`pa node` remains available as a compatibility alias.
+
+See [Pages](./pages.md) and [Nodes](./nodes.md).
 
 ### `pa note [list|find|show|new|lint]`
 
-Compatibility surface for the shared note subset. Use `pa node` for new work.
+Compatibility surface for the shared note subset. Use `pa page` for new work.
 
 Examples:
 
@@ -348,8 +351,7 @@ Synced roots include:
 - `agents/**`
 - `settings/**`
 - `models/**`
-- `skills/**`
-- `notes/**`
+- `nodes/**`
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`

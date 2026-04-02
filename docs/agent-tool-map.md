@@ -18,8 +18,8 @@ Use the CLI mainly for:
 
 | Job | Preferred tool | Durable home | Notes |
 | --- | --- | --- | --- |
-| Track ongoing work, status, blockers, milestones, project notes | `project` | project node under `sync/projects/**` | use projects for durable tracked work |
-| Find or create durable note nodes | `note` | note nodes under `sync/notes/**` | find/show before new |
+| Track ongoing work, status, blockers, milestones, project notes | `project` | project page backed by `sync/nodes/**` | use projects for durable tracked work |
+| Find or create durable note pages | `note` | note pages backed by `sync/nodes/**` | find/show before new |
 | Create passive async attention items | `activity` | local inbox/activity state | use for async outcomes worth noticing later |
 | Schedule unattended automation | `scheduled_task` | `sync/tasks/*.task.md` + daemon state | use for later or recurring work |
 | Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
@@ -48,11 +48,11 @@ Use `AGENTS.md` for:
 
 There is no dedicated `agents` tool in this environment. Edit the relevant `AGENTS.md` file directly when that is the right durable home.
 
-### Skill nodes
+### Skill pages
 
-Use skill nodes for reusable procedures.
+Use skill pages for reusable procedures.
 
-There is no dedicated `skill` CRUD tool in this environment. Edit `skills/<id>/INDEX.md` and supporting files directly when you need to create or update a skill.
+There is no dedicated `skill` CRUD tool in this environment. Edit `sync/nodes/<id>/INDEX.md` and supporting files directly when you need to create or update a skill.
 
 ## Quick routing rules
 

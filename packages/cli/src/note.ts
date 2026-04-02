@@ -47,11 +47,11 @@ function printNoteHelp(): void {
   printDenseUsage('pa note [list|find|show|new|lint|help]');
   console.log('');
   printDenseCommandList('Commands', [
-    { usage: 'list [--json]', description: 'List parsed shared note nodes' },
-    { usage: 'find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note nodes by metadata fields' },
-    { usage: 'show <id> [--json]', description: 'Show one note node and metadata' },
-    { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note node scaffold with INDEX.md frontmatter' },
-    { usage: 'lint [--json]', description: 'Validate shared note node frontmatter, duplicate ids, and broken note links' },
+    { usage: 'list [--json]', description: 'List parsed shared note pages' },
+    { usage: 'find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note pages by metadata fields' },
+    { usage: 'show <id> [--json]', description: 'Show one note page and metadata' },
+    { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note page scaffold with INDEX.md frontmatter' },
+    { usage: 'lint [--json]', description: 'Validate shared note page frontmatter, duplicate ids, and broken note links' },
     { usage: 'help', description: 'Show note help' },
   ]);
 }
@@ -98,11 +98,11 @@ export async function noteCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Note nodes'));
+    console.log(section('Note pages'));
     console.log(keyValue('Notes dir', loaded.memoryDir));
 
     if (loaded.docs.length === 0) {
-      console.log(dim('No note nodes found.'));
+      console.log(dim('No note pages found.'));
     }
 
     for (const doc of loaded.docs) {
@@ -121,7 +121,7 @@ export async function noteCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note page(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -287,7 +287,7 @@ export async function noteCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Note node search'));
+    console.log(section('Note page search'));
     console.log(keyValue('Notes dir', loaded.memoryDir));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
     console.log(keyValue('Status filter', statusFilter ?? 'none'));
@@ -297,7 +297,7 @@ export async function noteCommand(args: string[]): Promise<number> {
     console.log(keyValue('Text filter', textFilter ?? 'none'));
 
     if (filteredDocs.length === 0) {
-      console.log(dim('No note nodes matched the supplied filters.'));
+      console.log(dim('No note pages matched the supplied filters.'));
     }
 
     for (const doc of filteredDocs) {
@@ -316,7 +316,7 @@ export async function noteCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note page(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -362,7 +362,7 @@ export async function noteCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section(`Note node: ${doc.id}`));
+    console.log(section(`Note page: ${doc.id}`));
     console.log(keyValue('Title', doc.title));
     console.log(keyValue('Type', doc.type));
     console.log(keyValue('Status', doc.status));
@@ -380,7 +380,7 @@ export async function noteCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} note node(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} note page(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -597,7 +597,7 @@ export async function noteCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Note node ${payload.overwritten ? 'updated' : 'created'}`));
+    console.log(section(`Note page ${payload.overwritten ? 'updated' : 'created'}`));
     console.log(keyValue('ID', payload.id));
     console.log(keyValue('File', payload.filePath));
     console.log(keyValue('Type', payload.type));
@@ -609,7 +609,7 @@ export async function noteCommand(args: string[]): Promise<number> {
     console.log(keyValue('Updated', payload.updated));
 
     console.log('');
-    console.log(success(`Note node ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
+    console.log(success(`Note page ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
     console.log(`  ${formatHint(`Edit ${payload.filePath} to add details`)}`);
     return 0;
   }
@@ -639,7 +639,7 @@ export async function noteCommand(args: string[]): Promise<number> {
       return hasIssues ? 1 : 0;
     }
 
-    console.log(section('Note node validation'));
+    console.log(section('Note page validation'));
     console.log(keyValue('Notes dir', payload.noteDir));
     console.log(keyValue('Docs parsed', payload.validDocs));
     console.log(keyValue('Parse errors', payload.parseErrors.length));
@@ -648,7 +648,7 @@ export async function noteCommand(args: string[]): Promise<number> {
 
     if (!hasIssues) {
       console.log('');
-      console.log(success('All note nodes are valid'));
+      console.log(success('All note pages are valid'));
       return 0;
     }
 

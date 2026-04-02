@@ -206,10 +206,18 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={cx('mt-4 space-y-3 rounded-2xl bg-surface/40 px-4 py-4 first:mt-0', className)}>
-      <p className="ui-section-label">{title}</p>
+    <section className={cx('space-y-3 border-t border-border-subtle pt-4 first:border-t-0 first:pt-0', className)}>
+      <h3 className="text-[13px] font-semibold text-primary">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
+  );
+}
+
+function ConversationInspectorShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="ui-node-workspace-chrome h-full min-h-0 overflow-y-auto px-5 py-5">
+      {children}
+    </div>
   );
 }
 
@@ -420,7 +428,7 @@ function compactRunCardSummary(
     return null;
   }
 
-  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow|Conversation node distillation)( · .+)?$/.test(trimmed)) {
+  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow|Conversation page distillation)( · .+)?$/.test(trimmed)) {
     return null;
   }
 
@@ -579,7 +587,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       const result = await api.retryNodeDistillRun(run.runId);
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}${setConversationRunIdInSearch('', result.runId)}`);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not retry the node distillation run.');
+      setActionError(error instanceof Error ? error.message : 'Could not retry the page distillation run.');
     } finally {
       setRetryingMemoryDistill(false);
     }
@@ -596,11 +604,11 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       const result = await api.recoverNodeDistillRun(run.runId);
       persistForkPromptDraft(
         result.conversationId,
-        `Help me recover node distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
+        `Help me recover page distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
       );
       navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this node distillation run.');
+      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this page distillation run.');
     } finally {
       setOpeningMemoryRecovery(false);
     }
@@ -668,7 +676,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
         {recoverableMemoryDistill && (
           <div className="space-y-2 rounded-lg border border-border-subtle bg-surface px-3 py-3">
             <div className="space-y-1">
-              <p className="ui-section-label">Node distillation recovery</p>
+              <p className="ui-section-label">Page distillation recovery</p>
               <p className="text-[12px] text-secondary">
                 Retry this failed distillation or open a recovery conversation with the source transcript and failure context loaded.
               </p>
@@ -1886,30 +1894,33 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const canToggleWorkingTreeChanges = workingTreeChanges.length > MAX_VISIBLE_WORKING_TREE_CHANGES;
 
   return (
-    <div className="px-4 py-4">
-      <Section title="Working Directory">
-        <div className="flex items-start gap-2">
-          <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <IconButton
-              compact
-              onClick={() => { void pickAndSubmitCwd(); }}
-              disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
-              className="text-accent"
-              title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
-              aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
-            >
-              <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
-            </IconButton>
-            <IconButton
-              compact
-              onClick={startChangingCwd}
-              disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
-              title="Enter the working directory manually"
-              aria-label="Enter the working directory manually"
-            >
-              <PencilIcon />
-            </IconButton>
+    <div className="space-y-4">
+      <Section title="Properties">
+        <div className="space-y-1">
+          <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Working directory</p>
+          <div className="flex items-start gap-2">
+            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <IconButton
+                compact
+                onClick={() => { void pickAndSubmitCwd(); }}
+                disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
+                className="text-accent"
+                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+                aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+              >
+                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+              </IconButton>
+              <IconButton
+                compact
+                onClick={startChangingCwd}
+                disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
+                title="Enter the working directory manually"
+                aria-label="Enter the working directory manually"
+              >
+                <PencilIcon />
+              </IconButton>
+            </div>
           </div>
         </div>
         {(data.branch || data.git || workspaceBrowserLink) && (
@@ -2141,6 +2152,29 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           </div>
         )}
       </Section>
+
+      <details className="ui-disclosure">
+        <summary className="ui-disclosure-summary">
+          <span>Details</span>
+          <span className="ui-disclosure-meta">Conversation id and execution</span>
+        </summary>
+        <div className="ui-disclosure-body">
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Conversation</p>
+              <p className="break-all font-mono text-[12px] text-secondary">{id}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Execution</p>
+              <p className="text-[12px] text-secondary">
+                {execution?.location === 'remote'
+                  ? `Remote${execution.targetLabel ? ` · ${execution.targetLabel}` : ''}`
+                  : 'Local'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </details>
 
       {projectModalOpen && focusedProjectId && (
         <ReferencedProjectModal
@@ -2508,7 +2542,7 @@ function MemoryOverviewContext() {
   return (
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
-        <p className="ui-card-title">Agent nodes</p>
+        <p className="ui-card-title">Agent pages</p>
         <p className="ui-card-meta">Select an item on the left to inspect the document content.</p>
       </div>
 
@@ -2741,7 +2775,7 @@ function KnowledgeOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recent notes</p>
-          {memories.length === 0 ? <p className="ui-card-meta">No note nodes available.</p> : memories.slice(0, 5).map((memory) => (
+          {memories.length === 0 ? <p className="ui-card-meta">No note pages available.</p> : memories.slice(0, 5).map((memory) => (
             <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{memory.title}</p>
               <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
@@ -2803,8 +2837,8 @@ function KnowledgeOverviewContext({
   return (
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
-        <p className="ui-card-title">Knowledge Base</p>
-        <p className="ui-card-meta">Durable context lives here: project nodes, note nodes, skill nodes, and instruction sources.</p>
+        <p className="ui-card-title">Pages</p>
+        <p className="ui-card-meta">Durable context lives here: project pages, note pages, skill pages, and instruction sources.</p>
       </div>
 
       <div className="space-y-2">
@@ -2936,8 +2970,8 @@ function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
         {loading && !data ? <LoadingState label="Loading skill…" className="px-0 py-0" /> : error && !data ? <ErrorState message={`Failed to load skill: ${error}`} className="px-0 py-0" /> : data?.content ? <RailMarkdownPreview content={data.content} /> : <p className="ui-card-meta">No skill definition content available.</p>}
         {data && (
           <>
-            <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This skill does not reference other nodes yet." />
-            <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other nodes link to this skill yet." />
+            <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This skill does not reference other pages yet." />
+            <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other pages link to this skill yet." />
             <UnresolvedNodeLinks ids={data.links?.unresolved} />
           </>
         )}
@@ -3333,8 +3367,7 @@ export function ContextRail() {
 
   // Conversations
   if (section === 'conversations' && id && selectedArtifactId) return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Artifact" sub={selectedArtifactId} />
+    <div className="flex-1 min-h-0 overflow-hidden">
       {suspendRailPanel(
         <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />,
         'Loading artifact…',
@@ -3342,28 +3375,24 @@ export function ContextRail() {
     </div>
   );
   if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Draft" />
+    <ConversationInspectorShell>
       <DraftConversationContextPanel />
-    </div>
+    </ConversationInspectorShell>
   );
   if (section === 'conversations' && id && selectedRunId) return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Run" sub={selectedRunId} />
+    <div className="flex-1 min-h-0 overflow-hidden">
       <RunContextPanel conversationId={id} runId={selectedRunId} />
     </div>
   );
   if (section === 'conversations' && id) return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Conversation" sub={id} />
+    <ConversationInspectorShell>
       <LiveSessionContextPanel id={id} />
-    </div>
+    </ConversationInspectorShell>
   );
   if (section === 'conversations') return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Conversations" sub="workspace" />
+    <ConversationInspectorShell>
       <ConversationsWorkspaceContext />
-    </div>
+    </ConversationInspectorShell>
   );
 
   // Scheduled tasks
@@ -3516,7 +3545,7 @@ export function ContextRail() {
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Knowledge Base" sub={knowledgeSub} />
+        <RailHeader label="Pages" sub={knowledgeSub} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <KnowledgeContextPanel />
         </div>

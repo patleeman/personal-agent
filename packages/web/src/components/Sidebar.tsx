@@ -28,8 +28,7 @@ import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
 import { buildNoteSearch, NOTE_ID_SEARCH_PARAM, readCreateState } from '../noteWorkspaceState';
 import { buildNodesHref, readSelectedNode } from '../nodeWorkspaceState';
-import { buildProjectsHref } from '../projectWorkspaceState';
-import { buildSkillsSearch, SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
+import { SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
   buildOpenNodeShelfId,
@@ -538,11 +537,11 @@ export function Sidebar() {
   const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get(SKILL_SEARCH_PARAM)?.trim() || null, [location.search]);
   const selectedProjectId = useMemo(() => parseSelectedProjectId(location.pathname), [location.pathname]);
   const selectedNodesPageItem = useMemo(
-    () => location.pathname.startsWith('/nodes') ? readSelectedNode(location.search) : null,
+    () => (location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes')) ? readSelectedNode(location.search) : null,
     [location.pathname, location.search],
   );
   const nodesRouteActive = useMemo(
-    () => location.pathname.startsWith('/nodes') || location.pathname.startsWith('/notes') || location.pathname.startsWith('/projects') || location.pathname.startsWith('/skills'),
+    () => location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes') || location.pathname.startsWith('/notes') || location.pathname.startsWith('/projects') || location.pathname.startsWith('/skills'),
     [location.pathname],
   );
   const selectedWorkspaceId = useMemo(
@@ -842,7 +841,7 @@ export function Sidebar() {
       || (kind === 'project' && selectedProjectId === nodeId && location.pathname.startsWith('/projects'))
       || (kind === 'skill' && selectedSkillName === nodeId && location.pathname.startsWith('/skills'))
       || (selectedNodesPageItem?.kind === kind && selectedNodesPageItem.id === nodeId)) {
-      navigate('/nodes');
+      navigate('/pages');
     }
   }
 
@@ -868,7 +867,7 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
-        <TopNavItem to="/nodes" icon={PATH.nodes} label="Knowledge Base" forceActive={nodesRouteActive} />
+        <TopNavItem to="/pages" icon={PATH.nodes} label="Pages" forceActive={nodesRouteActive} />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Workspace" />
       </div>
 
@@ -981,7 +980,7 @@ export function Sidebar() {
 
         {(openNodes.length > 0 || creatingNote) && (
           <>
-            <SectionHeader label="Open Nodes" />
+            <SectionHeader label="Open Pages" />
             <div className="py-1 space-y-0.5">
               {creatingNote ? (
                 <ShelfRow

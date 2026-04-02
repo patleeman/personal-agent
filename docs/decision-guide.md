@@ -22,9 +22,9 @@ If you are not sure which surface to use, start here.
 | --- | --- | --- | --- |
 | Work with the agent right now | conversation | conversation/session state | inbox, note, or project as the primary work surface |
 | Keep ongoing work alive across conversations | project | `sync/projects/<id>/` | top-level note or long conversation history |
-| Save reusable knowledge or references | note node | `sync/notes/<id>/` | project docs or random conversation text |
-| Save reusable workflow instructions | skill node | `sync/skills/<id>/` | AGENTS or ad hoc notes |
-| Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | note nodes or project state |
+| Save reusable knowledge or references | note page | `sync/nodes/<id>/` tagged `type:note` | project docs or random conversation text |
+| Save reusable workflow instructions | skill page | `sync/nodes/<id>/` tagged `type:skill` | AGENTS or ad hoc notes |
+| Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | note pages or project state |
 | Surface async work later without interrupting | activity / inbox | local inbox state | alerts by default |
 | Tell the user later | reminder / alert | local alert + wakeup state | scheduled task if no automation is needed |
 | Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
@@ -101,7 +101,7 @@ When you need Patrick's preferences or standing instructions, look in this order
 
 1. active profile `AGENTS.md`
 2. repo `AGENTS.md`
-3. relevant skill nodes
+3. relevant skill pages
 
 The docs explain the product model. `AGENTS.md` explains how this particular agent should behave.
 

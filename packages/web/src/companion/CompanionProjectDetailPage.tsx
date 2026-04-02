@@ -5,15 +5,13 @@ import {
   formatProjectStatus,
   getPlanProgress,
   hasMeaningfulBlockers,
-  isProjectArchived,
   pickCurrentMilestone,
-  summarizeProjectPreview,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { buildCompanionConversationPath, COMPANION_PROJECTS_PATH } from './routes';
+import { buildCompanionConversationPath } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -158,13 +156,13 @@ export function CompanionProjectDetailPage() {
                   title="Links to"
                   items={data.links?.outgoing}
                   surface="companion"
-                  emptyText="This project does not reference other nodes yet."
+                  emptyText="This project does not reference other pages yet."
                 />
                 <NodeLinkList
                   title="Linked from"
                   items={data.links?.incoming}
                   surface="companion"
-                  emptyText="No other nodes link to this project yet."
+                  emptyText="No other pages link to this project yet."
                 />
                 <UnresolvedNodeLinks ids={data.links?.unresolved} />
               </Section>

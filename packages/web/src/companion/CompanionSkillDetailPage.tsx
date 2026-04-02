@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, type ReactNode } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
+
 import type { SkillDetail } from '../types';
 import { NodeLinkList, UnresolvedNodeLinks } from '../components/NodeLinksSection';
 import { CompanionMarkdown } from './CompanionMarkdown';
-import { COMPANION_SKILLS_PATH } from './routes';
+
 import { useCompanionTopBarAction } from './CompanionLayout';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -30,13 +30,6 @@ export function CompanionSkillDetailPage() {
   const { data, loading, refreshing, error, refetch } = useApi(fetchSkill, `companion-skill:${name ?? ''}`);
 
   const skill = data?.skill ?? null;
-  const usageLabel = useMemo(() => {
-    if (!skill) {
-      return null;
-    }
-
-    return formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently');
-  }, [skill]);
   const { setTopBarRightAction } = useCompanionTopBarAction();
 
   useEffect(() => {
@@ -78,13 +71,13 @@ export function CompanionSkillDetailPage() {
                   title="Links to"
                   items={data.links?.outgoing}
                   surface="companion"
-                  emptyText="This skill does not reference other nodes yet."
+                  emptyText="This skill does not reference other pages yet."
                 />
                 <NodeLinkList
                   title="Linked from"
                   items={data.links?.incoming}
                   surface="companion"
-                  emptyText="No other nodes link to this skill yet."
+                  emptyText="No other pages link to this skill yet."
                 />
                 <UnresolvedNodeLinks ids={data.links?.unresolved} />
               </Section>

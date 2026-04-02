@@ -74,8 +74,9 @@ For app-level access control on remote devices:
 - generate a short-lived pairing code from the local desktop web UI or `pa ui pairing-code`
 - enter it once on the remote desktop browser or companion app
 - the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
-- the browser stays signed in until you revoke that paired session
+- active paired browsers and devices refresh their session while in use; idle pairings expire after 30 days unless you revoke them sooner
 - the companion chats view mirrors desktop workspace-open conversations separately from live-but-not-open and needs-review conversations, so mobile archive/open actions track the same shared layout
+- the companion knowledge browser card treatment is also the shared visual pattern for inbox and chats, so browse-style mobile pages keep one consistent hierarchy and row shell
 - companion setup/recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
@@ -177,6 +178,8 @@ Saved conversations show these queued and ready items under **Wakeups**. From th
 
 The Conversations workspace only treats conversation unread state as “needs review”. Detached background run review stays on the Runs page instead of adding workspace-wide conversation badges.
 
+Saved conversations also keep their working directory, referenced projects, and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
+
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
 When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
@@ -211,24 +214,26 @@ You can:
 
 
 
-### Knowledge Base (`/nodes`)
+### Pages (`/pages`)
 
-The Knowledge Base page is the shared browser for notes, projects, and skills.
+The Pages page is the shared browser for notes, projects, and skills.
 
-It is meant to make the knowledge system feel like one surface with a normal table-first browse flow instead of three unrelated product areas.
+It is meant to make the durable layer feel like one surface with a normal table-first browse flow instead of three unrelated product areas.
 
-From the Knowledge Base page you can:
+From the Pages page you can:
 
 - browse notes, projects, and skills together in one table
-- use a Lucene-style query bar for tag and text search
-- sort by updated/created/title/status and group by kind or tag-derived dimensions
+- use a Lucene-style query bar for tag and text search, with inline field insertion and field-name suggestions while typing
+- sort by updated/created/title/status and keep one shared table while grouping inline by kind or tag-derived dimensions
 - filter by date range without leaving the page
+- switch the browser between built-in views (all / notes / projects / skills) or saved server-backed views from one selector
 - save reusable browser views on the server so they follow the active profile instead of the current browser tab
-- switch between the normal browse view and a denser table mode
-- open quick-capture notes and saved URLs directly into the node system
-- open any row into a shared node workspace with the main content in the center and metadata on the right
-- edit shared node metadata there, including title/summary/description where appropriate, status, parent, and tags
-- keep recently opened notes, projects, and skills together in the sidebar’s unified Open Nodes shelf
+- keep the table in either a roomier or denser row layout
+- start from one unified new-page screen that can create notes, projects, or skills
+- use compact per-row icon actions to view a page in the shared workspace, jump into the dedicated editor, or delete supported page types directly from the table
+- open any row into a shared page workspace with the main content in the center and metadata on the right
+- edit shared page metadata there, including title/summary/description where appropriate, status, parent, and structured `key:value` tags with separate key/value inputs
+- keep recently opened notes, projects, and skills together in the sidebar’s unified Open Pages shelf
 - hand off from that shared workspace to the dedicated note, project, or skill editor when you need type-specific editing
 
 ### Projects
@@ -240,7 +245,7 @@ From the Projects page you can:
 - create a project from a short title plus a longer description
 - promote a project into a reusable note when project-specific material becomes generally useful knowledge
 - inspect current status, blockers, optional milestones, and tasks
-- edit the raw project node source (`INDEX.md` frontmatter + markdown body)
+- edit the raw project page source (`INDEX.md` frontmatter + markdown body)
 - edit or regenerate the project document when present
 - append project notes
 - upload attachments and project artifacts
@@ -295,7 +300,7 @@ The Notes page is now the dedicated note workspace.
 
 Use it when you want note-specific editing, note creation, or explicit note-distillation and recovery work that is still running or needs attention.
 
-The broader shared browser for notes, projects, and skills now lives on the Nodes page.
+The broader shared browser for notes, projects, and skills now lives on the Pages page.
 
 See [Profiles, AGENTS, Notes, and Skills](./profiles-memory-skills.md).
 
@@ -335,7 +340,7 @@ Switching the active profile affects:
 
 - inbox
 - projects
-- the AGENTS/skills lens used around note nodes
+- the AGENTS/skills lens used around note pages
 - new live sessions
 
 ## Prompt references in conversations
@@ -346,7 +351,7 @@ You can reference:
 
 - projects
 - scheduled tasks
-- note nodes
+- note pages
 - skills
 - profiles
 
