@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
@@ -23,7 +23,7 @@ import { SystemSettingsContent } from '../components/SystemSettingsContent';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
-const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface focus-visible:outline-none focus-visible:border-accent/60 disabled:opacity-50';
+const ACTION_BUTTON_CLASS = 'ui-toolbar-button';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 
 type ModelOption = ModelState['models'][number];
@@ -297,6 +297,33 @@ function ThemeButton({
     >
       {label ?? value}
     </button>
+  );
+}
+
+function SettingsPanel({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx('ui-panel-muted px-5 py-5', className)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 max-w-3xl space-y-1">
+          <h2 className="text-[15px] font-medium text-primary">{title}</h2>
+          {description ? <p className="ui-card-meta max-w-3xl">{description}</p> : null}
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      </div>
+      <div className="mt-5 min-w-0 space-y-4">{children}</div>
+    </div>
   );
 }
 
@@ -1105,287 +1132,274 @@ export function SettingsPage() {
             <section className={cx('space-y-4', activePageId !== 'appearance' && 'hidden')}>
               <SectionLabel label="Appearance" />
 
-            <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">Theme</h2>
-              <p className="ui-card-meta max-w-2xl">
-                Theme is stored in this browser only. Choose Auto to follow the OS appearance without reloading.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="ui-segmented-control" role="group" aria-label="Theme selection">
-                <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
-                <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
-                <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
-              </div>
-              <span className="ui-card-meta">
-                Current theme: {theme}{themePreference === 'system' ? ' (auto)' : ''}
-              </span>
-            </div>
-          </section>
-
-          <section className={cx('space-y-5', activePageId !== 'defaults' && 'hidden')}>
-            <SectionLabel label="Agent defaults" />
-
-            <div className="grid gap-8 lg:grid-cols-2 xl:grid-cols-4">
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Profile</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Changes the active profile for inbox, projects, AGENTS/skills context, and new live sessions. The app reloads after switching.
-                  </p>
+              <SettingsPanel
+                title="Theme"
+                description="Theme is stored in this browser only. Choose Auto to follow the OS appearance without reloading."
+              >
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="ui-segmented-control" role="group" aria-label="Theme selection">
+                    <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
+                    <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
+                    <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
+                  </div>
+                  <span className="ui-card-meta">
+                    Current theme: {theme}{themePreference === 'system' ? ' (auto)' : ''}
+                  </span>
                 </div>
+              </SettingsPanel>
+            </section>
 
-                {profilesLoading && !profileState ? (
-                  <p className="ui-card-meta">Loading profiles…</p>
-                ) : profilesError && !profileState ? (
-                  <p className="text-[12px] text-danger">Failed to load profiles: {profilesError}</p>
-                ) : profileState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-profile">Active profile</label>
-                    <select
-                      id="settings-profile"
-                      value={profileState.currentProfile}
-                      onChange={(event) => { void handleProfileChange(event.target.value); }}
-                      disabled={switchingProfile || profileState.profiles.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      {profileState.profiles.map((profile) => (
-                        <option key={profile} value={profile}>{profile}</option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {switchingProfile
-                        ? 'Switching profile and reloading…'
-                        : `${profileState.profiles.length} available ${profileState.profiles.length === 1 ? 'profile' : 'profiles'}.`}
-                    </p>
-                  </>
-                ) : null}
+            <section className={cx('space-y-5', activePageId !== 'defaults' && 'hidden')}>
+              <SectionLabel label="Agent defaults" />
 
-                {profileError && <p className="text-[12px] text-danger">{profileError}</p>}
-              </div>
-
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Default model</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
-                    Saving an explicit model here clears the active profile&apos;s default preset.
-                  </p>
-                </div>
-
-                {modelsLoading && !modelState ? (
-                  <p className="ui-card-meta">Loading models…</p>
-                ) : modelsError && !modelState ? (
-                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                ) : modelState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-model">Model</label>
-                    <select
-                      id="settings-model"
-                      value={modelState.currentModel}
-                      onChange={(event) => {
-                        void handleModelPreferenceChange({ model: event.target.value }, 'model');
-                      }}
-                      disabled={savingPreference !== null || modelState.models.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      {groupedModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={model.id} value={model.id}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingPreference === 'model'
-                        ? 'Saving default model...'
-                        : formatModelSummary(selectedModel, 'No model selected.')
-                      }
-                    </p>
-
-                    <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
-                    <select
-                      id="settings-thinking"
-                      value={modelState.currentThinkingLevel}
-                      onChange={(event) => {
-                        void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
-                      }}
-                      disabled={savingPreference !== null}
-                      className={INPUT_CLASS}
-                    >
-                      {THINKING_LEVEL_OPTIONS.map((option) => (
-                        <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingPreference === 'thinking'
-                        ? 'Saving thinking level…'
-                        : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
-                    </p>
-                  </>
-                ) : null}
-
-                {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
-              </div>
-
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Default working directory</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Used when a new live session or other web action starts without an explicit cwd. A single referenced project repo root still takes priority.
-                  </p>
-                </div>
-
-                {defaultCwdLoading && !defaultCwdState ? (
-                  <p className="ui-card-meta">Loading default working directory…</p>
-                ) : defaultCwdLoadError && !defaultCwdState ? (
-                  <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
-                ) : defaultCwdState ? (
-                  <form
-                    className="space-y-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleDefaultCwdSave();
-                    }}
-                  >
-                    <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
-                    <input
-                      id="settings-default-cwd"
-                      value={defaultCwdDraft}
-                      onChange={(event) => {
-                        setDefaultCwdDraft(event.target.value);
-                        if (defaultCwdSaveError) {
-                          setDefaultCwdSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      placeholder="~/workingdir/project"
-                      autoComplete="off"
-                      spellCheck={false}
-                      disabled={savingDefaultCwd}
-                    />
-                    <p className="ui-card-meta break-all">
-                      {savingDefaultCwd
-                        ? 'Saving default working directory…'
-                        : defaultCwdState.currentCwd
-                          ? `Effective default: ${defaultCwdState.effectiveCwd}`
-                          : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingDefaultCwd || !defaultCwdDirty}
-                        className={ACTION_BUTTON_CLASS}
+              <div className="space-y-4">
+                <SettingsPanel
+                  title="Profile"
+                  description="Changes the active profile for inbox, projects, AGENTS/skills context, and new live sessions. The app reloads after switching."
+                >
+                  {profilesLoading && !profileState ? (
+                    <p className="ui-card-meta">Loading profiles…</p>
+                  ) : profilesError && !profileState ? (
+                    <p className="text-[12px] text-danger">Failed to load profiles: {profilesError}</p>
+                  ) : profileState ? (
+                    <>
+                      <label className="ui-card-meta" htmlFor="settings-profile">Active profile</label>
+                      <select
+                        id="settings-profile"
+                        value={profileState.currentProfile}
+                        onChange={(event) => { void handleProfileChange(event.target.value); }}
+                        disabled={switchingProfile || profileState.profiles.length === 0}
+                        className={INPUT_CLASS}
                       >
-                        {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleDefaultCwdSave(''); }}
-                        disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Use process cwd
-                      </button>
-                    </div>
-                    <p className="ui-card-meta">
-                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
-                    </p>
-                  </form>
-                ) : null}
+                        {profileState.profiles.map((profile) => (
+                          <option key={profile} value={profile}>{profile}</option>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {switchingProfile
+                          ? 'Switching profile and reloading…'
+                          : `${profileState.profiles.length} available ${profileState.profiles.length === 1 ? 'profile' : 'profiles'}.`}
+                      </p>
+                    </>
+                  ) : null}
 
-                {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-              </div>
+                  {profileError && <p className="text-[12px] text-danger">{profileError}</p>}
+                </SettingsPanel>
 
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Conversation titles</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model.
-                  </p>
-                </div>
-
-                {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
-                  <p className="ui-card-meta">Loading conversation title settings…</p>
-                ) : (!conversationTitleState && conversationTitleError) ? (
-                  <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
-                ) : (!modelState && modelsError) ? (
-                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                ) : conversationTitleState && modelState ? (
-                  <>
-                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
-                      <input
-                        id="settings-conversation-titles-enabled"
-                        type="checkbox"
-                        checked={conversationTitleState.enabled}
+                <SettingsPanel
+                  title="Default model"
+                  description={(
+                    <>
+                      Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
+                      Saving an explicit model here clears the active profile&apos;s default preset.
+                    </>
+                  )}
+                >
+                  {modelsLoading && !modelState ? (
+                    <p className="ui-card-meta">Loading models…</p>
+                  ) : modelsError && !modelState ? (
+                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                  ) : modelState ? (
+                    <>
+                      <label className="ui-card-meta" htmlFor="settings-model">Model</label>
+                      <select
+                        id="settings-model"
+                        value={modelState.currentModel}
                         onChange={(event) => {
-                          void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
+                          void handleModelPreferenceChange({ model: event.target.value }, 'model');
                         }}
-                        disabled={savingConversationTitle !== null}
-                        className={CHECKBOX_CLASS}
-                      />
-                      <span>Generate titles automatically</span>
-                    </label>
-                    <p className="ui-card-meta">
-                      {savingConversationTitle === 'enabled'
-                        ? 'Saving auto-title setting…'
-                        : conversationTitleState.enabled
-                          ? 'Enabled after the first assistant reply.'
-                          : 'Disabled. New conversations keep the fallback title until renamed manually.'}
-                    </p>
+                        disabled={savingPreference !== null || modelState.models.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        {groupedModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'model'
+                          ? 'Saving default model...'
+                          : formatModelSummary(selectedModel, 'No model selected.')
+                        }
+                      </p>
 
-                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
-                    <select
-                      id="settings-conversation-title-model"
-                      value={conversationTitleState.currentModel}
-                      onChange={(event) => {
-                        void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
+                      <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
+                      <select
+                        id="settings-thinking"
+                        value={modelState.currentThinkingLevel}
+                        onChange={(event) => {
+                          void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
+                        }}
+                        disabled={savingPreference !== null}
+                        className={INPUT_CLASS}
+                      >
+                        {THINKING_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingPreference === 'thinking'
+                          ? 'Saving thinking level…'
+                          : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
+                      </p>
+                    </>
+                  ) : null}
+
+                  {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel
+                  title="Default working directory"
+                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced project repo root still takes priority."
+                >
+                  {defaultCwdLoading && !defaultCwdState ? (
+                    <p className="ui-card-meta">Loading default working directory…</p>
+                  ) : defaultCwdLoadError && !defaultCwdState ? (
+                    <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
+                  ) : defaultCwdState ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleDefaultCwdSave();
                       }}
-                      disabled={savingConversationTitle !== null || modelState.models.length === 0}
-                      className={INPUT_CLASS}
                     >
-                      <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
-                      {groupedModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingConversationTitle === 'model'
-                        ? 'Saving title model…'
-                        : conversationTitleState.currentModel
-                          ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
-                          : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
-                    </p>
-                  </>
-                ) : null}
+                      <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
+                      <input
+                        id="settings-default-cwd"
+                        value={defaultCwdDraft}
+                        onChange={(event) => {
+                          setDefaultCwdDraft(event.target.value);
+                          if (defaultCwdSaveError) {
+                            setDefaultCwdSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        placeholder="~/workingdir/project"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={savingDefaultCwd}
+                      />
+                      <p className="ui-card-meta break-all">
+                        {savingDefaultCwd
+                          ? 'Saving default working directory…'
+                          : defaultCwdState.currentCwd
+                            ? `Effective default: ${defaultCwdState.effectiveCwd}`
+                            : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={savingDefaultCwd || !defaultCwdDirty}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void handleDefaultCwdSave(''); }}
+                          disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Use process cwd
+                        </button>
+                      </div>
+                      <p className="ui-card-meta">
+                        Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
+                      </p>
+                    </form>
+                  ) : null}
 
-                {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
+                  {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel
+                  title="Conversation titles"
+                  description="Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model."
+                >
+                  {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
+                    <p className="ui-card-meta">Loading conversation title settings…</p>
+                  ) : (!conversationTitleState && conversationTitleError) ? (
+                    <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
+                  ) : (!modelState && modelsError) ? (
+                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                  ) : conversationTitleState && modelState ? (
+                    <>
+                      <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
+                        <input
+                          id="settings-conversation-titles-enabled"
+                          type="checkbox"
+                          checked={conversationTitleState.enabled}
+                          onChange={(event) => {
+                            void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
+                          }}
+                          disabled={savingConversationTitle !== null}
+                          className={CHECKBOX_CLASS}
+                        />
+                        <span>Generate titles automatically</span>
+                      </label>
+                      <p className="ui-card-meta">
+                        {savingConversationTitle === 'enabled'
+                          ? 'Saving auto-title setting…'
+                          : conversationTitleState.enabled
+                            ? 'Enabled after the first assistant reply.'
+                            : 'Disabled. New conversations keep the fallback title until renamed manually.'}
+                      </p>
+
+                      <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
+                      <select
+                        id="settings-conversation-title-model"
+                        value={conversationTitleState.currentModel}
+                        onChange={(event) => {
+                          void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
+                        }}
+                        disabled={savingConversationTitle !== null || modelState.models.length === 0}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
+                        {groupedModels.map(([provider, models]) => (
+                          <optgroup key={provider} label={provider}>
+                            {models.map((model) => (
+                              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                                {model.name} · {formatContextWindowLabel(model.context)} ctx
+                              </option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <p className="ui-card-meta">
+                        {savingConversationTitle === 'model'
+                          ? 'Saving title model…'
+                          : conversationTitleState.currentModel
+                            ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
+                            : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
+                      </p>
+                    </>
+                  ) : null}
+
+                  {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
+                </SettingsPanel>
               </div>
-            </div>
-          </section>
+            </section>
 
           <section className={cx('space-y-8', activePageId !== 'providers' && 'hidden')}>
             <SectionLabel label="Providers & models" />
 
-            <div className="space-y-8">
-              <div className="space-y-1">
-                <h2 className="text-[15px] font-medium text-primary">Provider &amp; model definitions</h2>
-                <p className="ui-card-meta max-w-3xl">
-                  Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for the active profile. Built-in providers still exist even when they are not listed here. Add a provider to create a custom provider or a built-in override.
-                </p>
-              </div>
-
-              <div className="grid gap-8 xl:grid-cols-[240px_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <SettingsPanel
+                title="Provider & model definitions"
+                description={(
+                  <>
+                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for the active profile. Built-in providers still exist even when they are not listed here. Add a provider to create a custom provider or a built-in override.
+                  </>
+                )}
+              >
+                <div className="space-y-8">
                 <div className="space-y-3 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-[13px] font-medium text-primary">Configured providers</h3>
@@ -1405,8 +1419,8 @@ export function SettingsPage() {
                   ) : modelProviderState ? (
                     <>
                       {modelProviderState.providers.length > 0 ? (
-                        <div className="overflow-hidden rounded-lg border border-border-subtle">
-                          {modelProviderState.providers.map((provider, index) => {
+                        <div className="space-y-px">
+                          {modelProviderState.providers.map((provider) => {
                             const selected = provider.id === selectedModelProviderId;
                             return (
                               <button
@@ -1414,9 +1428,8 @@ export function SettingsPage() {
                                 type="button"
                                 onClick={() => { selectModelProvider(provider.id); }}
                                 className={cx(
-                                  'flex w-full items-start justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-surface focus-visible:outline-none focus-visible:bg-surface',
-                                  index > 0 && 'border-t border-border-subtle',
-                                  selected && 'bg-surface',
+                                  'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                  selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
                                 )}
                                 aria-pressed={selected}
                               >
@@ -1441,7 +1454,7 @@ export function SettingsPage() {
                   ) : null}
                 </div>
 
-                <div className="space-y-8 min-w-0">
+                <div className="space-y-8 border-t border-border-subtle pt-6 min-w-0">
                   <div className="space-y-4 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">
@@ -1626,11 +1639,11 @@ export function SettingsPage() {
                     {selectedModelProvider ? (
                       <>
                         {selectedModelProvider.models.length > 0 ? (
-                          <div className="overflow-hidden rounded-lg border border-border-subtle">
-                            {selectedModelProvider.models.map((model, index) => (
+                          <div className="space-y-px">
+                            {selectedModelProvider.models.map((model) => (
                               <div
                                 key={model.id}
-                                className={cx('flex items-start justify-between gap-3 px-3 py-3', index > 0 && 'border-t border-border-subtle')}
+                                className="group ui-list-row ui-list-row-hover justify-between px-3 py-3"
                               >
                                 <div className="min-w-0">
                                   <p className="truncate text-[13px] font-medium text-primary">{model.id}</p>
@@ -1915,17 +1928,18 @@ export function SettingsPage() {
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-5 border-t border-border-subtle pt-8">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Provider credentials</h2>
-                  <p className="ui-card-meta max-w-2xl">
-                    Manage API-key and OAuth credentials per provider. Stored credentials are written to <span className="font-mono text-[11px]">{providerAuthState?.authFile ?? 'auth.json'}</span>.
-                  </p>
                 </div>
+              </SettingsPanel>
 
-                <div className="grid gap-8 lg:grid-cols-2">
+              <SettingsPanel
+                title="Provider credentials"
+                description={(
+                  <>
+                    Manage API-key and OAuth credentials per provider. Stored credentials are written to <span className="font-mono text-[11px]">{providerAuthState?.authFile ?? 'auth.json'}</span>.
+                  </>
+                )}
+              >
+                <div className="space-y-6">
                   <div className="space-y-3 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">Provider</h3>
@@ -1960,7 +1974,7 @@ export function SettingsPage() {
                     ) : null}
                   </div>
 
-                  <div className="space-y-3 min-w-0">
+                  <div className="space-y-3 border-t border-border-subtle pt-6 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">API key and OAuth</h3>
                       <p className="ui-card-meta max-w-2xl">
@@ -2120,7 +2134,7 @@ export function SettingsPage() {
                     )}
                   </div>
                 </div>
-              </div>
+              </SettingsPanel>
 
               <CodexPlanUsageSummary
                 usage={codexPlanUsage}
@@ -2133,45 +2147,44 @@ export function SettingsPage() {
           <section className={cx('space-y-5', activePageId !== 'interface' && 'hidden')}>
             <SectionLabel label="Interface state" />
 
-            <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">Reset saved UI preferences</h2>
-              <p className="ui-card-meta max-w-3xl">
-                These actions clear saved UI state. They do not delete conversations, project nodes, note nodes, skill nodes, or agent data.
-              </p>
+            <SettingsPanel
+              title="Reset saved UI preferences"
+              description="These actions clear saved UI state. They do not delete conversations, project nodes, note nodes, skill nodes, or agent data."
+            >
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
-            </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="space-y-2 min-w-0">
-                <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
-                <p className="ui-card-meta">
-                  Clears the stored sidebar width and per-page context rail widths, then reloads the page.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { void handleReset('layout'); }}
-                  disabled={resetting !== null}
-                  className={ACTION_BUTTON_CLASS}
-                >
-                  {resetting === 'layout' ? 'Resetting…' : 'Reset layout + reload'}
-                </button>
-              </div>
+              <div className="space-y-6">
+                <div className="space-y-2 min-w-0">
+                  <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
+                  <p className="ui-card-meta">
+                    Clears the stored sidebar width and per-page context rail widths, then reloads the page.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { void handleReset('layout'); }}
+                    disabled={resetting !== null}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    {resetting === 'layout' ? 'Resetting…' : 'Reset layout + reload'}
+                  </button>
+                </div>
 
-              <div className="space-y-2 min-w-0">
-                <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
-                <p className="ui-card-meta">
-                  Clears stored open-tab state, seen message counts, and composer history in this browser, plus the durable open-tab snapshot stored by the web UI, then reloads the page.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => { void handleReset('conversation'); }}
-                  disabled={resetting !== null}
-                  className={ACTION_BUTTON_CLASS}
-                >
-                  {resetting === 'conversation' ? 'Resetting…' : 'Reset conversation UI + reload'}
-                </button>
+                <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
+                  <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
+                  <p className="ui-card-meta">
+                    Clears stored open-tab state, seen message counts, and composer history in this browser, plus the durable open-tab snapshot stored by the web UI, then reloads the page.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { void handleReset('conversation'); }}
+                    disabled={resetting !== null}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    {resetting === 'conversation' ? 'Resetting…' : 'Reset conversation UI + reload'}
+                  </button>
+                </div>
               </div>
-            </div>
+            </SettingsPanel>
           </section>
 
           <section className={cx('space-y-5', !activePageId.startsWith('system') && 'hidden')}>
@@ -2181,17 +2194,15 @@ export function SettingsPage() {
           <section className={cx('space-y-4', activePageId !== 'workspace' && 'hidden')}>
             <SectionLabel label="Workspace" />
 
-            <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">Repo root</h2>
-              <p className="ui-card-meta max-w-3xl">
-                The repository root currently used by the web app for projects, memory, tasks, and profile resources.
+            <SettingsPanel
+              title="Repo root"
+              description="The repository root currently used by the web app for projects, memory, tasks, and profile resources."
+            >
+              <p className="break-all font-mono text-[12px] leading-relaxed text-primary">
+                {status?.repoRoot ?? 'Unavailable'}
               </p>
-            </div>
-
-            <p className="break-all font-mono text-[12px] leading-relaxed text-primary">
-              {status?.repoRoot ?? 'Unavailable'}
-            </p>
-            {statusError && <p className="text-[12px] text-danger">Failed to load workspace details: {statusError}</p>}
+              {statusError && <p className="text-[12px] text-danger">Failed to load workspace details: {statusError}</p>}
+            </SettingsPanel>
           </section>
         </div>
       </div>
