@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { basename, dirname, join } from 'path';
+import { basename, join } from 'path';
 import { parseDocument, stringify } from 'yaml';
 import { createUnifiedNode, loadUnifiedNodes, type UnifiedNodeRecord } from './nodes.js';
 import { getDurableProfilesDir } from './runtime/paths.js';
@@ -233,26 +233,6 @@ function readOptionalString(value: unknown): string | undefined {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function readStringArray(value: unknown, label: string): string[] {
-  if (value === undefined || value === null) {
-    return [];
-  }
-
-  if (!Array.isArray(value)) {
-    throw new Error(`${label} must be a string array`);
-  }
-
-  const normalized = value.map((entry) => {
-    const stringValue = readOptionalString(entry);
-    if (!stringValue) {
-      throw new Error(`${label} must not include empty values`);
-    }
-    return stringValue;
-  });
-
-  return [...new Set(normalized)];
 }
 
 function extractMarkdownTitle(body: string): string | undefined {
