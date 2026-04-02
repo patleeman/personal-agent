@@ -220,6 +220,19 @@ function movePathIntoSyncRoot(stateRoot: string, syncRoot: string, relativePath:
   ensureSymlink(sourcePath, targetPath);
 }
 
+function removeDirIfEmpty(path: string): void {
+  const stats = lstatSyncSafe(path);
+  if (!stats?.isDirectory()) {
+    return;
+  }
+
+  if (readdirSync(path).length > 0) {
+    return;
+  }
+
+  rmSync(path, { force: true, recursive: true });
+}
+
 function moveSyncedPiAgentLocalStateBack(stateRoot: string, syncRoot: string): void {
   const localPiAgentDir = join(stateRoot, 'pi-agent');
   const syncedPiAgentDir = join(syncRoot, 'pi-agent');
@@ -237,6 +250,26 @@ function moveSyncedPiAgentLocalStateBack(stateRoot: string, syncRoot: string): v
 
   for (const entry of readdirSync(syncedPiAgentDir, { withFileTypes: true })) {
     if (entry.name === 'sessions') {
+      continue;
+    }
+
+    if (entry.name === 'state' && entry.isDirectory()) {
+      const syncedStateDir = join(syncedPiAgentDir, 'state');
+      const localStateDir = join(localPiAgentDir, 'state');
+      ensureDirectory(localStateDir);
+
+      for (const stateEntry of readdirSync(syncedStateDir, { withFileTypes: true })) {
+        if (stateEntry.name === 'conversation-attention') {
+          continue;
+        }
+
+        movePathToTarget(
+          join(syncedStateDir, stateEntry.name),
+          join(localStateDir, stateEntry.name),
+        );
+      }
+
+      removeDirIfEmpty(syncedStateDir);
       continue;
     }
 
@@ -373,24 +406,20 @@ function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: strin
   }
 }
 
-function ensureManagedSyncRepoLayout(syncRoot: string): void {
+function cleanupManagedSyncRepoLayout(syncRoot: string): void {
   for (const relativePath of [
-    'profiles',
-    'agents',
-    'settings',
-    'models',
-    'skills',
     'memory',
+    'notes',
+    'skills',
     'tasks',
-    'projects',
-    join('pi-agent', 'sessions'),
   ]) {
-    ensureDirectory(join(syncRoot, relativePath));
+    removeDirIfEmpty(join(syncRoot, relativePath));
   }
 }
 
 function writeManagedSyncRepoFiles(syncRoot: string): void {
-  ensureManagedSyncRepoLayout(syncRoot);
+  ensureDirectory(syncRoot);
+  cleanupManagedSyncRepoLayout(syncRoot);
   writeFileSync(join(syncRoot, '.gitignore'), syncRepoGitignore());
   writeFileSync(join(syncRoot, '.gitattributes'), syncRepoGitattributes());
   writeFileSync(join(syncRoot, 'README.md'), syncRepoReadme());

@@ -128,12 +128,12 @@ Canonical state-home layout:
 │   ├── agents/
 │   ├── settings/
 │   ├── models/
-│   ├── skills/
-│   ├── notes/
-│   ├── tasks/
+│   ├── nodes/
 │   ├── projects/
 │   └── pi-agent/
-│       └── sessions/
+│       ├── sessions/
+│       └── state/
+│           └── conversation-attention/
 ├── profiles -> sync/profiles  # durable profile definitions
 ├── pi-agent/                  # local runtime state
 │   ├── state/
@@ -172,7 +172,7 @@ Typical durable paths there include:
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
-Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Conversation attention read-state is synced so “needs review” follows across machines.
+Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
 
 See [Sync Guide](./sync.md).
 
