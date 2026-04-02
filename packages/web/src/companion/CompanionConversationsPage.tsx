@@ -6,9 +6,8 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { type SseConnectionStatus, useAppEvents, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
-import { commitConversationLayoutMerge } from '../sessionTabs';
 import type { CompanionConversationListResult, SessionMeta } from '../types';
-import { useCompanionLayoutContext, useCompanionTopBarAction } from './CompanionLayout';
+import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
 function parseSessionActivityAt(session: SessionMeta): number {
@@ -78,11 +77,18 @@ const COMPANION_ROW_SWIPE_HIDE_THRESHOLD = 28;
 const COMPANION_ARCHIVED_PAGE_SIZE = 30;
 const COMPANION_ARCHIVE_SYNC_DELAY_MS = 180;
 
-function buildCompanionOverviewLabel(liveCount: number, archivedCount: number): string {
+function buildCompanionOverviewLabel(input: {
+  openCount: number;
+  liveElsewhereCount: number;
+  needsReviewCount: number;
+  archivedCount: number;
+}): string {
   const parts: string[] = [];
-  if (liveCount > 0) parts.push(`${liveCount} live`);
-  if (archivedCount > 0) parts.push(`${archivedCount} archived`);
-  if (parts.length === 0) return 'No live or archived conversations.';
+  if (input.openCount > 0) parts.push(`${input.openCount} open`);
+  if (input.liveElsewhereCount > 0) parts.push(`${input.liveElsewhereCount} live elsewhere`);
+  if (input.needsReviewCount > 0) parts.push(`${input.needsReviewCount} need review`);
+  if (input.archivedCount > 0) parts.push(`${input.archivedCount} archived`);
+  if (parts.length === 0) return 'No conversations yet.';
   return parts.join(' · ');
 }
 
@@ -129,30 +135,29 @@ function buildCompanionStateNote(input: {
   };
 }
 
-function HeaderIconButton({
-  label,
-  onClick,
-  disabled,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      title={label}
-      className="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
-      style={COMPANION_TOUCH_BUTTON_STYLE}
-    >
-      {children}
-    </button>
-  );
+function buildCompanionArchivedLayout(
+  current: { sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] },
+  sessionId: string,
+  archived: boolean,
+): { sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] } {
+  const normalizedSessionId = sessionId.trim();
+  if (!normalizedSessionId) {
+    return current;
+  }
+
+  const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
+  const openWithoutSession = current.sessionIds.filter((id) => id !== normalizedSessionId);
+  const archivedWithoutSession = current.archivedSessionIds.filter((id) => id !== normalizedSessionId);
+
+  return {
+    sessionIds: archived
+      ? openWithoutSession
+      : [...openWithoutSession, normalizedSessionId],
+    pinnedSessionIds: nextPinnedSessionIds,
+    archivedSessionIds: archived
+      ? [...archivedWithoutSession, normalizedSessionId]
+      : archivedWithoutSession,
+  };
 }
 
 export function sortCompanionSessions(sessions: SessionMeta[]): SessionMeta[] {
@@ -240,31 +245,6 @@ function applyCompanionConversationTitles(
   };
 }
 
-function mergeCompanionConversationLists(
-  current: CompanionConversationListResult,
-  nextPage: CompanionConversationListResult,
-): CompanionConversationListResult {
-  const mergedArchived = [...current.archived];
-  const seenArchivedIds = new Set(mergedArchived.map((session) => session.id));
-
-  for (const session of nextPage.archived) {
-    if (seenArchivedIds.has(session.id)) {
-      continue;
-    }
-
-    seenArchivedIds.add(session.id);
-    mergedArchived.push(session);
-  }
-
-  return {
-    ...nextPage,
-    archived: mergedArchived,
-    archivedOffset: 0,
-    archivedLimit: mergedArchived.length,
-    hasMoreArchived: mergedArchived.length < nextPage.archivedTotal,
-  };
-}
-
 function setCompanionConversationArchivedStateInList(
   current: CompanionConversationListResult,
   sessionId: string,
@@ -295,12 +275,12 @@ function setCompanionConversationArchivedStateInList(
 
   const destination = archived
     ? 'archived'
-    : session.isLive
-      ? 'live'
-      : session.needsAttention
-        ? 'needsReview'
-        : workspaceSessionIdSet.has(sessionId)
-          ? 'active'
+    : workspaceSessionIdSet.has(sessionId)
+      ? 'active'
+      : session.isLive
+        ? 'live'
+        : session.needsAttention
+          ? 'needsReview'
           : 'archived';
 
   const nextLive = destination === 'live'
@@ -761,13 +741,10 @@ export function CompanionConversationsPage() {
     notificationPermission,
     requestNotificationPermission,
   } = useCompanionLayoutContext();
-  const { setTopBarRightAction } = useCompanionTopBarAction();
-  const [creating, setCreating] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [actionBusyKind, setActionBusyKind] = useState<'archive' | 'resume' | null>(null);
   const [revealedActionId, setRevealedActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const syncTimerRef = useRef<number | null>(null);
   const fetchConversationList = useCallback(
@@ -777,7 +754,9 @@ export function CompanionConversationsPage() {
   const {
     data,
     loading,
+    refreshing,
     error: loadError,
+    refetch,
     replaceData,
   } = useApi(fetchConversationList, `companion-conversation-list:${versions.sessions}`);
   const [sections, setSections] = useState<CompanionConversationListResult | null>(() => data);
@@ -817,43 +796,38 @@ export function CompanionConversationsPage() {
     () => new Set(titledSections?.workspaceSessionIds ?? []),
     [titledSections],
   );
-  const liveSessions = titledSections?.live ?? [];
-  const needsReviewSessions = titledSections?.needsReview ?? [];
-  const activeSessions = titledSections?.active ?? [];
-  // "Live now" shows all workspace sessions (open/pinned tabs from web UI),
-  // plus any currently streaming sessions that aren't already in the workspace.
-  const liveNowSessions = useMemo(() => {
-    const wsIds = titledSections?.workspaceSessionIds ?? [];
-    const wsSet = new Set(wsIds);
-    const inWorkspace = [...activeSessions, ...needsReviewSessions];
-    const notInWorkspace = liveSessions.filter((s) => !wsSet.has(s.id));
-    const wsPosition = new Map(wsIds.map((id, index) => [id, index]));
-    inWorkspace.sort((a, b) => (wsPosition.get(a.id) ?? 0) - (wsPosition.get(b.id) ?? 0));
-    notInWorkspace.sort((left, right) => {
-      const leftTs = left.lastActivityAt ?? left.timestamp;
-      const rightTs = right.lastActivityAt ?? right.timestamp;
-      return rightTs.localeCompare(leftTs);
-    });
-    return [...inWorkspace, ...notInWorkspace];
-  }, [activeSessions, needsReviewSessions, liveSessions, titledSections]);
-  // Sort sessions by their position in workspaceSessionIds (matching web UI order),
-  const orderedArchivedSessions = useMemo(() => {
-    const wsIds = titledSections?.workspaceSessionIds ?? [];
-    const wsSet = new Set(wsIds);
-    const explicitlyArchived = titledSections?.archived ?? [];
-    // Include workspace sessions that were explicitly archived, in workspace order.
-    const archivedFromWorkspace = explicitlyArchived.filter((s) => wsSet.has(s.id));
-    const orphaned = explicitlyArchived.filter((s) => !wsSet.has(s.id));
-    archivedFromWorkspace.sort((a, b) => wsIds.indexOf(a.id) - wsIds.indexOf(b.id));
-    orphaned.sort((left, right) => {
-      const leftTs = left.lastActivityAt ?? left.timestamp;
-      const rightTs = right.lastActivityAt ?? right.timestamp;
-      return rightTs.localeCompare(leftTs);
-    });
-    return [...archivedFromWorkspace, ...orphaned];
+  const orderedOpenSessions = useMemo(() => {
+    if (!titledSections) {
+      return [];
+    }
+
+    const sessionById = new Map(titledSections.active.map((session) => [session.id, session]));
+    return titledSections.workspaceSessionIds
+      .map((id) => sessionById.get(id) ?? null)
+      .filter((session): session is SessionMeta => session !== null);
   }, [titledSections]);
-  const totalConversationCount = liveNowSessions.length + orderedArchivedSessions.length;
-  const overviewLabel = buildCompanionOverviewLabel(liveNowSessions.length, orderedArchivedSessions.length);
+  const orderedLiveElsewhereSessions = useMemo(
+    () => sortCompanionSessions(titledSections?.live ?? []).filter((session) => !workspaceSessionIds.has(session.id)),
+    [titledSections, workspaceSessionIds],
+  );
+  const orderedNeedsReviewSessions = useMemo(
+    () => sortCompanionSessions((titledSections?.needsReview ?? []).filter((session) => !workspaceSessionIds.has(session.id))),
+    [titledSections, workspaceSessionIds],
+  );
+  const orderedArchivedSessions = useMemo(
+    () => sortCompanionSessions(titledSections?.archived ?? []),
+    [titledSections],
+  );
+  const totalConversationCount = orderedOpenSessions.length
+    + orderedLiveElsewhereSessions.length
+    + orderedNeedsReviewSessions.length
+    + orderedArchivedSessions.length;
+  const overviewLabel = buildCompanionOverviewLabel({
+    openCount: orderedOpenSessions.length,
+    liveElsewhereCount: orderedLiveElsewhereSessions.length,
+    needsReviewCount: orderedNeedsReviewSessions.length,
+    archivedCount: orderedArchivedSessions.length,
+  });
   const stateNote = buildCompanionStateNote({
     standalone,
     installAvailable,
@@ -863,64 +837,15 @@ export function CompanionConversationsPage() {
   });
   const visibleError = error ?? loadError;
 
-  const handleCreateConversation = useCallback(async () => {
-    if (creating) {
-      return;
-    }
-
-    setCreating(true);
+  const handleRefresh = useCallback(async () => {
     setError(null);
-
-    try {
-      const { id } = await api.createLiveSession();
-      navigate(buildCompanionConversationPath(id));
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setCreating(false);
+    const next = await refetch({ resetLoading: sections === null });
+    if (next) {
+      setSections(next);
     }
-  }, [creating, navigate]);
+  }, [refetch, sections]);
 
-  // Top bar actions now handled by CompanionLayout bottom nav (Chats | +Chat | +Note | Knowledge)
-  // No custom topBarRightAction needed here
-
-  useEffect(() => {
-    if (visibleError) {
-      // Errors are shown inline in content; no toast needed.
-    }
-  }, [visibleError]);
-
-  /**
-   * Same tab-state logic as `setConversationArchivedState` but computes the layout
-   * without writing anywhere. Used by the companion for optimistic local updates
-   * before `commitConversationLayoutMerge` pushes the merged result to the server.
-   */
-  function buildCompanionSetArchivedLayout(sessionId: string, archived: boolean) {
-    const normalizedSessionId = sessionId.trim();
-    if (!normalizedSessionId) {
-      return { sessionIds: [] as string[], pinnedSessionIds: [] as string[], archivedSessionIds: [] as string[] };
-    }
-
-    // workspaceSessionIds = open + pinned from the server's last known state.
-    const wsIds = titledSections?.workspaceSessionIds ?? [];
-    // archivedSessionIds come from the list result's archived[] items.
-    const archivedIds = (titledSections?.archived ?? []).map((s) => s.id);
-
-    const pinnedIds = wsIds; // companion list doesn't separate open/pinned; treat all as "workspace"
-    const openIds = wsIds; // same — used only to reconstruct pinned vs open
-
-    const nextPinnedSessionIds = pinnedIds.filter((id) => id !== normalizedSessionId);
-    const openWithoutSession = openIds.filter((id) => id !== normalizedSessionId);
-    const archivedWithoutSession = archivedIds.filter((id) => id !== normalizedSessionId);
-    const nextSessionIds = archived ? openWithoutSession : [...openWithoutSession, normalizedSessionId];
-    const nextArchivedSessionIds = archived
-      ? [...archivedWithoutSession, normalizedSessionId]
-      : archivedWithoutSession;
-
-    return { sessionIds: nextSessionIds, pinnedSessionIds: nextPinnedSessionIds, archivedSessionIds: nextArchivedSessionIds };
-  }
-
-  const handleSetArchived = useCallback((sessionId: string, archived: boolean) => {
+  const handleSetArchived = useCallback(async (sessionId: string, archived: boolean) => {
     if (actionBusyId) {
       return;
     }
@@ -930,12 +855,11 @@ export function CompanionConversationsPage() {
     setActionBusyKind('archive');
     setError(null);
     try {
-      // Build the intended layout locally for optimistic UI update.
-      const intendedLayout = buildCompanionSetArchivedLayout(sessionId, archived);
       setSections((current) => current ? setCompanionConversationArchivedStateInList(current, sessionId, archived) : current);
 
-      // Merge with server state before writing so web UI tabs are preserved.
-      void commitConversationLayoutMerge(intendedLayout);
+      const currentLayout = await api.openConversationTabs();
+      const nextLayout = buildCompanionArchivedLayout(currentLayout, sessionId, archived);
+      await api.setOpenConversationTabs(nextLayout.sessionIds, nextLayout.pinnedSessionIds, nextLayout.archivedSessionIds);
 
       if (typeof window !== 'undefined') {
         if (syncTimerRef.current !== null) {
@@ -949,6 +873,7 @@ export function CompanionConversationsPage() {
         }, COMPANION_ARCHIVE_SYNC_DELAY_MS);
       }
     } catch (nextError) {
+      await refreshSections(Math.max(sections?.archived.length ?? COMPANION_ARCHIVED_PAGE_SIZE, COMPANION_ARCHIVED_PAGE_SIZE));
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setActionBusyId(null);
@@ -980,30 +905,6 @@ export function CompanionConversationsPage() {
     }
   }, [actionBusyId, navigate]);
 
-  const handleLoadMoreArchived = useCallback(async () => {
-    if (!sections || loadingMore || !sections.hasMoreArchived) {
-      return;
-    }
-
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const nextPage = await api.companionConversationList({
-        archivedOffset: sections.archived.length,
-        archivedLimit: COMPANION_ARCHIVED_PAGE_SIZE,
-      });
-      const next = mergeCompanionConversationLists(sections, nextPage);
-      setSections(next);
-      replaceData(next);
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [loadingMore, replaceData, sections]);
-
-
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
@@ -1017,7 +918,46 @@ export function CompanionConversationsPage() {
               {titledSections ? <span className="text-[11px] text-dim">{overviewLabel}</span> : null}
               {stateNote ? <span className={`text-[11px] ${stateNote.className}`}>{stateNote.text}</span> : null}
             </div>
+            {status !== 'open' ? (
+              <p className="mt-1 text-[11px] text-secondary">
+                {status === 'offline'
+                  ? 'Live updates are offline. Refresh to resync the companion with the desktop workspace.'
+                  : 'Live updates are reconnecting. You can refresh if this view looks stale.'}
+              </p>
+            ) : null}
             {visibleError ? <p className="mt-1 text-[11px] text-danger">{visibleError}</p> : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => { void handleRefresh(); }}
+                disabled={refreshing}
+                className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                style={COMPANION_TOUCH_BUTTON_STYLE}
+              >
+                {refreshing ? 'Refreshing…' : 'Refresh'}
+              </button>
+              {installAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => { void promptInstall(); }}
+                  disabled={installBusy}
+                  className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                  style={COMPANION_TOUCH_BUTTON_STYLE}
+                >
+                  {installBusy ? 'Installing…' : 'Install app'}
+                </button>
+              ) : null}
+              {notificationsSupported && secureContext && notificationPermission === 'default' ? (
+                <button
+                  type="button"
+                  onClick={() => { void requestNotificationPermission(); }}
+                  className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+                  style={COMPANION_TOUCH_BUTTON_STYLE}
+                >
+                  Enable alerts
+                </button>
+              ) : null}
+            </div>
           </div>
           {loading && !titledSections ? (
             <p className="px-4 text-[13px] text-dim">Loading conversations…</p>
@@ -1030,8 +970,16 @@ export function CompanionConversationsPage() {
             </div>
           ) : titledSections ? (
             <>
-              {liveNowSessions.length > 0 ? (
-                <SessionSection title="Live now" sessions={liveNowSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+              {orderedOpenSessions.length > 0 ? (
+                <SessionSection title="Open in workspace" sessions={orderedOpenSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+              ) : null}
+
+              {orderedLiveElsewhereSessions.length > 0 ? (
+                <SessionSection title="Live elsewhere" sessions={orderedLiveElsewhereSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
+              ) : null}
+
+              {orderedNeedsReviewSessions.length > 0 ? (
+                <SessionSection title="Needs review" sessions={orderedNeedsReviewSessions} workspaceSessionIds={new Set()} actionBusyId={actionBusyId} actionBusyKind={actionBusyKind} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onResume={handleResumeConversation} onRevealActions={setRevealedActionId} />
               ) : null}
 
               {orderedArchivedSessions.length > 0 ? (

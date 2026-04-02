@@ -2,7 +2,7 @@ import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { listAllProjectIds } from '@personal-agent/core';
 import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
-import { readWebUiConfig, readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
+import { readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
 import { writeInternalAttentionEntry } from '../shared/internalAttention.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import { logError, logWarn } from '../middleware/index.js';
@@ -129,10 +129,16 @@ function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): 
 
 async function handleOpenConversationLayoutWriteRequest(req: Request, res: Response): Promise<void> {
   try {
-    const { sessionIds, pinnedSessionIds, archivedConversationIds } = req.body as {
+    const {
+      sessionIds,
+      pinnedSessionIds,
+      archivedConversationIds,
+      archivedSessionIds,
+    } = req.body as {
       sessionIds?: unknown;
       pinnedSessionIds?: unknown;
       archivedConversationIds?: unknown;
+      archivedSessionIds?: unknown;
     };
 
     if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
@@ -150,8 +156,13 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       return;
     }
 
-    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedConversationIds === undefined) {
-      res.status(400).json({ error: 'sessionIds, pinnedSessionIds, or archivedConversationIds required' });
+    if (archivedSessionIds !== undefined && !Array.isArray(archivedSessionIds)) {
+      res.status(400).json({ error: 'archivedSessionIds must be an array when provided' });
+      return;
+    }
+
+    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedConversationIds === undefined && archivedSessionIds === undefined) {
+      res.status(400).json({ error: 'sessionIds, pinnedSessionIds, or archived conversation ids required' });
       return;
     }
 
@@ -159,7 +170,7 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       (settingsFile) => writeSavedWebUiPreferences({
         openConversationIds: sessionIds as string[] | null | undefined,
         pinnedConversationIds: pinnedSessionIds as string[] | null | undefined,
-        archivedConversationIds: archivedConversationIds as string[] | null | undefined,
+        archivedConversationIds: (archivedConversationIds ?? archivedSessionIds) as string[] | null | undefined,
       }, settingsFile),
       { runtimeSettingsFile: getWebUiSettingsFileFn() },
     );

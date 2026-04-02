@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
 import { Pill, cx } from '../components/ui';
+import { shouldShowScrollToBottomControl } from '../conversationScroll';
 import { useCompanionTopBarAction } from './CompanionLayout';
 import { useApi } from '../hooks';
 import { filterMentionItems, type MentionItem } from '../conversationMentions';
@@ -650,7 +651,7 @@ export function CompanionConversationPage() {
     () => (id ? `${id}:${isLiveSession ? 'live' : 'saved'}` : null),
     [id, isLiveSession],
   );
-  const { syncScrollStateFromDom, capturePrependRestore } = useConversationScroll({
+  const { atBottom, syncScrollStateFromDom, scrollToBottom, capturePrependRestore } = useConversationScroll({
     conversationId: id ?? null,
     messages,
     scrollRef,
@@ -762,6 +763,7 @@ export function CompanionConversationPage() {
   const composerFooterPaddingBottom = keyboardOpen
     ? '0.5rem'
     : 'calc(env(safe-area-inset-bottom) + 0.75rem)';
+  const showJumpToLatestControl = shouldShowScrollToBottomControl(messages.length, atBottom);
 
   useEffect(() => {
     if (orderedDeferredResumes.length === 0) {
@@ -1233,6 +1235,15 @@ export function CompanionConversationPage() {
               windowingBadgeTopOffset={historicalHasOlderBlocks ? COMPANION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
           )}
+          {showJumpToLatestControl ? (
+            <button
+              type="button"
+              onClick={() => scrollToBottom({ behavior: 'smooth' })}
+              className="sticky bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border-default bg-base/95 px-3 py-2 text-[12px] font-medium text-primary shadow-[0_10px_30px_rgba(15,23,42,0.18)] backdrop-blur"
+            >
+              Jump to latest
+            </button>
+          ) : null}
         </div>
       </div>
 
