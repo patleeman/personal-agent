@@ -65,8 +65,8 @@ describe('resources profile loader', () => {
     writeFile(join(profilesRoot, 'datadog', 'agent', 'AGENTS.md'), '# Durable datadog\n');
     writeFile(join(syncRoot, 'settings', 'global.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(syncRoot, 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
-    writeFile(join(syncRoot, 'skills', 'shared-skill', 'INDEX.md'), '---\nname: shared-skill\ndescription: Shared\n---\n');
-    writeFile(join(syncRoot, 'skills', 'datadog-skill', 'INDEX.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
+    writeFile(join(syncRoot, 'nodes', 'shared-skill', 'INDEX.md'), '---\nid: shared-skill\ntitle: Shared skill\nsummary: Shared\ndescription: Shared\ntags:\n  - type:skill\n  - profile:shared\n---\n');
+    writeFile(join(syncRoot, 'nodes', 'datadog-skill', 'INDEX.md'), '---\nid: datadog-skill\ntitle: Datadog skill\nsummary: Datadog\ndescription: Datadog\ntags:\n  - type:skill\n  - profile:datadog\n---\n');
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
@@ -89,8 +89,8 @@ describe('resources profile loader', () => {
       join(local, 'agent', 'settings.json'),
     ]);
     expect(resolved.skillDirs).toEqual([
-      join(syncRoot, 'skills', 'datadog-skill'),
-      join(syncRoot, 'skills', 'shared-skill'),
+      join(syncRoot, 'nodes', 'datadog-skill'),
+      join(syncRoot, 'nodes', 'shared-skill'),
     ]);
     expect(resolved.extensionEntries).toEqual([join(repo, 'extensions', 'index.ts')]);
   });
@@ -154,10 +154,13 @@ describe('resources profile loader', () => {
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'high',
     }));
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `-----
-name: checkpoint
+    writeFile(join(syncRoot, 'nodes', 'checkpoint', 'INDEX.md'), `---
+id: checkpoint
+title: Checkpoint
+summary: Commit and push the agent's current work.
 description: Commit and push the agent's current work.
-kind: skill
+tags:
+  - type:skill
 ---`);
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
@@ -189,10 +192,13 @@ kind: skill
     writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
     writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
     writeFile(join(profilesRoot, 'shared.json'), '{"title":"Shared"}\n');
-    writeFile(join(syncRoot, 'skills', 'checkpoint', 'INDEX.md'), `-----
-name: checkpoint
+    writeFile(join(syncRoot, 'nodes', 'checkpoint', 'INDEX.md'), `---
+id: checkpoint
+title: Checkpoint
+summary: Commit and push
 description: Commit and push
-kind: skill
+tags:
+  - type:skill
 ---`);
 
     const resolved = resolveResourceProfile('shared', { repoRoot: repo, profilesRoot });
@@ -252,7 +258,7 @@ kind: skill
     const syncRoot = join(profilesRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(syncRoot, 'skills', 'test', 'INDEX.md'), '---\nname: test\ndescription: Skill\n---\n');
+    writeFile(join(syncRoot, 'nodes', 'test', 'INDEX.md'), '---\nid: test\ntitle: Test\nsummary: Skill\ndescription: Skill\ntags:\n  - type:skill\n---\n');
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'role\n');
     writeFile(join(repo, 'themes/theme.json'), '{}\n');
 
@@ -267,7 +273,7 @@ kind: skill
     expect(args).toContain('-e');
     expect(args).toContain(join(repo, 'extensions/basic/index.ts'));
     expect(args).toContain('--skill');
-    expect(args).toContain(join(syncRoot, 'skills', 'test'));
+    expect(args).toContain(join(syncRoot, 'nodes', 'test'));
     expect(args).toContain('--theme');
     expect(args).toContain(join(repo, 'themes/theme.json'));
   });

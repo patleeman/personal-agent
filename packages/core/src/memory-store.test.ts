@@ -27,7 +27,7 @@ function writeFile(path: string, content: string): void {
 }
 
 function memoryPath(profilesRoot: string, memoryId: string): string {
-  return join(profilesRoot, '..', 'notes', memoryId, 'INDEX.md');
+  return join(profilesRoot, '..', 'nodes', memoryId, 'INDEX.md');
 }
 
 afterEach(async () => {
@@ -35,7 +35,7 @@ afterEach(async () => {
 });
 
 describe('memory store organization metadata', () => {
-  it('parses skill-style memory packages and tracks package-local references', () => {
+  it('parses note nodes from sync/nodes and tracks package-local references', () => {
     const profilesRoot = createTempDir('personal-agent-memory-store-');
 
     writeFile(
@@ -51,10 +51,12 @@ links:
   related:
     - runpod
 updatedAt: 2026-03-18
-metadata:
-  type: project
-  area: personal-agent
-  role: structure
+tags:
+  - area:personal-agent
+  - role:structure
+  - noteType:project
+  - status:active
+  - type:note
 ---
 # Personal-agent
 
@@ -63,7 +65,7 @@ Hub doc.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'web-ui.md'),
+      join(profilesRoot, '..', 'nodes', 'personal-agent', 'references', 'web-ui.md'),
       `---
 name: web-ui
 description: Durable UI notes.
@@ -78,7 +80,7 @@ Keep the right rail visible and resizable.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'state-model.md'),
+      join(profilesRoot, '..', 'nodes', 'personal-agent', 'references', 'state-model.md'),
       `# Project state model
 
 Keep planning state durable.
@@ -100,7 +102,7 @@ Keep planning state durable.
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
-    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'notes', 'personal-agent'));
+    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'nodes', 'personal-agent'));
     expect(references.map((reference) => reference.title)).toEqual(['Project state model', 'web-ui']);
     expect(references[1]).toMatchObject({
       relativePath: 'references/web-ui.md',
@@ -114,7 +116,7 @@ Keep planning state durable.
     expect(filtered.map((doc) => doc.id)).toEqual(['personal-agent']);
   });
 
-  it('creates memory packages with skill-style frontmatter', () => {
+  it('creates note nodes in sync/nodes', () => {
     const profilesRoot = createTempDir('personal-agent-memory-create-');
 
     const created = createMemoryDoc({
@@ -139,11 +141,11 @@ Keep planning state durable.
     const fileContent = readFileSync(created.filePath, 'utf-8');
     expect(created.filePath).toBe(memoryPath(profilesRoot, 'memory-index'));
     expect(fileContent).toContain('id: memory-index');
-    expect(fileContent).toContain('kind: note');
+    expect(fileContent).toContain('type:note');
     expect(fileContent).toContain('summary: Top-level memory hub.');
     expect(fileContent).toContain('description: Tell the agent to use this as the top-level routing note for shared memory.');
     expect(fileContent).toContain('title: Memory index');
-    expect(fileContent).toContain('area: notes');
+    expect(fileContent).toContain('area:notes');
     expect(fileContent).toContain('structure');
     expect(fileContent).toContain('links:');
     expect(fileContent).toContain('related:');
@@ -166,8 +168,10 @@ links:
     - missing-hub
     - runpod
 updatedAt: 2026-03-18
-metadata:
-  type: note
+tags:
+  - noteType:note
+  - status:active
+  - type:note
 ---
 # Runpod
 

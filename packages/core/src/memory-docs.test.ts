@@ -25,9 +25,9 @@ afterEach(async () => {
 });
 
 describe('note node paths', () => {
-  it('stores shared note nodes under the sync notes root', () => {
+  it('stores shared note nodes under the sync nodes root', () => {
     const profilesRoot = createTempProfilesRoot();
-    expect(getMemoryDocsDir({ profilesRoot })).toBe(join(profilesRoot, '..', 'notes'));
+    expect(getMemoryDocsDir({ profilesRoot })).toBe(join(profilesRoot, '..', 'nodes'));
   });
 
   it('migrates legacy per-profile memory files into note nodes', () => {
@@ -40,19 +40,19 @@ describe('note node paths', () => {
 
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
 
-    expect(result.memoryDir).toBe(join(profilesRoot, '..', 'notes'));
+    expect(result.memoryDir).toBe(join(profilesRoot, '..', 'nodes'));
     expect(result.migratedFiles).toEqual([
-      { from: assistantMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
-      { from: datadogMemory, to: join(profilesRoot, '..', 'notes', 'infra', 'INDEX.md') },
+      { from: assistantMemory, to: join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md') },
+      { from: datadogMemory, to: join(profilesRoot, '..', 'nodes', 'infra', 'INDEX.md') },
     ]);
 
     expect(existsSync(assistantMemory)).toBe(false);
     expect(existsSync(datadogMemory)).toBe(false);
-    const runpod = readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8');
+    const runpod = readFileSync(join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md'), 'utf-8');
     expect(runpod).toContain('id: runpod');
-    expect(runpod).toContain('kind: note');
     expect(runpod).toContain('summary: Notes');
     expect(runpod).toContain('title: Runpod');
+    expect(runpod).toContain('type:note');
   });
 
   it('migrates legacy shared memory packages into note nodes', () => {
@@ -77,17 +77,17 @@ metadata:
     writeFile(legacyReferencePath, '# Usage\n\nShort-lived GPU boxes.\n');
 
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
-    const targetPath = join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md');
+    const targetPath = join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md');
 
     expect(result.migratedFiles).toContainEqual({ from: legacyPackagePath, to: targetPath });
     expect(existsSync(targetPath)).toBe(true);
-    expect(existsSync(join(profilesRoot, '..', 'notes', 'runpod', 'references', 'usage.md'))).toBe(true);
+    expect(existsSync(join(profilesRoot, '..', 'nodes', 'runpod', 'references', 'usage.md'))).toBe(true);
 
     const migrated = readFileSync(targetPath, 'utf-8');
     expect(migrated).toContain('id: runpod');
-    expect(migrated).toContain('kind: note');
     expect(migrated).toContain('summary: Runpod notes.');
-    expect(migrated).toContain('structure');
+    expect(migrated).toContain('type:note');
+    expect(migrated).toContain('role:structure');
   });
 
   it('migrates flat shared memory files into note nodes', () => {
@@ -99,9 +99,9 @@ metadata:
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
 
     expect(result.migratedFiles).toEqual([
-      { from: flatMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
+      { from: flatMemory, to: join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md') },
     ]);
     expect(existsSync(flatMemory)).toBe(false);
-    expect(readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8')).toContain('id: runpod');
+    expect(readFileSync(join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md'), 'utf-8')).toContain('id: runpod');
   });
 });

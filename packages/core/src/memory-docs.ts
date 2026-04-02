@@ -11,7 +11,7 @@ import {
 } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getDurableNotesDir, getDurableProfilesDir } from './runtime/paths.js';
+import { getDurableNodesDir, getDurableProfilesDir } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {
   profilesRoot?: string;
@@ -37,7 +37,7 @@ function resolveProfilesRootForMemory(options: ResolveMemoryDocsOptions = {}): s
 }
 
 export function getMemoryDocsDir(options: ResolveMemoryDocsOptions = {}): string {
-  return getDurableNotesDir(dirname(resolveProfilesRootForMemory(options)));
+  return getDurableNodesDir(dirname(resolveProfilesRootForMemory(options)));
 }
 
 function resolveLegacyMemoryDir(options: ResolveMemoryDocsOptions = {}): string {
@@ -134,10 +134,10 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
       id: fallbackId,
       content: stringifyMarkdown({
         id: fallbackId,
-        kind: 'note',
         title,
         summary,
         status: 'active',
+        tags: ['status:active', 'type:note'],
       }, rawContent.trim().length > 0 ? rawContent : `# ${title}\n\n${summary}`),
     };
   }
@@ -147,85 +147,63 @@ function normalizeNoteNodeMarkdown(rawContent: string, fallbackId: string): { id
   const metadata = metadataValue && typeof metadataValue === 'object' && !Array.isArray(metadataValue)
     ? { ...(metadataValue as Record<string, unknown>) }
     : {};
+  const linksValue = attributes.links;
+  const links = linksValue && typeof linksValue === 'object' && !Array.isArray(linksValue)
+    ? { ...(linksValue as Record<string, unknown>) }
+    : {};
+  const legacyTags = Array.isArray(attributes.tags)
+    ? (attributes.tags as unknown[])
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+    : [];
 
-  if (readOptionalString(attributes.kind) === 'note') {
-    const id = readOptionalString(attributes.id) ?? fallbackId;
-    const title = readOptionalString(attributes.title) ?? extractMarkdownTitle(parsed.body) ?? humanizeId(id);
-    const summary = readOptionalString(attributes.summary) ?? extractFirstParagraph(parsed.body) ?? `Durable note for ${title}.`;
-    const status = readOptionalString(attributes.status) ?? 'active';
-    const updatedAt = readOptionalString(attributes.updatedAt);
-    const frontmatter: Record<string, unknown> = {
-      ...attributes,
-      id,
-      kind: 'note',
-      title,
-      summary,
-      status,
-      ...(updatedAt ? { updatedAt } : {}),
-      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
-    };
-    delete frontmatter.links;
-    delete frontmatter.parent;
-    delete frontmatter.related;
-    return {
-      id,
-      content: stringifyMarkdown(frontmatter, parsed.body.trim().length > 0 ? parsed.body : `# ${title}\n\n${summary}`),
-    };
-  }
-
-  const legacyId = readOptionalString(attributes.name)
-    ?? readOptionalString(attributes.id)
+  const id = readOptionalString(attributes.id)
+    ?? readOptionalString(attributes.name)
     ?? fallbackId;
-  const legacySummary = readOptionalString(attributes.description)
-    ?? readOptionalString(attributes.summary)
-    ?? extractFirstParagraph(parsed.body)
-    ?? `Durable note for ${humanizeId(legacyId)}.`;
-  const legacyTitle = readOptionalString(metadata.title)
-    ?? readOptionalString(attributes.title)
+  const title = readOptionalString(attributes.title)
+    ?? readOptionalString(metadata.title)
     ?? extractMarkdownTitle(parsed.body)
-    ?? humanizeId(legacyId);
-  const legacyStatus = readOptionalString(metadata.status)
-    ?? readOptionalString(attributes.status)
+    ?? humanizeId(id);
+  const summary = readOptionalString(attributes.summary)
+    ?? readOptionalString(attributes.description)
+    ?? extractFirstParagraph(parsed.body)
+    ?? `Durable note for ${title}.`;
+  const description = readOptionalString(attributes.description);
+  const rawRole = readOptionalString(metadata.role) ?? readOptionalString(attributes.role);
+  const role = rawRole === 'hub' ? 'structure' : rawRole;
+  const status = readOptionalString(attributes.status)
+    ?? readOptionalString(metadata.status)
     ?? 'active';
-  const legacyType = readOptionalString(metadata.type)
+  const noteType = readOptionalString(metadata.type)
     ?? readOptionalString(attributes.type);
-  const legacyArea = readOptionalString(metadata.area)
+  const area = readOptionalString(metadata.area)
     ?? readOptionalString(attributes.area);
-  const legacyRole = readOptionalString(metadata.role)
-    ?? readOptionalString(attributes.role);
   const updatedAt = readOptionalString(metadata.updated)
     ?? readOptionalString(attributes.updatedAt)
     ?? readOptionalString(attributes.updated);
 
-  const extraMetadata = { ...metadata };
-  delete extraMetadata.title;
-  delete extraMetadata.status;
-  delete extraMetadata.type;
-  delete extraMetadata.area;
-  delete extraMetadata.role;
-  delete extraMetadata.parent;
-  delete extraMetadata.related;
-  delete extraMetadata.tags;
-  delete extraMetadata.updated;
-
-  const nextMetadata: Record<string, unknown> = {
-    ...(legacyType ? { type: legacyType } : {}),
-    ...(legacyArea ? { area: legacyArea } : {}),
-    ...(legacyRole ? { role: legacyRole === 'hub' ? 'structure' : legacyRole } : {}),
-    ...extraMetadata,
-  };
+  const tags = [...new Set([
+    ...legacyTags.filter((tag) => !/^type:/i.test(tag) && !/^status:/i.test(tag) && !/^noteType:/i.test(tag) && !/^area:/i.test(tag) && !/^role:/i.test(tag)),
+    'type:note',
+    `status:${status}`,
+    ...(noteType ? [`noteType:${noteType}`] : []),
+    ...(area ? [`area:${area}`] : []),
+    ...(role ? [`role:${role}`] : []),
+  ])].sort((left, right) => left.localeCompare(right));
 
   return {
-    id: legacyId,
+    id,
     content: stringifyMarkdown({
-      id: legacyId,
-      kind: 'note',
-      title: legacyTitle,
-      summary: legacySummary,
-      status: legacyStatus,
+      id,
+      title,
+      summary,
+      ...(description ? { description } : {}),
+      status,
       ...(updatedAt ? { updatedAt } : {}),
-      ...(Object.keys(nextMetadata).length > 0 ? { metadata: nextMetadata } : {}),
-    }, parsed.body.trim().length > 0 ? parsed.body : `# ${legacyTitle}\n\n${legacySummary}`),
+      tags,
+      ...(Object.keys(links).length > 0 ? { links } : {}),
+    }, parsed.body.trim().length > 0 ? parsed.body : `# ${title}\n\n${summary}`),
   };
 }
 
