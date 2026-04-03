@@ -13,7 +13,7 @@ type PageFilter = 'active' | 'archived' | 'all';
 
 function pageRecordLabel(page: NodeBrowserSummary): string {
   const archived = page.status.trim().toLowerCase() === 'archived';
-  return archived ? 'Archived page' : 'Page';
+  return archived ? 'Archived doc' : 'Doc';
 }
 
 function pageRecordAside(page: NodeBrowserSummary): string | null {
@@ -75,17 +75,17 @@ function memoryWorkItemDotClass(item: MemoryWorkItem): string {
 function memoryWorkItemLabel(item: MemoryWorkItem): string {
   switch (item.status) {
     case 'failed':
-      return 'Vault-doc distillation failed';
+      return 'Doc distillation failed';
     case 'interrupted':
-      return 'Vault-doc distillation interrupted';
+      return 'Doc distillation interrupted';
     case 'queued':
-      return 'Queued for vault-doc distillation';
+      return 'Queued for doc distillation';
     case 'waiting':
-      return 'Waiting to resume vault-doc distillation';
+      return 'Waiting to resume doc distillation';
     case 'recovering':
-      return 'Recovering vault-doc distillation';
+      return 'Recovering doc distillation';
     default:
-      return 'Distilling into a vault doc';
+      return 'Distilling into a doc';
   }
 }
 
@@ -125,7 +125,7 @@ function WorkQueueRow({
         <ToolbarButton
           onClick={() => onRetry(item)}
           disabled={actionDisabled}
-          title="Retry vault-doc distillation"
+          title="Retry doc distillation"
         >
           {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
         </ToolbarButton>
@@ -224,7 +224,7 @@ export function PagesBrowserRail() {
       setQueueNotice(`Started recovery run ${result.runId} for ${result.count} failed ${result.count === 1 ? 'extraction' : 'extractions'}.`);
       await queueState.refetch({ resetLoading: false });
     } catch (error) {
-      setQueueError(error instanceof Error ? error.message : 'Could not start failed page-distillation recovery.');
+      setQueueError(error instanceof Error ? error.message : 'Could not start failed doc-distillation recovery.');
     } finally {
       setStartingBatchRecovery(false);
     }
@@ -235,8 +235,8 @@ export function PagesBrowserRail() {
       <div className="shrink-0 space-y-3 border-b border-border-subtle px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="ui-card-title">Vault docs</p>
-            <p className="ui-card-meta mt-1">Browse canonical vault docs and open them in the main workspace.</p>
+            <p className="ui-card-title">Docs</p>
+            <p className="ui-card-meta mt-1">Browse canonical docs and open them in the main workspace.</p>
           </div>
           <div className="flex items-center gap-2">
             <Link to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`} className="ui-toolbar-button text-accent">
@@ -273,7 +273,7 @@ export function PagesBrowserRail() {
           </select>
         ) : null}
 
-        <div className="ui-segmented-control" role="group" aria-label="Page filter">
+        <div className="ui-segmented-control" role="group" aria-label="Doc filter">
           {(['active', 'archived', 'all'] as PageFilter[]).map((value) => (
             <button
               key={value}
@@ -289,29 +289,29 @@ export function PagesBrowserRail() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search pages"
+          placeholder="Search docs"
           className={INPUT_CLASS}
           autoComplete="off"
           spellCheck={false}
         />
 
         <p className="ui-card-meta">
-          {query.trim() ? `Showing ${filteredPages.length} of ${pages.length}.` : `${pages.length} pages.`}
+          {query.trim() ? `Showing ${filteredPages.length} of ${pages.length}.` : `${pages.length} docs.`}
         </p>
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {nodesState.loading && !nodesState.data ? <LoadingState label="Loading pages…" className="px-0 py-0" /> : null}
-        {nodesState.error && !nodesState.data ? <ErrorState message={`Unable to load pages: ${nodesState.error}`} className="px-0 py-0" /> : null}
+        {nodesState.loading && !nodesState.data ? <LoadingState label="Loading docs…" className="px-0 py-0" /> : null}
+        {nodesState.error && !nodesState.data ? <ErrorState message={`Unable to load docs: ${nodesState.error}`} className="px-0 py-0" /> : null}
         {!nodesState.loading && !nodesState.error && queueState.loading && !queueState.data ? <LoadingState label="Loading work queue…" className="px-0 py-0" /> : null}
-        {!nodesState.loading && !nodesState.error && queueState.error ? <ErrorState message={`Unable to load page work queue: ${queueState.error}`} className="px-0 py-0" /> : null}
+        {!nodesState.loading && !nodesState.error && queueState.error ? <ErrorState message={`Unable to load doc work queue: ${queueState.error}`} className="px-0 py-0" /> : null}
 
         {!nodesState.loading && !nodesState.error && memoryQueue.length > 0 ? (
           <div className="space-y-2 border-b border-border-subtle pb-4">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="ui-section-label">Distillation runs</p>
-                <p className="ui-card-meta mt-1">Explicit page distillation and recovery runs.</p>
+                <p className="ui-card-meta mt-1">Explicit doc distillation and recovery runs.</p>
               </div>
               {recoverableQueueItems.length > 0 ? (
                 <ToolbarButton onClick={() => { void recoverFailedMemoryWorkItems(); }} disabled={Boolean(pendingQueueAction)}>
@@ -338,8 +338,8 @@ export function PagesBrowserRail() {
         {!nodesState.loading && !nodesState.error && filteredPages.length === 0 ? (
           <EmptyState
             className="py-8"
-            title={pages.length === 0 ? 'No pages yet' : 'No matches'}
-            body={pages.length === 0 ? 'Create a page to start building durable context.' : 'Try a broader search or another filter.'}
+            title={pages.length === 0 ? 'No docs yet' : 'No matches'}
+            body={pages.length === 0 ? 'Create a doc to start building durable context.' : 'Try a broader search or another filter.'}
           />
         ) : null}
 
@@ -349,9 +349,9 @@ export function PagesBrowserRail() {
               <BrowserRecordRow
                 to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`}
                 selected
-                label="Page"
-                heading="Draft page"
-                summary="Create a new page in the main workspace."
+                label="Doc"
+                heading="Draft doc"
+                summary="Create a new doc in the main workspace."
                 meta="Unsaved"
               />
             ) : null}
@@ -372,8 +372,8 @@ export function PagesBrowserRail() {
 
         {selectedPage ? (
           <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Selected page</p>
-            <p className="ui-card-meta">Open it in the Pages workspace to edit the overview, child pages, tasks, files, and linked conversations in one place.</p>
+            <p className="ui-section-label">Selected doc</p>
+            <p className="ui-card-meta">Open it in the Docs workspace to edit the overview, child docs, tasks, files, and linked conversations in one place.</p>
           </div>
         ) : null}
       </div>

@@ -5,6 +5,7 @@
  */
 
 import type { Express } from 'express';
+import { getVaultRoot } from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
 import {
   readWorkspaceSnapshot,
@@ -24,7 +25,7 @@ import {
 import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
 
-let _getDefaultWebCwd: () => string = () => process.cwd();
+let _getDefaultWebCwd: () => string = () => getVaultRoot();
 let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;
 let _draftWorkspaceCommitMessage: (input: { draftSource: ReturnType<typeof import('../workspace/workspaceBrowser.js').readWorkspaceGitDraftSource>; authFile: string; settingsFile: string }) => Promise<unknown>;
 let _authFile: string;
@@ -32,7 +33,7 @@ let _authFile: string;
 function initializeWorkspaceRoutesContext(
   context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd' | 'draftWorkspaceCommitMessage' | 'getAuthFile'>,
 ): void {
-  _getDefaultWebCwd = context.getDefaultWebCwd;
+  _getDefaultWebCwd = () => getVaultRoot();
   _resolveRequestedCwd = context.resolveRequestedCwd;
   _draftWorkspaceCommitMessage = context.draftWorkspaceCommitMessage;
   _authFile = context.getAuthFile();

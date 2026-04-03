@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { COMPANION_APP_PATH, resolveCompanionRouteRedirect } from './companion/routes';
+import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
 import { Layout } from './components/Layout';
@@ -38,6 +39,12 @@ function LegacyTaskRoutesRedirect() {
 function WorkspaceRouteRedirect() {
   const location = useLocation();
   return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
+}
+
+function LegacyWebRouteRedirect() {
+  const location = useLocation();
+  const redirectPath = resolveWebRouteRedirect(location.pathname, location.search) ?? '/workspace/files';
+  return <Navigate to={redirectPath} replace />;
 }
 
 function CompanionRouteValidationBoundary() {
@@ -539,7 +546,7 @@ export function App() {
                       <Route path="capture" element={suspendRoute(<CompanionQuickNotePage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
-                      <Route index element={<Navigate to="/conversations" replace />} />
+                      <Route index element={<Navigate to="/workspace/files" replace />} />
                       <Route path="conversations" element={suspendRoute(<ConversationsPage />)} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
@@ -552,6 +559,18 @@ export function App() {
                       <Route path="runs" element={suspendRoute(<RunsPage />)} />
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
                       <Route path="pages" element={suspendRoute(<NodesPage />)} />
+                      <Route path="knowledge" element={<LegacyWebRouteRedirect />} />
+                      <Route path="knowledge/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="projects" element={<LegacyWebRouteRedirect />} />
+                      <Route path="projects/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="notes" element={<LegacyWebRouteRedirect />} />
+                      <Route path="notes/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="memories" element={<LegacyWebRouteRedirect />} />
+                      <Route path="memories/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="skills" element={<LegacyWebRouteRedirect />} />
+                      <Route path="skills/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="nodes" element={<LegacyWebRouteRedirect />} />
+                      <Route path="nodes/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
                       <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
                       <Route path="automations" element={<LegacyTaskRoutesRedirect />} />

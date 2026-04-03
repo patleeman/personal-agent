@@ -331,10 +331,10 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse pages and open them in the main workspace.');
+    expect(html).toContain('Browse canonical docs and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Page');
-    expect(html).toContain('1 pages.');
+    expect(html).toContain('Doc');
+    expect(html).toContain('1 docs.');
     expect(html).not.toContain('Note info');
     expect(html).not.toContain('INDEX.md');
   });
@@ -451,10 +451,10 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse pages and open them in the main workspace.');
+    expect(html).toContain('Browse canonical docs and open them in the main workspace.');
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Page');
-    expect(html).toContain('1 pages.');
+    expect(html).toContain('Doc');
+    expect(html).toContain('1 docs.');
     expect(html).not.toContain('INDEX.md');
   });
 

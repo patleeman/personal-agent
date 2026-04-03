@@ -9,6 +9,7 @@ import {
   getDurableProfileSettingsFilePath,
   getDurableSettingsDir as getCanonicalLegacyDurableSettingsDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
+  getVaultRoot,
   listUnifiedSkillNodeDirs,
 } from '@personal-agent/core';
 import { homedir } from 'os';
@@ -17,6 +18,16 @@ import { fileURLToPath } from 'url';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+
+function buildVaultRootAppendSystemChunk(): string {
+  const vaultRoot = getVaultRoot();
+  return [
+    '## Durable knowledge vault',
+    `The canonical durable knowledge vault root is: ${vaultRoot}`,
+    'Use this path when you need to read or write durable notes, projects, skills, or profile files.',
+    'Treat the vault as the source of truth for durable knowledge; do not assume those files live under the runtime state sync repo.',
+  ].join('\n');
+}
 
 export interface ProfileLayer {
   name: string;
@@ -1036,6 +1047,7 @@ export function materializeProfileToAgentDir(
     : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
+    buildVaultRootAppendSystemChunk(),
     fileAppendContent ?? '',
   ]);
 

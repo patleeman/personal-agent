@@ -179,7 +179,7 @@ function formatBadgeCount(count: number): string {
 const TOP_BAR_ITEMS: Array<{ pathPrefix: string; label: string; hasBack: boolean }> = [
   { pathPrefix: COMPANION_INBOX_PATH, label: 'Inbox', hasBack: false },
   { pathPrefix: COMPANION_CONVERSATIONS_PATH, label: 'Chats', hasBack: false },
-  { pathPrefix: COMPANION_PAGES_PATH, label: 'Pages', hasBack: false },
+  { pathPrefix: COMPANION_PAGES_PATH, label: 'Docs', hasBack: false },
   { pathPrefix: COMPANION_SYSTEM_PATH, label: 'System', hasBack: true },
   { pathPrefix: COMPANION_TASKS_PATH, label: 'Tasks', hasBack: true },
 ];
@@ -529,14 +529,14 @@ export function CompanionLayout() {
   const inboxBadgeCount = activity?.unreadCount ?? 0;
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
-  const noteActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
+  const captureActive = location.pathname === COMPANION_QUICK_NOTE_PATH;
   const knowledgeActive = location.pathname.startsWith(COMPANION_PAGES_PATH);
 
   const navItems = [
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', ariaLabel: 'Open chats', Icon: ChatsIcon, badgeCount: 0, active: chatsActive },
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chat', ariaLabel: 'New chat', Icon: PlusIcon, badgeCount: 0, active: false, isAccent: true },
-    { to: COMPANION_QUICK_NOTE_PATH, label: 'Note', ariaLabel: 'Quick note', Icon: PlusIcon, badgeCount: 0, active: noteActive, isAccent: true },
-    { to: COMPANION_PAGES_PATH, label: 'Pages', ariaLabel: 'Open pages', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
+    { to: COMPANION_QUICK_NOTE_PATH, label: 'Capture', ariaLabel: 'Quick capture', Icon: PlusIcon, badgeCount: 0, active: captureActive, isAccent: true },
+    { to: COMPANION_PAGES_PATH, label: 'Docs', ariaLabel: 'Open docs', Icon: KnowledgeIcon, badgeCount: 0, active: knowledgeActive },
   ];
 
   useEffect(() => {
@@ -721,12 +721,12 @@ export function CompanionLayout() {
               <DrawerSection title="Navigate">
                 <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and workspace chats." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
-                <DrawerLink to={COMPANION_PAGES_PATH} label="Pages" detail="Browse all durable pages, then filter to pages or skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_PAGES_PATH} label="Docs" detail="Browse all durable docs, then filter to docs or skills." Icon={KnowledgeIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status, tasks, and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 
-              <DrawerSection title="Page lenses">
-                <DrawerLink to={buildCompanionPagesFilterPath('page')} label="Pages" detail="Durable work, references, and tracked page detail." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
+              <DrawerSection title="Doc lenses">
+                <DrawerLink to={buildCompanionPagesFilterPath('page')} label="Docs" detail="Durable work, references, and tracked doc detail." Icon={ProjectsIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={buildCompanionPagesFilterPath('skill')} label="Skills" detail="Reusable workflows and operating guidance." Icon={SkillsIcon} onClick={() => setMenuOpen(false)} />
               </DrawerSection>
 

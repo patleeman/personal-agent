@@ -11,6 +11,7 @@ export type MachineConfigSectionKey = 'daemon' | 'webUi' | 'executionTargets';
 
 export interface MachineConfigDocument {
   defaultProfile?: string;
+  vaultRoot?: string;
   daemon?: Record<string, unknown>;
   webUi?: Record<string, unknown>;
   executionTargets?: Record<string, unknown>;
@@ -26,6 +27,12 @@ export interface MachineWebUiConfigState {
   companionPort: number;
   useTailscaleServe: boolean;
   resumeFallbackPrompt: string;
+}
+
+export interface MachineVaultRootState {
+  currentRoot: string;
+  effectiveRoot: string;
+  source: 'env' | 'config' | 'default';
 }
 
 export interface WriteMachineWebUiConfigInput {
@@ -93,12 +100,16 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const defaultProfile = typeof document.defaultProfile === 'string' && document.defaultProfile.trim().length > 0
     ? document.defaultProfile.trim()
     : undefined;
+  const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0
+    ? document.vaultRoot.trim()
+    : undefined;
   const daemon = normalizeSection(document.daemon);
   const webUi = normalizeSection(document.webUi);
   const executionTargets = normalizeSection(document.executionTargets);
 
   return {
     ...(defaultProfile ? { defaultProfile } : {}),
+    ...(vaultRoot ? { vaultRoot } : {}),
     ...(daemon ? { daemon } : {}),
     ...(webUi ? { webUi } : {}),
     ...(executionTargets ? { executionTargets } : {}),
@@ -315,6 +326,23 @@ export function writeMachineDefaultProfile(profile: string, options: MachineConf
     ...current,
     ...(normalizedProfile.length > 0 ? { defaultProfile: normalizedProfile } : {}),
   }), options);
+}
+
+export function readMachineVaultRoot(options: MachineConfigOptions = {}): string {
+  return readMachineConfig(options).vaultRoot ?? '';
+}
+
+export function writeMachineVaultRoot(vaultRoot: string | null | undefined, options: MachineConfigOptions = {}): MachineConfigDocument {
+  const normalizedVaultRoot = typeof vaultRoot === 'string' ? vaultRoot.trim() : '';
+  return updateMachineConfig((current) => {
+    const next: MachineConfigDocument = { ...current };
+    if (normalizedVaultRoot.length > 0) {
+      next.vaultRoot = normalizedVaultRoot;
+    } else {
+      delete next.vaultRoot;
+    }
+    return next;
+  }, options);
 }
 
 function normalizeWebUiConfigPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {

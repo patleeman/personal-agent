@@ -193,14 +193,15 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Pages'));
-    expect(html.indexOf('Pages')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Vault'));
+    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Docs'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
-    expect(html).toContain('Pages');
+    expect(html).toContain('Vault');
+    expect(html).toContain('Docs');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');
@@ -277,7 +278,7 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/inbox');
 
-    expect(html).toContain('Open Pages');
+    expect(html).toContain('Open Docs');
     expect(html).toContain('note-index');
     expect(html).toContain('active-project');
     expect(html).toContain('agent-browser');
@@ -288,9 +289,9 @@ describe('Sidebar', () => {
   it('shows a draft page row in the sidebar while creating a new note page', () => {
     const html = renderSidebar('/pages?new=1&createType=note');
 
-    expect(html).toContain('Open Pages');
-    expect(html).toContain('new page');
-    expect(html).toContain('Draft page');
+    expect(html).toContain('Open Docs');
+    expect(html).toContain('new doc');
+    expect(html).toContain('Draft doc');
     expect(html).toContain('href="/pages?new=1&amp;createType=note"');
   });
 

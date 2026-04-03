@@ -12,7 +12,7 @@
  * - PERSONAL_AGENT_CACHE_PATH: Override cache directory
  */
 
-import { existsSync, realpathSync } from 'fs';
+import { existsSync, readFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, join, resolve } from 'path';
 
@@ -78,6 +78,38 @@ export function getConfigRoot(): string {
     : getDefaultConfigRoot();
 }
 
+function getMachineConfigFilePathForRuntimePaths(): string {
+  const explicit = process.env.PERSONAL_AGENT_CONFIG_FILE;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  return join(resolve(getConfigRoot()), 'config.json');
+}
+
+function readConfiguredVaultRootFromMachineConfig(): string | undefined {
+  const filePath = getMachineConfigFilePathForRuntimePaths();
+  if (!existsSync(filePath)) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const configured = (parsed as { vaultRoot?: unknown }).vaultRoot;
+    if (typeof configured !== 'string' || configured.trim().length === 0) {
+      return undefined;
+    }
+
+    return expandHomePath(configured.trim());
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Default durable knowledge vault root directory.
  *
@@ -99,9 +131,12 @@ export function getDefaultVaultRoot(): string {
  */
 export function getVaultRoot(): string {
   const explicit = process.env.PERSONAL_AGENT_VAULT_ROOT;
-  return explicit && explicit.trim().length > 0
-    ? expandHomePath(explicit.trim())
-    : getDefaultVaultRoot();
+  if (explicit && explicit.trim().length > 0) {
+    return expandHomePath(explicit.trim());
+  }
+
+  const configured = readConfiguredVaultRootFromMachineConfig();
+  return configured ?? getDefaultVaultRoot();
 }
 
 /**

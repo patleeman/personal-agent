@@ -20,7 +20,7 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
-import { buildKnowledgeSearch, getKnowledgeInstructionPath, getKnowledgeNoteId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
+import { getKnowledgeInstructionPath, getKnowledgeNoteId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
 import { buildNodesHref, buildNodesSearch, readSelectedNode } from '../nodeWorkspaceState';
 import { useReloadState } from '../reloadState';
 import {
@@ -2343,7 +2343,7 @@ function InboxItemContext({ id }: { id: string }) {
 
             {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Pages</p>
+                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Docs</p>
                 {entry.relatedProjectIds.map((projectId) => (
                   <Link key={projectId} to={buildNodesHref('project', projectId)} className="ui-card-meta font-mono text-accent hover:text-accent/80">
                     {projectId}
@@ -2742,8 +2742,8 @@ function KnowledgeOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Pages</p>
-          <p className="ui-card-meta">Select a page on the left to inspect its active plan, blockers, and linked work.</p>
+          <p className="ui-card-title">Docs</p>
+          <p className="ui-card-meta">Select a doc on the left to inspect its active plan, blockers, and linked work.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Active" value={activeProjects.length} />
@@ -2751,8 +2751,8 @@ function KnowledgeOverviewContext({
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recently updated</p>
-          {projects.length === 0 ? <p className="ui-card-meta">No tracked pages available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
-            <Link key={project.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'projects', projectId: project.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+          {projects.length === 0 ? <p className="ui-card-meta">No tracked docs available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
+            <Link key={project.id} to={buildNodesHref('project', project.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{project.title}</p>
               <p className="ui-card-meta mt-1">{formatProjectStatus(project.status)} · updated {timeAgo(project.updatedAt)}</p>
             </Link>
@@ -2766,17 +2766,17 @@ function KnowledgeOverviewContext({
     return (
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
-          <p className="ui-card-title">Pages</p>
-          <p className="ui-card-meta">Select a page on the left to inspect its overview and package-local references.</p>
+          <p className="ui-card-title">Docs</p>
+          <p className="ui-card-meta">Select a doc on the left to inspect its overview and package-local references.</p>
         </div>
         <div className="space-y-2">
-          <RailMetadataRow label="Pages" value={memories.length} />
+          <RailMetadataRow label="Docs" value={memories.length} />
           <RailMetadataRow label="Recently used" value={memories.filter((item) => item.usedInLastSession).length} />
         </div>
         <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recent pages</p>
-          {memories.length === 0 ? <p className="ui-card-meta">No pages available.</p> : memories.slice(0, 5).map((memory) => (
-            <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+          <p className="ui-section-label">Recent docs</p>
+          {memories.length === 0 ? <p className="ui-card-meta">No docs available.</p> : memories.slice(0, 5).map((memory) => (
+            <Link key={memory.id} to={buildNodesHref('note', memory.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{memory.title}</p>
               <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
             </Link>
@@ -2791,7 +2791,7 @@ function KnowledgeOverviewContext({
       <div className="px-4 py-4 space-y-4">
         <div className="space-y-1">
           <p className="ui-card-title">Skills</p>
-          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its INDEX.md definition.</p>
+          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its SKILL.md definition.</p>
         </div>
         <div className="space-y-2">
           <RailMetadataRow label="Available" value={skills.length} />
@@ -2800,7 +2800,7 @@ function KnowledgeOverviewContext({
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Top workflows</p>
           {capabilityCards.length === 0 ? <p className="ui-card-meta">No skills available.</p> : capabilityCards.slice(0, 5).map((card) => (
-            <Link key={card.item.name} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'skills', skillName: card.item.name })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <Link key={card.item.name} to={buildNodesHref('skill', card.item.name)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{card.title}</p>
               <p className="ui-card-meta mt-1">{card.usageLabel}</p>
             </Link>
@@ -2824,7 +2824,7 @@ function KnowledgeOverviewContext({
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Loaded sources</p>
           {instructions.length === 0 ? <p className="ui-card-meta">No instruction sources loaded.</p> : instructions.map((item) => (
-            <Link key={item.path} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'instructions', instructionPath: item.path })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <Link key={item.path} to={`/instructions?instruction=${encodeURIComponent(item.path)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{item.source}</p>
               <p className="ui-card-meta mt-1 break-all">{item.path}</p>
             </Link>
@@ -2837,12 +2837,12 @@ function KnowledgeOverviewContext({
   return (
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
-        <p className="ui-card-title">Pages</p>
-        <p className="ui-card-meta">Durable context lives here: pages and skills, plus instruction sources.</p>
+        <p className="ui-card-title">Docs</p>
+        <p className="ui-card-meta">Durable context lives here: docs and skills, plus instruction sources.</p>
       </div>
 
       <div className="space-y-2">
-        <RailMetadataRow label="Pages" value={projects.length + memories.length} />
+        <RailMetadataRow label="Docs" value={projects.length + memories.length} />
         <RailMetadataRow label="Skills" value={skills.length} />
         <RailMetadataRow label="Instructions" value={instructions.length} />
       </div>
@@ -2859,7 +2859,7 @@ function KnowledgeOverviewContext({
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <p className="ui-section-label">Recent knowledge</p>
           {knowledge.recent.length === 0 ? <p className="ui-card-meta">No recent durable knowledge usage yet.</p> : knowledge.recent.slice(0, 4).map((item) => (
-            <Link key={item.item.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'notes', noteId: item.item.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <Link key={item.item.id} to={buildNodesHref('note', item.item.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
               <p className="text-[12px] font-medium text-primary">{item.title}</p>
               <p className="ui-card-meta mt-1">{item.usageLabel}</p>
             </Link>
@@ -3440,7 +3440,7 @@ export function ContextRail() {
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Pages" sub={sub ?? undefined} />
+        <RailHeader label="Docs" sub={sub ?? undefined} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <PagesBrowserRail />
         </div>
@@ -3492,7 +3492,7 @@ export function ContextRail() {
       const fileName = itemPath.split('/').pop() ?? itemPath;
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Pages" sub={fileName} />
+          <RailHeader label="Docs" sub={fileName} />
           <div className="flex-1 overflow-y-auto">
             <MemoryFileContext path={itemPath} />
           </div>
@@ -3501,7 +3501,7 @@ export function ContextRail() {
     }
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Pages" />
+        <RailHeader label="Docs" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
         </div>
@@ -3537,7 +3537,7 @@ export function ContextRail() {
 
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Pages" sub={knowledgeSub} />
+        <RailHeader label="Docs" sub={knowledgeSub} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <KnowledgeContextPanel />
         </div>
