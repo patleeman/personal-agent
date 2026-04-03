@@ -152,6 +152,62 @@ Keep planning state durable.
     expect(fileContent).toContain('- personal-agent');
   });
 
+  it('ignores project child markdown when listing top-level notes', () => {
+    const profilesRoot = createTempDir('personal-agent-memory-scope-');
+
+    writeFile(
+      join(profilesRoot, '..', 'notes', 'top-level.md'),
+      `---
+id: top-level
+title: Top-level note
+summary: Canonical note.
+status: active
+updatedAt: 2026-03-31
+tags:
+  - noteType:note
+  - status:active
+  - type:note
+---
+# Top-level note
+`,
+    );
+
+    writeFile(
+      join(profilesRoot, '..', 'projects', 'ship-it', 'project.md'),
+      `---
+id: ship-it
+kind: project
+title: Ship It
+summary: Ship the feature.
+status: active
+createdAt: 2026-04-01T00:00:00.000Z
+updatedAt: 2026-04-01T01:00:00.000Z
+---
+# Ship It
+`,
+    );
+
+    writeFile(
+      join(profilesRoot, '..', 'projects', 'ship-it', 'notes', 'scratch.md'),
+      `---
+id: ship-it-scratch
+title: Scratch note
+summary: Project-local scratch file.
+status: active
+updatedAt: 2026-03-31
+tags:
+  - noteType:note
+  - status:active
+  - type:note
+---
+# Scratch note
+`,
+    );
+
+    const loaded = loadMemoryDocs({ profilesRoot });
+    expect(loaded.docs.map((doc) => doc.id)).toEqual(['top-level']);
+  });
+
   it('auto-migrates legacy runtime notes into sync/notes on load', () => {
     const profilesRoot = createTempDir('personal-agent-memory-runtime-');
     const runtimeNotePath = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');

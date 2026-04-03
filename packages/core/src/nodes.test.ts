@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -22,7 +22,7 @@ function createTempStateRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'personal-agent-nodes-'));
   tempDirs.push(dir);
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
-  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', '_profiles');
   return dir;
 }
 
@@ -92,11 +92,11 @@ describe('unified nodes', () => {
     expect(loadUnifiedNodes({ profilesRoot: join(stateRoot, 'sync', 'profiles') }).nodes).toHaveLength(0);
   });
 
-  it('migrates legacy notes, skills, and projects into unified nodes', () => {
+  it('loads notes, skills, and projects from the canonical vault layout', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', 'profiles');
+    const profilesRoot = join(stateRoot, 'sync', '_profiles');
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'desktop', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'notes', 'desktop.md'), `---
 id: desktop
 kind: note
 title: Desktop Notes
@@ -114,13 +114,9 @@ links:
 Ubuntu workstation details.
 `);
 
-    writeFile(join(stateRoot, 'sync', 'skills', 'agent-browser', 'INDEX.md'), `---
-id: agent-browser
-kind: skill
+    writeFile(join(stateRoot, 'sync', '_skills', 'agent-browser', 'SKILL.md'), `---
 name: agent-browser
 description: Automate browsers.
-title: agent-browser
-summary: Browser automation workflows.
 profiles:
   - assistant
 ---
@@ -130,7 +126,7 @@ profiles:
 Use the browser automation helper.
 `);
 
-    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'project.md'), `---
 id: ship-it
 kind: project
 title: Ship It
@@ -174,9 +170,19 @@ plan:
       title: Build it
       status: pending
 `);
+    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'notes', 'scratch.md'), `---
+id: ship-it-scratch
+kind: note
+title: Scratch
+summary: Project-local scratch note.
+status: active
+---
+
+# Scratch
+`);
 
     const migration = migrateLegacyNodes({ profilesRoot });
-    expect(migration.created).toEqual(['agent-browser', 'desktop', 'ship-it']);
+    expect(migration.created).toEqual([]);
     expect(migration.updated).toEqual([]);
     expect(migration.conflicts).toEqual([]);
 
@@ -187,19 +193,18 @@ plan:
     expect(findUnifiedNodes(loaded.nodes, 'type:project AND cwd:*').map((node) => node.id)).toEqual([]);
 
     const projectNode = loaded.nodes.find((node) => node.id === 'ship-it');
-    expect(projectNode?.body).toContain('## Goal');
-    expect(projectNode?.body).toContain('## Tasks');
-    expect(projectNode?.body).toContain('## Milestones');
+    expect(projectNode?.body).toContain('# Ship It');
+    expect(projectNode?.body).toContain('Ship the feature.');
 
     const skillDirs = listUnifiedSkillNodeDirs('assistant', { profilesRoot });
-    expect(skillDirs).toEqual([join(stateRoot, 'sync', 'nodes', 'agent-browser')]);
+    expect(skillDirs).toEqual([join(stateRoot, 'sync', '_skills', 'agent-browser')]);
   });
 
-  it('merges cross-store collisions into one node and lints references', () => {
+  it('reports duplicate ids across notes and projects and lints references', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', 'profiles');
+    const profilesRoot = join(stateRoot, 'sync', '_profiles');
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'shared-topic', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'notes', 'shared-topic.md'), `---
 id: shared-topic
 kind: note
 title: Shared Topic
@@ -215,7 +220,7 @@ links:
 Note body.
 `);
 
-    writeFile(join(stateRoot, 'sync', 'projects', 'shared-topic', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'projects', 'shared-topic', 'project.md'), `---
 id: shared-topic
 kind: project
 title: Shared Topic
@@ -249,30 +254,28 @@ plan:
 `);
 
     const migration = migrateLegacyNodes({ profilesRoot });
-    expect(migration.created).toEqual(['shared-topic']);
-    expect(migration.updated).toEqual(['shared-topic']);
-    expect(migration.conflicts).toEqual([
-      expect.objectContaining({ id: 'shared-topic', kinds: ['note', 'project'] }),
-    ]);
+    expect(migration.created).toEqual([]);
+    expect(migration.updated).toEqual([]);
+    expect(migration.conflicts).toEqual([]);
 
     const loaded = loadUnifiedNodes({ profilesRoot });
-    expect(loaded.nodes).toHaveLength(1);
-    expect(loaded.nodes[0]?.kinds).toEqual(['note', 'project']);
+    expect(loaded.nodes).toHaveLength(2);
+    expect(loaded.nodes.map((node) => node.id)).toEqual(['shared-topic', 'shared-topic']);
 
     const lint = lintUnifiedNodes({ profilesRoot });
+    expect(lint.duplicateIds).toEqual([
+      expect.objectContaining({ id: 'shared-topic' }),
+    ]);
     expect(lint.referenceErrors).toEqual([
       expect.objectContaining({ id: 'shared-topic', field: 'related', targetId: 'missing-node' }),
     ]);
-
-    const content = readFileSync(join(stateRoot, 'sync', 'nodes', 'shared-topic', 'INDEX.md'), 'utf-8');
-    expect(content).toContain('Legacy Project State');
   });
 
   it('parses typed relationships from frontmatter objects', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', 'profiles');
+    const profilesRoot = join(stateRoot, 'sync', '_profiles');
 
-    writeFile(join(stateRoot, 'sync', 'nodes', 'graph-node', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'notes', 'graph-node.md'), `---
 id: graph-node
 title: Graph Node
 summary: Node with explicit relationships.

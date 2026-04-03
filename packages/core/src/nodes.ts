@@ -564,36 +564,72 @@ function parseSkillNode(filePath: string): UnifiedNodeRecord {
   };
 }
 
-function collectMarkdownFiles(rootDir: string, options: { excludeFileNames?: string[]; excludeDirs?: string[] } = {}): string[] {
-  if (!existsSync(rootDir)) {
+function collectCanonicalNoteEntryFiles(notesDir: string): string[] {
+  if (!existsSync(notesDir)) {
     return [];
   }
 
   const output: string[] = [];
-  const excludedNames = new Set((options.excludeFileNames ?? []).map((value) => value.toLowerCase()));
-  const excludedDirs = new Set((options.excludeDirs ?? []).map((value) => value.toLowerCase()));
 
-  const walk = (dirPath: string): void => {
-    for (const entry of readdirSync(dirPath, { withFileTypes: true })) {
-      const entryPath = join(dirPath, entry.name);
-      if (entry.isDirectory()) {
-        if (excludedDirs.has(entry.name.toLowerCase())) {
-          continue;
-        }
-        walk(entryPath);
-        continue;
-      }
-      if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.md')) {
-        continue;
-      }
-      if (excludedNames.has(entry.name.toLowerCase())) {
-        continue;
-      }
+  for (const entry of readdirSync(notesDir, { withFileTypes: true })) {
+    const entryPath = join(notesDir, entry.name);
+    if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
       output.push(entryPath);
+      continue;
     }
-  };
 
-  walk(rootDir);
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const indexPath = join(entryPath, INDEX_FILE_NAME);
+    if (existsSync(indexPath)) {
+      output.push(indexPath);
+    }
+  }
+
+  return output.sort((left, right) => left.localeCompare(right));
+}
+
+function collectCanonicalProjectEntryFiles(projectsDir: string): string[] {
+  if (!existsSync(projectsDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+
+  for (const entry of readdirSync(projectsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const projectFile = join(projectsDir, entry.name, 'project.md');
+    if (existsSync(projectFile)) {
+      output.push(projectFile);
+    }
+  }
+
+  return output.sort((left, right) => left.localeCompare(right));
+}
+
+function collectCanonicalSkillEntryFiles(skillsDir: string): string[] {
+  if (!existsSync(skillsDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+
+  for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const skillFile = join(skillsDir, entry.name, 'SKILL.md');
+    if (existsSync(skillFile)) {
+      output.push(skillFile);
+    }
+  }
+
   return output.sort((left, right) => left.localeCompare(right));
 }
 
@@ -879,9 +915,7 @@ export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnified
   const nodes: UnifiedNodeRecord[] = [];
   const parseErrors: UnifiedNodeParseError[] = [];
 
-  for (const filePath of collectMarkdownFiles(notesDir, {
-    excludeDirs: ['references', 'assets', 'scripts', 'templates'],
-  })) {
+  for (const filePath of collectCanonicalNoteEntryFiles(notesDir)) {
     try {
       nodes.push(parseUnifiedNode(filePath));
     } catch (error) {
@@ -892,60 +926,25 @@ export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnified
     }
   }
 
-  if (existsSync(projectsDir)) {
-    for (const entry of readdirSync(projectsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      const projectDir = join(projectsDir, entry.name);
-      const projectFile = join(projectDir, 'project.md');
-      if (!existsSync(projectFile)) {
-        continue;
-      }
-
-      try {
-        nodes.push(parseUnifiedNode(projectFile));
-      } catch (error) {
-        parseErrors.push({
-          filePath: projectFile,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-
-      for (const childFile of collectMarkdownFiles(projectDir, {
-        excludeFileNames: ['project.md'],
-        excludeDirs: ['references', 'assets', 'scripts', 'templates'],
-      })) {
-        try {
-          nodes.push(parseUnifiedNode(childFile));
-        } catch (error) {
-          parseErrors.push({
-            filePath: childFile,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
+  for (const projectFile of collectCanonicalProjectEntryFiles(projectsDir)) {
+    try {
+      nodes.push(parseUnifiedNode(projectFile));
+    } catch (error) {
+      parseErrors.push({
+        filePath: projectFile,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  if (existsSync(skillsDir)) {
-    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      const skillFile = join(skillsDir, entry.name, 'SKILL.md');
-      if (!existsSync(skillFile)) {
-        continue;
-      }
-      try {
-        nodes.push(parseSkillNode(skillFile));
-      } catch (error) {
-        parseErrors.push({
-          filePath: skillFile,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+  for (const skillFile of collectCanonicalSkillEntryFiles(skillsDir)) {
+    try {
+      nodes.push(parseSkillNode(skillFile));
+    } catch (error) {
+      parseErrors.push({
+        filePath: skillFile,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

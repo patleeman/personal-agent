@@ -75,17 +75,17 @@ function memoryWorkItemDotClass(item: MemoryWorkItem): string {
 function memoryWorkItemLabel(item: MemoryWorkItem): string {
   switch (item.status) {
     case 'failed':
-      return 'Page distillation failed';
+      return 'Vault-doc distillation failed';
     case 'interrupted':
-      return 'Page distillation interrupted';
+      return 'Vault-doc distillation interrupted';
     case 'queued':
-      return 'Queued for page distillation';
+      return 'Queued for vault-doc distillation';
     case 'waiting':
-      return 'Waiting to resume page distillation';
+      return 'Waiting to resume vault-doc distillation';
     case 'recovering':
-      return 'Recovering page distillation';
+      return 'Recovering vault-doc distillation';
     default:
-      return 'Distilling into a page';
+      return 'Distilling into a vault doc';
   }
 }
 
@@ -125,7 +125,7 @@ function WorkQueueRow({
         <ToolbarButton
           onClick={() => onRetry(item)}
           disabled={actionDisabled}
-          title="Retry page distillation"
+          title="Retry vault-doc distillation"
         >
           {activeAction === 'retry' ? 'Retrying…' : 'Retry'}
         </ToolbarButton>
@@ -147,15 +147,8 @@ export function PagesBrowserRail() {
 
   const selectedPageId = useMemo(() => {
     const selected = readSelectedNode(location.search);
-    if (selected && selected.kind !== 'skill') {
-      return selected.id;
-    }
-    const parts = location.pathname.split('/').filter(Boolean);
-    if ((parts[0] === 'projects' || parts[0] === 'notes') && parts[1]) {
-      return decodeURIComponent(parts[1]);
-    }
-    return null;
-  }, [location.pathname, location.search]);
+    return selected && selected.kind !== 'skill' ? selected.id : null;
+  }, [location.search]);
 
   const requestedViewProfile = useMemo(() => new URLSearchParams(location.search).get('viewProfile')?.trim() || null, [location.search]);
   const effectiveViewProfile = useMemo(() => {
@@ -242,8 +235,8 @@ export function PagesBrowserRail() {
       <div className="shrink-0 space-y-3 border-b border-border-subtle px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="ui-card-title">Pages</p>
-            <p className="ui-card-meta mt-1">Browse pages and open them in the main workspace.</p>
+            <p className="ui-card-title">Vault docs</p>
+            <p className="ui-card-meta mt-1">Browse canonical vault docs and open them in the main workspace.</p>
           </div>
           <div className="flex items-center gap-2">
             <Link to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`} className="ui-toolbar-button text-accent">

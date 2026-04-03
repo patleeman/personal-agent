@@ -26,9 +26,7 @@ import {
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
-import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import { buildNodeCreateSearch, buildNodesHref, readCreatingNode, readSelectedNode } from '../nodeWorkspaceState';
-import { SKILL_SEARCH_PARAM } from '../skillWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
   buildOpenNodeShelfId,
@@ -467,11 +465,6 @@ function ShelfDropZone({
   );
 }
 
-function parseSelectedProjectId(pathname: string): string | null {
-  const parts = pathname.split('/').filter(Boolean);
-  return parts[0] === 'projects' && parts[1] ? decodeURIComponent(parts[1]) : null;
-}
-
 function buildWorkspaceHref(cwd: string): string {
   return buildWorkspacePath('files', buildWorkspaceSearch('', { cwd, file: null, changeScope: null }));
 }
@@ -529,13 +522,10 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
-  const selectedNoteId = useMemo(() => new URLSearchParams(location.search).get(NOTE_ID_SEARCH_PARAM)?.trim() || null, [location.search]);
   const creatingNote = useMemo(
     () => location.pathname.startsWith('/pages') && readCreatingNode(location.search),
     [location.pathname, location.search],
   );
-  const selectedSkillName = useMemo(() => new URLSearchParams(location.search).get(SKILL_SEARCH_PARAM)?.trim() || null, [location.search]);
-  const selectedProjectId = useMemo(() => parseSelectedProjectId(location.pathname), [location.pathname]);
   const selectedNodesPageItem = useMemo(
     () => (location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes')) ? readSelectedNode(location.search) : null,
     [location.pathname, location.search],
@@ -864,7 +854,7 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
-        <TopNavItem to="/pages" icon={PATH.nodes} label="Pages" forceActive={nodesRouteActive} />
+        <TopNavItem to="/pages" icon={PATH.nodes} label="Vault" forceActive={nodesRouteActive} />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Workspace" />
       </div>
 
@@ -883,12 +873,12 @@ export function Sidebar() {
           <Link
             to={`/pages${buildNodeCreateSearch('', { creating: true, createKind: 'note' })}`}
             className="ui-sidebar-nav-item mx-0 flex-1 bg-accent/10 text-accent hover:bg-accent/20"
-            title="Create page"
+            title="Create note"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
               <path d="M12 5v14M5 12h14" />
             </svg>
-            <span className="flex-1 text-left font-medium">Page</span>
+            <span className="flex-1 text-left font-medium">Note</span>
           </Link>
         </div>
       </div>
@@ -977,7 +967,7 @@ export function Sidebar() {
 
         {(openNodes.length > 0 || creatingNote) && (
           <>
-            <SectionHeader label="Open Pages" />
+            <SectionHeader label="Open Docs" />
             <div className="py-1 space-y-0.5">
               {creatingNote ? (
                 <ShelfRow
