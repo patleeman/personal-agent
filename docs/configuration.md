@@ -30,7 +30,7 @@ Example:
     "modules": {
       "tasks": {
         "enabled": true,
-        "taskDir": "~/.local/state/personal-agent/sync/tasks",
+        "taskDir": "~/.local/state/personal-agent/sync/_tasks",
         "tickIntervalSeconds": 30,
         "maxRetries": 3,
         "defaultTimeoutSeconds": 1800
@@ -72,11 +72,11 @@ Profile resources resolve from repo defaults plus synced durable roots:
 
 Common durable roots:
 
-- `profiles/<profile>/AGENTS.md`
-- `profiles/<profile>/settings.json`
-- `profiles/<profile>/models.json`
-- `agents/**`
-- `nodes/**`
+- `_profiles/<profile>/AGENTS.md`
+- `_profiles/<profile>/settings.json`
+- `_profiles/<profile>/models.json`
+- `_skills/**`
+- `notes/**`
 - `tasks/`
 - `projects/`
 
@@ -121,23 +121,23 @@ run `./scripts/migrate-state-home.sh` from the repo root.
 Canonical state-home layout:
 
 ```text
+~/Documents/personal-agent/     # external durable knowledge vault
+├── _profiles/
+├── _skills/
+├── notes/
+└── projects/
+
 ~/.local/state/personal-agent/
-├── sync/                      # git-synced durable state
-│   ├── profiles/
-│   ├── agents/
-│   ├── settings/
-│   ├── models/
-│   ├── nodes/
-│   ├── projects/
+├── sync/                       # git-synced app-managed durable state
+│   ├── tasks/
 │   └── pi-agent/
 │       ├── sessions/
 │       └── state/
 │           └── conversation-attention/
-├── profiles -> sync/profiles  # durable profile definitions
-├── pi-agent/                  # local runtime state
+├── pi-agent/                   # local runtime state
 │   ├── state/
 │   └── deferred-resumes-state.json
-├── pi-agent-runtime/          # generated runtime materialization
+├── pi-agent-runtime/           # generated runtime materialization
 ├── config/
 │   └── config.json
 ├── daemon/
@@ -159,14 +159,11 @@ Setup enables the daemon sync module and schedules periodic background sync.
 By default, sync tracks everything under `~/.local/state/personal-agent/sync/`.
 Typical durable paths there include:
 
-- `profiles/**`
-- `agents/**`
-- `nodes/**`
-- `projects/**`
+- `tasks/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
-Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
+The external knowledge vault (default: `~/Documents/personal-agent`) is separate from `pa sync` and can be synced by another tool such as Obsidian Sync. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
 
 See [Sync Guide](./sync.md).
 
@@ -182,6 +179,7 @@ See [Sync Guide](./sync.md).
 ### Runtime state
 
 - `PERSONAL_AGENT_STATE_ROOT` — override the runtime state root
+- `PERSONAL_AGENT_VAULT_ROOT` — override the external knowledge vault root (default auto-detects `~/Documents/personal-agent`)
 - `PERSONAL_AGENT_AUTH_PATH`
 - `PERSONAL_AGENT_SESSION_PATH`
 - `PERSONAL_AGENT_CACHE_PATH`

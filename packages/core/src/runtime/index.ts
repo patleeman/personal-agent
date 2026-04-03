@@ -13,6 +13,8 @@ export {
   getPiAgentRuntimeDir,
   getDefaultConfigRoot,
   getConfigRoot,
+  getDefaultVaultRoot,
+  getVaultRoot,
   getDefaultProfilesRoot,
   getProfilesRoot,
   getDefaultLocalProfileDir,

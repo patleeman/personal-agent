@@ -6,6 +6,7 @@
  * 
  * Environment variables for override:
  * - PERSONAL_AGENT_STATE_ROOT: Override the base state directory
+ * - PERSONAL_AGENT_VAULT_ROOT: Override the durable knowledge vault root
  * - PERSONAL_AGENT_AUTH_PATH: Override auth directory
  * - PERSONAL_AGENT_SESSION_PATH: Override session directory
  * - PERSONAL_AGENT_CACHE_PATH: Override cache directory
@@ -78,6 +79,32 @@ export function getConfigRoot(): string {
 }
 
 /**
+ * Default durable knowledge vault root directory.
+ *
+ * When no explicit vault root is configured, prefer ~/Documents/personal-agent
+ * for normal interactive use. Fall back to the managed sync root for legacy
+ * installs and test environments that override PERSONAL_AGENT_STATE_ROOT.
+ */
+export function getDefaultVaultRoot(): string {
+  if (process.env.PERSONAL_AGENT_STATE_ROOT?.trim()) {
+    return getSyncRoot();
+  }
+
+  const documentsVault = join(homedir(), 'Documents', 'personal-agent');
+  return existsSync(documentsVault) ? documentsVault : getSyncRoot();
+}
+
+/**
+ * Get the configured durable knowledge vault root directory.
+ */
+export function getVaultRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_VAULT_ROOT;
+  return explicit && explicit.trim().length > 0
+    ? expandHomePath(explicit.trim())
+    : getDefaultVaultRoot();
+}
+
+/**
  * Default mutable profiles root directory.
  */
 export function getDefaultProfilesRoot(): string {
@@ -113,56 +140,72 @@ export function getDurableConversationAttentionDir(stateRoot: string = getStateR
   return join(getDurablePiAgentDir(stateRoot), 'state', 'conversation-attention');
 }
 
-export function getDurableProfilesDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'profiles');
+function resolveDurableDir(syncRoot: string, canonicalName: string, legacyName?: string): string {
+  const canonicalPath = join(syncRoot, canonicalName);
+  if (existsSync(canonicalPath)) {
+    return canonicalPath;
+  }
+
+  if (legacyName) {
+    const legacyPath = join(syncRoot, legacyName);
+    if (existsSync(legacyPath)) {
+      return legacyPath;
+    }
+  }
+
+  return canonicalPath;
 }
 
-export function getDurableProfileDir(profile: string, syncRoot: string = getSyncRoot()): string {
-  return join(getDurableProfilesDir(syncRoot), profile);
+export function getDurableProfilesDir(vaultRoot: string = getVaultRoot()): string {
+  return resolveDurableDir(vaultRoot, '_profiles', 'profiles');
 }
 
-export function getDurableProfileAgentFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
-  return join(getDurableProfileDir(profile, syncRoot), 'AGENTS.md');
+export function getDurableProfileDir(profile: string, vaultRoot: string = getVaultRoot()): string {
+  return join(getDurableProfilesDir(vaultRoot), profile);
 }
 
-export function getDurableProfileSettingsFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
-  return join(getDurableProfileDir(profile, syncRoot), 'settings.json');
+export function getDurableProfileAgentFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
+  return join(getDurableProfileDir(profile, vaultRoot), 'AGENTS.md');
 }
 
-export function getDurableProfileModelsFilePath(profile: string, syncRoot: string = getSyncRoot()): string {
-  return join(getDurableProfileDir(profile, syncRoot), 'models.json');
+export function getDurableProfileSettingsFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
+  return join(getDurableProfileDir(profile, vaultRoot), 'settings.json');
 }
 
-export function getDurableSettingsDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'settings');
+export function getDurableProfileModelsFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
+  return join(getDurableProfileDir(profile, vaultRoot), 'models.json');
 }
 
-export function getDurableModelsDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'models');
+export function getDurableSettingsDir(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'settings');
 }
 
-export function getDurableSkillsDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'skills');
+export function getDurableModelsDir(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'models');
 }
 
-export function getDurableNodesDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'nodes');
+export function getDurableSkillsDir(vaultRoot: string = getVaultRoot()): string {
+  return resolveDurableDir(vaultRoot, '_skills', 'skills');
 }
 
-export function getDurableNotesDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'notes');
+export function getDurableNodesDir(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'nodes');
 }
 
-export function getDurableMemoryDir(syncRoot: string = getSyncRoot()): string {
-  return getDurableNotesDir(syncRoot);
+export function getDurableNotesDir(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'notes');
+}
+
+export function getDurableMemoryDir(vaultRoot: string = getVaultRoot()): string {
+  return getDurableNotesDir(vaultRoot);
 }
 
 export function getDurableTasksDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'tasks');
+  return resolveDurableDir(syncRoot, '_tasks', 'tasks');
 }
 
-export function getDurableProjectsDir(syncRoot: string = getSyncRoot()): string {
-  return join(syncRoot, 'projects');
+export function getDurableProjectsDir(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'projects');
 }
 
 /**

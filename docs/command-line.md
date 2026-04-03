@@ -204,7 +204,7 @@ See [Web UI Guide](./web-ui.md).
 
 ### `pa page [list|find|show|get|new|update|delete|tag|lint|migrate]`
 
-Work with the unified durable page store backed by `sync/nodes/`.
+Work with the unified durable page store backed by the vault layout under `notes`, `projects`, and `_skills` at the active vault root (default: `~/Documents/personal-agent`).
 
 Examples:
 
@@ -225,6 +225,8 @@ See [Pages](./pages.md) and [Nodes](./nodes.md).
 ### `pa note [list|find|show|new|lint]`
 
 Compatibility surface for the shared note subset. Use `pa page` for new work.
+
+`pa note` reads and writes the durable vault notes directory only. Simple notes use `notes/<id>.md`; note packages use `notes/<id>/INDEX.md`. Legacy files under `~/.local/state/personal-agent/pi-agent-runtime/notes` are treated as migration input and moved into the vault `notes/` directory when note pages are loaded.
 
 Examples:
 
@@ -344,9 +346,9 @@ Use `--fresh` for first-time setup into a new/empty remote. Use `--bootstrap` on
 
 The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module, and enables periodic background git sync.
 
-The managed sync repo syncs everything under `<stateRoot>/sync` by default. Typical durable paths there include `profiles/**`, `agents/**`, `nodes/**`, `projects/**`, `pi-agent/sessions/**`, and `pi-agent/state/conversation-attention/**`.
+The managed sync repo syncs everything under `<stateRoot>/sync` by default. Typical durable paths there include `tasks/**`, `pi-agent/sessions/**`, and `pi-agent/state/conversation-attention/**`.
 
-Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface, so “needs review” follows across machines without dragging the rest of runtime state into sync.
+If you use an external knowledge vault, notes, skills, projects, and profile files can live there and sync separately from `pa sync`. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface, so “needs review” follows across machines without dragging the rest of runtime state into sync.
 
 See [Sync Guide](./sync.md).
 
@@ -379,6 +381,8 @@ pa inbox list --unread
 ```
 
 ### Create and validate a note node
+
+This creates a durable note entry file at `notes/<id>.md` under the active vault root.
 
 ```bash
 pa note new repo-notes \

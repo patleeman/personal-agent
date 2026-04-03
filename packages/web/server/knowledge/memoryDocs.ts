@@ -187,7 +187,7 @@ function inferSkillSource(filePath: string, profile: string): string {
   const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'skills'));
   const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
   const profileLegacyHiddenSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
-  const sharedSkillsDir = normalizeMemoryPath(join(sharedRoot, 'skills'));
+  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(sharedRoot));
   const normalizedFilePath = normalizeMemoryPath(filePath);
 
   if (
