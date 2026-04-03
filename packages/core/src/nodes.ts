@@ -10,6 +10,7 @@ import {
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
 import { readProject, type ProjectDocument, type ProjectMilestoneDocument, type ProjectTaskDocument } from './project-artifacts.js';
+import { migrateLegacyProfileMemoryDirs } from './memory-docs.js';
 import { getDurableNodesDir, getDurableProfilesDir, getDurableProjectsDir, getDurableNotesDir, getDurableSkillsDir } from './runtime/paths.js';
 
 const INDEX_FILE_NAME = 'INDEX.md';
@@ -517,11 +518,14 @@ function parseSkillNode(filePath: string): UnifiedNodeRecord {
   const description = readOptionalString(attributes.description);
   const summary = readOptionalString(metadata.summary) ?? description ?? extractFirstParagraph(section.body) ?? `Skill package for ${title}.`;
   const status = readOptionalString(metadata.status) ?? 'active';
-  const profile = readOptionalString(metadata.profile);
+  const profiles = dedupeStrings([
+    ...readStringArray(attributes.profiles).map((value) => value.toLowerCase()),
+    ...(readOptionalString(metadata.profile) ? [readOptionalString(metadata.profile) as string] : []),
+  ]);
   const tags = normalizeTags([
     'type:skill',
     ...(status ? [`status:${status}`] : []),
-    ...(profile ? [`profile:${profile}`] : []),
+    ...profiles.map((profile) => `profile:${profile}`),
   ]);
   const searchText = buildSearchText({
     id,
@@ -547,7 +551,7 @@ function parseSkillNode(filePath: string): UnifiedNodeRecord {
     type: 'skill',
     kinds: ['skill'],
     tags,
-    profiles: profile ? [profile] : [],
+    profiles,
     links: {
       related: [],
       conversations: [],
@@ -828,6 +832,37 @@ function writeUnifiedNode(targetPath: string, frontmatter: Record<string, unknow
   return parseUnifiedNode(targetPath);
 }
 
+function writeSkillNode(targetPath: string, input: {
+  id: string;
+  title: string;
+  summary: string;
+  description?: string;
+  status: string;
+  profiles: string[];
+  body: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+}): UnifiedNodeRecord {
+  mkdirSync(dirname(targetPath), { recursive: true });
+  const frontmatter: Record<string, unknown> = {
+    name: input.id,
+    description: input.description ?? input.summary,
+    ...(input.profiles.length > 0 ? { profiles: input.profiles } : {}),
+    metadata: {
+      title: input.title,
+      summary: input.summary,
+      status: input.status,
+      ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      ...(input.updatedAt ? { updatedAt: input.updatedAt } : {}),
+      ...(input.createdBy ? { createdBy: input.createdBy } : {}),
+      ...(input.profiles[0] ? { profile: input.profiles[0] } : {}),
+    },
+  };
+  writeFileSync(targetPath, stringifyFrontmatter(frontmatter, input.body), 'utf-8');
+  return parseSkillNode(targetPath);
+}
+
 export function validateUnifiedNodeId(id: string): void {
   if (!NODE_ID_PATTERN.test(id)) {
     throw new Error(`Invalid node id "${id}". Node ids must use lowercase letters, numbers, and dashes.`);
@@ -836,7 +871,7 @@ export function validateUnifiedNodeId(id: string): void {
 
 export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnifiedNodesResult {
   const syncRoot = resolveSyncRoot(options);
-  const nodesDir = resolveUnifiedNodesDir(options);
+  migrateLegacyProfileMemoryDirs({ profilesRoot: options.profilesRoot });
   const notesDir = getDurableNotesDir(syncRoot);
   const projectsDir = getDurableProjectsDir(syncRoot);
   const skillsDir = getDurableSkillsDir(syncRoot);
@@ -915,7 +950,7 @@ export function loadUnifiedNodes(options: ResolveNodesOptions = {}): LoadUnified
   }
 
   nodes.sort((left, right) => left.id.localeCompare(right.id));
-  return { nodesDir, nodes, parseErrors };
+  return { nodesDir: syncRoot, nodes, parseErrors };
 }
 
 export function findUnifiedNodeById(nodes: UnifiedNodeRecord[], id: string): UnifiedNodeRecord {
@@ -943,31 +978,77 @@ export function createUnifiedNode(input: CreateUnifiedNodeInput, options: Resolv
     throw new Error('summary is required');
   }
 
-  const notesDir = getDurableNotesDir(resolveSyncRoot(options));
-  mkdirSync(notesDir, { recursive: true });
-  const targetPath = join(notesDir, `${id}.md`);
+  const syncRoot = resolveSyncRoot(options);
+  const tags = normalizeTags(input.tags);
+  const kinds = collectKindsFromTags(tags);
+  const primaryKind = kinds[0] ?? 'note';
   const overwrite = input.force === true;
-  if (existsSync(targetPath) && !overwrite) {
-    throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
+  const body = input.body?.trim() || `# ${title}\n\n${summary}`;
+  const description = input.description?.trim() || undefined;
+  const status = input.status?.trim() || 'active';
+  const updatedAt = input.updatedAt ?? new Date().toISOString();
+
+  let targetPath: string;
+  let node: UnifiedNodeRecord;
+
+  if (primaryKind === 'project') {
+    targetPath = join(getDurableProjectsDir(syncRoot), id, 'project.md');
+    if (existsSync(targetPath) && !overwrite) {
+      throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
+    }
+    node = writeUnifiedNode(targetPath, buildNodeFrontmatter({
+      id,
+      title,
+      summary,
+      description,
+      status,
+      createdAt: input.createdAt,
+      updatedAt,
+      createdBy: input.createdBy,
+      tags,
+      parent: input.parent?.trim() || undefined,
+      related: input.related,
+      relationships: input.relationships,
+    }), body);
+  } else if (primaryKind === 'skill') {
+    targetPath = join(getDurableSkillsDir(syncRoot), id, 'SKILL.md');
+    if (existsSync(targetPath) && !overwrite) {
+      throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
+    }
+    node = writeSkillNode(targetPath, {
+      id,
+      title,
+      summary,
+      description,
+      status,
+      profiles: collectTagValues(tags, 'profile'),
+      body,
+      createdAt: input.createdAt,
+      updatedAt,
+      createdBy: input.createdBy,
+    });
+  } else {
+    targetPath = join(getDurableNotesDir(syncRoot), `${id}.md`);
+    if (existsSync(targetPath) && !overwrite) {
+      throw new Error(`Node already exists at ${targetPath}. Pass force=true to overwrite.`);
+    }
+    node = writeUnifiedNode(targetPath, buildNodeFrontmatter({
+      id,
+      title,
+      summary,
+      description,
+      status,
+      createdAt: input.createdAt,
+      updatedAt,
+      createdBy: input.createdBy,
+      tags,
+      parent: input.parent?.trim() || undefined,
+      related: input.related,
+      relationships: input.relationships,
+    }), body);
   }
 
-  const body = input.body?.trim() || `# ${title}\n\n${summary}`;
-  const node = writeUnifiedNode(targetPath, buildNodeFrontmatter({
-    id,
-    title,
-    summary,
-    description: input.description?.trim() || undefined,
-    status: input.status?.trim() || 'active',
-    createdAt: input.createdAt,
-    updatedAt: input.updatedAt ?? new Date().toISOString(),
-    createdBy: input.createdBy,
-    tags: normalizeTags(input.tags),
-    parent: input.parent?.trim() || undefined,
-    related: input.related,
-    relationships: input.relationships,
-  }), body);
-
-  return { nodesDir: notesDir, node, overwritten: overwrite };
+  return { nodesDir: syncRoot, node, overwritten: overwrite };
 }
 
 function readNodeFrontmatter(filePath: string): { frontmatter: Record<string, unknown>; body: string } {

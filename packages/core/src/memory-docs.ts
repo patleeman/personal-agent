@@ -11,7 +11,7 @@ import {
 } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getDurableNotesDir, getDurableProfilesDir } from './runtime/paths.js';
+import { getDurableNotesDir, getDurableProfilesDir, getPiAgentRuntimeDir } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {
   profilesRoot?: string;
@@ -42,6 +42,10 @@ export function getMemoryDocsDir(options: ResolveMemoryDocsOptions = {}): string
 
 function resolveLegacyMemoryDir(options: ResolveMemoryDocsOptions = {}): string {
   return join(dirname(resolveProfilesRootForMemory(options)), 'memory');
+}
+
+function resolveLegacyRuntimeNotesDir(options: ResolveMemoryDocsOptions = {}): string {
+  return join(getPiAgentRuntimeDir(dirname(dirname(resolveProfilesRootForMemory(options)))), 'notes');
 }
 
 function parseFrontmatter(rawContent: string): ParsedFrontmatter | null {
@@ -299,10 +303,31 @@ function migrateLooseLegacyMemoryFile(sourcePath: string, notesDir: string): Leg
   return { from: sourcePath, to: targetIndex };
 }
 
+function migrateLegacyRuntimeNoteFile(sourcePath: string, notesDir: string): LegacyMemoryMigrationRecord | null {
+  const normalized = normalizeNoteNodeMarkdown(readFileSync(sourcePath, 'utf-8'), basename(sourcePath, '.md'));
+  const targetPath = join(notesDir, `${normalized.id}.md`);
+
+  if (existsSync(targetPath)) {
+    const existingNormalized = normalizeNoteNodeMarkdown(readFileSync(targetPath, 'utf-8'), basename(targetPath, '.md'));
+    if (existingNormalized.content === normalized.content) {
+      rmSync(sourcePath, { force: true });
+      removeDirIfEmpty(dirname(sourcePath));
+    }
+    return null;
+  }
+
+  mkdirSync(dirname(targetPath), { recursive: true });
+  writeFileSync(targetPath, normalized.content, 'utf-8');
+  rmSync(sourcePath, { force: true });
+  removeDirIfEmpty(dirname(sourcePath));
+  return { from: sourcePath, to: targetPath };
+}
+
 export function migrateLegacyProfileMemoryDirs(options: ResolveMemoryDocsOptions = {}): LegacyMemoryMigrationResult {
   const profilesRoot = resolveProfilesRootForMemory(options);
   const notesDir = getMemoryDocsDir({ profilesRoot });
   const legacySyncMemoryDir = resolveLegacyMemoryDir({ profilesRoot });
+  const legacyRuntimeNotesDir = resolveLegacyRuntimeNotesDir({ profilesRoot });
   const migratedFiles: LegacyMemoryMigrationRecord[] = [];
 
   mkdirSync(notesDir, { recursive: true });
@@ -335,6 +360,22 @@ export function migrateLegacyProfileMemoryDirs(options: ResolveMemoryDocsOptions
     if (migrated) {
       migratedFiles.push(migrated);
     }
+  }
+
+  if (existsSync(legacyRuntimeNotesDir)) {
+    const runtimeFiles = readdirSync(legacyRuntimeNotesDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+      .map((entry) => join(legacyRuntimeNotesDir, entry.name))
+      .sort();
+
+    for (const filePath of runtimeFiles) {
+      const migrated = migrateLegacyRuntimeNoteFile(filePath, notesDir);
+      if (migrated) {
+        migratedFiles.push(migrated);
+      }
+    }
+
+    removeDirIfEmpty(legacyRuntimeNotesDir);
   }
 
   return {

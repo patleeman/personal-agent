@@ -9,7 +9,7 @@ const tempDirs: string[] = [];
 
 function createTempProfilesRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'personal-agent-memory-docs-'));
-  const dir = join(root, 'sync', 'profiles');
+  const dir = join(root, 'sync', '_profiles');
   mkdirSync(dir, { recursive: true });
   tempDirs.push(root);
   return dir;
@@ -25,9 +25,9 @@ afterEach(async () => {
 });
 
 describe('note node paths', () => {
-  it('stores shared note nodes under the sync nodes root', () => {
+  it('stores shared note nodes under the sync notes root', () => {
     const profilesRoot = createTempProfilesRoot();
-    expect(getMemoryDocsDir({ profilesRoot })).toBe(join(profilesRoot, '..', 'nodes'));
+    expect(getMemoryDocsDir({ profilesRoot })).toBe(join(profilesRoot, '..', 'notes'));
   });
 
   it('migrates legacy per-profile memory files into note nodes', () => {
@@ -40,15 +40,15 @@ describe('note node paths', () => {
 
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
 
-    expect(result.memoryDir).toBe(join(profilesRoot, '..', 'nodes'));
+    expect(result.memoryDir).toBe(join(profilesRoot, '..', 'notes'));
     expect(result.migratedFiles).toEqual([
-      { from: assistantMemory, to: join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md') },
-      { from: datadogMemory, to: join(profilesRoot, '..', 'nodes', 'infra', 'INDEX.md') },
+      { from: assistantMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
+      { from: datadogMemory, to: join(profilesRoot, '..', 'notes', 'infra', 'INDEX.md') },
     ]);
 
     expect(existsSync(assistantMemory)).toBe(false);
     expect(existsSync(datadogMemory)).toBe(false);
-    const runpod = readFileSync(join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md'), 'utf-8');
+    const runpod = readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8');
     expect(runpod).toContain('id: runpod');
     expect(runpod).toContain('summary: Notes');
     expect(runpod).toContain('title: Runpod');
@@ -77,11 +77,11 @@ metadata:
     writeFile(legacyReferencePath, '# Usage\n\nShort-lived GPU boxes.\n');
 
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
-    const targetPath = join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md');
+    const targetPath = join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md');
 
     expect(result.migratedFiles).toContainEqual({ from: legacyPackagePath, to: targetPath });
     expect(existsSync(targetPath)).toBe(true);
-    expect(existsSync(join(profilesRoot, '..', 'nodes', 'runpod', 'references', 'usage.md'))).toBe(true);
+    expect(existsSync(join(profilesRoot, '..', 'notes', 'runpod', 'references', 'usage.md'))).toBe(true);
 
     const migrated = readFileSync(targetPath, 'utf-8');
     expect(migrated).toContain('id: runpod');
@@ -99,9 +99,25 @@ metadata:
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
 
     expect(result.migratedFiles).toEqual([
-      { from: flatMemory, to: join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md') },
+      { from: flatMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
     ]);
     expect(existsSync(flatMemory)).toBe(false);
-    expect(readFileSync(join(profilesRoot, '..', 'nodes', 'runpod', 'INDEX.md'), 'utf-8')).toContain('id: runpod');
+    expect(readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8')).toContain('id: runpod');
+  });
+
+  it('migrates legacy runtime notes into sync notes flat files', () => {
+    const profilesRoot = createTempProfilesRoot();
+    const runtimeNote = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
+
+    writeFile(runtimeNote, '---\nid: desktop\ntitle: Desktop\nsummary: Server notes\ntype: note\nstatus: active\nupdatedAt: 2026-03-31\n---\n\n# Desktop\n');
+
+    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
+
+    expect(result.migratedFiles).toContainEqual({
+      from: runtimeNote,
+      to: join(profilesRoot, '..', 'notes', 'desktop.md'),
+    });
+    expect(existsSync(runtimeNote)).toBe(false);
+    expect(readFileSync(join(profilesRoot, '..', 'notes', 'desktop.md'), 'utf-8')).toContain('id: desktop');
   });
 });

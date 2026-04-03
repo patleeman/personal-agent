@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -15,7 +15,7 @@ const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
-  const profilesRoot = join(root, 'sync', 'profiles');
+  const profilesRoot = join(root, 'sync', '_profiles');
   mkdirSync(profilesRoot, { recursive: true });
   tempDirs.push(root);
   return profilesRoot;
@@ -27,7 +27,7 @@ function writeFile(path: string, content: string): void {
 }
 
 function memoryPath(profilesRoot: string, memoryId: string): string {
-  return join(profilesRoot, '..', 'nodes', memoryId, 'INDEX.md');
+  return join(profilesRoot, '..', 'notes', memoryId, 'INDEX.md');
 }
 
 afterEach(async () => {
@@ -35,7 +35,7 @@ afterEach(async () => {
 });
 
 describe('memory store organization metadata', () => {
-  it('parses note nodes from sync/nodes and tracks package-local references', () => {
+  it('parses note nodes from sync/notes and tracks package-local references', () => {
     const profilesRoot = createTempDir('personal-agent-memory-store-');
 
     writeFile(
@@ -65,7 +65,7 @@ Hub doc.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'nodes', 'personal-agent', 'references', 'web-ui.md'),
+      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'web-ui.md'),
       `---
 name: web-ui
 description: Durable UI notes.
@@ -80,7 +80,7 @@ Keep the right rail visible and resizable.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'nodes', 'personal-agent', 'references', 'state-model.md'),
+      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'state-model.md'),
       `# Project state model
 
 Keep planning state durable.
@@ -102,7 +102,7 @@ Keep planning state durable.
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
-    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'nodes', 'personal-agent'));
+    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'notes', 'personal-agent'));
     expect(references.map((reference) => reference.title)).toEqual(['Project state model', 'web-ui']);
     expect(references[1]).toMatchObject({
       relativePath: 'references/web-ui.md',
@@ -116,7 +116,7 @@ Keep planning state durable.
     expect(filtered.map((doc) => doc.id)).toEqual(['personal-agent']);
   });
 
-  it('creates note nodes in sync/nodes', () => {
+  it('creates note nodes in sync/notes', () => {
     const profilesRoot = createTempDir('personal-agent-memory-create-');
 
     const created = createMemoryDoc({
@@ -139,7 +139,7 @@ Keep planning state durable.
     });
 
     const fileContent = readFileSync(created.filePath, 'utf-8');
-    expect(created.filePath).toBe(memoryPath(profilesRoot, 'memory-index'));
+    expect(created.filePath).toBe(join(profilesRoot, '..', 'notes', 'memory-index.md'));
     expect(fileContent).toContain('id: memory-index');
     expect(fileContent).toContain('type:note');
     expect(fileContent).toContain('summary: Top-level memory hub.');
@@ -150,6 +150,30 @@ Keep planning state durable.
     expect(fileContent).toContain('links:');
     expect(fileContent).toContain('related:');
     expect(fileContent).toContain('- personal-agent');
+  });
+
+  it('auto-migrates legacy runtime notes into sync/notes on load', () => {
+    const profilesRoot = createTempDir('personal-agent-memory-runtime-');
+    const runtimeNotePath = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
+
+    writeFile(
+      runtimeNotePath,
+      `---
+id: desktop
+title: Desktop Notes
+summary: Desktop box facts.
+type: note
+status: active
+updatedAt: 2026-03-31
+---
+# Desktop Notes
+`,
+    );
+
+    const loaded = loadMemoryDocs({ profilesRoot });
+    expect(loaded.docs.map((doc) => doc.id)).toContain('desktop');
+    expect(existsSync(runtimeNotePath)).toBe(false);
+    expect(readFileSync(join(profilesRoot, '..', 'notes', 'desktop.md'), 'utf-8')).toContain('id: desktop');
   });
 
   it('reports broken related references during lint', () => {
