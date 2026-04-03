@@ -985,14 +985,14 @@ function KnowledgeBrowserPage({
       <PageHeader
         actions={(
           <div className="flex items-center gap-2">
-            <ToolbarButton onClick={onCreateNode} className="text-accent">New page</ToolbarButton>
-            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh pages">
+            <ToolbarButton onClick={onCreateNode} className="text-accent">New doc</ToolbarButton>
+            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh vault docs">
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </ToolbarButton>
           </div>
         )}
       >
-        <PageHeading title="Pages" meta={pageMeta} />
+        <PageHeading title="Vault docs" meta={pageMeta} />
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -1016,7 +1016,7 @@ function KnowledgeBrowserPage({
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Sort</span>
-              <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort pages">
+              <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort vault docs">
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
@@ -1025,7 +1025,7 @@ function KnowledgeBrowserPage({
 
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Group by</span>
-              <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group pages">
+              <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group vault docs">
                 {[...GROUP_BY_OPTIONS, ...tagGroupOptions].map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
@@ -1034,7 +1034,7 @@ function KnowledgeBrowserPage({
 
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Density</span>
-              <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Page density">
+              <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Vault doc density">
                 <option value="comfortable">Comfortable</option>
                 <option value="dense">Dense table</option>
               </select>
@@ -1062,28 +1062,28 @@ function KnowledgeBrowserPage({
           {error && data && data.nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
           {actionError ? <p className="text-[11px] text-danger">{actionError}</p> : null}
 
-          {loading && !data ? <LoadingState label="Loading pages…" className="py-10" /> : null}
-          {error && !data ? <ErrorState message={`Unable to load pages: ${error}`} className="py-10" /> : null}
+          {loading && !data ? <LoadingState label="Loading vault docs…" className="py-10" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load vault docs: ${error}`} className="py-10" /> : null}
 
           {!loading && !error && data && data.nodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No pages yet"
-              body="Create a page or skill page to start shaping your durable layer."
+              title="No vault docs yet"
+              body="Create a note, project, or skill doc to start shaping your durable layer."
             />
           ) : null}
 
           {!loading && !error && data && data.nodes.length > 0 && filteredNodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No matching pages"
+              title="No matching vault docs"
               body={`No ${filterLabel.toLowerCase()} match the current query, grouping, and date range.`}
             />
           ) : null}
 
           {!loading && !error && filteredNodes.length > 0 ? (
             <NodesTable
-              groups={groupBy === 'none' ? [{ key: 'all', label: 'All pages', items: filteredNodes }] : groupedNodes}
+              groups={groupBy === 'none' ? [{ key: 'all', label: 'All vault docs', items: filteredNodes }] : groupedNodes}
               groupBy={groupBy}
               locationSearch={locationSearch}
               density={density}
@@ -1119,14 +1119,14 @@ function SelectedNodeView({
   const overviewHref = `/pages${buildNodesSearch(baseSearch, { kind: null, nodeId: null })}`;
 
   if (loading && !detail) {
-    return <LoadingState label="Loading page…" className="min-h-[18rem]" />;
+    return <LoadingState label="Loading vault doc…" className="min-h-[18rem]" />;
   }
 
   if (error || !detail) {
     return (
       <div className="space-y-3">
-        <ErrorState message={`Failed to load page: ${error ?? `@${selection.id} not found.`}`} />
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to pages</Link>
+        <ErrorState message={`Failed to load vault doc: ${error ?? `@${selection.id} not found.`}`} />
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to vault docs</Link>
       </div>
     );
   }
@@ -1136,7 +1136,7 @@ function SelectedNodeView({
       <NoteWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to pages"
+        backLabel="Back to vault docs"
         onNavigate={(updates, replace) => {
           const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
           navigate(`/pages${buildNodesSearch(baseSearch, {
@@ -1157,7 +1157,7 @@ function SelectedNodeView({
       <SkillWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to pages"
+        backLabel="Back to vault docs"
         selectedView={readSkillView(locationSearch)}
         selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
         onNavigate={(updates, replace) => {
@@ -1178,7 +1178,7 @@ function SelectedNodeView({
       project={detail.detail}
       activeProfile={currentProfile ?? undefined}
       backHref={overviewHref}
-      backLabel="Back to pages"
+      backLabel="Back to vault docs"
       onChanged={() => {
         emitProjectsChanged();
         onRefreshAll();
