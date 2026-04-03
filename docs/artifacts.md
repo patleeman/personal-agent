@@ -62,7 +62,7 @@ This is the right way to iterate on the same rendered output without creating a 
 
 Project artifacts are plain durable files stored with one project under:
 
-- `sync/nodes/<projectId>/artifacts/`
+- `sync/projects/<projectId>/artifacts/`
 
 Use them for:
 

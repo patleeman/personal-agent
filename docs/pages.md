@@ -6,23 +6,25 @@ A page is a place for information. It can contain content, link to other pages, 
 
 This is the user-facing model.
 
-Internally, the storage still lives under `sync/nodes/` for now, but the product model is **pages first**.
+The product model is **pages first**, and the durable storage now follows that vault layout directly.
 
 ## Core model
 
-A page is a directory with:
+A page is durable markdown plus optional supporting files:
 
-- required `INDEX.md`
+- notes live in `notes/` as `<id>.md` or `<id>/INDEX.md` when they need a package directory; the filename or package directory should match the page `id`
+- skills live in `_skills/<skill>/SKILL.md`
+- tracked pages live in `projects/<projectId>/project.md`
 - optional supporting directories such as `documents/`, `references/`, `attachments/`, `scripts/`, and `artifacts/`
 - lightweight structure through frontmatter, tags, relationships, and supporting files
 
-`INDEX.md` is always the canonical entrypoint.
-
 ## Durable root
 
-The canonical synced durable store is still:
+The canonical synced durable store is now the vault root under:
 
-- `~/.local/state/personal-agent/sync/nodes/<id>/`
+- `~/.local/state/personal-agent/sync/{notes,projects,_skills}/`
+
+Machine-local runtime paths such as `~/.local/state/personal-agent/pi-agent-runtime/notes` are not a supported durable note store. If legacy runtime notes are found, the runtime migrates them into `sync/notes/` and then treats the vault copy as canonical.
 
 That path is an implementation detail. The user model is:
 
@@ -100,9 +102,9 @@ Convention:
 - keep goals, status, blockers, and progress in markdown sections
 - use supporting files when the project needs attachments, notes, or artifacts
 
-## `INDEX.md`
+## Page entry files
 
-Every page starts with YAML frontmatter followed by markdown body content.
+Every page entry file starts with YAML frontmatter followed by markdown body content.
 
 Example:
 
@@ -237,11 +239,11 @@ Those role-aware workspaces are converging on the same page-editing primitives:
 
 Current compatibility rules:
 
-- storage remains under `sync/nodes/`
 - `pa page` is the preferred CLI surface
 - `pa node` remains as a compatibility alias
 - `/pages` is the browser URL for durable page work
 - note, project, and skill workspaces are all addressed inside that one surface
+- the old `sync/nodes/` mirror is legacy debt and should not be used as a source of truth
 
 ## Related docs
 

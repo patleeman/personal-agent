@@ -11,11 +11,11 @@ The product model is now:
 - **page** = the universal durable unit
 - **note / project / skill** = page roles or workflows
 
-The implementation still uses the unified node store under `sync/nodes/`, so you will still see `node` in:
+The implementation still uses `node` in some API names and compatibility surfaces, so you will still see `node` in:
 
-- on-disk paths like `sync/nodes/<id>/`
 - older CLI compatibility (`pa node`)
 - some internal APIs and code paths
+- older docs, links, or scripts that have not been updated yet
 
 That does **not** mean users or agents should lead with `node` as the mental model.
 
@@ -23,7 +23,7 @@ That does **not** mean users or agents should lead with `node` as the mental mod
 
 Use this doc when you need the storage compatibility context:
 
-- why the durable root is still `sync/nodes/`
+- why some compatibility surfaces still say `node`
 - why some APIs still say `node`
 - why older docs, links, or scripts may still use the term
 
@@ -33,9 +33,9 @@ For the actual product model, read [Pages](./pages.md).
 
 These are still valid for now:
 
-- `sync/nodes/<id>/`
 - `pa node ...`
 - older `/nodes` links and API clients
+- legacy scripts that still use node terminology
 
 The preferred user-facing surfaces are now:
 

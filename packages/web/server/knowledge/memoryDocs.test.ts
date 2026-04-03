@@ -25,11 +25,11 @@ function writeFile(path: string, content: string): void {
 }
 
 function notePath(stateRoot: string, noteId: string): string {
-  return join(stateRoot, 'sync', 'notes', noteId, 'INDEX.md');
+  return join(stateRoot, 'sync', 'notes', `${noteId}.md`);
 }
 
-function unifiedNodePath(stateRoot: string, nodeId: string): string {
-  return join(stateRoot, 'sync', 'nodes', nodeId, 'INDEX.md');
+function notePackagePath(stateRoot: string, noteId: string): string {
+  return join(stateRoot, 'sync', 'notes', noteId, 'INDEX.md');
 }
 
 beforeEach(() => {
@@ -83,7 +83,7 @@ Top-level note hub.
       title: 'Memory Index',
       summary: 'Top-level note hub.',
       description: 'Durable routing note.',
-      path: unifiedNodePath(stateRoot, 'memory-index'),
+      path: notePath(stateRoot, 'memory-index'),
       type: 'reference',
       area: 'notes',
       role: 'structure',
@@ -97,7 +97,7 @@ Top-level note hub.
 
   it('reads note detail content and package references', () => {
     const stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT as string;
-    const indexPath = notePath(stateRoot, 'memory-index');
+    const indexPath = notePackagePath(stateRoot, 'memory-index');
     writeFile(
       indexPath,
       `---
@@ -138,7 +138,7 @@ Reference details.
         title: 'Overview',
         summary: 'Overview reference.',
         relativePath: 'references/overview.md',
-        path: join(dirname(unifiedNodePath(stateRoot, 'memory-index')), 'references', 'overview.md'),
+        path: join(dirname(notePackagePath(stateRoot, 'memory-index')), 'references', 'overview.md'),
         updated: '2026-04-01',
       }),
     ]);
@@ -155,8 +155,8 @@ Reference details.
       status: 'active',
     });
 
-    expect(created.filePath).toBe(unifiedNodePath(stateRoot, 'quick-note'));
-    const content = readFileSync(unifiedNodePath(stateRoot, 'quick-note'), 'utf-8');
+    expect(created.filePath).toBe(notePath(stateRoot, 'quick-note'));
+    const content = readFileSync(notePath(stateRoot, 'quick-note'), 'utf-8');
     expect(content).toContain('id: quick-note');
     expect(content).toContain('title: Quick Note');
     expect(content).toContain('summary: Captured thought.');

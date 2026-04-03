@@ -28,7 +28,7 @@ Do not confuse scheduled tasks with:
 
 Recommended location:
 
-- `~/.local/state/personal-agent/sync/tasks/*.task.md`
+- `~/.local/state/personal-agent/sync/_tasks/*.task.md`
 
 Only files ending in `.task.md` are discovered automatically.
 

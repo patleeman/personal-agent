@@ -1298,7 +1298,7 @@ export function ProjectDetailPanel({
         {(conversationError || archiveError || deleteError) ? <p className="text-[12px] text-danger">{conversationError ?? archiveError ?? deleteError}</p> : null}
 
         {rawProjectOpen ? (
-          <ProjectRailSection title="INDEX.md">
+          <ProjectRailSection title="project.md">
             <ProjectRecordViewer
               repoRoot={record.repoRoot}
               summary={record.summary}

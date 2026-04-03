@@ -289,7 +289,7 @@ export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemo
 
       return lines.join('\n');
     }),
-    'These are durable note nodes. Read their INDEX.md when the user refers to that knowledge, asks for details, or wants the information updated.',
+    'These are durable note pages. Read the note markdown file when the user refers to that knowledge, asks for details, or wants the information updated.',
   ].join('\n');
 }
 

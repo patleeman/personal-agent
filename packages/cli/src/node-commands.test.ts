@@ -22,7 +22,7 @@ function writeFile(path: string, content: string): void {
 function createNodeRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
   const repoRoot = createTempDir('personal-agent-node-repo-');
   const stateRoot = createTempDir('personal-agent-node-state-');
-  const profilesRoot = join(stateRoot, 'sync', 'profiles');
+  const profilesRoot = join(stateRoot, 'sync', '_profiles');
   const configDir = createTempDir('personal-agent-node-config-');
   const configPath = join(configDir, 'config.json');
 
@@ -103,10 +103,10 @@ describe('node command', () => {
     logSpy.mockRestore();
   });
 
-  it('migrates legacy note, skill, and project stores into unified nodes', async () => {
+  it('lists canonical notes, skills, and projects from the vault layout', async () => {
     const { repoRoot, profilesRoot, configPath, stateRoot } = createNodeRepo();
 
-    writeFile(join(stateRoot, 'sync', 'notes', 'desktop', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'notes', 'desktop.md'), `---
 id: desktop
 kind: note
 title: Desktop
@@ -118,13 +118,9 @@ status: active
 
 Ubuntu workstation details.
 `);
-    writeFile(join(stateRoot, 'sync', 'skills', 'agent-browser', 'INDEX.md'), `---
-id: agent-browser
-kind: skill
+    writeFile(join(stateRoot, 'sync', '_skills', 'agent-browser', 'SKILL.md'), `---
 name: agent-browser
 description: Browser automation.
-title: agent-browser
-summary: Browser automation.
 profiles:
   - assistant
 ---
@@ -133,7 +129,7 @@ profiles:
 
 Use the browser automation helper.
 `);
-    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'INDEX.md'), `---
+    writeFile(join(stateRoot, 'sync', 'projects', 'ship-it', 'project.md'), `---
 id: ship-it
 kind: project
 title: Ship It
@@ -178,7 +174,7 @@ plan:
 
     const migrateExitCode = await runCli(['node', 'migrate', '--json']);
     expect(migrateExitCode).toBe(0);
-    expect(JSON.parse(logs[0] as string)).toMatchObject({ created: ['agent-browser', 'desktop', 'ship-it'] });
+    expect(JSON.parse(logs[0] as string)).toMatchObject({ created: [], updated: [], skipped: [] });
 
     logs.length = 0;
     const listExitCode = await runCli(['node', 'list', '--query', 'type:skill OR type:project', '--json']);

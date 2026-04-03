@@ -2,6 +2,7 @@ import { basename, dirname, join, relative, resolve } from 'node:path';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { getVaultRoot } from '@personal-agent/core';
 import {
   renderPromptCatalogTemplate,
   requirePromptCatalogEntryFromExtension,
@@ -160,6 +161,7 @@ function buildNoteTemplateVariables(cwd: string, context: ReturnType<typeof reso
     active_profile: context.activeProfile,
     active_profile_dir: toDisplayPath(cwd, context.activeProfileDir),
     repo_root: toDisplayPath(cwd, context.repoRoot),
+    vault_root: toDisplayPath(cwd, getVaultRoot()),
     requested_profile: context.requestedProfile,
     agents_edit_target: context.activeAgentsFile
       ? toDisplayPath(cwd, context.activeAgentsFile)

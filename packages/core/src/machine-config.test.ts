@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   getMachineConfigFilePath,
   readMachineConfigSection,
+  readMachineVaultRoot,
   updateMachineConfigSection,
   writeMachineDefaultProfile,
+  writeMachineVaultRoot,
 } from './machine-config.js';
 
 const originalEnv = process.env;
@@ -64,5 +66,17 @@ describe('machine config', () => {
     writeMachineDefaultProfile('assistant', { configRoot: configDir });
 
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({ defaultProfile: 'assistant' });
+  });
+
+  it('reads and writes the machine vault root in config.json', () => {
+    const configDir = createTempDir('pa-machine-config-');
+
+    writeMachineVaultRoot('~/Documents/personal-agent', { configRoot: configDir });
+    expect(readMachineVaultRoot({ configRoot: configDir })).toBe('~/Documents/personal-agent');
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({ vaultRoot: '~/Documents/personal-agent' });
+
+    writeMachineVaultRoot('', { configRoot: configDir });
+    expect(readMachineVaultRoot({ configRoot: configDir })).toBe('');
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
   });
 });

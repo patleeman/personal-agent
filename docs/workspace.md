@@ -90,7 +90,7 @@ In practice that means:
 
 The workspace usually follows the effective cwd of the conversation or selected repo context.
 
-That means project references and cwd selection influence which repo the workspace opens against, but the workspace itself remains a file interface, not the durable home of the conversation.
+That means page references and cwd selection influence which repo the workspace opens against, but the workspace itself remains a file interface, not the durable home of the conversation.
 
 ## Practical rule of thumb
 

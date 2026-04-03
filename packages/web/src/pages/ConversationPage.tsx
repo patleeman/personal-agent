@@ -5135,7 +5135,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       ? 'Connect to the remote workspace to continue…'
                       : pendingAskUserQuestion
                         ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
+                        : 'Message… (/ for commands, @ to reference pages, tasks, skills, and profiles)'}
                     title={pendingAskUserQuestion
                       ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                       : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}

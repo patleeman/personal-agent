@@ -27,13 +27,13 @@ In addition, repo built-ins are always available from:
 
 The synced durable store can contain:
 
-- `profiles/<profile>/AGENTS.md`
-- `profiles/<profile>/settings.json`
-- `profiles/<profile>/models.json`
-- `agents/**`
-- `nodes/**`
+- `_profiles/<profile>/AGENTS.md`
+- `_profiles/<profile>/settings.json`
+- `_profiles/<profile>/models.json`
+- `_skills/**`
+- `notes/**`
 - `tasks/*.task.md`
-- `projects/<projectId>/{INDEX.md,state.yaml}`
+- `projects/<projectId>/{project.md,state.yaml}`
 
 Repo built-ins still provide:
 
@@ -53,16 +53,16 @@ Repo built-ins still provide:
 
 ~/.local/state/personal-agent/
 └── sync/
-    ├── profiles/
-    │   ├── assistant/
+    ├── _profiles/
+    │   ├── default/
     │   │   ├── AGENTS.md
     │   │   ├── settings.json
     │   │   └── models.json
     │   └── datadog/
     │       ├── AGENTS.md
     │       └── settings.json
-    ├── agents/
-    ├── nodes/
+    ├── _skills/
+    ├── notes/
     ├── tasks/
     └── projects/
 ```
@@ -71,15 +71,15 @@ Repo built-ins still provide:
 
 | Place | Use it for |
 | --- | --- |
-| `agents/**` | durable role, behavior rules, and operating policy fragments |
-| `nodes/<id>/INDEX.md` tagged `type:skill` | reusable workflow skill pages |
-| `nodes/<id>/INDEX.md` tagged `type:note` | shared durable pages |
-| `nodes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that page |
-| `nodes/<id>/assets/**` | non-markdown assets used by that page |
+| `_profiles/<profile>/AGENTS.md` | durable role, behavior rules, and operating policy fragments |
+| `_skills/<skill>/SKILL.md` | reusable workflow skill pages |
+| `notes/**` | shared durable pages |
+| `notes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that page |
+| `notes/<id>/assets/**` | non-markdown assets used by that page |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
-| `profiles/<profile>/settings.json` | profile-specific runtime defaults such as theme and model prefs |
-| `profiles/<profile>/models.json` | profile-specific model provider definitions and overrides |
+| `_profiles/<profile>/settings.json` | profile-specific runtime defaults such as theme and model prefs |
+| `_profiles/<profile>/models.json` | profile-specific model provider definitions and overrides |
 
 ## `AGENTS.md`: durable identity and behavior
 
@@ -115,7 +115,7 @@ Examples:
 - a Git or release workflow
 - a browser-automation workflow
 
-Skill pages live under `sync/nodes/<id>/INDEX.md` with tag `type:skill` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
+Skill pages live under `sync/_skills/<skill>/SKILL.md` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
 
 For Pi compatibility, skill node frontmatter keeps:
 
@@ -143,9 +143,15 @@ Use them for:
 - distilled conversation captures
 - structure notes / maps of content when they genuinely help
 
-A note page is a directory with an `INDEX.md` file. Supporting directories are freeform.
+A reusable page can be a single markdown file in `notes/` or a note package directory with an `INDEX.md` file when it needs supporting material. Supporting directories are freeform.
 
-Notes may also include an optional `description` field for agent-facing guidance about how the note should be used or when it should be consulted.
+Use these naming rules:
+
+- simple note: `notes/<id>.md`
+- note package: `notes/<id>/INDEX.md`
+- the filename or package directory should match the note `id`
+
+Reusable pages may also include an optional `description` field for agent-facing guidance about how the page should be used or when it should be consulted.
 
 ```text
 note-id/
@@ -153,6 +159,8 @@ note-id/
 ├── references/
 └── assets/
 ```
+
+Simple notes can also live directly as `notes/<note-id>.md`.
 
 Typical note-node frontmatter:
 
@@ -175,18 +183,18 @@ metadata:
 ---
 ```
 
-Use tag `structure` when a note mostly organizes other notes.
+Use tag `structure` when a page mostly organizes other pages.
 There is no separate hub kind.
 
-Do not create empty hub or index notes by default. If a topic already has a real project or skill home, put the content there instead of duplicating it as a top-level note.
+Do not create empty hub or index pages by default. If a topic already has a real tracked-page or skill home, put the content there instead of duplicating it as a top-level page.
 
 ## Project pages
 
-Tracked pages are stored under `sync/nodes/<id>/` with:
+Tracked pages are stored under `sync/projects/<id>/` with:
 
-- `INDEX.md` for the human handoff / overview
+- `project.md` for the human handoff / overview
 - optional `documents/`, `attachments/`, and `artifacts/` directories for supporting material
-- optional child pages elsewhere in `sync/nodes/**` linked back with `links.parent: <projectId>`
+- optional child pages elsewhere in `sync/projects/**` or `sync/notes/**` linked back with `links.parent: <projectId>`
 
 See [Tracked Pages](./projects.md).
 
@@ -196,14 +204,15 @@ Important convention:
 
 - shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
 - profile-targeted durable resources are selected by filename or metadata applicability
-- durable note and skill pages live in the synced shared nodes store at `sync/nodes/`
+- durable note and skill pages live in the synced shared vault under `sync/notes/` and `sync/_skills/`
 
 In particular:
 
 - there is no profile-local synced `memory/` directory
-- behavior targeting belongs in durable `agents/**`, per-profile `profiles/<profile>/{settings.json,models.json}`, and tagged nodes under `nodes/**`
+- there is no supported durable note store under `pi-agent-runtime/notes`; that path is legacy migration input only
+- behavior targeting belongs in durable `_profiles/<profile>/{AGENTS.md,settings.json,models.json}` and shared vault content under `notes/**`, `_skills/**`, and `projects/**`
 
-## Notes vs projects vs inbox
+## Pages vs tracked pages vs inbox
 
 This distinction still matters.
 
@@ -215,18 +224,18 @@ Use:
 
 A good rule:
 
-- if it is reusable knowledge, store it in a note page
-- if it is about one piece of ongoing work, store it in a project page
+- if it is reusable knowledge, store it in a page
+- if it is about one piece of ongoing work, store it in a tracked page
 - if it is an async event worth noticing, surface it in the inbox
-- if it already has a project or skill home, do not also keep it as a duplicate top-level note
+- if it already has a tracked-page or skill home, do not also keep it as a duplicate top-level page
 
-## Writing style for notes and projects
+## Writing style for pages and tracked pages
 
 Use these defaults for durable node prose:
 
 - keep ids stable and slug-like, but make titles human-readable
 - keep `summary` to one sentence
-- start `INDEX.md` with a plain-English opening
+- start the note entry file (`<id>.md` or `INDEX.md`) with a plain-English opening
 - keep overview docs high-signal and move long detail into `references/` or project child pages
 - avoid placeholder sections, stale scaffolding, and empty structure pages
 - update or remove stale text instead of letting it linger
@@ -251,9 +260,10 @@ pa note new <id> --title "..." --summary "..." --type reference
 pa note lint
 ```
 
-Use `pa note` to operate on shared pages under `sync/nodes/`.
+Use `pa note` to operate on shared pages under `sync/notes/`.
 
-`pa note new` scaffolds `nodes/<note-id>/INDEX.md`.
+`pa note new` scaffolds `notes/<note-id>.md`.
+If legacy files still exist under `~/.local/state/personal-agent/pi-agent-runtime/notes`, note loads migrate them into `sync/notes/` and the vault copy becomes canonical.
 
 ## Local overlay
 
@@ -278,7 +288,7 @@ Do not store conversation ids or session ids in portable durable files.
 That includes:
 
 - note-node frontmatter/metadata
-- project page files
+- tracked-page files
 - activity frontmatter
 - any profile-local schema meant to be portable
 

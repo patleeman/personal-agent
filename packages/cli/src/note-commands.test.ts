@@ -20,13 +20,13 @@ function writeFile(path: string, content: string): void {
 }
 
 function notePath(profilesRoot: string, noteId: string): string {
-  return join(profilesRoot, '..', 'nodes', noteId, 'INDEX.md');
+  return join(profilesRoot, '..', 'notes', `${noteId}.md`);
 }
 
 function createNoteRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
   const repoRoot = createTempDir('personal-agent-memory-repo-');
   const stateRoot = createTempDir('personal-agent-memory-state-');
-  const profilesRoot = join(stateRoot, 'sync', 'profiles');
+  const profilesRoot = join(stateRoot, 'sync', '_profiles');
   const configDir = createTempDir('personal-agent-memory-config-');
   const configPath = join(configDir, 'config.json');
 
@@ -113,7 +113,7 @@ Desktop operational notes.
       parseErrors: Array<unknown>;
     };
 
-    expect(listPayload.noteDir).toBe(join(profilesRoot, '..', 'nodes'));
+    expect(listPayload.noteDir).toBe(join(profilesRoot, '..', 'notes'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
     expect(readFileSync(notePath(profilesRoot, 'runpod'), 'utf-8')).toContain('id: runpod');

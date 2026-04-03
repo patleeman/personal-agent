@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import {
-  createUnifiedNode,
   findUnifiedNodeById,
   loadUnifiedNodes,
   migrateLegacyNodes,
@@ -276,18 +275,6 @@ function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): voi
   }
 }
 
-function buildProjectNodeBody(title: string, description: string): string {
-  return [
-    `# ${title}`,
-    '',
-    description,
-    '',
-    '## Goal',
-    '',
-    description,
-  ].join('\n');
-}
-
 export function createProjectScaffold(
   options: CreateProjectScaffoldOptions,
 ): CreateProjectScaffoldResult {
@@ -334,17 +321,6 @@ export function createProjectScaffold(
   );
   writtenFiles.push(paths.projectFile);
 
-  createUnifiedNode({
-    id: options.projectId,
-    title,
-    summary: description,
-    status: 'active',
-    tags: [`type:project`, `profile:${options.profile}`],
-    body: buildProjectNodeBody(title, description),
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    force: true,
-  });
   writtenFiles.push(paths.documentFile);
 
   return {

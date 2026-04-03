@@ -21,18 +21,18 @@ If you are not sure which surface to use, start here.
 | If you need to… | Use | Durable home | Do not default to |
 | --- | --- | --- | --- |
 | Work with the agent right now | conversation | conversation/session state | inbox or page as the primary work surface |
-| Keep ongoing work alive across conversations | tracked page | `sync/nodes/<id>/` tagged `type:project` | top-level reusable page or long conversation history |
-| Save reusable knowledge or references | page | `sync/nodes/<id>/` tagged `type:note` | tracked-page docs or random conversation text |
-| Save reusable workflow instructions | skill page | `sync/nodes/<id>/` tagged `type:skill` | AGENTS or ad hoc pages |
+| Keep ongoing work alive across conversations | tracked page | `sync/projects/<id>/project.md` | top-level reusable page or long conversation history |
+| Save reusable knowledge or references | page | `sync/notes/**` | tracked-page docs or random conversation text |
+| Save reusable workflow instructions | skill page | `sync/_skills/<skill>/SKILL.md` | AGENTS or ad hoc pages |
 | Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | pages or tracked-page state |
 | Surface async work later without interrupting | activity / inbox | local inbox state | alerts by default |
 | Tell the user later | reminder / alert | local alert + wakeup state | scheduled task if no automation is needed |
 | Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
 | Run something detached right now | durable background run | `daemon/runs/<run-id>/` | scheduled task |
-| Run something later or repeatedly | scheduled task | `sync/tasks/*.task.md` | run |
+| Run something later or repeatedly | scheduled task | `sync/_tasks/*.task.md` | run |
 | Work on local repo files in the web UI | workspace | local repo/filesystem view | tracked-page docs or pages |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory as the first stop |
-| Keep a file with a specific tracked page | tracked-page attachment or tracked-page artifact | `sync/nodes/<id>/attachments|artifacts/` | top-level page assets |
+| Keep a file with a specific tracked page | tracked-page attachment or tracked-page artifact | `sync/projects/<id>/attachments|artifacts/` | top-level page assets |
 | Offload a conversation to another machine | execution target | machine-local execution-target config | scheduled task or run |
 | Call external tool servers through MCP | MCP server config + MCP calls | MCP config + auth state | hand-rolled shell scripts by default |
 
