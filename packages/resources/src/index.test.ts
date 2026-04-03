@@ -15,9 +15,11 @@ import {
   resolveResourceProfile,
 } from './index.js';
 
+const originalEnv = process.env;
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -29,7 +31,7 @@ function createTempRepo(): string {
 
 function createTempProfilesRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
-  const profilesRoot = join(root, 'sync', 'profiles');
+  const profilesRoot = join(root, 'sync', '_profiles');
   mkdirSync(profilesRoot, { recursive: true });
   tempDirs.push(root);
   return profilesRoot;
@@ -65,8 +67,8 @@ describe('resources profile loader', () => {
     writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Durable datadog\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
-    writeFile(join(syncRoot, 'nodes', 'shared-skill', 'INDEX.md'), '---\nid: shared-skill\ntitle: Shared skill\nsummary: Shared\ndescription: Shared\ntags:\n  - type:skill\n  - profile:shared\n---\n');
-    writeFile(join(syncRoot, 'nodes', 'datadog-skill', 'INDEX.md'), '---\nid: datadog-skill\ntitle: Datadog skill\nsummary: Datadog\ndescription: Datadog\ntags:\n  - type:skill\n  - profile:datadog\n---\n');
+    writeFile(join(syncRoot, '_skills', 'shared-skill', 'SKILL.md'), '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n');
+    writeFile(join(syncRoot, '_skills', 'datadog-skill', 'SKILL.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
@@ -89,8 +91,8 @@ describe('resources profile loader', () => {
       join(local, 'agent', 'settings.json'),
     ]);
     expect(resolved.skillDirs).toEqual([
-      join(syncRoot, 'nodes', 'datadog-skill'),
-      join(syncRoot, 'nodes', 'shared-skill'),
+      join(syncRoot, '_skills', 'datadog-skill'),
+      join(syncRoot, '_skills', 'shared-skill'),
     ]);
     expect(resolved.extensionEntries).toEqual([join(repo, 'extensions', 'index.ts')]);
   });
@@ -139,7 +141,9 @@ describe('resources profile loader', () => {
     const profilesRoot = createTempProfilesRoot();
     const syncRoot = join(profilesRoot, '..');
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
-    tempDirs.push(runtime);
+    const vaultRoot = mkdtempSync(join(tmpdir(), 'personal-agent-vault-'));
+    tempDirs.push(runtime, vaultRoot);
+    process.env.PERSONAL_AGENT_VAULT_ROOT = vaultRoot;
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
@@ -154,14 +158,14 @@ describe('resources profile loader', () => {
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'high',
     }));
-    writeFile(join(syncRoot, 'nodes', 'checkpoint', 'INDEX.md'), `---
-id: checkpoint
-title: Checkpoint
-summary: Commit and push the agent's current work.
+    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+name: checkpoint
 description: Commit and push the agent's current work.
-tags:
-  - type:skill
----`);
+profiles:
+  - datadog
+---
+# Checkpoint
+`);
 
     const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
@@ -174,6 +178,7 @@ tags:
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('catalog role');
     expect(runtimePrompt).toContain('shared append');
+    expect(runtimePrompt).toContain(`The canonical durable knowledge vault root is: ${vaultRoot}`);
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Datadog');
     expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
     expect(runtimeSettings.defaultProvider).toBe('openai-codex');
@@ -192,14 +197,14 @@ tags:
     writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
     writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
     writeFile(join(profilesRoot, 'shared.json'), '{"title":"Shared"}\n');
-    writeFile(join(syncRoot, 'nodes', 'checkpoint', 'INDEX.md'), `---
-id: checkpoint
-title: Checkpoint
-summary: Commit and push
+    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+name: checkpoint
 description: Commit and push
-tags:
-  - type:skill
----`);
+profiles:
+  - shared
+---
+# Checkpoint
+`);
 
     const resolved = resolveResourceProfile('shared', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
@@ -257,7 +262,7 @@ tags:
     const syncRoot = join(profilesRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(syncRoot, 'nodes', 'test', 'INDEX.md'), '---\nid: test\ntitle: Test\nsummary: Skill\ndescription: Skill\ntags:\n  - type:skill\n---\n');
+    writeFile(join(syncRoot, '_skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'role\n');
     writeFile(join(repo, 'themes/theme.json'), '{}\n');
 
@@ -272,8 +277,41 @@ tags:
     expect(args).toContain('-e');
     expect(args).toContain(join(repo, 'extensions/basic/index.ts'));
     expect(args).toContain('--skill');
-    expect(args).toContain(join(syncRoot, 'nodes', 'test'));
+    expect(args).toContain(join(syncRoot, '_skills', 'test'));
     expect(args).toContain('--theme');
     expect(args).toContain(join(repo, 'themes/theme.json'));
+  });
+
+  it('loads profiles and skills from canonical underscored durable directories', () => {
+    const repo = createTempRepo();
+    const root = mkdtempSync(join(tmpdir(), 'personal-agent-legacy-sync-'));
+    const syncRoot = join(root, 'sync');
+    const profilesRoot = join(syncRoot, '_profiles');
+    tempDirs.push(root);
+
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(profilesRoot, 'default', 'AGENTS.md'), '# Default\n');
+    writeFile(join(profilesRoot, 'default', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
+    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+name: checkpoint
+description: Commit your work.
+profiles:
+  - default
+---
+# Checkpoint
+`);
+
+    const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+    expect(profiles).toEqual(['default', 'shared']);
+
+    const resolved = resolveResourceProfile('default', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.agentsFiles).toContain(join(profilesRoot, 'default', 'AGENTS.md'));
+    expect(resolved.settingsFiles).toContain(join(profilesRoot, 'default', 'settings.json'));
+    expect(resolved.skillDirs).toEqual([join(syncRoot, '_skills', 'checkpoint')]);
   });
 });

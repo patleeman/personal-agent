@@ -1237,6 +1237,13 @@ export interface DefaultCwdState {
   effectiveCwd: string;
 }
 
+export interface VaultRootState {
+  currentRoot: string;
+  effectiveRoot: string;
+  defaultRoot: string;
+  source: 'env' | 'config' | 'default';
+}
+
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
 
 export interface ProviderAuthSummary {

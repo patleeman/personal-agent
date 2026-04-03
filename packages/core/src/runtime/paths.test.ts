@@ -30,7 +30,7 @@ import {
   validateStatePathsOutsideRepo,
   type RuntimeStatePaths,
 } from './paths.js';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 
@@ -89,6 +89,7 @@ describe('profile and config path helpers', () => {
     process.env = { ...originalEnv };
     delete process.env.PERSONAL_AGENT_STATE_ROOT;
     delete process.env.PERSONAL_AGENT_CONFIG_ROOT;
+    delete process.env.PERSONAL_AGENT_CONFIG_FILE;
     delete process.env.PERSONAL_AGENT_PROFILES_ROOT;
     delete process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
     delete process.env.PERSONAL_AGENT_VAULT_ROOT;
@@ -135,6 +136,20 @@ describe('profile and config path helpers', () => {
     expect(getDurableNotesDir()).toBe('/custom/vault/notes');
     expect(getDurableProjectsDir()).toBe('/custom/vault/projects');
     expect(getLocalProfileDir()).toBe('/custom/local');
+  });
+
+  it('reads vault root from machine config when no env override is set', () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
+    const stateRoot = mkdtempSync(join(tmpdir(), 'personal-agent-state-'));
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({ vaultRoot: '~/Documents/custom-agent-vault' }));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
+
+    expect(getVaultRoot()).toBe(join(homedir(), 'Documents', 'custom-agent-vault'));
+    expect(getDurableProfilesDir()).toBe(join(homedir(), 'Documents', 'custom-agent-vault', '_profiles'));
+
+    rmSync(configDir, { recursive: true, force: true });
+    rmSync(stateRoot, { recursive: true, force: true });
   });
 
   it('falls back to legacy non-underscored durable directories when underscored ones are absent', () => {

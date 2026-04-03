@@ -163,7 +163,7 @@ Typical durable paths there include:
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
-The external knowledge vault (default: `~/Documents/personal-agent`) is separate from `pa sync` and can be synced by another tool such as Obsidian Sync. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
+The external knowledge vault (default: `~/Documents/personal-agent`) is separate from `pa sync` and can be synced by another tool such as Obsidian Sync. You can override it with `PERSONAL_AGENT_VAULT_ROOT`, set `vaultRoot` in machine `config.json`, or use the desktop web UI Settings page. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
 
 See [Sync Guide](./sync.md).
 
@@ -179,7 +179,7 @@ See [Sync Guide](./sync.md).
 ### Runtime state
 
 - `PERSONAL_AGENT_STATE_ROOT` — override the runtime state root
-- `PERSONAL_AGENT_VAULT_ROOT` — override the external knowledge vault root (default auto-detects `~/Documents/personal-agent`)
+- `PERSONAL_AGENT_VAULT_ROOT` — override the external knowledge vault root (default auto-detects `~/Documents/personal-agent`; this wins over machine config `vaultRoot`)
 - `PERSONAL_AGENT_AUTH_PATH`
 - `PERSONAL_AGENT_SESSION_PATH`
 - `PERSONAL_AGENT_CACHE_PATH`

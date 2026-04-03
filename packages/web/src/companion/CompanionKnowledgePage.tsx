@@ -27,8 +27,8 @@ const INPUT_CLASS = 'w-full rounded-2xl border border-border-default bg-base px-
 const SELECT_CLASS = `${INPUT_CLASS} pr-9`;
 const QUERY_INPUT_CLASS = `${INPUT_CLASS} font-mono text-[13px]`;
 const FILTER_OPTIONS: Array<{ value: NodeBrowserFilter; label: string }> = [
-  { value: 'all', label: 'All pages' },
-  { value: 'page', label: 'Pages' },
+  { value: 'all', label: 'All docs' },
+  { value: 'page', label: 'Docs' },
   { value: 'skill', label: 'Skills' },
 ];
 const CORE_QUERY_FIELDS = [
@@ -50,7 +50,7 @@ function kindLabel(kind: NodeLinkKind | 'page'): string {
     case 'project':
     case 'note':
     case 'page':
-      return 'Page';
+      return 'Doc';
   }
 }
 
@@ -61,7 +61,7 @@ function pluralKindLabel(kind: NodeLinkKind | 'page'): string {
     case 'project':
     case 'note':
     case 'page':
-      return 'Pages';
+      return 'Docs';
   }
 }
 
@@ -326,14 +326,14 @@ function CompanionSelectedPageView({
           onClick={onBack}
           className="text-[12px] font-medium text-accent transition-colors hover:text-accent/80"
         >
-          ← Back to pages
+          ← Back to docs
         </button>
       </div>
 
       {!page ? (
         <div className="px-4 py-5">
-          <p className="text-[15px] text-primary">Page not found.</p>
-          <p className="mt-2 text-[13px] leading-relaxed text-secondary">@{selection.id} is not available in the current page store.</p>
+          <p className="text-[15px] text-primary">Doc not found.</p>
+          <p className="mt-2 text-[13px] leading-relaxed text-secondary">@{selection.id} is not available in the current docs store.</p>
         </div>
       ) : selection.kind === 'project' ? (
         <CompanionProjectDetailPage projectId={selection.id} />
@@ -418,9 +418,9 @@ export function CompanionKnowledgePage() {
           <section className="px-4">
             <div className="space-y-3">
               <div>
-                <p className="text-[15px] font-medium text-primary">Browse all durable pages from your phone.</p>
+                <p className="text-[15px] font-medium text-primary">Browse all durable docs from your phone.</p>
                 <p className="mt-1 text-[13px] leading-relaxed text-secondary">
-                  Use Lucene-style filters like <span className="font-mono text-[12px] text-primary">type:page AND status:active</span>, then open any page inline without leaving the Pages surface.
+                  Use Lucene-style filters like <span className="font-mono text-[12px] text-primary">type:page AND status:active</span>, then open any doc inline without leaving the Docs surface.
                 </p>
               </div>
 
@@ -440,26 +440,26 @@ export function CompanionKnowledgePage() {
                   </select>
                 </label>
                 <div className="text-[12px] text-secondary sm:text-right">
-                  {pages.length} total · {countsByKind.page} pages · {countsByKind.skill} skills
+                  {pages.length} total · {countsByKind.page} docs · {countsByKind.skill} skills
                 </div>
               </div>
 
             </div>
           </section>
 
-          {loading ? <p className="px-4 pt-5 text-[13px] text-dim">Loading pages…</p> : null}
-          {!loading && error ? <p className="px-4 pt-5 text-[13px] text-danger">Unable to load pages: {error}</p> : null}
+          {loading ? <p className="px-4 pt-5 text-[13px] text-dim">Loading docs…</p> : null}
+          {!loading && error ? <p className="px-4 pt-5 text-[13px] text-danger">Unable to load docs: {error}</p> : null}
           {!loading && !error && pages.length === 0 ? (
             <div className="px-4 pt-5">
-              <p className="text-[15px] text-primary">No pages yet.</p>
+              <p className="text-[15px] text-primary">No docs yet.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Create or sync pages in the main workspace and they will appear here automatically.
+                Create or sync docs in the main workspace and they will appear here automatically.
               </p>
             </div>
           ) : null}
           {!loading && !error && pages.length > 0 && visiblePages.length === 0 ? (
             <div className="px-4 pt-5">
-              <p className="text-[15px] text-primary">No pages match this query.</p>
+              <p className="text-[15px] text-primary">No docs match this query.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
                 Try a broader filter or clear the Lucene query.
               </p>

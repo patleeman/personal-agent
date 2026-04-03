@@ -4,9 +4,11 @@
  * Handles model preferences, model providers, and provider authentication.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type { Express } from 'express';
+import { getDefaultVaultRoot, getVaultRoot, readMachineConfig, updateMachineConfig } from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
 import {
   normalizeSavedModelPreferences,
@@ -59,6 +61,23 @@ let materializeWebProfileFn: (profile: string) => void = () => {
 let AUTH_FILE: string = '';
 
 let SETTINGS_FILE: string = '';
+
+function expandHomePath(value: string): string {
+  if (value === '~') {
+    return homedir();
+  }
+
+  if (value.startsWith('~/')) {
+    return join(homedir(), value.slice(2));
+  }
+
+  return value;
+}
+
+function readConfiguredVaultRoot(): string {
+  const config = readMachineConfig() as { vaultRoot?: unknown };
+  return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
+}
 
 const BUILT_IN_MODELS = [
   { id: 'claude-opus-4-6', provider: 'anthropic', name: 'Claude Opus 4.6', context: 200_000 },
@@ -384,6 +403,82 @@ export function registerModelRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/vault-root', (_req, res) => {
+    try {
+      const currentRoot = readConfiguredVaultRoot();
+      const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
+        ? 'env'
+        : currentRoot.length > 0
+          ? 'config'
+          : 'default';
+      res.json({
+        currentRoot,
+        effectiveRoot: getVaultRoot(),
+        defaultRoot: getDefaultVaultRoot(),
+        source,
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/vault-root', (req, res) => {
+    try {
+      const { root } = req.body as { root?: string | null };
+      if (root !== undefined && root !== null && typeof root !== 'string') {
+        res.status(400).json({ error: 'root must be a string or null' });
+        return;
+      }
+
+      const normalizedRoot = typeof root === 'string' ? root.trim() : '';
+      if (normalizedRoot.length > 0) {
+        const resolvedRoot = expandHomePath(normalizedRoot);
+        if (!existsSync(resolvedRoot)) {
+          res.status(400).json({ error: `Directory does not exist: ${resolvedRoot}` });
+          return;
+        }
+        if (!statSync(resolvedRoot).isDirectory()) {
+          res.status(400).json({ error: `Not a directory: ${resolvedRoot}` });
+          return;
+        }
+      }
+
+      updateMachineConfig((current) => {
+        const next = { ...(current as Record<string, unknown>) } as Record<string, unknown>;
+        if (normalizedRoot.length > 0) {
+          next.vaultRoot = normalizedRoot;
+        } else {
+          delete next.vaultRoot;
+        }
+        return next as typeof current;
+      });
+      materializeWebProfileFn(getCurrentProfileFn());
+
+      const currentRoot = readConfiguredVaultRoot();
+      const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
+        ? 'env'
+        : currentRoot.length > 0
+          ? 'config'
+          : 'default';
+      res.json({
+        currentRoot,
+        effectiveRoot: getVaultRoot(),
+        defaultRoot: getDefaultVaultRoot(),
+        source,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('Directory does not exist') || message.includes('Not a directory')
+        ? 400
+        : 500;
+      res.status(status).json({ error: message });
     }
   });
 

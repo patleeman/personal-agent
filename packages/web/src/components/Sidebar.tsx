@@ -854,8 +854,8 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
-        <TopNavItem to="/pages" icon={PATH.nodes} label="Vault" forceActive={nodesRouteActive} />
-        <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Workspace" />
+        <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
+        <TopNavItem to="/pages" icon={PATH.nodes} label="Docs" forceActive={nodesRouteActive} />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
@@ -973,8 +973,8 @@ export function Sidebar() {
                 <ShelfRow
                   to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`}
                   active
-                  title="new page"
-                  meta="Draft page"
+                  title="new doc"
+                  meta="Draft doc"
                   onClose={() => navigate(`/pages${buildNodeCreateSearch(location.search, { creating: false, createKind: null })}`)}
                 />
               ) : null}

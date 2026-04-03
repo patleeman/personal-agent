@@ -232,6 +232,15 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.vaultRoot) {
+        return buildUseApiResult({
+          currentRoot: '~/Documents/personal-agent',
+          effectiveRoot: '/Users/patrick/Documents/personal-agent',
+          defaultRoot: '/Users/patrick/Documents/personal-agent',
+          source: 'config',
+        });
+      }
+
       if (fetcher === api.defaultCwd) {
         return buildUseApiResult({
           currentCwd: '',
@@ -317,6 +326,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('Agent defaults');
     expect(html).toContain('Profile');
     expect(html).toContain('Default model');
+    expect(html).toContain('Knowledge vault root');
     expect(html).toContain('Default working directory');
     expect(html).toContain('Conversation titles');
   });

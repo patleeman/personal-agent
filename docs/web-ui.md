@@ -6,12 +6,11 @@ It gives you one place to see:
 
 - inbox attention
 - conversations
-- workspace files and edits
-- projects
+- the vault workspace and file browser
+- docs, projects, and skills
 - scheduled tasks
 - sync state
 - daemon state
-- notes
 - profile and model settings
 
 ## Start the UI
@@ -76,7 +75,7 @@ For app-level access control on remote devices:
 - the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
 - active paired browsers and devices refresh their session while in use; idle pairings expire after 30 days unless you revoke them sooner
 - the companion chats view mirrors desktop workspace-open conversations separately from live-but-not-open and needs-review conversations, so mobile archive/open actions track the same shared layout
-- the companion pages browser uses the same row shell as inbox and chats, and now supports the same Lucene-style page querying model as the desktop pages browser in a mobile-first layout
+- the companion docs browser uses the same row shell as inbox and chats, and supports the same Lucene-style durable-doc querying model as the desktop docs browser in a mobile-first layout
 - companion setup/recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
@@ -187,6 +186,12 @@ When active alerts exist and browser notifications are still off, the desktop we
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
 
+### Vault
+
+The default landing view is the Vault workspace at `/workspace/files`.
+
+It opens the configured knowledge vault root by default, so the workspace browser is the primary way to move around the durable Obsidian-style vault.
+
 ### Workspace
 
 The Workspace page is a local file browser and editor for the current codebase.
@@ -214,13 +219,13 @@ You can:
 
 
 
-### Pages (`/pages`)
+### Docs (`/pages`)
 
-The Pages page is the shared browser for notes, projects, and skills.
+The Docs page is the shared browser for notes, projects, and skills.
 
 It is meant to make the durable layer feel like one surface with a normal table-first browse flow instead of three unrelated product areas.
 
-From the Pages page you can:
+From the Docs page you can:
 
 - browse notes, projects, and skills together in one table
 - use a Lucene-style query bar for tag and text search, with inline field insertion and field-name suggestions while typing
@@ -229,14 +234,14 @@ From the Pages page you can:
 - switch the browser between built-in views (all / notes / projects / skills) or saved server-backed views from one selector
 - save reusable browser views on the server so they follow the active profile instead of the current browser tab
 - keep the table in either a roomier or denser row layout
-- start from one unified new-page screen that can create notes, projects, or skills
-- use compact per-row icon actions to open a page in the shared workspace or delete supported page types directly from the table
-- open any row into one shared page workspace with the main content in the center and metadata on the right
-- let that workspace adapt to the page role instead of switching to unrelated top-level product areas
-- edit shared page metadata there, including title/summary/description where appropriate, status, parent, and structured `key:value` tags with separate key/value inputs
-- keep recently opened pages and skills together in the sidebar’s unified Open Pages shelf
-- keep page bodies, skill definition/reference files, and tracked-page documents on the same shared markdown editor surface instead of three unrelated editors
-- use `/pages` as the only first-class browser URL for page and skill workspaces
+- start from one unified new-doc screen that can create notes, projects, or skills
+- use compact per-row icon actions to open a doc in the shared workspace or delete supported doc types directly from the table
+- open any row into one shared doc workspace with the main content in the center and metadata on the right
+- let that workspace adapt to the doc role instead of switching to unrelated top-level product areas
+- edit shared doc metadata there, including title/summary/description where appropriate, status, parent, and structured `key:value` tags with separate key/value inputs
+- keep recently opened docs and skills together in the sidebar’s unified Open Docs shelf
+- keep doc bodies, skill definition/reference files, and tracked project documents on the same shared markdown editor surface instead of three unrelated editors
+- use `/pages` as the canonical browser URL for durable doc and skill workspaces
 
 ### Tracked page workspaces
 
@@ -245,7 +250,7 @@ Tracked pages are durable cross-conversation work hubs, and in the UI they open 
 From a tracked page workspace you can:
 
 - inspect current status, blockers, optional milestones, and tasks
-- edit the raw tracked-page source (`INDEX.md` frontmatter + markdown body)
+- edit the raw tracked-page source (`project.md` frontmatter + markdown body)
 - edit or regenerate the tracked-page document when present
 - create child pages under the current page
 - upload attachments and page artifacts
@@ -294,13 +299,13 @@ The advanced pages still exist for subsystem-specific setup and controls:
 
 See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), and [Execution Targets](./execution-targets.md).
 
-### Note workspaces
+### Doc workspaces
 
-Note pages also open inside `/pages`.
+Docs also open inside `/pages`.
 
-Use a note page workspace when you want note-specific editing or explicit note-distillation and recovery work that is still running or needs attention.
+Use a doc workspace when you want doc editing or explicit doc-distillation and recovery work that is still running or needs attention.
 
-Use `/pages` for note work. The old note-specific browser URL is no longer part of the intended product surface.
+Use `/pages` for durable doc work. Old note/project browser URLs are no longer part of the intended product surface.
 
 See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
@@ -328,6 +333,7 @@ Settings lets you change:
 - default model
 - default thinking level
 - conversation auto-title behavior and title model
+- knowledge vault root
 - saved UI state
 
 The settings rail also links out to Runs, Scheduled tasks, Tools, and Instructions for operational work.
@@ -358,16 +364,16 @@ When you mention these items, the UI resolves them and injects durable context i
 
 This makes the conversation aware of the durable objects you are pointing at, instead of copying them manually into the prompt.
 
-## Referenced projects and working directory selection
+## Referenced pages and working directory selection
 
-Referenced projects matter in two ways:
+Referenced pages matter in two ways:
 
-1. they stay attached to the conversation as durable project context
-2. if a new conversation references exactly one project with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
+1. they stay attached to the conversation as durable page context
+2. if a new conversation references exactly one tracked page with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
-That makes project references more than just labels.
+That makes page references more than just labels.
 
 ## Common conversation composer commands
 
@@ -376,9 +382,9 @@ The UI supports slash-style commands in the composer.
 Common ones include:
 
 - `/model` — pick a model
-- `/project new <title>` — create a project quickly using the same text for both title and description
-- `/project reference <id>` — reference a project in this conversation
-- `/project unreference <id>` — stop referencing a project
+- `/page new <title>` — create a page quickly using the same text for both title and description
+- `/page reference <id>` — reference a page in this conversation
+- `/page unreference <id>` — stop referencing a page
 - `/resume <delay> [prompt]` — schedule this conversation to continue later (`/defer` also works)
 - `/draw` — open the Excalidraw editor and attach a drawing
 - `/drawings` — attach an existing saved drawing/revision from this conversation

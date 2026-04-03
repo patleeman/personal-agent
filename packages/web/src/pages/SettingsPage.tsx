@@ -350,6 +350,12 @@ export function SettingsPage() {
     replaceData: replaceModelProviderState,
   } = useApi(api.modelProviders);
   const {
+    data: vaultRootState,
+    loading: vaultRootLoading,
+    error: vaultRootLoadError,
+    refetch: refetchVaultRoot,
+  } = useApi(api.vaultRoot);
+  const {
     data: defaultCwdState,
     loading: defaultCwdLoading,
     error: defaultCwdLoadError,
@@ -386,6 +392,9 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [vaultRootDraft, setVaultRootDraft] = useState('');
+  const [savingVaultRoot, setSavingVaultRoot] = useState(false);
+  const [vaultRootSaveError, setVaultRootSaveError] = useState<string | null>(null);
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
@@ -485,9 +494,18 @@ export function SettingsPage() {
     return providerAuthState.providers.find((provider) => provider.id === selectedProviderId) ?? null;
   }, [providerAuthState, selectedProviderId]);
 
+  const vaultRootDirty = vaultRootState
+    ? vaultRootDraft.trim() !== vaultRootState.currentRoot
+    : false;
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
+
+  useEffect(() => {
+    if (vaultRootState) {
+      setVaultRootDraft(vaultRootState.currentRoot);
+    }
+  }, [vaultRootState?.currentRoot]);
 
   useEffect(() => {
     if (defaultCwdState) {
@@ -656,6 +674,30 @@ export function SettingsPage() {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingPreference(null);
+    }
+  }
+
+  async function handleVaultRootSave(nextRoot: string | null = vaultRootDraft) {
+    if (!vaultRootState || savingVaultRoot) {
+      return;
+    }
+
+    const normalizedRoot = (nextRoot ?? '').trim();
+    if (normalizedRoot === vaultRootState.currentRoot) {
+      return;
+    }
+
+    setVaultRootSaveError(null);
+    setSavingVaultRoot(true);
+
+    try {
+      const saved = await api.updateVaultRoot(normalizedRoot || null);
+      setVaultRootDraft(saved.currentRoot);
+      await refetchVaultRoot({ resetLoading: false });
+    } catch (error) {
+      setVaultRootSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingVaultRoot(false);
     }
   }
 
@@ -1113,6 +1155,7 @@ export function SettingsPage() {
             refetchProfiles({ resetLoading: false }),
             refetchModels({ resetLoading: false }),
             refetchModelProviders({ resetLoading: false }),
+            refetchVaultRoot({ resetLoading: false }),
             refetchDefaultCwd({ resetLoading: false }),
             refetchConversationTitleSettings({ resetLoading: false }),
             refetchProviderAuth({ resetLoading: false }),
@@ -1155,7 +1198,7 @@ export function SettingsPage() {
               <div className="space-y-4">
                 <SettingsPanel
                   title="Profile"
-                  description="Changes the active profile for inbox, projects, AGENTS/skills context, and new live sessions. The app reloads after switching."
+                  description="Changes the active profile for inbox, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
                 >
                   {profilesLoading && !profileState ? (
                     <p className="ui-card-meta">Loading profiles…</p>
@@ -1254,8 +1297,75 @@ export function SettingsPage() {
                 </SettingsPanel>
 
                 <SettingsPanel
+                  title="Knowledge vault root"
+                  description="Sets the canonical vault location for notes, projects, skills, and profile files. The agent and workspace/browser use this path as the durable knowledge home."
+                >
+                  {vaultRootLoading && !vaultRootState ? (
+                    <p className="ui-card-meta">Loading knowledge vault root…</p>
+                  ) : vaultRootLoadError && !vaultRootState ? (
+                    <p className="text-[12px] text-danger">Failed to load knowledge vault root: {vaultRootLoadError}</p>
+                  ) : vaultRootState ? (
+                    <form
+                      className="space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void handleVaultRootSave();
+                      }}
+                    >
+                      <label className="ui-card-meta" htmlFor="settings-vault-root">Path</label>
+                      <input
+                        id="settings-vault-root"
+                        value={vaultRootDraft}
+                        onChange={(event) => {
+                          setVaultRootDraft(event.target.value);
+                          if (vaultRootSaveError) {
+                            setVaultRootSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        placeholder="~/Documents/personal-agent"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={savingVaultRoot}
+                      />
+                      <p className="ui-card-meta break-all">
+                        {savingVaultRoot
+                          ? 'Saving knowledge vault root…'
+                          : vaultRootState.source === 'env'
+                            ? `Environment override active. Effective root: ${vaultRootState.effectiveRoot}`
+                            : vaultRootState.currentRoot
+                              ? `Effective root: ${vaultRootState.effectiveRoot}`
+                              : `Using default root: ${vaultRootState.defaultRoot}`}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={savingVaultRoot || !vaultRootDirty}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {savingVaultRoot ? 'Saving…' : 'Save vault root'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { void handleVaultRootSave(''); }}
+                          disabled={savingVaultRoot || vaultRootState.currentRoot.length === 0}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Use default root
+                        </button>
+                      </div>
+                      <p className="ui-card-meta">
+                        Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. Environment variable <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still overrides this setting when present.
+                      </p>
+                    </form>
+                  ) : null}
+
+                  {vaultRootSaveError && <p className="text-[12px] text-danger">{vaultRootSaveError}</p>}
+                </SettingsPanel>
+
+                <SettingsPanel
                   title="Default working directory"
-                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-page repo root still takes priority."
+                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-doc repo root still takes priority."
                 >
                   {defaultCwdLoading && !defaultCwdState ? (
                     <p className="ui-card-meta">Loading default working directory…</p>
@@ -2149,7 +2259,7 @@ export function SettingsPage() {
 
             <SettingsPanel
               title="Reset saved UI preferences"
-              description="These actions clear saved UI state. They do not delete conversations, pages, or agent data."
+              description="These actions clear saved UI state. They do not delete conversations, docs, or agent data."
             >
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
 
@@ -2157,7 +2267,7 @@ export function SettingsPage() {
                 <div className="space-y-2 min-w-0">
                   <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
                   <p className="ui-card-meta">
-                    Clears the stored sidebar width and per-page context rail widths, then reloads the page.
+                    Clears the stored sidebar width and per-doc context rail widths, then reloads the page.
                   </p>
                   <button
                     type="button"
@@ -2196,7 +2306,7 @@ export function SettingsPage() {
 
             <SettingsPanel
               title="Repo root"
-              description="The repository root currently used by the web app for projects, memory, tasks, and profile resources."
+              description="The repository root currently used by the web app for docs, tasks, and profile resources."
             >
               <p className="break-all font-mono text-[12px] leading-relaxed text-primary">
                 {status?.repoRoot ?? 'Unavailable'}

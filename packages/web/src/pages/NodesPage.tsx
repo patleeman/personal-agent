@@ -63,7 +63,7 @@ const SELECT_CLASS = `${INPUT_CLASS} sm:w-auto`;
 const QUERY_INPUT_CLASS = `${INPUT_CLASS} font-mono text-[12px]`;
 const PAGE_GROUP_ORDER = ['page', 'skill'] as const;
 const GROUP_BY_OPTIONS: Array<{ value: NodeBrowserGroupBy; label: string }> = [
-  { value: 'kind', label: 'Page type' },
+  { value: 'kind', label: 'Doc type' },
   { value: 'none', label: 'No grouping' },
   { value: 'status', label: 'Status' },
   { value: 'profile', label: 'Profile' },
@@ -79,8 +79,8 @@ const SORT_OPTIONS: Array<{ value: NodeBrowserSort; label: string }> = [
   { value: 'status_asc', label: 'Status' },
 ];
 const BUILT_IN_VIEW_OPTIONS: Array<{ value: NodeBrowserFilter; label: string }> = [
-  { value: 'all', label: 'All pages' },
-  { value: 'page', label: 'Pages' },
+  { value: 'all', label: 'All docs' },
+  { value: 'page', label: 'Docs' },
   { value: 'skill', label: 'Skills' },
 ];
 const CORE_QUERY_FIELDS = [
@@ -108,7 +108,7 @@ function kindLabel(kind: NodeLinkKind | 'page'): string {
     case 'note':
     case 'project':
     case 'page':
-      return 'Page';
+      return 'Doc';
   }
 }
 
@@ -119,7 +119,7 @@ function pluralKindLabel(kind: NodeLinkKind | 'page'): string {
     case 'note':
     case 'project':
     case 'page':
-      return 'Pages';
+      return 'Docs';
   }
 }
 
@@ -159,7 +159,7 @@ function summarizeNodeContext(node: NodeBrowserSummary): { primary: string; seco
   switch (node.kind) {
     case 'note': {
       const referenceCount = node.note?.referenceCount ?? 0;
-      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Page';
+      const primary = referenceCount > 0 ? `${referenceCount} ${referenceCount === 1 ? 'reference' : 'references'}` : 'Doc';
       return { primary, secondary: humanizeStatus(node.status), tags: visibleTags };
     }
     case 'skill': {
@@ -264,7 +264,7 @@ function sortGroupEntries(left: { key: string }, right: { key: string }, groupBy
 
 function buildGroupedNodes(nodes: NodeBrowserSummary[], groupBy: NodeBrowserGroupBy): GroupedNodeEntry[] {
   if (groupBy === 'none') {
-    return [{ key: 'all', label: 'All pages', items: nodes }];
+    return [{ key: 'all', label: 'All docs', items: nodes }];
   }
 
   const map = new Map<string, NodeBrowserSummary[]>();
@@ -716,7 +716,7 @@ function SavedViewsBar({
         <select
           value={selectedView}
           onChange={(event) => onViewChange(event.target.value)}
-          aria-label="Pages view"
+          aria-label="Docs view"
           className={SELECT_CLASS}
         >
           {BUILT_IN_VIEW_OPTIONS.map((view) => (
@@ -780,24 +780,24 @@ function NodeCreatePage({
     setParent(initialParent ?? '');
   }, [initialParent]);
 
-  const heading = 'New page';
+  const heading = 'New doc';
   const parentMeta = parent.trim() ? ` under @${parent.trim().toLowerCase()}` : '';
   const meta = createKind === 'project'
-    ? `Start a tracked page${parentMeta}${currentProfile ? ` for profile ${currentProfile}` : ''}.`
+    ? `Start a tracked doc${parentMeta}${currentProfile ? ` for profile ${currentProfile}` : ''}.`
     : createKind === 'skill'
-      ? `Create a reusable workflow page${parentMeta}.`
-      : `Create a page${parentMeta}.`;
+      ? `Create a reusable workflow doc${parentMeta}.`
+      : `Create a doc${parentMeta}.`;
   const summaryLabel = createKind === 'project' ? 'Summary' : 'Description';
   const summaryPlaceholder = createKind === 'project'
-    ? 'Short summary shown in page lists.'
+    ? 'Short summary shown in doc lists.'
     : createKind === 'skill'
       ? 'What this skill is for and when to use it.'
-      : 'What this page is for and how the agent should use it.';
+      : 'What this doc is for and how the agent should use it.';
   const bodyPlaceholder = createKind === 'project'
     ? 'Optional. Add the initial plan, context, or working notes.'
     : createKind === 'skill'
       ? 'Document the workflow, steps, and sharp edges.'
-      : 'Optional. Add the initial page content.';
+      : 'Optional. Add the initial doc content.';
 
   return (
     <div className="min-h-0 flex h-full flex-col overflow-hidden">
@@ -812,7 +812,7 @@ function NodeCreatePage({
                   disabled={busy || title.trim().length === 0}
                   className="text-accent"
                 >
-                  {busy ? 'Creating…' : 'Create page'}
+                  {busy ? 'Creating…' : 'Create doc'}
                 </ToolbarButton>
               </div>
             )}
@@ -822,15 +822,15 @@ function NodeCreatePage({
 
           <div className="space-y-4 rounded-2xl border border-border-subtle px-5 py-5">
             <label className="flex max-w-xs flex-col gap-1.5 text-[12px] text-dim">
-              <span>Page type</span>
+              <span>Doc type</span>
               <select
                 value={createKind}
                 onChange={(event) => onCreateKindChange(event.target.value as NodeLinkKind)}
                 className={SELECT_CLASS}
-                aria-label="Page type"
+                aria-label="Doc type"
               >
-                <option value="note">Page</option>
-                <option value="project">Tracked page</option>
+                <option value="note">Doc</option>
+                <option value="project">Tracked doc</option>
                 <option value="skill">Skill</option>
               </select>
             </label>
@@ -842,7 +842,7 @@ function NodeCreatePage({
                 value={title}
                 onChange={(event) => setTitle(event.target.value)}
                 className={INPUT_CLASS}
-                placeholder={createKind === 'project' ? 'Short page title' : createKind === 'skill' ? 'Skill title' : 'Page title'}
+                placeholder={createKind === 'project' ? 'Short doc title' : createKind === 'skill' ? 'Skill title' : 'Doc title'}
               />
             </div>
 
@@ -872,7 +872,7 @@ function NodeCreatePage({
             ) : null}
 
             <div className="space-y-1.5">
-              <label className="text-[12px] text-dim" htmlFor="new-node-parent">Parent page</label>
+              <label className="text-[12px] text-dim" htmlFor="new-node-parent">Parent doc</label>
               <input
                 id="new-node-parent"
                 value={parent}
@@ -986,13 +986,13 @@ function KnowledgeBrowserPage({
         actions={(
           <div className="flex items-center gap-2">
             <ToolbarButton onClick={onCreateNode} className="text-accent">New doc</ToolbarButton>
-            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh vault docs">
+            <ToolbarButton onClick={onRefresh} disabled={refreshing} aria-label="Refresh docs">
               {refreshing ? 'Refreshing…' : 'Refresh'}
             </ToolbarButton>
           </div>
         )}
       >
-        <PageHeading title="Vault docs" meta={pageMeta} />
+        <PageHeading title="Docs" meta={pageMeta} />
       </PageHeader>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -1016,7 +1016,7 @@ function KnowledgeBrowserPage({
           <div className="flex flex-wrap items-end gap-2">
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Sort</span>
-              <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort vault docs">
+              <select value={sort} onChange={(event) => onSortChange(event.target.value as NodeBrowserSort)} className={SELECT_CLASS} aria-label="Sort docs">
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
@@ -1025,7 +1025,7 @@ function KnowledgeBrowserPage({
 
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Group by</span>
-              <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group vault docs">
+              <select value={groupBy} onChange={(event) => onGroupByChange(event.target.value as NodeBrowserGroupBy)} className={SELECT_CLASS} aria-label="Group docs">
                 {[...GROUP_BY_OPTIONS, ...tagGroupOptions].map((option) => (
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
@@ -1034,7 +1034,7 @@ function KnowledgeBrowserPage({
 
             <label className="flex flex-col gap-1 text-[11px] text-dim">
               <span>Density</span>
-              <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Vault doc density">
+              <select value={density} onChange={(event) => onDensityChange(event.target.value as NodeBrowserDensity)} className={SELECT_CLASS} aria-label="Doc density">
                 <option value="comfortable">Comfortable</option>
                 <option value="dense">Dense table</option>
               </select>
@@ -1062,13 +1062,13 @@ function KnowledgeBrowserPage({
           {error && data && data.nodes.length > 0 ? <p className="text-[11px] text-danger">{error}</p> : null}
           {actionError ? <p className="text-[11px] text-danger">{actionError}</p> : null}
 
-          {loading && !data ? <LoadingState label="Loading vault docs…" className="py-10" /> : null}
-          {error && !data ? <ErrorState message={`Unable to load vault docs: ${error}`} className="py-10" /> : null}
+          {loading && !data ? <LoadingState label="Loading docs…" className="py-10" /> : null}
+          {error && !data ? <ErrorState message={`Unable to load docs: ${error}`} className="py-10" /> : null}
 
           {!loading && !error && data && data.nodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No vault docs yet"
+              title="No docs yet"
               body="Create a note, project, or skill doc to start shaping your durable layer."
             />
           ) : null}
@@ -1076,14 +1076,14 @@ function KnowledgeBrowserPage({
           {!loading && !error && data && data.nodes.length > 0 && filteredNodes.length === 0 ? (
             <EmptyState
               className="py-10"
-              title="No matching vault docs"
+              title="No matching docs"
               body={`No ${filterLabel.toLowerCase()} match the current query, grouping, and date range.`}
             />
           ) : null}
 
           {!loading && !error && filteredNodes.length > 0 ? (
             <NodesTable
-              groups={groupBy === 'none' ? [{ key: 'all', label: 'All vault docs', items: filteredNodes }] : groupedNodes}
+              groups={groupBy === 'none' ? [{ key: 'all', label: 'All docs', items: filteredNodes }] : groupedNodes}
               groupBy={groupBy}
               locationSearch={locationSearch}
               density={density}
@@ -1119,14 +1119,14 @@ function SelectedNodeView({
   const overviewHref = `/pages${buildNodesSearch(baseSearch, { kind: null, nodeId: null })}`;
 
   if (loading && !detail) {
-    return <LoadingState label="Loading vault doc…" className="min-h-[18rem]" />;
+    return <LoadingState label="Loading doc…" className="min-h-[18rem]" />;
   }
 
   if (error || !detail) {
     return (
       <div className="space-y-3">
         <ErrorState message={`Failed to load vault doc: ${error ?? `@${selection.id} not found.`}`} />
-        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to vault docs</Link>
+        <Link to={overviewHref} className="ui-toolbar-button inline-flex">Back to docs</Link>
       </div>
     );
   }
@@ -1136,7 +1136,7 @@ function SelectedNodeView({
       <NoteWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to vault docs"
+        backLabel="Back to docs"
         onNavigate={(updates, replace) => {
           const nextMemoryId = updates.memoryId === undefined ? detail.detail.memory.id : updates.memoryId;
           navigate(`/pages${buildNodesSearch(baseSearch, {
@@ -1157,7 +1157,7 @@ function SelectedNodeView({
       <SkillWorkspace
         detail={detail.detail}
         backHref={overviewHref}
-        backLabel="Back to vault docs"
+        backLabel="Back to docs"
         selectedView={readSkillView(locationSearch)}
         selectedItem={new URLSearchParams(locationSearch).get(SKILL_ITEM_SEARCH_PARAM)?.trim() || null}
         onNavigate={(updates, replace) => {
@@ -1178,7 +1178,7 @@ function SelectedNodeView({
       project={detail.detail}
       activeProfile={currentProfile ?? undefined}
       backHref={overviewHref}
-      backLabel="Back to vault docs"
+      backLabel="Back to docs"
       onChanged={() => {
         emitProjectsChanged();
         onRefreshAll();
@@ -1253,10 +1253,10 @@ export function NodesPage() {
       return 'Loading knowledge base…';
     }
     if (counts.all === 0) {
-      return 'No pages yet.';
+      return 'No docs yet.';
     }
     if (query.trim() || filter !== 'all' || dateRange.from || dateRange.to || groupBy !== 'kind' || sort !== 'updated_desc') {
-      return `${filteredNodes.length} visible · ${counts.all} total pages`;
+      return `${filteredNodes.length} visible · ${counts.all} total docs`;
     }
     return `${counts.all} total · ${formatPageRoleCount('page', counts.note + counts.project)} · ${formatPageRoleCount('skill', counts.skill)}`;
   }, [counts.all, counts.note, counts.project, counts.skill, dataLoading, dateRange.from, dateRange.to, filter, filteredNodes.length, groupBy, query, sort]);

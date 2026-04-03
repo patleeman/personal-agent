@@ -35,7 +35,7 @@ describe('companion resource pages', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the companion pages browser with lucene-style query guidance and grouped results', () => {
+  it('renders the companion docs browser with lucene-style query guidance and grouped results', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         profile: 'assistant',
@@ -102,7 +102,7 @@ describe('companion resource pages', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Browse all durable pages from your phone.');
+    expect(html).toContain('Browse all durable docs from your phone.');
     expect(html).toContain('Lucene query');
     expect(html).toContain('type:page AND status:active');
     expect(html).toContain('Active project');
