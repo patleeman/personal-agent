@@ -50,7 +50,7 @@ function printNoteHelp(): void {
     { usage: 'list [--json]', description: 'List parsed shared note pages' },
     { usage: 'find [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]', description: 'Filter shared note pages by metadata fields' },
     { usage: 'show <id> [--json]', description: 'Show one note page and metadata' },
-    { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note page scaffold with INDEX.md frontmatter' },
+    { usage: 'new <id> --title <title> --summary <summary> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]', description: 'Create a new shared note page scaffold in the durable vault notes directory' },
     { usage: 'lint [--json]', description: 'Validate shared note page frontmatter, duplicate ids, and broken note links' },
     { usage: 'help', description: 'Show note help' },
   ]);

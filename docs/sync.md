@@ -2,7 +2,7 @@
 
 `personal-agent` supports git-backed cross-machine sync for durable state.
 
-Use this when you want portable durable resources, conversation session history, and conversation read state to follow you across devices without syncing the rest of machine-local runtime state.
+Use this when you want app-managed durable state, conversation session history, and conversation read state to follow you across devices without syncing the rest of machine-local runtime state.
 
 ## What sync does
 
@@ -17,15 +17,16 @@ The managed sync repo now syncs everything under the sync root.
 In practice that means anything placed under `~/.local/state/personal-agent/sync/` is eligible to sync across machines.
 Typical durable paths include:
 
-- `profiles/**`
-- `agents/**`
-- `nodes/**`
-- `projects/**`
+- `tasks/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
 Machine-local runtime files stay out of the synced surface by living outside the sync root.
-That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index. Under `pi-agent/state`, only `conversation-attention/**` should remain in the sync repo.
+That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, the session index, and legacy `pi-agent-runtime/notes/**`. Under `pi-agent/state`, only `conversation-attention/**` should remain in the sync repo.
+
+Legacy runtime notes are migration input only. Durable notes should live in the external vault `notes/` directory as `notes/<id>.md` or `notes/<id>/INDEX.md`.
+
+If you use an external vault (default: `~/Documents/personal-agent`), notes, skills, projects, and profile files can sync through that vault separately from `pa sync`.
 
 `config/config.json` remains machine-local by default.
 

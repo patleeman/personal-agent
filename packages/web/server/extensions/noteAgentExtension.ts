@@ -97,7 +97,7 @@ export function createNoteAgentExtension(): (pi: ExtensionAPI) => void {
       promptGuidelines: [
         'Use this tool for shared note-page discovery and validation instead of running pa note through bash.',
         'Prefer find/show before creating a new note page so you do not duplicate durable knowledge.',
-        'Use new to scaffold a valid note page with INDEX.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
+        'Use new to scaffold a valid note page in the durable vault notes directory, then edit the file only when you need to add details beyond the scaffold.',
       ],
       parameters: NoteToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {

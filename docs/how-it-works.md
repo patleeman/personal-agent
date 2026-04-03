@@ -24,13 +24,14 @@ Common repo-managed examples:
 - `extensions/**`
 - `themes/**`
 
-Mutable durable resources default to the synced durable-state home:
+Mutable durable knowledge resources default to the external vault at `~/Documents/personal-agent`:
 
-- `~/.local/state/personal-agent/sync/profiles/<profile>/AGENTS.md`
-- `~/.local/state/personal-agent/sync/profiles/<profile>/settings.json`
-- `~/.local/state/personal-agent/sync/profiles/<profile>/models.json`
-- `~/.local/state/personal-agent/sync/nodes/**`
-- `~/.local/state/personal-agent/sync/tasks/**`
+- `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md`
+- `~/Documents/personal-agent/_profiles/<profile>/settings.json`
+- `~/Documents/personal-agent/_profiles/<profile>/models.json`
+- `~/Documents/personal-agent/{notes,projects,_skills}/**`
+
+The managed sync repo under `~/.local/state/personal-agent/sync/` still holds app-managed durable state such as tasks and optional synced conversation data.
 
 ### Local runtime state
 
@@ -42,6 +43,7 @@ Common examples:
 
 - `~/.local/state/personal-agent/pi-agent-runtime/auth.json` (always machine-local)
 - `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
+- `~/.local/state/personal-agent/pi-agent-runtime/notes/**` (legacy machine-local note migration input only, not a supported durable store)
 - `~/.local/state/personal-agent/pi-agent/sessions/**` (optionally synced when sync is enabled)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
 - inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
@@ -113,12 +115,12 @@ Pages are the unified durable product model for notes, projects, and skills.
 
 Use them for:
 
-- profile behavior files in `sync/profiles/<profile>/AGENTS.md`
-- reusable workflow skill pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:skill`
-- durable pages backed by `sync/nodes/<id>/INDEX.md` tagged `type:note` plus package-local `references/`
-- structured tracked pages backed by `sync/nodes/<id>/INDEX.md` plus supporting files
+- profile behavior files in the vault at `_profiles/<profile>/AGENTS.md`
+- reusable workflow skill pages backed by `_skills/<skill>/SKILL.md`
+- durable note pages backed by `notes/**` as `notes/<id>.md` or `notes/<id>/INDEX.md`, plus package-local `references/` when needed
+- structured tracked pages backed by `projects/<projectId>/project.md` plus supporting files
 
-The storage still lives under `sync/nodes/`, but the user-facing model is pages.
+The user-facing model is pages, and the on-disk durable model now matches that vault layout directly.
 
 See [Pages](./pages.md) and [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
@@ -193,7 +195,7 @@ Portable durable files should not store conversation ids or session ids.
 
 That means:
 
-- do not put conversation ids in tracked-page `state.yaml` or `INDEX.md`
+- do not put conversation ids in tracked-page `state.yaml` or `project.md`
 - do not put conversation ids in reusable-page frontmatter, state, or metadata
 - do not key repo files by conversation id
 
