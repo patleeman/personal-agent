@@ -385,7 +385,7 @@ export function ProjectRecordViewer({
 
       {rawProjectOpen && (
         <form onSubmit={onRawProjectSubmit} className="max-w-5xl space-y-4 border-t border-border-subtle pt-6">
-          <p className="ui-card-meta">INDEX.md</p>
+          <p className="ui-card-meta">project.md</p>
           <textarea
             value={rawProjectContent}
             onChange={(event) => onRawProjectContentChange(event.target.value)}

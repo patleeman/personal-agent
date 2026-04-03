@@ -19,7 +19,7 @@ Use these other places for adjacent concerns:
 
 - active profile `AGENTS.md` — Patrick-specific preferences, durable behavior, standing instructions
 - repo `AGENTS.md` — repo-specific development rules
-- skill pages under `sync/nodes/` tagged `type:skill` — reusable workflows and procedures
+- skill pages under `sync/_skills/<skill>/SKILL.md` — reusable workflows and procedures
 - tool schemas / runtime prompt material — exact tool arguments and live agent capabilities
 - `nodes.md`, `configuration.md`, and task docs — on-disk format and config details
 
@@ -92,13 +92,13 @@ Those four pages should answer most agent questions quickly.
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
 | Work on local repo files in the web UI | workspace | local filesystem / git-backed workspace state |
-| Track ongoing work or reusable knowledge in the shared durable layer | page | `~/.local/state/personal-agent/sync/nodes/**` |
-| Store durable behavior or preferences | `AGENTS.md`, settings, skill pages | repo defaults + `~/.local/state/personal-agent/sync/profiles/<profile>/{AGENTS.md,settings.json,models.json}` + `sync/{agents,skills}/**` |
+| Track ongoing work or reusable knowledge in the shared durable layer | page | `~/.local/state/personal-agent/sync/{notes,projects,_skills}/**` |
+| Store durable behavior or preferences | `AGENTS.md`, settings, skill pages | repo defaults + `~/.local/state/personal-agent/sync/_profiles/<profile>/{AGENTS.md,settings.json,models.json}` + `sync/_skills/**` |
 | Render inspectable outputs in the current conversation | conversation artifact | local conversation-artifact state |
 | Notice async outcomes later without interrupting yourself | inbox/activity | local runtime inbox state |
 | Interrupt yourself later or wake a conversation back up | reminder / alert / deferred resume | local runtime alert + wakeup state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/runs/**` |
-| Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/tasks/*.task.md` + local daemon state |
+| Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/_tasks/*.task.md` + local daemon state |
 | Keep durable state aligned across machines | sync (`pa sync`) | git-backed sync repo under `~/.local/state/personal-agent/sync/**` |
 
 ## Read this if you are an agent

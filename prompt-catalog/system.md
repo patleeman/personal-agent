@@ -60,6 +60,7 @@ Use the active-profile `AGENTS.md`, skills, and shared note nodes as the durable
 - active_profile: {{ active_profile }}
 - active_profile_dir: {{ active_profile_dir }}
 - repo_root: {{ repo_root }}
+- vault_root: {{ vault_root }}
 {% if requested_profile and requested_profile != active_profile %}
 - requested_profile: {{ requested_profile }}
 - note: requested profile was missing; using "{{ active_profile }}"

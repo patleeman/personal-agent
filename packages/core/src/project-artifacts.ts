@@ -355,15 +355,18 @@ function formatProjectState(document: ProjectDocument): Record<string, unknown> 
 }
 
 function buildProjectIndexFrontmatter(document: ProjectDocument): Record<string, unknown> {
+  const ownerProfile = assertNonEmptyText(document.ownerProfile, 'Project ownerProfile');
+  const tags = [`type:project`, `profile:${ownerProfile}`];
   return {
     id: assertNonEmptyText(document.id, 'Project id'),
     kind: 'project',
     title: assertNonEmptyText(document.title, 'Project title'),
     summary: assertNonEmptyText(document.summary, 'Project summary'),
     status: assertNonEmptyText(document.status, 'Project status'),
-    ownerProfile: assertNonEmptyText(document.ownerProfile, 'Project ownerProfile'),
+    ownerProfile,
     createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    tags,
   };
 }
 
@@ -513,9 +516,16 @@ function parseLegacyProjectDocument(object: Record<string, unknown>, label: stri
 function readProjectNode(path: string): { document: ProjectDocument; body: string } {
   const stateContent = readFileSync(path, 'utf-8');
   const stateObject = parseYamlDocument(stateContent, 'Project state');
-  const indexPath = join(dirname(path), 'INDEX.md');
+  const projectDocPath = join(dirname(path), 'project.md');
+  const legacyIndexPath = join(dirname(path), 'INDEX.md');
   const legacyBriefPath = join(dirname(path), 'BRIEF.md');
-  const existingIndexPath = existsSync(indexPath) ? indexPath : existsSync(legacyBriefPath) ? legacyBriefPath : null;
+  const existingIndexPath = existsSync(projectDocPath)
+    ? projectDocPath
+    : existsSync(legacyIndexPath)
+      ? legacyIndexPath
+      : existsSync(legacyBriefPath)
+        ? legacyBriefPath
+        : null;
 
   if (!existingIndexPath) {
     return {
@@ -592,9 +602,16 @@ export function readProject(path: string): ProjectDocument {
 }
 
 export function readProjectIndexBody(path: string): string | null {
-  const indexPath = join(dirname(path), 'INDEX.md');
+  const projectDocPath = join(dirname(path), 'project.md');
+  const legacyIndexPath = join(dirname(path), 'INDEX.md');
   const legacyBriefPath = join(dirname(path), 'BRIEF.md');
-  const existingIndexPath = existsSync(indexPath) ? indexPath : existsSync(legacyBriefPath) ? legacyBriefPath : null;
+  const existingIndexPath = existsSync(projectDocPath)
+    ? projectDocPath
+    : existsSync(legacyIndexPath)
+      ? legacyIndexPath
+      : existsSync(legacyBriefPath)
+        ? legacyBriefPath
+        : null;
   if (!existingIndexPath) {
     return null;
   }
@@ -608,9 +625,9 @@ export function readProjectIndexBody(path: string): string | null {
 }
 
 export function writeProjectIndexBody(path: string, document: ProjectDocument, body: string): void {
-  const indexPath = join(dirname(path), 'INDEX.md');
-  mkdirSync(dirname(indexPath), { recursive: true });
-  writeFileSync(indexPath, formatProjectIndex(document, body));
+  const projectDocPath = join(dirname(path), 'project.md');
+  mkdirSync(dirname(projectDocPath), { recursive: true });
+  writeFileSync(projectDocPath, formatProjectIndex(document, body));
 }
 
 export function writeProject(path: string, document: ProjectDocument): void {

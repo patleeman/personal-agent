@@ -54,7 +54,7 @@ describe('projectResources', () => {
 
     const brief = readProjectDocument({ repoRoot, profile: 'datadog', projectId: 'briefs' });
     expect(brief?.content).toContain('A durable project note.');
-    expect(brief?.path).toContain('project-document.md');
+    expect(brief?.path).toContain('project.md');
   });
 
   it('migrates legacy project notes into child pages', () => {
@@ -75,7 +75,7 @@ kind: decision
 createdAt: 2026-03-20T12:00:00.000Z
 updatedAt: 2026-03-21T09:30:00.000Z
 ---
-Keep the main project doc in INDEX.md.
+Keep the main project doc in project.md.
 `);
 
     const result = migrateLegacyProjectPages({
@@ -94,7 +94,7 @@ Keep the main project doc in INDEX.md.
     expect(child?.tags).toContain('profile:datadog');
     expect(child?.tags).toContain('noteType:decision');
     expect(child?.body).toContain('# Capture the decision');
-    expect(child?.body).toContain('Keep the main project doc in INDEX.md.');
+    expect(child?.body).toContain('Keep the main project doc in project.md.');
   });
 
   it('uploads, downloads, and deletes project files from the unified files bucket', () => {

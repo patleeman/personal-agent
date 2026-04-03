@@ -88,11 +88,11 @@ A tracked page answers:
 
 Notes, skills, and projects are all **pages** in the product model.
 
-Internally they still share the same node-backed durable structure:
+Internally they still share one vault-backed durable model:
 
-- directory-based storage
-- `INDEX.md` as the canonical human entrypoint
-- optional `state.yaml` for structured state
+- note pages under `notes/` as markdown files or note packages when they need supporting files, with filenames or package directories matching the page `id`
+- skill packages under `_skills/<skill>/SKILL.md`
+- tracked pages under `projects/<projectId>/project.md` plus `state.yaml` and supporting directories
 - supporting directories when needed
 
 This is why the system is cohesive.
@@ -111,9 +111,9 @@ A simple way to say it:
 | Memory role | Durable home | Use it for | Do not default to |
 | --- | --- | --- | --- |
 | Behavioral memory | `AGENTS.md` | preferences, policy, durable behavior | node content or project state |
-| Knowledge memory | pages backed by `sync/nodes/` | reusable facts and references | tracked pages for generic knowledge |
-| Procedural memory | skill pages backed by `sync/nodes/` | reusable workflows | AGENTS for long procedures |
-| Working memory | tracked pages backed by `sync/nodes/` | active tracked work | top-level reusable pages for live project state |
+| Knowledge memory | pages backed by `sync/notes/` | reusable facts and references | tracked pages for generic knowledge |
+| Procedural memory | skill pages backed by `sync/_skills/` | reusable workflows | AGENTS for long procedures |
+| Working memory | tracked pages backed by `sync/projects/` | active tracked work | top-level reusable pages for live project state |
 
 ## What makes this a knowledge-management system
 
@@ -258,7 +258,9 @@ This is why the docs should describe these as one knowledge system rather than s
 
 The old naming can be confusing.
 
-`pa note` operates on the shared **note subset**. The canonical shared store is still `sync/nodes/`, and `pa page` is now the preferred unified surface.
+`pa note` operates on the shared **note subset**. The canonical shared store is now `sync/notes/`, and `pa page` is the preferred unified surface.
+
+`~/.local/state/personal-agent/pi-agent-runtime/notes` is not a second supported durable store. It is only a legacy migration source; if runtime note files are found there, the loader moves them into `sync/notes/` and treats the vault copy as canonical.
 
 That does **not** mean the whole durable memory system is only one narrow page subset.
 

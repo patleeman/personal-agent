@@ -18,9 +18,9 @@ See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the st
 
 ## Skill pages
 
-Skill pages live in the shared durable nodes store plus optional local overlay skill dirs:
+Skill pages live in the shared durable vault plus optional local overlay skill dirs:
 
-- `~/.local/state/personal-agent/sync/nodes/` tagged `type:skill`
+- `~/.local/state/personal-agent/sync/_skills/<skill>/SKILL.md`
 - local overlay skill dirs
 - repo defaults and built-in runtime capabilities
 
@@ -61,8 +61,8 @@ Use this rule:
 
 - change `AGENTS.md` when you want to change durable behavior or policy
 - add or update a **skill page** when you want a reusable workflow
-- add or update a **note page** when you want durable knowledge or reference material
-- create or update a **project page** when you want tracked work state
+- add or update a **page** when you want durable knowledge or reference material
+- create or update a **tracked page** when you want tracked work state
 - create a **scheduled task** when you want unattended automation
 
 Only reach for extensions when you need to change runtime behavior itself.

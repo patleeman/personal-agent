@@ -24,7 +24,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_STATE_ROOT: stateRoot,
-    PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', 'profiles'),
+    PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', '_profiles'),
   };
 });
 
@@ -72,7 +72,7 @@ function createToolContext() {
 }
 
 function notePath(noteId: string): string {
-  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'nodes', noteId, 'INDEX.md');
+  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'notes', `${noteId}.md`);
 }
 
 describe('note agent extension', () => {

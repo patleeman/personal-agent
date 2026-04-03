@@ -61,7 +61,7 @@ function printHelp(config: UnifiedStoreCommandConfig): void {
     { usage: 'delete <id> [--json]', description: `Delete a unified ${config.singular}` },
     { usage: 'tag <id> [--add <key:value>] [--remove <key:value>] [--json]', description: `Add or remove ${config.singular} tags` },
     { usage: 'lint [--json]', description: `Validate ${config.singular} frontmatter, duplicate ids, and references` },
-    { usage: 'migrate [--json]', description: 'Copy legacy notes, skills, and projects into /sync/nodes' },
+    { usage: 'migrate [--json]', description: 'Legacy compatibility command; the vault no longer materializes /sync/nodes' },
     { usage: 'help', description: `Show ${config.commandName} help` },
   ]);
 }
@@ -146,7 +146,7 @@ async function runUnifiedStoreCommand(args: string[], config: UnifiedStoreComman
     }
 
     console.log(section(`Unified ${config.plural}`));
-    console.log(keyValue('Nodes dir', loaded.nodesDir));
+    console.log(keyValue('Vault root', loaded.nodesDir));
     console.log(keyValue('Query', query ?? 'none'));
     if (nodes.length === 0) {
       console.log(dim(`No unified ${config.plural} matched.`));
@@ -187,7 +187,7 @@ async function runUnifiedStoreCommand(args: string[], config: UnifiedStoreComman
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
     console.log(section(`Unified ${config.singular} search`));
-    console.log(keyValue('Nodes dir', loaded.nodesDir));
+    console.log(keyValue('Vault root', loaded.nodesDir));
     console.log(keyValue('Query', query));
     if (nodes.length === 0) {
       console.log(dim(`No unified ${config.plural} matched the supplied query.`));
@@ -446,7 +446,7 @@ async function runUnifiedStoreCommand(args: string[], config: UnifiedStoreComman
       return hasIssues ? 1 : 0;
     }
     console.log(section(`Unified ${config.singular} validation`));
-    console.log(keyValue('Nodes dir', result.nodesDir));
+    console.log(keyValue('Vault root', result.nodesDir));
     console.log(keyValue('Nodes parsed', result.validNodes));
     console.log(keyValue('Parse errors', result.parseErrors.length));
     console.log(keyValue('Duplicate ids', result.duplicateIds.length));
@@ -492,7 +492,7 @@ async function runUnifiedStoreCommand(args: string[], config: UnifiedStoreComman
       return 0;
     }
     console.log(section(`Legacy ${config.singular} migration`));
-    console.log(keyValue('Nodes dir', result.nodesDir));
+    console.log(keyValue('Vault root', result.nodesDir));
     console.log(keyValue('Created', result.created.length));
     console.log(keyValue('Updated', result.updated.length));
     console.log(keyValue('Skipped', result.skipped.length));

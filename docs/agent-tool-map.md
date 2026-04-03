@@ -18,10 +18,10 @@ Use the CLI mainly for:
 
 | Job | Preferred tool | Durable home | Notes |
 | --- | --- | --- | --- |
-| Track ongoing work, status, blockers, milestones, child pages | `project` | tracked page backed by `sync/nodes/**` | use tracked pages for durable ongoing work |
-| Find or create durable pages | `note` | page backed by `sync/nodes/**` | find/show before new |
+| Track ongoing work, status, blockers, milestones, child pages | `project` | tracked page backed by `sync/projects/**` | use tracked pages for durable ongoing work |
+| Find or create durable pages | `note` | page backed by `sync/notes/**` | find/show before new |
 | Create passive async attention items | `activity` | local inbox/activity state | use for async outcomes worth noticing later |
-| Schedule unattended automation | `scheduled_task` | `sync/tasks/*.task.md` + daemon state | use for later or recurring work |
+| Schedule unattended automation | `scheduled_task` | `sync/_tasks/*.task.md` + daemon state | use for later or recurring work |
 | Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
 | Continue this conversation later without user input | `deferred_resume` | local wakeup state | use for agent-owned continue-later behavior |
 | Remind the user later | `reminder` | local alert + wakeup state | use for user-requested tell-me-later behavior |
@@ -52,7 +52,7 @@ There is no dedicated `agents` tool in this environment. Edit the relevant `AGEN
 
 Use skill pages for reusable procedures.
 
-There is no dedicated `skill` CRUD tool in this environment. Edit `sync/nodes/<id>/INDEX.md` and supporting files directly when you need to create or update a skill.
+There is no dedicated `skill` CRUD tool in this environment. Edit `sync/_skills/<skill>/SKILL.md` and supporting files directly when you need to create or update a skill.
 
 ## Quick routing rules
 

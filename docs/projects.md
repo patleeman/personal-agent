@@ -19,23 +19,22 @@ If the work should still make sense next week and has an active plan, it probabl
 
 ## On-disk shape
 
-Tracked pages are stored in the unified node tree:
+Tracked pages are stored in project packages:
 
-- `~/.local/state/personal-agent/sync/nodes/<projectId>/INDEX.md`
-- `~/.local/state/personal-agent/sync/nodes/<projectId>/attachments/`
-- `~/.local/state/personal-agent/sync/nodes/<projectId>/artifacts/`
-- optional supporting files under `~/.local/state/personal-agent/sync/nodes/<projectId>/documents/`
-- optional child pages anywhere under `~/.local/state/personal-agent/sync/nodes/<childPageId>/INDEX.md` with `links.parent: <projectId>`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/project.md`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/state.yaml`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/attachments/`
+- `~/.local/state/personal-agent/sync/projects/<projectId>/artifacts/`
+- optional supporting files under `~/.local/state/personal-agent/sync/projects/<projectId>/documents/`
+- optional child pages anywhere under `sync/projects/<projectId>/` or `sync/notes/` with `links.parent: <projectId>`
 
-`INDEX.md` is the canonical tracked page.
-
-The old top-level `sync/projects/` tree was a legacy layout. Tracked pages now live with other pages and skills in `sync/nodes/`.
+`project.md` is the canonical tracked-page document.
 
 ## What goes where
 
-### `INDEX.md`
+### `project.md`
 
-Use `INDEX.md` for the durable tracked-page record:
+Use `project.md` for the durable tracked-page record:
 
 - what the work is
 - why it exists
@@ -89,8 +88,8 @@ Use these defaults:
 
 - prefer human-readable titles; keep raw slugs in ids and directory names
 - keep `summary` to one sentence
-- start `INDEX.md` with a plain-English overview
-- keep `INDEX.md` high-signal and move long detail into child pages
+- start `project.md` with a plain-English overview
+- keep `project.md` high-signal and move long detail into child pages
 - avoid template filler and empty headings
 - prefer a few concrete bullets over bloated PM boilerplate
 - keep current status and recent progress truthful and current
@@ -154,7 +153,7 @@ Tracked-page tasks are just tracked-page checklist items.
 
 Scheduled tasks are daemon automation definitions under:
 
-- `~/.local/state/personal-agent/sync/tasks/*.task.md`
+- `~/.local/state/personal-agent/sync/_tasks/*.task.md`
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 

@@ -131,7 +131,7 @@ Portable files should not store conversation ids or session ids.
 Do **not** put conversation ids into:
 
 - project `state.yaml`
-- project `INDEX.md`
+- project `project.md`
 - note-node frontmatter
 - note metadata
 - skill metadata

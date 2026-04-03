@@ -458,7 +458,7 @@ export function matchesNodeBrowserQuery(node: NodeBrowserSummary, query: string)
 export function getNodeGroupValue(node: NodeBrowserSummary, groupBy: NodeBrowserGroupBy): string {
   switch (groupBy) {
     case 'none':
-      return 'All pages';
+      return 'All docs';
     case 'kind':
       return node.kind;
     case 'status':
@@ -471,6 +471,6 @@ export function getNodeGroupValue(node: NodeBrowserSummary, groupBy: NodeBrowser
       if (groupBy.startsWith('tag:')) {
         return extractTagValue(node.tags, groupBy.slice(4)) ?? 'untagged';
       }
-      return 'All pages';
+      return 'All docs';
   }
 }

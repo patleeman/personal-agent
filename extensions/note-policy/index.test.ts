@@ -35,6 +35,7 @@ afterEach(async () => {
   delete process.env.PERSONAL_AGENT_PROFILE;
   delete process.env.PERSONAL_AGENT_STATE_ROOT;
   delete process.env.PERSONAL_AGENT_PROFILES_ROOT;
+  delete process.env.PERSONAL_AGENT_VAULT_ROOT;
 });
 
 describe('note policy extension', () => {
@@ -45,6 +46,7 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
@@ -71,6 +73,7 @@ describe('note policy extension', () => {
     const prompt = result?.systemPrompt ?? '';
     expect(prompt).toContain('# Identity & Goal');
     expect(prompt).toContain('- active_profile: datadog');
+    expect(prompt).toContain('- vault_root: vault');
     expect(prompt).toContain('- Shared notes dir: notes');
     expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
     expect(prompt).toContain('<available_notes>');
@@ -84,6 +87,7 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'missing-profile';
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
 
@@ -106,6 +110,7 @@ describe('note policy extension', () => {
 
     const prompt = result?.systemPrompt ?? '';
     expect(prompt).toContain('- active_profile: shared');
+    expect(prompt).toContain(`- vault_root: ${join(stateRoot, 'vault')}`);
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');
     expect(prompt).toContain('- AGENTS.md: none (shared profile does not use AGENTS.md)');
