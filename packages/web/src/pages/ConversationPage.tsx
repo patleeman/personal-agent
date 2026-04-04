@@ -3595,7 +3595,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cwd,
       `${messageCount} ${messageCount === 1 ? 'block' : 'blocks'}`,
       sessionTokens ? formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow) : null,
-      referencedProjectIds.length > 0 ? `${referencedProjectIds.length} referenced page${referencedProjectIds.length === 1 ? '' : 's'}` : null,
+      referencedProjectIds.length > 0 ? `${referencedProjectIds.length} referenced project${referencedProjectIds.length === 1 ? '' : 's'}` : null,
     ].filter((value): value is string => Boolean(value));
 
     showNotice('accent', details.join(' · '), 5000);
@@ -4381,7 +4381,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
-              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced tracked-page repo root pick it automatically.'
+              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
               : remoteConnectionPending
                 ? 'Connecting to the remote workspace and staging your first turn. Your message has been queued and will send as soon as the remote session is ready.'
                 : remoteConversationRequiresConnect
@@ -4718,10 +4718,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
-            {/* Referenced pages */}
+            {/* Referenced projects */}
             {referencedProjectIds.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                <span className="ui-section-label">Referenced pages</span>
+                <span className="ui-section-label">Referenced projects</span>
                 {referencedProjectIds.map((projectId) => (
                   <span key={projectId} className="inline-flex max-w-[18rem] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent" title={`@${projectId}`}>
                     <span className="truncate font-mono">@{projectId}</span>

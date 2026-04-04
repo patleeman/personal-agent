@@ -304,9 +304,9 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Referenced pages')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced pages'));
-    expect(html).toContain('No referenced pages.');
+    expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
+    expect(html).toContain('No referenced projects.');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {

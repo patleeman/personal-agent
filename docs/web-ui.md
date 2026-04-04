@@ -365,16 +365,16 @@ When you mention these items, the UI resolves them and injects durable context i
 
 This makes the conversation aware of the durable objects you are pointing at, instead of copying them manually into the prompt.
 
-## Referenced pages and working directory selection
+## Referenced projects and working directory selection
 
-Referenced pages matter in two ways:
+Referenced projects matter in two ways:
 
-1. they stay attached to the conversation as durable page context
-2. if a new conversation references exactly one tracked page with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
+1. they stay attached to the conversation as durable project context
+2. if a new conversation references exactly one project with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
-That makes page references more than just labels.
+That makes project references more than just labels.
 
 ## Common conversation composer commands
 

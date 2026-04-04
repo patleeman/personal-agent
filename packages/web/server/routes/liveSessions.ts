@@ -298,9 +298,9 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
   });
 
   return [
-    'Referenced pages for this conversation:',
+    'Referenced projects for this conversation:',
     ...lines,
-    'Pages are durable cross-conversation hubs. Read the structured fields and handoff doc when you need continuity, and use the project tool for tracked-page CRUD plus conversation reference changes.',
+    'Projects are durable cross-conversation hubs. Read the structured fields and handoff doc when you need continuity, and use the project tool for project CRUD plus conversation reference changes.',
   ].join('\n');
 }
 
