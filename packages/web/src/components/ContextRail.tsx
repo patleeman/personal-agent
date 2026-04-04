@@ -20,7 +20,7 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
-import { getKnowledgeInstructionPath, getKnowledgeNoteId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
+import { getKnowledgeInstructionPath, getKnowledgeSection } from '../knowledgeSelection';
 import { buildNodesHref, buildNodesSearch, readSelectedNode } from '../nodeWorkspaceState';
 import { useReloadState } from '../reloadState';
 import {
@@ -71,9 +71,6 @@ import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 import { MentionTextarea } from './MentionTextarea';
-import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
-import { PagesBrowserRail } from './PagesBrowserRail';
-import { SkillsBrowserRail } from './SkillsBrowserRail';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -2967,13 +2964,6 @@ function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {loading && !data ? <LoadingState label="Loading skill…" className="px-0 py-0" /> : error && !data ? <ErrorState message={`Failed to load skill: ${error}`} className="px-0 py-0" /> : data?.content ? <RailMarkdownPreview content={data.content} /> : <p className="ui-card-meta">No skill definition content available.</p>}
-        {data && (
-          <>
-            <NodeLinkList title="Links to" items={data.links?.outgoing} surface="main" emptyText="This skill does not reference other pages yet." />
-            <NodeLinkList title="Linked from" items={data.links?.incoming} surface="main" emptyText="No other pages link to this skill yet." />
-            <UnresolvedNodeLinks ids={data.links?.unresolved} />
-          </>
-        )}
       </div>
     </div>
   );
@@ -3429,36 +3419,6 @@ export function ContextRail() {
       <EmptyPrompt text="Select an item to see details." />
     </div>
   );
-
-  // Pages
-  if (section === 'projects' || section === 'notes' || section === 'memories') {
-    const params = new URLSearchParams(location.search);
-    const selected = readSelectedNode(location.search);
-    const sub = selected && selected.kind !== 'skill'
-      ? `@${selected.id}`
-      : params.get(NOTE_ID_SEARCH_PARAM)?.trim() || params.get('memory')?.trim() || id || undefined;
-
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Docs" sub={sub ?? undefined} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <PagesBrowserRail />
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'skills') {
-    const skillName = getKnowledgeSkillName(location.search);
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Skills" sub={skillName ?? undefined} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <SkillsBrowserRail />
-        </div>
-      </div>
-    );
-  }
 
   if (section === 'instructions') {
     const instructionPath = getKnowledgeInstructionPath(location.search);

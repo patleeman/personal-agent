@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { formatProjectStatus, isProjectArchived } from '../contextRailProject';
-import { buildNodeCreateSearch, buildNodesHref } from '../nodeWorkspaceState';
-import type { ProjectChildPage, ProjectDetail, ProjectFile, ProjectTask } from '../types';
+import type { ProjectDetail, ProjectFile, ProjectTask } from '../types';
 import {
   ProjectFileUploadForm,
   ProjectTaskEditorForm,
@@ -31,8 +30,6 @@ import {
 } from './projectDetailState';
 import { MentionTextarea } from './MentionTextarea';
 import { IconButton, cx } from './ui';
-import { NodeRelationshipsPanel } from './NodeRelationshipsPanel';
-import { NodeMetadataPanel } from './NodeMetadataPanel';
 import { timeAgo } from '../utils';
 
 const ACTION_TEXT_BUTTON_CLASS = 'text-[12px] font-medium text-accent hover:text-accent/75 transition-colors disabled:opacity-40';
@@ -279,47 +276,6 @@ function ProjectTaskListBlock({
   );
 }
 
-function ProjectChildPageList({
-  pages,
-}: {
-  pages: ProjectChildPage[];
-}) {
-  if (pages.length === 0) {
-    return <p className="text-[12px] text-secondary">No child pages yet.</p>;
-  }
-
-  return (
-    <div className="divide-y divide-border-subtle">
-      {pages.map((page) => (
-        <article key={page.id} id={`project-page-${page.id}`} className="px-3 py-2.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Link to={buildNodesHref(page.kind, page.id)} className="text-[13px] font-medium text-accent transition-colors hover:text-accent/75">
-                {page.title}
-              </Link>
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
-                <span>{page.kind === 'skill' ? 'skill' : 'page'}</span>
-                <span className="opacity-40">·</span>
-                <span>{formatProjectStatus(page.status)}</span>
-                {page.updatedAt ? (
-                  <>
-                    <span className="opacity-40">·</span>
-                    <span>updated {timeAgo(page.updatedAt)}</span>
-                  </>
-                ) : null}
-              </div>
-              <p className="mt-1 text-[12px] leading-relaxed text-secondary">{page.summary}</p>
-            </div>
-            <Link to={buildNodesHref(page.kind, page.id)} className={ACTION_TEXT_BUTTON_CLASS}>
-              Open page
-            </Link>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
-}
-
 function ProjectFileList({
   files,
   fileBusy,
@@ -467,7 +423,6 @@ export function ProjectDetailPanel({
 
   const [conversationBusy, setConversationBusy] = useState(false);
   const [conversationError, setConversationError] = useState<string | null>(null);
-  const [promotionBusy, setPromotionBusy] = useState(false);
 
   const [rawProjectOpen, setRawProjectOpen] = useState(false);
   const [rawProjectLoaded, setRawProjectLoaded] = useState(false);
@@ -933,30 +888,6 @@ export function ProjectDetailPanel({
     }
   }
 
-  async function promoteProjectToNote() {
-    if (promotionBusy) {
-      return;
-    }
-
-    setPromotionBusy(true);
-    setConversationError(null);
-    try {
-      const created = await api.createNoteDoc({
-        title: record.title,
-        summary: record.summary,
-        description: record.description,
-        body: documentContent.trim() || record.summary,
-      });
-      await api.saveNodeDetail(created.memory.id, {
-        relationships: [{ type: 'derived-from', targetId: record.id }],
-      });
-      window.location.assign(`/pages?kind=note&page=${encodeURIComponent(created.memory.id)}`);
-    } catch (error) {
-      setConversationError(error instanceof Error ? error.message : String(error));
-      setPromotionBusy(false);
-    }
-  }
-
   function downloadProjectPackage() {
     const link = document.createElement('a');
     link.href = `/api/projects/${encodeURIComponent(record.id)}/package?viewProfile=${encodeURIComponent(projectProfile)}`;
@@ -1072,9 +1003,7 @@ export function ProjectDetailPanel({
         ? 'Unsaved changes'
         : (documentSavedAt ? 'Saved' : null));
   const showLinkedConversationsSection = project.linkedConversations.length > 0;
-  const showChildPagesSection = true;
   const showFilesSection = project.files.length > 0 || fileComposerOpen || Boolean(fileError);
-  const childPageCreateHref = `/pages${buildNodeCreateSearch('', { creating: true, createKind: 'note', parent: record.id })}`;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18.5rem]">
@@ -1110,24 +1039,6 @@ export function ProjectDetailPanel({
                   aria-label="Start conversation"
                 >
                   <ToolbarGlyph path="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z" />
-                </IconButton>
-                <Link
-                  to={childPageCreateHref}
-                  className={`${PROJECT_TOOLBAR_BUTTON_CLASS} inline-flex items-center justify-center`}
-                  title="Create child page"
-                  aria-label="Create child page"
-                >
-                  <ToolbarGlyph path={["M12 5v14", "M5 12h14", "M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"]} />
-                </Link>
-                <IconButton
-                  type="button"
-                  onClick={() => { void promoteProjectToNote(); }}
-                  disabled={promotionBusy || deleteBusy}
-                  className={PROJECT_TOOLBAR_BUTTON_CLASS}
-                  title={promotionBusy ? 'Creating standalone page' : 'Create standalone page'}
-                  aria-label={promotionBusy ? 'Creating standalone page' : 'Create standalone page'}
-                >
-                  <ToolbarGlyph path={["M7 4.75h7.5L18 8.25V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z", "M8 11h8", "M8 15h4"]} />
                 </IconButton>
                 <IconButton
                   type="button"
@@ -1364,36 +1275,12 @@ export function ProjectDetailPanel({
           </div>
         </ProjectRailSection>
 
-        <ProjectRailSection title="Page metadata">
-          <NodeMetadataPanel
-            nodeId={record.id}
-            onChanged={onChanged}
-            showTitle={false}
-            showSummary={false}
-            showStatus={false}
-          />
-        </ProjectRailSection>
-
         {showLinkedConversationsSection ? (
           <ProjectRailSection
             title="Linked conversations"
             meta={`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`}
           >
             <ProjectConversationList conversations={project.linkedConversations} />
-          </ProjectRailSection>
-        ) : null}
-
-        {showChildPagesSection ? (
-          <ProjectRailSection
-            title="Pages"
-            meta={`${project.childPageCount ?? project.childPages.length} ${project.childPages.length === 1 ? 'page' : 'pages'}`}
-            action={(
-              <Link to={childPageCreateHref} className={ACTION_TEXT_BUTTON_CLASS}>
-                + New page
-              </Link>
-            )}
-          >
-            <ProjectChildPageList pages={project.childPages} />
           </ProjectRailSection>
         ) : null}
 
@@ -1423,14 +1310,6 @@ export function ProjectDetailPanel({
           </ProjectRailSection>
         ) : null}
 
-        <ProjectRailSection title="Page graph">
-          <NodeRelationshipsPanel
-            nodeId={record.id}
-            emptyOutgoingText="No typed page links yet."
-            emptyIncomingText="No typed links point here yet."
-            onChanged={onChanged}
-          />
-        </ProjectRailSection>
       </aside>
     </div>
   );
