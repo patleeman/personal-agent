@@ -194,14 +194,13 @@ describe('Sidebar', () => {
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
     expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Vault'));
-    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Docs'));
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).toContain('Vault');
-    expect(html).toContain('Docs');
+    expect(html).not.toContain('Docs');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');
@@ -217,7 +216,7 @@ describe('Sidebar', () => {
     expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
-    expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
   it('keeps live title overrides scoped to the matching conversation id', () => {
@@ -270,7 +269,7 @@ describe('Sidebar', () => {
     expect(html).toContain('padding-left:14px');
   });
 
-  it('renders grouped open shelves for pages and workspaces', () => {
+  it('renders grouped open shelves for workspaces without the removed docs shelf', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
@@ -278,21 +277,10 @@ describe('Sidebar', () => {
 
     const html = renderSidebar('/inbox');
 
-    expect(html).toContain('Open Docs');
-    expect(html).toContain('note-index');
-    expect(html).toContain('active-project');
-    expect(html).toContain('agent-browser');
+    expect(html).not.toContain('Open Docs');
+    expect(html).not.toContain('Draft doc');
     expect(html).toContain('Open Workspaces');
     expect(html).toContain('repo');
-  });
-
-  it('shows a draft page row in the sidebar while creating a new note page', () => {
-    const html = renderSidebar('/pages?new=1&createType=note');
-
-    expect(html).toContain('Open Docs');
-    expect(html).toContain('new doc');
-    expect(html).toContain('Draft doc');
-    expect(html).toContain('href="/pages?new=1&amp;createType=note"');
   });
 
   it('keeps the workspace nav simple on workspace routes', () => {

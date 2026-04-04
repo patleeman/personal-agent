@@ -23,7 +23,6 @@ import {
 } from './liveSessions.js';
 import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerCompanionModelRoutes, registerModelRoutes } from './models.js';
-import { registerNodeRoutes } from './nodes.js';
 import { registerProfileRoutes } from './profiles.js';
 import {
   registerCompanionProjectRoutes,
@@ -68,8 +67,6 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
 
   registerProjectRoutes(app, context);
 
-  registerNodeRoutes(app, context);
-  registerNodeRoutes(companionApp, context);
   registerCompanionProjectRoutes(companionApp, context);
 
   registerConversationRoutes(app, context);

@@ -10,26 +10,16 @@ import {
   type CommandPaletteSection,
 } from '../commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commandPaletteEvents';
-import {
-  formatProjectStatus,
-  hasMeaningfulBlockers,
-  isProjectArchived,
-  summarizeProjectPreview,
-} from '../contextRailProject';
 import { useAppData } from '../contexts';
-import { humanizeSkillName } from '../memoryOverview';
-import { buildNodesHref } from '../nodeWorkspaceState';
-import { ensureOpenResourceShelfItem } from '../openResourceShelves';
 import { useConversations } from '../hooks/useConversations';
-import type { MemoryData, NodeLinkKind, ProjectRecord, ScheduledTaskSummary, SessionMeta } from '../types';
+import type { ScheduledTaskSummary, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
 import { IconButton, Keycap, Pill, cx } from './ui';
 
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'setScope'; scope: CommandPaletteSection }
-  | { kind: 'openNode'; nodeKind: NodeLinkKind; nodeId: string };
+  | { kind: 'setScope'; scope: CommandPaletteSection };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -155,15 +145,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/workspace/changes' },
     },
     {
-      id: 'nav:nodes',
-      section: 'nav',
-      title: 'Pages',
-      subtitle: 'Browse pages and skills together',
-      keywords: ['pages', 'knowledge', 'knowledge base', 'nodes', 'page', 'skill', 'skills'],
-      order: 4,
-      action: { kind: 'navigate', to: '/pages' },
-    },
-    {
       id: 'nav:scheduled',
       section: 'nav',
       title: 'Scheduled Tasks',
@@ -189,15 +170,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       keywords: ['agents', 'instructions', 'policy', 'capabilities'],
       order: 10,
       action: { kind: 'navigate', to: '/instructions' },
-    },
-    {
-      id: 'nav:search-nodes',
-      section: 'nav',
-      title: 'Search pages',
-      subtitle: 'Fuzzy search pages and skills together',
-      keywords: ['pages', 'nodes', 'knowledge', 'knowledge base', 'page', 'notes', 'projects', 'skills', 'fuzzy'],
-      order: 11,
-      action: { kind: 'setScope', scope: 'nodes' },
     },
     {
       id: 'nav:archived',
@@ -315,112 +287,6 @@ function buildConversationItems(
   });
 }
 
-function buildNodeItems(memoryData: MemoryData | null, projects: ProjectRecord[]): CommandPaletteItem<CommandPaletteAction>[] {
-  const noteItems = (memoryData?.memoryDocs ?? []).map((memory) => {
-    const metaParts = ['page'];
-    if (memory.updated) {
-      metaParts.push(timeAgo(memory.updated));
-    } else if (memory.usedInLastSession) {
-      metaParts.push('used recently');
-    } else if (memory.lastUsedAt) {
-      metaParts.push(`used ${timeAgo(memory.lastUsedAt)}`);
-    }
-
-    return {
-      id: `node:note:${memory.id}`,
-      section: 'nodes' as const,
-      title: memory.title,
-      subtitle: excerpt(memory.summary, 120),
-      meta: metaParts.join(' · '),
-      keywords: [
-        'page',
-        memory.id,
-        memory.title,
-        memory.summary,
-        memory.searchText ?? '',
-        memory.status ?? '',
-        memory.path ?? '',
-      ],
-      sortAt: memory.updated ?? memory.lastUsedAt ?? '',
-      action: { kind: 'openNode' as const, nodeKind: 'note', nodeId: memory.id },
-    };
-  });
-
-  const projectItems = projects.map((project) => {
-    const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
-    const archived = isProjectArchived(project);
-    const metaParts = ['page', formatProjectStatus(project.status), project.id];
-    if (project.updatedAt) {
-      metaParts.push(timeAgo(project.updatedAt));
-    }
-    if (archived && project.archivedAt) {
-      metaParts.push(`archived ${timeAgo(project.archivedAt)}`);
-    } else if (!archived && hasMeaningfulBlockers(project.blockers) && blockers[0]) {
-      metaParts.push(blockers[0]);
-    }
-
-    return {
-      id: `node:project:${project.id}`,
-      section: 'nodes' as const,
-      title: project.title,
-      subtitle: excerpt(summarizeProjectPreview(project), 120),
-      meta: metaParts.join(' · '),
-      keywords: [
-        'page',
-        project.id,
-        project.title,
-        project.description,
-        project.summary,
-        project.requirements.goal,
-        ...project.requirements.acceptanceCriteria,
-        project.planSummary ?? '',
-        project.completionSummary ?? '',
-        project.status,
-        project.currentFocus ?? '',
-        archived ? 'archived' : '',
-        ...project.blockers,
-        ...project.recentProgress,
-      ],
-      sortAt: project.updatedAt,
-      action: { kind: 'openNode' as const, nodeKind: 'project', nodeId: project.id },
-    };
-  });
-
-  const skillItems = (memoryData?.skills ?? []).map((skill) => {
-    const metaParts = ['skill', skill.source];
-    if (skill.usedInLastSession) {
-      metaParts.push('used recently');
-    } else if (skill.lastUsedAt) {
-      metaParts.push(`used ${timeAgo(skill.lastUsedAt)}`);
-    }
-
-    return {
-      id: `node:skill:${skill.name}`,
-      section: 'nodes' as const,
-      title: humanizeSkillName(skill.name),
-      subtitle: excerpt(skill.description, 120),
-      meta: metaParts.join(' · '),
-      keywords: [
-        'skill',
-        skill.name,
-        humanizeSkillName(skill.name),
-        skill.description,
-        skill.source,
-        skill.path,
-      ],
-      sortAt: skill.lastUsedAt ?? '',
-      action: { kind: 'openNode' as const, nodeKind: 'skill', nodeId: skill.name },
-    };
-  });
-
-  return [...noteItems, ...projectItems, ...skillItems]
-    .sort((left, right) => right.sortAt.localeCompare(left.sortAt) || left.title.localeCompare(right.title))
-    .map(({ sortAt: _sortAt, ...item }, index) => ({
-      ...item,
-      order: index,
-    }));
-}
-
 function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<CommandPaletteAction>[] {
   const orderedTasks = [...tasks].sort((left, right) => {
     if (left.running !== right.running) {
@@ -471,8 +337,6 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
         return `No open conversations match “${query}”.`;
       case 'archived':
         return `No archived conversations match “${query}”.`;
-      case 'nodes':
-        return `No pages match “${query}”.`;
       case 'tasks':
         return `No scheduled tasks match “${query}”.`;
       default:
@@ -485,8 +349,6 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
       return 'No open conversations yet.';
     case 'archived':
       return 'No archived conversations yet.';
-    case 'nodes':
-      return 'No pages yet.';
     case 'tasks':
       return 'No scheduled tasks yet.';
     default:
@@ -500,7 +362,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const macPlatform = useMemo(() => isMacPlatform(), []);
-  const { projects, tasks } = useAppData();
+  const { tasks } = useAppData();
   const {
     pinnedSessions,
     tabs,
@@ -514,9 +376,6 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [knowledgeData, setKnowledgeData] = useState<MemoryData | null>(null);
-  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
-  const [knowledgeError, setKnowledgeError] = useState<string | null>(null);
   const [archivedSearchIndex, setArchivedSearchIndex] = useState<Record<string, string>>({});
   const [archivedSearchLoading, setArchivedSearchLoading] = useState(false);
   const [archivedSearchError, setArchivedSearchError] = useState<string | null>(null);
@@ -532,17 +391,15 @@ export function CommandPalette() {
     () => buildConversationItems('archived', archivedSessions, archivedSearchIndex),
     [archivedSearchIndex, archivedSessions],
   );
-  const nodeItems = useMemo(() => buildNodeItems(knowledgeData, projects ?? []), [knowledgeData, projects]);
   const taskItems = useMemo(() => buildTaskItems(tasks ?? []), [tasks]);
   const items = useMemo(
     () => [
       ...buildNavItems(),
       ...openConversationItems,
       ...archivedConversationItems,
-      ...nodeItems,
       ...taskItems,
     ],
-    [archivedConversationItems, nodeItems, openConversationItems, taskItems],
+    [archivedConversationItems, openConversationItems, taskItems],
   );
   const groups = useMemo(
     () => searchCommandPaletteItems(items, { query, scope }),
@@ -604,11 +461,6 @@ export function CommandPalette() {
           setBusyItemId(null);
           window.requestAnimationFrame(() => inputRef.current?.focus());
           return;
-        case 'openNode':
-          ensureOpenResourceShelfItem(item.action.nodeKind, item.action.nodeId);
-          navigate(buildNodesHref(item.action.nodeKind, item.action.nodeId));
-          closePalette();
-          return;
         default:
           return;
       }
@@ -653,38 +505,6 @@ export function CommandPalette() {
 
     listRef.current?.querySelector(`[data-command-palette-idx="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [cursor, open]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setKnowledgeLoading(true);
-    setKnowledgeError(null);
-    let cancelled = false;
-
-    api.memory()
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-
-        setKnowledgeData(result);
-        setKnowledgeLoading(false);
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setKnowledgeLoading(false);
-        setKnowledgeError(error instanceof Error ? error.message : String(error));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
 
   const archivedSessionIds = useMemo(
     () => archivedSessions.map((session) => session.id),
@@ -863,14 +683,11 @@ export function CommandPalette() {
     if ((scope === 'all' || scope === 'archived') && archivedSearchLoading) {
       sections.add('archived');
     }
-    if ((scope === 'all' || scope === 'nodes') && (knowledgeLoading || projects === null)) {
-      sections.add('nodes');
-    }
     if ((scope === 'all' || scope === 'tasks') && tasks === null) {
       sections.add('tasks');
     }
     return [...sections];
-  }, [archivedSearchLoading, knowledgeLoading, projects, scope, sessionsLoading, tasks]);
+  }, [archivedSearchLoading, scope, sessionsLoading, tasks]);
 
   if (!open) {
     return null;
@@ -901,7 +718,7 @@ export function CommandPalette() {
             <div>
               <p className="ui-section-label text-[11px]">Command palette</p>
               <p className="text-[12px] text-secondary mt-1">
-                Unified search for navigation, chats, archived history, pages, and scheduled tasks.
+                Unified search for navigation, chats, archived history, and scheduled tasks.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
@@ -1036,18 +853,8 @@ export function CommandPalette() {
             </section>
           )}
 
-          {knowledgeError && (scope === 'all' || scope === 'nodes') && (
-            <section className="py-1">
-              <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">Pages</p>
-              </div>
-              <p className="px-5 py-3 text-[12px] text-danger">Failed to load pages: {knowledgeError}</p>
-            </section>
-          )}
-
           {visibleCount === 0 && loadingSections.length === 0
-            && !(archivedSearchError && (scope === 'all' || scope === 'archived'))
-            && !(knowledgeError && (scope === 'all' || scope === 'nodes')) && (
+            && !(archivedSearchError && (scope === 'all' || scope === 'archived')) && (
             <p className="px-6 py-10 text-[12px] text-dim text-center font-mono">{emptyStateCopy(scope, query)}</p>
           )}
         </div>
