@@ -20,8 +20,7 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
-import { getKnowledgeInstructionPath, getKnowledgeSection } from '../knowledgeSelection';
-import { buildNodesHref, buildNodesSearch, readSelectedNode } from '../nodeWorkspaceState';
+import { getKnowledgeInstructionPath } from '../knowledgeSelection';
 import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
@@ -30,17 +29,12 @@ import {
   getRunTimeline,
   type RunPresentationLookups,
 } from '../runPresentation';
-import {
-  formatProjectStatus,
-  isProjectArchived,
-  pickFocusedProjectId,
-} from '../contextRailProject';
+import { pickFocusedProjectId } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { formatTaskSchedule } from '../taskSchedule';
@@ -52,9 +46,6 @@ import type {
   DurableRunDetailResult,
   LiveSessionContext,
   MemoryAgentsItem,
-  MemoryData,
-  MemoryDocItem,
-  MemorySkillItem,
   ProjectDetail,
   ProjectRecord,
   RemoteFolderListing,
@@ -63,17 +54,14 @@ import type {
 } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
-import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
-import { MentionTextarea } from './MentionTextarea';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
-const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
 const ProjectOverviewPanel = lazy(() => import('./ProjectOverviewPanel').then((module) => ({ default: module.ProjectOverviewPanel })));
 const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
@@ -2370,215 +2358,6 @@ function InboxItemContext({ id }: { id: string }) {
   );
 }
 
-// ── Project detail ───────────────────────────────────────────────────────────
-
-const VIEW_PROFILE_SEARCH_PARAM = 'viewProfile';
-
-export function ProjectDetailContext({ id }: { id: string }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const viewProfile = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    const value = params.get(VIEW_PROFILE_SEARCH_PARAM)?.trim();
-    return value && value !== 'all' ? value : undefined;
-  }, [location.search]);
-  const fetcher = useCallback(() => api.projectById(id, viewProfile ? { profile: viewProfile } : undefined), [id, viewProfile]);
-  const { data: project, loading, error, refetch } = useApi(fetcher, `${id}:${viewProfile ?? ''}`);
-  const { data: profileState } = useApi(api.profiles);
-
-  useEffect(() => {
-    function handleProjectChanged() {
-      void refetch({ resetLoading: false });
-    }
-
-    window.addEventListener(PROJECTS_CHANGED_EVENT, handleProjectChanged);
-    return () => window.removeEventListener(PROJECTS_CHANGED_EVENT, handleProjectChanged);
-  }, [refetch]);
-
-  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (error) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
-  if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
-
-  const nextSearch = viewProfile ? `?${VIEW_PROFILE_SEARCH_PARAM}=${encodeURIComponent(viewProfile)}` : '';
-
-  return suspendRailPanel(
-    <ProjectDetailPanel
-      project={project}
-      activeProfile={profileState?.currentProfile}
-      onChanged={() => {
-        void refetch({ resetLoading: false });
-        emitProjectsChanged();
-      }}
-      onDeleted={() => {
-        navigate(`/pages${buildNodesSearch(nextSearch, { filter: 'page', kind: null, nodeId: null })}`);
-        emitProjectsChanged();
-      }}
-    />,
-    'Loading page…',
-  );
-}
-
-// ── Memory file content ───────────────────────────────────────────────────────
-
-function MemoryFileContext({ path }: { path: string }) {
-  const fetcher = useCallback(() => api.memoryFile(path), [path]);
-  const { data, loading, error, refetch } = useApi(fetcher, path);
-  const editingStorageKey = `pa:reload:memory-file:${path}:editing`;
-  const draftStorageKey = `pa:reload:memory-file:${path}:draft`;
-  const [editing, setEditing] = useReloadState<boolean>({
-    storageKey: editingStorageKey,
-    initialValue: false,
-    shouldPersist: (value) => value,
-  });
-  const [draft, setDraft] = useReloadState<string>({
-    storageKey: draftStorageKey,
-    initialValue: '',
-    shouldPersist: (value) => editing && value !== (data?.content ?? ''),
-  });
-  const [saving,   setSaving]   = useState(false);
-  const [saveErr,  setSaveErr]  = useState<string | null>(null);
-  const [savedOk,  setSavedOk]  = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (data?.content === undefined || editing) {
-      return;
-    }
-
-    setDraft(data.content);
-  }, [data?.content, editing, setDraft]);
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      const el = textareaRef.current;
-      el.style.height = 'auto';
-      el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
-    }
-  }, [editing, draft]);
-
-  async function save() {
-    setSaving(true); setSaveErr(null); setSavedOk(false);
-    try {
-      await api.memoryFileSave(path, draft);
-      setEditing(false);
-      setSavedOk(true);
-      setTimeout(() => setSavedOk(false), 2000);
-      refetch();
-    } catch (e) {
-      setSaveErr(e instanceof Error ? e.message : String(e));
-    } finally { setSaving(false); }
-  }
-
-  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse font-mono">Loading…</div>;
-  if (error)   return <div className="px-4 py-4 text-[12px] text-danger/80 font-mono">Error: {error}</div>;
-
-  const fileName = path.split('/').pop() ?? path;
-
-  return (
-    <div className="px-4 py-4 space-y-3">
-      <p className="text-[12px] font-mono text-dim/60 truncate" title={path}>{fileName}</p>
-      {editing ? (
-        <div className="space-y-2">
-          <MentionTextarea
-            ref={textareaRef}
-            value={draft}
-            onValueChange={setDraft}
-            className="w-full text-[13px] font-mono text-secondary leading-[1.75] bg-base border border-border-default rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-accent/60 min-h-[120px]"
-            spellCheck={false}
-          />
-          {saveErr && <p className="text-[12px] text-danger/80">{saveErr}</p>}
-          <div className="flex items-center gap-3">
-            <button onClick={save} disabled={saving} className="text-[12px] font-medium text-accent hover:text-accent/70 transition-colors disabled:opacity-40">
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            {savedOk && <span className="text-[12px] text-success">✓ Saved</span>}
-            <button
-              onClick={() => {
-                setDraft(data?.content ?? '');
-                setEditing(false);
-              }}
-              disabled={saving}
-              className="text-[12px] text-secondary hover:text-primary transition-colors disabled:opacity-40"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="relative group/content">
-          <pre className="text-[13px] font-mono text-secondary leading-[1.75] whitespace-pre-wrap break-words overflow-x-auto max-h-[calc(100vh-200px)] overflow-y-auto">
-            {data?.content}
-          </pre>
-          <button
-            onClick={() => {
-              setDraft(data?.content ?? '');
-              setEditing(true);
-            }}
-            className="absolute top-0 right-0 opacity-0 group-hover/content:opacity-100 transition-opacity text-[10px] text-secondary hover:text-primary"
-          >
-            Edit
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MemoryOverviewContext() {
-  const { data, loading, error } = useApi(api.memory);
-
-  if (loading) return <LoadingState label="Loading note…" className="px-4 py-4" />;
-  if (error) return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
-  if (!data) return null;
-
-  const summary = buildMemoryPageSummary(data);
-  const identity = buildIdentitySummary(data);
-  const capabilities = buildCapabilityCards(data).slice(0, 3);
-  const knowledge = buildKnowledgeSections(data);
-
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title">Agent pages</p>
-        <p className="ui-card-meta">Select an item on the left to inspect the document content.</p>
-      </div>
-
-      <p className="ui-card-meta">
-        {summary.role}
-        {' · '}
-        {summary.knowledgeCount} knowledge items
-        {' · '}
-        {summary.capabilityCount} capabilities
-      </p>
-
-      <div className="space-y-3 border-t border-border-subtle pt-4">
-        <div className="space-y-1.5">
-          <p className="ui-section-label">Identity</p>
-          <p className="ui-card-meta">{identity.ruleCount} behavior rules · {identity.role}</p>
-        </div>
-
-        <div className="space-y-1.5 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Knowledge</p>
-          {knowledge.recent.length === 0
-            ? <p className="ui-card-meta">No recently used knowledge yet.</p>
-            : knowledge.recent.map((item) => (
-              <p key={item.item.path} className="ui-card-meta">{item.title} · {item.usageLabel}</p>
-            ))}
-        </div>
-
-        <div className="space-y-1.5 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Capabilities</p>
-          {capabilities.length === 0
-            ? <p className="ui-card-meta">No capabilities loaded yet.</p>
-            : capabilities.map((item) => (
-              <p key={item.item.path} className="ui-card-meta">{item.title} · {item.usageLabel}</p>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function RailMetadataRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="ui-detail-row">
@@ -2590,28 +2369,6 @@ function RailMetadataRow({ label, value }: { label: string; value: React.ReactNo
 
 function RailMarkdownPreview({ content, className }: { content: string; className?: string }) {
   return <RichMarkdownRenderer content={content} className={className ?? 'ui-markdown max-w-none text-[13px] leading-relaxed'} stripFrontmatter />;
-}
-
-function sortKnowledgeProjects(items: ProjectRecord[]): ProjectRecord[] {
-  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.title.localeCompare(right.title));
-}
-
-function sortKnowledgeMemories(items: MemoryDocItem[]): MemoryDocItem[] {
-  return [...items].sort((left, right) => {
-    const leftTimestamp = left.updated ?? left.lastUsedAt ?? '';
-    const rightTimestamp = right.updated ?? right.lastUsedAt ?? '';
-    return rightTimestamp.localeCompare(leftTimestamp) || left.title.localeCompare(right.title);
-  });
-}
-
-function sortKnowledgeSkills(items: MemorySkillItem[]): MemorySkillItem[] {
-  return [...items].sort((left, right) => {
-    const leftUsage = Number(left.usedInLastSession) * 10 + (left.recentSessionCount ?? 0);
-    const rightUsage = Number(right.usedInLastSession) * 10 + (right.recentSessionCount ?? 0);
-    return rightUsage - leftUsage
-      || (right.lastUsedAt ?? '').localeCompare(left.lastUsedAt ?? '')
-      || humanizeSkillName(left.name).localeCompare(humanizeSkillName(right.name));
-  });
 }
 
 function sortCapabilityTasks(items: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
@@ -2717,258 +2474,6 @@ function ConversationsWorkspaceContext() {
   );
 }
 
-function KnowledgeOverviewContext({
-  section,
-  memoryData,
-  projects,
-}: {
-  section: ReturnType<typeof getKnowledgeSection>;
-  memoryData: MemoryData | null;
-  projects: ProjectRecord[];
-}) {
-  const location = useLocation();
-  const activeProjects = projects.filter((project) => !isProjectArchived(project));
-  const memories = sortKnowledgeMemories(memoryData?.memoryDocs ?? []);
-  const skills = sortKnowledgeSkills(memoryData?.skills ?? []);
-  const instructions = (memoryData?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source));
-  const identity = memoryData ? buildIdentitySummary(memoryData) : null;
-  const knowledge = memoryData ? buildKnowledgeSections(memoryData) : null;
-  const capabilityCards = memoryData ? buildCapabilityCards(memoryData) : [];
-
-  if (section === 'projects') {
-    return (
-      <div className="px-4 py-4 space-y-4">
-        <div className="space-y-1">
-          <p className="ui-card-title">Docs</p>
-          <p className="ui-card-meta">Select a doc on the left to inspect its active plan, blockers, and linked work.</p>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Active" value={activeProjects.length} />
-          <RailMetadataRow label="Archived" value={projects.length - activeProjects.length} />
-        </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recently updated</p>
-          {projects.length === 0 ? <p className="ui-card-meta">No tracked docs available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
-            <Link key={project.id} to={buildNodesHref('project', project.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{project.title}</p>
-              <p className="ui-card-meta mt-1">{formatProjectStatus(project.status)} · updated {timeAgo(project.updatedAt)}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'notes') {
-    return (
-      <div className="px-4 py-4 space-y-4">
-        <div className="space-y-1">
-          <p className="ui-card-title">Docs</p>
-          <p className="ui-card-meta">Select a doc on the left to inspect its overview and package-local references.</p>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Docs" value={memories.length} />
-          <RailMetadataRow label="Recently used" value={memories.filter((item) => item.usedInLastSession).length} />
-        </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recent docs</p>
-          {memories.length === 0 ? <p className="ui-card-meta">No docs available.</p> : memories.slice(0, 5).map((memory) => (
-            <Link key={memory.id} to={buildNodesHref('note', memory.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{memory.title}</p>
-              <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'skills') {
-    return (
-      <div className="px-4 py-4 space-y-4">
-        <div className="space-y-1">
-          <p className="ui-card-title">Skills</p>
-          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its SKILL.md definition.</p>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Available" value={skills.length} />
-          <RailMetadataRow label="Used recently" value={skills.filter((item) => item.usedInLastSession).length} />
-        </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Top workflows</p>
-          {capabilityCards.length === 0 ? <p className="ui-card-meta">No skills available.</p> : capabilityCards.slice(0, 5).map((card) => (
-            <Link key={card.item.name} to={buildNodesHref('skill', card.item.name)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{card.title}</p>
-              <p className="ui-card-meta mt-1">{card.usageLabel}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'instructions') {
-    return (
-      <div className="px-4 py-4 space-y-4">
-        <div className="space-y-1">
-          <p className="ui-card-title">Instructions</p>
-          <p className="ui-card-meta">Select an instruction source on the left to inspect the durable role and operating policy it contributes.</p>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Sources" value={instructions.length} />
-          <RailMetadataRow label="Rules" value={identity?.ruleCount ?? 0} />
-        </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Loaded sources</p>
-          {instructions.length === 0 ? <p className="ui-card-meta">No instruction sources loaded.</p> : instructions.map((item) => (
-            <Link key={item.path} to={`/instructions?instruction=${encodeURIComponent(item.path)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{item.source}</p>
-              <p className="ui-card-meta mt-1 break-all">{item.path}</p>
-            </Link>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title">Docs</p>
-        <p className="ui-card-meta">Durable context lives here: docs and skills, plus instruction sources.</p>
-      </div>
-
-      <div className="space-y-2">
-        <RailMetadataRow label="Docs" value={projects.length + memories.length} />
-        <RailMetadataRow label="Skills" value={skills.length} />
-        <RailMetadataRow label="Instructions" value={instructions.length} />
-      </div>
-
-      {identity && (
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Identity</p>
-          <p className="ui-card-meta">{identity.role}</p>
-          <p className="ui-card-meta">{identity.ruleCount} durable behavior rules in effect.</p>
-        </div>
-      )}
-
-      {knowledge && (
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Recent knowledge</p>
-          {knowledge.recent.length === 0 ? <p className="ui-card-meta">No recent durable knowledge usage yet.</p> : knowledge.recent.slice(0, 4).map((item) => (
-            <Link key={item.item.id} to={buildNodesHref('note', item.item.id)} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-              <p className="text-[12px] font-medium text-primary">{item.title}</p>
-              <p className="ui-card-meta mt-1">{item.usageLabel}</p>
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function KnowledgeProjectContext({ projectId }: { projectId: string }) {
-  const location = useLocation();
-  const viewProfile = useMemo(() => {
-    const value = new URLSearchParams(location.search).get(VIEW_PROFILE_SEARCH_PARAM)?.trim();
-    return value && value !== 'all' ? value : undefined;
-  }, [location.search]);
-  const fetcher = useCallback(() => api.projectById(projectId, viewProfile ? { profile: viewProfile } : undefined), [projectId, viewProfile]);
-  const { data, loading, error, refreshing, refetch } = useApi(fetcher, `knowledge-project-rail:${projectId}:${viewProfile ?? ''}`);
-
-  if (loading && !data) return <LoadingState label="Loading project…" className="px-4 py-4" />;
-  if (error && !data) return <ErrorState message={`Failed to load project: ${error}`} className="px-4 py-4" />;
-  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <p className="ui-card-title">Project</p>
-            <p className="ui-card-meta">{data.project.title}</p>
-          </div>
-          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading project…')}
-      </div>
-    </div>
-  );
-}
-
-function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
-  const { data, loading, error, refreshing, refetch } = useApi(() => api.noteDoc(memoryId), `knowledge-note-rail:${memoryId}`);
-
-  if (loading && !data) return <LoadingState label="Loading note…" className="px-4 py-4" />;
-  if (error && !data) return <ErrorState message={`Failed to load note: ${error}`} className="px-4 py-4" />;
-  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Note not found.</div>;
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="ui-card-title break-words">{data.memory.title}</p>
-            <p className="ui-card-meta mt-1 font-mono">@{data.memory.id}</p>
-          </div>
-          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </button>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Updated" value={data.memory.updated ? timeAgo(data.memory.updated) : 'unknown'} />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to={buildNodesHref('note', data.memory.id)} className="ui-toolbar-button">Open page</Link>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        <div className="space-y-1.5">
-          <p className="ui-section-label">Summary</p>
-          <p className="ui-card-body">{data.memory.summary || 'No summary provided.'}</p>
-        </div>
-        <div className="space-y-2 border-t border-border-subtle pt-4">
-          <p className="ui-section-label">Overview</p>
-          <RailMarkdownPreview content={data.content} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
-  const { data, loading, error, refreshing, refetch } = useApi(() => api.skillDetail(skill.name), `knowledge-skill-rail:${skill.path}`);
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="ui-card-title break-words">{humanizeSkillName(skill.name)}</p>
-            <p className="ui-card-meta mt-1">{skill.source}</p>
-          </div>
-          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </button>
-        </div>
-        <div className="space-y-2">
-          <RailMetadataRow label="Name" value={skill.name} />
-          <RailMetadataRow label="Usage" value={formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} />
-          <RailMetadataRow label="Path" value={<span className="font-mono break-all">{skill.path}</span>} />
-        </div>
-        {skill.description && <p className="ui-card-body">{skill.description}</p>}
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {loading && !data ? <LoadingState label="Loading skill…" className="px-0 py-0" /> : error && !data ? <ErrorState message={`Failed to load skill: ${error}`} className="px-0 py-0" /> : data?.content ? <RailMarkdownPreview content={data.content} /> : <p className="ui-card-meta">No skill definition content available.</p>}
-      </div>
-    </div>
-  );
-}
-
 function KnowledgeInstructionContext({ item }: { item: MemoryAgentsItem }) {
   return (
     <div className="px-4 py-4 space-y-4">
@@ -3019,35 +2524,6 @@ function InstructionsContextPanel() {
       </div>
     </div>
   );
-}
-
-function KnowledgeContextPanel() {
-  const location = useLocation();
-  const section = getKnowledgeSection(location.search);
-  const selectedProjectId = getKnowledgeProjectId(location.search);
-  const selectedMemoryId = getKnowledgeNoteId(location.search);
-  const selectedSkillName = getKnowledgeSkillName(location.search);
-  const selectedInstructionPath = getKnowledgeInstructionPath(location.search);
-  const memoryResult = useApi(api.memory, 'knowledge-rail-memory');
-  const projectsResult = useApi(api.projects, 'knowledge-rail-projects');
-
-  const memoryData = memoryResult.data ?? null;
-  const projects = sortKnowledgeProjects(projectsResult.data ?? []);
-  const skills = sortKnowledgeSkills(memoryData?.skills ?? []);
-  const instructions = (memoryData?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source));
-  const selectedSkill = skills.find((item) => item.name === selectedSkillName) ?? null;
-  const selectedInstruction = instructions.find((item) => item.path === selectedInstructionPath) ?? null;
-
-  if (selectedProjectId) return <KnowledgeProjectContext projectId={selectedProjectId} />;
-  if (selectedMemoryId) return <KnowledgeMemoryContext memoryId={selectedMemoryId} />;
-  if (selectedSkill) return <KnowledgeSkillContext skill={selectedSkill} />;
-  if (selectedInstruction) return <KnowledgeInstructionContext item={selectedInstruction} />;
-  if (memoryResult.loading && !memoryData && projectsResult.loading && projects.length === 0) return <LoadingState label="Loading knowledge base…" className="px-4 py-4" />;
-  if (!memoryData && !projectsResult.data && (memoryResult.error || projectsResult.error)) {
-    return <ErrorState message={`Failed to load knowledge base: ${[memoryResult.error, projectsResult.error].filter(Boolean).join(' · ')}`} className="px-4 py-4" />;
-  }
-
-  return <KnowledgeOverviewContext section={section} memoryData={memoryData} projects={projects} />;
 }
 
 function CapabilitiesOverviewContext({
@@ -3445,30 +2921,6 @@ export function ContextRail() {
     );
   }
 
-  // Memory
-  if (section === 'memory') {
-    const itemPath = new URLSearchParams(location.search).get('item');
-    if (itemPath) {
-      const fileName = itemPath.split('/').pop() ?? itemPath;
-      return (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Docs" sub={fileName} />
-          <div className="flex-1 overflow-y-auto">
-            <MemoryFileContext path={itemPath} />
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Docs" />
-        <div className="flex-1 overflow-y-auto">
-          <MemoryOverviewContext />
-        </div>
-      </div>
-    );
-  }
-
   // Workspace
   if (section === 'workspace') {
     const workspaceMode = readWorkspaceModeFromPathname(location.pathname);
@@ -3477,29 +2929,6 @@ export function ContextRail() {
         <RailHeader label="Workspace" sub={workspaceMode} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {suspendRailPanel(<WorkspaceRail />, workspaceMode === 'changes' ? 'Loading changes…' : 'Loading workspace tree…')}
-        </div>
-      </div>
-    );
-  }
-
-  // Knowledge Base
-  if (section === 'knowledge') {
-    const knowledgeSection = getKnowledgeSection(location.search);
-    const projectId = getKnowledgeProjectId(location.search);
-    const memoryId = getKnowledgeNoteId(location.search);
-    const skillName = getKnowledgeSkillName(location.search);
-    const instructionPath = getKnowledgeInstructionPath(location.search);
-    const knowledgeSub = projectId
-      ?? (memoryId ? `@${memoryId}` : null)
-      ?? skillName
-      ?? (instructionPath ? instructionPath.split('/').pop() ?? instructionPath : null)
-      ?? knowledgeSection;
-
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Docs" sub={knowledgeSub} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <KnowledgeContextPanel />
         </div>
       </div>
     );
