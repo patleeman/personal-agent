@@ -1,10 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { createUnifiedNode, loadUnifiedNodes } from '@personal-agent/core';
-import { parse as parseYaml } from 'yaml';
 import { resolveProjectNodePaths } from './projects.js';
 
-export type LegacyProjectPageKind = 'note' | 'decision' | 'question' | 'meeting' | 'checkpoint';
 export type LegacyProjectFileSourceKind = 'file' | 'attachment' | 'artifact';
 
 export interface ProjectDocumentRecord {
@@ -43,15 +40,6 @@ interface ResolveProjectResourceOptions {
   repoRoot?: string;
   profile: string;
   projectId: string;
-}
-
-interface LegacyProjectNoteDocument {
-  id: string;
-  title: string;
-  kind: LegacyProjectPageKind | string;
-  createdAt: string;
-  updatedAt: string;
-  body: string;
 }
 
 function nowIso(): string {
@@ -106,36 +94,6 @@ function generateUniqueId(title: string, existingIds: string[], fallbackBase: st
   throw new Error(`Unable to generate a unique ${fallbackBase} id.`);
 }
 
-function parseLegacyProjectNoteDocument(markdown: string, path: string): LegacyProjectNoteDocument {
-  const normalized = markdown.replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('---\n')) {
-    throw new Error(`Project child page is missing frontmatter: ${path}`);
-  }
-
-  const secondDelimiterIndex = normalized.indexOf('\n---\n', 4);
-  if (secondDelimiterIndex === -1) {
-    throw new Error(`Project child page frontmatter is incomplete: ${path}`);
-  }
-
-  const frontmatterRaw = normalized.slice(4, secondDelimiterIndex);
-  const body = normalized.slice(secondDelimiterIndex + 5).trim();
-  const parsed = parseYaml(frontmatterRaw) as Record<string, unknown> | null;
-  const object = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-
-  return {
-    id: readRequiredString(typeof object.id === 'string' ? object.id : undefined, 'Project child page id'),
-    title: readRequiredString(typeof object.title === 'string' ? object.title : undefined, 'Project child page title'),
-    kind: readRequiredString(typeof object.kind === 'string' ? object.kind : undefined, 'Project child page kind'),
-    createdAt: readRequiredString(typeof object.createdAt === 'string' ? object.createdAt : undefined, 'Project child page createdAt'),
-    updatedAt: readRequiredString(typeof object.updatedAt === 'string' ? object.updatedAt : undefined, 'Project child page updatedAt'),
-    body,
-  };
-}
-
-function resolveLegacyProjectPagesDir(options: ResolveProjectResourceOptions): string {
-  return join(resolveProjectNodePaths(options).projectDir, 'notes');
-}
-
 function resolveFilesDir(options: ResolveProjectResourceOptions): string {
   return resolveProjectNodePaths(options).filesDir;
 }
@@ -147,29 +105,6 @@ function resolveLegacyFileRoots(options: ResolveProjectResourceOptions): Array<{
     { dir: paths.attachmentsDir, sourceKind: 'attachment' },
     { dir: paths.artifactsDir, sourceKind: 'artifact' },
   ];
-}
-
-function extractSummaryFromBody(body: string, title: string): string {
-  const paragraphs = body
-    .replace(/\r\n/g, '\n')
-    .split(/\n\s*\n/)
-    .map((paragraph) => paragraph.replace(/^#\s+.+$/gm, '').replace(/\s+/g, ' ').trim())
-    .filter((paragraph) => paragraph.length > 0);
-
-  return paragraphs[0] ?? `Child page for ${title}.`;
-}
-
-function ensureMarkdownHeading(body: string, title: string): string {
-  const normalizedBody = body.replace(/\r\n/g, '\n').trim();
-  if (!normalizedBody) {
-    return `# ${title}`;
-  }
-
-  if (/^#\s+/m.test(normalizedBody)) {
-    return normalizedBody;
-  }
-
-  return `# ${title}\n\n${normalizedBody}`;
 }
 
 function resolveProjectFileMetadataPath(entryDir: string): string {
@@ -212,57 +147,6 @@ function listEntryDirectories(dir: string): string[] {
     .map((entry) => join(dir, entry))
     .filter((entryPath) => statSync(entryPath).isDirectory())
     .sort((left, right) => basename(left).localeCompare(basename(right)));
-}
-
-function removeLegacyProjectPagesDirIfEmpty(dir: string): void {
-  if (!existsSync(dir)) {
-    return;
-  }
-
-  const remainingEntries = readdirSync(dir).filter((entry) => !entry.startsWith('.'));
-  if (remainingEntries.length === 0) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-export function migrateLegacyProjectPages(options: ResolveProjectResourceOptions): { migratedPageIds: string[] } {
-  const legacyPagesDir = resolveLegacyProjectPagesDir(options);
-  if (!existsSync(legacyPagesDir)) {
-    return { migratedPageIds: [] };
-  }
-
-  const existingNodeIds = loadUnifiedNodes().nodes.map((node) => node.id);
-  const migratedPageIds: string[] = [];
-
-  for (const entry of readdirSync(legacyPagesDir).filter((name) => name.endsWith('.md')).sort((left, right) => left.localeCompare(right))) {
-    const path = join(legacyPagesDir, entry);
-    const page = parseLegacyProjectNoteDocument(readFileSync(path, 'utf-8'), path);
-    const pageId = generateUniqueId(`${options.projectId}-${page.id}`, [...existingNodeIds, ...migratedPageIds], 'page');
-    const normalizedKind = page.kind.trim().toLowerCase();
-
-    createUnifiedNode({
-      id: pageId,
-      title: page.title,
-      summary: extractSummaryFromBody(page.body, page.title),
-      status: 'active',
-      tags: [
-        'type:note',
-        ...(options.profile !== 'shared' ? [`profile:${options.profile}`] : []),
-        ...(normalizedKind && normalizedKind !== 'note' ? [`noteType:${normalizedKind}`] : []),
-        `legacyProjectPageId:${page.id}`,
-      ],
-      parent: options.projectId,
-      body: ensureMarkdownHeading(page.body, page.title),
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-    });
-
-    migratedPageIds.push(pageId);
-    rmSync(path);
-  }
-
-  removeLegacyProjectPagesDirIfEmpty(legacyPagesDir);
-  return { migratedPageIds };
 }
 
 export function readProjectDocument(options: ResolveProjectResourceOptions): ProjectDocumentRecord | null {

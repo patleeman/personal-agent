@@ -185,10 +185,6 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     lines.push(`tasks: ${detail.tasks.map((task) => `${task.id}:${task.status}`).join(', ')}`);
   }
 
-  if (detail.childPages.length > 0) {
-    lines.push(`pages: ${detail.childPages.map((page) => page.id).join(', ')}`);
-  }
-
   if (detail.document) {
     lines.push(`document: ${detail.document.path}`);
   }
@@ -256,7 +252,6 @@ export function createProjectAgentExtension(options: {
                   profile,
                   projectId,
                   taskCount: detail.taskCount,
-                  childPageCount: detail.childPageCount,
                 },
               };
             }

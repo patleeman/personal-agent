@@ -7,7 +7,6 @@ import {
   clearMemoryBrowserCaches,
   createMemoryDoc,
   listMemoryDocs,
-  readNoteDetail,
 } from './memoryDocs.js';
 
 const originalEnv = process.env;
@@ -26,10 +25,6 @@ function writeFile(path: string, content: string): void {
 
 function notePath(stateRoot: string, noteId: string): string {
   return join(stateRoot, 'sync', 'notes', `${noteId}.md`);
-}
-
-function notePackagePath(stateRoot: string, noteId: string): string {
-  return join(stateRoot, 'sync', 'notes', noteId, 'INDEX.md');
 }
 
 beforeEach(() => {
@@ -93,55 +88,6 @@ Top-level note hub.
     });
     expect(docs[0]?.searchText).toContain('top-level note hub');
     expect(docs[0]?.searchText).toContain('unified-node-design');
-  });
-
-  it('reads note detail content and package references', () => {
-    const stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT as string;
-    const indexPath = notePackagePath(stateRoot, 'memory-index');
-    writeFile(
-      indexPath,
-      `---
-id: memory-index
-kind: note
-title: Memory Index
-summary: Top-level note hub.
-status: active
-updatedAt: 2026-03-31
----
-
-# Memory Index
-
-Top-level note hub.
-`,
-    );
-    writeFile(
-      join(dirname(indexPath), 'references', 'overview.md'),
-      `---
-id: overview
-title: Overview
-summary: Overview reference.
-updatedAt: 2026-04-01
----
-
-# Overview
-
-Reference details.
-`,
-    );
-
-    const detail = readNoteDetail('memory-index', 'assistant');
-
-    expect(detail.memory.id).toBe('memory-index');
-    expect(detail.content).toContain('# Memory Index');
-    expect(detail.references).toEqual([
-      expect.objectContaining({
-        title: 'Overview',
-        summary: 'Overview reference.',
-        relativePath: 'references/overview.md',
-        path: join(dirname(notePackagePath(stateRoot, 'memory-index')), 'references', 'overview.md'),
-        updated: '2026-04-01',
-      }),
-    ]);
   });
 
   it('creates note nodes in sync/notes packages', () => {

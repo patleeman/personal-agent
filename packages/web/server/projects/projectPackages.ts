@@ -9,7 +9,7 @@ import { readProjectDetailFromProject } from './projects.js';
 import { listSessions, readSessionSearchText } from '../conversations/sessions.js';
 
 export const PROJECT_SHARE_PACKAGE_KIND = 'personal-agent.project-package';
-export const PROJECT_SHARE_PACKAGE_VERSION = 3;
+export const PROJECT_SHARE_PACKAGE_VERSION = 4;
 const PROJECT_SHARE_PACKAGE_TRANSCRIPT_FORMAT = 'pi-session-jsonl';
 
 export type ProjectSharePackageProject = Omit<ProjectDocument, 'repoRoot'>;
@@ -17,20 +17,6 @@ export type ProjectSharePackageProject = Omit<ProjectDocument, 'repoRoot'>;
 export interface ProjectSharePackageProjectDocument {
   updatedAt: string;
   content: string;
-}
-
-export interface ProjectSharePackagePage {
-  id: string;
-  kind: 'note' | 'project' | 'skill';
-  title: string;
-  summary: string;
-  description?: string;
-  status: string;
-  tags: string[];
-  parent: string;
-  body: string;
-  createdAt?: string;
-  updatedAt?: string;
 }
 
 export interface ProjectSharePackageFile {
@@ -81,7 +67,6 @@ export interface ProjectSharePackageDocument {
   };
   project: ProjectSharePackageProject;
   document: ProjectSharePackageProjectDocument | null;
-  pages: ProjectSharePackagePage[];
   attachments: ProjectSharePackageFile[];
   artifacts: ProjectSharePackageFile[];
   conversations: ProjectSharePackageConversation[];
@@ -213,19 +198,6 @@ export function exportProjectSharePackage(input: {
         content: detail.document.content,
       }
       : null,
-    pages: detail.childPages.map((page) => ({
-      id: page.id,
-      kind: page.kind,
-      title: page.title,
-      summary: page.summary,
-      ...(page.description ? { description: page.description } : {}),
-      status: page.status,
-      tags: [...page.tags],
-      parent: page.parent,
-      body: page.body,
-      createdAt: page.createdAt,
-      updatedAt: page.updatedAt,
-    })),
     attachments: detail.attachments.map(serializeFile),
     artifacts: detail.artifacts.map(serializeFile),
     conversations: buildConversationPackage({

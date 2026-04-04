@@ -1280,15 +1280,6 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
     });
   }
 
-  for (const page of detail.childPages) {
-    timeline.push({
-      id: `page:${page.id}`,
-      kind: 'page',
-      createdAt: page.updatedAt ?? page.createdAt ?? '',
-      title: page.title,
-    });
-  }
-
   for (const file of detail.files) {
     timeline.push({
       id: `file:${file.id}`,
