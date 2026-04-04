@@ -3,8 +3,6 @@ const COMPANION_ROOT_FALLBACK_PREFIXES = [
   '/conversations',
   '/tasks',
   '/system',
-  '/pages',
-  '/capture',
   '/projects',
   '/notes',
   '/memories',
