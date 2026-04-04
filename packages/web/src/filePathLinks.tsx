@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { looksLikeLocalFilesystemPath } from './localPaths';
 
 export type FilePathButtonVariant = 'text' | 'code' | 'pre';
@@ -169,7 +169,7 @@ export function normalizeDetectedFilePath(rawValue: string): string | null {
 }
 
 function filePathButtonClassName(variant: FilePathButtonVariant): string {
-  const baseClassName = 'inline-block align-baseline appearance-none border-0 bg-transparent p-0 m-0 cursor-pointer text-left transition-colors focus:outline-none';
+  const baseClassName = 'align-baseline cursor-pointer text-left transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base';
 
   switch (variant) {
     case 'code':
@@ -180,6 +180,15 @@ function filePathButtonClassName(variant: FilePathButtonVariant): string {
     default:
       return `${baseClassName} font-mono text-accent hover:text-primary`;
   }
+}
+
+function hasActiveTextSelection(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const selection = window.getSelection();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
 }
 
 export function FilePathButton({
@@ -201,26 +210,44 @@ export function FilePathButton({
     onOpenFilePath(path);
   }
 
-  function handleClick(event: ReactMouseEvent<HTMLButtonElement>) {
+  function handleClick(event: ReactMouseEvent<HTMLSpanElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (hasActiveTextSelection()) {
+      return;
+    }
+    openFilePath();
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLSpanElement>) {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
     event.stopPropagation();
     openFilePath();
   }
 
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       data-file-path-link={path}
       aria-label={`Open ${path}`}
       className={filePathButtonClassName(variant)}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       style={{
+        userSelect: 'text',
+        WebkitUserSelect: 'text',
         textDecoration: 'underline',
         textUnderlineOffset: '0.18em',
         textDecorationColor: 'rgb(var(--color-accent) / 0.32)',
       }}
     >
       {displayText}
-    </button>
+    </span>
   );
 }
 

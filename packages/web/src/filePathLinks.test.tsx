@@ -18,13 +18,16 @@ describe('normalizeDetectedFilePath', () => {
 });
 
 describe('renderFilePathTextFragments', () => {
-  it('renders clickable file-path buttons inside inline text', () => {
+  it('renders selection-friendly clickable file paths inside inline text', () => {
     const html = renderToStaticMarkup(
       <span>{renderFilePathTextFragments('Touch packages/web/src/App.tsx next.', { onOpenFilePath: () => undefined })}</span>,
     );
 
     expect(html).toContain('data-file-path-link="packages/web/src/App.tsx"');
     expect(html).toContain('aria-label="Open packages/web/src/App.tsx"');
+    expect(html).toContain('role="button"');
+    expect(html).toContain('tabindex="0"');
+    expect(html).not.toContain('<button');
     expect(html).toContain('Touch ');
   });
 
