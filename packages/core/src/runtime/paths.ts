@@ -113,17 +113,11 @@ function readConfiguredVaultRootFromMachineConfig(): string | undefined {
 /**
  * Default durable knowledge vault root directory.
  *
- * When no explicit vault root is configured, prefer ~/Documents/personal-agent
- * for normal interactive use. Fall back to the managed sync root for legacy
- * installs and test environments that override PERSONAL_AGENT_STATE_ROOT.
+ * Durable notes, projects, skills, and profile files now live in the external
+ * vault by default rather than under the runtime state root.
  */
 export function getDefaultVaultRoot(): string {
-  if (process.env.PERSONAL_AGENT_STATE_ROOT?.trim()) {
-    return getSyncRoot();
-  }
-
-  const documentsVault = join(homedir(), 'Documents', 'personal-agent');
-  return existsSync(documentsVault) ? documentsVault : getSyncRoot();
+  return join(homedir(), 'Documents', 'personal-agent');
 }
 
 /**

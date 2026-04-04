@@ -1,13 +1,9 @@
-import type { NodeLinkKind } from '../types';
-import { buildNodesSearch, type NodeBrowserFilter } from '../nodeWorkspaceState';
 
 export const COMPANION_APP_PATH = '/app';
 export const COMPANION_INBOX_PATH = '/app/inbox';
 export const COMPANION_CONVERSATIONS_PATH = '/app/conversations';
 export const COMPANION_TASKS_PATH = '/app/tasks';
 export const COMPANION_SYSTEM_PATH = '/app/system';
-export const COMPANION_PAGES_PATH = '/app/pages';
-export const COMPANION_QUICK_NOTE_PATH = '/app/capture';
 const LEGACY_COMPANION_KNOWLEDGE_PATH = '/app/knowledge';
 const LEGACY_COMPANION_MEMORIES_PATH = '/app/memories';
 const LEGACY_COMPANION_NOTES_PATH = '/app/notes';
@@ -24,20 +20,10 @@ const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_CONVERSATIONS_PATH,
   COMPANION_TASKS_PATH,
   COMPANION_SYSTEM_PATH,
-  COMPANION_PAGES_PATH,
-  COMPANION_QUICK_NOTE_PATH,
 ]);
 
 function buildCompanionDetailPath(basePath: string, id: string): string {
   return `${basePath}/${encodeURIComponent(id)}`;
-}
-
-function buildCompanionPageSearch(kind: NodeLinkKind | null, id?: string | null, filter?: NodeBrowserFilter | null): string {
-  return buildNodesSearch('', {
-    ...(filter ? { filter } : {}),
-    kind,
-    nodeId: id ?? null,
-  });
 }
 
 export function buildCompanionConversationPath(id: string): string {
@@ -48,12 +34,12 @@ export function buildCompanionTaskPath(id: string): string {
   return buildCompanionDetailPath(COMPANION_TASKS_PATH, id);
 }
 
-export function buildCompanionPagesFilterPath(filter: NodeBrowserFilter): string {
-  return `${COMPANION_PAGES_PATH}${buildCompanionPageSearch(null, null, filter)}`;
+export function buildCompanionPagesFilterPath(_filter: string): string {
+  return COMPANION_INBOX_PATH;
 }
 
-export function buildCompanionPagePath(kind: NodeLinkKind, id: string): string {
-  return `${COMPANION_PAGES_PATH}${buildCompanionPageSearch(kind, id)}`;
+export function buildCompanionPagePath(_kind: string, _id: string): string {
+  return COMPANION_INBOX_PATH;
 }
 
 function normalizePathname(pathname: string): string {
@@ -62,10 +48,6 @@ function normalizePathname(pathname: string): string {
   }
 
   return pathname.replace(/\/+$/, '');
-}
-
-function buildLegacyCompanionPagePath(kind: NodeLinkKind, routeId: string): string {
-  return buildCompanionPagePath(kind, decodeURIComponent(routeId));
 }
 
 function isSupportedDetailPath(normalizedPath: string, basePath: string): boolean {
@@ -90,7 +72,7 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
   }
 
   if (normalizedPath === LEGACY_COMPANION_KNOWLEDGE_PATH) {
-    return COMPANION_PAGES_PATH;
+    return COMPANION_INBOX_PATH;
   }
 
   if (
@@ -99,23 +81,23 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
     || normalizedPath === LEGACY_COMPANION_PROJECTS_PATH
     || normalizedPath === LEGACY_COMPANION_SKILLS_PATH
   ) {
-    return COMPANION_PAGES_PATH;
+    return COMPANION_INBOX_PATH;
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_MEMORIES_PATH)) {
-    return buildLegacyCompanionPagePath('note', normalizedPath.slice(LEGACY_COMPANION_MEMORIES_DETAIL_PREFIX.length));
+    return COMPANION_INBOX_PATH;
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_NOTES_PATH)) {
-    return buildLegacyCompanionPagePath('note', normalizedPath.slice(LEGACY_COMPANION_NOTES_DETAIL_PREFIX.length));
+    return COMPANION_INBOX_PATH;
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_PROJECTS_PATH)) {
-    return buildLegacyCompanionPagePath('project', normalizedPath.slice(LEGACY_COMPANION_PROJECTS_DETAIL_PREFIX.length));
+    return COMPANION_INBOX_PATH;
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_SKILLS_PATH)) {
-    return buildLegacyCompanionPagePath('skill', normalizedPath.slice(LEGACY_COMPANION_SKILLS_DETAIL_PREFIX.length));
+    return COMPANION_INBOX_PATH;
   }
 
   if (COMPANION_TOP_LEVEL_PATHS.has(normalizedPath)) {

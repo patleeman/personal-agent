@@ -1,13 +1,8 @@
-import { buildNodesHref } from './nodeWorkspaceState';
 import {
   getKnowledgeInstructionPath,
-  getKnowledgeNoteId,
-  getKnowledgeProjectId,
   getKnowledgeSection,
-  getKnowledgeSkillName,
 } from './knowledgeSelection';
 
-export const WEB_PAGES_PATH = '/pages';
 export const WEB_INSTRUCTIONS_PATH = '/instructions';
 
 const LEGACY_KNOWLEDGE_PATH = '/knowledge';
@@ -43,31 +38,18 @@ function buildInstructionHref(path: string | null): string {
 }
 
 function buildKnowledgeRedirect(search: string): string {
-  switch (getKnowledgeSection(search)) {
-    case 'projects': {
-      const projectId = getKnowledgeProjectId(search);
-      return projectId ? buildNodesHref('project', projectId) : buildNodesHref(null, null, 'page');
-    }
-    case 'notes': {
-      const noteId = getKnowledgeNoteId(search);
-      return noteId ? buildNodesHref('note', noteId) : buildNodesHref(null, null, 'page');
-    }
-    case 'skills': {
-      const skillName = getKnowledgeSkillName(search);
-      return skillName ? buildNodesHref('skill', skillName) : buildNodesHref(null, null, 'skill');
-    }
-    case 'instructions':
-      return buildInstructionHref(getKnowledgeInstructionPath(search));
-    default:
-      return buildNodesHref(null, null, 'page');
+  if (getKnowledgeSection(search) === 'instructions') {
+    return buildInstructionHref(getKnowledgeInstructionPath(search));
   }
+
+  return '/workspace/files';
 }
 
 export function resolveWebRouteRedirect(pathname: string, search = ''): string | null {
   const normalizedPath = normalizePathname(pathname);
 
   if (normalizedPath === LEGACY_NODES_PATH) {
-    return `${WEB_PAGES_PATH}${search}`;
+    return '/workspace/files';
   }
 
   if (normalizedPath === LEGACY_KNOWLEDGE_PATH) {
@@ -75,31 +57,31 @@ export function resolveWebRouteRedirect(pathname: string, search = ''): string |
   }
 
   if (normalizedPath === LEGACY_PROJECTS_PATH) {
-    return buildNodesHref(null, null, 'page');
+    return '/workspace/files';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_PROJECTS_PATH)) {
-    return buildNodesHref('project', normalizedPath.slice(`${LEGACY_PROJECTS_PATH}/`.length));
+    return '/workspace/files';
   }
 
   if (normalizedPath === LEGACY_NOTES_PATH || normalizedPath === LEGACY_MEMORIES_PATH) {
-    return buildNodesHref(null, null, 'page');
+    return '/workspace/files';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_NOTES_PATH)) {
-    return buildNodesHref('note', normalizedPath.slice(`${LEGACY_NOTES_PATH}/`.length));
+    return '/workspace/files';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_MEMORIES_PATH)) {
-    return buildNodesHref('note', normalizedPath.slice(`${LEGACY_MEMORIES_PATH}/`.length));
+    return '/workspace/files';
   }
 
   if (normalizedPath === LEGACY_SKILLS_PATH) {
-    return buildNodesHref(null, null, 'skill');
+    return '/workspace/files';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_SKILLS_PATH)) {
-    return buildNodesHref('skill', normalizedPath.slice(`${LEGACY_SKILLS_PATH}/`.length));
+    return '/workspace/files';
   }
 
   return null;

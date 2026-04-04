@@ -329,142 +329,6 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
   }
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readJsonObjectSafe(path: string): Record<string, unknown> {
-  if (!existsSync(path)) {
-    return {};
-  }
-
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
-  if (!isPlainRecord(parsed)) {
-    return {};
-  }
-
-  return parsed;
-}
-
-function deepMergeJson(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
-  const output: Record<string, unknown> = { ...base };
-
-  for (const [key, value] of Object.entries(overlay)) {
-    if (Array.isArray(value)) {
-      output[key] = [...value];
-      continue;
-    }
-
-    if (isPlainRecord(value) && isPlainRecord(output[key])) {
-      output[key] = deepMergeJson(output[key] as Record<string, unknown>, value);
-      continue;
-    }
-
-    output[key] = value;
-  }
-
-  return output;
-}
-
-function moveScopedJsonFileToCanonicalProfilePath(input: {
-  syncRoot: string;
-  sourcePath: string;
-  profile: string;
-  fileName: 'settings.json' | 'models.json';
-}): void {
-  if (!existsSync(input.sourcePath)) {
-    return;
-  }
-
-  const targetPath = join(input.syncRoot, 'profiles', input.profile, input.fileName);
-  ensureDirectory(dirname(targetPath));
-
-  const merged = deepMergeJson(
-    readJsonObjectSafe(input.sourcePath),
-    readJsonObjectSafe(targetPath),
-  );
-
-  writeFileSync(targetPath, `${JSON.stringify(merged, null, 2)}\n`);
-  rmSync(input.sourcePath, { force: true });
-}
-
-function migrateProfileResourceLayout(syncRoot: string): void {
-  const profilesRoot = join(syncRoot, 'profiles');
-  ensureDirectory(profilesRoot);
-
-  for (const entry of readdirSync(profilesRoot, { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith('.json')) {
-      continue;
-    }
-
-    const profile = entry.name.slice(0, -'.json'.length).trim();
-    if (!profile) {
-      continue;
-    }
-
-    ensureDirectory(join(profilesRoot, profile));
-    rmSync(join(profilesRoot, entry.name), { force: true });
-  }
-
-  for (const entry of readdirSync(profilesRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory()) {
-      continue;
-    }
-
-    const profileDir = join(profilesRoot, entry.name);
-    const legacyAgentFile = join(profileDir, 'agent', 'AGENTS.md');
-    const canonicalAgentFile = join(profileDir, 'AGENTS.md');
-
-    if (existsSync(legacyAgentFile) && !existsSync(canonicalAgentFile)) {
-      ensureDirectory(dirname(canonicalAgentFile));
-      renameSync(legacyAgentFile, canonicalAgentFile);
-    }
-
-    removeDirIfEmpty(join(profileDir, 'agent'));
-  }
-
-  const settingsRoot = join(syncRoot, 'settings');
-  if (existsSync(settingsRoot)) {
-    for (const entry of readdirSync(settingsRoot, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) {
-        continue;
-      }
-
-      const profile = entry.name === 'global.json'
-        ? 'shared'
-        : entry.name.slice(0, -'.json'.length);
-      moveScopedJsonFileToCanonicalProfilePath({
-        syncRoot,
-        sourcePath: join(settingsRoot, entry.name),
-        profile,
-        fileName: 'settings.json',
-      });
-    }
-  }
-
-  const modelsRoot = join(syncRoot, 'models');
-  if (existsSync(modelsRoot)) {
-    for (const entry of readdirSync(modelsRoot, { withFileTypes: true })) {
-      if (!entry.isFile() || !entry.name.endsWith('.json')) {
-        continue;
-      }
-
-      const profile = entry.name === 'global.json'
-        ? 'shared'
-        : entry.name.slice(0, -'.json'.length);
-      moveScopedJsonFileToCanonicalProfilePath({
-        syncRoot,
-        sourcePath: join(modelsRoot, entry.name),
-        profile,
-        fileName: 'models.json',
-      });
-    }
-  }
-
-  removeDirIfEmpty(settingsRoot);
-  removeDirIfEmpty(modelsRoot);
-}
-
 export function syncRepoGitignore(): string {
   return renderManagedSyncRepoGitignore();
 }
@@ -548,6 +412,10 @@ function cleanupManagedSyncRepoLayout(syncRoot: string): void {
     'notes',
     'skills',
     'tasks',
+    'profiles',
+    '_profiles',
+    '_skills',
+    'projects',
   ]) {
     removeDirIfEmpty(join(syncRoot, relativePath));
   }
@@ -555,7 +423,6 @@ function cleanupManagedSyncRepoLayout(syncRoot: string): void {
 
 function writeManagedSyncRepoFiles(syncRoot: string): void {
   ensureDirectory(syncRoot);
-  migrateProfileResourceLayout(syncRoot);
   cleanupManagedSyncRepoLayout(syncRoot);
   writeFileSync(join(syncRoot, '.gitignore'), syncRepoGitignore());
   writeFileSync(join(syncRoot, '.gitattributes'), syncRepoGitattributes());
@@ -728,7 +595,6 @@ async function setupSyncCommand(args: string[]): Promise<number> {
   const syncRoot = parsed.repoDir;
 
   ensureDirectory(syncRoot);
-  movePathIntoSyncRoot(stateRoot, syncRoot, 'profiles');
   migrateLegacyPiAgentRuntimeArtifacts(stateRoot, syncRoot);
   moveSyncedPiAgentLocalStateBack(stateRoot, syncRoot);
   movePathIntoSyncRoot(stateRoot, syncRoot, join('pi-agent', 'sessions'));

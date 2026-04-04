@@ -48,9 +48,9 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
-    mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
-    writeNoteNode(join(stateRoot, 'notes'), 'runpod', 'Provisioning notes for short-lived GPU pods.');
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
+    writeNoteNode(join(stateRoot, 'vault', 'notes'), 'runpod', 'Provisioning notes for short-lived GPU pods.');
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -74,11 +74,11 @@ describe('note policy extension', () => {
     expect(prompt).toContain('# Identity & Goal');
     expect(prompt).toContain('- active_profile: datadog');
     expect(prompt).toContain('- vault_root: vault');
-    expect(prompt).toContain('- Shared notes dir: notes');
+    expect(prompt).toContain('- Shared notes dir: vault/notes');
     expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
     expect(prompt).toContain('<available_notes>');
     expect(prompt).toContain('<note id="runpod"');
-    expect(prompt).toContain('notes/runpod/INDEX.md');
+    expect(prompt).toContain('vault/notes/runpod/INDEX.md');
   });
 
   it('shows fallback note when requested profile is missing', async () => {
@@ -89,7 +89,7 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'missing-profile';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -114,7 +114,7 @@ describe('note policy extension', () => {
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');
     expect(prompt).toContain('- AGENTS.md: none (shared profile does not use AGENTS.md)');
-    expect(prompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir) (Note: Scheduled tasks belong here, not in shared notes).');
+    expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', '_tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
     expect(prompt).not.toContain('## Shared Notes & Available Nodes');
   });
 
@@ -123,8 +123,9 @@ describe('note policy extension', () => {
     const stateRoot = createTempDir('memory-state-');
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -158,9 +159,10 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
-    mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -188,14 +190,17 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
-    mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
+    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
 
     const context = resolveNoteProfileContext(repoRoot);
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
-    expect(context.activeAgentsFile).toBe(join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md'));
-    expect(context.activeNotesDir).toBe(join(stateRoot, 'notes'));
+    expect(context.activeAgentsFile).toBe(join(stateRoot, 'vault', '_profiles', 'datadog', 'AGENTS.md'));
+    expect(context.activeSkillsDir).toBe(join(stateRoot, 'vault', '_skills'));
+    expect(context.activeTasksDir).toBe(join(stateRoot, 'sync', '_tasks'));
+    expect(context.activeNotesDir).toBe(join(stateRoot, 'vault', 'notes'));
   });
 });

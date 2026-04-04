@@ -397,7 +397,7 @@ describe('sync module', () => {
       const resolverArgs = readFileSync(argsFile, 'utf-8');
       expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
       expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
-      expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_VAULT_ROOT=');
       expect(resolverArgs).toContain('tui');
       expect(resolverArgs).toContain('--profile');
       expect(resolverArgs).toContain('assistant');
@@ -472,7 +472,7 @@ describe('sync module', () => {
       const resolverArgs = readFileSync(argsFile, 'utf-8');
       expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
       expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
-      expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_VAULT_ROOT=');
       expect(resolverArgs).toContain('tui');
       expect(resolverArgs).toContain('--profile');
       expect(resolverArgs).toContain('assistant');
