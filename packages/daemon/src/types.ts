@@ -97,6 +97,12 @@ export interface StartBackgroundRunRequestInput {
     id?: string;
     filePath?: string;
   };
+  callbackConversation?: {
+    conversationId: string;
+    sessionFile: string;
+    profile: string;
+    repoRoot?: string;
+  };
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
 }

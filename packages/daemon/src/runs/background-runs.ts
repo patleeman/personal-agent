@@ -34,6 +34,12 @@ export interface StartBackgroundRunInput {
     id?: string;
     filePath?: string;
   };
+  callbackConversation?: {
+    conversationId: string;
+    sessionFile: string;
+    profile: string;
+    repoRoot?: string;
+  };
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
   createdAt?: string;
@@ -241,6 +247,7 @@ function buildScheduleRunInputFromBackgroundRun(
       cwd: input.cwd,
       ...(input.manifestMetadata ?? {}),
       ...(input.checkpointPayload ?? {}),
+      ...(input.callbackConversation ? { callbackConversation: input.callbackConversation } : {}),
     },
   };
 }

@@ -10,6 +10,7 @@ import {
   type DurableRunStatus,
   type ScannedDurableRun,
 } from './store.js';
+import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js';
 
 const SINGLE_RUN_LOG_TAIL_LINES = 60;
 const BATCH_RUN_LOG_TAIL_LINES = 20;
@@ -75,6 +76,11 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
     || (isRecord(payload.metadata) && payload.metadata.resumeParentOnExit === true);
 
   if (!resumeParentOnExit) {
+    return undefined;
+  }
+
+  const callbackDelivery = getBackgroundRunCallbackDelivery(run);
+  if (callbackDelivery.deliveredAt) {
     return undefined;
   }
 

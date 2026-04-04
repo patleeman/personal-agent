@@ -181,6 +181,11 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     throw new Error('runs.startBackground manifestMetadata must be an object when provided');
   }
 
+  const callbackConversation = value.callbackConversation;
+  if (callbackConversation !== undefined && !isRecord(callbackConversation)) {
+    throw new Error('runs.startBackground callbackConversation must be an object when provided');
+  }
+
   const checkpointPayload = value.checkpointPayload;
   if (checkpointPayload !== undefined && !isRecord(checkpointPayload)) {
     throw new Error('runs.startBackground checkpointPayload must be an object when provided');
@@ -204,6 +209,16 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
             type: readRequiredString(value.source.type, 'runs.startBackground source.type'),
             ...(readOptionalString(value.source.id) ? { id: readOptionalString(value.source.id) } : {}),
             ...(readOptionalString(value.source.filePath) ? { filePath: readOptionalString(value.source.filePath) } : {}),
+          },
+        }
+      : {}),
+    ...(callbackConversation
+      ? {
+          callbackConversation: {
+            conversationId: readRequiredString(callbackConversation.conversationId, 'runs.startBackground callbackConversation.conversationId'),
+            sessionFile: readRequiredString(callbackConversation.sessionFile, 'runs.startBackground callbackConversation.sessionFile'),
+            profile: readRequiredString(callbackConversation.profile, 'runs.startBackground callbackConversation.profile'),
+            ...(readOptionalString(callbackConversation.repoRoot) ? { repoRoot: readOptionalString(callbackConversation.repoRoot) } : {}),
           },
         }
       : {}),

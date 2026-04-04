@@ -17,7 +17,7 @@ Good fits:
 Do not use runs for:
 - task-file-based automation — use [Scheduled Tasks](./scheduled-tasks.md)
 - direct human reminders — use reminders/alerts
-- conversation-bound wakeups — use `deferred_resume`
+- pure "continue this conversation later" wakeups with no background job — use `deferred_resume`
 
 ## Shell run
 
@@ -116,6 +116,8 @@ The slug is how you group and recognize the work. It is not a schedule and it do
 
 A run can be launched from the context of a conversation, but the run itself is a detached background record.
 
+When a run is launched from a web conversation, completion can wake that originating conversation back up with a ready conversation wakeup.
+
 Use runs when you want to avoid blocking the current thread. Then inspect the run later with its run id.
 
 If the outcome should eventually drive user attention, pair that behavior with the appropriate surface:
@@ -136,7 +138,7 @@ If the outcome should eventually drive user attention, pair that behavior with t
 For "run this prompt later," use `run` with `--defer`.
 For "run this every hour," use `run` with `--cron`.
 For "run this and have it loop," use `run` with `--loop`.
-For "continue this conversation later," use `deferred_resume`.
+For "continue this conversation later" with no detached job, use `deferred_resume`.
 For "persistent automation from a file," use `scheduled_task`.
 
 ## Related docs

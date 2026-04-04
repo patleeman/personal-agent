@@ -91,7 +91,7 @@ export function createRunAgentExtension(options: {
         'Use start for detached shell work, start_agent for detached subagents, get/logs for inspection, and cancel to stop a run.',
         'For time-based runs, use defer/cron/at with start_agent.',
         'For looping agents, use loop=true with start_agent.',
-        'For conversation-bound wakeups, prefer deferred_resume instead.',
+        'For pure time-based conversation wakeups, prefer deferred_resume instead.',
         'For persistent task-file-based automation, prefer scheduled_task instead.',
       ],
       parameters: RunToolParams,
@@ -155,6 +155,14 @@ export function createRunAgentExtension(options: {
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
+              const callbackConversation = conversationFile
+                ? {
+                    conversationId,
+                    sessionFile: conversationFile,
+                    profile: options.getCurrentProfile(),
+                    repoRoot: options.repoRoot,
+                  }
+                : undefined;
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -166,6 +174,7 @@ export function createRunAgentExtension(options: {
                   id: conversationId,
                   ...(conversationFile ? { filePath: conversationFile } : {}),
                 },
+                ...(callbackConversation ? { callbackConversation } : {}),
                 checkpointPayload: {
                   resumeParentOnExit: true,
                 },
@@ -197,6 +206,14 @@ export function createRunAgentExtension(options: {
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
+              const callbackConversation = conversationFile
+                ? {
+                    conversationId,
+                    sessionFile: conversationFile,
+                    profile: options.getCurrentProfile(),
+                    repoRoot: options.repoRoot,
+                  }
+                : undefined;
               const model = params.model?.trim();
               const profile = params.profile?.trim() || options.getCurrentProfile();
               const defer = params.defer?.trim();
@@ -227,6 +244,7 @@ export function createRunAgentExtension(options: {
                   id: conversationId,
                   ...(conversationFile ? { filePath: conversationFile } : {}),
                 },
+                ...(callbackConversation ? { callbackConversation } : {}),
                 checkpointPayload: {
                   resumeParentOnExit: true,
                   ...(defer ? { defer } : {}),

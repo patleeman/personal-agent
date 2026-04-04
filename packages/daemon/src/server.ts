@@ -17,6 +17,7 @@ import {
   markBackgroundRunStarted,
   type StartBackgroundRunInput,
 } from './runs/background-runs.js';
+import { deliverBackgroundRunCallbackWakeup } from './runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './runs/background-run-deferred-resumes.js';
 import {
   resolveDurableRunPaths,
@@ -650,6 +651,29 @@ export class PersonalAgentDaemon {
     }
   }
 
+  private async surfaceBackgroundRunOutcome(triggerRunId: string): Promise<void> {
+    try {
+      const callback = await deliverBackgroundRunCallbackWakeup({
+        daemonRoot: this.paths.root,
+        stateRoot: this.paths.stateRoot,
+        runsRoot: this.runsRoot,
+        runId: triggerRunId,
+      });
+
+      if (callback.delivered) {
+        this.log(
+          'info',
+          `background run callback delivered run=${triggerRunId} wakeup=${callback.wakeupId ?? 'n/a'} conversation=${callback.conversationId ?? 'n/a'}`,
+        );
+        return;
+      }
+    } catch (error) {
+      this.log('warn', `background run callback delivery failed run=${triggerRunId} error=${(error as Error).message}`);
+    }
+
+    await this.surfaceBackgroundRunResults(triggerRunId);
+  }
+
   private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
     const record = await createBackgroundRunRecord(this.runsRoot, input);
     const startedAt = new Date().toISOString();
@@ -777,7 +801,7 @@ export class PersonalAgentDaemon {
           : (typeof code === 'number' && code === 0 ? undefined : `Command exited with code ${String(code ?? signal ?? 1)}`),
       })
         .then(async () => {
-          await this.surfaceBackgroundRunResults(record.runId);
+          await this.surfaceBackgroundRunOutcome(record.runId);
         })
         .finally(() => {
           outputStream.end();
@@ -852,7 +876,7 @@ export class PersonalAgentDaemon {
       cancelled: true,
       error: reason,
     });
-    await this.surfaceBackgroundRunResults(runId);
+    await this.surfaceBackgroundRunOutcome(runId);
 
     this.log('info', `background run cancelled from durable state id=${runId}`);
     return {
@@ -875,7 +899,7 @@ export class PersonalAgentDaemon {
         reason: 'Daemon restarted before background run completion.',
       });
       if (interrupted) {
-        await this.surfaceBackgroundRunResults(run.runId);
+        await this.surfaceBackgroundRunOutcome(run.runId);
       }
     }));
   }
