@@ -95,7 +95,6 @@ const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((m
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
-const NodesPage = lazy(() => import('./pages/NodesPage').then((module) => ({ default: module.NodesPage })));
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
@@ -109,8 +108,6 @@ const CompanionConversationPage = lazy(() => import('./companion/CompanionConver
 const CompanionTasksPage = lazy(() => import('./companion/CompanionTasksPage').then((module) => ({ default: module.CompanionTasksPage })));
 const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDetailPage').then((module) => ({ default: module.CompanionTaskDetailPage })));
 const CompanionSystemPage = lazy(() => import('./companion/CompanionSystemPage').then((module) => ({ default: module.CompanionSystemPage })));
-const CompanionKnowledgePage = lazy(() => import('./companion/CompanionKnowledgePage').then((module) => ({ default: module.CompanionKnowledgePage })));
-const CompanionQuickNotePage = lazy(() => import('./companion/CompanionQuickNotePage').then((module) => ({ default: module.CompanionQuickNotePage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -542,8 +539,6 @@ export function App() {
                       <Route path="tasks" element={suspendRoute(<CompanionTasksPage />)} />
                       <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
-                      <Route path="pages" element={suspendRoute(<CompanionKnowledgePage />)} />
-                      <Route path="capture" element={suspendRoute(<CompanionQuickNotePage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/workspace/files" replace />} />
@@ -558,7 +553,6 @@ export function App() {
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="runs" element={suspendRoute(<RunsPage />)} />
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
-                      <Route path="pages" element={suspendRoute(<NodesPage />)} />
                       <Route path="knowledge" element={<LegacyWebRouteRedirect />} />
                       <Route path="knowledge/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="projects" element={<LegacyWebRouteRedirect />} />

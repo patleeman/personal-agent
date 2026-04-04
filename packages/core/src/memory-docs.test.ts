@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -30,94 +30,24 @@ describe('note node paths', () => {
     expect(getMemoryDocsDir({ profilesRoot })).toBe(join(profilesRoot, '..', 'notes'));
   });
 
-  it('migrates legacy per-profile memory files into note nodes', () => {
+  it('does not migrate legacy profile, shared, or runtime memory anymore', () => {
     const profilesRoot = createTempProfilesRoot();
     const assistantMemory = join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md');
-    const datadogMemory = join(profilesRoot, 'datadog', 'agent', 'memory', 'infra.md');
+    const legacyPackagePath = join(profilesRoot, '..', 'memory', 'runpod', 'MEMORY.md');
+    const runtimeNote = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
 
-    writeFile(assistantMemory, '---\nid: runpod\ntitle: Runpod\nsummary: Notes\ntags: [gpu]\nupdated: 2026-03-17\n---\nRunpod\n');
-    writeFile(datadogMemory, '---\nid: infra\ntitle: Infra\nsummary: Notes\ntags: [ops]\nupdated: 2026-03-17\n---\nInfra\n');
+    writeFile(assistantMemory, '---\nid: runpod\ntitle: Runpod\nsummary: Notes\n---\nRunpod\n');
+    writeFile(legacyPackagePath, '---\nname: runpod\ndescription: Runpod notes.\n---\n# Runpod\n');
+    writeFile(runtimeNote, '---\nid: desktop\ntitle: Desktop\nsummary: Server notes\n---\n# Desktop\n');
 
     const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
 
     expect(result.memoryDir).toBe(join(profilesRoot, '..', 'notes'));
-    expect(result.migratedFiles).toEqual([
-      { from: assistantMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
-      { from: datadogMemory, to: join(profilesRoot, '..', 'notes', 'infra', 'INDEX.md') },
-    ]);
-
-    expect(existsSync(assistantMemory)).toBe(false);
-    expect(existsSync(datadogMemory)).toBe(false);
-    const runpod = readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8');
-    expect(runpod).toContain('id: runpod');
-    expect(runpod).toContain('summary: Notes');
-    expect(runpod).toContain('title: Runpod');
-    expect(runpod).toContain('type:note');
-  });
-
-  it('migrates legacy shared memory packages into note nodes', () => {
-    const profilesRoot = createTempProfilesRoot();
-    const legacyPackagePath = join(profilesRoot, '..', 'memory', 'runpod', 'MEMORY.md');
-    const legacyReferencePath = join(profilesRoot, '..', 'memory', 'runpod', 'references', 'usage.md');
-
-    writeFile(legacyPackagePath, `---
-name: runpod
-description: Runpod notes.
-metadata:
-  title: Runpod
-  type: reference
-  area: compute
-  role: hub
-  tags:
-    - gpu
-  updated: 2026-03-17
----
-# Runpod
-`);
-    writeFile(legacyReferencePath, '# Usage\n\nShort-lived GPU boxes.\n');
-
-    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
-    const targetPath = join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md');
-
-    expect(result.migratedFiles).toContainEqual({ from: legacyPackagePath, to: targetPath });
-    expect(existsSync(targetPath)).toBe(true);
-    expect(existsSync(join(profilesRoot, '..', 'notes', 'runpod', 'references', 'usage.md'))).toBe(true);
-
-    const migrated = readFileSync(targetPath, 'utf-8');
-    expect(migrated).toContain('id: runpod');
-    expect(migrated).toContain('summary: Runpod notes.');
-    expect(migrated).toContain('type:note');
-    expect(migrated).toContain('role:structure');
-  });
-
-  it('migrates flat shared memory files into note nodes', () => {
-    const profilesRoot = createTempProfilesRoot();
-    const flatMemory = join(profilesRoot, '..', 'memory', 'runpod.md');
-
-    writeFile(flatMemory, '---\nid: runpod\ntitle: Runpod\nsummary: Notes\ntags: [gpu]\nupdated: 2026-03-17\n---\nRunpod\n');
-
-    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
-
-    expect(result.migratedFiles).toEqual([
-      { from: flatMemory, to: join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md') },
-    ]);
-    expect(existsSync(flatMemory)).toBe(false);
-    expect(readFileSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'), 'utf-8')).toContain('id: runpod');
-  });
-
-  it('migrates legacy runtime notes into sync notes flat files', () => {
-    const profilesRoot = createTempProfilesRoot();
-    const runtimeNote = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
-
-    writeFile(runtimeNote, '---\nid: desktop\ntitle: Desktop\nsummary: Server notes\ntype: note\nstatus: active\nupdatedAt: 2026-03-31\n---\n\n# Desktop\n');
-
-    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
-
-    expect(result.migratedFiles).toContainEqual({
-      from: runtimeNote,
-      to: join(profilesRoot, '..', 'notes', 'desktop.md'),
-    });
-    expect(existsSync(runtimeNote)).toBe(false);
-    expect(readFileSync(join(profilesRoot, '..', 'notes', 'desktop.md'), 'utf-8')).toContain('id: desktop');
+    expect(result.migratedFiles).toEqual([]);
+    expect(existsSync(assistantMemory)).toBe(true);
+    expect(existsSync(legacyPackagePath)).toBe(true);
+    expect(existsSync(runtimeNote)).toBe(true);
+    expect(existsSync(join(profilesRoot, '..', 'notes', 'runpod', 'INDEX.md'))).toBe(false);
+    expect(existsSync(join(profilesRoot, '..', 'notes', 'desktop.md'))).toBe(false);
   });
 });

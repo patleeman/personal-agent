@@ -208,7 +208,7 @@ tags:
     expect(loaded.docs.map((doc) => doc.id)).toEqual(['top-level']);
   });
 
-  it('auto-migrates legacy runtime notes into sync/notes on load', () => {
+  it('ignores legacy runtime notes outside the vault on load', () => {
     const profilesRoot = createTempDir('personal-agent-memory-runtime-');
     const runtimeNotePath = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
 
@@ -227,9 +227,9 @@ updatedAt: 2026-03-31
     );
 
     const loaded = loadMemoryDocs({ profilesRoot });
-    expect(loaded.docs.map((doc) => doc.id)).toContain('desktop');
-    expect(existsSync(runtimeNotePath)).toBe(false);
-    expect(readFileSync(join(profilesRoot, '..', 'notes', 'desktop.md'), 'utf-8')).toContain('id: desktop');
+    expect(loaded.docs.map((doc) => doc.id)).not.toContain('desktop');
+    expect(existsSync(runtimeNotePath)).toBe(true);
+    expect(existsSync(join(profilesRoot, '..', 'notes', 'desktop.md'))).toBe(false);
   });
 
   it('reports broken related references during lint', () => {

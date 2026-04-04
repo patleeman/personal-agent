@@ -26,15 +26,12 @@ import {
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
-import { buildNodeCreateSearch, buildNodesHref, readCreatingNode, readSelectedNode } from '../nodeWorkspaceState';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
-  buildOpenNodeShelfId,
   useOpenResourceShelf,
   closeOpenResourceShelfItem,
   pinOpenResourceShelfItem,
   unpinOpenResourceShelfItem,
-  parseOpenNodeShelfId,
 } from '../openResourceShelves';
 import { buildNestedSessionRows } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
@@ -474,7 +471,6 @@ export function Sidebar() {
   const location = useLocation();
   const { activity, alerts, runs } = useAppData();
   const { data: status } = useApi(api.status);
-  const { data: nodesData } = useApi(api.nodes);
   const {
     pinnedSessions,
     tabs,
@@ -486,7 +482,6 @@ export function Sidebar() {
     loading,
   } = useConversations();
 
-  const nodeShelf = useOpenResourceShelf('node');
   const workspaceShelf = useOpenResourceShelf('workspace');
 
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
@@ -522,41 +517,12 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
-  const creatingNote = useMemo(
-    () => location.pathname.startsWith('/pages') && readCreatingNode(location.search),
-    [location.pathname, location.search],
-  );
-  const selectedNodesPageItem = useMemo(
-    () => (location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes')) ? readSelectedNode(location.search) : null,
-    [location.pathname, location.search],
-  );
-  const nodesRouteActive = useMemo(
-    () => location.pathname.startsWith('/pages') || location.pathname.startsWith('/nodes'),
-    [location.pathname],
-  );
   const selectedWorkspaceId = useMemo(
     () => location.pathname.startsWith('/workspace') ? readWorkspaceCwdFromSearch(location.search) : null,
     [location.pathname, location.search],
   );
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
 
-  const nodesByKindAndId = useMemo(
-    () => new Map((nodesData?.nodes ?? []).map((node) => [`${node.kind}:${node.id}`, node] as const)),
-    [nodesData?.nodes],
-  );
-
-  const openNodeEntries = useMemo(
-    () => [
-      ...nodeShelf.pinnedIds.map((shelfId) => ({ shelfId, pinned: true })),
-      ...nodeShelf.openIds.map((shelfId) => ({ shelfId, pinned: false })),
-    ]
-      .map((item) => {
-        const parsed = parseOpenNodeShelfId(item.shelfId);
-        return parsed ? { ...parsed, shelfId: item.shelfId, pinned: item.pinned } : null;
-      })
-      .filter((item): item is { kind: 'note' | 'project' | 'skill'; id: string; shelfId: string; pinned: boolean } => item !== null),
-    [nodeShelf.openIds, nodeShelf.pinnedIds],
-  );
   const openWorkspaces = useMemo(
     () => [
       ...workspaceShelf.pinnedIds.map((id) => ({ id, pinned: true })),
@@ -564,19 +530,6 @@ export function Sidebar() {
     ],
     [workspaceShelf.openIds, workspaceShelf.pinnedIds],
   );
-  const openNodes = useMemo(() => {
-    return openNodeEntries.map((item) => {
-      const node = nodesByKindAndId.get(`${item.kind}:${item.id}`) ?? null;
-      return {
-        kind: item.kind,
-        id: item.id,
-        shelfId: item.shelfId,
-        pinned: item.pinned,
-        title: node?.title ?? item.id,
-        meta: node?.summary || `${item.kind} · @${item.id}`,
-      };
-    }).sort((left, right) => Number(right.pinned) - Number(left.pinned) || left.title.localeCompare(right.title));
-  }, [nodesByKindAndId, openNodeEntries]);
   const runsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
@@ -825,13 +778,6 @@ export function Sidebar() {
     }
   }
 
-  function handleCloseNode(kind: 'note' | 'project' | 'skill', nodeId: string) {
-    closeOpenResourceShelfItem('node', buildOpenNodeShelfId(kind, nodeId));
-    if (selectedNodesPageItem?.kind === kind && selectedNodesPageItem.id === nodeId) {
-      navigate('/pages');
-    }
-  }
-
   function handleCloseWorkspace(workspaceId: string) {
     closeOpenResourceShelfItem('workspace', workspaceId);
     if (selectedWorkspaceId === workspaceId && location.pathname.startsWith('/workspace')) {
@@ -855,7 +801,6 @@ export function Sidebar() {
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
-        <TopNavItem to="/pages" icon={PATH.nodes} label="Docs" forceActive={nodesRouteActive} />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
@@ -870,16 +815,6 @@ export function Sidebar() {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
             <span className="flex-1 text-left">Chat</span>
           </button>
-          <Link
-            to={`/pages${buildNodeCreateSearch('', { creating: true, createKind: 'note' })}`}
-            className="ui-sidebar-nav-item mx-0 flex-1 bg-accent/10 text-accent hover:bg-accent/20"
-            title="Create note"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            <span className="flex-1 text-left font-medium">Note</span>
-          </Link>
         </div>
       </div>
 
@@ -964,36 +899,6 @@ export function Sidebar() {
             );
           })}
         </div>
-
-        {(openNodes.length > 0 || creatingNote) && (
-          <>
-            <SectionHeader label="Open Docs" />
-            <div className="py-1 space-y-0.5">
-              {creatingNote ? (
-                <ShelfRow
-                  to={`/pages${buildNodeCreateSearch(location.search, { creating: true, createKind: 'note' })}`}
-                  active
-                  title="new doc"
-                  meta="Draft doc"
-                  onClose={() => navigate(`/pages${buildNodeCreateSearch(location.search, { creating: false, createKind: null })}`)}
-                />
-              ) : null}
-              {openNodes.map((item) => (
-                <ShelfRow
-                  key={`${item.kind}:${item.id}`}
-                  to={buildNodesHref(item.kind, item.id)}
-                  active={selectedNodesPageItem?.kind === item.kind && selectedNodesPageItem.id === item.id}
-                  title={item.title}
-                  meta={item.meta}
-                  pinned={item.pinned}
-                  onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('node', item.shelfId)}
-                  onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('node', item.shelfId) : undefined}
-                  onClose={item.pinned ? undefined : () => handleCloseNode(item.kind, item.id)}
-                />
-              ))}
-            </div>
-          </>
-        )}
 
         {openWorkspaces.length > 0 && (
           <>

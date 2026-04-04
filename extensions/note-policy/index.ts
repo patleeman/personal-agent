@@ -1,8 +1,13 @@
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, join, relative } from 'node:path';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { getVaultRoot } from '@personal-agent/core';
+import {
+  getDurableNotesDir,
+  getDurableSkillsDir,
+  getDurableTasksDir,
+  getProfilesRoot,
+  getVaultRoot,
+} from '@personal-agent/core';
 import {
   renderPromptCatalogTemplate,
   requirePromptCatalogEntryFromExtension,
@@ -53,31 +58,12 @@ function resolveRequestedProfile(): string {
   return 'shared';
 }
 
-function expandHomePath(value: string): string {
-  if (value === '~') return homedir();
-  if (value.startsWith('~/')) return join(homedir(), value.slice(2));
-  return value;
-}
-
-function getDefaultStateRoot(): string {
-  if (process.env.PERSONAL_AGENT_STATE_ROOT?.trim()) {
-    return resolve(expandHomePath(process.env.PERSONAL_AGENT_STATE_ROOT.trim()));
-  }
-  if (process.env.XDG_STATE_HOME?.trim()) {
-    return join(resolve(expandHomePath(process.env.XDG_STATE_HOME.trim())), 'personal-agent');
-  }
-  return join(homedir(), '.local', 'state', 'personal-agent');
-}
-
 function resolveProfilesRoot(): string {
-  if (process.env.PERSONAL_AGENT_PROFILES_ROOT?.trim()) {
-    return resolve(expandHomePath(process.env.PERSONAL_AGENT_PROFILES_ROOT.trim()));
-  }
-  return join(getDefaultStateRoot(), 'profiles');
+  return getProfilesRoot();
 }
 
 function resolveProfileDir(profilesRoot: string, profile: string): string {
-  return join(profilesRoot, profile, 'agent');
+  return join(profilesRoot, profile);
 }
 
 function toDisplayPath(cwd: string, path: string): string {
@@ -147,9 +133,9 @@ export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
     activeProfileDir,
     layers,
     activeAgentsFile: activeProfile === 'shared' ? undefined : join(activeProfileDir, 'AGENTS.md'),
-    activeSkillsDir: join(activeProfileDir, 'skills'),
-    activeTasksDir: activeProfile === 'shared' ? undefined : join(activeProfileDir, 'tasks'),
-    activeNotesDir: join(dirname(profilesRoot), 'notes'),
+    activeSkillsDir: getDurableSkillsDir(),
+    activeTasksDir: getDurableTasksDir(),
+    activeNotesDir: getDurableNotesDir(),
   };
 }
 

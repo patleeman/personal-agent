@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import {
   createProjectActivityEntry,
   getPiAgentRuntimeDir,
+  getVaultRoot,
   managedSyncRepoGitignore,
   managedSyncRepoGitattributes,
   MANAGED_SYNC_REPO_CONVERSATION_ATTENTION_MERGE_DRIVER,
@@ -317,13 +318,12 @@ function buildResolverAgentCommand(input: {
   prompt: string;
 }): string[] {
   const maintenanceStateRoot = ensureMaintenanceAgentRuntimeState(input.stateRoot, input.profile);
-  const profilesRoot = process.env.PERSONAL_AGENT_PROFILES_ROOT?.trim() || join(input.stateRoot, 'profiles');
   const cliEntrypoint = join(getRepoRoot(), 'packages', 'cli', 'dist', 'index.js');
 
   return [
     'env',
     `PERSONAL_AGENT_STATE_ROOT=${maintenanceStateRoot}`,
-    `PERSONAL_AGENT_PROFILES_ROOT=${profilesRoot}`,
+    `PERSONAL_AGENT_VAULT_ROOT=${getVaultRoot()}`,
     `PERSONAL_AGENT_REPO_ROOT=${getRepoRoot()}`,
     process.execPath,
     cliEntrypoint,
