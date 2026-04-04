@@ -930,7 +930,7 @@ function ReferencedProjectsSectionContent({
                   'w-full py-2.5 text-left transition-colors',
                   isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
                 )}
-                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced page ${projectId}`}
+                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -956,10 +956,10 @@ function ReferencedProjectsSectionContent({
       )}
 
       {projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim animate-pulse">Loading pages…</p>
+        <p className="text-[12px] text-dim animate-pulse">Loading projects…</p>
       )}
       {!projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim">No referenced pages.</p>
+        <p className="text-[12px] text-dim">No referenced projects.</p>
       )}
     </div>
   );
@@ -1284,7 +1284,7 @@ function DraftConversationContextPanel() {
         )}
       </Section>
 
-      <Section title="Referenced pages">
+      <Section title="Referenced projects">
         <ReferencedProjectsSectionContent
           relatedProjectIds={draftProjectIds}
           allProjects={allProjects}
@@ -2041,7 +2041,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         )}
       </Section>
 
-      <Section title="Referenced pages">
+      <Section title="Referenced projects">
         <ReferencedProjectsSectionContent
           relatedProjectIds={relatedProjectIds}
           allProjects={allProjects}
