@@ -166,6 +166,7 @@ The UI supports:
 - branch navigation
 - context usage display
 - file/image input
+- clickable inline file paths in assistant messages without breaking normal text selection
 
 A new draft conversation becomes a live session when you send the first prompt.
 
