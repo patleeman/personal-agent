@@ -7,7 +7,7 @@ import { buildMentionLookup, renderTextWithMentionLinks } from './mentionRenderi
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 describe('mentionRendering', () => {
-  it('renders unique node mentions as links for the main app surface', () => {
+  it('renders unique node mentions as plain mention pills when page routes are unavailable', () => {
     const lookup = buildMentionLookup([
       { id: '@web-ui', label: 'web-ui', kind: 'project', title: 'Web UI' },
       { id: '@note-index', label: 'note-index', kind: 'note', title: 'Note index' },
@@ -20,9 +20,11 @@ describe('mentionRendering', () => {
       </StaticRouter>,
     );
 
-    expect(html).toContain('href="/pages?kind=project&amp;page=web-ui"');
-    expect(html).toContain('href="/pages?kind=note&amp;page=note-index"');
-    expect(html).toContain('href="/pages?kind=skill&amp;page=agent-browser"');
+    expect(html).toContain('class="ui-markdown-mention"');
+    expect(html).toContain('@web-ui');
+    expect(html).toContain('@note-index');
+    expect(html).toContain('@agent-browser');
+    expect(html).not.toContain('href=');
   });
 
   it('falls back to a non-link pill for ambiguous mentions', () => {

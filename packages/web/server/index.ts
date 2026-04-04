@@ -1286,7 +1286,6 @@ function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile
       kind: 'page',
       createdAt: page.updatedAt ?? page.createdAt ?? '',
       title: page.title,
-      href: `/pages?kind=${encodeURIComponent(page.kind)}&page=${encodeURIComponent(page.id)}`,
     });
   }
 

@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { bucketProjectStatus, formatProjectStatus, isProjectArchived } from '../contextRailProject';
 import type { ProjectDetail } from '../types';
 import { timeAgo } from '../utils';
@@ -49,7 +48,6 @@ export function ProjectOverviewPanel({
   removeDisabled?: boolean;
 }) {
   const record = project.project;
-  const projectHref = `/pages?kind=project&page=${encodeURIComponent(record.id)}`;
   const isArchived = isProjectArchived(record);
   const documentRecord = project.document;
   const taskCount = project.taskCount ?? project.tasks.length;
@@ -82,9 +80,6 @@ export function ProjectOverviewPanel({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Link to={projectHref} className="ui-action-button text-accent hover:text-accent/80">
-              open page
-            </Link>
             {onRemove && (
               <IconButton
                 onClick={onRemove}

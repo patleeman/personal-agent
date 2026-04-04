@@ -7,10 +7,10 @@ interface TestAction {
 
 const ITEMS: CommandPaletteItem<TestAction>[] = [
   {
-    id: 'nav:projects',
+    id: 'nav:workspace',
     section: 'nav',
-    title: 'Projects',
-    subtitle: 'Browse all projects',
+    title: 'Workspace Files',
+    subtitle: 'Browse workspace files',
     keywords: ['workspaces'],
     order: 1,
     action: { kind: 'navigate' },
@@ -34,15 +34,6 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     action: { kind: 'restore' },
   },
   {
-    id: 'node:ship',
-    section: 'nodes',
-    title: 'Ship candidate',
-    subtitle: 'ready to branch',
-    keywords: ['memory-123', 'release', 'note'],
-    order: 1,
-    action: { kind: 'node' },
-  },
-  {
     id: 'task:nightly',
     section: 'tasks',
     title: 'nightly-review',
@@ -51,40 +42,31 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     order: 1,
     action: { kind: 'task' },
   },
-  {
-    id: 'node:apollo',
-    section: 'nodes',
-    title: 'Apollo migration',
-    subtitle: 'Move jobs onto the new worker stack',
-    keywords: ['apollo-migration', 'in_progress', 'project'],
-    order: 2,
-    action: { kind: 'project' },
-  },
 ];
 
 describe('command palette search', () => {
   it('scores title matches ahead of unrelated items', () => {
-    const score = scoreCommandPaletteItem(ITEMS[5], 'apollo');
-    const unrelated = scoreCommandPaletteItem(ITEMS[0], 'apollo');
+    const score = scoreCommandPaletteItem(ITEMS[3], 'nightly');
+    const unrelated = scoreCommandPaletteItem(ITEMS[0], 'nightly');
 
     expect(score).not.toBeNull();
     expect(unrelated).toBeNull();
   });
 
   it('matches across multiple tokens and keywords', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'ship release', scope: 'all' });
+    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly summarize', scope: 'all' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('nodes');
-    expect(results[0]?.items[0]?.id).toBe('node:ship');
+    expect(results[0]?.section).toBe('tasks');
+    expect(results[0]?.items[0]?.id).toBe('task:nightly');
   });
 
   it('filters to the requested scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'nodes' });
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'open' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('nodes');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['node:ship', 'node:apollo']);
+    expect(results[0]?.section).toBe('open');
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['open:alpha']);
   });
 
   it('keeps section order when query is empty', () => {
@@ -94,7 +76,6 @@ describe('command palette search', () => {
       'nav',
       'open',
       'archived',
-      'nodes',
       'tasks',
     ]);
   });

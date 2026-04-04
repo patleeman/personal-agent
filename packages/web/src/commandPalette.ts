@@ -1,6 +1,6 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'nodes' | 'tasks';
+export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'tasks';
 export type CommandPaletteScope = 'all' | CommandPaletteSection;
 
 export interface CommandPaletteItem<TAction = unknown> {
@@ -30,7 +30,6 @@ export const COMMAND_PALETTE_SECTION_ORDER: CommandPaletteSection[] = [
   'nav',
   'open',
   'archived',
-  'nodes',
   'tasks',
 ];
 
@@ -38,7 +37,6 @@ export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, strin
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  nodes: 'Docs',
   tasks: 'Scheduled tasks',
 };
 
@@ -47,7 +45,6 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'nodes', label: 'Docs' },
   { value: 'tasks', label: 'Scheduled' },
 ];
 
@@ -55,7 +52,6 @@ const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   nav: 12,
   open: 12,
   archived: 8,
-  nodes: 12,
   tasks: 8,
 };
 

@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelProviderState, ModelState, NodeBrowserData, NodeBrowserDetail, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, SavedNodeBrowserView, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SkillDetail, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelProviderState, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SkillDetail, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -585,22 +585,6 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  nodes: (options?: { profile?: string }) => get<NodeBrowserData>(withViewProfile('/pages', options?.profile)),
-  nodeDetail: (nodeId: string, options?: { profile?: string }) => get<NodeBrowserDetail>(withViewProfile(`/pages/${encodeURIComponent(nodeId)}`, options?.profile)),
-  saveNodeDetail: (nodeId: string, input: {
-    title?: string;
-    summary?: string;
-    description?: string | null;
-    status?: string;
-    tags?: string[];
-    addTags?: string[];
-    removeTags?: string[];
-    parent?: string | null;
-    relationships?: Array<{ type: string; targetId: string }>;
-  }, options?: { profile?: string }) => patch<NodeBrowserDetail>(withViewProfile(`/pages/${encodeURIComponent(nodeId)}`, options?.profile), input),
-  nodeViews: () => get<{ views: SavedNodeBrowserView[] }>('/pages/views'),
-  saveNodeView: (input: { id?: string; name: string; search: string }) => post<{ views: SavedNodeBrowserView[] }>('/pages/views', input),
-  deleteNodeView: (viewId: string) => del<{ views: SavedNodeBrowserView[] }>(`/pages/views/${encodeURIComponent(viewId)}`),
   notes: () => get<{ memories: MemoryDocItem[]; memoryQueue?: MemoryWorkItem[] }>('/notes'),
   noteWorkQueue: () => get<{ memoryQueue: MemoryWorkItem[] }>('/notes/work-queue'),
   recoverFailedNodeDistills: () =>

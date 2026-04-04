@@ -75,7 +75,7 @@ export async function validateWebUiRoutes(
 ): Promise<void> {
   await assertStatusRoute(baseUrl, expectedRelease);
   await assertHtmlRoute(baseUrl, '/');
-  await assertHtmlRoute(baseUrl, '/projects');
+  await assertHtmlRoute(baseUrl, '/workspace/files');
 }
 
 export async function waitForWebUiHealthy(

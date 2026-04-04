@@ -13,8 +13,6 @@ import { createActivityAgentExtension } from '../extensions/activityAgentExtensi
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createDeferredResumeAgentExtension } from '../extensions/deferredResumeAgentExtension.js';
-import { createNodeAgentExtension } from '../extensions/nodeAgentExtension.js';
-import { createNoteAgentExtension } from '../extensions/noteAgentExtension.js';
 import { createProjectAgentExtension } from '../extensions/projectAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
@@ -118,8 +116,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         repoRoot,
         profilesRoot: getProfilesRoot(),
       }),
-      createNoteAgentExtension(),
-      createNodeAgentExtension(),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
         getCurrentProfile,

@@ -2342,9 +2342,9 @@ function InboxItemContext({ id }: { id: string }) {
               <div className="space-y-1.5">
                 <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Docs</p>
                 {entry.relatedProjectIds.map((projectId) => (
-                  <Link key={projectId} to={buildNodesHref('project', projectId)} className="ui-card-meta font-mono text-accent hover:text-accent/80">
+                  <span key={projectId} className="ui-card-meta font-mono text-secondary">
                     {projectId}
-                  </Link>
+                  </span>
                 ))}
               </div>
             )}
@@ -2876,7 +2876,7 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
   const fetcher = useCallback(() => api.projectById(projectId, viewProfile ? { profile: viewProfile } : undefined), [projectId, viewProfile]);
   const { data, loading, error, refreshing, refetch } = useApi(fetcher, `knowledge-project-rail:${projectId}:${viewProfile ?? ''}`);
 
-  if (loading && !data) return <LoadingState label="Loading page…" className="px-4 py-4" />;
+  if (loading && !data) return <LoadingState label="Loading project…" className="px-4 py-4" />;
   if (error && !data) return <ErrorState message={`Failed to load project: ${error}`} className="px-4 py-4" />;
   if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Page not found.</div>;
 
@@ -2894,7 +2894,7 @@ function KnowledgeProjectContext({ projectId }: { projectId: string }) {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading page…')}
+        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading project…')}
       </div>
     </div>
   );
