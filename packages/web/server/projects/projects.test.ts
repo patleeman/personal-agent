@@ -31,6 +31,7 @@ function createTempRepo(): string {
   tempDirs.push(dir);
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(dir, 'sync');
   return dir;
 }
 
@@ -46,7 +47,7 @@ describe('sortProjectTasks', () => {
 });
 
 describe('readProjectDetailFromProject', () => {
-  it('returns the project document, child pages, files, and flat tasks from project storage', () => {
+  it('returns the project document, files, and flat tasks from project storage', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
@@ -85,7 +86,6 @@ describe('readProjectDetailFromProject', () => {
       },
     ]);
     expect(detail.taskCount).toBe(1);
-    expect(detail.childPageCount).toBe(0);
     expect(detail.fileCount).toBe(0);
     expect(detail.document?.content).toContain('Ship the project UI');
   });
@@ -281,6 +281,6 @@ describe('project editing helpers', () => {
     });
 
     expect(result).toEqual({ ok: true, deletedProjectId: 'delete-me' });
-    expect(existsSync(resolveProjectNodePaths({ repoRoot, profile: 'datadog', projectId: 'delete-me' }).projectDir)).toBe(false);
+    expect(existsSync(resolveProjectNodePaths({ repoRoot, profile: 'datadog', projectId: 'delete-me' }).projectFile)).toBe(false);
   });
 });

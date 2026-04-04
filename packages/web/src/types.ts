@@ -196,22 +196,6 @@ export interface ProjectDocumentRecord {
   updatedAt: string;
 }
 
-export interface ProjectChildPage {
-  id: string;
-  kind: 'note' | 'project' | 'skill';
-  kinds: string[];
-  path: string;
-  title: string;
-  summary: string;
-  description?: string;
-  status: string;
-  tags: string[];
-  parent: string;
-  body: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 export interface ProjectFile {
   id: string;
   kind?: 'attachment' | 'artifact';
@@ -240,7 +224,7 @@ export interface ProjectLinkedConversation {
 
 export interface ProjectTimelineEntry {
   id: string;
-  kind: 'project' | 'document' | 'task' | 'page' | 'file' | 'conversation' | 'activity';
+  kind: 'project' | 'document' | 'task' | 'file' | 'conversation' | 'activity';
   createdAt: string;
   title: string;
   href?: string;
@@ -250,13 +234,11 @@ export interface ProjectDetail {
   profile: string;
   project: ProjectRecord;
   taskCount: number;
-  childPageCount: number;
   fileCount: number;
   attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
   document: ProjectDocumentRecord | null;
-  childPages: ProjectChildPage[];
   files: ProjectFile[];
   attachments: ProjectFile[];
   artifacts: ProjectFile[];
@@ -990,43 +972,11 @@ export interface MemoryDocItem {
   usedInLastSession?: boolean;
 }
 
-export interface MemoryReferenceItem {
-  title: string;
-  summary: string;
-  path: string;
-  relativePath: string;
-  updated?: string;
-}
-
-export interface MemoryDocDetail {
-  memory: MemoryDocItem;
-  content: string;
-  references: MemoryReferenceItem[];
-  links?: NodeLinks;
-}
-
-export interface MemoryWorkItem {
-  conversationId: string;
-  conversationTitle: string;
-  runId: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  lastError?: string;
-}
-
 export interface MemoryData {
   profile: string;
   agentsMd: MemoryAgentsItem[];
   skills: MemorySkillItem[];
   memoryDocs: MemoryDocItem[];
-}
-
-export interface SkillDetail {
-  skill: MemorySkillItem;
-  content: string;
-  references: MemoryReferenceItem[];
-  links?: NodeLinks;
 }
 
 export interface ExecutionTargetPathMapping {

@@ -17,7 +17,6 @@ import {
 } from '@personal-agent/core';
 import { resolveResourceProfile } from '@personal-agent/resources';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
-import { readNodeLinks, type NodeLinks } from './nodeLinks.js';
 
 // ── Memory path utilities ─────────────────────────────────────────────────────
 
@@ -78,21 +77,6 @@ export interface MemoryDocItem {
   recentSessionCount?: number;
   lastUsedAt?: string | null;
   usedInLastSession?: boolean;
-}
-
-export interface MemoryReferenceItem {
-  title: string;
-  summary: string;
-  path: string;
-  relativePath: string;
-  updated?: string;
-}
-
-export interface MemoryDocDetail {
-  memory: MemoryDocItem;
-  content: string;
-  references: MemoryReferenceItem[];
-  links?: NodeLinks;
 }
 
 function extractTagValue(tags: string[], key: string): string | undefined {
@@ -308,57 +292,6 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
   return skills;
 }
 
-export function readSkillDetailForProfile(skillName: string, profile: string): SkillItem | null {
-  return listSkillsForProfile(profile).find((skill) => skill.name === skillName) ?? null;
-}
-
-export function readSkillWorkspaceDetailForProfile(skillName: string, profile: string): {
-  skill: SkillItem;
-  content: string;
-  references: Array<{
-    title: string;
-    summary?: string;
-    path: string;
-    relativePath: string;
-    updated?: string;
-  }>;
-  links?: NodeLinks;
-} | null {
-  const skill = readSkillDetailForProfile(skillName, profile);
-  if (!skill) {
-    return null;
-  }
-
-  const content = readFileSync(skill.path, 'utf-8');
-  const references = loadMemoryPackageReferences(dirname(skill.path)).map((reference) => ({
-    title: reference.title,
-    summary: reference.summary,
-    path: reference.filePath,
-    relativePath: reference.relativePath,
-    updated: reference.updated,
-  }));
-
-  let links: NodeLinks | undefined;
-  try {
-    links = readNodeLinks({
-      repoRoot: process.cwd(),
-      profilesRoot: getProfilesRoot(),
-      profile,
-      kind: 'skill',
-      id: skill.name,
-    });
-  } catch {
-    links = undefined;
-  }
-
-  return {
-    skill,
-    content,
-    references,
-    ...(links ? { links } : {}),
-  };
-}
-
 export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
   const profile = input.profile.trim();
   const title = input.title.trim();
@@ -556,37 +489,3 @@ export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
   };
 }
 
-export function readNoteDetail(memoryId: string, profile: string): MemoryDocDetail {
-  const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
-  const doc = loaded.nodes.find((entry) => entry.id === memoryId && (entry.kinds.includes('note') || (!entry.kinds.includes('project') && !entry.kinds.includes('skill'))));
-  if (!doc) throw new Error('Note not found.');
-
-  const content = readFileSync(doc.filePath, 'utf-8');
-  const references = loadMemoryPackageReferences(doc.dirPath).map((reference) => ({
-    title: reference.title,
-    summary: reference.summary,
-    path: reference.filePath,
-    relativePath: reference.relativePath,
-    updated: reference.updated,
-  }));
-
-  let links: NodeLinks | undefined;
-  try {
-    links = readNodeLinks({
-      repoRoot: process.cwd(),
-      profilesRoot: getProfilesRoot(),
-      profile,
-      kind: 'note',
-      id: doc.id,
-    });
-  } catch {
-    links = undefined;
-  }
-
-  return {
-    memory: mapLoadedMemoryDoc(doc, true),
-    content,
-    references,
-    ...(links ? { links } : {}),
-  };
-}

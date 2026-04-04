@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelProviderState, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SkillDetail, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -585,28 +585,6 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  notes: () => get<{ memories: MemoryDocItem[]; memoryQueue?: MemoryWorkItem[] }>('/notes'),
-  noteWorkQueue: () => get<{ memoryQueue: MemoryWorkItem[] }>('/notes/work-queue'),
-  recoverFailedNodeDistills: () =>
-    post<{ accepted: true; runId: string; count: number }>('/notes/recover-failed-node-distills'),
-  createNoteDoc: (input: { title: string; summary?: string; description?: string; body?: string }) =>
-    post<MemoryDocDetail>('/notes', input),
-  captureNote: (input: { title?: string; body: string }) =>
-    post<MemoryDocDetail>('/captures', input),
-  captureUrl: (input: { url: string; title?: string }) =>
-    post<MemoryDocDetail>('/captures/url', input),
-  noteDoc: (memoryId: string) =>
-    get<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`),
-  saveNoteDoc: (memoryId: string, input: { content: string } | { title: string; summary?: string; description?: string; body: string }) =>
-    post<MemoryDocDetail>(`/notes/${encodeURIComponent(memoryId)}`, input),
-  deleteNoteDoc: (memoryId: string) =>
-    del<{ deleted: boolean; memoryId: string }>(`/notes/${encodeURIComponent(memoryId)}`),
-  skillDetail: (name: string, options?: { profile?: string }) =>
-    get<SkillDetail>(withViewProfile(`/skills/${encodeURIComponent(name)}`, options?.profile)),
-  createSkill: (input: { title: string; name?: string; description?: string; body?: string }) =>
-    post<SkillDetail>('/skills', input),
-  startNoteConversation: (memoryId: string, input?: { cwd?: string }) =>
-    post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/notes/${encodeURIComponent(memoryId)}/start`, input ?? {}),
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>

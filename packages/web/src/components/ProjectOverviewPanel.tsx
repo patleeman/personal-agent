@@ -51,7 +51,6 @@ export function ProjectOverviewPanel({
   const isArchived = isProjectArchived(record);
   const documentRecord = project.document;
   const taskCount = project.taskCount ?? project.tasks.length;
-  const childPageCount = project.childPageCount ?? project.childPages.length;
   const fileCount = project.fileCount ?? project.files?.length ?? ((project.attachments?.length ?? 0) + (project.artifacts?.length ?? 0));
   const projectSummary = record.summary.trim() || record.description.trim();
   const documentPreview = previewLine(documentRecord?.content ?? '') || projectSummary;
@@ -59,7 +58,6 @@ export function ProjectOverviewPanel({
   const hiddenTasks = Math.max(0, project.tasks.length - tasks.length);
   const metrics = [
     `${taskCount} ${taskCount === 1 ? 'task' : 'tasks'}`,
-    ...(childPageCount > 0 ? [`${childPageCount} ${childPageCount === 1 ? 'page' : 'pages'}`] : []),
     ...(fileCount > 0 ? [`${fileCount} ${fileCount === 1 ? 'file' : 'files'}`] : []),
     ...(project.linkedConversations.length > 0 ? [`${project.linkedConversations.length} ${project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}`] : []),
   ];

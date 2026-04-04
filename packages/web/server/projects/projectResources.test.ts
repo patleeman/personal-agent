@@ -2,12 +2,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProjectScaffold, loadUnifiedNodes, resolveProjectPaths } from '@personal-agent/core';
+import { createProjectScaffold, resolveProjectPaths } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   deleteProjectFileRecord,
   listProjectFiles,
-  migrateLegacyProjectPages,
   readProjectDocument,
   readProjectFileDownload,
   saveProjectDocument,
@@ -31,6 +30,7 @@ function createTempRepo(): string {
   tempDirs.push(dir);
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(dir, 'sync');
   return dir;
 }
 
@@ -55,46 +55,6 @@ describe('projectResources', () => {
     const brief = readProjectDocument({ repoRoot, profile: 'datadog', projectId: 'briefs' });
     expect(brief?.content).toContain('A durable project note.');
     expect(brief?.path).toContain('project.md');
-  });
-
-  it('migrates legacy project notes into child pages', () => {
-    const repoRoot = createTempRepo();
-    const scaffold = createProjectScaffold({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'notes',
-      title: 'Notes',
-      description: 'Test project pages',
-    });
-    const legacyNotesDir = join(scaffold.paths.projectDir, 'notes');
-    mkdirSync(legacyNotesDir, { recursive: true });
-    writeFileSync(join(legacyNotesDir, 'capture-the-decision.md'), `---
-id: capture-the-decision
-title: Capture the decision
-kind: decision
-createdAt: 2026-03-20T12:00:00.000Z
-updatedAt: 2026-03-21T09:30:00.000Z
----
-Keep the main project doc in project.md.
-`);
-
-    const result = migrateLegacyProjectPages({
-      repoRoot,
-      profile: 'datadog',
-      projectId: 'notes',
-    });
-
-    expect(result.migratedPageIds).toHaveLength(1);
-    expect(existsSync(legacyNotesDir)).toBe(false);
-
-    const loaded = loadUnifiedNodes();
-    const child = loaded.nodes.find((node) => node.id === result.migratedPageIds[0]);
-    expect(child?.links.parent).toBe('notes');
-    expect(child?.tags).toContain('type:note');
-    expect(child?.tags).toContain('profile:datadog');
-    expect(child?.tags).toContain('noteType:decision');
-    expect(child?.body).toContain('# Capture the decision');
-    expect(child?.body).toContain('Keep the main project doc in project.md.');
   });
 
   it('uploads, downloads, and deletes project files from the unified files bucket', () => {
