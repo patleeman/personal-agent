@@ -2,9 +2,6 @@ import { useState, type ReactNode } from 'react';
 import type { ProjectFile } from '../types';
 import { ProjectFileRow } from './ProjectDetailForms';
 import { EmptyState, ToolbarButton } from './ui';
-import { PageEditorDocument } from './PageEditorDocument';
-import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
-import { NodeLinkList, UnresolvedNodeLinks } from './NodeLinksSection';
 import type { ProjectActivityItemShape } from './projectDetailState';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
@@ -81,7 +78,11 @@ export function composeProjectDocumentContent(body: string, heading: string, pre
 }
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
-  return <RichMarkdownRenderer content={body} className={className ?? 'ui-markdown max-w-none text-[14px]'} />;
+  return (
+    <div className={className ?? 'max-w-none text-[14px] leading-relaxed text-primary whitespace-pre-wrap'}>
+      {body}
+    </div>
+  );
 }
 
 export function ProjectRequirementsContent({
@@ -326,18 +327,12 @@ export function ProjectDocumentContent({
   onChange: (value: string) => void;
 }) {
   return (
-    <PageEditorDocument
-      title=""
-      onTitleChange={() => undefined}
-      description=""
-      onDescriptionChange={() => undefined}
-      body={content}
-      onBodyChange={onChange}
-      showTitle={false}
-      showDescription={false}
-      frameClassName="ui-note-editor-frame-embedded"
-      documentClassName="ui-note-editor-doc-embedded gap-0"
-      bodyPlaceholder="Start writing…"
+    <textarea
+      value={content}
+      onChange={(event) => onChange(event.target.value)}
+      className={`${INPUT_CLASS} min-h-[20rem] resize-y`}
+      spellCheck={false}
+      placeholder="Start writing…"
     />
   );
 }
@@ -399,30 +394,6 @@ export function ProjectRecordViewer({
         </form>
       )}
     </>
-  );
-}
-
-export function ProjectNodeLinksContent({
-  links,
-}: {
-  links?: { outgoing: Array<{ kind: 'note' | 'project' | 'skill'; id: string; title: string; summary?: string }>; incoming: Array<{ kind: 'note' | 'project' | 'skill'; id: string; title: string; summary?: string }>; unresolved: string[] };
-}) {
-  return (
-    <div className="max-w-5xl space-y-5">
-      <NodeLinkList
-        title="Links to"
-        items={links?.outgoing}
-        surface="main"
-        emptyText="This page does not reference other pages yet."
-      />
-      <NodeLinkList
-        title="Linked from"
-        items={links?.incoming}
-        surface="main"
-        emptyText="No other pages link to this page yet."
-      />
-      <UnresolvedNodeLinks ids={links?.unresolved} />
-    </div>
   );
 }
 
