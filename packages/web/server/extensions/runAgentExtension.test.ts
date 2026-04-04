@@ -123,6 +123,12 @@ describe('run agent extension', () => {
         id: 'conv-999',
         filePath: '/tmp/sessions/conv-999.jsonl',
       },
+      callbackConversation: {
+        conversationId: 'conv-999',
+        sessionFile: '/tmp/sessions/conv-999.jsonl',
+        profile: 'assistant',
+        repoRoot: '/repo',
+      },
       checkpointPayload: {
         resumeParentOnExit: true,
       },
@@ -166,6 +172,12 @@ describe('run agent extension', () => {
         type: 'tool',
         id: 'conv-agent',
         filePath: '/tmp/sessions/conv-agent.jsonl',
+      },
+      callbackConversation: {
+        conversationId: 'conv-agent',
+        sessionFile: '/tmp/sessions/conv-agent.jsonl',
+        profile: 'assistant',
+        repoRoot: '/repo',
       },
       checkpointPayload: {
         resumeParentOnExit: true,
