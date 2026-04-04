@@ -885,7 +885,7 @@ export function registerCompanionConversationRoutes(
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
         const availableModels = getAvailableModelObjects();
-        const state = updateLiveSessionModelPreferences(req.params.id, input, availableModels);
+        const state = await updateLiveSessionModelPreferences(req.params.id, input, availableModels);
         res.json(state);
         return;
       }

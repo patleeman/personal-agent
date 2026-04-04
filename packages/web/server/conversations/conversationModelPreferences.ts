@@ -218,22 +218,22 @@ export function applyConversationModelPreferencesToSessionManager(
   };
 }
 
-export function applyConversationModelPreferencesToLiveSession(
-  session: Pick<AgentSession, 'agent' | 'sessionManager'>,
+export async function applyConversationModelPreferencesToLiveSession(
+  session: Pick<AgentSession, 'setModel' | 'setThinkingLevel' | 'sessionManager'>,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
   models: Model<any>[],
-): ConversationModelPreferenceState {
+): Promise<ConversationModelPreferenceState> {
   const snapshot = readConversationModelPreferenceSnapshot(session.sessionManager);
   const next = computeNextConversationModelPreferences(snapshot, input, defaults, models);
 
   if (next.shouldAppendModelChange && next.nextModel) {
-    session.agent.setModel(next.nextModel);
+    await session.setModel(next.nextModel);
     session.sessionManager.appendModelChange(next.nextModel.provider, next.nextModel.id);
   }
 
   if (next.nextPersistedThinkingLevel) {
-    session.agent.setThinkingLevel(next.nextPersistedThinkingLevel);
+    session.setThinkingLevel(next.nextPersistedThinkingLevel);
     session.sessionManager.appendThinkingLevelChange(next.nextPersistedThinkingLevel);
   }
 

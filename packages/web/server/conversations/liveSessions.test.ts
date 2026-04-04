@@ -319,7 +319,7 @@ describe('live session subscriptions', () => {
               timestamp: 2,
             },
           ],
-          streamMessage: {
+          streamingMessage: {
             role: 'assistant',
             content: [{ type: 'thinking', thinking: 'Rebuilding the visible transcript…' }],
             timestamp: 3,
@@ -382,7 +382,7 @@ describe('live session subscriptions', () => {
       session: {
         state: {
           messages: [],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         getSteeringMessages: () => [],
@@ -410,7 +410,7 @@ describe('live session subscriptions', () => {
       session: {
         state: {
           messages: [],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         getSteeringMessages: () => [],
@@ -512,7 +512,7 @@ describe('live session subscriptions', () => {
       session: {
         state: {
           messages: [],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         getSteeringMessages: () => [],
@@ -574,7 +574,7 @@ describe('live session subscriptions', () => {
       session: {
         state: {
           messages: [],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         getSteeringMessages: () => [],
@@ -664,7 +664,7 @@ describe('live session subscriptions', () => {
               timestamp: '2026-03-13T18:00:04.000Z',
             },
           ],
-          streamMessage: {
+          streamingMessage: {
             role: 'assistant',
             content: [{ type: 'thinking', thinking: 'Planning the next step' }],
             timestamp: '2026-03-13T18:00:05.000Z',
@@ -920,7 +920,7 @@ describe('live session subscriptions', () => {
               timestamp: '2026-03-13T18:00:11.000Z',
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: true,
@@ -1096,7 +1096,7 @@ describe('live session subscriptions', () => {
               timestamp: '2026-03-13T18:00:07.600Z',
             },
           ],
-          streamMessage: {
+          streamingMessage: {
             role: 'assistant',
             content: [{ type: 'thinking', thinking: 'Plan the next fix' }],
             timestamp: '2026-03-13T19:00:06.000Z',
@@ -1155,7 +1155,7 @@ describe('live session subscriptions', () => {
               timestamp: 2,
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1214,7 +1214,7 @@ describe('live session subscriptions', () => {
               timestamp: 2,
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1308,7 +1308,7 @@ describe('live session subscriptions', () => {
               timestamp: '2026-03-13T18:00:04.000Z',
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1371,7 +1371,7 @@ describe('live session subscriptions', () => {
               timestamp: 1,
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1410,7 +1410,7 @@ describe('live session subscriptions', () => {
               timestamp: 1,
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1454,7 +1454,7 @@ describe('live session subscriptions', () => {
               timestamp: 2,
             },
           ],
-          streamMessage: null,
+          streamingMessage: null,
         },
         getContextUsage: () => null,
         isStreaming: false,
@@ -1486,7 +1486,7 @@ describe('live session subscriptions', () => {
             timestamp: 1,
           },
         ],
-        streamMessage: null,
+        streamingMessage: null,
       },
       getContextUsage: () => null,
       isStreaming: false,
@@ -1534,7 +1534,7 @@ describe('queued prompt restore', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         getSteeringMessages: () => [''],
         getFollowUpMessages: () => [],
@@ -1588,7 +1588,7 @@ describe('queued prompt restore', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: true,
         getSteeringMessages: () => steeringMessages,
@@ -1642,7 +1642,7 @@ describe('queuePromptContext', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: false,
         sendCustomMessage,
@@ -1671,7 +1671,7 @@ describe('queuePromptContext', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: true,
         sendCustomMessage,
@@ -1708,7 +1708,7 @@ describe('submitPromptSession', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: false,
         subscribe(listener: (event: AgentSessionEvent) => void) {
@@ -1759,7 +1759,7 @@ describe('submitPromptSession', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: false,
         subscribe: () => () => {},
@@ -1806,7 +1806,7 @@ describe('promptSession', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: false,
         prompt,
@@ -1836,7 +1836,7 @@ describe('promptSession', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: true,
         prompt,
@@ -1866,7 +1866,7 @@ describe('promptSession', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: true,
         prompt,
@@ -1897,7 +1897,7 @@ describe('promptSession', () => {
       lastQueueStateJson: null,
       pendingHiddenTurnCustomTypes: ['conversation_automation_post_turn_review'],
       session: {
-        state: { messages: [], streamMessage: null },
+        state: { messages: [], streamingMessage: null },
         getContextUsage: () => null,
         isStreaming: false,
         prompt,

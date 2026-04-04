@@ -668,7 +668,7 @@ function buildUserMessageBlock(message: { content?: unknown; timestamp?: string 
 function buildLiveStateBlocks(session: AgentSession, options: { omitStreamMessage?: boolean } = {}): DisplayBlock[] {
   const state = session.state;
   const messages = state.messages.slice();
-  const streamMessage = state.streamMessage;
+  const streamMessage = state.streamingMessage;
 
   if (streamMessage && !options.omitStreamMessage) {
     messages.push(streamMessage);
@@ -1723,7 +1723,7 @@ async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
   return loader;
 }
 
-function repairSessionModelProvider(session: Pick<AgentSession, 'agent' | 'sessionManager' | 'model'>, models: ReturnType<ModelRegistry['getAvailable']>): void {
+async function repairSessionModelProvider(session: Pick<AgentSession, 'setModel' | 'sessionManager' | 'model'>, models: ReturnType<ModelRegistry['getAvailable']>): Promise<void> {
   const currentId = session.model?.id ?? '';
   const currentProvider = (session.model as { provider?: string } | undefined)?.provider ?? '';
   if (!currentId) {
@@ -1741,7 +1741,7 @@ function repairSessionModelProvider(session: Pick<AgentSession, 'agent' | 'sessi
   }
 
   const repairedModel = idMatches[0]!;
-  session.agent.setModel(repairedModel);
+  await session.setModel(repairedModel);
   session.sessionManager.appendModelChange(repairedModel.provider, repairedModel.id);
 }
 
@@ -1768,10 +1768,10 @@ export async function createSession(
   ensureSessionFileExists(session.sessionManager);
 
   const availableModels = modelRegistry.getAvailable();
-  repairSessionModelProvider(session, availableModels);
+  await repairSessionModelProvider(session, availableModels);
 
   if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
-    applyConversationModelPreferencesToLiveSession(
+    await applyConversationModelPreferencesToLiveSession(
       session,
       {
         ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
@@ -1812,7 +1812,7 @@ export async function createSessionFromExisting(
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
-  repairSessionModelProvider(session, modelRegistry.getAvailable());
+  await repairSessionModelProvider(session, modelRegistry.getAvailable());
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -1845,7 +1845,7 @@ export async function resumeSession(
 
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
-  repairSessionModelProvider(session, modelRegistry.getAvailable());
+  await repairSessionModelProvider(session, modelRegistry.getAvailable());
 
   const id = session.sessionId;
   wireSession(id, session, cwd, {
@@ -2002,7 +2002,7 @@ export async function appendDetachedUserMessage(
     timestamp: Date.now(),
   };
 
-  entry.session.agent.appendMessage(message);
+  entry.session.state.messages = [...entry.session.state.messages, message];
   entry.session.sessionManager.appendMessage(message);
 
   if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
@@ -2252,16 +2252,16 @@ export function renameSession(sessionId: string, name: string): void {
   });
 }
 
-export function updateLiveSessionModelPreferences(
+export async function updateLiveSessionModelPreferences(
   sessionId: string,
   input: ConversationModelPreferenceInput,
   availableModels?: ReturnType<typeof getAvailableModelObjects>,
-): ConversationModelPreferenceState {
+): Promise<ConversationModelPreferenceState> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
 
   const models = availableModels ?? getAvailableModelObjects();
-  const next = applyConversationModelPreferencesToLiveSession(
+  const next = await applyConversationModelPreferencesToLiveSession(
     entry.session,
     input,
     {
@@ -2319,67 +2319,28 @@ export async function forkSession(
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   if (entry.session.isStreaming) throw new Error('Cannot fork while a response is running. Use stop first.');
 
-  if (!options.preserveSource) {
-    const { cancelled } = await entry.session.fork(entryId);
-    if (cancelled) throw new Error('Fork cancelled');
-
-    patchSessionManagerPersistence(entry.session.sessionManager);
-    ensureSessionFileExists(entry.session.sessionManager);
-
-    // fork() creates a new session file and switches the current session to it
-    const newId = entry.session.sessionId;
-    const newFile = entry.session.sessionFile ?? '';
-
-    // Re-register under the new ID
-    registry.delete(sessionId);
-    entry.sessionId = newId;
-    entry.lastDurableRunState = undefined;
-    registry.set(newId, entry);
-    publishSessionMetaChanged(sessionId);
-    publishSessionMetaChanged(newId);
-    void syncDurableConversationRun(entry, entry.session.isStreaming ? 'running' : 'waiting', { force: true });
-
-    return { newSessionId: newId, sessionFile: newFile };
-  }
-
   const sourceSessionFile = entry.session.sessionFile;
   if (!sourceSessionFile) {
     throw new Error('Cannot fork a live session without a session file.');
   }
 
-  const auth = makeAuth();
-  const resourceLoader = await makeLoader(entry.cwd, options);
-  const sessionManager = SessionManager.open(sourceSessionFile);
-  let forkedSession: AgentSession | null = null;
-
-  try {
-    const { session } = await createAgentSession({
-      cwd: entry.cwd,
-      agentDir: options.agentDir ?? AGENT_DIR,
-      authStorage: auth,
-      modelRegistry: makeRegistry(auth),
-      resourceLoader,
-      sessionManager,
-    });
-
-    forkedSession = session;
-    patchConversationBashTool(forkedSession, entry.cwd, forkedSession.sessionId, forkedSession.sessionFile);
-    patchSessionManagerPersistence(forkedSession.sessionManager);
-
-    const { cancelled } = await forkedSession.fork(entryId);
-    if (cancelled) throw new Error('Fork cancelled');
-
-    ensureSessionFileExists(forkedSession.sessionManager);
-
-    const newId = forkedSession.sessionId;
-    const newFile = forkedSession.sessionFile ?? '';
-    wireSession(newId, forkedSession, entry.cwd);
-
-    return { newSessionId: newId, sessionFile: newFile };
-  } catch (error) {
-    forkedSession?.dispose();
-    throw error;
+  const sourceManager = SessionManager.open(sourceSessionFile);
+  if (!sourceManager.getEntry(entryId)) {
+    throw new Error(`Session entry not found: ${entryId}`);
   }
+
+  const forkedSessionFile = sourceManager.createBranchedSession(entryId);
+  if (!forkedSessionFile) {
+    throw new Error('Unable to create a forked session file.');
+  }
+
+  const resumed = await resumeSession(forkedSessionFile, options);
+
+  if (!options.preserveSource) {
+    destroySession(sessionId);
+  }
+
+  return { newSessionId: resumed.id, sessionFile: forkedSessionFile };
 }
 
 /** Cleanly dispose a live session. */
