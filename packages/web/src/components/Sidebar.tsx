@@ -790,14 +790,14 @@ export function Sidebar() {
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
         <div className="ui-brand-mark">
           <span className="ui-brand-mark-text">pa</span>
         </div>
         <span className="text-[13px] font-semibold text-primary truncate flex-1">{getSidebarBrandLabel(status?.profile)}</span>
       </div>
 
-      <div className="pb-1 space-y-0.5">
+      <div className="pb-2 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
