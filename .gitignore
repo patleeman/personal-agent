@@ -13,6 +13,7 @@ packages/*/dist/
 packages/*/dist-server/
 profiles/**/dist/
 profiles/**/build/
+tools/*/.build/
 
 # Local runtime / temp
 .taskfactory/

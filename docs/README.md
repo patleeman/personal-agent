@@ -54,6 +54,7 @@ Those four pages should answer most agent questions quickly.
 - [Web UI Guide](./web-ui.md)
 - [Workspace](./workspace.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
+- [Native UI Automation](./native-ui-automation.md)
 
 ## Integrations and system surfaces
 
