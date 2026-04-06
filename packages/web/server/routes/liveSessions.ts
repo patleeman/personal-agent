@@ -908,13 +908,19 @@ export function registerLiveSessionRoutes(
       if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
       const gitSummaryRead = remoteLive
-        ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false } satisfies GitStatusReadTelemetry }
+        ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false, degraded: false } satisfies GitStatusReadTelemetry }
         : readGitStatusSummaryWithTelemetry(cwd);
       const gitSummary = gitSummaryRead.summary;
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
       setServerTimingHeaders(res, [
-        { name: 'git', durationMs: gitSummaryRead.telemetry.durationMs, description: remoteLive ? 'remote-skip' : gitSummaryRead.telemetry.cache },
+        {
+          name: 'git',
+          durationMs: gitSummaryRead.telemetry.durationMs,
+          description: remoteLive
+            ? 'remote-skip'
+            : `${gitSummaryRead.telemetry.cache}${gitSummaryRead.telemetry.degraded ? '/degraded' : ''}`,
+        },
         { name: 'total', durationMs },
       ], {
         route: 'live-session-context',
@@ -926,6 +932,7 @@ export function registerLiveSessionRoutes(
         conversationId: id,
         durationMs,
         gitCache: gitSummaryRead.telemetry.cache,
+        gitDegraded: gitSummaryRead.telemetry.degraded,
       });
 
       res.json({
