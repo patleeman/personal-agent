@@ -10,11 +10,6 @@ describe('layout sizing helpers', () => {
   });
 
   it('returns per-route rail preferences', () => {
-    expect(getRailLayoutPrefs('/projects/web-ui')).toEqual({
-      storageKey: 'pa:rail-width:projects',
-      initialWidth: 560,
-    });
-
     expect(getRailLayoutPrefs('/conversations/session-123')).toEqual({
       storageKey: 'pa:rail-width:conversations',
       initialWidth: 380,

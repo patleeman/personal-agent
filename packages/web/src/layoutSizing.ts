@@ -22,7 +22,6 @@ export function getRailPageKey(pathname: string): string {
         return 'workspace-files';
       }
       return 'workspace';
-    case 'projects':
     case 'scheduled':
     case 'runs':
     case 'conversations':
@@ -67,11 +66,6 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   const pageKey = getRailPageKey(pathname);
 
   switch (pageKey) {
-    case 'projects':
-      return {
-        storageKey: buildRailWidthStorageKey(pageKey),
-        initialWidth: 560,
-      };
     case 'scheduled':
       return {
         storageKey: buildRailWidthStorageKey(pageKey),

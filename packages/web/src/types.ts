@@ -607,7 +607,6 @@ export interface ConversationTreeSnapshot {
 export type AppEventTopic =
   | 'activity'
   | 'alerts'
-  | 'projects'
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
@@ -627,7 +626,6 @@ export type AppEvent =
   | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
   | { type: 'alerts_snapshot'; entries: AlertEntry[]; activeCount: number }
-  | { type: 'projects_snapshot'; projects: ProjectRecord[] }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }

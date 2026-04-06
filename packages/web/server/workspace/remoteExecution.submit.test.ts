@@ -9,7 +9,6 @@ const {
   startBackgroundRunMock,
   getExecutionTargetMock,
   setConversationExecutionTargetMock,
-  setConversationProjectLinksMock,
   appendDetachedUserMessageMock,
   ensureSessionFileExistsMock,
   patchSessionManagerPersistenceMock,
@@ -18,7 +17,6 @@ const {
   startBackgroundRunMock: vi.fn(),
   getExecutionTargetMock: vi.fn(),
   setConversationExecutionTargetMock: vi.fn(),
-  setConversationProjectLinksMock: vi.fn(),
   appendDetachedUserMessageMock: vi.fn(),
   ensureSessionFileExistsMock: vi.fn(),
   patchSessionManagerPersistenceMock: vi.fn(),
@@ -34,7 +32,6 @@ vi.mock('@personal-agent/core', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@personal-agent/core')>()),
   getExecutionTarget: getExecutionTargetMock,
   setConversationExecutionTarget: setConversationExecutionTargetMock,
-  setConversationProjectLinks: setConversationProjectLinksMock,
 }));
 
 vi.mock('../conversations/liveSessions.js', async (importOriginal) => ({
@@ -61,7 +58,6 @@ describe('submitRemoteExecutionRun', () => {
     startBackgroundRunMock.mockReset();
     getExecutionTargetMock.mockReset();
     setConversationExecutionTargetMock.mockReset();
-    setConversationProjectLinksMock.mockReset();
     appendDetachedUserMessageMock.mockReset();
     ensureSessionFileExistsMock.mockReset();
     patchSessionManagerPersistenceMock.mockReset();

@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import {
   OPEN_NOTE_IDS_STORAGE_KEY,
-  OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
@@ -292,7 +291,6 @@ describe('Sidebar', () => {
 
   it('renders grouped open shelves for workspaces without the removed docs shelf', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
-    storage.setItem(OPEN_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['active-project']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
     storage.setItem(OPEN_WORKSPACE_IDS_STORAGE_KEY, JSON.stringify(['/tmp/repo']));
 

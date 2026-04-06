@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -189,76 +189,6 @@ export const api = {
   sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
   sessionBlock: (id: string, blockId: string) => get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`),
   sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
-  projects:     (options?: { profile?: string }) => get<ProjectRecord[]>(withViewProfile('/projects', options?.profile)),
-  projectDiagnostics: (options?: { profile?: string }) => get<ProjectDiagnostics>(withViewProfile('/projects/diagnostics', options?.profile)),
-  projectById:  (id: string, options?: { profile?: string }) => get<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
-  createProject: (input: {
-    title: string;
-    description?: string;
-    documentContent?: string;
-    repoRoot?: string | null;
-    summary?: string;
-    status?: string;
-  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile('/projects', options?.profile), input),
-  updateProject: (id: string, patchBody: {
-    title?: string;
-    description?: string;
-    repoRoot?: string | null;
-    summary?: string;
-    status?: string;
-    currentMilestoneId?: string | null;
-  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile), patchBody),
-  deleteProject: (id: string, options?: { profile?: string }) =>
-    del<{ ok: true; deletedProjectId: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
-  archiveProject: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/archive`, options?.profile)),
-  unarchiveProject: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/unarchive`, options?.profile)),
-  addProjectMilestone: (id: string, input: {
-    title: string;
-    status: string;
-    summary?: string;
-    makeCurrent?: boolean;
-  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones`, options?.profile), input),
-  updateProjectMilestone: (id: string, milestoneId: string, patchBody: {
-    title?: string;
-    status?: string;
-    summary?: string | null;
-    makeCurrent?: boolean;
-  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, options?.profile), patchBody),
-  deleteProjectMilestone: (id: string, milestoneId: string, options?: { profile?: string }) =>
-    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, options?.profile)),
-  moveProjectMilestone: (id: string, milestoneId: string, direction: 'up' | 'down', options?: { profile?: string }) =>
-    post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}/move`, options?.profile), { direction }),
-  createProjectTask: (id: string, input: {
-    title: string;
-    status: string;
-    milestoneId?: string | null;
-  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks`, options?.profile), input),
-  updateProjectTask: (id: string, taskId: string, patchBody: {
-    title?: string;
-    status?: string;
-    milestoneId?: string | null;
-  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, options?.profile), patchBody),
-  deleteProjectTask: (id: string, taskId: string, options?: { profile?: string }) =>
-    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, options?.profile)),
-  moveProjectTask: (id: string, taskId: string, direction: 'up' | 'down', options?: { profile?: string }) =>
-    post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, options?.profile), { direction }),
-  projectSource: (id: string, options?: { profile?: string }) => get<{ path: string; content: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile)),
-  saveProjectSource: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile), { content }),
-  saveProjectDocument: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/document`, options?.profile), { content }),
-  regenerateProjectDocument: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/document/regenerate`, options?.profile), {}),
-  uploadProjectFile: (id: string, input: {
-    kind?: 'attachment' | 'artifact';
-    name: string;
-    mimeType?: string;
-    title?: string;
-    description?: string;
-    data: string;
-  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files`, options?.profile), input),
-  deleteProjectFile: (id: string, kindOrFileId: string, fileIdOrOptions?: string | { profile?: string }, maybeOptions?: { profile?: string }) => {
-    const fileId = typeof fileIdOrOptions === 'string' ? fileIdOrOptions : kindOrFileId;
-    const options = (typeof fileIdOrOptions === 'string' ? maybeOptions : fileIdOrOptions);
-    return del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`, options?.profile));
-  },
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
@@ -370,8 +300,6 @@ export const api = {
   markDurableRunAttentionRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
-  retryNodeDistillRun: (id: string) => post<{ accepted: true; conversationId: string; runId: string; status: string }>(`/runs/${encodeURIComponent(id)}/node-distill/retry`),
-  recoverNodeDistillRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; sessionFile: string; cwd: string }>(`/runs/${encodeURIComponent(id)}/node-distill/recover`),
   importRemoteRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; summary: string; importedAt: string }>(`/runs/${encodeURIComponent(id)}/import`),
   remoteRunTranscriptUrl: (id: string) => buildApiPath(`/runs/${encodeURIComponent(id)}/remote-transcript`),
 
@@ -467,7 +395,6 @@ export const api = {
   remoteRuns: (input: {
     conversationId?: string;
     cwd?: string;
-    referencedProjectIds?: string[];
     text: string;
     targetId: string;
   }) => post<{ accepted: true; conversationId: string; sessionFile: string; runId: string; remoteCwd: string; target: { id: string; label: string } }>(`/remote-runs`, input),
@@ -555,7 +482,6 @@ export const api = {
         attachments: ConversationAttachmentSummary[];
       }>;
     }),
-  conversationProjects: (id: string) => get<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`),
   deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
   scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
     fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes`), {
@@ -584,13 +510,6 @@ export const api = {
       }
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
-    }),
-  addConversationProject: (id: string, projectId: string) =>
-    post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
-  removeConversationProject: (id: string, projectId: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`), { method: 'DELETE' }).then(r => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json() as Promise<ConversationProjectLinks>;
     }),
   changeConversationCwd: (id: string, cwd: string, surfaceId?: string) =>
     fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/cwd`), {
@@ -621,14 +540,12 @@ export const api = {
 
   createLiveSession: (
     cwd?: string,
-    referencedProjectIds?: string[],
     text?: string,
     targetId?: string | null,
     options?: { model?: string | null; thinkingLevel?: string | null },
   ) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', {
       cwd,
-      referencedProjectIds,
       text,
       targetId,
       ...(options?.model !== undefined ? { model: options.model } : {}),

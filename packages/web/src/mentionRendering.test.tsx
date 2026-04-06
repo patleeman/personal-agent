@@ -9,19 +9,17 @@ import { buildMentionLookup, renderTextWithMentionLinks } from './mentionRenderi
 describe('mentionRendering', () => {
   it('renders unique node mentions as plain mention pills when page routes are unavailable', () => {
     const lookup = buildMentionLookup([
-      { id: '@web-ui', label: 'web-ui', kind: 'project', title: 'Web UI' },
       { id: '@note-index', label: 'note-index', kind: 'note', title: 'Note index' },
       { id: '@agent-browser', label: 'agent-browser', kind: 'skill', title: 'Agent Browser' },
     ]);
 
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
-        <Fragment>{renderTextWithMentionLinks('See @web-ui with @note-index and @agent-browser.', { lookup, surface: 'main' })}</Fragment>
+        <Fragment>{renderTextWithMentionLinks('See @note-index with @agent-browser.', { lookup, surface: 'main' })}</Fragment>
       </StaticRouter>,
     );
 
     expect(html).toContain('class="ui-markdown-mention"');
-    expect(html).toContain('@web-ui');
     expect(html).toContain('@note-index');
     expect(html).toContain('@agent-browser');
     expect(html).not.toContain('href=');
@@ -29,8 +27,8 @@ describe('mentionRendering', () => {
 
   it('falls back to a non-link pill for ambiguous mentions', () => {
     const lookup = buildMentionLookup([
-      { id: '@shared-id', label: 'shared-id', kind: 'project', title: 'Shared project' },
       { id: '@shared-id', label: 'shared-id', kind: 'note', title: 'Shared note' },
+      { id: '@shared-id', label: 'shared-id', kind: 'skill', title: 'Shared skill' },
     ]);
 
     const html = renderToStaticMarkup(
@@ -40,7 +38,7 @@ describe('mentionRendering', () => {
     );
 
     expect(html).toContain('class="ui-markdown-mention"');
-    expect(html).not.toContain('href="/pages?kind=project&amp;page=shared-id"');
     expect(html).not.toContain('href="/pages?kind=note&amp;page=shared-id"');
+    expect(html).not.toContain('href="/pages?kind=skill&amp;page=shared-id"');
   });
 });

@@ -97,9 +97,6 @@ import {
   type TaskRuntimeEntry,
 } from './automation/scheduledTasks.js';
 import {
-  writeConversationMemoryDistillFailureActivity,
-} from './conversations/conversationMemoryActivity.js';
-import {
   createSession as createLocalSession,
   createSessionFromExisting,
   resumeSession as resumeLocalSession,
@@ -192,7 +189,6 @@ import {
   getConversationArtifact,
   getConversationAttachment,
   getConversationExecutionTarget,
-  getConversationProjectLink,
   getExecutionTarget,
   getSyncRoot,
   getProfilesRoot,
@@ -614,36 +610,6 @@ function markActivityReadState(profile: string, activityId: string, read: boolea
 
 function listActivityForCurrentProfile() {
   return listActivityForProfile(getCurrentProfile());
-}
-
-function getConversationMemoryRelatedProjectIds(profile: string, conversationId: string): string[] {
-  return getConversationProjectLink({
-    profile,
-    conversationId,
-  })?.relatedProjectIds ?? [];
-}
-
-function tryWriteConversationMemoryDistillFailureActivity(options: {
-  profile: string;
-  conversationId: string;
-  error: string;
-  relatedProjectIds?: string[];
-}): string | undefined {
-  try {
-    return writeConversationMemoryDistillFailureActivity({
-      profile: options.profile,
-      conversationId: options.conversationId,
-      error: options.error,
-      relatedProjectIds: options.relatedProjectIds ?? getConversationMemoryRelatedProjectIds(options.profile, options.conversationId),
-    });
-  } catch (error) {
-    logWarn('failed to write conversation memory distill failure activity', {
-      profile: options.profile,
-      conversationId: options.conversationId,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return undefined;
-  }
 }
 
 function buildInboxActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {

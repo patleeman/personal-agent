@@ -307,7 +307,7 @@ See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), an
 
 Docs also open inside `/pages`.
 
-Use a doc workspace when you want doc editing or explicit doc-distillation and recovery work that is still running or needs attention.
+Use a doc workspace when you want doc editing or durable page work that is still running or needs attention.
 
 Use `/pages` for durable doc work. Old note/project browser URLs are no longer part of the intended product surface.
 

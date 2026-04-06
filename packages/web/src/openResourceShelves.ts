@@ -2,34 +2,32 @@ import { useEffect, useState } from 'react';
 import {
   OPEN_NODE_IDS_STORAGE_KEY,
   OPEN_NOTE_IDS_STORAGE_KEY,
-  OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
   PINNED_NODE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
-  PINNED_PROJECT_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
   PINNED_WORKSPACE_IDS_STORAGE_KEY,
 } from './localSettings';
 
 export const OPEN_RESOURCE_SHELVES_CHANGED_EVENT = 'pa:open-resource-shelves-changed';
 
-export type OpenResourceKind = 'node' | 'note' | 'project' | 'skill' | 'workspace';
+export type OpenResourceKind = 'node' | 'note' | 'skill' | 'workspace';
 
-export function buildOpenNodeShelfId(kind: 'note' | 'project' | 'skill', id: string): string {
+export function buildOpenNodeShelfId(kind: 'note' | 'skill', id: string): string {
   const normalizedId = normalizeResourceId(id);
   return normalizedId ? `${kind}:${normalizedId}` : '';
 }
 
-export function parseOpenNodeShelfId(value: string | null | undefined): { kind: 'note' | 'project' | 'skill'; id: string } | null {
+export function parseOpenNodeShelfId(value: string | null | undefined): { kind: 'note' | 'skill'; id: string } | null {
   const normalized = normalizeResourceId(value);
-  const match = normalized.match(/^(note|project|skill):(.*)$/);
+  const match = normalized.match(/^(note|skill):(.*)$/);
   if (!match?.[1] || !match[2]?.trim()) {
     return null;
   }
 
   return {
-    kind: match[1] as 'note' | 'project' | 'skill',
+    kind: match[1] as 'note' | 'skill',
     id: match[2].trim(),
   };
 }
@@ -89,8 +87,6 @@ function storageKeys(kind: OpenResourceKind): { open: string; pinned: string } {
       return { open: OPEN_NODE_IDS_STORAGE_KEY, pinned: PINNED_NODE_IDS_STORAGE_KEY };
     case 'note':
       return { open: OPEN_NOTE_IDS_STORAGE_KEY, pinned: PINNED_NOTE_IDS_STORAGE_KEY };
-    case 'project':
-      return { open: OPEN_PROJECT_IDS_STORAGE_KEY, pinned: PINNED_PROJECT_IDS_STORAGE_KEY };
     case 'skill':
       return { open: OPEN_SKILL_IDS_STORAGE_KEY, pinned: PINNED_SKILL_IDS_STORAGE_KEY };
     case 'workspace':
@@ -102,12 +98,10 @@ function readLegacyNodeShelfState(): OpenResourceShelfState {
   return normalizeShelfState({
     openIds: [
       ...readStoredIds(OPEN_NOTE_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('note', id)),
-      ...readStoredIds(OPEN_PROJECT_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('project', id)),
       ...readStoredIds(OPEN_SKILL_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('skill', id)),
     ],
     pinnedIds: [
       ...readStoredIds(PINNED_NOTE_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('note', id)),
-      ...readStoredIds(PINNED_PROJECT_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('project', id)),
       ...readStoredIds(PINNED_SKILL_IDS_STORAGE_KEY).map((id) => buildOpenNodeShelfId('skill', id)),
     ],
   });
@@ -153,8 +147,6 @@ function dispatchShelfChanged(kind: OpenResourceKind, state: OpenResourceShelfSt
 function clearLegacyNodeShelfState(): void {
   writeStoredIds(OPEN_NOTE_IDS_STORAGE_KEY, []);
   writeStoredIds(PINNED_NOTE_IDS_STORAGE_KEY, []);
-  writeStoredIds(OPEN_PROJECT_IDS_STORAGE_KEY, []);
-  writeStoredIds(PINNED_PROJECT_IDS_STORAGE_KEY, []);
   writeStoredIds(OPEN_SKILL_IDS_STORAGE_KEY, []);
   writeStoredIds(PINNED_SKILL_IDS_STORAGE_KEY, []);
 }

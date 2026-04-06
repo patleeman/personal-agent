@@ -14,7 +14,6 @@ import {
   buildDraftConversationExecutionTargetStorageKey,
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
-import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
 import { getKnowledgeInstructionPath } from '../knowledgeSelection';
 import { useReloadState } from '../reloadState';
@@ -387,18 +386,11 @@ function compactRunCardSummary(
     return null;
   }
 
-  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow|Conversation page distillation)( · .+)?$/.test(trimmed)) {
+  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow)( · .+)?$/.test(trimmed)) {
     return null;
   }
 
   return trimmed;
-}
-
-const NODE_DISTILL_RUN_SOURCE_TYPE = 'conversation-node-distill';
-const LEGACY_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
-
-function isNodeDistillRunSourceType(value: string | undefined): boolean {
-  return value === NODE_DISTILL_RUN_SOURCE_TYPE || value === LEGACY_MEMORY_DISTILL_RUN_SOURCE_TYPE;
 }
 
 function formatRecoveryAction(action: string): string {
@@ -410,11 +402,6 @@ function formatRecoveryAction(action: string): string {
     case 'invalid': return 'invalid';
     default: return action;
   }
-}
-
-function isRecoverableMemoryDistillRun(detail: DurableRunDetailResult['run']): boolean {
-  return isNodeDistillRunSourceType(detail.manifest?.source?.type)
-    && (detail.status?.status === 'failed' || detail.status?.status === 'interrupted');
 }
 
 function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
@@ -438,8 +425,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   const [cancelling, setCancelling] = useState(false);
   const [markingReviewed, setMarkingReviewed] = useState(false);
   const [importingRemote, setImportingRemote] = useState(false);
-  const [retryingMemoryDistill, setRetryingMemoryDistill] = useState(false);
-  const [openingMemoryRecovery, setOpeningMemoryRecovery] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const {
@@ -516,7 +501,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
   const showConversationChrome = Boolean(conversationId);
   const remoteExecution = run.remoteExecution;
-  const recoverableMemoryDistill = isRecoverableMemoryDistillRun(run);
 
   async function handleImportRemote() {
     if (!remoteExecution || importingRemote || remoteExecution.importStatus !== 'ready') {
@@ -532,44 +516,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       setActionError(error instanceof Error ? error.message : 'Could not import the remote run.');
     } finally {
       setImportingRemote(false);
-    }
-  }
-
-  async function handleRetryMemoryDistill() {
-    if (!recoverableMemoryDistill || retryingMemoryDistill) {
-      return;
-    }
-
-    setActionError(null);
-    setRetryingMemoryDistill(true);
-    try {
-      const result = await api.retryNodeDistillRun(run.runId);
-      navigate(`/conversations/${encodeURIComponent(result.conversationId)}${setConversationRunIdInSearch('', result.runId)}`);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not retry the page distillation run.');
-    } finally {
-      setRetryingMemoryDistill(false);
-    }
-  }
-
-  async function handleRecoverMemoryDistill() {
-    if (!recoverableMemoryDistill || openingMemoryRecovery) {
-      return;
-    }
-
-    setActionError(null);
-    setOpeningMemoryRecovery(true);
-    try {
-      const result = await api.recoverNodeDistillRun(run.runId);
-      persistForkPromptDraft(
-        result.conversationId,
-        `Help me recover page distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
-      );
-      navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this page distillation run.');
-    } finally {
-      setOpeningMemoryRecovery(false);
     }
   }
 
@@ -629,35 +575,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
             <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
               {cancelling ? 'Cancelling…' : 'Cancel'}
             </button>
-          </div>
-        )}
-
-        {recoverableMemoryDistill && (
-          <div className="space-y-2 rounded-lg border border-border-subtle bg-surface px-3 py-3">
-            <div className="space-y-1">
-              <p className="ui-section-label">Page distillation recovery</p>
-              <p className="text-[12px] text-secondary">
-                Retry this failed distillation or open a recovery conversation with the source transcript and failure context loaded.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => { void handleRetryMemoryDistill(); }}
-                disabled={retryingMemoryDistill || openingMemoryRecovery}
-                className="ui-toolbar-button text-warning"
-              >
-                {retryingMemoryDistill ? 'Retrying…' : 'Retry distillation'}
-              </button>
-              <button
-                type="button"
-                onClick={() => { void handleRecoverMemoryDistill(); }}
-                disabled={openingMemoryRecovery || retryingMemoryDistill}
-                className="ui-toolbar-button"
-              >
-                {openingMemoryRecovery ? 'Opening…' : 'Recover in conversation'}
-              </button>
-            </div>
           </div>
         )}
 

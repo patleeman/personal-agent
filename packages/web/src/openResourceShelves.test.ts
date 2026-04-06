@@ -2,12 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   OPEN_NODE_IDS_STORAGE_KEY,
   OPEN_NOTE_IDS_STORAGE_KEY,
-  OPEN_PROJECT_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
   PINNED_NODE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
-  PINNED_PROJECT_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
   PINNED_WORKSPACE_IDS_STORAGE_KEY,
 } from './localSettings';
@@ -49,8 +47,6 @@ function keysFor(kind: OpenResourceKind): { open: string; pinned: string } {
       return { open: OPEN_NODE_IDS_STORAGE_KEY, pinned: PINNED_NODE_IDS_STORAGE_KEY };
     case 'note':
       return { open: OPEN_NOTE_IDS_STORAGE_KEY, pinned: PINNED_NOTE_IDS_STORAGE_KEY };
-    case 'project':
-      return { open: OPEN_PROJECT_IDS_STORAGE_KEY, pinned: PINNED_PROJECT_IDS_STORAGE_KEY };
     case 'skill':
       return { open: OPEN_SKILL_IDS_STORAGE_KEY, pinned: PINNED_SKILL_IDS_STORAGE_KEY };
     case 'workspace':
@@ -95,14 +91,14 @@ describe('openResourceShelves', () => {
   });
 
   it('opens an item once per shelf', () => {
-    expect(ensureOpenResourceShelfItem('project', ' project-1 ')).toEqual({
-      openIds: ['project-1'],
+    expect(ensureOpenResourceShelfItem('note', ' note-1 ')).toEqual({
+      openIds: ['note-1'],
       pinnedIds: [],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
 
-    expect(ensureOpenResourceShelfItem('project', 'project-1')).toEqual({
-      openIds: ['project-1'],
+    expect(ensureOpenResourceShelfItem('note', 'note-1')).toEqual({
+      openIds: ['note-1'],
       pinnedIds: [],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
@@ -142,30 +138,30 @@ describe('openResourceShelves', () => {
   });
 
   it('closes only open items', () => {
-    replaceOpenResourceShelf('project', { openIds: ['project-a'], pinnedIds: ['project-b'] });
+    replaceOpenResourceShelf('note', { openIds: ['note-a'], pinnedIds: ['note-b'] });
     dispatchEvent.mockReset();
 
-    expect(closeOpenResourceShelfItem('project', 'project-b')).toEqual({
-      openIds: ['project-a'],
-      pinnedIds: ['project-b'],
+    expect(closeOpenResourceShelfItem('note', 'note-b')).toEqual({
+      openIds: ['note-a'],
+      pinnedIds: ['note-b'],
     });
     expect(dispatchEvent).not.toHaveBeenCalled();
 
-    expect(closeOpenResourceShelfItem('project', 'project-a')).toEqual({
+    expect(closeOpenResourceShelfItem('note', 'note-a')).toEqual({
       openIds: [],
-      pinnedIds: ['project-b'],
+      pinnedIds: ['note-b'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
-  it('merges legacy note/project/skill shelves into the consolidated node shelf', () => {
+  it('merges legacy note and skill shelves into the consolidated node shelf', () => {
     localStorage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-a']));
-    localStorage.setItem(PINNED_PROJECT_IDS_STORAGE_KEY, JSON.stringify(['project-a']));
-    localStorage.setItem(OPEN_NODE_IDS_STORAGE_KEY, JSON.stringify([buildOpenNodeShelfId('skill', 'skill-a')]));
+    localStorage.setItem(PINNED_SKILL_IDS_STORAGE_KEY, JSON.stringify(['skill-a']));
+    localStorage.setItem(OPEN_NODE_IDS_STORAGE_KEY, JSON.stringify([buildOpenNodeShelfId('skill', 'skill-b')]));
 
     expect(readOpenResourceShelf('node')).toEqual({
-      openIds: [buildOpenNodeShelfId('note', 'note-a'), buildOpenNodeShelfId('skill', 'skill-a')],
-      pinnedIds: [buildOpenNodeShelfId('project', 'project-a')],
+      openIds: [buildOpenNodeShelfId('note', 'note-a'), buildOpenNodeShelfId('skill', 'skill-b')],
+      pinnedIds: [buildOpenNodeShelfId('skill', 'skill-a')],
     });
   });
 });

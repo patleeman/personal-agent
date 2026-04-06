@@ -6,7 +6,7 @@ import { buildNodeMentionHref, type NodeMentionSurface } from './nodeMentionRout
 const MENTION_REGEX = /@[\w-]+/g;
 
 function isNodeMentionItem(item: MentionItem): boolean {
-  return item.kind === 'project' || item.kind === 'note' || item.kind === 'skill';
+  return item.kind === 'note' || item.kind === 'skill';
 }
 
 function splitMentionFragments(text: string): Array<{ text: string; mention: boolean }> {

@@ -2,24 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { buildMentionItems, filterMentionItems, resolveMentionItems } from './conversationMentions';
 
 describe('conversationMentions', () => {
-  it('builds project, task, note, skill, and per-profile mentions without view scaffolding', () => {
+  it('builds task, note, skill, and per-profile mentions without view scaffolding', () => {
     const items = buildMentionItems({
-      projects: [{
-        id: 'web-ui',
-        createdAt: '',
-        updatedAt: '',
-        title: 'Web UI shell',
-        description: 'Build the web UI shell.',
-        summary: 'Inbox-first web shell.',
-        requirements: {
-          goal: 'Build the web UI shell.',
-          acceptanceCriteria: [],
-        },
-        status: 'active',
-        blockers: [],
-        recentProgress: [],
-        plan: { milestones: [], tasks: [] },
-      }],
       tasks: [{
         id: 'daily-review',
         filePath: '/tmp/daily-review.task.md',
@@ -45,7 +29,6 @@ describe('conversationMentions', () => {
     });
 
     expect(items.map((item) => `${item.kind}:${item.id}`)).toEqual([
-      'project:@web-ui',
       'task:@daily-review',
       'note:@project-state-model',
       'skill:@agent-browser',
@@ -57,7 +40,6 @@ describe('conversationMentions', () => {
 
   it('filters mentions by id, title, or summary text', () => {
     const items = buildMentionItems({
-      projects: [],
       tasks: [{
         id: 'daily-review',
         filePath: '/tmp/daily-review.task.md',
@@ -91,7 +73,6 @@ describe('conversationMentions', () => {
 
   it('resolves mentioned items in encounter order', () => {
     const items = buildMentionItems({
-      projects: [],
       tasks: [{
         id: 'daily-review',
         filePath: '/tmp/daily-review.task.md',

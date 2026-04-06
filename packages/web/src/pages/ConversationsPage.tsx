@@ -340,7 +340,6 @@ function workspaceLabel(workspace: ConversationWorkspaceState): string {
 
 function isGenericRunSummary(summary: string): boolean {
   return /^(Live conversation|Background run|Scheduled task|Wakeup|Remote execution)( · .+)?$/.test(summary)
-    || summary === 'Conversation page distillation'
     || summary === 'Shell run'
     || summary === 'Workflow'
     || summary === 'Run';

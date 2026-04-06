@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getConfigRoot, getDurableSessionsDir, getStateRoot, resolveProfileConversationLinksDir } from '@personal-agent/core';
+import { getConfigRoot, getDurableSessionsDir, getStateRoot } from '@personal-agent/core';
 import type { AppEvent } from './appEvents.js';
 import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 
@@ -12,7 +12,6 @@ const tempDirs: string[] = [];
 const ALL_TOPICS = [
   'activity',
   'alerts',
-  'projects',
   'sessions',
   'sessionFiles',
   'artifacts',
@@ -130,43 +129,6 @@ describe('app event monitor', () => {
     renameSync(pendingSessionFile, sessionFile);
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
-    unsubscribe();
-  }, 10_000);
-
-  it('invalidates projects without bumping sessions when conversation project links change', async () => {
-    const repoRoot = createTempDir('pa-web-app-events-repo-');
-    const sessionsDir = getDurableSessionsDir();
-    const taskStateFile = join(getStateRoot(), 'daemon', 'task-state.json');
-    const profileConfigFile = join(getConfigRoot(), 'profile.json');
-    const conversationLinksDir = resolveProfileConversationLinksDir({ profile: 'assistant' });
-    mkdirSync(sessionsDir, { recursive: true });
-    mkdirSync(dirname(taskStateFile), { recursive: true });
-    mkdirSync(dirname(profileConfigFile), { recursive: true });
-    mkdirSync(conversationLinksDir, { recursive: true });
-    writeFileSync(taskStateFile, '{}\n', 'utf-8');
-    writeFileSync(profileConfigFile, '{"defaultProfile":"assistant"}\n', 'utf-8');
-
-    const events: AppEvent[] = [];
-    const unsubscribe = subscribeAppEvents((event) => {
-      events.push(event);
-    });
-
-    startAppEventMonitor({
-      repoRoot,
-      sessionsDir,
-      taskStateFile,
-      profileConfigFile,
-      getCurrentProfile: () => 'assistant',
-    });
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    events.length = 0;
-
-    writeFileSync(join(conversationLinksDir, 'conv-3.json'), '{"conversationId":"conv-3","relatedProjectIds":["personal-agent"]}\n', 'utf-8');
-
-    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('projects')));
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();

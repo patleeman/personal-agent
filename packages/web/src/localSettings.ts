@@ -9,8 +9,6 @@ export const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'pa:sidebar-width';
 export const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
 export const PINNED_NOTE_IDS_STORAGE_KEY = 'pa:pinned-note-ids';
-export const OPEN_PROJECT_IDS_STORAGE_KEY = 'pa:open-project-ids';
-export const PINNED_PROJECT_IDS_STORAGE_KEY = 'pa:pinned-project-ids';
 export const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
 export const PINNED_SKILL_IDS_STORAGE_KEY = 'pa:pinned-skill-ids';
 export const OPEN_WORKSPACE_IDS_STORAGE_KEY = 'pa:open-workspace-ids';
@@ -65,8 +63,6 @@ export function resetStoredConversationUiState(): void {
   removeStoredItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY);
   removeStoredItem(OPEN_NOTE_IDS_STORAGE_KEY);
   removeStoredItem(PINNED_NOTE_IDS_STORAGE_KEY);
-  removeStoredItem(OPEN_PROJECT_IDS_STORAGE_KEY);
-  removeStoredItem(PINNED_PROJECT_IDS_STORAGE_KEY);
   removeStoredItem(OPEN_SKILL_IDS_STORAGE_KEY);
   removeStoredItem(PINNED_SKILL_IDS_STORAGE_KEY);
   removeStoredItem(OPEN_WORKSPACE_IDS_STORAGE_KEY);

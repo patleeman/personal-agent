@@ -1883,7 +1883,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
   const mentionItems = useMemo(() => buildMentionItems({
-    projects: [],
     tasks: tasks ?? [],
     memoryDocs: memoryData?.memoryDocs ?? [],
     skills: memoryData?.skills ?? [],
@@ -2929,7 +2928,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
       await api.destroySession(id, currentSurfaceId).catch(() => {});
       const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const { id: newId } = await api.createLiveSession(cwd, undefined, undefined, undefined, {
+      const { id: newId } = await api.createLiveSession(cwd, undefined, undefined, {
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
       });
@@ -3711,7 +3710,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, undefined, undefined, remoteTargetId, {
+          const { id: newId } = await api.createLiveSession(draftCwd, undefined, remoteTargetId, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });

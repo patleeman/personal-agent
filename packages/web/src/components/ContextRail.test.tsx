@@ -6,7 +6,7 @@ import { AppDataContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
-import type { DurableRunDetailResult, ProjectRecord, SessionMeta } from '../types.js';
+import type { DurableRunDetailResult, SessionMeta } from '../types.js';
 import { ContextRail } from './ContextRail.js';
 
 vi.mock('../hooks', () => ({
@@ -33,29 +33,6 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     model: 'openai/gpt-5.4',
     title: 'Fix runs navigation',
     messageCount: 6,
-    ...overrides,
-  };
-}
-
-function createProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
-  return {
-    id: 'personal-agent',
-    createdAt: '2026-03-18T00:00:00.000Z',
-    updatedAt: '2026-03-18T00:00:00.000Z',
-    title: 'Personal Agent',
-    description: 'Personal-agent work',
-    summary: 'Keep the web UI tidy.',
-    requirements: {
-      goal: 'Ship the requested UI change.',
-      acceptanceCriteria: [],
-    },
-    status: 'active',
-    blockers: [],
-    recentProgress: [],
-    plan: {
-      milestones: [],
-      tasks: [],
-    },
     ...overrides,
   };
 }
@@ -288,7 +265,7 @@ describe('ContextRail run detail', () => {
       <MemoryRouter initialEntries={['/conversations/new']}>
         <AppDataContext.Provider value={{
           activity: null,
-          projects: [createProject()],
+          projects: null,
           sessions: [createSession()],
           tasks: null,
           runs: null,

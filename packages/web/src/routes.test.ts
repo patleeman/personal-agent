@@ -24,12 +24,15 @@ describe('resolveWebRouteRedirect', () => {
     expect(resolveWebRouteRedirect('/knowledge/', '?section=instructions&instruction=%2Ftmp%2Fshared%2FAGENTS.md')).toBe('/instructions?instruction=%2Ftmp%2Fshared%2FAGENTS.md');
   });
 
+  it('redirects legacy project routes into the workspace', () => {
+    expect(resolveWebRouteRedirect('/projects')).toBe('/workspace/files');
+    expect(resolveWebRouteRedirect('/projects/continuous-conversations')).toBe('/workspace/files');
+  });
+
   it('ignores canonical and unrelated routes', () => {
     expect(resolveWebRouteRedirect(WEB_INSTRUCTIONS_PATH)).toBeNull();
     expect(resolveWebRouteRedirect('/workspace/files')).toBeNull();
     expect(resolveWebRouteRedirect('/conversations')).toBeNull();
-    expect(resolveWebRouteRedirect('/projects')).toBeNull();
-    expect(resolveWebRouteRedirect('/projects/continuous-conversations')).toBeNull();
     expect(resolveWebRouteRedirect('/projects/continuous-conversations/extra')).toBeNull();
   });
 });

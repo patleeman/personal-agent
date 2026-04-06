@@ -249,7 +249,6 @@ export function CompanionLayout() {
     runs,
     setActivity,
     setAlerts,
-    setProjects,
     setTasks,
     setRuns,
   } = useAppData();
@@ -560,7 +559,6 @@ export function CompanionLayout() {
     setActivity,
     setAlerts,
     setDaemon,
-    setProjects,
     setRuns,
     setSync,
     setTasks,

@@ -13,8 +13,6 @@ import {
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
   resolveProfileConversationArtifactsDir,
-  resolveProfileConversationLinksDir,
-  resolveProfileProjectsDir,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { logWarn } from './logging.js';
@@ -22,7 +20,6 @@ import { logWarn } from './logging.js';
 export type AppEventTopic =
   | 'activity'
   | 'alerts'
-  | 'projects'
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
@@ -75,7 +72,6 @@ interface AppEventWatchTarget {
 const ALL_TOPICS: AppEventTopic[] = [
   'activity',
   'alerts',
-  'projects',
   'sessions',
   'sessionFiles',
   'artifacts',
@@ -187,8 +183,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     resolveActivityReadStatePath({ profile }),
     resolveActivityReadStatePath({ stateRoot: daemonRoot, profile }),
   ];
-  const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
-  const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
   const conversationAttachmentsDir = resolveProfileConversationAttachmentsDir({ profile });
   const tasksDir = getDurableTasksDir();
@@ -209,10 +203,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     activity: activitySources,
     alerts: [
       { path: alertsStateFile, kind: 'file' },
-    ],
-    projects: [
-      { path: projectsDir, kind: 'directory' },
-      { path: conversationLinksDir, kind: 'directory' },
     ],
     sessions: [
       { path: conversationAttentionStateFile, kind: 'file' },

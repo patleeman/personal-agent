@@ -24,7 +24,6 @@ import type {
   DaemonState,
   DesktopAuthSessionState,
   DurableRunListResult,
-  ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
   SyncState,
@@ -213,7 +212,7 @@ export function App() {
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
   const [activity, setActivityState] = useState<ActivitySnapshot | null>(null);
   const [alerts, setAlertsState] = useState<AlertSnapshot | null>(null);
-  const [projects, setProjectsState] = useState<ProjectRecord[] | null>(null);
+  const projects = null;
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
@@ -240,9 +239,7 @@ export function App() {
     setAlertsState(snapshot);
   }, []);
 
-  const setProjects = useCallback((items: ProjectRecord[]) => {
-    setProjectsState(items);
-  }, []);
+  const setProjects = useCallback(() => {}, []);
 
   const setSessions = useCallback((items: SessionMeta[]) => {
     setSessionsState(items);
@@ -371,7 +368,7 @@ export function App() {
       .catch(() => {
         // Keep waiting for SSE or a later retry.
       });
-  }, [setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
+  }, [setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -443,9 +440,6 @@ export function App() {
         case 'alerts_snapshot':
           setAlerts({ entries: payload.entries, activeCount: payload.activeCount });
           return;
-        case 'projects_snapshot':
-          setProjects(payload.projects);
-          return;
         case 'sessions_snapshot':
           if (isCompanionBrowserRoute()) {
             setEventVersions((prev) => ({
@@ -499,7 +493,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (

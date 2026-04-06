@@ -18,7 +18,6 @@ import {
   getExecutionTarget,
   listExecutionTargets,
   setConversationExecutionTarget,
-  setConversationProjectLinks,
   type ExecutionTargetPathMapping,
   type ExecutionTargetRecord,
 } from '@personal-agent/core';
@@ -407,8 +406,6 @@ function buildUserMessage(text: string) {
 async function createStoredConversation(options: {
   cwd: string;
   text: string;
-  profile: string;
-  referencedProjectIds: string[];
 }): Promise<{ conversationId: string; sessionFile: string; localCwd: string }> {
   const sessionManager = SessionManager.create(options.cwd, resolvePersistentSessionDir(options.cwd));
   patchSessionManagerPersistence(sessionManager);
@@ -420,14 +417,6 @@ async function createStoredConversation(options: {
 
   sessionManager.appendMessage(buildUserMessage(options.text));
   ensureSessionFileExists(sessionManager);
-
-  if (options.referencedProjectIds.length > 0) {
-    setConversationProjectLinks({
-      profile: options.profile,
-      conversationId,
-      relatedProjectIds: options.referencedProjectIds,
-    });
-  }
 
   return {
     conversationId,
@@ -552,7 +541,6 @@ export async function submitRemoteExecutionRun(options: {
   conversationId?: string;
   sessionFile?: string;
   cwd?: string;
-  referencedProjectIds?: string[];
   text: string;
   targetId: string;
   profile: string;
@@ -581,8 +569,6 @@ export async function submitRemoteExecutionRun(options: {
     const created = await createStoredConversation({
       cwd,
       text: prompt,
-      profile: options.profile,
-      referencedProjectIds: options.referencedProjectIds ?? [],
     });
     conversationId = created.conversationId;
     sessionFile = created.sessionFile;
