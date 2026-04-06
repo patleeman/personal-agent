@@ -1047,6 +1047,7 @@ body {
 .conversation-scroll-shell {
   scrollbar-width: none;
   -ms-overflow-style: none;
+  overflow-anchor: none;
 }
 
 .conversation-scroll-shell::-webkit-scrollbar {

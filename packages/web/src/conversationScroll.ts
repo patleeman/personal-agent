@@ -1,6 +1,8 @@
 import type { MessageBlock } from './types';
 
 const DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX = 40;
+const DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT = 2;
+const DEFAULT_BOTTOM_SETTLE_MAX_FRAMES = 45;
 
 export interface ConversationScrollMetrics {
   scrollHeight: number;
@@ -89,4 +91,28 @@ export function shouldAutoScrollToStreamingTail(
 
 export function shouldShowScrollToBottomControl(messageCount: number, atBottom: boolean): boolean {
   return messageCount > 0 && !atBottom;
+}
+
+export function shouldContinueConversationBottomSettle(
+  state: {
+    frameCount: number;
+    stableFrames: number;
+    minFrames?: number;
+    stableFrameCount?: number;
+    maxFrames?: number;
+  },
+): boolean {
+  const minFrames = Math.max(0, state.minFrames ?? 0);
+  const stableFrameCount = Math.max(1, state.stableFrameCount ?? DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT);
+  const maxFrames = Math.max(minFrames, state.maxFrames ?? DEFAULT_BOTTOM_SETTLE_MAX_FRAMES);
+
+  if (state.frameCount >= maxFrames) {
+    return false;
+  }
+
+  if (state.frameCount < minFrames) {
+    return true;
+  }
+
+  return state.stableFrames < stableFrameCount;
 }

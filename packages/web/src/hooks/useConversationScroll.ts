@@ -5,10 +5,12 @@ import {
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
+  shouldContinueConversationBottomSettle,
 } from '../conversationScroll';
 import type { MessageBlock } from '../types';
 
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
+const INITIAL_SCROLL_MIN_FRAMES = 24;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const SMOOTH_SCROLL_SETTLE_DELAY_MS = 360;
 
@@ -74,10 +76,10 @@ export function useConversationScroll({
     clearSmoothBottomScrollSettle();
   }, [clearSmoothBottomScrollSettle]);
 
-  const settleBottomScroll = useCallback((onSettled?: () => void) => {
+  const settleBottomScroll = useCallback((options?: { onSettled?: () => void; minFrames?: number }) => {
     const el = scrollRef.current;
     if (!el) {
-      onSettled?.();
+      options?.onSettled?.();
       return;
     }
 
@@ -108,8 +110,14 @@ export function useConversationScroll({
         stableFrames = 0;
       }
 
-      if (stableFrames >= INITIAL_SCROLL_STABLE_FRAME_COUNT || frameCount >= INITIAL_SCROLL_MAX_FRAMES) {
-        onSettled?.();
+      if (!shouldContinueConversationBottomSettle({
+        frameCount,
+        stableFrames,
+        minFrames: options?.minFrames,
+        stableFrameCount: INITIAL_SCROLL_STABLE_FRAME_COUNT,
+        maxFrames: INITIAL_SCROLL_MAX_FRAMES,
+      })) {
+        options?.onSettled?.();
         return;
       }
 
@@ -297,8 +305,11 @@ export function useConversationScroll({
     }
 
     scrollPinnedToBottomRef.current = true;
-    settleBottomScroll(() => {
-      completedInitialScrollKeyRef.current = initialScrollKey;
+    settleBottomScroll({
+      minFrames: INITIAL_SCROLL_MIN_FRAMES,
+      onSettled: () => {
+        completedInitialScrollKeyRef.current = initialScrollKey;
+      },
     });
 
     return () => {

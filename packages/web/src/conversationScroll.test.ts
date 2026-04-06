@@ -6,6 +6,7 @@ import {
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
+  shouldContinueConversationBottomSettle,
   shouldShowScrollToBottomControl,
 } from './conversationScroll.js';
 
@@ -139,5 +140,33 @@ describe('conversation scroll helpers', () => {
   it('shows the scroll-to-bottom control only when messages exist and the view is not pinned', () => {
     expect(shouldShowScrollToBottomControl(4, true)).toBe(false);
     expect(shouldShowScrollToBottomControl(4, false)).toBe(true);
+  });
+
+  it('keeps the initial bottom-settle loop alive until the minimum frame budget has elapsed', () => {
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 2,
+      stableFrames: 2,
+      minFrames: 6,
+      stableFrameCount: 2,
+      maxFrames: 45,
+    })).toBe(true);
+
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 6,
+      stableFrames: 2,
+      minFrames: 6,
+      stableFrameCount: 2,
+      maxFrames: 45,
+    })).toBe(false);
+  });
+
+  it('always stops the bottom-settle loop once the max frame cap is reached', () => {
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 45,
+      stableFrames: 0,
+      minFrames: 24,
+      stableFrameCount: 2,
+      maxFrames: 45,
+    })).toBe(false);
   });
 });
