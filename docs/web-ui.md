@@ -169,7 +169,7 @@ The UI supports:
 - file/image input
 - clickable inline file paths in assistant messages without breaking normal text selection
 
-A new draft conversation becomes a live session when you send the first prompt.
+A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading.
 
 If execution targets are configured, the draft conversation empty state lets you choose where the first turn runs before you send it. Once the conversation starts, that execution choice is shown in the header and treated as locked for that conversation.
 

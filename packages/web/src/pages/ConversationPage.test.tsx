@@ -11,6 +11,7 @@ import {
   resolveConversationLiveSession,
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
+  resolveDisplayedConversationPendingStatusLabel,
   shouldEnableConversationLiveStream,
   shouldRefetchConversationExecutionOnRunsChange,
   shouldShowConversationTakeoverBanner,
@@ -94,6 +95,68 @@ describe('conversation live state helpers', () => {
       hasExecutionTarget: false,
       hasVisibleSessionDetail: true,
     })).toBe('Resuming…');
+  });
+
+  it('keeps showing a pending status while a draft or initial prompt is still staging', () => {
+    expect(resolveDisplayedConversationPendingStatusLabel({
+      explicitLabel: null,
+      draft: true,
+      hasDraftPendingPrompt: true,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
+      isLiveSession: false,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: false,
+    })).toBe('Sending…');
+
+    expect(resolveDisplayedConversationPendingStatusLabel({
+      explicitLabel: null,
+      draft: false,
+      hasDraftPendingPrompt: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: true,
+      hasPendingInitialPromptInFlight: false,
+      isLiveSession: true,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: false,
+    })).toBe('Working…');
+
+    expect(resolveDisplayedConversationPendingStatusLabel({
+      explicitLabel: null,
+      draft: false,
+      hasDraftPendingPrompt: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: true,
+      isLiveSession: true,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: false,
+    })).toBe('Working…');
+
+    expect(resolveDisplayedConversationPendingStatusLabel({
+      explicitLabel: 'Resuming…',
+      draft: false,
+      hasDraftPendingPrompt: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
+      isLiveSession: false,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: true,
+    })).toBe('Resuming…');
+
+    expect(resolveDisplayedConversationPendingStatusLabel({
+      explicitLabel: null,
+      draft: false,
+      hasDraftPendingPrompt: false,
+      isStreaming: true,
+      hasPendingInitialPrompt: true,
+      hasPendingInitialPromptInFlight: true,
+      isLiveSession: true,
+      hasExecutionTarget: false,
+      hasVisibleSessionDetail: false,
+    })).toBeNull();
   });
 
   it('prefers the freshest available conversation title source', () => {

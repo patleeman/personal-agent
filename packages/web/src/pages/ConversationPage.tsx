@@ -156,6 +156,44 @@ export function resolveConversationPendingStatusLabel(input: {
   return 'Sending…';
 }
 
+export function resolveDisplayedConversationPendingStatusLabel(input: {
+  explicitLabel: string | null;
+  draft: boolean;
+  hasDraftPendingPrompt: boolean;
+  isStreaming: boolean;
+  hasPendingInitialPrompt: boolean;
+  hasPendingInitialPromptInFlight: boolean;
+  isLiveSession: boolean;
+  hasExecutionTarget: boolean;
+  hasVisibleSessionDetail: boolean;
+}): string | null {
+  if (input.explicitLabel) {
+    return input.explicitLabel;
+  }
+
+  if (input.isStreaming) {
+    return null;
+  }
+
+  if (input.draft && input.hasDraftPendingPrompt) {
+    return resolveConversationPendingStatusLabel({
+      isLiveSession: false,
+      hasExecutionTarget: input.hasExecutionTarget,
+      hasVisibleSessionDetail: false,
+    });
+  }
+
+  if (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight) {
+    return resolveConversationPendingStatusLabel({
+      isLiveSession: input.isLiveSession,
+      hasExecutionTarget: input.hasExecutionTarget,
+      hasVisibleSessionDetail: input.hasVisibleSessionDetail,
+    });
+  }
+
+  return null;
+}
+
 export function shouldRefetchConversationExecutionOnRunsChange(
   selectedExecutionTargetId: string | null | undefined,
 ): boolean {
@@ -1186,6 +1224,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
 
   const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
+  const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
   const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
@@ -1193,6 +1232,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
   const computedMessages = useMemo<MessageBlock[] | undefined>(() => {
+    if (draft) {
+      return appendPendingInitialPromptBlock(undefined, draftPendingPrompt);
+    }
+
     if (isLiveSession) {
       const liveMessages = stream.hasSnapshot
         ? visibleStreamBlocks
@@ -1203,7 +1246,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     return visibleSessionDetail ? baseMessages : undefined;
-  }, [baseMessages, isLiveSession, pendingInitialPrompt, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
+  }, [baseMessages, draft, draftPendingPrompt, isLiveSession, pendingInitialPrompt, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
   const computedHistoricalBlockOffset = stream.hasSnapshot
     ? stream.blockOffset
     : (visibleSessionDetail?.blockOffset ?? 0);
@@ -1713,6 +1756,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pinnedInitialPromptTailKeyRef.current = null;
   }, [draft, id]);
 
+  useEffect(() => {
+    if (!draft) {
+      setDraftPendingPrompt(null);
+    }
+  }, [draft, id]);
+
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
   const conversationBootstrapPendingContext = Boolean(id)
     && conversationBootstrapLoading
@@ -2015,6 +2064,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     location: selectedExecutionTarget ? 'remote' as const : 'local' as const,
     target: selectedExecutionTarget,
   }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
+  const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
+  const displayedPendingAssistantStatusLabel = resolveDisplayedConversationPendingStatusLabel({
+    explicitLabel: pendingAssistantStatusLabel,
+    draft,
+    hasDraftPendingPrompt: Boolean(draftPendingPrompt),
+    isStreaming: stream.isStreaming,
+    hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    hasPendingInitialPromptInFlight,
+    isLiveSession,
+    hasExecutionTarget: Boolean(conversationExecution.targetId),
+    hasVisibleSessionDetail: Boolean(visibleSessionDetail),
+  });
   const openConversationFilePath = useCallback((path: string) => {
     const target = resolveConversationFileTarget(path, currentSessionMeta?.cwd ?? null);
     if (!target) {
@@ -3708,6 +3769,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       if (!id && !visibleSessionDetail) {
         rememberComposerInput(inputSnapshot);
+        setDraftPendingPrompt({
+          text: textToSend,
+          behavior: queuedBehavior,
+          images: promptImages,
+          attachmentRefs: [],
+        });
+        setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
+          isLiveSession: false,
+          hasExecutionTarget: Boolean(remoteTargetId),
+          hasVisibleSessionDetail: false,
+        }));
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
           const { id: newId } = await api.createLiveSession(draftCwd, undefined, remoteTargetId, {
@@ -3732,6 +3804,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
+          setPendingAssistantStatusLabel(null);
+          setDraftPendingPrompt(null);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
           setInput(inputSnapshot);
           setAttachments(pendingImageAttachments);
@@ -4149,7 +4223,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               focusMessageIndex={requestedFocusMessageIndex}
               isStreaming={stream.isStreaming}
               isCompacting={stream.isCompacting}
-              pendingStatusLabel={pendingAssistantStatusLabel}
+              pendingStatusLabel={displayedPendingAssistantStatusLabel}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
               onReplyToSelection={handleReplyToSelection}
@@ -4257,7 +4331,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     openConversationFilePath,
-    pendingAssistantStatusLabel,
+    displayedPendingAssistantStatusLabel,
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,
