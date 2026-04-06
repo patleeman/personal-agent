@@ -104,7 +104,29 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
+const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
+const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const conversationProjectsCache = new Map<string, ConversationProjectLinks>();
+
+export function truncateConversationShelfText(
+  text: string,
+  options: { maxChars?: number; maxLines?: number } = {},
+): string {
+  const normalized = text.replace(/\r\n?/g, '\n');
+  const maxChars = Math.max(1, options.maxChars ?? COMPOSER_SHELF_TEXT_MAX_CHARS);
+  const maxLines = Math.max(1, options.maxLines ?? COMPOSER_SHELF_TEXT_MAX_LINES);
+  const lines = normalized.split('\n');
+  const truncatedByLines = lines.length > maxLines;
+  const lineLimited = truncatedByLines ? lines.slice(0, maxLines).join('\n') : normalized;
+  const truncatedByChars = lineLimited.length > maxChars;
+  const charLimited = truncatedByChars ? `${lineLimited.slice(0, maxChars).trimEnd()}…` : lineLimited;
+
+  if (!truncatedByLines) {
+    return charLimited;
+  }
+
+  return charLimited.endsWith('…') ? charLimited : `${charLimited.trimEnd()}…`;
+}
 
 export function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
@@ -4266,6 +4288,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         ? 'Remote workspace disconnected. Click connect to resume.'
         : null);
   const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
+  const hasComposerShelfContent = draftMentionItems.length > 0
+    || referencedProjectIds.length > 0
+    || attachments.length > 0
+    || drawingAttachments.length > 0
+    || drawingsBusy
+    || Boolean(drawingsError)
+    || pendingQueue.length > 0
+    || (!draft && activeConversationAlerts.length > 0)
+    || (!draft && orderedDeferredResumes.length > 0)
+    || Boolean(pendingAskUserQuestion && composerActiveQuestion);
   const keyboardOpen = keyboardInset > 120;
   const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
     draft,
@@ -4701,349 +4733,353 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
-            {/* Prompt references */}
-            {draftMentionItems.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                <span className="ui-section-label">Prompt references</span>
-                {draftMentionItems.map((item) => (
-                  <span
-                    key={`${item.kind}:${item.id}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
-                    title={item.summary || item.title || item.id}
-                  >
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{item.kind}</span>
-                    <span className="font-mono text-accent">{item.id}</span>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Referenced projects */}
-            {referencedProjectIds.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                <span className="ui-section-label">Referenced projects</span>
-                {referencedProjectIds.map((projectId) => (
-                  <span key={projectId} className="inline-flex max-w-[18rem] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent" title={`@${projectId}`}>
-                    <span className="truncate font-mono">@{projectId}</span>
-                    <button
-                      type="button"
-                      onClick={() => { void removeReferencedProject(projectId); }}
-                      className="text-accent/70 transition-colors hover:text-accent disabled:opacity-40"
-                      disabled={conversationProjectsBusy}
-                      title={`Stop referencing ${projectId}`}
-                      aria-label={`Stop referencing ${projectId}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Attachments */}
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-                {attachments.map((f, i) => (
-                  <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border-subtle text-[11px] max-w-[200px]">
-                    <span className="shrink-0">{fileIcon(f.type)}</span>
-                    <span className="text-secondary truncate">{f.name}</span>
-                    <span className="text-dim shrink-0">{formatBytes(f.size)}</span>
-                    <button onClick={() => removeAttachment(i)} className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none" title={`Remove ${f.name}`}>
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {drawingAttachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                {drawingAttachments.map((attachment) => (
-                  <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2 py-1 text-[11px] max-w-[270px]">
-                    <img
-                      src={attachment.previewUrl}
-                      alt={buildComposerDrawingPreviewTitle(attachment)}
-                      className="h-7 w-9 rounded object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
-                      <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => editDrawing(attachment.localId)}
-                      className="text-[11px] text-accent transition-colors hover:text-accent/80"
-                      title={`Edit ${attachment.title}`}
-                    >
-                      edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeDrawingAttachment(attachment.localId)}
-                      className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
-                      title={`Remove ${attachment.title}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {drawingsBusy && (
-              <div className="px-3 pt-2 text-[11px] text-dim">Syncing drawings…</div>
-            )}
-
-            {drawingsError && (
-              <div className="px-3 pt-2 text-[11px] text-danger">{drawingsError}</div>
-            )}
-
-            {/* Pending steer / follow-up queue */}
-            {pendingQueue.length > 0 && (
-              <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
-                <span className="ui-section-label">Queued</span>
-                {pendingQueue.map(msg => (
-                  <div key={msg.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
-                    <Pill tone={msg.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
-                      {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
-                    </Pill>
-                    <p className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">{msg.text}</p>
-                    {msg.restorable !== false ? (
-                      <button
-                        type="button"
-                        onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
-                        disabled={conversationNeedsTakeover}
-                        className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
-                        title={conversationNeedsTakeover ? 'Take over this conversation before restoring queued prompts' : 'Restore this queued prompt to the composer'}
-                        aria-label="Restore queued prompt to the composer"
+            {hasComposerShelfContent && (
+              <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                {/* Prompt references */}
+                {draftMentionItems.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
+                    <span className="ui-section-label">Prompt references</span>
+                    {draftMentionItems.map((item) => (
+                      <span
+                        key={`${item.kind}:${item.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
+                        title={item.summary || item.title || item.id}
                       >
-                        restore
-                      </button>
-                    ) : (
-                      <span className="shrink-0 pt-0.5 text-[11px] text-dim/70">remote</span>
-                    )}
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{item.kind}</span>
+                        <span className="font-mono text-accent">{item.id}</span>
+                      </span>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {!draft && activeConversationAlerts.length > 0 && (
-              <div className="border-b border-border-subtle px-3 py-2.5">
-                <div className="flex flex-col gap-2">
-                  {activeConversationAlerts.map((alert) => (
-                    <div key={alert.id} className="rounded-xl border border-warning/40 bg-warning/8 px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-warning">Alert</p>
-                          <p className="mt-1 text-[13px] font-semibold text-primary">{alert.title}</p>
-                          <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{alert.body}</p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3 text-[11px]">
-                          {alert.wakeupId ? (
-                            <button
-                              type="button"
-                              onClick={() => { void snoozeConversationAlert(alert.id); }}
-                              className="text-accent transition-colors hover:text-accent/80"
-                            >
-                              snooze 15m
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => { void acknowledgeConversationAlert(alert.id); }}
-                            className="text-accent transition-colors hover:text-accent/80"
-                          >
-                            acknowledge
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { void dismissConversationAlert(alert.id); }}
-                            className="text-dim transition-colors hover:text-danger"
-                          >
-                            dismiss
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Deferred resume indicator */}
-            {!draft && orderedDeferredResumes.length > 0 && (
-              <>
-                <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
-                  <div className="min-w-0 flex items-center gap-2">
-                    <span className={cx(
-                      'shrink-0',
-                      hasReadyDeferredResumes ? 'text-warning' : 'text-dim',
-                    )}>
-                      ⏰
-                    </span>
-                    <span className="shrink-0 text-secondary">Wakeups</span>
-                    <span className="truncate text-dim">{deferredResumeIndicatorText}</span>
+                {/* Referenced projects */}
+                {referencedProjectIds.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
+                    <span className="ui-section-label">Referenced projects</span>
+                    {referencedProjectIds.map((projectId) => (
+                      <span key={projectId} className="inline-flex max-w-[18rem] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent" title={`@${projectId}`}>
+                        <span className="truncate font-mono">@{projectId}</span>
+                        <button
+                          type="button"
+                          onClick={() => { void removeReferencedProject(projectId); }}
+                          className="text-accent/70 transition-colors hover:text-accent disabled:opacity-40"
+                          disabled={conversationProjectsBusy}
+                          title={`Stop referencing ${projectId}`}
+                          aria-label={`Stop referencing ${projectId}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 text-[11px]">
-                    {hasReadyDeferredResumes && !isLiveSession && (
-                      <button
-                        type="button"
-                        onClick={() => { void continueDeferredResumesNow(); }}
-                        className="text-accent transition-colors hover:text-accent/80"
-                      >
-                        continue now
-                      </button>
-                    )}
-                    {deferredResumesBusy && <span className="text-dim">updating…</span>}
-                    <button
-                      type="button"
-                      onClick={() => { setShowDeferredResumeDetails((open) => !open); }}
-                      className="text-dim transition-colors hover:text-primary"
-                    >
-                      {showDeferredResumeDetails ? 'hide' : 'details'}
-                    </button>
-                  </div>
-                </div>
+                )}
 
-                {showDeferredResumeDetails && (
-                  <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
-                    {orderedDeferredResumes.map((resume) => (
-                      <div key={resume.id} className="flex items-start gap-3 text-[12px]">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className={cx(
-                              'shrink-0 font-medium',
-                              resume.status === 'ready' ? 'text-warning' : 'text-secondary',
-                            )}>
-                              {describeDeferredResumeStatus(resume, deferredResumeNowMs)}
-                            </span>
-                            <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
-                          </div>
-                          <div className="mt-0.5 text-[11px] text-dim">
-                            {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
-                            {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          {resume.status === 'scheduled' && (
-                            <button
-                              type="button"
-                              onClick={() => { void fireDeferredResumeNow(resume.id); }}
-                              className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
-                              disabled={deferredResumesBusy}
-                            >
-                              fire now
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => { void cancelDeferredResume(resume.id); }}
-                            className="text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
-                            disabled={deferredResumesBusy}
-                          >
-                            cancel
-                          </button>
-                        </div>
+                {/* Attachments */}
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-3 pt-3">
+                    {attachments.map((f, i) => (
+                      <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border-subtle text-[11px] max-w-[200px]">
+                        <span className="shrink-0">{fileIcon(f.type)}</span>
+                        <span className="text-secondary truncate">{f.name}</span>
+                        <span className="text-dim shrink-0">{formatBytes(f.size)}</span>
+                        <button onClick={() => removeAttachment(i)} className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none" title={`Remove ${f.name}`}>
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
-              </>
-            )}
 
-            {pendingAskUserQuestion && composerActiveQuestion && (
-              <div className="border-b border-border-subtle px-3 py-2.5">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <span className="ui-section-label">Answer below</span>
-                  <Pill tone="warning">{composerQuestionAnsweredCount}/{pendingAskUserQuestion.presentation.questions.length}</Pill>
-                  {composerQuestionCanSubmit && (
-                    <button
-                      type="button"
-                      onClick={() => { void submitComposerQuestionIfReady(); }}
-                      disabled={composerQuestionSubmitting}
-                      className="ui-action-button px-1 py-0.5 text-[10px] text-accent disabled:opacity-40"
-                    >
-                      {composerQuestionSubmitting ? 'Submitting…' : '✓ Submit →'}
-                    </button>
-                  )}
-                </div>
-
-                {pendingAskUserQuestion.presentation.questions.length > 1 && (
-                  <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
-                    {pendingAskUserQuestion.presentation.questions.map((question, index) => {
-                      const answered = (composerQuestionAnswers[question.id]?.length ?? 0) > 0;
-                      const active = index === composerQuestionIndex;
-                      return (
+                {drawingAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+                    {drawingAttachments.map((attachment) => (
+                      <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2 py-1 text-[11px] max-w-[270px]">
+                        <img
+                          src={attachment.previewUrl}
+                          alt={buildComposerDrawingPreviewTitle(attachment)}
+                          className="h-7 w-9 rounded object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
+                          <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
+                        </div>
                         <button
-                          key={question.id}
                           type="button"
-                          onClick={() => activateComposerQuestion(index)}
-                          className={cx(
-                            'ui-action-button min-w-0 px-1 py-0.5 text-[10px]',
-                            active
-                              ? 'text-primary'
-                              : answered
-                                ? 'text-secondary'
-                                : 'text-dim',
-                          )}
+                          onClick={() => editDrawing(attachment.localId)}
+                          className="text-[11px] text-accent transition-colors hover:text-accent/80"
+                          title={`Edit ${attachment.title}`}
                         >
-                          <span aria-hidden="true" className={cx('shrink-0 text-[10px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
-                            {answered ? '✓' : active ? '•' : '○'}
-                          </span>
-                          <span className="truncate">{question.label}</span>
+                          edit
                         </button>
-                      );
-                    })}
+                        <button
+                          type="button"
+                          onClick={() => removeDrawingAttachment(attachment.localId)}
+                          className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
+                          title={`Remove ${attachment.title}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                <div className="mt-1.5">
-                  <p className="text-[12px] font-medium text-primary break-words">{composerActiveQuestion.label}</p>
-                  {composerActiveQuestion.details && (
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-secondary break-words">{composerActiveQuestion.details}</p>
-                  )}
-                </div>
+                {drawingsBusy && (
+                  <div className="px-3 pt-2 text-[11px] text-dim">Syncing drawings…</div>
+                )}
 
-                <div
-                  className="mt-1 -mx-0.5"
-                  role={composerActiveQuestion.style === 'check' ? 'group' : 'radiogroup'}
-                  aria-label={composerActiveQuestion.label}
-                >
-                  {composerActiveQuestion.options.map((option, optionIndex) => {
-                    const selectedValues = composerQuestionAnswers[composerActiveQuestion.id] ?? [];
-                    const checked = selectedValues.includes(option.value);
-                    const active = optionIndex === composerQuestionOptionIndex;
-                    const indicator = composerActiveQuestion.style === 'check'
-                      ? (checked ? '☑' : '☐')
-                      : (checked ? '◉' : '◯');
-                    return (
-                      <button
-                        key={`${composerActiveQuestion.id}:${option.value}`}
-                        type="button"
-                        disabled={composerQuestionSubmitting}
-                        onClick={() => handleComposerQuestionOptionSelect(composerQuestionIndex, optionIndex)}
-                        className={cx(
-                          'ui-list-row -mx-0.5 w-full items-start gap-2 px-2.5 py-1 text-left disabled:opacity-40',
-                          checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                {drawingsError && (
+                  <div className="px-3 pt-2 text-[11px] text-danger">{drawingsError}</div>
+                )}
+
+                {/* Pending steer / follow-up queue */}
+                {pendingQueue.length > 0 && (
+                  <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
+                    <span className="ui-section-label">Queued</span>
+                    {pendingQueue.map(msg => (
+                      <div key={msg.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
+                        <Pill tone={msg.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
+                          {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
+                        </Pill>
+                        <p className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">{truncateConversationShelfText(msg.text)}</p>
+                        {msg.restorable !== false ? (
+                          <button
+                            type="button"
+                            onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
+                            disabled={conversationNeedsTakeover}
+                            className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
+                            title={conversationNeedsTakeover ? 'Take over this conversation before restoring queued prompts' : 'Restore this queued prompt to the composer'}
+                            aria-label="Restore queued prompt to the composer"
+                          >
+                            restore
+                          </button>
+                        ) : (
+                          <span className="shrink-0 pt-0.5 text-[11px] text-dim/70">remote</span>
                         )}
-                      >
-                        <span className={cx('mt-px w-8 shrink-0 text-[11px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
-                          {optionIndex + 1}. {indicator}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="ui-row-title block break-words">{option.label}</span>
-                          {option.details && (
-                            <span className="ui-row-summary block break-words">{option.details}</span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                <p className="mt-1.5 text-[10px] text-dim">
-                  Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
-                </p>
+                {!draft && activeConversationAlerts.length > 0 && (
+                  <div className="border-b border-border-subtle px-3 py-2.5">
+                    <div className="flex flex-col gap-2">
+                      {activeConversationAlerts.map((alert) => (
+                        <div key={alert.id} className="rounded-xl border border-warning/40 bg-warning/8 px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-warning">Alert</p>
+                              <p className="mt-1 text-[13px] font-semibold text-primary">{alert.title}</p>
+                              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{alert.body}</p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                              {alert.wakeupId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => { void snoozeConversationAlert(alert.id); }}
+                                  className="text-accent transition-colors hover:text-accent/80"
+                                >
+                                  snooze 15m
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => { void acknowledgeConversationAlert(alert.id); }}
+                                className="text-accent transition-colors hover:text-accent/80"
+                              >
+                                acknowledge
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void dismissConversationAlert(alert.id); }}
+                                className="text-dim transition-colors hover:text-danger"
+                              >
+                                dismiss
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Deferred resume indicator */}
+                {!draft && orderedDeferredResumes.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className={cx(
+                          'shrink-0',
+                          hasReadyDeferredResumes ? 'text-warning' : 'text-dim',
+                        )}>
+                          ⏰
+                        </span>
+                        <span className="shrink-0 text-secondary">Wakeups</span>
+                        <span className="truncate text-dim">{deferredResumeIndicatorText}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                        {hasReadyDeferredResumes && !isLiveSession && (
+                          <button
+                            type="button"
+                            onClick={() => { void continueDeferredResumesNow(); }}
+                            className="text-accent transition-colors hover:text-accent/80"
+                          >
+                            continue now
+                          </button>
+                        )}
+                        {deferredResumesBusy && <span className="text-dim">updating…</span>}
+                        <button
+                          type="button"
+                          onClick={() => { setShowDeferredResumeDetails((open) => !open); }}
+                          className="text-dim transition-colors hover:text-primary"
+                        >
+                          {showDeferredResumeDetails ? 'hide' : 'details'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {showDeferredResumeDetails && (
+                      <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
+                        {orderedDeferredResumes.map((resume) => (
+                          <div key={resume.id} className="flex items-start gap-3 text-[12px]">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span className={cx(
+                                  'shrink-0 font-medium',
+                                  resume.status === 'ready' ? 'text-warning' : 'text-secondary',
+                                )}>
+                                  {describeDeferredResumeStatus(resume, deferredResumeNowMs)}
+                                </span>
+                                <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
+                              </div>
+                              <div className="mt-0.5 text-[11px] text-dim">
+                                {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
+                                {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3">
+                              {resume.status === 'scheduled' && (
+                                <button
+                                  type="button"
+                                  onClick={() => { void fireDeferredResumeNow(resume.id); }}
+                                  className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
+                                  disabled={deferredResumesBusy}
+                                >
+                                  fire now
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => { void cancelDeferredResume(resume.id); }}
+                                className="text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
+                                disabled={deferredResumesBusy}
+                              >
+                                cancel
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {pendingAskUserQuestion && composerActiveQuestion && (
+                  <div className="border-b border-border-subtle px-3 py-2.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="ui-section-label">Answer below</span>
+                      <Pill tone="warning">{composerQuestionAnsweredCount}/{pendingAskUserQuestion.presentation.questions.length}</Pill>
+                      {composerQuestionCanSubmit && (
+                        <button
+                          type="button"
+                          onClick={() => { void submitComposerQuestionIfReady(); }}
+                          disabled={composerQuestionSubmitting}
+                          className="ui-action-button px-1 py-0.5 text-[10px] text-accent disabled:opacity-40"
+                        >
+                          {composerQuestionSubmitting ? 'Submitting…' : '✓ Submit →'}
+                        </button>
+                      )}
+                    </div>
+
+                    {pendingAskUserQuestion.presentation.questions.length > 1 && (
+                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
+                        {pendingAskUserQuestion.presentation.questions.map((question, index) => {
+                          const answered = (composerQuestionAnswers[question.id]?.length ?? 0) > 0;
+                          const active = index === composerQuestionIndex;
+                          return (
+                            <button
+                              key={question.id}
+                              type="button"
+                              onClick={() => activateComposerQuestion(index)}
+                              className={cx(
+                                'ui-action-button min-w-0 px-1 py-0.5 text-[10px]',
+                                active
+                                  ? 'text-primary'
+                                  : answered
+                                    ? 'text-secondary'
+                                    : 'text-dim',
+                              )}
+                            >
+                              <span aria-hidden="true" className={cx('shrink-0 text-[10px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                                {answered ? '✓' : active ? '•' : '○'}
+                              </span>
+                              <span className="truncate">{question.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="mt-1.5">
+                      <p className="text-[12px] font-medium text-primary break-words">{composerActiveQuestion.label}</p>
+                      {composerActiveQuestion.details && (
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-secondary break-words">{composerActiveQuestion.details}</p>
+                      )}
+                    </div>
+
+                    <div
+                      className="mt-1 -mx-0.5"
+                      role={composerActiveQuestion.style === 'check' ? 'group' : 'radiogroup'}
+                      aria-label={composerActiveQuestion.label}
+                    >
+                      {composerActiveQuestion.options.map((option, optionIndex) => {
+                        const selectedValues = composerQuestionAnswers[composerActiveQuestion.id] ?? [];
+                        const checked = selectedValues.includes(option.value);
+                        const active = optionIndex === composerQuestionOptionIndex;
+                        const indicator = composerActiveQuestion.style === 'check'
+                          ? (checked ? '☑' : '☐')
+                          : (checked ? '◉' : '◯');
+                        return (
+                          <button
+                            key={`${composerActiveQuestion.id}:${option.value}`}
+                            type="button"
+                            disabled={composerQuestionSubmitting}
+                            onClick={() => handleComposerQuestionOptionSelect(composerQuestionIndex, optionIndex)}
+                            className={cx(
+                              'ui-list-row -mx-0.5 w-full items-start gap-2 px-2.5 py-1 text-left disabled:opacity-40',
+                              checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                            )}
+                          >
+                            <span className={cx('mt-px w-8 shrink-0 text-[11px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              {optionIndex + 1}. {indicator}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="ui-row-title block break-words">{option.label}</span>
+                              {option.details && (
+                                <span className="ui-row-summary block break-words">{option.details}</span>
+                              )}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mt-1.5 text-[10px] text-dim">
+                      Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

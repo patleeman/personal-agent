@@ -122,6 +122,8 @@ Examples include:
 
 These commands operate on the conversation surface. They do not change the underlying durable-state model.
 
+If you queue follow-up work while the agent is still running, the composer shows queued prompt previews in a capped shelf above the input. Long queued prompt text is intentionally truncated there so a large slash command or injected context block does not take over the whole conversation view.
+
 ## Locality boundary
 
 This is the key portability rule.

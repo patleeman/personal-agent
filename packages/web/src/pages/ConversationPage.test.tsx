@@ -15,6 +15,7 @@ import {
   shouldRefetchConversationExecutionOnRunsChange,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
+  truncateConversationShelfText,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -168,6 +169,14 @@ describe('conversation live state helpers', () => {
     expect(merged?.deferredResumes).toEqual(snapshot.deferredResumes);
     expect(merged?.title).toBe('Detail title');
     expect(merged?.file).toBe(snapshot.file);
+  });
+
+  it('truncates oversized queued prompt previews by line count', () => {
+    expect(truncateConversationShelfText('1\n2\n3\n4', { maxLines: 3, maxChars: 100 })).toBe('1\n2\n3…');
+  });
+
+  it('truncates oversized queued prompt previews by character count', () => {
+    expect(truncateConversationShelfText('abcdefghijklmnopqrstuvwxyz', { maxLines: 10, maxChars: 8 })).toBe('abcdefgh…');
   });
 });
 
