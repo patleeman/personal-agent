@@ -59,9 +59,10 @@ This means:
 - web UI launch and managed service actions read the preference consistently,
 - the Web UI page shows and toggles the setting,
 - enabling it in the UI or via `--tailscale-serve` exposes the full desktop UI at the Tailnet root (`/`) and the mobile companion at `/app`,
-- disabling it via `--no-tailscale-serve` removes both the desktop root mapping and the `/app` companion mapping.
+- disabling it via `--no-tailscale-serve` stores the preference immediately and then makes a best-effort attempt to remove the desktop root mapping and the `/app` companion mapping.
 
-If the `tailscale` CLI is unavailable (or the node is not authenticated), the toggle/flag returns an error so the mismatch is visible immediately.
+If the `tailscale` CLI is unavailable (or the node is not authenticated), enabling Serve still returns an error immediately. Foreground `--no-tailscale-serve` warns but still launches the local UI so the machine-local workflow is not blocked.
+If the configured companion port is already in use, foreground launch picks a temporary free companion port for that session.
 
 In practice:
 

@@ -189,7 +189,9 @@ pa ui --port 4000
 pa ui --tailscale-serve
 ```
 
-`--tailscale-serve` and `--no-tailscale-serve` apply the Tailscale Serve change immediately by invoking the `tailscale` CLI for `localhost:<port>`.
+`--tailscale-serve` enables Tailscale Serve for the foreground session immediately via the `tailscale` CLI.
+`--no-tailscale-serve` updates the saved preference first, then makes a best-effort attempt to remove the existing Serve mappings without blocking the local foreground launch when `tailscale` is unavailable.
+If the configured companion port is already busy, foreground launch picks a temporary free companion port for that session.
 
 Useful related commands:
 

@@ -2,7 +2,7 @@
 
 import { spawn, spawnSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
-import { createConnection } from 'net';
+import { createConnection, createServer } from 'net';
 import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -4071,6 +4071,64 @@ async function isLocalPortListening(port: number): Promise<boolean> {
   });
 }
 
+async function isLocalPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolvePromise) => {
+    let settled = false;
+    const server = createServer();
+    server.unref();
+
+    const finish = (result: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      if (result) {
+        server.close(() => resolvePromise(true));
+        return;
+      }
+
+      try {
+        server.close(() => resolvePromise(false));
+      } catch {
+        resolvePromise(false);
+      }
+    };
+
+    server.once('error', () => finish(false));
+    server.listen(port, '127.0.0.1', () => finish(true));
+  });
+}
+
+async function resolveForegroundCompanionPort(preferredPort: number, uiPort: number): Promise<{ port: number; adjusted: boolean }> {
+  if (preferredPort !== uiPort && await isLocalPortAvailable(preferredPort)) {
+    return { port: preferredPort, adjusted: false };
+  }
+
+  for (let candidate = uiPort + 1; candidate <= 65535; candidate += 1) {
+    if (candidate === preferredPort) {
+      continue;
+    }
+
+    if (await isLocalPortAvailable(candidate)) {
+      return { port: candidate, adjusted: true };
+    }
+  }
+
+  for (let candidate = uiPort - 1; candidate >= 1; candidate -= 1) {
+    if (candidate === preferredPort) {
+      continue;
+    }
+
+    if (await isLocalPortAvailable(candidate)) {
+      return { port: candidate, adjusted: true };
+    }
+  }
+
+  throw new Error(`Could not find a free companion port for web UI foreground launch (ui port ${uiPort}, preferred companion port ${preferredPort}).`);
+}
+
 interface WebUiCandidateHandle {
   child: ReturnType<typeof spawn>;
   release: WebUiReleaseSummary;
@@ -4765,15 +4823,15 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
   });
 
   if (parsedTailscaleServe.explicit) {
+    writeWebUiConfig(desiredConfig);
+
     syncWebUiTailscaleServeFromCli({
       enabled: parsedTailscaleServe.value,
       port: desiredConfig.port,
       companionPort: desiredConfig.companionPort,
-      strict: true,
-      context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
+      strict: parsedTailscaleServe.value,
+      context: `Could not ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
     });
-
-    writeWebUiConfig(desiredConfig);
   } else if (desiredUseTailscaleServe) {
     syncWebUiTailscaleServeFromCli({
       enabled: true,
@@ -4815,6 +4873,22 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     }
   }
 
+  const launchCompanionPort = await resolveForegroundCompanionPort(desiredConfig.companionPort, desiredConfig.port);
+
+  if (launchCompanionPort.adjusted) {
+    console.log(`  ${warning(`Configured companion port ${desiredConfig.companionPort} is unavailable; using ${launchCompanionPort.port} for this foreground session`)}`);
+
+    if (desiredUseTailscaleServe) {
+      syncWebUiTailscaleServeFromCli({
+        enabled: true,
+        port: desiredConfig.port,
+        companionPort: launchCompanionPort.port,
+        strict: parsedTailscaleServe.explicit && parsedTailscaleServe.value,
+        context: 'Could not update Tailscale Serve for the foreground companion port',
+      });
+    }
+  }
+
   if (openBrowser) {
     setTimeout(() => {
       openWebUiInBrowser(url);
@@ -4828,7 +4902,7 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     env: {
       ...process.env,
       PA_WEB_PORT: String(portParse.value),
-      PA_WEB_COMPANION_PORT: String(desiredConfig.companionPort),
+      PA_WEB_COMPANION_PORT: String(launchCompanionPort.port),
       PA_WEB_DIST: distPath,
       PERSONAL_AGENT_REPO_ROOT: repoRoot,
       PERSONAL_AGENT_WEB_TAILSCALE_SERVE: String(desiredUseTailscaleServe),

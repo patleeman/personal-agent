@@ -73,12 +73,22 @@ async function listenOnRandomPort(): Promise<{ server: Server; port: number }> {
   return { server, port: address.port };
 }
 
+async function allocateUnusedPort(): Promise<number> {
+  const probe = await listenOnRandomPort();
+  await new Promise<void>((resolve) => probe.server.close(() => resolve()));
+  activeServers = activeServers.filter((server) => server !== probe.server);
+  return probe.port;
+}
+
 beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PI_SESSION_DIR: createTempDir('pi-session-'),
   };
+  delete process.env.PA_WEB_COMPANION_PORT;
+  delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
+  delete process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
 
   childProcessMocks.spawnSync.mockReset();
   childProcessMocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
@@ -166,10 +176,9 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const probe = await listenOnRandomPort();
-    const port = probe.port;
-    await new Promise<void>((resolve) => probe.server.close(() => resolve()));
-    activeServers = activeServers.filter((server) => server !== probe.server);
+    const port = await allocateUnusedPort();
+    const companionPort = await allocateUnusedPort();
+    process.env.PA_WEB_COMPANION_PORT = String(companionPort);
 
     serviceMocks.getWebUiServiceStatus.mockImplementation(() => ({
       identifier: 'mock-web-ui',
@@ -197,8 +206,89 @@ describe('ui foreground launch', () => {
         stdio: 'inherit',
         env: expect.objectContaining({
           PA_WEB_PORT: String(port),
-          PA_WEB_COMPANION_PORT: '3742',
+          PA_WEB_COMPANION_PORT: String(companionPort),
           PERSONAL_AGENT_REPO_ROOT: repoRoot,
+        }),
+      }),
+    );
+
+    logSpy.mockRestore();
+  });
+
+  it('uses a temporary foreground companion port when the configured one is already occupied', async () => {
+    const repoRoot = createFakeWebRepo();
+    const stateRoot = createTempDir('pa-ui-foreground-state-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const occupiedCompanion = await listenOnRandomPort();
+    process.env.PA_WEB_COMPANION_PORT = String(occupiedCompanion.port);
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['ui', '--port', '4010']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes(`Configured companion port ${occupiedCompanion.port} is unavailable`))).toBe(true);
+
+    const foregroundEnv = childProcessMocks.spawnSync.mock.calls[0]?.[2]?.env as Record<string, string> | undefined;
+    expect(foregroundEnv?.PA_WEB_PORT).toBe('4010');
+    expect(foregroundEnv?.PERSONAL_AGENT_REPO_ROOT).toBe(repoRoot);
+    expect(foregroundEnv?.PA_WEB_COMPANION_PORT).not.toBe(String(occupiedCompanion.port));
+    expect(foregroundEnv?.PA_WEB_COMPANION_PORT).not.toBe('4010');
+    expect(Number.parseInt(String(foregroundEnv?.PA_WEB_COMPANION_PORT ?? ''), 10)).toBeGreaterThan(0);
+
+    logSpy.mockRestore();
+  });
+
+  it('keeps foreground launch working when `--no-tailscale-serve` cannot talk to tailscale', async () => {
+    const repoRoot = createFakeWebRepo();
+    const stateRoot = createTempDir('pa-ui-foreground-state-');
+    const configDir = createTempDir('pa-ui-config-');
+    const configPath = join(configDir, 'web.json');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = configPath;
+
+    const companionPort = await allocateUnusedPort();
+
+    writeFileSync(configPath, JSON.stringify({
+      port: 3741,
+      companionPort,
+      useTailscaleServe: true,
+      resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
+    }, null, 2));
+
+    serviceMocks.syncWebUiTailscaleServe.mockImplementation(() => {
+      throw new Error('Could not run `tailscale`.');
+    });
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['ui', '--port', '4810', '--no-tailscale-serve']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('Could not disable Tailscale Serve'))).toBe(true);
+    expect(serviceMocks.syncWebUiTailscaleServe).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: false,
+      port: 4810,
+      companionPort,
+    }));
+    expect(childProcessMocks.spawnSync).toHaveBeenCalledWith(
+      process.execPath,
+      [join(repoRoot, 'packages', 'web', 'dist-server', 'index.js')],
+      expect.objectContaining({
+        stdio: 'inherit',
+        env: expect.objectContaining({
+          PA_WEB_PORT: '4810',
+          PA_WEB_COMPANION_PORT: String(companionPort),
+          PERSONAL_AGENT_WEB_TAILSCALE_SERVE: 'false',
         }),
       }),
     );
@@ -215,8 +305,11 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = configPath;
 
+    const companionPort = await allocateUnusedPort();
+
     writeFileSync(configPath, JSON.stringify({
       port: 3741,
+      companionPort,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
       webOnlySetting: {
@@ -224,17 +317,21 @@ describe('ui foreground launch', () => {
       },
     }, null, 2));
 
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
     const exitCode = await runCli(['ui', '--port', '4810', '--no-tailscale-serve']);
 
     expect(exitCode).toBe(0);
     expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({
       port: 4810,
-      companionPort: 3742,
+      companionPort,
       useTailscaleServe: false,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
       webOnlySetting: {
         enabled: true,
       },
     });
+
+    logSpy.mockRestore();
   });
 });
