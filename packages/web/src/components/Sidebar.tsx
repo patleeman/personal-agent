@@ -19,6 +19,7 @@ import {
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   hasDraftConversationAttachments,
+  persistDraftConversationCwd,
   readDraftConversationComposer,
   readDraftConversationCwd,
   readDraftConversationProjectIds,
@@ -59,6 +60,7 @@ const PATH = {
   pin: 'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
   unpin: 'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
   chevronDown: 'm6 9 6 6 6-6',
+  plus: 'M12 5v14M5 12h14',
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
@@ -290,22 +292,33 @@ function ShelfRow({
 function ConversationCwdGroupHeader({
   label,
   cwd,
-  count,
+  onNewConversation,
 }: {
   label: string;
   cwd: string | null;
-  count: number;
+  onNewConversation: () => void;
 }) {
+  const hoverTitle = cwd ?? label;
+  const newConversationTitle = cwd
+    ? `New conversation in ${cwd}`
+    : 'New conversation';
+
   return (
-    <div className="px-4 pt-2 pb-1">
-      <div className="flex items-center gap-2 text-[11px] font-medium text-secondary">
-        <Ico d={PATH.workspace} size={11} />
-        <span className="truncate" title={cwd ?? label}>{label}</span>
-        <span className="ml-auto shrink-0 text-[10px] text-dim">{count}</span>
+    <div className="px-4 pt-3 pb-1">
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-tight text-primary" title={hoverTitle}>
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={onNewConversation}
+          className="ui-icon-button ui-icon-button-compact shrink-0"
+          title={newConversationTitle}
+          aria-label={newConversationTitle}
+        >
+          <Ico d={PATH.plus} size={11} />
+        </button>
       </div>
-      {cwd && cwd !== label ? (
-        <p className="pl-5 pt-0.5 text-[10px] text-dim truncate" title={cwd}>{cwd}</p>
-      ) : null}
     </div>
   );
 }
@@ -720,7 +733,11 @@ export function Sidebar() {
     });
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
-  const handleNewConversation = useCallback(() => {
+  const handleNewConversation = useCallback((cwd?: string | null) => {
+    if (typeof cwd === 'string' && cwd.trim().length > 0) {
+      persistDraftConversationCwd(cwd);
+    }
+
     navigate('/conversations/new');
   }, [navigate]);
 
@@ -845,27 +862,23 @@ export function Sidebar() {
 
       <div className="pb-2 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
+        <div className="px-1">
+          <button
+            onClick={() => handleNewConversation()}
+            className="ui-sidebar-nav-item mx-0 flex w-full text-secondary"
+            title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+          >
+            <Ico d={PATH.plus} size={15} />
+            <span className="flex-1 text-left">Chat</span>
+          </button>
+        </div>
         <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
 
-      <div className="px-1 pb-2">
-        <div className="flex items-stretch gap-1 mx-1">
-          <button
-            onClick={handleNewConversation}
-            className="ui-sidebar-nav-item mx-0 flex-1 text-secondary"
-            title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M12 5v14M5 12h14" /></svg>
-            <span className="flex-1 text-left">Chat</span>
-          </button>
-        </div>
-      </div>
-
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
-        <SectionHeader label="Open Conversations" />
         <div className="py-1 space-y-0.5">
           {!loading && pinnedSessions.length === 0 && draggingSection === 'open' ? (
             <ShelfDropZone
@@ -890,8 +903,12 @@ export function Sidebar() {
           ) : null}
 
           {groupedConversationRows.map((group) => (
-            <div key={`cwd:${group.key}`} className="space-y-0.5">
-              <ConversationCwdGroupHeader label={group.label} cwd={group.cwd} count={group.items.length} />
+            <div key={`cwd:${group.key}`} className="space-y-0.5 pt-3 first:pt-0">
+              <ConversationCwdGroupHeader
+                label={group.label}
+                cwd={group.cwd}
+                onNewConversation={() => handleNewConversation(group.cwd)}
+              />
               {group.items.map(({ row: { session, depth, parentSessionId }, section, pinned }) => {
                 const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
                 const canDrag = !isDraftTab && depth === 0;

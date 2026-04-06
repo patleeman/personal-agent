@@ -192,9 +192,10 @@ describe('Sidebar', () => {
   it('renders a flat primary nav for core workspaces', () => {
     const html = renderSidebar('/inbox');
 
-    expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
+    expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Chat'));
+    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Conversations'));
     expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Vault'));
-    expect(html).toContain('Open Conversations');
+    expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
@@ -206,14 +207,13 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Archived');
   });
 
-  it('keeps pinned conversations in the open conversations section and shows a pinned indicator', () => {
+  it('keeps pinned conversations in the main conversation list and shows a pinned indicator', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(PINNED_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
 
     const html = renderSidebar('/inbox');
 
-    expect(html).toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
     expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(1);
@@ -241,7 +241,7 @@ describe('Sidebar', () => {
     expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
-  it('groups open conversations by working directory', () => {
+  it('groups open conversations by working directory with quick-start actions in the headers', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
 
     const html = renderSidebar('/inbox', {
@@ -254,6 +254,9 @@ describe('Sidebar', () => {
 
     expect((html.match(/alpha-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect((html.match(/beta-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(html).toContain('title="/tmp/alpha-worktree"');
+    expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
+    expect(html).not.toContain('>2</span>');
     expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('First alpha conversation'));
     expect(html.indexOf('First alpha conversation')).toBeLessThan(html.indexOf('Second alpha conversation'));
     expect(html.indexOf('Second alpha conversation')).toBeLessThan(html.indexOf('beta-worktree'));

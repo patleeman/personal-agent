@@ -178,7 +178,7 @@ Saved conversations show these queued and ready items under **Wakeups**. From th
 
 The Conversations workspace only treats conversation unread state as “needs review”. Detached background run review stays on the Runs page instead of adding workspace-wide conversation badges.
 
-Conversation lists in the sidebar and on the Conversations page are grouped by working directory so related threads stay clustered under the same repo or folder.
+Conversation lists in the sidebar and on the Conversations page are grouped by working directory so related threads stay clustered under the same repo or folder. In the sidebar, each working-directory header shows the folder name, reveals the full path on hover, and includes a quick action to start a draft chat in that cwd.
 
 Saved conversations also keep their working directory, referenced projects, and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
 
