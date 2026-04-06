@@ -9,7 +9,6 @@ import {
   resolveDeferredResumeStateFile,
   resolveProfileAlertsStateFile,
   resolveProfileConversationAttachmentsDir,
-  resolveExecutionTargetsFilePath,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
   resolveProfileConversationArtifactsDir,
@@ -30,7 +29,6 @@ export type AppEventTopic =
   | 'daemon'
   | 'sync'
   | 'webUi'
-  | 'executionTargets'
   | 'workspace';
 
 export type AppEvent =
@@ -82,7 +80,6 @@ const ALL_TOPICS: AppEventTopic[] = [
   'daemon',
   'sync',
   'webUi',
-  'executionTargets',
   'workspace',
 ];
 const listeners = new Set<AppEventListener>();
@@ -239,7 +236,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: join(webStateDir, 'deploy-state.json'), kind: 'file' },
       { path: join(webStateDir, 'app-restart.lock.json'), kind: 'file' },
     ],
-    executionTargets: [{ path: resolveExecutionTargetsFilePath(), kind: 'file' }],
     workspace: [],
   };
 }

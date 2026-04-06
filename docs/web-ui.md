@@ -171,8 +171,6 @@ The UI supports:
 
 A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading.
 
-If execution targets are configured, the draft conversation empty state lets you choose where the first turn runs before you send it. Once the conversation starts, that execution choice is shown in the header and treated as locked for that conversation.
-
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
 Saved conversations show these queued and ready items under **Wakeups**. From that row, you can fire a wakeup immediately or cancel it.
@@ -290,7 +288,6 @@ It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
-- configure execution targets for remote conversation offload
 - run per-subsystem actions directly from the page (restart Web UI / daemon, or trigger sync now)
 - jump into the advanced Daemon, Sync, or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
@@ -301,7 +298,7 @@ The advanced pages still exist for subsystem-specific setup and controls:
 - **Sync** — first-time setup, repo configuration, conflict visibility, and manual sync runs
 - **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
 
-See [Daemon and Background Automation](./daemon.md), [Sync Guide](./sync.md), and [Execution Targets](./execution-targets.md).
+See [Daemon and Background Automation](./daemon.md) and [Sync Guide](./sync.md).
 
 ### Doc workspaces
 
@@ -403,6 +400,8 @@ The UI uses server-sent events for snapshots and updates.
 That means:
 
 - inbox, projects, sessions, tasks, and system status surfaces update live
+- the global app stream carries lightweight summary state; heavier durable run history and conversation transcript data still load on demand from their own surfaces
+- conversation bootstrap requests reuse cached transcript windows by session-file signature when possible, and the browser keeps recent transcript windows in durable local cache so reopen/reload usually only fetches lightweight live metadata unless that transcript actually changed
 - you usually do not need to refresh manually
 - if the SSE connection drops, the UI will try to reconnect, including during managed web UI restarts
 
@@ -433,7 +432,6 @@ So, for example:
 - [Artifacts and Rendered Outputs](./artifacts.md)
 - [How personal-agent works](./how-it-works.md)
 - [Tracked Pages](./projects.md)
-- [Execution Targets](./execution-targets.md)
 - [MCP](./mcp.md)
 - [Inbox and Activity](./inbox.md)
 - [Scheduled Tasks](./scheduled-tasks.md)

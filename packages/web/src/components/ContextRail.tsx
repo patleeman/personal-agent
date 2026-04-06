@@ -11,7 +11,6 @@ import {
 } from '../conversationRuns';
 import {
   buildDraftConversationCwdStorageKey,
-  buildDraftConversationExecutionTargetStorageKey,
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
@@ -34,11 +33,9 @@ import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
   AgentToolInfo,
-  ConversationExecutionState,
   DurableRunDetailResult,
   LiveSessionContext,
   MemoryAgentsItem,
-  RemoteFolderListing,
   ScheduledTaskSummary,
   WorkspaceChangeKind,
 } from '../types';
@@ -74,8 +71,6 @@ type ConversationRailCacheEntry<T> = {
 
 const liveSessionContextCache = new Map<string, ConversationRailCacheEntry<LiveSessionContext>>();
 const liveSessionContextInflight = new Map<string, Promise<LiveSessionContext>>();
-const conversationExecutionCache = new Map<string, ConversationRailCacheEntry<ConversationExecutionState>>();
-const conversationExecutionInflight = new Map<string, Promise<ConversationExecutionState>>();
 
 function isConversationRailCacheFresh<T>(
   entry: ConversationRailCacheEntry<T> | null | undefined,
@@ -121,12 +116,10 @@ export function prefetchConversationRailData(input: {
   conversationId: string;
   workspaceVersion: number;
   runsVersion: number;
-  executionTargetsVersion: number;
 }): Promise<void> {
+  void input.runsVersion;
   const liveContextVersionKey = `${input.workspaceVersion}`;
-  const executionVersionKey = `${input.executionTargetsVersion}:${input.runsVersion}`;
   const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
-  const cachedExecution = conversationExecutionCache.get(input.conversationId) ?? null;
 
   const requests: Promise<unknown>[] = [];
   if (!isConversationRailCacheFresh(cachedContext, liveContextVersionKey)) {
@@ -136,16 +129,6 @@ export function prefetchConversationRailData(input: {
       key: input.conversationId,
       versionKey: liveContextVersionKey,
       fetcher: () => api.liveSessionContext(input.conversationId),
-    }));
-  }
-
-  if (!isConversationRailCacheFresh(cachedExecution, executionVersionKey)) {
-    requests.push(fetchConversationRailCacheEntry({
-      cache: conversationExecutionCache,
-      inflight: conversationExecutionInflight,
-      key: input.conversationId,
-      versionKey: executionVersionKey,
-      fetcher: () => api.conversationExecution(input.conversationId),
     }));
   }
 
@@ -282,77 +265,6 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-function RemoteFolderBrowser({
-  listing,
-  loading,
-  error,
-  selecting = false,
-  onNavigate,
-  onSelect,
-  onClose,
-}: {
-  listing: RemoteFolderListing | null;
-  loading: boolean;
-  error: string | null;
-  selecting?: boolean;
-  onNavigate: (path: string) => void;
-  onSelect: (path: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="space-y-2.5 border-t border-border-subtle/70 pt-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="ui-section-label">Remote folders</p>
-          <p className="mt-1 break-all font-mono text-[11px] text-secondary">{listing?.cwd ?? 'Loading…'}</p>
-        </div>
-        <button type="button" onClick={onClose} className="ui-toolbar-button shrink-0">Close</button>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => { if (listing?.parent) onNavigate(listing.parent); }}
-          disabled={loading || !listing?.parent}
-          className="ui-toolbar-button"
-        >
-          Up
-        </button>
-        <button
-          type="button"
-          onClick={() => { if (listing) onSelect(listing.cwd); }}
-          disabled={loading || !listing || selecting}
-          className="ui-toolbar-button text-accent"
-        >
-          {selecting ? 'Using…' : 'Use this folder'}
-        </button>
-      </div>
-
-      {error && <p className="text-[11px] text-danger/80">{error}</p>}
-      {loading && <p className="text-[11px] text-dim animate-pulse">Loading remote folders…</p>}
-      {!loading && !error && listing && listing.entries.length === 0 && (
-        <p className="text-[11px] text-dim">No subdirectories found here.</p>
-      )}
-      {!loading && listing && listing.entries.length > 0 && (
-        <div className="max-h-56 overflow-y-auto divide-y divide-border-subtle/70 border-t border-border-subtle/70">
-          {listing.entries.map((entry) => (
-            <button
-              key={entry.path}
-              type="button"
-              onClick={() => onNavigate(entry.path)}
-              className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:text-primary"
-              title={entry.path}
-            >
-              <span className="truncate text-[12px] text-primary">{entry.name}</span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-dim">open</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function runStatusText(detail: DurableRunDetailResult['run']): { text: string; cls: string } {
   const status = detail.status?.status;
 
@@ -424,7 +336,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   const { tasks, sessions, setRuns } = useAppData();
   const [cancelling, setCancelling] = useState(false);
   const [markingReviewed, setMarkingReviewed] = useState(false);
-  const [importingRemote, setImportingRemote] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const {
@@ -500,25 +411,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   const closeSearch = conversationId ? setConversationRunIdInSearch(location.search, null) : '';
   const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
   const showConversationChrome = Boolean(conversationId);
-  const remoteExecution = run.remoteExecution;
-
-  async function handleImportRemote() {
-    if (!remoteExecution || importingRemote || remoteExecution.importStatus !== 'ready') {
-      return;
-    }
-
-    setActionError(null);
-    setImportingRemote(true);
-    try {
-      await api.importRemoteRun(run.runId);
-      reconnect();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not import the remote run.');
-    } finally {
-      setImportingRemote(false);
-    }
-  }
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 px-4 py-4 space-y-4">
@@ -575,33 +467,6 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
             <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
               {cancelling ? 'Cancelling…' : 'Cancel'}
             </button>
-          </div>
-        )}
-
-        {remoteExecution && (
-          <div className="border-t border-border-subtle pt-3 space-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1 min-w-0">
-                <p className="ui-section-label">Remote execution</p>
-                <p className="text-[13px] text-primary break-words">{remoteExecution.targetLabel}</p>
-                <p className="text-[12px] text-secondary break-words">{remoteExecution.remoteCwd}</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {remoteExecution.transcriptAvailable && (
-                  <a href={api.remoteRunTranscriptUrl(run.runId)} target="_blank" rel="noreferrer" className="ui-toolbar-button">
-                    Transcript
-                  </a>
-                )}
-                {remoteExecution.importStatus === 'ready' && (
-                  <button type="button" onClick={() => { void handleImportRemote(); }} disabled={importingRemote} className="ui-toolbar-button text-warning">
-                    {importingRemote ? 'Importing…' : 'Import'}
-                  </button>
-                )}
-              </div>
-            </div>
-            {remoteExecution.prompt && <p className="text-[12px] text-secondary break-words">{remoteExecution.prompt}</p>}
-            {remoteExecution.importSummary && <p className="text-[12px] text-secondary break-words">{remoteExecution.importSummary}</p>}
-            {remoteExecution.importError && <p className="text-[12px] text-danger break-words">{remoteExecution.importError}</p>}
           </div>
         )}
 
@@ -704,19 +569,10 @@ function DraftConversationContextPanel() {
     initialValue: '',
     shouldPersist: (value) => value.trim().length > 0,
   });
-  const [draftTargetId] = useReloadState<string | null>({
-    storageKey: buildDraftConversationExecutionTargetStorageKey(),
-    initialValue: null,
-    shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
-  });
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState(draftCwd);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
   const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
-  const [remotePickerOpen, setRemotePickerOpen] = useState(false);
-  const [remotePickerBusy, setRemotePickerBusy] = useState(false);
-  const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
-  const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
   useEffect(() => {
     if (!changingCwd) {
@@ -724,35 +580,7 @@ function DraftConversationContextPanel() {
     }
   }, [draftCwd, changingCwd]);
 
-  useEffect(() => {
-    setRemotePickerOpen(false);
-    setRemotePickerError(null);
-    setRemotePickerListing(null);
-  }, [draftTargetId]);
-
   const hasExplicitCwd = draftCwd.trim().length > 0;
-  const isRemoteDraft = typeof draftTargetId === 'string' && draftTargetId.length > 0;
-
-  async function loadRemoteDraftFolders(pathOverride?: string) {
-    if (!draftTargetId) {
-      return;
-    }
-
-    setRemotePickerBusy(true);
-    setRemotePickerError(null);
-    try {
-      const result = await api.browseRemoteFolder(
-        draftTargetId,
-        pathOverride ?? (draftCwd || undefined),
-        draftCwd || undefined,
-      );
-      setRemotePickerListing(result);
-    } catch (error) {
-      setRemotePickerError(error instanceof Error ? error.message : 'Could not browse remote folders.');
-    } finally {
-      setRemotePickerBusy(false);
-    }
-  }
 
   async function pickDraftCwd() {
     if (pickCwdBusy) {
@@ -762,12 +590,6 @@ function DraftConversationContextPanel() {
     setPickCwdBusy(true);
     setChangeCwdError(null);
     try {
-      if (draftTargetId) {
-        setRemotePickerOpen(true);
-        await loadRemoteDraftFolders();
-        return;
-      }
-
       const result = await api.pickFolder(draftCwd || undefined);
       if (result.cancelled || !result.path) {
         return;
@@ -783,18 +605,9 @@ function DraftConversationContextPanel() {
     }
   }
 
-  function selectRemoteDraftFolder(path: string) {
-    setDraftCwd(path);
-    setRequestedCwd(path);
-    setRemotePickerOpen(false);
-    setRemotePickerError(null);
-    setChangingCwd(false);
-  }
-
   function startChangingCwd() {
     setRequestedCwd(draftCwd);
     setChangeCwdError(null);
-    setRemotePickerOpen(false);
     setChangingCwd(true);
   }
 
@@ -809,7 +622,6 @@ function DraftConversationContextPanel() {
     setDraftCwd(nextCwd);
     setRequestedCwd(nextCwd);
     setChangeCwdError(null);
-    setRemotePickerOpen(false);
     setChangingCwd(false);
   }
 
@@ -817,8 +629,6 @@ function DraftConversationContextPanel() {
     clearDraftCwd();
     setRequestedCwd('');
     setChangeCwdError(null);
-    setRemotePickerOpen(false);
-    setRemotePickerError(null);
     setChangingCwd(false);
   }
 
@@ -846,17 +656,17 @@ function DraftConversationContextPanel() {
             <IconButton
               compact
               onClick={() => { void pickDraftCwd(); }}
-              disabled={pickCwdBusy || remotePickerBusy}
+              disabled={pickCwdBusy}
               className="text-accent"
-              title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
-              aria-label={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
+              title={pickCwdBusy ? 'Choosing working directory…' : 'Choose the initial working directory for this draft conversation'}
+              aria-label="Choose the initial working directory for this draft conversation"
             >
-              <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+              <FolderIcon className={pickCwdBusy ? 'animate-pulse' : undefined} />
             </IconButton>
             <IconButton
               compact
               onClick={startChangingCwd}
-              disabled={pickCwdBusy || remotePickerBusy}
+              disabled={pickCwdBusy}
               title="Enter the working directory manually"
               aria-label="Enter the working directory manually"
             >
@@ -864,19 +674,6 @@ function DraftConversationContextPanel() {
             </IconButton>
           </div>
         </div>
-        {remotePickerOpen && isRemoteDraft && (
-          <RemoteFolderBrowser
-            listing={remotePickerListing}
-            loading={remotePickerBusy}
-            error={remotePickerError}
-            onNavigate={(path) => { void loadRemoteDraftFolders(path); }}
-            onSelect={selectRemoteDraftFolder}
-            onClose={() => {
-              setRemotePickerOpen(false);
-              setRemotePickerError(null);
-            }}
-          />
-        )}
         {changingCwd && (
           <form
             className="space-y-2 border-t border-border-subtle/70 pt-3"
@@ -907,7 +704,7 @@ function DraftConversationContextPanel() {
               className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
             />
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-dim">{isRemoteDraft ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
+              <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -942,7 +739,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
-  const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
+  const execution = null;
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
   const [workingTreeExpanded, setWorkingTreeExpanded] = useState(false);
@@ -953,10 +750,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [requestedCwd, setRequestedCwd] = useState('');
   const [changeCwdBusy, setChangeCwdBusy] = useState(false);
   const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
-  const [remotePickerOpen, setRemotePickerOpen] = useState(false);
-  const [remotePickerBusy, setRemotePickerBusy] = useState(false);
-  const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
-  const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
   useEffect(() => {
     if (runs !== null) {
@@ -986,21 +779,18 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const runsLoading = runs === null;
   const runsError = null;
   const liveContextVersionKey = `${versions.workspace}`;
-  const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
 
   const load = useCallback((options: {
     forceContext?: boolean;
     forceExecution?: boolean;
   } = {}) => {
+    void options.forceExecution;
     let cancelled = false;
     const cachedContext = liveSessionContextCache.get(id) ?? null;
-    const cachedExecution = conversationExecutionCache.get(id) ?? null;
     const hasFreshContext = !options.forceContext && isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
-    const hasFreshExecution = !options.forceExecution && isConversationRailCacheFresh(cachedExecution, executionVersionKey);
 
     setData(cachedContext?.data ?? null);
-    setExecution(cachedExecution?.data ?? null);
-    setLoading(!cachedContext && !cachedExecution);
+    setLoading(!cachedContext);
     setError(false);
 
     const contextPromise = hasFreshContext && cachedContext
@@ -1012,23 +802,13 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: liveContextVersionKey,
           fetcher: () => api.liveSessionContext(id),
         });
-    const executionPromise = hasFreshExecution && cachedExecution
-      ? Promise.resolve(cachedExecution.data)
-      : fetchConversationRailCacheEntry({
-          cache: conversationExecutionCache,
-          inflight: conversationExecutionInflight,
-          key: id,
-          versionKey: executionVersionKey,
-          fetcher: () => api.conversationExecution(id),
-        });
-    Promise.all([contextPromise, executionPromise])
-      .then(([context, nextExecution]) => {
+    contextPromise
+      .then((context) => {
         if (cancelled) {
           return;
         }
 
         setData(context);
-        setExecution(nextExecution);
         setLoading(false);
       })
       .catch(() => {
@@ -1040,7 +820,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [executionVersionKey, id, liveContextVersionKey]);
+  }, [id, liveContextVersionKey]);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
@@ -1106,10 +886,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setPickCwdBusy(false);
     setChangeCwdBusy(false);
     setChangeCwdError(null);
-    setRemotePickerOpen(false);
-    setRemotePickerBusy(false);
-    setRemotePickerError(null);
-    setRemotePickerListing(null);
     setRunsExpanded(false);
     setWorkingTreeExpanded(false);
   }, [id]);
@@ -1120,8 +896,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }, [data?.cwd, changingCwd]);
 
-  const remoteTargetId = execution?.location === 'remote' ? execution.targetId : null;
-  const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
   const connectedBackgroundRuns = useMemo(() => {
@@ -1255,27 +1029,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     });
   }
 
-  async function loadRemoteConversationFolders(pathOverride?: string) {
-    if (!remoteTargetId || !data) {
-      return;
-    }
-
-    setRemotePickerBusy(true);
-    setRemotePickerError(null);
-    try {
-      const result = await api.browseRemoteFolder(
-        remoteTargetId,
-        pathOverride ?? (data.cwd || undefined),
-        data.cwd || undefined,
-      );
-      setRemotePickerListing(result);
-    } catch (error) {
-      setRemotePickerError(error instanceof Error ? error.message : 'Could not browse remote folders.');
-    } finally {
-      setRemotePickerBusy(false);
-    }
-  }
-
   async function pickAndSubmitCwd() {
     if (!data || pickCwdBusy || changeCwdBusy) {
       return;
@@ -1284,12 +1037,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setPickCwdBusy(true);
     setChangeCwdError(null);
     try {
-      if (remoteTargetId) {
-        setRemotePickerOpen(true);
-        await loadRemoteConversationFolders();
-        return;
-      }
-
       const result = await api.pickFolder(data.cwd);
       if (result.cancelled || !result.path) {
         return;
@@ -1306,13 +1053,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }
 
   function startChangingCwd() {
-    if (!data || changeCwdBusy || pickCwdBusy || remotePickerBusy) {
+    if (!data || changeCwdBusy || pickCwdBusy) {
       return;
     }
 
     setRequestedCwd(data.cwd);
     setChangeCwdError(null);
-    setRemotePickerOpen(false);
     setChangingCwd(true);
   }
 
@@ -1339,8 +1085,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     try {
       const result = await api.changeConversationCwd(id, nextCwd);
       setChangingCwd(false);
-      setRemotePickerOpen(false);
-      setRemotePickerError(null);
       setRequestedCwd(result.cwd);
 
       if (!result.changed || result.id === id) {
@@ -1365,7 +1109,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const gitChangeLabel = data.git
     ? (data.git.changeCount === 0 ? 'working tree clean' : `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`)
     : null;
-  const workspaceBrowserLink = isRemoteConversation ? null : buildWorkspaceLink(data.cwd);
+  const workspaceBrowserLink = buildWorkspaceLink(data.cwd);
   const workingTreeChanges = data.git?.changes ?? [];
   const visibleWorkingTreeChanges = workingTreeExpanded
     ? workingTreeChanges
@@ -1384,17 +1128,17 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               <IconButton
                 compact
                 onClick={() => { void pickAndSubmitCwd(); }}
-                disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
+                disabled={pickCwdBusy || changeCwdBusy}
                 className="text-accent"
-                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
-                aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+                title={pickCwdBusy ? 'Choosing working directory…' : 'Choose a new working directory for this conversation'}
+                aria-label="Choose a new working directory for this conversation"
               >
-                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+                <FolderIcon className={pickCwdBusy ? 'animate-pulse' : undefined} />
               </IconButton>
               <IconButton
                 compact
                 onClick={startChangingCwd}
-                disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
+                disabled={changingCwd || changeCwdBusy || pickCwdBusy}
                 title="Enter the working directory manually"
                 aria-label="Enter the working directory manually"
               >
@@ -1437,20 +1181,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             )}
           </div>
         )}
-        {remotePickerOpen && isRemoteConversation && (
-          <RemoteFolderBrowser
-            listing={remotePickerListing}
-            loading={remotePickerBusy}
-            error={remotePickerError}
-            selecting={changeCwdBusy}
-            onNavigate={(path) => { void loadRemoteConversationFolders(path); }}
-            onSelect={(path) => { void submitCwdChange(path); }}
-            onClose={() => {
-              setRemotePickerOpen(false);
-              setRemotePickerError(null);
-            }}
-          />
-        )}
         {changingCwd && (
           <form
             className="space-y-2 border-t border-border-subtle/70 pt-3"
@@ -1481,7 +1211,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
             />
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-dim">{isRemoteConversation ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
+              <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -1502,7 +1232,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             </div>
           </form>
         )}
-        {!isRemoteConversation && visibleWorkingTreeChanges.length > 0 && (
+        {visibleWorkingTreeChanges.length > 0 && (
           <div className="space-y-2 border-t border-border-subtle/70 pt-3">
             <p className="ui-section-label">Changed files</p>
             <div className="divide-y divide-border-subtle/70">
@@ -1633,11 +1363,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             </div>
             <div className="space-y-1">
               <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Execution</p>
-              <p className="text-[12px] text-secondary">
-                {execution?.location === 'remote'
-                  ? `Remote${execution.targetLabel ? ` · ${execution.targetLabel}` : ''}`
-                  : 'Local'}
-              </p>
+              <p className="text-[12px] text-secondary">Local</p>
             </div>
           </div>
         </div>

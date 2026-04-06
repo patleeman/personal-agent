@@ -327,25 +327,6 @@ export interface DurableRunPaths {
   resultPath: string;
 }
 
-export type RemoteRunImportStatus = 'not_ready' | 'ready' | 'imported' | 'failed';
-
-export interface RemoteExecutionRunSummary {
-  targetId: string;
-  targetLabel: string;
-  transport: 'ssh';
-  conversationId: string;
-  localCwd: string;
-  remoteCwd: string;
-  prompt: string;
-  submittedAt: string;
-  importStatus: RemoteRunImportStatus;
-  importedAt?: string;
-  importSummary?: string;
-  importError?: string;
-  transcriptAvailable: boolean;
-  transcriptFileName?: string;
-}
-
 export interface DurableRunRecord {
   runId: string;
   paths: DurableRunPaths;
@@ -355,7 +336,6 @@ export interface DurableRunRecord {
   problems: string[];
   recoveryAction: string;
   location?: 'local' | 'remote';
-  remoteExecution?: RemoteExecutionRunSummary;
   attentionDismissed?: boolean;
   attentionSignature?: string | null;
 }
@@ -585,7 +565,16 @@ export interface SessionDetail {
   blockOffset: number;
   totalBlocks: number;
   contextUsage: SessionContextUsage | null;
+  signature?: string;
 }
+
+export interface SessionDetailUnchangedResponse {
+  unchanged: true;
+  sessionId: string;
+  signature: string | null;
+}
+
+export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse;
 
 export interface ConversationTreeNode {
   id: string;
@@ -616,7 +605,6 @@ export type AppEventTopic =
   | 'daemon'
   | 'sync'
   | 'webUi'
-  | 'executionTargets'
   | 'workspace';
 
 export type AppEvent =
@@ -663,8 +651,8 @@ export type ConversationBootstrapLiveState = { live: false } | ({ live: true } &
 export interface ConversationBootstrapState {
   conversationId: string;
   sessionDetail: SessionDetail | null;
-  execution: ConversationExecutionState;
-  remoteConnection: RemoteConversationConnectionState;
+  sessionDetailSignature?: string | null;
+  sessionDetailUnchanged?: boolean;
   liveSession: ConversationBootstrapLiveState;
 }
 
@@ -696,17 +684,6 @@ export interface ConversationCwdChangeResult {
 export interface FolderPickerResult {
   path: string | null;
   cancelled: boolean;
-}
-
-export interface RemoteFolderEntry {
-  name: string;
-  path: string;
-}
-
-export interface RemoteFolderListing {
-  cwd: string;
-  parent: string | null;
-  entries: RemoteFolderEntry[];
 }
 
 // ── Workspace browser ───────────────────────────────────────────────────────
@@ -988,59 +965,6 @@ export interface VaultFileListResult {
   root: string;
   files: VaultFileSummary[];
 }
-
-export interface ExecutionTargetPathMapping {
-  localPrefix: string;
-  remotePrefix: string;
-}
-
-export interface ExecutionTargetSummary {
-  id: string;
-  label: string;
-  description?: string;
-  transport: 'ssh';
-  sshDestination: string;
-  sshCommand?: string;
-  remotePaCommand?: string;
-  profile?: string;
-  defaultRemoteCwd?: string;
-  commandPrefix?: string;
-  cwdMappings: ExecutionTargetPathMapping[];
-  createdAt: string;
-  updatedAt: string;
-  activeRunCount: number;
-  readyImportCount: number;
-  latestRunAt?: string;
-}
-
-export interface ExecutionTargetsState {
-  targets: ExecutionTargetSummary[];
-  sshBinary: CliBinaryState;
-  summary: {
-    totalTargets: number;
-    activeRemoteRuns: number;
-    readyImports: number;
-  };
-}
-
-export interface ConversationExecutionState {
-  conversationId: string;
-  targetId: string | null;
-  location: 'local' | 'remote';
-  target: ExecutionTargetSummary | null;
-}
-
-export interface RemoteConversationConnectionState {
-  conversationId: string;
-  targetId: string | null;
-  connected: boolean;
-  state: 'local' | 'idle' | 'installing' | 'connecting' | 'connected' | 'error';
-  message: string | null;
-  updatedAt: string | null;
-}
-
-export type RemoteConversationConnectionStreamEvent =
-  | { type: 'snapshot'; data: RemoteConversationConnectionState };
 
 export interface AppStatus {
   profile: string;

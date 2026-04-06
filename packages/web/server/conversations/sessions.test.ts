@@ -198,10 +198,12 @@ describe('sessions', () => {
       assistantTexts: ['Reply 1'],
     });
 
-    expect(readSessionBlocks('session-cache', { tailBlocks: 2 })?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+    const initialDetail = readSessionBlocks('session-cache', { tailBlocks: 2 });
+    expect(initialDetail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
       'user',
       'Reply 1',
     ]);
+    expect(initialDetail?.signature).toMatch(/^\d+:\d+(?:\.\d+)?$/);
 
     writeSessionFile({
       sessionsDir,
@@ -211,6 +213,8 @@ describe('sessions', () => {
     });
 
     const detail = readSessionBlocks('session-cache', { tailBlocks: 2 });
+    expect(detail?.signature).toMatch(/^\d+:\d+(?:\.\d+)?$/);
+    expect(detail?.signature).not.toBe(initialDetail?.signature);
     expect(detail?.totalBlocks).toBe(3);
     expect(detail?.blockOffset).toBe(1);
     expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
@@ -540,22 +544,22 @@ describe('sessions', () => {
         id: 'session-custom-user-1',
         parentId: null,
         timestamp: '2026-03-11T12:00:00.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'Investigate remotely' }] },
+        message: { role: 'user', content: [{ type: 'text', text: 'Investigate this result' }] },
       }),
       JSON.stringify({
         type: 'custom_message',
-        id: 'session-custom-import-1',
+        id: 'session-custom-note-1',
         parentId: 'session-custom-user-1',
         timestamp: '2026-03-11T12:00:01.000Z',
-        customType: 'remote_run_import',
-        content: [{ type: 'text', text: 'Remote execution imported from GPU Box.' }],
+        customType: 'note',
+        content: [{ type: 'text', text: 'Imported summary note.' }],
         display: true,
       }),
     ].join('\n') + '\n');
 
     const detail = readSessionBlocks('session-custom');
     expect(detail?.meta.messageCount).toBe(2);
-    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Remote execution imported from GPU Box.');
+    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Imported summary note.');
   });
 
   it('keeps hidden custom context entries out of the visible transcript', () => {

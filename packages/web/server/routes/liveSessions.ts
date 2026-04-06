@@ -26,23 +26,9 @@ import {
   subscribe as subscribeLocal,
   takeOverSessionControl,
 } from '../conversations/liveSessions.js';
-import {
-  createLocalMirrorSession,
-  createRemoteLiveSession,
-  getRemoteLiveSessionMeta,
-  isRemoteLiveSession,
-  listRemoteLiveSessions,
-  resumeRemoteLiveSession,
-  stopRemoteLiveSession,
-  subscribeRemoteLiveSession,
-  submitRemoteLiveSessionPrompt,
-} from '../conversations/remoteLiveSessions.js';
 import { readCompanionSession } from '../ui/companionAuth.js';
 import {
-  getConversationExecutionTarget,
-  getExecutionTarget,
   resolveConversationAttachmentPromptFiles,
-  setConversationExecutionTarget,
 } from '@personal-agent/core';
 import {
   logError,
@@ -51,10 +37,9 @@ import {
   invalidateAppTopics,
   logWarn,
 } from '../middleware/index.js';
-import { parseTailBlocksQuery, publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
+import { parseTailBlocksQuery } from '../conversations/conversationService.js';
 import { readSessionMeta } from '../conversations/sessions.js';
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';
-import { resolveRemoteExecutionCwd } from '../workspace/remoteExecution.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
@@ -64,7 +49,7 @@ import {
 } from '../knowledge/promptReferences.js';
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import { syncWebLiveConversationRun } from '../conversations/conversationRuns.js';
-import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from '../workspace/gitStatus.js';
+import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import {
   listPendingBackgroundRunResults,
   markBackgroundRunResultsDelivered,
@@ -286,7 +271,6 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
     }
 
     const surfaceId = readRequestSurfaceId(req.body);
-    const isRemoteLive = isRemoteLiveSession(id);
 
     const currentProfile = getCurrentProfileFn();
     const tasks = listTasksForCurrentProfileFn();
@@ -325,9 +309,8 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       }
     }
 
-    const liveEntry = !isRemoteLive ? liveRegistry.get(id) : undefined;
-    const remoteLive = isRemoteLive ? getRemoteLiveSessionMeta(id) : null;
-    const sessionFile = liveEntry?.session.sessionFile ?? remoteLive?.sessionFile;
+    const liveEntry = liveRegistry.get(id);
+    const sessionFile = liveEntry?.session.sessionFile;
     const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
     const backgroundRunContextEntries = sessionFile
       ? listPendingBackgroundRunResults({
@@ -347,11 +330,11 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
 
     const hiddenContext = queuedContextBlocks.join('\n\n');
 
-    if (!isRemoteLive && queuedContextBlocks.length > 0) {
+    if (queuedContextBlocks.length > 0) {
       await queuePromptContext(id, 'referenced_context', hiddenContext);
     }
 
-    if (!isRemoteLive && liveEntry?.session.sessionFile) {
+    if (liveEntry?.session.sessionFile) {
       await syncWebLiveConversationRun({
         conversationId: id,
         sessionFile: liveEntry.session.sessionFile,
@@ -386,26 +369,13 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       });
     }
 
-    if (isRemoteLive && referencedAttachments.length > 0) {
-      res.status(400).json({ error: 'Remote conversations do not support local attachment references yet.' });
-      return;
-    }
-
     const promptImages = images?.map((image) => ({
       type: 'image' as const,
       data: image.data,
       mimeType: image.mimeType,
       ...(image.name ? { name: image.name } : {}),
     }));
-    const submittedPrompt = (isRemoteLive
-      ? await submitRemoteLiveSessionPrompt({
-        conversationId: id,
-        text,
-        behavior,
-        images: promptImages,
-        ...(hiddenContext ? { hiddenContext } : {}),
-      })
-      : await submitLocalPromptSession(id, text, behavior, promptImages, surfaceId)) as {
+    const submittedPrompt = await submitLocalPromptSession(id, text, behavior, promptImages, surfaceId) as {
       acceptedAs: 'queued' | 'started';
       completion: Promise<void>;
     };
@@ -433,7 +403,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
         });
       }
     }).catch(async (err: unknown) => {
-      if (!isRemoteLive && liveEntry?.session.sessionFile) {
+      if (liveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
           conversationId: id,
           sessionFile: liveEntry.session.sessionFile,
@@ -473,14 +443,11 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
 }
 
 function isLiveSession(sessionId: string): boolean {
-  return isLocalLive(sessionId) || isRemoteLiveSession(sessionId);
+  return isLocalLive(sessionId);
 }
 
 function listAllLiveSessions() {
-  const local = getLocalLiveSessions();
-  const localIds = new Set(local.map((session: { id: string }) => session.id));
-  const remote = listRemoteLiveSessions().filter((session) => !localIds.has(session.id));
-  return [...local, ...remote];
+  return getLocalLiveSessions();
 }
 
 function subscribeLiveSession(
@@ -494,8 +461,7 @@ function subscribeLiveSession(
     };
   },
 ): (() => void) | null {
-  return subscribeLocal(sessionId, listener, options)
-    ?? subscribeRemoteLiveSession(sessionId, listener, options ? { tailBlocks: options.tailBlocks } : undefined);
+  return subscribeLocal(sessionId, listener, options);
 }
 
 function readRequestSurfaceId(body: unknown): string | undefined {
@@ -536,11 +502,6 @@ export function writeLiveConversationControlError(res: Response, error: unknown)
 }
 
 async function abortLiveSession(sessionId: string): Promise<void> {
-  if (isRemoteLiveSession(sessionId)) {
-    await stopRemoteLiveSession(sessionId);
-    return;
-  }
-
   await abortLocalSession(sessionId);
 }
 
@@ -573,7 +534,6 @@ export function registerLiveSessionRoutes(
     try {
       const body = req.body as {
         cwd?: string;
-        targetId?: string | null;
         model?: string | null;
         thinkingLevel?: string | null;
       };
@@ -584,39 +544,6 @@ export function registerLiveSessionRoutes(
         explicitCwd: body.cwd,
         defaultCwd: getDefaultWebCwdFn(),
       });
-      const targetId = typeof body.targetId === 'string' ? body.targetId.trim() || null : null;
-
-      if (targetId) {
-        const target = getExecutionTarget({ targetId });
-        if (!target) {
-          res.status(400).json({ error: `Execution target ${targetId} not found.` });
-          return;
-        }
-
-        const remoteCwd = resolveRemoteExecutionCwd(target, cwd);
-        const result = await createLocalMirrorSession({
-          remoteCwd,
-          ...(body.model !== undefined ? { initialModel: body.model } : {}),
-          ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
-        });
-        setConversationExecutionTarget({
-          profile,
-          conversationId: result.id,
-          targetId,
-        });
-        await createRemoteLiveSession({
-          profile,
-          targetId,
-          remoteCwd,
-          localSessionFile: result.sessionFile,
-          conversationId: result.id,
-        });
-
-        publishConversationSessionMetaChanged(result.id);
-        res.json(result);
-        return;
-      }
-
       const result = await createLocalSession(cwd, buildLiveSessionResourceOptions({
         ...(body.model !== undefined ? { initialModel: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
@@ -636,23 +563,6 @@ export function registerLiveSessionRoutes(
     try {
       const { sessionFile } = req.body as { sessionFile: string };
       if (!sessionFile) { res.status(400).json({ error: 'sessionFile required' }); return; }
-
-      const conversationId = SessionManager.open(sessionFile).getSessionId();
-      const targetBinding = getConversationExecutionTarget({
-        profile: getCurrentProfileFn(),
-        conversationId,
-      });
-
-      if (targetBinding) {
-        const result = await resumeRemoteLiveSession({
-          profile: getCurrentProfileFn(),
-          conversationId,
-          localSessionFile: sessionFile,
-          targetId: targetBinding.targetId,
-        });
-        res.json(result);
-        return;
-      }
 
       const result = await resumeLocalSession(sessionFile, buildLiveSessionResourceOptions());
       await flushLiveDeferredResumesFn();
@@ -876,14 +786,11 @@ export function registerLiveSessionRoutes(
     try {
       const { id } = req.params;
       const liveEntry = liveRegistry.get(id);
-      const remoteLive = getRemoteLiveSessionMeta(id);
-      const storedSession = !liveEntry && !remoteLive ? readSessionMeta(id) : null;
-      const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? storedSession?.cwd;
+      const storedSession = !liveEntry ? readSessionMeta(id) : null;
+      const cwd = liveEntry?.cwd ?? storedSession?.cwd;
       if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
-      const gitSummaryRead = remoteLive
-        ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false, degraded: false } satisfies GitStatusReadTelemetry }
-        : readGitStatusSummaryWithTelemetry(cwd);
+      const gitSummaryRead = readGitStatusSummaryWithTelemetry(cwd);
       const gitSummary = gitSummaryRead.summary;
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
@@ -891,9 +798,7 @@ export function registerLiveSessionRoutes(
         {
           name: 'git',
           durationMs: gitSummaryRead.telemetry.durationMs,
-          description: remoteLive
-            ? 'remote-skip'
-            : `${gitSummaryRead.telemetry.cache}${gitSummaryRead.telemetry.degraded ? '/degraded' : ''}`,
+          description: `${gitSummaryRead.telemetry.cache}${gitSummaryRead.telemetry.degraded ? '/degraded' : ''}`,
         },
         { name: 'total', durationMs },
       ], {
@@ -977,12 +882,6 @@ export function registerLiveSessionRoutes(
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
 
-      if (isRemoteLiveSession(req.params.id)) {
-        await stopRemoteLiveSession(req.params.id);
-        res.json({ ok: true });
-        return;
-      }
-
       destroySession(req.params.id);
       res.json({ ok: true });
     } catch (err) {
@@ -1031,24 +930,6 @@ export function registerCompanionLiveSessionRoutes(
       const { sessionFile } = req.body as { sessionFile: string };
       if (!sessionFile) {
         res.status(400).json({ error: 'sessionFile required' });
-        return;
-      }
-
-      const conversationId = SessionManager.open(sessionFile).getSessionId();
-      const profile = getCurrentProfileFn();
-      const targetBinding = getConversationExecutionTarget({
-        profile,
-        conversationId,
-      });
-
-      if (targetBinding) {
-        const result = await resumeRemoteLiveSession({
-          profile,
-          conversationId,
-          localSessionFile: sessionFile,
-          targetId: targetBinding.targetId,
-        });
-        res.json(result);
         return;
       }
 
@@ -1189,11 +1070,6 @@ export function registerLiveSessionStatsRoutes(
   });
 
   router.get('/api/live-sessions/:id/context-usage', (req, res) => {
-    if (isRemoteLiveSession(req.params.id)) {
-      res.json({ tokens: null, modelId: undefined, contextWindow: undefined });
-      return;
-    }
-
     try {
       const usage = getSessionContextUsage(req.params.id);
       if (!usage) {

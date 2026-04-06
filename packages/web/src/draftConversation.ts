@@ -10,7 +10,6 @@ export const DRAFT_CONVERSATION_STATE_CHANGED_EVENT = 'pa:draft-conversation-sta
 const DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY = 'pa:reload:conversation:draft:composer';
 const DRAFT_CONVERSATION_CWD_STORAGE_KEY = 'pa:reload:conversation:draft:cwd';
 const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft:attachments';
-const DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY = 'pa:reload:conversation:draft:execution-target';
 const DRAFT_CONVERSATION_MODEL_STORAGE_KEY = 'pa:reload:conversation:draft:model';
 const DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY = 'pa:reload:conversation:draft:thinking-level';
 
@@ -49,10 +48,6 @@ export function buildDraftConversationAttachmentsStorageKey(): string {
   return DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY;
 }
 
-export function buildDraftConversationExecutionTargetStorageKey(): string {
-  return DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY;
-}
-
 export function buildDraftConversationModelStorageKey(): string {
   return DRAFT_CONVERSATION_MODEL_STORAGE_KEY;
 }
@@ -67,15 +62,6 @@ function normalizeDraftConversationComposer(value: unknown): string {
 
 function normalizeDraftConversationCwd(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function normalizeDraftConversationExecutionTarget(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const normalized = value.trim();
-  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeDraftConversationModel(value: unknown): string {
@@ -235,37 +221,6 @@ export function clearDraftConversationCwd(
   storage: StorageLike | null = getSessionStorage(),
 ): void {
   clearStoredState(storage, buildDraftConversationCwdStorageKey());
-  emitDraftConversationStateChanged();
-}
-
-export function readDraftConversationExecutionTarget(
-  storage: StorageLike | null = getSessionStorage(),
-): string | null {
-  return readStoredState<string | null>({
-    key: buildDraftConversationExecutionTargetStorageKey(),
-    fallback: null,
-    storage,
-    deserialize: (raw) => normalizeDraftConversationExecutionTarget(JSON.parse(raw) as unknown),
-  });
-}
-
-export function persistDraftConversationExecutionTarget(
-  targetId: string | null,
-  storage: StorageLike | null = getSessionStorage(),
-): void {
-  persistStoredState({
-    key: buildDraftConversationExecutionTargetStorageKey(),
-    value: targetId,
-    storage,
-    shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
-  });
-  emitDraftConversationStateChanged();
-}
-
-export function clearDraftConversationExecutionTarget(
-  storage: StorageLike | null = getSessionStorage(),
-): void {
-  clearStoredState(storage, buildDraftConversationExecutionTargetStorageKey());
   emitDraftConversationStateChanged();
 }
 

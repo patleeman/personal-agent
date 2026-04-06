@@ -145,12 +145,12 @@ describe('parseRequest', () => {
         cwd: '/tmp/work',
         shellCommand: 'node worker.mjs',
         manifestMetadata: {
-          remoteExecution: {
+          customMetadata: {
             targetId: 'gpu-box',
           },
         },
         checkpointPayload: {
-          remoteExecution: {
+          customMetadata: {
             import: {
               status: 'not_ready',
             },
@@ -167,12 +167,12 @@ describe('parseRequest', () => {
         cwd: '/tmp/work',
         shellCommand: 'node worker.mjs',
         manifestMetadata: {
-          remoteExecution: {
+          customMetadata: {
             targetId: 'gpu-box',
           },
         },
         checkpointPayload: {
-          remoteExecution: {
+          customMetadata: {
             import: {
               status: 'not_ready',
             },

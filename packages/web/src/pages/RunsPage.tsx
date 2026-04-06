@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import {
   getRunConversationConnection,
   getRunHeadline,
@@ -86,7 +87,7 @@ function runMomentLabel(run: DurableRunRecord): string | null {
 }
 
 function isGenericRunSummary(summary: string): boolean {
-  return /^(Live conversation|Background run|Scheduled task|Wakeup|Remote execution)( · .+)?$/.test(summary)
+  return /^(Live conversation|Background run|Scheduled task|Wakeup)( · .+)?$/.test(summary)
     || summary === 'Shell run'
     || summary === 'Workflow'
     || summary === 'Run';
@@ -174,6 +175,8 @@ export function RunsPage() {
       setRefreshing(false);
     }
   }, [setRuns]);
+
+  useInvalidateOnTopics(['runs'], refreshRuns);
 
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [sessions, tasks]);
   const orderedRuns = useMemo(

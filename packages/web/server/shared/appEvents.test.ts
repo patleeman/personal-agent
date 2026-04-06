@@ -22,7 +22,6 @@ const ALL_TOPICS = [
   'daemon',
   'sync',
   'webUi',
-  'executionTargets',
   'workspace',
 ] as const;
 

@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationExecutionState, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, VaultFileListResult, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, SyncState, ToolsState, VaultFileListResult, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -177,14 +177,17 @@ export const api = {
     const query = params.toString();
     return get<CompanionConversationListResult>(`/companion/conversations${query ? `?${query}` : ''}`);
   },
-  sessionDetail: (id: string, options?: { tailBlocks?: number }) => {
+  sessionDetail: (id: string, options?: { tailBlocks?: number; knownSessionSignature?: string }) => {
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
     }
+    if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
+      params.set('knownSessionSignature', options.knownSessionSignature.trim());
+    }
 
     const query = params.toString();
-    return get<SessionDetail>(`/sessions/${encodeURIComponent(id)}${query ? `?${query}` : ''}`);
+    return get<SessionDetailResult>(`/sessions/${encodeURIComponent(id)}${query ? `?${query}` : ''}`);
   },
   sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
   sessionBlock: (id: string, blockId: string) => get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`),
@@ -301,14 +304,10 @@ export const api = {
   markDurableRunAttentionRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
-  importRemoteRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; summary: string; importedAt: string }>(`/runs/${encodeURIComponent(id)}/import`),
-  remoteRunTranscriptUrl: (id: string) => buildApiPath(`/runs/${encodeURIComponent(id)}/remote-transcript`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
     post<FolderPickerResult>('/folder-picker', { cwd }),
-  browseRemoteFolder: (targetId: string, cwd?: string, baseCwd?: string) =>
-    post<RemoteFolderListing>(`/execution-targets/${encodeURIComponent(targetId)}/folders`, { cwd, baseCwd }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
   workspaceSnapshot: (cwd?: string) =>
@@ -368,49 +367,18 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
-  executionTargets: () => get<ExecutionTargetsState>('/execution-targets'),
-  createExecutionTarget: (input: {
-    id: string;
-    label: string;
-    description?: string | null;
-    sshDestination: string;
-    sshCommand?: string | null;
-    remotePaCommand?: string | null;
-    profile?: string | null;
-    defaultRemoteCwd?: string | null;
-    commandPrefix?: string | null;
-    cwdMappings?: ExecutionTargetPathMapping[];
-  }) => post<ExecutionTargetsState>('/execution-targets', input),
-  updateExecutionTarget: (id: string, input: {
-    label: string;
-    description?: string | null;
-    sshDestination: string;
-    sshCommand?: string | null;
-    remotePaCommand?: string | null;
-    profile?: string | null;
-    defaultRemoteCwd?: string | null;
-    commandPrefix?: string | null;
-    cwdMappings?: ExecutionTargetPathMapping[];
-  }) => patch<ExecutionTargetsState>(`/execution-targets/${encodeURIComponent(id)}`, input),
-  deleteExecutionTarget: (id: string) => del<ExecutionTargetsState>(`/execution-targets/${encodeURIComponent(id)}`),
-  remoteRuns: (input: {
-    conversationId?: string;
-    cwd?: string;
-    text: string;
-    targetId: string;
-  }) => post<{ accepted: true; conversationId: string; sessionFile: string; runId: string; remoteCwd: string; target: { id: string; label: string } }>(`/remote-runs`, input),
-  conversationExecution: (id: string) => get<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`),
-  conversationBootstrap: (id: string, options?: { tailBlocks?: number }) => {
+  conversationBootstrap: (id: string, options?: { tailBlocks?: number; knownSessionSignature?: string }) => {
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
+    }
+    if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
+      params.set('knownSessionSignature', options.knownSessionSignature.trim());
     }
 
     const query = params.toString();
     return get<ConversationBootstrapState>(`/conversations/${encodeURIComponent(id)}/bootstrap${query ? `?${query}` : ''}`);
   },
-  remoteConversationConnection: (id: string) => get<RemoteConversationConnectionState>(`/conversations/${encodeURIComponent(id)}/remote-connection`),
-  updateConversationExecution: (id: string, targetId: string | null, surfaceId?: string) => patch<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`, { targetId, ...(surfaceId ? { surfaceId } : {}) }),
   conversationPlan: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan`),
   updateConversationPlan: (id: string, input: {
     enabled?: boolean;
@@ -542,13 +510,11 @@ export const api = {
   createLiveSession: (
     cwd?: string,
     text?: string,
-    targetId?: string | null,
     options?: { model?: string | null; thinkingLevel?: string | null },
   ) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', {
       cwd,
       text,
-      targetId,
       ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
     }),

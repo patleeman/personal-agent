@@ -10,7 +10,6 @@ import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
-  clearDraftConversationExecutionTarget,
   clearDraftConversationModel,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
@@ -795,7 +794,6 @@ export function Sidebar() {
     clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
-    clearDraftConversationExecutionTarget();
     clearDraftConversationModel();
     clearDraftConversationThinkingLevel();
     setDraftComposer('');

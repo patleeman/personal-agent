@@ -190,6 +190,7 @@ function useViewportWidth() {
   return viewportWidth;
 }
 
+const ENABLE_OPEN_CONVERSATION_WARMING = false;
 const OPEN_TAB_WARM_TAIL_BLOCKS = 400;
 const OPEN_TAB_WARM_BOOT_DELAY_MS = 750;
 const OPEN_TAB_WARM_START_DELAY_MS = 150;
@@ -219,6 +220,11 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
   const activeConversationId = getActiveConversationId(pathname);
 
   useEffect(() => {
+    if (!ENABLE_OPEN_CONVERSATION_WARMING) {
+      setWarmingEnabled(false);
+      return;
+    }
+
     const timer = window.setTimeout(() => {
       setWarmingEnabled(true);
     }, OPEN_TAB_WARM_BOOT_DELAY_MS);
@@ -261,7 +267,7 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
   useEffect(() => {
     const openConversationIdSet = new Set(openConversationIds);
     for (const sessionId of listWarmLiveSessionStateIds()) {
-      if (!openConversationIdSet.has(sessionId) || sessionsById.get(sessionId)?.isLive !== true) {
+      if (!ENABLE_OPEN_CONVERSATION_WARMING || !openConversationIdSet.has(sessionId) || sessionsById.get(sessionId)?.isLive !== true) {
         clearWarmLiveSessionState(sessionId);
       }
     }
@@ -297,7 +303,6 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
               conversationId,
               workspaceVersion: versions.workspace,
               runsVersion: versions.runs,
-              executionTargetsVersion: versions.executionTargets,
             }),
           ]);
 
@@ -314,10 +319,10 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessionFiles, versions.sessions, versions.workspace, warmingEnabled]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.runs, versions.sessionFiles, versions.sessions, versions.workspace, warmingEnabled]);
 
   useEffect(() => {
-    if (!warmingEnabled || (versions.executionTargets === 0 && versions.runs === 0)) {
+    if (!warmingEnabled || versions.runs === 0) {
       return;
     }
 
@@ -340,7 +345,6 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
             conversationId,
             workspaceVersion: versions.workspace,
             runsVersion: versions.runs,
-            executionTargetsVersion: versions.executionTargets,
           }).catch(() => undefined);
         }
       })();
@@ -350,7 +354,11 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.workspace, warmingEnabled]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.runs, versions.workspace, warmingEnabled]);
+
+  if (!ENABLE_OPEN_CONVERSATION_WARMING) {
+    return [];
+  }
 
   return warmingEnabled
     ? openConversationIds

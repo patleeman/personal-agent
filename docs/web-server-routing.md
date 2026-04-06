@@ -7,9 +7,9 @@
 The server root is now intentionally shallow:
 
 - `routes/` — Express route registration modules
-- `conversations/` — session reads, live sessions, remote bindings, conversation memory, and conversation services
+- `conversations/` — session reads, live sessions, conversation memory, and conversation services
 - `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes
-- `workspace/` — workspace browser, git helpers, remote execution, folder picker
+- `workspace/` — workspace browser, git helpers, folder picker
 - `models/` — model defaults, providers, auth, usage
 - `knowledge/` — memory docs, prompt references, node links
 - `ui/` — web UI config, companion auth, SPA helpers, web-specific preferences
@@ -43,17 +43,17 @@ The companion SPA fallback also has to recognize both canonical `/app/*` URLs an
 | File | Responsibility | Notes |
 | --- | --- | --- |
 | `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads. The companion surface also mounts the read-only session detail/meta/tree/block routes so mobile conversation links can open transcripts directly. |
-| `routes/conversationState.ts` | conversation bootstrap, recover, execution target state, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
+| `routes/conversationState.ts` | conversation bootstrap, recover, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
-| `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel/import; companion surface is read-focused |
-| `routes/runsOps.ts` | run attention + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
+| `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel; companion surface is read-focused |
+| `routes/runsOps.ts` | run attention helpers | Keeps the run-ops endpoints separate from the main run listing routes |
 | `routes/workspace.ts` | workspace browsing and git operations | Injects cwd helpers and commit-message drafting |
 | `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session helpers that were previously inline |
 | `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/skill table data with tags and page metadata |
 | `routes/folderPicker.ts` | folder picker endpoint | Small wrapper around the folder picker service |
 | `routes/shell.ts` | ad-hoc shell command execution | Wrapper for the `/api/run` endpoint |
 | `routes/tasks.ts` | scheduled tasks and companion task run trigger | Shares task lookup logic through `taskService.ts` |
-| `routes/models.ts`, `routes/daemon.ts`, `routes/webUi.ts`, `routes/system.ts`, `routes/activity.ts`, `routes/alerts.ts`, `routes/auth.ts`, `routes/profiles.ts`, `routes/tools.ts`, `routes/conversationTitles.ts`, `routes/executionTargets.ts` | the remaining app/companion route domains | Existing modules, now mounted from the same barrel. `routes/models.ts` also owns runtime default settings endpoints such as `/api/default-cwd` and conversation-plan library/default routes. |
+| `routes/models.ts`, `routes/daemon.ts`, `routes/webUi.ts`, `routes/system.ts`, `routes/activity.ts`, `routes/alerts.ts`, `routes/auth.ts`, `routes/profiles.ts`, `routes/tools.ts`, `routes/conversationTitles.ts` | the remaining app/companion route domains | Existing modules, now mounted from the same barrel. `routes/models.ts` also owns runtime default settings endpoints such as `/api/default-cwd` and conversation-plan library/default routes. |
 
 ## Shared helper files
 

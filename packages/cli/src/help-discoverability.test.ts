@@ -55,28 +55,12 @@ describe('subcommand help discoverability', () => {
       expected: ['Tasks', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
     },
     {
-      argv: ['note', '--help'],
-      expected: ['Note', 'Usage: pa note [list|find|show|new|lint|help]', 'new <id> --title <title>', 'note pages'],
-    },
-    {
-      argv: ['page', '--help'],
-      expected: ['Page', 'Usage: pa page [list|find|show|get|new|update|delete|tag|lint|migrate|help]', 'migrate [--json]'],
-    },
-    {
-      argv: ['node', '--help'],
-      expected: ['Node', 'Usage: pa node [list|find|show|get|new|update|delete|tag|lint|migrate|help]', 'migrate [--json]'],
-    },
-    {
       argv: ['inbox', '--help'],
       expected: ['Inbox', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
     },
     {
       argv: ['runs', '--help'],
-      expected: ['Runs', 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
-    },
-    {
-      argv: ['targets', '--help'],
-      expected: ['Targets', 'Usage: pa targets [list|show|add|update|install|delete|help]', 'install <id> [--force] [--json]'],
+      expected: ['Runs', 'Usage: pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
     },
     {
       argv: ['daemon', '--help'],

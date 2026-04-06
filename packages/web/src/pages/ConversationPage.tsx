@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -54,7 +54,6 @@ import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
-  clearDraftConversationExecutionTarget,
   clearDraftConversationModel,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ROUTE,
@@ -63,11 +62,9 @@ import {
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationModel,
-  persistDraftConversationExecutionTarget,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationCwd,
-  readDraftConversationExecutionTarget,
   readDraftConversationModel,
   readDraftConversationThinkingLevel,
   type DraftConversationDrawingAttachment,
@@ -79,7 +76,11 @@ import {
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
 import { appendPendingInitialPromptBlock } from '../pendingQueueMessages';
-import { getConversationResumeState } from '../conversationResume';
+import {
+  didConversationStopMidTurn,
+  didConversationStopWithError,
+  getConversationResumeState,
+} from '../conversationResume';
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
@@ -138,15 +139,10 @@ export function resolveConversationLiveSession(input: {
 
 export function resolveConversationPendingStatusLabel(input: {
   isLiveSession: boolean;
-  hasExecutionTarget: boolean;
   hasVisibleSessionDetail: boolean;
 }): string {
   if (input.isLiveSession) {
     return 'Working…';
-  }
-
-  if (input.hasExecutionTarget) {
-    return 'Connecting to remote workspace…';
   }
 
   if (input.hasVisibleSessionDetail) {
@@ -164,7 +160,6 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   hasPendingInitialPrompt: boolean;
   hasPendingInitialPromptInFlight: boolean;
   isLiveSession: boolean;
-  hasExecutionTarget: boolean;
   hasVisibleSessionDetail: boolean;
 }): string | null {
   if (input.explicitLabel) {
@@ -178,7 +173,6 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   if (input.draft && input.hasDraftPendingPrompt) {
     return resolveConversationPendingStatusLabel({
       isLiveSession: false,
-      hasExecutionTarget: input.hasExecutionTarget,
       hasVisibleSessionDetail: false,
     });
   }
@@ -186,18 +180,11 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   if (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight) {
     return resolveConversationPendingStatusLabel({
       isLiveSession: input.isLiveSession,
-      hasExecutionTarget: input.hasExecutionTarget,
       hasVisibleSessionDetail: input.hasVisibleSessionDetail,
     });
   }
 
   return null;
-}
-
-export function shouldRefetchConversationExecutionOnRunsChange(
-  selectedExecutionTargetId: string | null | undefined,
-): boolean {
-  return typeof selectedExecutionTargetId === 'string' && selectedExecutionTargetId.trim().length > 0;
 }
 
 export function shouldShowMissingConversationState(input: {
@@ -209,7 +196,6 @@ export function shouldShowMissingConversationState(input: {
   hasVisibleSessionDetail: boolean;
   hasSavedConversationSessionFile: boolean;
   hasPendingInitialPrompt: boolean;
-  hasExecutionTarget: boolean;
 }): boolean {
   return !input.draft
     && Boolean(input.conversationId)
@@ -218,8 +204,7 @@ export function shouldShowMissingConversationState(input: {
     && !input.sessionLoading
     && !input.hasVisibleSessionDetail
     && !input.hasSavedConversationSessionFile
-    && !input.hasPendingInitialPrompt
-    && !input.hasExecutionTarget;
+    && !input.hasPendingInitialPrompt;
 }
 
 export function shouldShowConversationTakeoverBanner(input: {
@@ -509,25 +494,15 @@ interface ContextBarProps {
   onOpenPreferences?: (preference: 'model' | 'thinking') => void;
 }
 
-function buildExecutionEnvironmentSummary(target: ExecutionTargetSummary | null): {
+function buildExecutionEnvironmentSummary(): {
   label: string;
   title: string;
   remote: boolean;
 } {
-  if (!target) {
-    return {
-      label: 'local',
-      title: 'Local agent',
-      remote: false,
-    };
-  }
-
   return {
-    label: target.label,
-    title: [target.label, target.sshDestination, target.description]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .join(' · '),
-    remote: true,
+    label: 'local',
+    title: 'Local agent',
+    remote: false,
   };
 }
 
@@ -653,50 +628,6 @@ function ContextBar({
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-export function DraftExecutionTargetSelector({
-  execution,
-  targets,
-  busy,
-  onSelectTarget,
-}: {
-  execution: {
-    targetId: string | null;
-    location: 'local' | 'remote';
-    target: ExecutionTargetSummary | null;
-  };
-  targets: ExecutionTargetSummary[];
-  busy: boolean;
-  onSelectTarget: (targetId: string | null) => void;
-}) {
-  if (targets.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="mt-4 space-y-2 text-center">
-      <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-secondary">
-        <span className="ui-section-label">Execution</span>
-        <select
-          value={execution.target ? execution.target.id : ''}
-          onChange={(event) => onSelectTarget(event.target.value.trim() || null)}
-          disabled={busy}
-          className="min-w-[12rem] rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-[12px] text-primary outline-none transition-colors focus:border-accent/60 disabled:cursor-default disabled:opacity-60"
-          aria-label="Draft conversation execution target"
-        >
-          <option value="">Local agent</option>
-          {targets.map((target) => (
-            <option key={target.id} value={target.id}>{target.label}</option>
-          ))}
-        </select>
-        {busy && <span className="text-dim">Saving…</span>}
-      </div>
-      <p className="text-[11px] text-dim">
-        Choose where the first turn runs. This is locked after the conversation starts.
-      </p>
     </div>
   );
 }
@@ -1607,8 +1538,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
-  const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
@@ -1642,14 +1571,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setMentionIdx(0);
     draftAttachmentsHydratedRef.current = true;
   }, [draft]);
-
-  useEffect(() => {
-    if (!draft || !draftAttachmentsHydratedRef.current) {
-      return;
-    }
-
-    persistDraftConversationExecutionTarget(draftExecutionTargetId);
-  }, [draft, draftExecutionTargetId]);
 
   // Track keyboard open/close via visualViewport (mobile keyboard)
   useEffect(() => {
@@ -1782,67 +1703,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
   const { data: vaultFilesData } = useApi(api.vaultFiles);
-  const executionTargetsState = useApi(api.executionTargets);
-  const conversationExecutionState = useApi(
-    async () => {
-      if (!id) {
-        return {
-          conversationId: 'draft',
-          targetId: null,
-          location: 'local' as const,
-          target: null,
-        };
-      }
-
-      if (conversationBootstrapPendingContext) {
-        return {
-          conversationId: '',
-          targetId: null,
-          location: 'local' as const,
-          target: null,
-        };
-      }
-
-      return api.conversationExecution(id);
-    },
-    id
-      ? `conversation-execution:${id}:${conversationBootstrapPendingContext ? 'bootstrap-pending' : 'ready'}`
-      : 'draft-conversation-execution',
-  );
-  const remoteConversationConnectionState = useApi(
-    async () => {
-      if (!id) {
-        return {
-          conversationId: 'draft',
-          targetId: null,
-          connected: false,
-          state: 'local' as const,
-          message: null,
-          updatedAt: null,
-        };
-      }
-
-      if (conversationBootstrapPendingContext) {
-        return {
-          conversationId: '',
-          targetId: null,
-          connected: false,
-          state: 'local' as const,
-          message: null,
-          updatedAt: null,
-        };
-      }
-
-      return api.remoteConversationConnection(id);
-    },
-    id
-      ? `conversation-remote-connection:${id}:${conversationBootstrapPendingContext ? 'bootstrap-pending' : 'ready'}`
-      : 'draft-remote-connection',
-  );
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
-  const [remoteConnectBusy, setRemoteConnectBusy] = useState(false);
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
@@ -1995,9 +1858,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     lastMessage: lastConversationMessage,
   }), [conversationRun, isLiveSession, lastConversationMessage]);
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems), [input, mentionItems]);
+  const shouldLoadConversationRun = Boolean(conversationRunId)
+    && !draft
+    && (
+      selectedRunId === conversationRunId
+      || (!isLiveSession && (
+        didConversationStopMidTurn(lastConversationMessage)
+        || didConversationStopWithError(lastConversationMessage)
+      ))
+    );
 
   useEffect(() => {
-    if (!conversationRunId || draft) {
+    if (!conversationRunId || !shouldLoadConversationRun) {
       setConversationRun(null);
       return;
     }
@@ -2018,51 +1890,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [conversationRunId, draft, versions.runs]);
+  }, [conversationRunId, shouldLoadConversationRun, versions.runs]);
 
-  useInvalidateOnTopics(['executionTargets'], executionTargetsState.refetch);
-  useInvalidateOnTopics(['executionTargets'], conversationExecutionState.refetch);
-
-  const conversationExecutionData = draft
-    ? null
-    : (conversationExecutionState.data?.conversationId === id
-        ? conversationExecutionState.data
-        : (visibleConversationBootstrap?.execution ?? null));
-  const remoteConversationConnection = draft
-    ? null
-    : (remoteConversationConnectionState.data?.conversationId === id
-        ? remoteConversationConnectionState.data
-        : (visibleConversationBootstrap?.remoteConnection ?? null));
-
-  const selectedExecutionTargetId = draft
-    ? draftExecutionTargetId
-    : (conversationExecutionData?.targetId ?? null);
-
-  useEffect(() => {
-    if (versions.runs === 0) {
-      return;
-    }
-
-    void executionTargetsState.refetch({ resetLoading: false });
-    if (id && shouldRefetchConversationExecutionOnRunsChange(selectedExecutionTargetId)) {
-      void conversationExecutionState.refetch({ resetLoading: false });
-    }
-  }, [conversationExecutionState.refetch, executionTargetsState.refetch, id, selectedExecutionTargetId, versions.runs]);
-
-  const selectedExecutionTarget = useMemo<ExecutionTargetSummary | null>(() => {
-    if (!selectedExecutionTargetId) {
-      return null;
-    }
-
-    return executionTargetsState.data?.targets.find((target) => target.id === selectedExecutionTargetId) ?? null;
-  }, [executionTargetsState.data?.targets, selectedExecutionTargetId]);
-  const executionTargets = executionTargetsState.data?.targets ?? [];
-  const conversationExecution = useMemo(() => ({
-    conversationId: id ?? 'draft',
-    targetId: selectedExecutionTargetId,
-    location: selectedExecutionTarget ? 'remote' as const : 'local' as const,
-    target: selectedExecutionTarget,
-  }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
   const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
   const displayedPendingAssistantStatusLabel = resolveDisplayedConversationPendingStatusLabel({
     explicitLabel: pendingAssistantStatusLabel,
@@ -2072,7 +1901,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
     hasPendingInitialPromptInFlight,
     isLiveSession,
-    hasExecutionTarget: Boolean(conversationExecution.targetId),
     hasVisibleSessionDetail: Boolean(visibleSessionDetail),
   });
   const openConversationFilePath = useCallback((path: string) => {
@@ -2107,35 +1935,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [selectedFileTarget],
   );
   const executionEnvironmentSummary = useMemo(
-    () => buildExecutionEnvironmentSummary(selectedExecutionTarget),
-    [selectedExecutionTarget],
+    () => buildExecutionEnvironmentSummary(),
+    [],
   );
-  const replaceConversationExecution = conversationExecutionState.replaceData;
-  const executionSelectionBusy = executionTargetBusy;
-
-  useEffect(() => {
-    if (!id || draft) {
-      return;
-    }
-
-    const stream = new EventSource(`/api/conversations/${encodeURIComponent(id)}/remote-connection/events`);
-    stream.onmessage = (event) => {
-      let payload: RemoteConversationConnectionStreamEvent;
-      try {
-        payload = JSON.parse(event.data) as RemoteConversationConnectionStreamEvent;
-      } catch {
-        return;
-      }
-
-      if (payload.type === 'snapshot') {
-        remoteConversationConnectionState.replaceData(payload.data);
-      }
-    };
-
-    return () => {
-      stream.close();
-    };
-  }, [draft, id, remoteConversationConnectionState.replaceData]);
 
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {
@@ -2988,7 +2790,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
       await api.destroySession(id, currentSurfaceId).catch(() => {});
       const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const { id: newId } = await api.createLiveSession(cwd, undefined, undefined, {
+      const { id: newId } = await api.createLiveSession(cwd, undefined, {
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
       });
@@ -3324,25 +3126,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  const connectRemoteConversation = useCallback(async () => {
-    if (!id || draft || !selectedExecutionTargetId || !savedConversationSessionFile || remoteConnectBusy) {
-      return;
-    }
-
-    setRemoteConnectBusy(true);
-    try {
-      await api.resumeSession(savedConversationSessionFile);
-      setConfirmedLive(true);
-      streamReconnect();
-      await remoteConversationConnectionState.refetch({ resetLoading: false });
-      showNotice('accent', 'Connected to the remote workspace.');
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setRemoteConnectBusy(false);
-    }
-  }, [draft, id, remoteConnectBusy, remoteConversationConnectionState, savedConversationSessionFile, selectedExecutionTargetId, showNotice, streamReconnect]);
-
   const resumeConversation = useCallback(async () => {
     if (!id || draft || resumeConversationBusy) {
       return;
@@ -3373,37 +3156,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setResumeConversationBusy(false);
     }
   }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
-
-  const handleExecutionTargetSelect = useCallback(async (targetId: string | null) => {
-    if (executionSelectionBusy) {
-      return;
-    }
-
-    setExecutionTargetBusy(true);
-    try {
-      if (draft) {
-        setDraftExecutionTargetId(targetId);
-        persistDraftConversationExecutionTarget(targetId);
-        return;
-      }
-
-      if (!id) {
-        return;
-      }
-
-      if (!ensureConversationCanControl('change the execution target')) {
-        return;
-      }
-
-      const next = await api.updateConversationExecution(id, targetId, currentSurfaceId);
-      replaceConversationExecution(next);
-      showNotice('accent', next.target ? `Remote execution set to ${next.target.label}.` : 'Execution target reset to local.', 3000);
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setExecutionTargetBusy(false);
-    }
-  }, [currentSurfaceId, draft, ensureConversationCanControl, executionSelectionBusy, id, replaceConversationExecution, showNotice]);
 
   async function renameConversationTo(nextTitle: string) {
     if (draft || !id) {
@@ -3439,10 +3191,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
-    clearDraftConversationExecutionTarget();
     clearDraftConversationModel();
     clearDraftConversationThinkingLevel();
-    setDraftExecutionTargetId(null);
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setInput('');
@@ -3740,15 +3490,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
-      const remoteTargetId = conversationExecution.targetId;
-
-      if (remoteTargetId && pendingDrawingAttachments.length > 0) {
-        setInput(inputSnapshot);
-        setAttachments(pendingImageAttachments);
-        setDrawingAttachments(pendingDrawingAttachments);
-        showNotice('danger', 'Remote conversations do not support local drawing attachments yet.', 4000);
-        return;
-      }
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -3776,12 +3517,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         });
         setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
           isLiveSession: false,
-          hasExecutionTarget: Boolean(remoteTargetId),
           hasVisibleSessionDetail: false,
         }));
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, undefined, remoteTargetId, {
+          const { id: newId } = await api.createLiveSession(draftCwd, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });
@@ -3796,7 +3536,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           });
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
-          clearDraftConversationExecutionTarget();
           clearDraftConversationModel();
           clearDraftConversationThinkingLevel();
 
@@ -3831,7 +3570,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         rememberComposerInput(inputSnapshot);
         setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
           isLiveSession,
-          hasExecutionTarget: Boolean(remoteTargetId),
           hasVisibleSessionDetail: Boolean(visibleSessionDetail),
         }));
         await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
@@ -3845,7 +3583,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           rememberComposerInput(inputSnapshot);
           setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
             isLiveSession: false,
-            hasExecutionTarget: Boolean(remoteTargetId),
             hasVisibleSessionDetail: true,
           }));
           await api.resumeSession(visibleSessionDetail.meta.file);
@@ -4118,24 +3855,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
-  const remoteConversationRequiresConnect = Boolean(selectedExecutionTargetId)
-    && !draft
-    && !isLiveSession
-    && !remoteConnectBusy
-    && !pendingInitialPrompt
-    && pendingInitialPromptSessionIdRef.current !== id;
-  const remoteConnectionPending = Boolean(selectedExecutionTargetId)
-    && !stream.isStreaming
-    && (remoteConnectBusy
-      || Boolean(pendingInitialPrompt)
-      || pendingInitialPromptSessionIdRef.current === id);
-  const remoteConnectionStatusMessage = remoteConversationConnection?.message
-    ?? (remoteConnectionPending
-      ? 'Connecting to the remote workspace…'
-      : remoteConversationRequiresConnect
-        ? 'Remote workspace disconnected. Click connect to resume.'
-        : null);
-  const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
+  const composerDisabled = conversationNeedsTakeover;
   const hasComposerShelfContent = draftMentionItems.length > 0
     || attachments.length > 0
     || drawingAttachments.length > 0
@@ -4167,13 +3887,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !stream.hasSnapshot
     && !visibleSessionDetail
     && stream.blocks.length === 0;
-  const hydratingRemoteConversation = Boolean(selectedExecutionTargetId)
-    && !stream.hasSnapshot
-    && stream.blocks.length === 0
-    && remoteConnectionPending
-    && Boolean(savedConversationSessionFile || pendingInitialPrompt);
+  const hydratingRemoteConversation = false;
   const showConversationLoadingState = !hasRenderableMessages
-    && (sessionLoading || hydratingLiveConversation || hydratingRemoteConversation || remoteConnectionPending);
+    && (sessionLoading || hydratingLiveConversation);
 
   useEffect(() => {
     if (!id || draft || showConversationLoadingState) {
@@ -4232,7 +3948,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={selectedArtifactId}
               onOpenRun={openRun}
               activeRunId={selectedRunId}
-              onOpenFilePath={!draft && !selectedExecutionTargetId ? openConversationFilePath : undefined}
+              onOpenFilePath={!draft ? openConversationFilePath : undefined}
               onSubmitAskUserQuestion={submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
@@ -4244,7 +3960,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </>
         ) : showConversationLoadingState ? (
           <LoadingState
-            label={remoteConnectionPending ? 'Connecting to remote workspace…' : 'Loading session…'}
+            label="Loading session…"
             className="justify-center h-full"
           />
         ) : (
@@ -4260,30 +3976,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
               ? 'Start typing to create a conversation. You can set its initial working directory in the right rail or use the saved default from Settings.'
-              : remoteConnectionPending
-                ? 'Connecting to the remote workspace and staging your first turn. Your message has been queued and will send as soon as the remote session is ready.'
-                : remoteConversationRequiresConnect
-                  ? (remoteConnectionStatusMessage ?? 'Remote workspace disconnected. Click connect to resume this conversation.')
-                  : isLiveSession
-                    ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
-                    : 'Start a Pi session to populate this conversation.'}
-            action={draft ? (
-              <DraftExecutionTargetSelector
-                execution={conversationExecution}
-                targets={executionTargets}
-                busy={executionSelectionBusy}
-                onSelectTarget={(targetId) => { void handleExecutionTargetSelect(targetId); }}
-              />
-            ) : remoteConversationRequiresConnect ? (
-              <button
-                type="button"
-                onClick={() => { void connectRemoteConversation(); }}
-                disabled={remoteConnectBusy}
-                className="ui-action-button"
-              >
-                {remoteConnectBusy ? 'Connecting…' : 'Connect to remote'}
-              </button>
-            ) : undefined}
+              : isLiveSession
+                ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
+                : 'Start a Pi session to populate this conversation.'}
           />
         )}
         {showScrollToBottomControl && (
@@ -4307,15 +4002,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       )}
     </div>
   ), [
-    conversationExecution,
     conversationResumeState.actionLabel,
     conversationResumeState.canResume,
     conversationResumeState.title,
     draft,
-    executionSelectionBusy,
-    executionTargets,
     forkConversationFromMessage,
-    handleExecutionTargetSelect,
     hasRenderableMessages,
     rewindConversationFromMessage,
     historicalBlockOffset,
@@ -4334,15 +4025,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,
-    remoteConnectBusy,
-    remoteConnectionPending,
-    remoteConnectionStatusMessage,
-    remoteConversationRequiresConnect,
-    connectRemoteConversation,
     resumeConversation,
     resumeConversationBusy,
     selectedArtifactId,
-    selectedExecutionTargetId,
     selectedRunId,
     sessionLoading,
     shouldRenderConversationRail,
@@ -4362,7 +4047,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     hasVisibleSessionDetail: Boolean(visibleSessionDetail),
     hasSavedConversationSessionFile: Boolean(savedConversationSessionFile),
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
-    hasExecutionTarget: Boolean(selectedExecutionTargetId),
   });
 
   if (missingConversation) {
@@ -4419,23 +4103,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
                     <span>running</span>
                     {streamingThroughputLabel && <span className="font-mono text-[11px] text-accent/80">· {streamingThroughputLabel}</span>}
-                  </span>
-                )}
-                {!stream.isStreaming && remoteConversationRequiresConnect && (
-                  <button
-                    type="button"
-                    onClick={() => { void connectRemoteConversation(); }}
-                    disabled={remoteConnectBusy}
-                    title="Connect to the remote workspace"
-                    className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
-                  >
-                    {remoteConnectBusy ? 'connecting…' : 'connect'}
-                  </button>
-                )}
-                {!stream.isStreaming && remoteConnectionPending && (
-                  <span className="inline-flex items-center gap-1.5 text-accent" title={remoteConnectionStatusMessage ?? undefined}>
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-                    {remoteConnectBusy ? 'connecting…' : 'queued…'}
                   </span>
                 )}
                 {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
@@ -4497,9 +4164,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activePreference={headerPreference}
               onOpenPreferences={openHeaderPreference}
             />
-            {!draft && remoteConnectionStatusMessage && selectedExecutionTargetId && !isLiveSession && (
-              <p className="mt-2 text-[11px] text-secondary">{remoteConnectionStatusMessage}</p>
-            )}
             {headerPreference && (
               <HeaderPreferencesMenu
                 models={models}
@@ -4531,21 +4195,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         {notice && (
           <div className="mb-2 text-center">
             <Pill tone={notice.tone}>{notice.text}</Pill>
-          </div>
-        )}
-        {selectedExecutionTargetId && !draft && !isLiveSession && remoteConnectionStatusMessage && (
-          <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border-subtle px-3 py-2 text-[11px] text-secondary">
-            <span className="min-w-0 truncate">{remoteConnectionStatusMessage}</span>
-            {remoteConversationRequiresConnect && (
-              <button
-                type="button"
-                onClick={() => { void connectRemoteConversation(); }}
-                disabled={remoteConnectBusy}
-                className="ui-toolbar-button shrink-0"
-              >
-                {remoteConnectBusy ? 'Connecting…' : 'Connect'}
-              </button>
-            )}
           </div>
         )}
 
@@ -4948,11 +4597,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     rows={1}
                     disabled={composerDisabled}
                     className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
-                    placeholder={remoteConversationRequiresConnect
-                      ? 'Connect to the remote workspace to continue…'
-                      : pendingAskUserQuestion
-                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
+                    placeholder={pendingAskUserQuestion
+                      ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                      : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
                     title={pendingAskUserQuestion
                       ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                       : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}

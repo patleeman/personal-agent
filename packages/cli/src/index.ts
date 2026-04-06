@@ -100,7 +100,6 @@ import {
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
 import { runsCommand } from './runs-command.js';
-import { targetsCommand } from './targets-command.js';
 import { syncCommand } from './sync-command.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
@@ -5103,14 +5102,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect background runs',
       disableBuiltInHelp: true,
       run: runsCommand,
-    },
-    {
-      name: 'targets',
-      category: 'automation',
-      usage: 'targets [list|show|add|update|install|delete|help] [args...]',
-      description: 'Manage execution targets',
-      disableBuiltInHelp: true,
-      run: targetsCommand,
     },
     {
       name: 'sync',

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAppEvents } from '../contexts';
-import type { SessionDetail } from '../types';
+import type { SessionDetail, SessionDetailResult } from '../types';
 
 interface CachedSessionDetailEntry {
   detail: SessionDetail;
@@ -11,6 +11,31 @@ interface CachedSessionDetailEntry {
 const sessionDetailCache = new Map<string, CachedSessionDetailEntry>();
 const sessionDetailInflight = new Map<string, Promise<SessionDetail>>();
 const MAX_CACHED_SESSION_DETAILS = 24;
+
+function readSessionDetailSignature(detail: SessionDetail | null | undefined): string | undefined {
+  const signature = detail?.signature?.trim();
+  return signature && signature.length > 0 ? signature : undefined;
+}
+
+export function mergeSessionDetailResultWithCachedDetail(
+  cached: SessionDetail | null,
+  result: SessionDetailResult,
+): SessionDetail | null {
+  if (!('unchanged' in result)) {
+    return result;
+  }
+
+  if (!cached) {
+    return null;
+  }
+
+  const cachedSignature = readSessionDetailSignature(cached) ?? null;
+  if (result.signature && cachedSignature && result.signature !== cachedSignature) {
+    return null;
+  }
+
+  return cached;
+}
 
 function buildSessionDetailCacheKey(sessionId: string, options?: { tailBlocks?: number }): string {
   return `${sessionId}::${options?.tailBlocks ?? 'all'}`;
@@ -65,8 +90,20 @@ export function fetchSessionDetailCached(
     return inflight;
   }
 
-  const request = api.sessionDetail(sessionId, options)
-    .then((detail) => {
+  const request = api.sessionDetail(sessionId, {
+    ...options,
+    ...(readSessionDetailSignature(cached?.detail) ? { knownSessionSignature: readSessionDetailSignature(cached?.detail) } : {}),
+  })
+    .then(async (result) => {
+      let detail = mergeSessionDetailResultWithCachedDetail(cached?.detail ?? null, result);
+      if (!detail) {
+        const fallback = await api.sessionDetail(sessionId, options);
+        detail = mergeSessionDetailResultWithCachedDetail(null, fallback);
+      }
+      if (!detail) {
+        throw new Error('Session detail cache reuse failed without a fresh transcript payload.');
+      }
+
       sessionDetailCache.set(cacheKey, { detail, version });
       trimSessionDetailCache();
       return detail;

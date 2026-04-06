@@ -76,18 +76,6 @@ For new conversations, the working directory is chosen from the strongest availa
 2. the saved default cwd from Settings / profile settings
 3. the web server process cwd as a fallback
 
-## Execution targets
-
-If execution targets are configured, a new draft conversation can choose where its first turn runs before sending the initial prompt.
-
-Important behavior:
-
-- target choice happens before the first turn
-- once the conversation starts, that execution target is treated as locked for that conversation
-- targets are machine-local config, not portable conversation metadata
-
-See [Execution Targets](./execution-targets.md).
-
 ## Wakeups and callbacks
 
 Conversations can be resumed later by several mechanisms:

@@ -93,16 +93,16 @@ async function emitSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: u
 }
 
 const COMPANION_SESSION_COOKIE = 'pa_companion';
-const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>([
+export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
+  'sessions',
   'activity',
   'alerts',
-  'sessions',
   'tasks',
-  'runs',
   'daemon',
   'sync',
   'webUi',
-]);
+];
+const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(INITIAL_APP_EVENT_TOPICS);
 
 function writeSseHeaders(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -271,7 +271,7 @@ export function registerSystemRoutes(
 
     writeEvent({ type: 'connected' });
     enqueueWrite(async () => {
-      await writeSnapshotEvents(['sessions', 'activity', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
+      await writeSnapshotEvents(INITIAL_APP_EVENT_TOPICS);
     });
 
     const heartbeat = setInterval(() => {
@@ -282,8 +282,11 @@ export function registerSystemRoutes(
 
     const unsubscribe = subscribeAppEvents((event) => {
       if (event.type === 'invalidate') {
+        const snapshotTopics = event.topics.filter((topic) => topic !== 'runs');
         enqueueWrite(async () => {
-          await writeSnapshotEvents(event.topics);
+          if (snapshotTopics.length > 0) {
+            await writeSnapshotEvents(snapshotTopics);
+          }
           writeEvent(event);
         });
         return;
@@ -348,7 +351,7 @@ export function registerCompanionSystemRoutes(
 
     writeEvent({ type: 'connected' });
     enqueueWrite(async () => {
-      await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
+      await writeSnapshotEvents(INITIAL_APP_EVENT_TOPICS);
     });
 
     const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
@@ -375,8 +378,11 @@ export function registerCompanionSystemRoutes(
           return;
         }
 
+        const snapshotTopics = topics.filter((topic) => topic !== 'runs');
         enqueueWrite(async () => {
-          await writeSnapshotEvents(topics);
+          if (snapshotTopics.length > 0) {
+            await writeSnapshotEvents(snapshotTopics);
+          }
           writeEvent({ type: 'invalidate', topics });
         });
         return;

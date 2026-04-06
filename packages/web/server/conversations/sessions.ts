@@ -174,6 +174,7 @@ export interface SessionDetail {
   blockOffset: number;
   totalBlocks: number;
   contextUsage: SessionContextUsageSnapshot | null;
+  signature?: string;
 }
 
 export interface SessionDetailReadTelemetry {
@@ -1793,7 +1794,9 @@ export function readSessionBlocksByFileWithTelemetry(
     sessionDetailCache.delete(cacheKey);
     sessionDetailCache.set(cacheKey, cachedDetail);
     return {
-      detail: cachedDetail.detail,
+      detail: cachedDetail.detail.signature === signature
+        ? cachedDetail.detail
+        : { ...cachedDetail.detail, signature },
       telemetry: {
         cache: 'hit',
         loader: cachedDetail.detail.contextUsage === null && typeof options?.tailBlocks === 'number' ? 'fast-tail' : 'full',
@@ -1814,17 +1817,21 @@ export function readSessionBlocksByFileWithTelemetry(
     ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
     : null;
   if (fastTailDetail) {
-    sessionDetailCache.set(cacheKey, { signature, detail: fastTailDetail });
+    const detail = {
+      ...fastTailDetail,
+      signature,
+    } satisfies SessionDetail;
+    sessionDetailCache.set(cacheKey, { signature, detail });
     trimSessionDetailCache();
     return {
-      detail: fastTailDetail,
+      detail,
       telemetry: {
         cache: 'miss',
         loader: 'fast-tail',
         durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
         ...(typeof requestedTailBlocks === 'number' ? { requestedTailBlocks } : {}),
-        totalBlocks: fastTailDetail.totalBlocks,
-        blockOffset: fastTailDetail.blockOffset,
+        totalBlocks: detail.totalBlocks,
+        blockOffset: detail.blockOffset,
         contextUsageIncluded: false,
       },
     };
@@ -1847,6 +1854,7 @@ export function readSessionBlocksByFileWithTelemetry(
     blockOffset,
     totalBlocks,
     contextUsage: readSessionContextUsageFromEntries(manager.getEntries()),
+    signature,
   } satisfies SessionDetail;
 
   sessionDetailCache.set(cacheKey, { signature, detail });

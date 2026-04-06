@@ -2,12 +2,6 @@ import { existsSync, statSync } from 'node:fs';
 import type { Express } from 'express';
 import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
-import {
-  getConversationExecutionTarget,
-  getExecutionTarget,
-  inspectCliBinary,
-  setConversationExecutionTarget,
-} from '@personal-agent/core';
 import { parsePendingOperation } from '@personal-agent/daemon';
 import {
   applyConversationModelPreferencesToSessionManager,
@@ -21,6 +15,7 @@ import {
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
   readConversationModelPreferenceStateById,
+  readConversationSessionSignature,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
   toPublicLiveSessionMeta,
@@ -38,34 +33,16 @@ import {
   resumeSession as resumeLocalSession,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
-import {
-  browseRemoteTargetDirectory,
-  clearRemoteConversationBindingForConversation,
-  createRemoteLiveSession,
-  forkLocalMirrorSession,
-  getRemoteConversationConnectionState,
-  getRemoteLiveSessionMeta,
-  isRemoteLiveSession,
-  readRemoteConversationBindingForConversation,
-  stopRemoteLiveSession,
-} from '../conversations/remoteLiveSessions.js';
 import { readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   getDurableRun,
-  listDurableRunsWithTelemetry,
-  type DurableRunsListTelemetry,
 } from '../automation/durableRuns.js';
 import {
   logError,
   logSlowConversationPerf,
-  invalidateAppTopics,
   setServerTimingHeaders,
 } from '../middleware/index.js';
-import {
-  buildConversationExecutionState,
-  type ConversationExecutionState,
-} from '../workspace/remoteExecution.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readWebUiConfig } from '../ui/webUi.js';
@@ -77,8 +54,6 @@ import {
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation state routes');
 };
-
-let getRepoRootFn: () => string = () => process.cwd();
 
 let buildLiveSessionResourceOptionsFn: (profile?: string) => LiveSessionResourceOptions = () => ({
   additionalExtensionPaths: [],
@@ -92,57 +67,39 @@ let buildLiveSessionExtensionFactoriesFn: () => ExtensionFactory[] = () => [];
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 function initializeConversationStateRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
-  getRepoRootFn = context.getRepoRoot;
   buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
-}
-
-function inspectSshBinaryState() {
-  return inspectCliBinary({ command: 'ssh', cwd: getRepoRootFn(), versionArgs: ['-V'] });
-}
-
-async function readConversationExecutionStateWithTelemetry(conversationId: string): Promise<{
-  state: ConversationExecutionState;
-  telemetry: DurableRunsListTelemetry;
-}> {
-  const stored = getConversationExecutionTarget({
-    profile: getCurrentProfileFn(),
-    conversationId,
-  });
-  const runs = await listDurableRunsWithTelemetry();
-
-  return {
-    state: buildConversationExecutionState({
-      conversationId,
-      targetId: stored?.targetId ?? null,
-      runs: runs.result.runs,
-      inspectSshBinary: inspectSshBinaryState,
-    }),
-    telemetry: runs.telemetry,
-  };
-}
-
-async function readConversationExecutionState(conversationId: string) {
-  return (await readConversationExecutionStateWithTelemetry(conversationId)).state;
 }
 
 async function readConversationBootstrapState(input: {
   conversationId: string;
   profile: string;
   tailBlocks?: number;
+  knownSessionSignature?: string;
 }) {
-  const [sessionResult, execution] = await Promise.all([
-    readSessionDetailForRoute({
-      conversationId: input.conversationId,
-      profile: input.profile,
-      tailBlocks: input.tailBlocks,
-    }),
-    readConversationExecutionStateWithTelemetry(input.conversationId),
-  ]);
+  const sessionSignature = readConversationSessionSignature(input.conversationId);
+  const sessionDetailReused = Boolean(
+    sessionSignature
+    && input.knownSessionSignature
+    && input.knownSessionSignature === sessionSignature,
+  );
+  const sessionResult = sessionDetailReused
+    ? {
+        sessionRead: {
+          detail: null,
+          telemetry: null,
+        },
+        remoteMirror: { status: 'deferred' as const, durationMs: 0 },
+      }
+    : await readSessionDetailForRoute({
+        conversationId: input.conversationId,
+        profile: input.profile,
+        tailBlocks: input.tailBlocks,
+      });
 
   const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
 
@@ -150,26 +107,23 @@ async function readConversationBootstrapState(input: {
     state: {
       conversationId: input.conversationId,
       sessionDetail: sessionResult.sessionRead.detail,
-      execution: execution.state,
-      remoteConnection: getRemoteConversationConnectionState({
-        profile: input.profile,
-        conversationId: input.conversationId,
-      }),
+      sessionDetailSignature: sessionResult.sessionRead.detail?.signature ?? sessionSignature,
+      ...(sessionDetailReused ? { sessionDetailUnchanged: true } : {}),
       liveSession: liveSession
         ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) }
         : { live: false as const },
     },
     telemetry: {
       sessionRead: sessionResult.sessionRead.telemetry,
+      sessionDetailReused,
       remoteMirror: sessionResult.remoteMirror,
-      execution: execution.telemetry,
     },
   };
 }
 
 export function registerConversationStateRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
 ): void {
   initializeConversationStateRoutesContext(context);
   router.get('/api/conversations/:id/bootstrap', async (req, res) => {
@@ -177,21 +131,32 @@ export function registerConversationStateRoutes(
 
     try {
       const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
+      const rawKnownSessionSignature = Array.isArray(req.query.knownSessionSignature)
+        ? req.query.knownSessionSignature[0]
+        : req.query.knownSessionSignature;
+      const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
+        ? rawKnownSessionSignature.trim()
+        : undefined;
       const bootstrap = await readConversationBootstrapState({
         conversationId: req.params.id,
         profile: getCurrentProfileFn(),
         tailBlocks,
+        knownSessionSignature,
       });
-      if (!bootstrap.state.sessionDetail && !bootstrap.state.liveSession.live) {
+      if (!bootstrap.state.sessionDetail && !bootstrap.state.sessionDetailUnchanged && !bootstrap.state.liveSession.live) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      const sessionReadDescription = bootstrap.telemetry.sessionRead
+        ? `${bootstrap.telemetry.sessionRead.cache}/${bootstrap.telemetry.sessionRead.loader}`
+        : bootstrap.telemetry.sessionDetailReused
+          ? 'reuse/signature'
+          : 'missing';
       setServerTimingHeaders(res, [
         { name: 'remote_sync', durationMs: bootstrap.telemetry.remoteMirror.durationMs, description: bootstrap.telemetry.remoteMirror.status },
-        { name: 'session_read', durationMs: bootstrap.telemetry.sessionRead?.durationMs ?? 0, description: bootstrap.telemetry.sessionRead ? `${bootstrap.telemetry.sessionRead.cache}/${bootstrap.telemetry.sessionRead.loader}` : 'missing' },
-        { name: 'runs', durationMs: bootstrap.telemetry.execution.durationMs, description: `${bootstrap.telemetry.execution.cache}/${bootstrap.telemetry.execution.source}` },
+        { name: 'session_read', durationMs: bootstrap.telemetry.sessionRead?.durationMs ?? 0, description: sessionReadDescription },
         { name: 'total', durationMs },
       ], {
         route: 'conversation-bootstrap',
@@ -199,7 +164,6 @@ export function registerConversationStateRoutes(
         ...(tailBlocks ? { tailBlocks } : {}),
         remoteMirror: bootstrap.telemetry.remoteMirror,
         sessionRead: bootstrap.telemetry.sessionRead,
-        execution: bootstrap.telemetry.execution,
         durationMs,
       });
       logSlowConversationPerf('conversation bootstrap request', {
@@ -208,11 +172,8 @@ export function registerConversationStateRoutes(
         ...(tailBlocks ? { tailBlocks } : {}),
         remoteMirrorStatus: bootstrap.telemetry.remoteMirror.status,
         sessionReadCache: bootstrap.telemetry.sessionRead?.cache,
-        sessionReadLoader: bootstrap.telemetry.sessionRead?.loader,
+        sessionReadLoader: bootstrap.telemetry.sessionDetailReused ? 'signature' : bootstrap.telemetry.sessionRead?.loader,
         sessionReadDurationMs: bootstrap.telemetry.sessionRead?.durationMs,
-        executionRunsCache: bootstrap.telemetry.execution.cache,
-        executionRunsSource: bootstrap.telemetry.execution.source,
-        executionRunsDurationMs: bootstrap.telemetry.execution.durationMs,
       });
 
       res.json(bootstrap.state);
@@ -258,7 +219,6 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const profile = getCurrentProfileFn();
       const input: {
         model?: string | null;
         thinkingLevel?: string | null;
@@ -266,11 +226,6 @@ export function registerConversationStateRoutes(
         ...(model !== undefined ? { model } : {}),
         ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
       };
-
-      if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
-        res.status(409).json({ error: 'Per-conversation model changes are not supported for remote conversations yet.' });
-        return;
-      }
 
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
@@ -491,88 +446,6 @@ export function registerConversationStateRoutes(
     }
   });
 
-  router.get('/api/conversations/:id/execution', async (req, res) => {
-    const startedAt = process.hrtime.bigint();
-
-    try {
-      const execution = await readConversationExecutionStateWithTelemetry(req.params.id);
-      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      setServerTimingHeaders(res, [
-        { name: 'runs', durationMs: execution.telemetry.durationMs, description: `${execution.telemetry.cache}/${execution.telemetry.source}` },
-        { name: 'total', durationMs },
-      ], {
-        route: 'conversation-execution',
-        conversationId: req.params.id,
-        runs: execution.telemetry,
-        durationMs,
-      });
-      logSlowConversationPerf('conversation execution request', {
-        conversationId: req.params.id,
-        durationMs,
-        runsCache: execution.telemetry.cache,
-        runsSource: execution.telemetry.source,
-        runsDurationMs: execution.telemetry.durationMs,
-      });
-
-      res.json(execution.state);
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.patch('/api/conversations/:id/execution', async (req, res) => {
-    try {
-      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-
-      const targetId = req.body?.targetId === null
-        ? null
-        : typeof req.body?.targetId === 'string'
-          ? req.body.targetId.trim() || null
-          : null;
-
-      if (targetId && !getExecutionTarget({ targetId })) {
-        res.status(400).json({ error: `Execution target ${targetId} not found.` });
-        return;
-      }
-
-      const profile = getCurrentProfileFn();
-      const previous = getConversationExecutionTarget({
-        profile,
-        conversationId: req.params.id,
-      });
-
-      if (previous?.targetId && previous.targetId !== targetId) {
-        await stopRemoteLiveSession(req.params.id).catch(() => undefined);
-        clearRemoteConversationBindingForConversation({
-          profile,
-          conversationId: req.params.id,
-        });
-      }
-
-      setConversationExecutionTarget({
-        profile,
-        conversationId: req.params.id,
-        targetId,
-      });
-
-      if (targetId === null) {
-        clearRemoteConversationBindingForConversation({
-          profile,
-          conversationId: req.params.id,
-        });
-      }
-
-      invalidateAppTopics('executionTargets');
-      res.json(await readConversationExecutionState(req.params.id));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (writeLiveConversationControlError(res, err)) {
-        return;
-      }
-      res.status(message.startsWith('Invalid') ? 400 : 500).json({ error: message });
-    }
-  });
-
   router.patch('/api/conversations/:id/title', (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
@@ -615,11 +488,6 @@ export function registerConversationStateRoutes(
     try {
       const { cwd: requestedCwd } = req.body as { cwd?: string };
       const conversationId = req.params.id;
-      const profile = getCurrentProfileFn();
-      const remoteBinding = readRemoteConversationBindingForConversation({
-        profile,
-        conversationId,
-      });
 
       const liveEntry = liveRegistry.get(conversationId);
       const sessionDetail = readSessionBlocks(conversationId);
@@ -628,52 +496,6 @@ export function registerConversationStateRoutes(
 
       if (!currentCwd || !sourceSessionFile) {
         res.status(404).json({ error: 'Conversation not found.' });
-        return;
-      }
-
-      if (remoteBinding) {
-        const remoteLive = getRemoteLiveSessionMeta(conversationId);
-        if (remoteLive?.isStreaming) {
-          res.status(409).json({ error: 'Stop the current response before changing the working directory.' });
-          return;
-        }
-
-        const resolved = await browseRemoteTargetDirectory({
-          targetId: remoteBinding.targetId,
-          cwd: requestedCwd,
-          baseCwd: currentCwd,
-        });
-
-        if (resolved.cwd === currentCwd) {
-          res.json({ id: conversationId, sessionFile: sourceSessionFile, cwd: currentCwd, changed: false });
-          return;
-        }
-
-        const result = forkLocalMirrorSession({
-          sessionFile: sourceSessionFile,
-          remoteCwd: resolved.cwd,
-        });
-
-        setConversationExecutionTarget({
-          profile,
-          conversationId: result.id,
-          targetId: remoteBinding.targetId,
-        });
-        await createRemoteLiveSession({
-          profile,
-          targetId: remoteBinding.targetId,
-          remoteCwd: resolved.cwd,
-          localSessionFile: result.sessionFile,
-          conversationId: result.id,
-          bootstrapLocalSessionFile: result.sessionFile,
-        });
-
-        if (remoteLive) {
-          await stopRemoteLiveSession(conversationId).catch(() => undefined);
-        }
-
-        publishConversationSessionMetaChanged(conversationId, result.id);
-        res.json({ id: result.id, sessionFile: result.sessionFile, cwd: resolved.cwd, changed: true });
         return;
       }
 

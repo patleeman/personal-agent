@@ -18,7 +18,6 @@ import {
   type ReplayDurableRunResult,
   type FollowUpDurableRunResult,
 } from '@personal-agent/daemon';
-import { decorateRemoteExecutionRun } from '../workspace/remoteExecution.js';
 import { decorateDurableRunAttention, decorateDurableRunsAttention } from './durableRunAttention.js';
 
 const LIST_DURABLE_RUNS_CACHE_TTL_MS = 10_000;
@@ -69,11 +68,11 @@ function resolveRunsRoot(): string {
 }
 
 function decorateRuns<T extends ScannedDurableRun>(runs: T[]) {
-  return decorateDurableRunsAttention(runs.map((run) => decorateRemoteExecutionRun(run)));
+  return decorateDurableRunsAttention(runs);
 }
 
 function decorateRun<T extends ScannedDurableRun>(run: T) {
-  return decorateDurableRunAttention(decorateRemoteExecutionRun(run));
+  return decorateDurableRunAttention(run);
 }
 
 function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {

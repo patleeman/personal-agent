@@ -1,17 +1,10 @@
 import { loadDurableRunAttentionState, type DurableRunAttentionStateDocument } from '@personal-agent/core';
 import type { ScannedDurableRun } from '@personal-agent/daemon';
 
-interface DurableRunAttentionCandidate extends Pick<ScannedDurableRun, 'runId' | 'status' | 'problems' | 'recoveryAction'> {
-  remoteExecution?: {
-    importStatus?: 'not_ready' | 'ready' | 'imported' | 'failed' | null;
-    importedAt?: string;
-    importError?: string;
-  };
-}
+interface DurableRunAttentionCandidate extends Pick<ScannedDurableRun, 'runId' | 'status' | 'problems' | 'recoveryAction'> {}
 
 export function durableRunNeedsAttention(run: DurableRunAttentionCandidate): boolean {
   const status = run.status?.status;
-  const importStatus = run.remoteExecution?.importStatus ?? null;
 
   return run.problems.length > 0
     || run.recoveryAction === 'resume'
@@ -20,9 +13,7 @@ export function durableRunNeedsAttention(run: DurableRunAttentionCandidate): boo
     || run.recoveryAction === 'invalid'
     || status === 'failed'
     || status === 'interrupted'
-    || status === 'recovering'
-    || importStatus === 'ready'
-    || importStatus === 'failed';
+    || status === 'recovering';
 }
 
 export function getDurableRunAttentionSignature(run: DurableRunAttentionCandidate): string | null {
@@ -36,9 +27,6 @@ export function getDurableRunAttentionSignature(run: DurableRunAttentionCandidat
     activeAttempt: run.status?.activeAttempt ?? null,
     updatedAt: run.status?.updatedAt ?? null,
     completedAt: run.status?.completedAt ?? null,
-    importStatus: run.remoteExecution?.importStatus ?? null,
-    importedAt: run.remoteExecution?.importedAt ?? null,
-    importError: run.remoteExecution?.importError ?? null,
     problems: [...run.problems],
   });
 }

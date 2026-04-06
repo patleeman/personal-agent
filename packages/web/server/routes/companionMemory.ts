@@ -72,6 +72,6 @@ export function registerCompanionModelPreferenceRoutes(router: Pick<Express, 'ge
   });
 
   router.patch('/api/conversations/:id/model-preferences', async (_req, res) => {
-    res.status(405).json({ error: 'Per-conversation model changes are not supported for remote conversations yet.' });
+    res.status(405).json({ error: 'Per-conversation model changes are not supported in companion mode.' });
   });
 }

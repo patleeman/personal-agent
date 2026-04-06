@@ -171,7 +171,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       'daemon',
       'sync',
       'webUi',
-      'executionTargets',
     );
     return currentProfile;
   }

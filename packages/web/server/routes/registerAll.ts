@@ -13,7 +13,6 @@ import {
   registerConversationRoutes,
 } from './conversations.js';
 import { registerCompanionDaemonRoutes, registerDaemonRoutes } from './daemon.js';
-import { registerExecutionTargetRoutes } from './executionTargets.js';
 import { registerFolderPickerRoutes } from './folderPicker.js';
 import {
   registerCompanionLiveSessionRoutes,
@@ -75,8 +74,6 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
   registerAlertRoutes(app, context);
 
   registerConversationTitlesRoutes(app, context);
-
-  registerExecutionTargetRoutes(app, context);
 
   registerRunAppRoutes(app, context);
 

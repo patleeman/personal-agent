@@ -65,8 +65,6 @@ export interface ServerRouteContext {
   listSkillsForCurrentProfile: () => SkillSummary[];
   listProfileAgentItems: () => ProfileAgentItemSummary[];
   withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
-  readExecutionTargetsState: () => Promise<unknown>;
-  browseRemoteTargetDirectory: (input: { targetId: string; cwd?: string; baseCwd?: string }) => Promise<unknown>;
   getDurableRunSnapshot: (runId: string, tail: number) => Promise<unknown | null>;
   draftWorkspaceCommitMessage: (input: {
     draftSource: ReturnType<typeof import('../workspace/workspaceBrowser.js').readWorkspaceGitDraftSource>;

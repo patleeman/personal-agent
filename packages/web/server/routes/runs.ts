@@ -12,12 +12,6 @@ import {
   listDurableRuns,
 } from '../automation/durableRuns.js';
 import {
-  readRemoteExecutionRunConversationId,
-  importRemoteExecutionRun,
-} from '../workspace/remoteExecution.js';
-import { resolveConversationSessionFile } from '../conversations/conversationService.js';
-import { publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
-import {
   invalidateAppTopics,
   logError,
 } from '../middleware/index.js';
@@ -145,37 +139,6 @@ export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'
     }
   });
 
-  router.post('/api/runs/:id/import', async (req, res) => {
-    try {
-      const detail = await getDurableRun(req.params.id);
-      if (!detail) {
-        res.status(404).json({ error: 'Run not found' });
-        return;
-      }
-      const conversationId = readRemoteExecutionRunConversationId(detail.run);
-      if (!conversationId) {
-        res.status(409).json({ error: 'This run is not a remote execution run.' });
-        return;
-      }
-      const sessionFile = resolveConversationSessionFile(conversationId) ?? detail.run.manifest?.source?.filePath;
-      if (!sessionFile) {
-        res.status(404).json({ error: 'Conversation not found for this remote run.' });
-        return;
-      }
-      const result = await importRemoteExecutionRun({
-        run: detail.run,
-        sessionFile,
-      });
-      publishConversationSessionMetaChanged(conversationId);
-      invalidateAppTopics('runs');
-      res.json({ ok: true, runId: req.params.id, ...result });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const status = message.includes('not found') ? 404 :
-        message.includes('already been imported') || message.includes('has not completed') || message.includes('not a remote execution run') || message.includes('Wait for the current local turn') ? 409 : 500;
-      res.status(status).json({ error: message });
-    }
-  });
 }
 
 export function registerCompanionRunRoutes(router: Pick<Express, 'get'>): void {

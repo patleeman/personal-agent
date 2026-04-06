@@ -44,7 +44,6 @@ These commands are handled by `personal-agent` itself:
 - `pa node ...` (compatibility alias)
 - `pa mcp ...`
 - `pa runs ...`
-- `pa targets ...`
 - `pa sync ...`
 - `pa restart`
 - `pa update`
@@ -71,7 +70,6 @@ pa inbox list
 pa page list
 pa mcp list
 pa tasks list
-pa targets list
 pa sync status
 ```
 
@@ -82,15 +80,6 @@ pa daemon start
 pa daemon service install
 pa tasks validate --all
 pa tasks logs <id>
-```
-
-### Remote execution targets
-
-```bash
-pa targets list
-pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
-pa targets install gpu-box
-pa targets show gpu-box
 ```
 
 ## Top-level command reference
@@ -310,28 +299,6 @@ Use this as the main control surface for detached local background work.
 
 See [Runs](./runs.md).
 
-### `pa targets [list|show|add|update|install|delete|help]`
-
-Inspect and manage machine-local execution targets for remote conversation offload.
-
-Examples:
-
-```bash
-pa targets list
-pa targets show gpu-box
-pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
-pa targets install gpu-box
-pa targets update gpu-box --remote-pa-command /opt/bin/pa --profile datadog
-pa targets delete gpu-box
-```
-
-`pa targets install <id>` uploads the current built `personal-agent` runtime bundle plus synced profile/auth state to the remote target so remote runs do not require a full `personal-agent` checkout on that machine.
-
-Targets are stored in the `executionTargets` section of `~/.local/state/personal-agent/config/config.json` by default.
-Use this when you want your local agent to configure remote SSH destinations without hand-editing the System page form.
-
-See [Execution Targets](./execution-targets.md).
-
 ### `pa sync [status|run|setup|help]`
 
 Configure and trigger automatic git sync for durable state.
@@ -451,7 +418,6 @@ Or set:
 - [How personal-agent works](./how-it-works.md)
 - [Conversations](./conversations.md)
 - [Runs](./runs.md)
-- [Execution Targets](./execution-targets.md)
 - [MCP](./mcp.md)
 - [Web UI Guide](./web-ui.md)
 - [Sync Guide](./sync.md)

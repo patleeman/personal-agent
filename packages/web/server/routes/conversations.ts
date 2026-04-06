@@ -4,6 +4,7 @@ import {
   setConversationServiceContext,
   handleCompanionConversationListRequest,
   readConversationSessionMeta,
+  readConversationSessionSignature,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
   publishConversationSessionMetaChanged,
@@ -28,12 +29,6 @@ import {
   listDeferredResumesForSessionFile,
   scheduleDeferredResumeForSessionFile,
 } from '../automation/deferredResumes.js';
-import {
-  getRemoteConversationConnectionState,
-  subscribeRemoteConversationConnection,
-  isRemoteLiveSession,
-  readRemoteConversationBindingForConversation,
-} from '../conversations/remoteLiveSessions.js';
 import {
   isLive as isLocalLive,
   updateLiveSessionModelPreferences,
@@ -109,6 +104,36 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
 
     try {
       const tailBlocks = parseTailBlocksQuery(req.query.tailBlocks);
+      const rawKnownSessionSignature = Array.isArray(req.query.knownSessionSignature)
+        ? req.query.knownSessionSignature[0]
+        : req.query.knownSessionSignature;
+      const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
+        ? rawKnownSessionSignature.trim()
+        : undefined;
+      const currentSessionSignature = readConversationSessionSignature(req.params.id);
+      if (knownSessionSignature && currentSessionSignature && knownSessionSignature === currentSessionSignature) {
+        const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        setServerTimingHeaders(res, [
+          { name: 'remote_sync', durationMs: 0, description: 'deferred' },
+          { name: 'session_read', durationMs: 0, description: 'reuse/signature' },
+          { name: 'total', durationMs },
+        ], {
+          route: 'session-detail',
+          conversationId: req.params.id,
+          ...(tailBlocks ? { tailBlocks } : {}),
+          remoteMirror: { status: 'deferred', durationMs: 0 },
+          sessionRead: null,
+          durationMs,
+        });
+
+        res.json({
+          unchanged: true,
+          sessionId: req.params.id,
+          signature: currentSessionSignature,
+        });
+        return;
+      }
+
       const { sessionRead, remoteMirror } = await readSessionDetailForRoute({
         conversationId: req.params.id,
         profile: getCurrentProfileFn(),
@@ -364,48 +389,6 @@ export function registerConversationRoutes(
     } catch (err) {
       res.status(400).json({ error: (err as Error).message });
     }
-  });
-
-  router.get('/api/conversations/:id/remote-connection', (req, res) => {
-    try {
-      res.json(getRemoteConversationConnectionState({
-        profile: getCurrentProfileFn(),
-        conversationId: req.params.id,
-      }));
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.get('/api/conversations/:id/remote-connection/events', (req, res) => {
-    const conversationId = req.params.id;
-
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-    res.write('retry: 1000\n\n');
-
-    const writeSnapshot = () => {
-      const data = getRemoteConversationConnectionState({
-        profile: getCurrentProfileFn(),
-        conversationId,
-      });
-      res.write(`data: ${JSON.stringify({ type: 'snapshot', data })}\n\n`);
-    };
-
-    writeSnapshot();
-
-    const heartbeat = setInterval(() => {
-      res.write(': heartbeat\n\n');
-    }, 15_000);
-    const unsubscribe = subscribeRemoteConversationConnection(conversationId, writeSnapshot);
-
-    req.on('close', () => {
-      clearInterval(heartbeat);
-      unsubscribe();
-    });
   });
 
   router.get('/api/conversations/:id/artifacts', (req, res) => {
@@ -806,15 +789,10 @@ export function registerCompanionConversationRoutes(
         res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
         return;
       }
-      const profile = getCurrentProfileFn();
       const input: { model?: string | null; thinkingLevel?: string | null } = {
         ...(model !== undefined ? { model } : {}),
         ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
       };
-      if (isRemoteLiveSession(req.params.id) || readRemoteConversationBindingForConversation({ profile, conversationId: req.params.id })) {
-        res.status(409).json({ error: 'Per-conversation model changes are not supported for remote conversations yet.' });
-        return;
-      }
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
         const availableModels = getAvailableModelObjects();

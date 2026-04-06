@@ -18,14 +18,7 @@ import {
   ensureSessionFileExists,
   registry as liveSessionRegistry,
 } from './liveSessions.js';
-import {
-  listRemoteLiveSessions,
-  readRemoteConversationBindingForConversation,
-  syncRemoteConversationMirror,
-  type RemoteConversationMirrorSyncTelemetry,
-} from './remoteLiveSessions.js';
 import { publishAppEvent } from '../shared/appEvents.js';
-import { logWarn } from '../shared/logging.js';
 import {
   listSessions,
   readSessionBlocksWithTelemetry,
@@ -234,6 +227,11 @@ type LocalLiveSession = ReturnType<typeof getLocalLiveSessions>[number] & {
   };
 };
 
+interface SessionDetailRouteRemoteMirrorTelemetry {
+  status: 'not-remote' | 'deferred';
+  durationMs: number;
+}
+
 export interface PublicLiveSessionMeta {
   id: string;
   cwd: string;
@@ -261,18 +259,15 @@ export function toPublicLiveSessionMeta(session: {
   };
 }
 
-export function listAllLiveSessions(): Array<LocalLiveSession | ReturnType<typeof listRemoteLiveSessions>[number]> {
+export function listAllLiveSessions(): LocalLiveSession[] {
   const local = getLocalLiveSessions();
   const localManagersById = new Map<string, unknown>(
     Array.from(liveSessionRegistry.entries()).map(([id, entry]) => [id, (entry as { session?: unknown }).session]),
   );
-  const localWithManagers: LocalLiveSession[] = local.map((entry) => ({
+  return local.map((entry) => ({
     ...entry,
     session: localManagersById.get(entry.id) as { sessionManager: unknown } | undefined,
   }));
-  const localIds = new Set(localWithManagers.map((session) => session.id));
-  const remote = listRemoteLiveSessions().filter((session) => !localIds.has(session.id));
-  return [...localWithManagers, ...remote];
 }
 export function publishConversationSessionMetaChanged(...conversationIds: Array<string | null | undefined>): void {
   const seen = new Set<string>();
@@ -539,6 +534,20 @@ export function resolveConversationSessionFile(conversationId: string): string |
   return snapshotSessionFile || undefined;
 }
 
+export function readConversationSessionSignature(conversationId: string): string | null {
+  const sessionFile = resolveConversationSessionFile(conversationId);
+  if (!sessionFile || !existsSync(sessionFile)) {
+    return null;
+  }
+
+  try {
+    const stats = statSync(sessionFile);
+    return `${stats.size}:${stats.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
 export function readConversationSessionMeta(conversationId: string) {
   const profile = getCurrentProfileFn();
   const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
@@ -560,21 +569,7 @@ export function readConversationSessionMeta(conversationId: string) {
   };
 }
 
-type SessionDetailRouteRemoteMirrorTelemetry = RemoteConversationMirrorSyncTelemetry | { status: 'deferred'; durationMs: 0 };
 type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelemetry>;
-
-function buildNoRemoteConversationMirrorTelemetry(): RemoteConversationMirrorSyncTelemetry {
-  return { status: 'not-remote', durationMs: 0 };
-}
-
-function invalidateSessionsAfterRemoteMirrorSync(
-  conversationId: string,
-  remoteMirror: RemoteConversationMirrorSyncTelemetry,
-): void {
-  if (remoteMirror.status === 'synced-live' || remoteMirror.status === 'synced-binding') {
-    publishConversationSessionMetaChanged(conversationId);
-  }
-}
 
 export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
   const candidate = Array.isArray(rawTailBlocks) ? rawTailBlocks[0] : rawTailBlocks;
@@ -597,52 +592,22 @@ export async function readSessionDetailForRoute(input: {
   sessionRead: SessionDetailRouteReadResult;
   remoteMirror: SessionDetailRouteRemoteMirrorTelemetry;
 }> {
-  const remoteMirrorPromise = syncRemoteConversationMirror({
-    profile: input.profile,
-    conversationId: input.conversationId,
-  }).catch((error) => {
-    logWarn('background remote conversation mirror sync failed', {
-      conversationId: input.conversationId,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return buildNoRemoteConversationMirrorTelemetry();
-  });
-
-  let sessionRead = readSessionBlocksWithTelemetry(
+  const sessionRead = readSessionBlocksWithTelemetry(
     input.conversationId,
     input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
   );
 
-  if (sessionRead.detail) {
-    void remoteMirrorPromise.then((remoteMirror) => {
-      invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
-    });
-
-    return {
-      sessionRead,
-      remoteMirror: { status: 'deferred', durationMs: 0 },
-    };
-  }
-
-  const remoteMirror = await remoteMirrorPromise;
-  sessionRead = readSessionBlocksWithTelemetry(
-    input.conversationId,
-    input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
-  );
-
-  invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
-  return { sessionRead, remoteMirror };
+  return {
+    sessionRead,
+    remoteMirror: sessionRead.detail
+      ? { status: 'deferred', durationMs: 0 }
+      : { status: 'not-remote', durationMs: 0 },
+  };
 }
 
 export async function readConversationModelPreferenceStateById(
   conversationId: string,
 ): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
-  const profile = getCurrentProfileFn();
-  const binding = readRemoteConversationBindingForConversation({ profile, conversationId });
-  if (binding) {
-    await syncRemoteConversationMirror({ profile, conversationId });
-  }
-
   const sessionFile = resolveConversationSessionFile(conversationId);
   if (!sessionFile || !existsSync(sessionFile)) {
     return null;

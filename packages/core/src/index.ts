@@ -41,12 +41,6 @@ export * from './task-callback-bindings.js';
 // Conversation ↔ project link exports
 export * from './conversation-project-links.js';
 
-// Conversation execution target exports
-export * from './conversation-execution-targets.js';
-
-// Execution target exports
-export * from './execution-targets.js';
-
 // Conversation artifact exports
 export * from './conversation-artifacts.js';
 

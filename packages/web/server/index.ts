@@ -133,38 +133,9 @@ import {
   getAvailableModelObjects,
   updateLiveSessionModelPreferences,
 } from './conversations/liveSessions.js';
-import {
-  abortRemoteLiveSession,
-  browseRemoteTargetDirectory,
-  clearRemoteConversationBindingForConversation,
-  createLocalMirrorSession,
-  createRemoteLiveSession,
-  forkLocalMirrorSession,
-  getRemoteConversationConnectionState,
-  getRemoteLiveSessionMeta,
-  isRemoteLiveSession,
-  listRemoteLiveSessions,
-  submitRemoteLiveSessionPrompt,
-  readRemoteConversationBindingForConversation,
-  resumeRemoteLiveSession,
-  stopRemoteLiveSession,
-  subscribeRemoteConversationConnection,
-  subscribeRemoteLiveSession,
-  syncRemoteConversationMirror,
-  type RemoteConversationMirrorSyncTelemetry,
-} from './conversations/remoteLiveSessions.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversations/conversationRuns.js';
 import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './automation/durableRuns.js';
 import { getDurableRunAttentionSignature } from './automation/durableRunAttention.js';
-import {
-  buildConversationExecutionState,
-  buildRemoteExecutionTranscriptResponse,
-  importRemoteExecutionRun,
-  readRemoteExecutionRunConversationId,
-  resolveRemoteExecutionCwd,
-  submitRemoteExecutionRun,
-  type ConversationExecutionState,
-} from './workspace/remoteExecution.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedProfilesContext,
@@ -188,8 +159,6 @@ import {
   getActivityConversationLink,
   getConversationArtifact,
   getConversationAttachment,
-  getConversationExecutionTarget,
-  getExecutionTarget,
   getSyncRoot,
   getProfilesRoot,
   getLocalProfileDir,
@@ -216,12 +185,9 @@ import {
   readMcpConfig,
   resolveConversationAttachmentPromptFiles,
   saveConversationAttachment,
-  saveExecutionTarget,
   saveProfileActivityReadState,
   setActivityConversationLinks,
-  setConversationExecutionTarget,
   summarizeConversationAttention,
-  deleteExecutionTarget,
 } from '@personal-agent/core';
 import {
   installPackageSource,
@@ -277,10 +243,7 @@ const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
 
 function listAllLiveSessions() {
-  const local = getLocalLiveSessions();
-  const localIds = new Set(local.map((session) => session.id));
-  const remote = listRemoteLiveSessions().filter((session) => !localIds.has(session.id));
-  return [...local, ...remote];
+  return getLocalLiveSessions();
 }
 
 function publishConversationSessionMetaChanged(...conversationIds: Array<string | null | undefined>): void {
@@ -904,7 +867,7 @@ function parseSessionActivityAt(session: { lastActivityAt?: string; timestamp: s
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-type SessionDetailRouteRemoteMirrorTelemetry = RemoteConversationMirrorSyncTelemetry | { status: 'deferred'; durationMs: 0 };
+type SessionDetailRouteRemoteMirrorTelemetry = { status: 'not-remote' | 'deferred'; durationMs: 0 };
 type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelemetry>;
 
 function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
@@ -919,17 +882,14 @@ function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
     : undefined;
 }
 
-function buildNoRemoteConversationMirrorTelemetry(): RemoteConversationMirrorSyncTelemetry {
+function buildNoRemoteConversationMirrorTelemetry(): SessionDetailRouteRemoteMirrorTelemetry {
   return { status: 'not-remote', durationMs: 0 };
 }
 
 function invalidateSessionsAfterRemoteMirrorSync(
-  conversationId: string,
-  remoteMirror: RemoteConversationMirrorSyncTelemetry,
+  _conversationId: string,
+  _remoteMirror: SessionDetailRouteRemoteMirrorTelemetry,
 ): void {
-  if (remoteMirror.status === 'synced-live' || remoteMirror.status === 'synced-binding') {
-    publishConversationSessionMetaChanged(conversationId);
-  }
 }
 
 async function readSessionDetailForRoute(input: {
@@ -940,41 +900,18 @@ async function readSessionDetailForRoute(input: {
   sessionRead: SessionDetailRouteReadResult;
   remoteMirror: SessionDetailRouteRemoteMirrorTelemetry;
 }> {
-  const remoteMirrorPromise = syncRemoteConversationMirror({
-    profile: input.profile,
-    conversationId: input.conversationId,
-  }).catch((error) => {
-    logWarn('background remote conversation mirror sync failed', {
-      conversationId: input.conversationId,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return buildNoRemoteConversationMirrorTelemetry();
-  });
-
-  let sessionRead = readSessionBlocksWithTelemetry(
+  void input.profile;
+  const sessionRead = readSessionBlocksWithTelemetry(
     input.conversationId,
     input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
   );
 
-  if (sessionRead.detail) {
-    void remoteMirrorPromise.then((remoteMirror) => {
-      invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
-    });
-
-    return {
-      sessionRead,
-      remoteMirror: { status: 'deferred', durationMs: 0 },
-    };
-  }
-
-  const remoteMirror = await remoteMirrorPromise;
-  sessionRead = readSessionBlocksWithTelemetry(
-    input.conversationId,
-    input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
-  );
-
-  invalidateSessionsAfterRemoteMirrorSync(input.conversationId, remoteMirror);
-  return { sessionRead, remoteMirror };
+  return {
+    sessionRead,
+    remoteMirror: sessionRead.detail
+      ? { status: 'deferred', durationMs: 0 }
+      : buildNoRemoteConversationMirrorTelemetry(),
+  };
 }
 
 function sortSessionsForCompanionList<T extends {
@@ -1093,12 +1030,6 @@ function resolveConversationSessionFile(conversationId: string): string | undefi
 }
 
 async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
-  const profile = getCurrentProfile();
-  const binding = readRemoteConversationBindingForConversation({ profile, conversationId });
-  if (binding) {
-    await syncRemoteConversationMirror({ profile, conversationId });
-  }
-
   const sessionFile = resolveConversationSessionFile(conversationId);
   if (!sessionFile || !existsSync(sessionFile)) {
     return null;
@@ -1128,18 +1059,6 @@ async function resolveBackgroundConversationPromptTarget(
   conversationId: string,
   sessionFile: string,
 ): Promise<BackgroundConversationPromptTarget> {
-  const remoteMeta = getRemoteLiveSessionMeta(conversationId);
-  if (remoteMeta) {
-    return {
-      conversationId,
-      sessionFile: remoteMeta.sessionFile,
-      cwd: remoteMeta.cwd,
-      title: remoteMeta.title,
-      isStreaming: remoteMeta.isStreaming,
-      remote: true,
-    };
-  }
-
   const localEntry = liveRegistry.get(conversationId);
   if (localEntry?.session.sessionFile) {
     return {
@@ -1149,34 +1068,6 @@ async function resolveBackgroundConversationPromptTarget(
       title: localEntry.title,
       isStreaming: localEntry.session.isStreaming,
       remote: false,
-    };
-  }
-
-  const targetBinding = getConversationExecutionTarget({
-    profile: getCurrentProfile(),
-    conversationId,
-  });
-
-  if (targetBinding) {
-    await resumeRemoteLiveSession({
-      profile: getCurrentProfile(),
-      conversationId,
-      localSessionFile: sessionFile,
-      targetId: targetBinding.targetId,
-    });
-
-    const resumedRemoteMeta = getRemoteLiveSessionMeta(conversationId);
-    if (!resumedRemoteMeta) {
-      throw new Error(`Could not resume remote conversation ${conversationId}.`);
-    }
-
-    return {
-      conversationId,
-      sessionFile: resumedRemoteMeta.sessionFile,
-      cwd: resumedRemoteMeta.cwd,
-      title: resumedRemoteMeta.title,
-      isStreaming: resumedRemoteMeta.isStreaming,
-      remote: true,
     };
   }
 
@@ -1401,10 +1292,8 @@ const routeContext = createServerRouteContext({
   listSkillsForCurrentProfile: () => listSkillsForProfile(getCurrentProfile()),
   listProfileAgentItems: () => [],
   withTemporaryProfileAgentDir,
-  browseRemoteTargetDirectory,
   getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   draftWorkspaceCommitMessage,
-  listDurableRuns,
 });
 
 registerServerRoutes({

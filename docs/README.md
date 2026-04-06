@@ -58,7 +58,6 @@ Those four pages should answer most agent questions quickly.
 
 ## Integrations and system surfaces
 
-- [Execution Targets](./execution-targets.md)
 - [MCP](./mcp.md)
 - [Reminders and Notification Delivery](./alerts.md)
 - [Inbox and Activity](./inbox.md)
@@ -84,7 +83,6 @@ Those four pages should answer most agent questions quickly.
 | How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
 | How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Tracked Pages](./projects.md), [Web UI Guide](./web-ui.md) |
 | Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
-| How do remote execution targets work? | [Execution Targets](./execution-targets.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 
 ## Durable surfaces at a glance

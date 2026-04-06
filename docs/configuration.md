@@ -18,7 +18,6 @@ It stores machine-specific settings such as:
 - default profile selection
 - daemon overrides
 - web UI runtime preferences
-- execution targets
 
 Example:
 
@@ -42,10 +41,6 @@ Example:
     "companionPort": 3742,
     "useTailscaleServe": false,
     "resumeFallbackPrompt": "Continue from where you left off."
-  },
-  "executionTargets": {
-    "version": 1,
-    "targets": []
   }
 }
 ```
@@ -54,13 +49,11 @@ Useful commands:
 
 ```bash
 pa profile use assistant
-pa targets list
-pa targets add <id> --label <label> --ssh <destination>
 ```
 
 This file is machine-local runtime config and is intentionally not part of the synced durable surface.
 
-Legacy sibling files such as `daemon.json`, `web.json`, and `execution-targets.json` are read for compatibility when present, but `config.json` is the single canonical write target now.
+Legacy sibling files such as `daemon.json` and `web.json` are read for compatibility when present, but `config.json` is the single canonical write target now.
 
 ## Profile resource configuration
 
@@ -267,7 +260,6 @@ For most setups:
 - [Decision Guide](./decision-guide.md)
 - [Getting Started](./getting-started.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Execution Targets](./execution-targets.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
 - [Troubleshooting](./troubleshooting.md)

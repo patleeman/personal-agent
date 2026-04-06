@@ -7,14 +7,13 @@ export const DEFAULT_WEB_UI_PORT = 3741;
 export const DEFAULT_WEB_UI_COMPANION_PORT = 3742;
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
 
-export type MachineConfigSectionKey = 'daemon' | 'webUi' | 'executionTargets';
+export type MachineConfigSectionKey = 'daemon' | 'webUi';
 
 export interface MachineConfigDocument {
   defaultProfile?: string;
   vaultRoot?: string;
   daemon?: Record<string, unknown>;
   webUi?: Record<string, unknown>;
-  executionTargets?: Record<string, unknown>;
 }
 
 export interface MachineConfigOptions {
@@ -105,14 +104,12 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
     : undefined;
   const daemon = normalizeSection(document.daemon);
   const webUi = normalizeSection(document.webUi);
-  const executionTargets = normalizeSection(document.executionTargets);
 
   return {
     ...(defaultProfile ? { defaultProfile } : {}),
     ...(vaultRoot ? { vaultRoot } : {}),
     ...(daemon ? { daemon } : {}),
     ...(webUi ? { webUi } : {}),
-    ...(executionTargets ? { executionTargets } : {}),
   };
 }
 
@@ -138,11 +135,6 @@ function readLegacyMachineConfigSections(options: MachineConfigOptions = {}): Re
     legacySections.webUi = webUi;
   }
 
-  const executionTargets = readJsonObjectFile(join(configDir, 'execution-targets.json'), 'legacy execution targets config');
-  if (executionTargets) {
-    legacySections.executionTargets = executionTargets;
-  }
-
   return legacySections;
 }
 
@@ -150,7 +142,7 @@ function removeLegacyMachineConfigFiles(options: MachineConfigOptions = {}): voi
   const configDir = resolveConfigDirectory(options);
   const currentFilePath = getMachineConfigFilePath(options);
 
-  for (const fileName of ['daemon.json', 'web.json', 'execution-targets.json']) {
+  for (const fileName of ['daemon.json', 'web.json']) {
     const legacyPath = join(configDir, fileName);
     if (legacyPath === currentFilePath) {
       continue;
@@ -212,10 +204,6 @@ function getLegacySingleSection(options: MachineConfigOptions = {}): {
 
   if (fileName === 'web.json') {
     return { section: 'webUi', filePath };
-  }
-
-  if (fileName === 'execution-targets.json') {
-    return { section: 'executionTargets', filePath };
   }
 
   return null;
@@ -290,11 +278,6 @@ export function updateMachineConfigSection(
       mkdirSync(dirname(filePath), { recursive: true });
       writeFileSync(filePath, `${JSON.stringify(updated, null, 2)}\n`);
       return normalizeMachineConfig({ [section]: updated });
-    }
-
-    if (section === 'executionTargets') {
-      rmSync(filePath, { force: true });
-      return {};
     }
 
     mkdirSync(dirname(filePath), { recursive: true });

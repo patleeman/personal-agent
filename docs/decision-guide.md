@@ -33,7 +33,6 @@ If you are not sure which surface to use, start here.
 | Work on local repo files in the web UI | workspace | local repo/filesystem view | tracked-page docs or pages |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory as the first stop |
 | Keep a file with a specific tracked page | tracked-page attachment or tracked-page artifact | `sync/projects/<id>/attachments|artifacts/` | top-level page assets |
-| Offload a conversation to another machine | execution target | machine-local execution-target config | scheduled task or run |
 | Call external tool servers through MCP | MCP server config + MCP calls | MCP config + auth state | hand-rolled shell scripts by default |
 
 ## Work surfaces

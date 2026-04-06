@@ -87,8 +87,6 @@ describe('registerServerRoutes smoke test', () => {
       listSkillsForCurrentProfile: () => [],
       listProfileAgentItems: () => [],
       withTemporaryProfileAgentDir: async (_profile, run) => run(tempRoot),
-      readExecutionTargetsState: async () => ({ targets: [{ id: 'demo-target' }], runs: [] }),
-      browseRemoteTargetDirectory: async () => ({ cwd: workspaceDir, entries: [] }),
       getDurableRunSnapshot: async () => null,
       draftWorkspaceCommitMessage: async () => ({ subject: 'smoke commit' }),
     };
@@ -114,16 +112,14 @@ describe('registerServerRoutes smoke test', () => {
   });
 
   it('serves core app routes through the shared route registry', async () => {
-    const [profilesResponse, titlesResponse, executionTargetsResponse, workspaceResponse] = await Promise.all([
+    const [profilesResponse, titlesResponse, workspaceResponse] = await Promise.all([
       fetch(`${appBaseUrl}/api/profiles`),
       fetch(`${appBaseUrl}/api/conversation-titles/settings`),
-      fetch(`${appBaseUrl}/api/execution-targets`),
       fetch(`${appBaseUrl}/api/workspace?cwd=${encodeURIComponent(workspaceDir)}`),
     ]);
 
     expect(profilesResponse.status).toBe(200);
     expect(titlesResponse.status).toBe(200);
-    expect(executionTargetsResponse.status).toBe(200);
     expect(workspaceResponse.status).toBe(200);
 
     expect(await profilesResponse.json()).toMatchObject({
@@ -131,9 +127,6 @@ describe('registerServerRoutes smoke test', () => {
       profiles: ['assistant', 'other'],
     });
     expect(await titlesResponse.json()).toEqual(expect.any(Object));
-    expect(await executionTargetsResponse.json()).toMatchObject({
-      targets: [{ id: 'demo-target' }],
-    });
     expect(await workspaceResponse.json()).toMatchObject({
       root: realpathSync(workspaceDir),
     });
