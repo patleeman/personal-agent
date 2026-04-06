@@ -341,7 +341,7 @@ describe('runPresentation', () => {
     expect(getRunCategory(backgroundRun)).toBe('background');
   });
 
-  it('links background runs started from a conversation back to that conversation', () => {
+  it('prefers a run transcript conversation while still linking back to the originating conversation', () => {
     const sessions: SessionMeta[] = [{
       id: 'conv-123',
       file: '/tmp/sessions/conv-123.jsonl',
@@ -351,9 +351,20 @@ describe('runPresentation', () => {
       model: 'openai/gpt-5',
       title: 'Watch subagent run',
       messageCount: 12,
+    }, {
+      id: 'subagent-456',
+      file: '/tmp/sessions/__runs/run-subagent-2026-03-12T20-30-00-000Z-abcd1234/subagent-456.jsonl',
+      timestamp: '2026-03-12T20:31:00.000Z',
+      cwd: '/repo',
+      cwdSlug: 'repo',
+      model: 'openai/gpt-5',
+      title: 'Focused work transcript',
+      messageCount: 9,
+      sourceRunId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
     }];
 
     const run = createRun({
+      runId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
       manifest: {
         version: 1,
         id: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
@@ -378,17 +389,26 @@ describe('runPresentation', () => {
       },
     });
 
-    expect(getRunConnections(run, { sessions })).toContainEqual({
-      key: 'conversation:conv-123',
-      label: 'Conversation',
-      value: 'Watch subagent run',
-      to: '/conversations/conv-123',
-      detail: 'conv-123',
-    });
+    expect(getRunConnections(run, { sessions })).toEqual(expect.arrayContaining([
+      {
+        key: 'transcript:subagent-456',
+        label: 'Conversation transcript',
+        value: 'Focused work transcript',
+        to: '/conversations/subagent-456',
+        detail: 'subagent-456',
+      },
+      {
+        key: 'conversation:conv-123',
+        label: 'Conversation',
+        value: 'Watch subagent run',
+        to: '/conversations/conv-123',
+        detail: 'conv-123',
+      },
+    ]));
 
     expect(getRunPrimaryConnection(run, { sessions })).toMatchObject({
-      label: 'Conversation',
-      to: '/conversations/conv-123',
+      label: 'Conversation transcript',
+      to: '/conversations/subagent-456',
     });
     expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
   });

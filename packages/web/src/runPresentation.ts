@@ -338,6 +338,28 @@ function sessionById(lookups: RunPresentationLookups, conversationId: string | u
   return lookups.sessions.find((session) => session.id === conversationId);
 }
 
+function runTranscriptSession(run: DurableRunRecord, lookups: RunPresentationLookups): SessionMeta | undefined {
+  if (!lookups.sessions) {
+    return undefined;
+  }
+
+  const matches = lookups.sessions
+    .filter((session) => session.sourceRunId === run.runId)
+    .sort((left, right) => {
+      const leftRoot = left.parentSessionId?.trim() ? 1 : 0;
+      const rightRoot = right.parentSessionId?.trim() ? 1 : 0;
+      if (leftRoot !== rightRoot) {
+        return leftRoot - rightRoot;
+      }
+
+      const leftTimestamp = left.lastActivityAt ?? left.timestamp;
+      const rightTimestamp = right.lastActivityAt ?? right.timestamp;
+      return rightTimestamp.localeCompare(leftTimestamp) || left.id.localeCompare(right.id);
+    });
+
+  return matches[0];
+}
+
 function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookups): { title?: string; conversationId?: string } {
   const sourceType = run.manifest?.source?.type;
   const isConversationRun = run.manifest?.kind === 'conversation'
@@ -527,6 +549,17 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
 export function getRunConnections(run: DurableRunRecord, lookups: RunPresentationLookups = {}): RunConnection[] {
   const connections: RunConnection[] = [];
 
+  const transcriptSession = runTranscriptSession(run, lookups);
+  if (transcriptSession) {
+    connections.push({
+      key: `transcript:${transcriptSession.id}`,
+      label: 'Conversation transcript',
+      value: transcriptSession.title,
+      to: `/conversations/${encodeURIComponent(transcriptSession.id)}`,
+      detail: transcriptSession.title !== transcriptSession.id ? transcriptSession.id : undefined,
+    });
+  }
+
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
     const taskId = run.manifest?.source?.id ?? readSpec(run, 'taskId');
     const task = taskById(lookups, taskId);
@@ -589,6 +622,13 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
   return connections;
 }
 
+export function getRunConversationConnection(
+  run: DurableRunRecord,
+  lookups: RunPresentationLookups = {},
+): RunConnection | undefined {
+  return getRunConnections(run, lookups).find((connection) => connection.label.startsWith('Conversation') && connection.to);
+}
+
 export function getRunPrimaryConnection(
   run: DurableRunRecord,
   lookups: RunPresentationLookups = {},
@@ -605,7 +645,7 @@ export function getRunPrimaryActionLabel(connection: RunConnection | undefined):
     return 'Open task';
   }
 
-  if (connection.label === 'Conversation' || connection.label === 'Conversation to reopen') {
+  if (connection.label.startsWith('Conversation')) {
     return 'Open conversation';
   }
 

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
 import {
+  getRunConversationConnection,
   getRunHeadline,
   getRunImportState,
   getRunMoment,
@@ -14,6 +15,7 @@ import {
 } from '../runPresentation';
 import type { DurableRunRecord } from '../types';
 import { timeAgo } from '../utils';
+import { setConversationRunIdInSearch } from '../conversationRuns';
 import { SettingsSplitLayout } from '../components/SettingsLayout';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
@@ -224,6 +226,7 @@ export function RunsPage() {
               const statusLabel = runStatusLabel(run);
               const moment = runMomentLabel(run);
               const primaryConnection = getRunPrimaryConnection(run, lookups);
+              const conversationConnection = getRunConversationConnection(run, lookups);
               const connectionLabel = primaryConnection?.label === 'Conversation to reopen'
                 ? 'conversation'
                 : primaryConnection?.label?.toLowerCase();
@@ -237,14 +240,17 @@ export function RunsPage() {
                 metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
               }
               metaParts.push(run.runId);
+              const rowHref = conversationConnection?.to
+                ? `${conversationConnection.to}${setConversationRunIdInSearch('', run.runId)}`
+                : `/runs/${encodeURIComponent(run.runId)}`;
 
               return (
                 <ListLinkRow
                   key={run.runId}
-                  to={`/runs/${encodeURIComponent(run.runId)}`}
+                  to={rowHref}
                   selected={selectedRunId === run.runId}
                   leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneDotClass(tone)}`} />}
-                  trailing={<span className={`mt-0.5 text-[11px] font-mono ${selectedRunId === run.runId ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>details</span>}
+                  trailing={<span className={`mt-0.5 text-[11px] font-mono ${selectedRunId === run.runId ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>{conversationConnection ? 'conversation' : 'details'}</span>}
                 >
                   <div className="flex items-center gap-2">
                     <p className="ui-row-title">{headline.title}</p>

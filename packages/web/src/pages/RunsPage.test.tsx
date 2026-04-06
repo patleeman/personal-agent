@@ -26,7 +26,7 @@ describe('RunsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders durable runs on their own page', () => {
+  it('opens linked conversations from the runs list when a run has conversation context', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/runs/conversation-live-conv-123']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -107,7 +107,7 @@ describe('RunsPage', () => {
 
     expect(html).toContain('Runs');
     expect(html).toContain('Fix runs navigation');
-    expect(html).toContain('href="/runs/conversation-live-conv-123"');
-    expect(html).toContain('details');
+    expect(html).toContain('href="/conversations/conv-123?run=conversation-live-conv-123"');
+    expect(html).toContain('conversation');
   });
 });

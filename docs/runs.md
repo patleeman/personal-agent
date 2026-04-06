@@ -118,6 +118,8 @@ A run can be launched from the context of a conversation, but the run itself is 
 
 When a run is launched from a web conversation, completion can wake that originating conversation back up with a ready conversation wakeup.
 
+In the web UI, runs that belong to a conversation can open that conversation directly with the run inspector selected. Agent runs that created their own transcript prefer that transcript conversation.
+
 Use runs when you want to avoid blocking the current thread. Then inspect the run later with its run id.
 
 If the outcome should eventually drive user attention, pair that behavior with the appropriate surface:
