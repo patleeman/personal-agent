@@ -15,8 +15,7 @@ const requiredArtifacts = [
   'packages/cli/dist/index.js',
   'packages/daemon/dist/index.js',
   'packages/services/dist/index.js',
-  'packages/web/dist-server/automation/distillConversationMemoryRun.js',
-  'packages/web/dist-server/automation/recoverConversationMemoryDistillRuns.js',
+  'packages/web/dist-server/index.js',
 ];
 
 const missingArtifacts = requiredArtifacts.filter((relativePath) => !existsSync(join(repoRoot, relativePath)));

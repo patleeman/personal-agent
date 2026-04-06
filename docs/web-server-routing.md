@@ -8,7 +8,7 @@ The server root is now intentionally shallow:
 
 - `routes/` — Express route registration modules
 - `conversations/` — session reads, live sessions, remote bindings, conversation memory, and conversation services
-- `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes, and server-side maintenance runner entrypoints
+- `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes
 - `workspace/` — workspace browser, git helpers, remote execution, folder picker
 - `models/` — model defaults, providers, auth, usage
 - `knowledge/` — memory docs, prompt references, node links
@@ -46,7 +46,7 @@ The companion SPA fallback also has to recognize both canonical `/app/*` URLs an
 | `routes/conversationState.ts` | conversation bootstrap, recover, execution target state, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel/import; companion surface is read-focused |
-| `routes/runsOps.ts` | run attention + page-distill retry/recover + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
+| `routes/runsOps.ts` | run attention + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
 | `routes/workspace.ts` | workspace browsing and git operations | Injects cwd helpers and commit-message drafting |
 | `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session helpers that were previously inline |
 | `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/skill table data with tags and page metadata |
