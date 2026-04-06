@@ -665,7 +665,6 @@ export type ConversationBootstrapLiveState = { live: false } | ({ live: true } &
 export interface ConversationBootstrapState {
   conversationId: string;
   sessionDetail: SessionDetail | null;
-  projects: ConversationProjectLinks;
   execution: ConversationExecutionState;
   remoteConnection: RemoteConversationConnectionState;
   liveSession: ConversationBootstrapLiveState;

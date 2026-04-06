@@ -11,7 +11,6 @@ The server root is now intentionally shallow:
 - `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes, and server-side maintenance runner entrypoints
 - `workspace/` — workspace browser, git helpers, remote execution, folder picker
 - `models/` — model defaults, providers, auth, usage
-- `projects/` — project records, packages, resources, generated documents
 - `knowledge/` — memory docs, prompt references, node links
 - `ui/` — web UI config, companion auth, SPA helpers, web-specific preferences
 - `extensions/` — agent extension factories
@@ -49,18 +48,18 @@ The companion SPA fallback also has to recognize both canonical `/app/*` URLs an
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel/import; companion surface is read-focused |
 | `routes/runsOps.ts` | run attention + page-distill retry/recover + remote transcript | Keeps the run-ops endpoints separate from the main run listing routes |
 | `routes/workspace.ts` | workspace browsing and git operations | Injects cwd helpers and commit-message drafting |
-| `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session/project helpers that were previously inline |
-| `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/project/skill table data with tags and page metadata |
+| `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session helpers that were previously inline |
+| `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/skill table data with tags and page metadata |
 | `routes/folderPicker.ts` | folder picker endpoint | Small wrapper around the folder picker service |
 | `routes/shell.ts` | ad-hoc shell command execution | Wrapper for the `/api/run` endpoint |
 | `routes/tasks.ts` | scheduled tasks and companion task run trigger | Shares task lookup logic through `taskService.ts` |
-| `routes/projects.ts`, `routes/models.ts`, `routes/daemon.ts`, `routes/webUi.ts`, `routes/system.ts`, `routes/activity.ts`, `routes/alerts.ts`, `routes/auth.ts`, `routes/profiles.ts`, `routes/tools.ts`, `routes/conversationTitles.ts`, `routes/executionTargets.ts` | the remaining app/companion route domains | Existing modules, now mounted from the same barrel. `routes/models.ts` also owns runtime default settings endpoints such as `/api/default-cwd` and conversation-plan library/default routes. |
+| `routes/models.ts`, `routes/daemon.ts`, `routes/webUi.ts`, `routes/system.ts`, `routes/activity.ts`, `routes/alerts.ts`, `routes/auth.ts`, `routes/profiles.ts`, `routes/tools.ts`, `routes/conversationTitles.ts`, `routes/executionTargets.ts` | the remaining app/companion route domains | Existing modules, now mounted from the same barrel. `routes/models.ts` also owns runtime default settings endpoints such as `/api/default-cwd` and conversation-plan library/default routes. |
 
 ## Shared helper files
 
 A few shared service/helper files exist to keep the route modules from becoming monoliths:
 
-- `conversations/conversationService.ts` — shared conversation snapshot/detail/bootstrap helpers used across conversation, project, run, and companion routes
+- `conversations/conversationService.ts` — shared conversation snapshot/detail/bootstrap helpers used across conversation, run, and companion routes
 - `automation/taskService.ts` — task ID/profile lookup helpers
 - `knowledge/memoryDocs.ts` — shared note, skill, and memory document helpers; profile-sensitive calls now take the profile explicitly instead of relying on a module-level setter
 - `shared/*` — cross-cutting helpers for logging, security headers, SSE/cookie helpers, and app events

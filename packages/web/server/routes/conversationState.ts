@@ -146,20 +146,12 @@ async function readConversationBootstrapState(input: {
     readConversationExecutionStateWithTelemetry(input.conversationId),
   ]);
 
-  const relatedProjectIds = getConversationProjectLink({
-    profile: input.profile,
-    conversationId: input.conversationId,
-  })?.relatedProjectIds ?? [];
   const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
 
   return {
     state: {
       conversationId: input.conversationId,
       sessionDetail: sessionResult.sessionRead.detail,
-      projects: {
-        conversationId: input.conversationId,
-        relatedProjectIds,
-      },
       execution: execution.state,
       remoteConnection: getRemoteConversationConnectionState({
         profile: input.profile,
@@ -664,19 +656,6 @@ export function registerConversationStateRoutes(
           remoteCwd: resolved.cwd,
         });
 
-        const relatedProjectIds = getConversationProjectLink({
-          profile,
-          conversationId,
-        })?.relatedProjectIds ?? [];
-
-        if (relatedProjectIds.length > 0) {
-          setConversationProjectLinks({
-            profile,
-            conversationId: result.id,
-            relatedProjectIds,
-          });
-        }
-
         setConversationExecutionTarget({
           profile,
           conversationId: result.id,
@@ -695,9 +674,6 @@ export function registerConversationStateRoutes(
           await stopRemoteLiveSession(conversationId).catch(() => undefined);
         }
 
-        if (relatedProjectIds.length > 0) {
-          invalidateAppTopics('projects');
-        }
         publishConversationSessionMetaChanged(conversationId, result.id);
         res.json({ id: result.id, sessionFile: result.sessionFile, cwd: resolved.cwd, changed: true });
         return;
@@ -733,20 +709,6 @@ export function registerConversationStateRoutes(
         ...buildLiveSessionResourceOptionsFn(),
         extensionFactories: buildLiveSessionExtensionFactoriesFn(),
       });
-
-      const relatedProjectIds = getConversationProjectLink({
-        profile,
-        conversationId,
-      })?.relatedProjectIds ?? [];
-
-      if (relatedProjectIds.length > 0) {
-        setConversationProjectLinks({
-          profile,
-          conversationId: result.id,
-          relatedProjectIds,
-        });
-        invalidateAppTopics('projects');
-      }
 
       if (liveEntry) {
         destroySession(conversationId);

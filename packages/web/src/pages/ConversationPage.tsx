@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationProjectLinks, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -25,16 +25,13 @@ import {
   shouldShowScrollToBottomControl,
 } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
-import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { buildWorkspaceSearch } from '../workspaceBrowser';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
-import { emitProjectsChanged } from '../projectEvents';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
 import { buildDeferredResumeAutoResumeKey } from '../deferredResumeAutoResume';
-import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
@@ -59,7 +56,6 @@ import {
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
   clearDraftConversationModel,
-  clearDraftConversationProjectIds,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
@@ -67,14 +63,12 @@ import {
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationModel,
-  persistDraftConversationProjectIds,
   persistDraftConversationExecutionTarget,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationCwd,
   readDraftConversationExecutionTarget,
   readDraftConversationModel,
-  readDraftConversationProjectIds,
   readDraftConversationThinkingLevel,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
@@ -106,7 +100,6 @@ const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
-const conversationProjectsCache = new Map<string, ConversationProjectLinks>();
 
 export function truncateConversationShelfText(
   text: string,
@@ -940,7 +933,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
-  const { alerts, projects, tasks, sessions, setProjects, setSessions, setAlerts = () => {} } = useAppData();
+  const { alerts, tasks, sessions, setSessions, setAlerts = () => {} } = useAppData();
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
@@ -1572,7 +1565,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
-  const [draftAttachedProjectIds, setDraftAttachedProjectIds] = useState<string[]>(() => readDraftConversationProjectIds());
   const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
@@ -1666,23 +1658,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         // Ignore draft attachment persistence failures.
       });
   }, [attachments, draft, drawingAttachments]);
-
-  useEffect(() => {
-    if (!draft) {
-      setDraftAttachedProjectIds([]);
-      return;
-    }
-
-    const syncDraftProjects = () => {
-      setDraftAttachedProjectIds(readDraftConversationProjectIds());
-    };
-
-    syncDraftProjects();
-    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
-    return () => {
-      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
-    };
-  }, [draft]);
 
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
@@ -1819,32 +1794,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
   const [remoteConnectBusy, setRemoteConnectBusy] = useState(false);
-  const conversationProjectsFetcher = useCallback(async () => {
-    if (!id || conversationBootstrapPendingContext) {
-      return { conversationId: '', relatedProjectIds: [] };
-    }
-
-    return api.conversationProjects(id);
-  }, [conversationBootstrapPendingContext, id]);
-  const {
-    data: conversationProjectsData,
-    refetch: refetchConversationProjects,
-  } = useApi(conversationProjectsFetcher, id ?? 'no-conversation');
-  const conversationProjects = (conversationProjectsData?.conversationId === id
-    ? conversationProjectsData
-    : null)
-    ?? visibleConversationBootstrap?.projects
-    ?? (id ? conversationProjectsCache.get(id) ?? null : null);
-  const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
-
-  useEffect(() => {
-    if (!id || !conversationProjects) {
-      return;
-    }
-
-    conversationProjectsCache.set(id, conversationProjects);
-  }, [conversationProjects, id]);
-  useInvalidateOnTopics(['projects'], refetchConversationProjects);
   const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
@@ -1934,15 +1883,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
   const mentionItems = useMemo(() => buildMentionItems({
-    projects: projects ?? [],
+    projects: [],
     tasks: tasks ?? [],
     memoryDocs: memoryData?.memoryDocs ?? [],
     skills: memoryData?.skills ?? [],
     profiles: profileState?.profiles ?? [],
-  }), [projects, tasks, memoryData, profileState]);
-  const referencedProjectIds = draft
-    ? draftAttachedProjectIds
-    : (conversationProjects?.relatedProjectIds ?? []);
+  }), [tasks, memoryData, profileState]);
   const currentSessionMeta = useMemo(
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
@@ -2005,23 +1951,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     isLiveSession,
     lastMessage: lastConversationMessage,
   }), [conversationRun, isLiveSession, lastConversationMessage]);
-  const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
-    .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
-  const draftReferencedProjectIds = useMemo(() => {
-    const ids = [...referencedProjectIds];
-    const seen = new Set(referencedProjectIds);
-
-    for (const item of draftMentionItems) {
-      if (item.kind !== 'project' || seen.has(item.label)) {
-        continue;
-      }
-
-      seen.add(item.label);
-      ids.push(item.label);
-    }
-
-    return ids;
-  }, [draftMentionItems, referencedProjectIds]);
+  const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems), [input, mentionItems]);
 
   useEffect(() => {
     if (!conversationRunId || draft) {
@@ -2339,8 +2269,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       if (isLiveSession) {
         await streamSend(textToSend, queuedBehavior);
-        await refetchConversationProjects({ resetLoading: false });
-        emitConversationProjectsChanged(id);
         window.setTimeout(() => {
           scrollToBottom();
         }, 50);
@@ -2356,8 +2284,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConfirmedLive(true);
       streamReconnect();
       await streamSend(textToSend, queuedBehavior);
-      await refetchConversationProjects({ resetLoading: false });
-      emitConversationProjectsChanged(id);
       window.setTimeout(() => {
         scrollToBottom();
       }, 50);
@@ -2370,7 +2296,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     defaultComposerBehavior,
     id,
     isLiveSession,
-    refetchConversationProjects,
     scrollToBottom,
     showNotice,
     streamReconnect,
@@ -2559,23 +2484,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [headerPreference]);
 
   useEffect(() => {
-    function handleConversationProjectsChanged(event: Event) {
-      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
-      if (detail?.conversationId && detail.conversationId !== id) {
-        return;
-      }
-
-      void refetchConversationProjects({ resetLoading: false });
-    }
-
-    window.addEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
     return () => {
-      window.removeEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
       if (noticeTimeoutRef.current !== null) {
         window.clearTimeout(noticeTimeoutRef.current);
       }
     };
-  }, [id, refetchConversationProjects]);
+  }, []);
 
   // Scroll tracking
   const handleScroll = useCallback(() => {
@@ -2687,17 +2601,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
 
-  // Refresh referenced projects when the agent finishes its run.
   useEffect(() => {
     if (prevStreamingRef.current && !stream.isStreaming) {
       if (pinnedInitialPromptScrollSessionIdRef.current === id) {
         pinnedInitialPromptScrollSessionIdRef.current = null;
         pinnedInitialPromptTailKeyRef.current = null;
       }
-      void refetchConversationProjects({ resetLoading: false });
     }
     prevStreamingRef.current = stream.isStreaming;
-  }, [id, stream.isStreaming, refetchConversationProjects]);
+  }, [id, stream.isStreaming]);
 
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
@@ -2809,10 +2721,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       normalizeConversationComposerBehavior(claimedInitialPrompt.behavior, allowQueuedPrompts),
       claimedInitialPrompt.images,
       claimedInitialPrompt.attachmentRefs,
-    ).then(async () => {
+    ).then(() => {
       pendingInitialPromptSessionIdRef.current = null;
-      await refetchConversationProjects({ resetLoading: false });
-      emitConversationProjectsChanged(id);
     }).catch((error) => {
       pendingInitialPromptSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
@@ -2830,7 +2740,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     allowQueuedPrompts,
     stream.hasSnapshot,
     stream.send,
-    refetchConversationProjects,
     showNotice,
   ]);
 
@@ -3289,12 +3198,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return persisted;
   }
 
-  async function refreshProjectMentions() {
-    const nextProjects = await api.projects();
-    setProjects(nextProjects);
-    emitProjectsChanged();
-  }
-
   async function scheduleDeferredResume(delay: string, prompt?: string) {
     if (!id || draft) {
       showNotice('danger', 'Wakeup requires an existing conversation.', 4000);
@@ -3448,28 +3351,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
 
-  async function removeReferencedProject(projectId: string) {
-    if (draft) {
-      const nextProjectIds = draftAttachedProjectIds.filter((id) => id !== projectId);
-      persistDraftConversationProjectIds(nextProjectIds);
-      setDraftAttachedProjectIds(nextProjectIds);
-      return;
-    }
-
-    if (!id || conversationProjectsBusy) {
-      return;
-    }
-
-    setConversationProjectsBusy(true);
-    try {
-      await api.removeConversationProject(id, projectId);
-      await refetchConversationProjects({ resetLoading: false });
-      emitConversationProjectsChanged(id);
-    } finally {
-      setConversationProjectsBusy(false);
-    }
-  }
-
   const handleExecutionTargetSelect = useCallback(async (targetId: string | null) => {
     if (executionSelectionBusy) {
       return;
@@ -3500,55 +3381,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setExecutionTargetBusy(false);
     }
   }, [currentSurfaceId, draft, ensureConversationCanControl, executionSelectionBusy, id, replaceConversationExecution, showNotice]);
-
-  async function handleProjectSlashCommand(command: ProjectSlashCommand) {
-    try {
-      if (command.action === 'new') {
-        const detail = await api.createProject({
-          title: command.description,
-          description: command.description,
-        });
-        const createdProjectId = detail.project.id;
-        await refreshProjectMentions();
-
-        if (id) {
-          await api.addConversationProject(id, createdProjectId);
-          await refetchConversationProjects({ resetLoading: false });
-          emitConversationProjectsChanged(id);
-          showNotice('accent', `Created and referenced @${createdProjectId}`);
-        } else {
-          showNotice('accent', `Created page @${createdProjectId}`);
-        }
-
-        setInput('');
-        return;
-      }
-
-      if (!id) {
-        showNotice('danger', 'Project references are only available inside a conversation.');
-        return;
-      }
-
-      setConversationProjectsBusy(true);
-      try {
-        if (command.action === 'reference') {
-          await api.addConversationProject(id, command.projectId);
-          showNotice('accent', `Now referencing @${command.projectId}`);
-        } else {
-          await api.removeConversationProject(id, command.projectId);
-          showNotice('accent', `Stopped referencing @${command.projectId}`);
-        }
-
-        await refetchConversationProjects({ resetLoading: false });
-        emitConversationProjectsChanged(id);
-        setInput('');
-      } finally {
-        setConversationProjectsBusy(false);
-      }
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
-  }
 
   async function renameConversationTo(nextTitle: string) {
     if (draft || !id) {
@@ -3586,10 +3418,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
     clearDraftConversationModel();
-    clearDraftConversationProjectIds();
     clearDraftConversationThinkingLevel();
     setDraftExecutionTargetId(null);
-    setDraftAttachedProjectIds([]);
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setInput('');
@@ -3617,7 +3447,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cwd,
       `${messageCount} ${messageCount === 1 ? 'block' : 'blocks'}`,
       sessionTokens ? formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow) : null,
-      referencedProjectIds.length > 0 ? `${referencedProjectIds.length} referenced project${referencedProjectIds.length === 1 ? '' : 's'}` : null,
     ].filter((value): value is string => Boolean(value));
 
     showNotice('accent', details.join(' · '), 5000);
@@ -3841,17 +3670,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     let slashTextToSend: string | null = null;
     if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
-      const projectSlash = parseProjectSlashCommand(text);
-      if (projectSlash) {
-        if (projectSlash.kind === 'invalid') {
-          showNotice('danger', projectSlash.message, 4000);
-        } else {
-          rememberComposerInput(inputSnapshot);
-          await handleProjectSlashCommand(projectSlash.command);
-        }
-        return;
-      }
-
       const deferredResumeSlash = parseDeferredResumeSlashCommand(text);
       if (deferredResumeSlash) {
         if (deferredResumeSlash.kind === 'invalid') {
@@ -3929,7 +3747,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds, undefined, remoteTargetId, {
+          const { id: newId } = await api.createLiveSession(draftCwd, undefined, undefined, remoteTargetId, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });
@@ -3946,7 +3764,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationCwd();
           clearDraftConversationExecutionTarget();
           clearDraftConversationModel();
-          clearDraftConversationProjectIds();
           clearDraftConversationThinkingLevel();
 
           ensureConversationTabOpen(newId);
@@ -3982,9 +3799,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           hasVisibleSessionDetail: Boolean(visibleSessionDetail),
         }));
         await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
-
-        await refetchConversationProjects({ resetLoading: false });
-        emitConversationProjectsChanged(id);
         await refetchConversationAttachments();
 
         window.setTimeout(() => {
@@ -4003,8 +3817,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           stream.reconnect();
           setPendingAssistantStatusLabel('Working…');
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
-          await refetchConversationProjects({ resetLoading: false });
-          emitConversationProjectsChanged(id);
           await refetchConversationAttachments();
           window.setTimeout(() => {
             scrollToBottom();
@@ -4289,7 +4101,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         : null);
   const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
   const hasComposerShelfContent = draftMentionItems.length > 0
-    || referencedProjectIds.length > 0
     || attachments.length > 0
     || drawingAttachments.length > 0
     || drawingsBusy
@@ -4413,7 +4224,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
-              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
+              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail or use the saved default from Settings.'
               : remoteConnectionPending
                 ? 'Connecting to the remote workspace and staging your first turn. Your message has been queued and will send as soon as the remote session is ready.'
                 : remoteConversationRequiresConnect
@@ -4747,28 +4558,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       >
                         <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{item.kind}</span>
                         <span className="font-mono text-accent">{item.id}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Referenced projects */}
-                {referencedProjectIds.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                    <span className="ui-section-label">Referenced projects</span>
-                    {referencedProjectIds.map((projectId) => (
-                      <span key={projectId} className="inline-flex max-w-[18rem] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent" title={`@${projectId}`}>
-                        <span className="truncate font-mono">@{projectId}</span>
-                        <button
-                          type="button"
-                          onClick={() => { void removeReferencedProject(projectId); }}
-                          className="text-accent/70 transition-colors hover:text-accent disabled:opacity-40"
-                          disabled={conversationProjectsBusy}
-                          title={`Stop referencing ${projectId}`}
-                          aria-label={`Stop referencing ${projectId}`}
-                        >
-                          ×
-                        </button>
                       </span>
                     ))}
                   </div>

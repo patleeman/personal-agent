@@ -12,11 +12,8 @@ import {
 import {
   buildDraftConversationCwdStorageKey,
   buildDraftConversationExecutionTargetStorageKey,
-  clearDraftConversationProjectIds,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
-  persistDraftConversationProjectIds,
-  readDraftConversationProjectIds,
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
@@ -29,7 +26,6 @@ import {
   getRunTimeline,
   type RunPresentationLookups,
 } from '../runPresentation';
-import { pickFocusedProjectId } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
@@ -42,19 +38,15 @@ import type {
   ActivityEntry,
   AgentToolInfo,
   ConversationExecutionState,
-  ConversationProjectLinks,
   DurableRunDetailResult,
   LiveSessionContext,
   MemoryAgentsItem,
-  ProjectDetail,
-  ProjectRecord,
   RemoteFolderListing,
   ScheduledTaskSummary,
   WorkspaceChangeKind,
 } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
-import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
@@ -62,7 +54,6 @@ import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
-const ProjectOverviewPanel = lazy(() => import('./ProjectOverviewPanel').then((module) => ({ default: module.ProjectOverviewPanel })));
 const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
@@ -86,8 +77,6 @@ type ConversationRailCacheEntry<T> = {
 
 const liveSessionContextCache = new Map<string, ConversationRailCacheEntry<LiveSessionContext>>();
 const liveSessionContextInflight = new Map<string, Promise<LiveSessionContext>>();
-const conversationProjectsCache = new Map<string, ConversationRailCacheEntry<ConversationProjectLinks>>();
-const conversationProjectsInflight = new Map<string, Promise<ConversationProjectLinks>>();
 const conversationExecutionCache = new Map<string, ConversationRailCacheEntry<ConversationExecutionState>>();
 const conversationExecutionInflight = new Map<string, Promise<ConversationExecutionState>>();
 
@@ -134,15 +123,12 @@ function fetchConversationRailCacheEntry<T>(input: {
 export function prefetchConversationRailData(input: {
   conversationId: string;
   workspaceVersion: number;
-  projectsVersion: number;
   runsVersion: number;
   executionTargetsVersion: number;
 }): Promise<void> {
   const liveContextVersionKey = `${input.workspaceVersion}`;
-  const projectsVersionKey = `${input.projectsVersion}`;
   const executionVersionKey = `${input.executionTargetsVersion}:${input.runsVersion}`;
   const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
-  const cachedProjects = conversationProjectsCache.get(input.conversationId) ?? null;
   const cachedExecution = conversationExecutionCache.get(input.conversationId) ?? null;
 
   const requests: Promise<unknown>[] = [];
@@ -153,16 +139,6 @@ export function prefetchConversationRailData(input: {
       key: input.conversationId,
       versionKey: liveContextVersionKey,
       fetcher: () => api.liveSessionContext(input.conversationId),
-    }));
-  }
-
-  if (!isConversationRailCacheFresh(cachedProjects, projectsVersionKey)) {
-    requests.push(fetchConversationRailCacheEntry({
-      cache: conversationProjectsCache,
-      inflight: conversationProjectsInflight,
-      key: input.conversationId,
-      versionKey: projectsVersionKey,
-      fetcher: () => api.conversationProjects(input.conversationId),
     }));
   }
 
@@ -807,166 +783,7 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
 
 // ── Live session context ──────────────────────────────────────────────────────
 
-function LinkedProjectOverviewPanel({
-  project,
-  onRemove,
-  removeDisabled = false,
-}: {
-  project: ProjectDetail;
-  onRemove?: () => void;
-  removeDisabled?: boolean;
-}) {
-  return suspendRailPanel(
-    <ProjectOverviewPanel
-      project={project}
-      onRemove={onRemove}
-      removeDisabled={removeDisabled}
-    />,
-    'Loading page…',
-  );
-}
-
-function ReferencedProjectModal({
-  projectId,
-  project,
-  loading,
-  onClose,
-  onRemove,
-  removeDisabled = false,
-}: {
-  projectId: string;
-  project: ProjectDetail | null;
-  loading: boolean;
-  onClose: () => void;
-  onRemove?: () => void;
-  removeDisabled?: boolean;
-}) {
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  const modalLabel = project ? `${project.project.title} (${project.project.id})` : projectId;
-
-  return (
-    <div
-      className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Referenced page: ${modalLabel}`}
-        className="ui-dialog-shell"
-        style={{ maxWidth: 'min(980px, calc(100vw - 3rem))', maxHeight: 'calc(100vh - 5rem)' }}
-      >
-        <div className="shrink-0 border-b border-border-subtle px-4 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="ui-section-label">Referenced page</p>
-              <p className="truncate text-[13px] text-primary" title={modalLabel}>{modalLabel}</p>
-            </div>
-            <button type="button" onClick={onClose} className="ui-toolbar-button">
-              Close
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="min-h-0 flex-1 overflow-y-auto py-4 pl-4 pr-5"
-          style={{ scrollbarGutter: 'stable' }}
-        >
-          {loading && !project && <LoadingState label="Loading page…" className="justify-center" />}
-          {!loading && project && (
-            <LinkedProjectOverviewPanel
-              project={project}
-              onRemove={onRemove}
-              removeDisabled={removeDisabled}
-            />
-          )}
-          {!loading && !project && <ErrorState message="Unable to load this page." />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReferencedProjectsSectionContent({
-  relatedProjectIds,
-  allProjects,
-  onOpenProject,
-  focusedProjectId,
-  projectModalOpen,
-  projectsLoading = false,
-}: {
-  relatedProjectIds: string[];
-  allProjects: ProjectRecord[];
-  onOpenProject: (projectId: string) => void;
-  focusedProjectId: string;
-  projectModalOpen: boolean;
-  projectsLoading?: boolean;
-}) {
-  return (
-    <div className="space-y-3">
-      {relatedProjectIds.length > 0 && (
-        <div className="divide-y divide-border-subtle/70">
-          {relatedProjectIds.map((projectId) => {
-            const projectRecord = allProjects.find((project) => project.id === projectId) ?? null;
-            const isSelected = projectModalOpen && projectId === focusedProjectId;
-            return (
-              <button
-                key={projectId}
-                type="button"
-                onClick={() => onOpenProject(projectId)}
-                className={cx(
-                  'w-full py-2.5 text-left transition-colors',
-                  isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
-                )}
-                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-medium text-primary">{projectRecord?.title ?? projectId}</p>
-                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-secondary">
-                      <span className="font-mono">@{projectId}</span>
-                      {projectRecord?.profile && (
-                        <>
-                          <span className="opacity-35">·</span>
-                          <span>profile {projectRecord.profile}</span>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                    {isSelected ? 'open' : 'view'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim animate-pulse">Loading projects…</p>
-      )}
-      {!projectsLoading && relatedProjectIds.length === 0 && (
-        <p className="text-[12px] text-dim">No referenced projects.</p>
-      )}
-    </div>
-  );
-}
-
 function DraftConversationContextPanel() {
-  const { projects: projectSnapshot } = useAppData();
   const [draftCwd, setDraftCwd, clearDraftCwd] = useReloadState<string>({
     storageKey: buildDraftConversationCwdStorageKey(),
     initialValue: '',
@@ -977,11 +794,6 @@ function DraftConversationContextPanel() {
     initialValue: null,
     shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
   });
-  const [draftProjectIds, setDraftProjectIds] = useState<string[]>(() => readDraftConversationProjectIds());
-  const [focusedProjectId, setFocusedProjectId] = useState('');
-  const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
-  const [focusedLoading, setFocusedLoading] = useState(false);
-  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState(draftCwd);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
@@ -990,10 +802,6 @@ function DraftConversationContextPanel() {
   const [remotePickerBusy, setRemotePickerBusy] = useState(false);
   const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
-
-  const allProjects = projectSnapshot ?? [];
-  const projectsLoading = projectSnapshot === null;
-  const focusedProjectRecord = allProjects.find((project) => project.id === focusedProjectId) ?? null;
 
   useEffect(() => {
     if (!changingCwd) {
@@ -1006,70 +814,6 @@ function DraftConversationContextPanel() {
     setRemotePickerError(null);
     setRemotePickerListing(null);
   }, [draftTargetId]);
-
-  useEffect(() => {
-    const syncDraftProjects = () => {
-      setDraftProjectIds(readDraftConversationProjectIds());
-    };
-
-    syncDraftProjects();
-    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
-    return () => {
-      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
-    };
-  }, []);
-
-  useEffect(() => {
-    const nextFocusedProjectId = pickFocusedProjectId(draftProjectIds, focusedProjectId);
-    if (nextFocusedProjectId !== focusedProjectId) {
-      setFocusedProjectId(nextFocusedProjectId);
-    }
-  }, [draftProjectIds, focusedProjectId]);
-
-  useEffect(() => {
-    if (!projectModalOpen) {
-      return;
-    }
-
-    if (!focusedProjectId || !draftProjectIds.includes(focusedProjectId)) {
-      setProjectModalOpen(false);
-    }
-  }, [draftProjectIds, focusedProjectId, projectModalOpen]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!focusedProjectId) {
-      setFocusedProject(null);
-      setFocusedLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    setFocusedLoading(true);
-    setFocusedProject((current) => (current?.project.id === focusedProjectId ? current : null));
-    api.projectById(
-      focusedProjectId,
-      focusedProjectRecord?.profile ? { profile: focusedProjectRecord.profile } : undefined,
-    )
-      .then((detail) => {
-        if (cancelled) {
-          return;
-        }
-
-        setFocusedProject(detail);
-        setFocusedLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setFocusedProject(null);
-        setFocusedLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [focusedProjectId, focusedProjectRecord?.profile]);
 
   const hasExplicitCwd = draftCwd.trim().length > 0;
   const isRemoteDraft = typeof draftTargetId === 'string' && draftTargetId.length > 0;
@@ -1163,16 +907,6 @@ function DraftConversationContextPanel() {
     setChangingCwd(false);
   }
 
-  function removeDraftProject(projectId: string) {
-    const nextProjectIds = draftProjectIds.filter((id) => id !== projectId);
-    if (nextProjectIds.length === 0) {
-      clearDraftConversationProjectIds();
-    } else {
-      persistDraftConversationProjectIds(nextProjectIds);
-    }
-    setDraftProjectIds(nextProjectIds);
-  }
-
   return (
     <div className="px-4 py-4">
       <Section title="Working Directory">
@@ -1251,7 +985,7 @@ function DraftConversationContextPanel() {
                   cancelChangingCwd();
                 }
               }}
-              placeholder="~/workingdir/project"
+              placeholder="~/workingdir/repo"
               spellCheck={false}
               disabled={pickCwdBusy}
               aria-label="Draft conversation working directory"
@@ -1283,34 +1017,6 @@ function DraftConversationContextPanel() {
           <p className="text-[11px] text-danger/80">{changeCwdError}</p>
         )}
       </Section>
-
-      <Section title="Referenced projects">
-        <ReferencedProjectsSectionContent
-          relatedProjectIds={draftProjectIds}
-          allProjects={allProjects}
-          onOpenProject={(projectId) => {
-            setFocusedProjectId(projectId);
-            setProjectModalOpen(true);
-          }}
-          focusedProjectId={focusedProjectId}
-          projectModalOpen={projectModalOpen}
-          projectsLoading={projectsLoading}
-        />
-      </Section>
-
-
-      {projectModalOpen && focusedProjectId && (
-        <ReferencedProjectModal
-          projectId={focusedProjectId}
-          project={focusedProject?.project.id === focusedProjectId ? focusedProject : null}
-          loading={focusedLoading}
-          onClose={() => setProjectModalOpen(false)}
-          onRemove={() => {
-            removeDraftProject(focusedProjectId);
-            setProjectModalOpen(false);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -1319,21 +1025,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
-  const { tasks, sessions, runs, projects: projectSnapshot, setRuns } = useAppData();
+  const { tasks, sessions, runs, setRuns } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
-  const [conversationProjects, setConversationProjects] = useState<ConversationProjectLinks | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
-  const [referenceableProjects, setReferenceableProjects] = useState<ProjectRecord[] | null>(projectSnapshot);
-  const [focusedProjectId, setFocusedProjectId] = useState('');
-  const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
-  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
   const [workingTreeExpanded, setWorkingTreeExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [linkBusy, setLinkBusy] = useState(false);
-  const [focusedLoading, setFocusedLoading] = useState(false);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState('');
@@ -1344,7 +1043,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
-  const allProjects = referenceableProjects ?? projectSnapshot ?? [];
   useEffect(() => {
     if (runs !== null) {
       return;
@@ -1373,26 +1071,21 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const runsLoading = runs === null;
   const runsError = null;
   const liveContextVersionKey = `${versions.workspace}`;
-  const projectsVersionKey = `${versions.projects}`;
   const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
 
   const load = useCallback((options: {
     forceContext?: boolean;
-    forceProjects?: boolean;
     forceExecution?: boolean;
   } = {}) => {
     let cancelled = false;
     const cachedContext = liveSessionContextCache.get(id) ?? null;
-    const cachedProjects = conversationProjectsCache.get(id) ?? null;
     const cachedExecution = conversationExecutionCache.get(id) ?? null;
     const hasFreshContext = !options.forceContext && isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
-    const hasFreshProjects = !options.forceProjects && isConversationRailCacheFresh(cachedProjects, projectsVersionKey);
     const hasFreshExecution = !options.forceExecution && isConversationRailCacheFresh(cachedExecution, executionVersionKey);
 
     setData(cachedContext?.data ?? null);
-    setConversationProjects(cachedProjects?.data ?? null);
     setExecution(cachedExecution?.data ?? null);
-    setLoading(!cachedContext && !cachedProjects && !cachedExecution);
+    setLoading(!cachedContext && !cachedExecution);
     setError(false);
 
     const contextPromise = hasFreshContext && cachedContext
@@ -1404,15 +1097,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: liveContextVersionKey,
           fetcher: () => api.liveSessionContext(id),
         });
-    const projectsPromise = hasFreshProjects && cachedProjects
-      ? Promise.resolve(cachedProjects.data)
-      : fetchConversationRailCacheEntry({
-          cache: conversationProjectsCache,
-          inflight: conversationProjectsInflight,
-          key: id,
-          versionKey: projectsVersionKey,
-          fetcher: () => api.conversationProjects(id),
-        });
     const executionPromise = hasFreshExecution && cachedExecution
       ? Promise.resolve(cachedExecution.data)
       : fetchConversationRailCacheEntry({
@@ -1422,14 +1106,13 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: executionVersionKey,
           fetcher: () => api.conversationExecution(id),
         });
-    Promise.all([contextPromise, projectsPromise, executionPromise])
-      .then(([context, nextProjects, nextExecution]) => {
+    Promise.all([contextPromise, executionPromise])
+      .then(([context, nextExecution]) => {
         if (cancelled) {
           return;
         }
 
         setData(context);
-        setConversationProjects(nextProjects);
         setExecution(nextExecution);
         setLoading(false);
       })
@@ -1442,7 +1125,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [executionVersionKey, id, liveContextVersionKey, projectsVersionKey]);
+  }, [executionVersionKey, id, liveContextVersionKey]);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
@@ -1450,32 +1133,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => load(), [load]);
-
-  useEffect(() => {
-    if (projectSnapshot !== null && referenceableProjects === null) {
-      setReferenceableProjects(projectSnapshot);
-    }
-  }, [projectSnapshot, referenceableProjects]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    api.projects({ profile: 'all' })
-      .then((projects) => {
-        if (!cancelled) {
-          setReferenceableProjects(projects);
-        }
-      })
-      .catch(() => {
-        if (!cancelled && projectSnapshot !== null) {
-          setReferenceableProjects(projectSnapshot);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectSnapshot, versions.projects]);
 
   useEffect(() => {
     if (loading || (!data && !execution && !error)) {
@@ -1487,12 +1144,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         state: error ? 'error' : 'loaded',
         hasContext: Boolean(data),
         hasExecution: Boolean(execution),
-        relatedProjectCount: conversationProjects?.relatedProjectIds.length ?? 0,
       });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [conversationProjects, data, error, execution, id, loading]);
+  }, [data, error, execution, id, loading]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
@@ -1541,7 +1197,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setRemotePickerListing(null);
     setRunsExpanded(false);
     setWorkingTreeExpanded(false);
-    setProjectModalOpen(false);
   }, [id]);
 
   useEffect(() => {
@@ -1550,24 +1205,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }, [data?.cwd, changingCwd]);
 
-  useEffect(() => {
-    function handleConversationProjectsChanged(event: Event) {
-      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
-      if (detail?.conversationId && detail.conversationId !== id) {
-        return;
-      }
-
-      load({ forceProjects: true });
-    }
-
-    window.addEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
-    return () => window.removeEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
-  }, [id, load]);
-
-  const relatedProjectIds = conversationProjects?.relatedProjectIds ?? [];
   const remoteTargetId = execution?.location === 'remote' ? execution.targetId : null;
   const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
-  const focusedProjectRecord = allProjects.find((project) => project.id === focusedProjectId) ?? null;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
   const connectedBackgroundRuns = useMemo(() => {
@@ -1691,64 +1330,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setRunsExpanded(true);
   }, [connectedBackgroundRuns, id, runsExpanded, selectedRunId]);
 
-  useEffect(() => {
-    const nextFocusedProjectId = pickFocusedProjectId(relatedProjectIds, focusedProjectId);
-    if (nextFocusedProjectId !== focusedProjectId) {
-      setFocusedProjectId(nextFocusedProjectId);
-    }
-  }, [focusedProjectId, relatedProjectIds]);
-
-  useEffect(() => {
-    if (!projectModalOpen) {
-      return;
-    }
-
-    if (!focusedProjectId || !relatedProjectIds.includes(focusedProjectId)) {
-      setProjectModalOpen(false);
-    }
-  }, [focusedProjectId, projectModalOpen, relatedProjectIds]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!focusedProjectId) {
-      setFocusedProject(null);
-      setFocusedLoading(false);
-      return () => { cancelled = true; };
-    }
-
-    setFocusedLoading(true);
-    setFocusedProject((current) => (current?.project.id === focusedProjectId ? current : null));
-    api.projectById(
-      focusedProjectId,
-      focusedProjectRecord?.profile ? { profile: focusedProjectRecord.profile } : undefined,
-    )
-      .then((detail) => {
-        if (cancelled) return;
-        setFocusedProject(detail);
-        setFocusedLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setFocusedProject(null);
-        setFocusedLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [focusedProjectId, focusedProjectRecord?.profile]);
-
-  async function removeLinkedProject(projectId: string) {
-    if (linkBusy) return;
-    setLinkBusy(true);
-    try {
-      await api.removeConversationProject(id, projectId);
-      emitConversationProjectsChanged(id);
-      load({ forceProjects: true });
-    } finally {
-      setLinkBusy(false);
-    }
-  }
-
   function openRun(runId: string) {
     navigate({
       pathname: location.pathname,
@@ -1854,7 +1435,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
       ensureConversationTabOpen(result.id);
       closeConversationTab(id);
-      emitConversationProjectsChanged(result.id);
       navigate(`/conversations/${result.id}`);
     } catch (error) {
       setChangeCwdError(error instanceof Error ? error.message : 'Could not change the working directory.');
@@ -2041,19 +1621,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         )}
       </Section>
 
-      <Section title="Referenced projects">
-        <ReferencedProjectsSectionContent
-          relatedProjectIds={relatedProjectIds}
-          allProjects={allProjects}
-          onOpenProject={(projectId) => {
-            setFocusedProjectId(projectId);
-            setProjectModalOpen(true);
-          }}
-          focusedProjectId={focusedProjectId}
-          projectModalOpen={projectModalOpen}
-          projectsLoading={referenceableProjects === null && projectSnapshot === null}
-        />
-      </Section>
 
       <Section title="Runs">
         <button
@@ -2161,16 +1728,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </div>
       </details>
 
-      {projectModalOpen && focusedProjectId && (
-        <ReferencedProjectModal
-          projectId={focusedProjectId}
-          project={focusedProject?.project.id === focusedProjectId ? focusedProject : null}
-          loading={focusedLoading}
-          onClose={() => setProjectModalOpen(false)}
-          onRemove={() => { void removeLinkedProject(focusedProjectId); setProjectModalOpen(false); }}
-          removeDisabled={linkBusy}
-        />
-      )}
     </div>
   );
 }
@@ -2306,7 +1863,7 @@ function InboxItemContext({ id }: { id: string }) {
         </div>
       )}
 
-      {(relatedConversationIds.length > 0 || (entry.relatedProjectIds && entry.relatedProjectIds.length > 0)) && (
+      {relatedConversationIds.length > 0 && (
         <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-2">Related</p>
           <div className="space-y-3">
@@ -2322,17 +1879,6 @@ function InboxItemContext({ id }: { id: string }) {
                   >
                     {conversationId}
                   </Link>
-                ))}
-              </div>
-            )}
-
-            {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Docs</p>
-                {entry.relatedProjectIds.map((projectId) => (
-                  <span key={projectId} className="ui-card-meta font-mono text-secondary">
-                    {projectId}
-                  </span>
                 ))}
               </div>
             )}

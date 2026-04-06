@@ -23,10 +23,6 @@ import {
 import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerCompanionModelRoutes, registerModelRoutes } from './models.js';
 import { registerProfileRoutes } from './profiles.js';
-import {
-  registerCompanionProjectRoutes,
-  registerProjectRoutes,
-} from './projects.js';
 import { registerCompanionRunRoutes } from './runs.js';
 import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
@@ -63,10 +59,6 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
 
   registerCompanionWebUiRoutes(companionApp, context);
   registerCompanionSystemRoutes(companionApp, context);
-
-  registerProjectRoutes(app, context);
-
-  registerCompanionProjectRoutes(companionApp, context);
 
   registerConversationRoutes(app, context);
   registerCompanionConversationRoutes(companionApp, context);

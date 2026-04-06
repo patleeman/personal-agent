@@ -180,7 +180,7 @@ The Conversations workspace only treats conversation unread state as “needs re
 
 Conversation lists in the sidebar and on the Conversations page are grouped by working directory so related threads stay clustered under the same repo or folder. In the sidebar, each working-directory header shows the folder name, reveals the full path on hover, and includes a quick action to start a draft chat in that cwd.
 
-Saved conversations also keep their working directory, referenced projects, and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
+Saved conversations also keep their working directory and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -367,16 +367,11 @@ When you mention these items, the UI resolves them and injects durable context i
 
 This makes the conversation aware of the durable objects you are pointing at, instead of copying them manually into the prompt.
 
-## Referenced projects and working directory selection
+## Working directory selection
 
-Referenced projects matter in two ways:
-
-1. they stay attached to the conversation as durable project context
-2. if a new conversation references exactly one project with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
+A new conversation uses an explicitly selected working directory when one is set.
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
-
-That makes project references more than just labels.
 
 ## Common conversation composer commands
 

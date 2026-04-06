@@ -283,7 +283,7 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('Full page');
   });
 
-  it('shows working directory, project references, and agent reminders on the draft conversation rail', () => {
+  it('shows the working directory controls on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <AppDataContext.Provider value={{
@@ -304,9 +304,8 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
-    expect(html).toContain('No referenced projects.');
+    expect(html).not.toContain('Referenced projects');
+    expect(html).not.toContain('No referenced projects.');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {

@@ -53,7 +53,6 @@ Examples of user-visible extension behavior in this repo:
 - **note-page policy** — keeps AGENTS, skills, and note-page rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
 - **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
-- **project agent extension** — manages durable tracked pages and current conversation ↔ page references
 
 ## What to edit when you want to change behavior
 

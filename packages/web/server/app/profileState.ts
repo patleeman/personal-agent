@@ -13,7 +13,6 @@ import { createActivityAgentExtension } from '../extensions/activityAgentExtensi
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createDeferredResumeAgentExtension } from '../extensions/deferredResumeAgentExtension.js';
-import { createProjectAgentExtension } from '../extensions/projectAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
@@ -98,11 +97,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
-      createProjectAgentExtension({
-        repoRoot,
-        stateRoot: getStateRoot(),
-        getCurrentProfile,
-      }),
       createScheduledTaskAgentExtension({
         getCurrentProfile,
       }),
@@ -171,7 +165,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     invalidateAppTopics(
       'activity',
       'alerts',
-      'projects',
       'sessions',
       'tasks',
       'runs',

@@ -13,16 +13,13 @@ import {
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
 import {
-  addConversationProjectLink,
   deleteConversationArtifact,
   deleteConversationAttachment,
   getConversationArtifact,
   getConversationAttachment,
-  getConversationProjectLink,
   listConversationArtifacts,
   listConversationAttachments,
   readConversationAttachmentDownload,
-  removeConversationProjectLink,
   saveConversationAttachment,
 } from '@personal-agent/core';
 import {
@@ -263,66 +260,6 @@ export function registerConversationRoutes(
       }
 
       res.json({ index });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.get('/api/conversations/:id/projects', (req, res) => {
-    try {
-      const profile = getCurrentProfileFn();
-      const relatedProjectIds = getConversationProjectLink({
-        profile,
-        conversationId: req.params.id,
-      })?.relatedProjectIds ?? [];
-      res.json({ conversationId: req.params.id, relatedProjectIds });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/conversations/:id/projects', (req, res) => {
-    try {
-      const profile = getCurrentProfileFn();
-      const { projectId } = req.body as { projectId?: string };
-      if (!projectId) { res.status(400).json({ error: 'projectId required' }); return; }
-
-      const document = addConversationProjectLink({
-        profile,
-        conversationId: req.params.id,
-        projectId,
-      });
-
-      invalidateAppTopics('projects');
-      res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
-    try {
-      const profile = getCurrentProfileFn();
-      const document = removeConversationProjectLink({
-        profile,
-        conversationId: req.params.id,
-        projectId: req.params.projectId,
-      });
-
-      invalidateAppTopics('projects');
-      res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

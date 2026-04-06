@@ -1,4 +1,3 @@
-import { relative } from 'node:path';
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
@@ -41,12 +40,9 @@ import {
 import { readCompanionSession } from '../ui/companionAuth.js';
 import {
   getConversationExecutionTarget,
-  getConversationProjectLink,
   getExecutionTarget,
-  listAllProjectIds,
   resolveConversationAttachmentPromptFiles,
   setConversationExecutionTarget,
-  setConversationProjectLinks,
 } from '@personal-agent/core';
 import {
   logError,
@@ -56,7 +52,6 @@ import {
   logWarn,
 } from '../middleware/index.js';
 import { parseTailBlocksQuery, publishConversationSessionMetaChanged } from '../conversations/conversationService.js';
-import { readProjectDetailFromProject, readProjectOwnerProfile, resolveProjectNodePaths } from '../projects/projects.js';
 import { readSessionMeta } from '../conversations/sessions.js';
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';
 import { resolveRemoteExecutionCwd } from '../workspace/remoteExecution.js';
@@ -180,10 +175,6 @@ function initializeLiveSessionRoutesContext(
   listProfileAgentItemsFn = context.listProfileAgentItems;
 }
 
-function listReferenceableProjectIds(): string[] {
-  return listAllProjectIds({ repoRoot: getRepoRootFn() });
-}
-
 function buildLiveSessionResourceOptions(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     ...buildLiveSessionResourceOptionsFn(getCurrentProfileFn()),
@@ -217,91 +208,6 @@ function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): st
 
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
-}
-
-function readProjectProfileById(projectId: string): string | null {
-  try {
-    return readProjectOwnerProfile({ repoRoot: getRepoRootFn(), projectId });
-  } catch {
-    return null;
-  }
-}
-
-function syncConversationProjectReferences(conversationId: string, mentionedProjectIds: string[]): string[] {
-  const profile = getCurrentProfileFn();
-  const availableProjectIds = listReferenceableProjectIds();
-  const availableProjectIdSet = new Set(availableProjectIds);
-  const existingProjectIds = (getConversationProjectLink({
-    profile,
-    conversationId,
-  })?.relatedProjectIds ?? []).filter((projectId) => availableProjectIdSet.has(projectId));
-  const relatedProjectIds = [...new Set([...existingProjectIds, ...mentionedProjectIds])];
-
-  const existingMatches = existingProjectIds.length === relatedProjectIds.length
-    && existingProjectIds.every((projectId, index) => projectId === relatedProjectIds[index]);
-
-  if (!existingMatches) {
-    setConversationProjectLinks({
-      profile,
-      conversationId,
-      relatedProjectIds,
-    });
-    invalidateAppTopics('projects');
-  }
-
-  return relatedProjectIds;
-}
-
-function buildReferencedProjectsContext(projectIds: string[]): string {
-  const currentProfile = getCurrentProfileFn();
-  const lines = projectIds.map((projectId) => {
-    const projectProfile = readProjectProfileById(projectId) ?? currentProfile;
-    const paths = {
-      projectFile: resolveProjectNodePaths({
-        repoRoot: getRepoRootFn(),
-        profile: projectProfile,
-        projectId,
-      }).projectFile,
-      filesDir: resolveProjectNodePaths({
-        repoRoot: getRepoRootFn(),
-        profile: projectProfile,
-        projectId,
-      }).filesDir,
-    };
-    const lineParts = [`- @${projectId}: ${relative(getRepoRootFn(), paths.projectFile)}`];
-
-    try {
-      const detail = readProjectDetailFromProject({
-        repoRoot: getRepoRootFn(),
-        profile: projectProfile,
-        projectId,
-      });
-      if (projectProfile !== currentProfile) {
-        lineParts.push(`  profile: ${projectProfile}`);
-      }
-      lineParts.push(`  title: ${detail.project.title}`);
-      lineParts.push(`  summary: ${detail.project.summary}`);
-      if (detail.project.repoRoot) {
-        lineParts.push(`  repoRoot: ${detail.project.repoRoot}`);
-      }
-      if (detail.document) {
-        lineParts.push(`  document: ${relative(getRepoRootFn(), detail.document.path)}`);
-      }
-      if (detail.fileCount > 0) {
-        lineParts.push(`  filesDir: ${relative(getRepoRootFn(), paths.filesDir)} (${detail.fileCount} files)`);
-      }
-    } catch {
-      // Ignore malformed project metadata in the lightweight reference summary.
-    }
-
-    return lineParts.join('\n');
-  });
-
-  return [
-    'Referenced projects for this conversation:',
-    ...lines,
-    'Projects are durable cross-conversation hubs. Read the structured fields and handoff doc when you need continuity, and use the project tool for project CRUD plus conversation reference changes.',
-  ].join('\n');
 }
 
 interface PromptAttachmentRefInput {
@@ -414,19 +320,17 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
     }));
     const promptReferences = resolvePromptReferences({
       text,
-      availableProjectIds: listReferenceableProjectIds(),
+      availableProjectIds: [],
       tasks,
       memoryDocs,
       skills,
       profiles: profileAgents,
     });
     const expandedNodeReferences = expandPromptReferencesWithNodeGraph({
-      projectIds: promptReferences.projectIds,
+      projectIds: [],
       memoryDocIds: promptReferences.memoryDocIds,
       skillNames: promptReferences.skillNames,
     });
-
-    const relatedProjectIds = syncConversationProjectReferences(id, expandedNodeReferences.projectIds);
     const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
     const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
     const referencedSkills = pickPromptReferencesInOrder(expandedNodeReferences.skillNames, skills);
@@ -458,7 +362,6 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
     const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
 
     const queuedContextBlocks = [
-      relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, getRepoRootFn()) : '',
       referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, getRepoRootFn()) : '',
@@ -577,7 +480,6 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       ok: true,
       accepted: true,
       delivery: submittedPrompt.acceptedAs,
-      relatedProjectIds,
       referencedTaskIds: promptReferences.taskIds,
       referencedMemoryDocIds: promptReferences.memoryDocIds,
       referencedSkillNames: promptReferences.skillNames,
@@ -697,33 +599,16 @@ export function registerLiveSessionRoutes(
     try {
       const body = req.body as {
         cwd?: string;
-        referencedProjectIds?: string[];
-        text?: string;
         targetId?: string | null;
         model?: string | null;
         thinkingLevel?: string | null;
       };
       const profile = getCurrentProfileFn();
-      const availableProjectIds = listReferenceableProjectIds();
-      const inferredReferencedProjectIds = body.text
-        ? resolvePromptReferences({
-          text: body.text,
-          availableProjectIds,
-          tasks: [],
-          memoryDocs: [],
-          skills: [],
-          profiles: [],
-        }).projectIds
-        : [];
-      const referencedProjectIds = body.referencedProjectIds && body.referencedProjectIds.length > 0
-        ? body.referencedProjectIds.filter((projectId) => availableProjectIds.includes(projectId))
-        : inferredReferencedProjectIds;
       const cwd = resolveConversationCwd({
         repoRoot: getRepoRootFn(),
         profile,
         explicitCwd: body.cwd,
         defaultCwd: getDefaultWebCwdFn(),
-        referencedProjectIds,
       });
       const targetId = typeof body.targetId === 'string' ? body.targetId.trim() || null : null;
 
@@ -753,15 +638,6 @@ export function registerLiveSessionRoutes(
           conversationId: result.id,
         });
 
-        if (referencedProjectIds.length > 0) {
-          setConversationProjectLinks({
-            profile,
-            conversationId: result.id,
-            relatedProjectIds: referencedProjectIds,
-          });
-          invalidateAppTopics('projects');
-        }
-
         publishConversationSessionMetaChanged(result.id);
         res.json(result);
         return;
@@ -771,14 +647,6 @@ export function registerLiveSessionRoutes(
         ...(body.model !== undefined ? { initialModel: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
       }));
-      if (referencedProjectIds.length > 0) {
-        setConversationProjectLinks({
-          profile,
-          conversationId: result.id,
-          relatedProjectIds: referencedProjectIds,
-        });
-        invalidateAppTopics('projects');
-      }
       res.json(result);
     } catch (err) {
       logError('request handler error', {
@@ -1158,39 +1026,15 @@ export function registerCompanionLiveSessionRoutes(
 
   router.post('/api/live-sessions', async (req, res) => {
     try {
-      const body = req.body as { referencedProjectIds?: string[]; text?: string };
       const profile = getCurrentProfileFn();
-      const availableProjectIds = listReferenceableProjectIds();
-      const inferredReferencedProjectIds = body.text
-        ? resolvePromptReferences({
-          text: body.text,
-          availableProjectIds,
-          tasks: [],
-          memoryDocs: [],
-          skills: [],
-          profiles: [],
-        }).projectIds
-        : [];
-      const referencedProjectIds = body.referencedProjectIds && body.referencedProjectIds.length > 0
-        ? body.referencedProjectIds.filter((projectId) => availableProjectIds.includes(projectId))
-        : inferredReferencedProjectIds;
       const cwd = resolveConversationCwd({
         repoRoot: getRepoRootFn(),
         profile,
         explicitCwd: undefined,
         defaultCwd: getDefaultWebCwdFn(),
-        referencedProjectIds,
       });
 
       const result = await createLocalSession(cwd, buildLiveSessionResourceOptions());
-      if (referencedProjectIds.length > 0) {
-        setConversationProjectLinks({
-          profile,
-          conversationId: result.id,
-          relatedProjectIds: referencedProjectIds,
-        });
-        invalidateAppTopics('projects');
-      }
       res.json(result);
     } catch (err) {
       logError('request handler error', {

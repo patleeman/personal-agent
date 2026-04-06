@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { requestApplicationRestart, requestApplicationUpdate } from '../ui/applicationRestart.js';
-import { listProjectIndex } from '../projects/projects.js';
 import { readWebUiState } from '../ui/webUi.js';
 import { readCompanionSession } from '../ui/companionAuth.js';
 import { readDaemonState } from '../automation/daemon.js';
@@ -38,21 +37,16 @@ let listActivityForCurrentProfileFn: () => ActivityListEntryLike[] = () => {
   throw new Error('listActivityForCurrentProfile not initialized for system routes');
 };
 
-let listProjectsForCurrentProfileFn: () => unknown[] = () => {
-  throw new Error('listProjectsForCurrentProfile not initialized for system routes');
-};
-
 let listTasksForCurrentProfileFn: () => unknown[] = () => {
   throw new Error('listTasksForCurrentProfile not initialized for system routes');
 };
 
 function initializeSystemRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
   listActivityForCurrentProfileFn = context.listActivityForCurrentProfile;
-  listProjectsForCurrentProfileFn = context.listProjectsForCurrentProfile;
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
 }
 
@@ -74,8 +68,6 @@ async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknow
       const snapshot = getAlertSnapshotForProfile(getCurrentProfileFn());
       return [{ type: 'alerts_snapshot' as const, entries: snapshot.entries, activeCount: snapshot.activeCount }];
     }
-    case 'projects':
-      return [{ type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfileFn() }];
     case 'sessions':
       return [{ type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() }];
     case 'tasks':
@@ -104,7 +96,6 @@ const COMPANION_SESSION_COOKIE = 'pa_companion';
 const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>([
   'activity',
   'alerts',
-  'projects',
   'sessions',
   'tasks',
   'runs',
@@ -144,12 +135,10 @@ function handleStatus(_req: Request, res: Response): void {
   try {
     const profile = getCurrentProfileFn();
     const activities = listActivityForCurrentProfileFn();
-    const projectIds = listProjectIndex({ repoRoot: getRepoRootFn(), profile }).projects.map((project) => project.id);
     res.json({
       profile,
       repoRoot: getRepoRootFn(),
       activityCount: activities.length,
-      projectCount: projectIds.length,
       webUiSlot: process.env.PERSONAL_AGENT_WEB_SLOT,
       webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
     });
@@ -243,7 +232,7 @@ async function handleSyncSetup(req: Request, res: Response): Promise<void> {
 
 export function registerSystemRoutes(
   router: Pick<Express, 'get' | 'post'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
 ): void {
   initializeSystemRoutesContext(context);
   router.get('/api/events', (req, res) => {
@@ -282,7 +271,7 @@ export function registerSystemRoutes(
 
     writeEvent({ type: 'connected' });
     enqueueWrite(async () => {
-      await writeSnapshotEvents(['sessions', 'activity', 'projects', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
+      await writeSnapshotEvents(['sessions', 'activity', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
     });
 
     const heartbeat = setInterval(() => {
@@ -320,7 +309,7 @@ export function registerSystemRoutes(
 
 export function registerCompanionSystemRoutes(
   router: Pick<Express, 'get' | 'post'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listProjectsForCurrentProfile' | 'listTasksForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
 ): void {
   initializeSystemRoutesContext(context);
   router.get('/api/events', (req, res) => {
@@ -359,7 +348,7 @@ export function registerCompanionSystemRoutes(
 
     writeEvent({ type: 'connected' });
     enqueueWrite(async () => {
-      await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'projects', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
+      await writeSnapshotEvents(['sessions', 'activity', 'alerts', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
     });
 
     const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);

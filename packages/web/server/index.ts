@@ -401,13 +401,6 @@ function readNodeLinksForProfile(kind: NodeLinkKind, id: string, profile = getCu
   });
 }
 
-function listProjectsForCurrentProfile() {
-  return listProjectIndex({
-    repoRoot: REPO_ROOT,
-    profile: getCurrentProfile(),
-  }).projects.map((project) => ({ ...project, profile: getCurrentProfile() }));
-}
-
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
 function listActivityStateRoots(): Array<string | undefined> {
@@ -1638,7 +1631,6 @@ const routeContext = createServerRouteContext({
   flushLiveDeferredResumes,
   getSavedWebUiPreferences: () => readSavedWebUiPreferences(SETTINGS_FILE),
   listActivityForCurrentProfile,
-  listProjectsForCurrentProfile,
   listTasksForCurrentProfile,
   listMemoryDocs: () => listMemoryDocs(),
   listSkillsForCurrentProfile: () => listSkillsForProfile(getCurrentProfile()),

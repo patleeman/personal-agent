@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { listAllProjectIds } from '@personal-agent/core';
 import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
 import { readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
 import { writeInternalAttentionEntry } from '../shared/internalAttention.js';
@@ -18,7 +17,7 @@ import { findActivityRecord, type ActivityRecord } from '../automation/inboxServ
 type LiveSessionCreateOptions = Parameters<typeof createLocalSession>[1];
 type LiveSessionResourceOptions = Omit<NonNullable<LiveSessionCreateOptions>, 'extensionFactories'>;
 type LiveSessionExtensionFactories = NonNullable<LiveSessionCreateOptions>['extensionFactories'];
-import { setActivityConversationLinks, setConversationProjectLinks } from '@personal-agent/core';
+import { setActivityConversationLinks } from '@personal-agent/core';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for web-ui routes');
@@ -60,10 +59,6 @@ function initializeWebUiRoutesContext(
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
 }
 
-function listReferenceableProjectIds(): string[] {
-  return listAllProjectIds({ repoRoot: getRepoRootFn() });
-}
-
 function normalizeMessageContext(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -96,10 +91,6 @@ function buildInboxActivityConversationContext(entry: ActivityRecord['entry']): 
 
   if (entry.notificationState) {
     lines.push(`- notification state: ${entry.notificationState}`);
-  }
-
-  if (entry.relatedProjectIds && entry.relatedProjectIds.length > 0) {
-    lines.push(`- related projects: ${entry.relatedProjectIds.join(', ')}`);
   }
 
   if (entry.details && entry.details.trim().length > 0) {
@@ -424,30 +415,16 @@ async function handleActivityStart(req: Request, res: Response): Promise<void> {
     }
 
     const entry = match.entry;
-    const requestedRelatedProjectIds = Array.isArray(entry.relatedProjectIds)
-      ? normalizeMessageContext(entry.relatedProjectIds)
-      : [];
-    const availableProjectIds = new Set(listReferenceableProjectIds());
-    const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
     const cwd = resolveConversationCwd({
       repoRoot: getRepoRootFn(),
       profile,
       defaultCwd: getDefaultWebCwdFn(),
-      referencedProjectIds: relatedProjectIds,
     });
 
     const result = await createLocalSession(cwd, {
       ...buildLiveSessionResourceOptionsFn(),
       extensionFactories: buildLiveSessionExtensionFactoriesFn(),
     });
-
-    if (relatedProjectIds.length > 0) {
-      setConversationProjectLinks({
-        profile,
-        conversationId: result.id,
-        relatedProjectIds,
-      });
-    }
 
     const relatedConversationIds = [...new Set([...(entry.relatedConversationIds ?? []), result.id])];
     setActivityConversationLinks({
@@ -459,11 +436,10 @@ async function handleActivityStart(req: Request, res: Response): Promise<void> {
 
     await queuePromptContext(result.id, 'referenced_context', buildInboxActivityConversationContext({
       ...entry,
-      relatedProjectIds,
       relatedConversationIds,
     }));
 
-    invalidateAppTopics('activity', 'projects', 'sessions');
+    invalidateAppTopics('activity', 'sessions');
     res.json({
       activityId: entry.id,
       id: result.id,

@@ -86,7 +86,7 @@ export function buildConversationBootstrapVersionKey(input: {
   sessionsVersion: number;
   sessionFilesVersion: number;
 }): string {
-  // Bootstrap is only the conversation-open fast path. The page/rail keep projects,
+  // Bootstrap is only the conversation-open fast path. The page/rail keep execution,
   // execution, and other side-panel data incremental with their own invalidations.
   // Session detail still rides through bootstrap, so session-file invalidations must
   // bust the cache alongside the session list snapshot version.

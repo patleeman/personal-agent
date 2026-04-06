@@ -330,14 +330,6 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.projects()
-      .then((items) => {
-        setProjects(items);
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-
     if (!companionRoute) {
       void fetchSessionsSnapshot()
         .then((items) => {

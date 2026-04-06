@@ -60,7 +60,6 @@ export interface ServerRouteContext {
   flushLiveDeferredResumes: () => Promise<void>;
   getSavedWebUiPreferences: () => SavedWebUiPreferences;
   listActivityForCurrentProfile: () => Array<{ read?: boolean }>;
-  listProjectsForCurrentProfile: () => unknown[];
   listTasksForCurrentProfile: () => CurrentProfileTaskSummary[];
   listMemoryDocs: () => MemoryDocSummary[];
   listSkillsForCurrentProfile: () => SkillSummary[];
