@@ -547,8 +547,6 @@ export function App() {
                       <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
                       <Route path="knowledge" element={<LegacyWebRouteRedirect />} />
                       <Route path="knowledge/*" element={<LegacyWebRouteRedirect />} />
-                      <Route path="projects" element={<LegacyWebRouteRedirect />} />
-                      <Route path="projects/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="notes" element={<LegacyWebRouteRedirect />} />
                       <Route path="notes/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="memories" element={<LegacyWebRouteRedirect />} />

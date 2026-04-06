@@ -219,21 +219,6 @@ function formatModelSummary(model: ModelOption | null, fallback: string): string
   return `${model.id} · ${model.provider} · ${formatContextWindowLabel(model.context)} ctx`;
 }
 
-function joinStringList(values: string[]): string {
-  return values.join('\n');
-}
-
-function splitStringList(text: string): string[] {
-  return text
-    .split(/\r?\n|,/)
-    .map((value) => value.trim())
-    .filter((value): value is string => value.length > 0);
-}
-
-function formatModelRefLabel(modelRef: string, models: ModelOption[]): string {
-  return formatModelSummary(findModelByRef(models, modelRef), modelRef || 'Select a model');
-}
-
 function canProviderUseApiKey(provider: ProviderAuthSummary | null): boolean {
   if (!provider) {
     return false;
@@ -1390,7 +1375,7 @@ export function SettingsPage() {
                           }
                         }}
                         className={`${INPUT_CLASS} font-mono text-[13px]`}
-                        placeholder="~/workingdir/project"
+                        placeholder="~/workingdir/repo"
                         autoComplete="off"
                         spellCheck={false}
                         disabled={savingDefaultCwd}

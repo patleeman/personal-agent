@@ -35,7 +35,6 @@ import {
   readRemoteConversationBindingForConversation,
 } from '../conversations/remoteLiveSessions.js';
 import {
-  getLiveSessions as getLocalLiveSessions,
   isLive as isLocalLive,
   updateLiveSessionModelPreferences,
   LiveSessionControlError,
@@ -50,8 +49,6 @@ import {
 } from '../ui/settingsPersistence.js';
 import {
   applyConversationModelPreferencesToSessionManager,
-  readConversationModelPreferenceSnapshot,
-  resolveConversationModelPreferenceState,
 } from '../conversations/conversationModelPreferences.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
@@ -68,7 +65,6 @@ import {
   setServerTimingHeaders,
   invalidateAppTopics,
 } from '../middleware/index.js';
-import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');

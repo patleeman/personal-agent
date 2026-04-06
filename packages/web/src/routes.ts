@@ -6,7 +6,6 @@ import {
 export const WEB_INSTRUCTIONS_PATH = '/instructions';
 
 const LEGACY_KNOWLEDGE_PATH = '/knowledge';
-const LEGACY_PROJECTS_PATH = '/projects';
 const LEGACY_NOTES_PATH = '/notes';
 const LEGACY_MEMORIES_PATH = '/memories';
 const LEGACY_SKILLS_PATH = '/skills';
@@ -54,14 +53,6 @@ export function resolveWebRouteRedirect(pathname: string, search = ''): string |
 
   if (normalizedPath === LEGACY_KNOWLEDGE_PATH) {
     return buildKnowledgeRedirect(search);
-  }
-
-  if (normalizedPath === LEGACY_PROJECTS_PATH) {
-    return '/workspace/files';
-  }
-
-  if (isSupportedDetailPath(normalizedPath, LEGACY_PROJECTS_PATH)) {
-    return '/workspace/files';
   }
 
   if (normalizedPath === LEGACY_NOTES_PATH || normalizedPath === LEGACY_MEMORIES_PATH) {

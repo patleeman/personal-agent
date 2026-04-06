@@ -59,27 +59,6 @@ function initializeWebUiRoutesContext(
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
 }
 
-function normalizeMessageContext(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const normalized: string[] = [];
-  const seen = new Set<string>();
-
-  for (const entry of value) {
-    const trimmed = typeof entry === 'string' ? entry.trim() : '';
-    if (!trimmed || seen.has(trimmed)) {
-      continue;
-    }
-
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-
-  return normalized;
-}
-
 function buildInboxActivityConversationContext(entry: ActivityRecord['entry']): string {
   const lines = [
     'Inbox activity context for this conversation:',

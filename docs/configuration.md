@@ -229,7 +229,7 @@ Example:
 
 These defaults are used when a run does not explicitly override them.
 
-`defaultCwd` is the fallback working directory for new web conversations and other web-triggered runs when no explicit cwd is set and no single referenced project `repoRoot` applies.
+`defaultCwd` is the working-directory default for new web conversations and other web-triggered runs when no explicit cwd is set.
 
 `webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.
 

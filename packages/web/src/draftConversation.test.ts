@@ -5,14 +5,12 @@ import {
   buildDraftConversationComposerStorageKey,
   buildDraftConversationCwdStorageKey,
   buildDraftConversationModelStorageKey,
-  buildDraftConversationProjectsStorageKey,
   buildDraftConversationSessionMeta,
   buildDraftConversationThinkingLevelStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationModel,
-  clearDraftConversationProjectIds,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
@@ -21,13 +19,11 @@ import {
   persistDraftConversationComposer,
   persistDraftConversationCwd,
   persistDraftConversationModel,
-  persistDraftConversationProjectIds,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
   readDraftConversationModel,
-  readDraftConversationProjectIds,
   readDraftConversationThinkingLevel,
   shouldShowDraftConversationTab,
 } from './draftConversation';
@@ -45,7 +41,6 @@ describe('draftConversation', () => {
   it('uses dedicated draft storage keys', () => {
     expect(buildDraftConversationComposerStorageKey()).toBe('pa:reload:conversation:draft:composer');
     expect(buildDraftConversationCwdStorageKey()).toBe('pa:reload:conversation:draft:cwd');
-    expect(buildDraftConversationProjectsStorageKey()).toBe('pa:reload:conversation:draft:projects');
     expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
     expect(buildDraftConversationModelStorageKey()).toBe('pa:reload:conversation:draft:model');
     expect(buildDraftConversationThinkingLevelStorageKey()).toBe('pa:reload:conversation:draft:thinking-level');
@@ -89,15 +84,6 @@ describe('draftConversation', () => {
     expect(storage.getItem(buildDraftConversationCwdStorageKey())).toBeNull();
   });
 
-  it('persists and reads draft project ids', () => {
-    const storage = createStorage();
-
-    persistDraftConversationProjectIds(['personal-agent', ' web-ui ', 'personal-agent'], storage);
-
-    expect(readDraftConversationProjectIds(storage)).toEqual(['personal-agent', 'web-ui']);
-    expect(storage.getItem(buildDraftConversationProjectsStorageKey())).toBe(JSON.stringify(['personal-agent', 'web-ui']));
-  });
-
   it('persists and reads the draft model', () => {
     const storage = createStorage();
 
@@ -134,16 +120,6 @@ describe('draftConversation', () => {
 
     expect(readDraftConversationThinkingLevel(storage)).toBe('');
     expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBeNull();
-  });
-
-  it('clears stored draft project ids', () => {
-    const storage = createStorage();
-
-    persistDraftConversationProjectIds(['personal-agent'], storage);
-    clearDraftConversationProjectIds(storage);
-
-    expect(readDraftConversationProjectIds(storage)).toEqual([]);
-    expect(storage.getItem(buildDraftConversationProjectsStorageKey())).toBeNull();
   });
 
   it('persists and reads draft attachments', () => {
@@ -204,7 +180,6 @@ describe('draftConversation', () => {
     expect(shouldShowDraftConversationTab('/inbox', 'Saved draft')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '', '~/workingdir/personal-agent')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '', '', true)).toBe(true);
-    expect(shouldShowDraftConversationTab('/inbox', '', '', false, ['personal-agent'])).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '   ')).toBe(false);
   });
 

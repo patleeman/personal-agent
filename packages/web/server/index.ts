@@ -184,7 +184,6 @@ import {
   listStandaloneActivityRecords,
 } from './automation/inbox.js';
 import {
-  addConversationProjectLink,
   clearActivityConversationLinks,
   deleteConversationArtifact,
   deleteConversationAttachment,
@@ -201,13 +200,11 @@ import {
   getStateRoot,
   createMemoryDoc,
   loadMemoryPackageReferences,
-  listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
   inspectMcpServer,
   inspectMcpTool,
   listProfileActivityEntries,
-  listAllProjectIds,
   listDeferredResumeRecords,
   loadDeferredResumeState,
   loadProfileActivityReadState,
@@ -221,16 +218,12 @@ import {
   migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
   readMcpConfig,
-  readProjectOwnerProfile,
-  removeConversationProjectLink,
   resolveConversationAttachmentPromptFiles,
-  resolveProjectPaths,
   saveConversationAttachment,
   saveExecutionTarget,
   saveProfileActivityReadState,
   setActivityConversationLinks,
   setConversationExecutionTarget,
-  setConversationProjectLinks,
   summarizeConversationAttention,
   deleteExecutionTarget,
 } from '@personal-agent/core';
@@ -252,40 +245,6 @@ import {
   startScheduledTaskRun,
   type BackgroundRunResultSummary,
 } from '@personal-agent/daemon';
-import {
-  addProjectMilestone,
-  createProjectRecord,
-  createProjectTaskRecord,
-  deleteProjectMilestone,
-  deleteProjectRecord,
-  deleteProjectTaskRecord,
-  listProjectIndex,
-  moveProjectMilestone,
-  moveProjectTaskRecord,
-  readProjectDetailFromProject,
-  readProjectSource,
-  saveProjectSource,
-  setProjectArchivedState,
-  updateProjectMilestone,
-  updateProjectRecord,
-  updateProjectTaskRecord,
-  type InvalidProjectRecord,
-  type ProjectDetail,
-  type ProjectLinkedConversation,
-  type ProjectTimelineEntry,
-} from './projects/projects.js';
-import {
-  deleteProjectFileRecord,
-  readProjectFileDownload,
-  saveProjectDocument,
-  uploadProjectFile,
-} from './projects/projectResources.js';
-import {
-  buildProjectSharePackageFileName,
-  exportProjectSharePackage,
-} from './projects/projectPackages.js';
-import { readNodeLinks, type NodeLinkKind, type NodeLinks } from './knowledge/nodeLinks.js';
-import { generateProjectDocument } from './projects/projectDocuments.js';
 import {
   acknowledgeAlertForProfile,
   dismissAlertForProfile,
@@ -320,7 +279,6 @@ const TASK_STATE_FILE = getScheduledTaskStateFilePath();
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
-const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
 function listAllLiveSessions() {
   const local = getLocalLiveSessions();
@@ -390,16 +348,6 @@ const {
 } = profileState;
 
 void syncDaemonTaskScopeForProfile(getCurrentProfile());
-
-function readNodeLinksForProfile(kind: NodeLinkKind, id: string, profile = getCurrentProfile()): NodeLinks {
-  return readNodeLinks({
-    repoRoot: REPO_ROOT,
-    profilesRoot: getProfilesRoot(),
-    profile,
-    kind,
-    id,
-  });
-}
 
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
@@ -564,14 +512,6 @@ type ActivityRecord = {
 
 type ActivityListEntry = ActivityEntryWithConversationLinks & {
   read: boolean;
-};
-
-type ProjectDetailWithProfile = ProjectDetail & {
-  profile: string;
-  links: NodeLinks;
-  project: ProjectDetail['project'] & {
-    profile: string;
-  };
 };
 
 function attachActivityConversationLinks(
@@ -1205,147 +1145,6 @@ async function readConversationModelPreferenceStateById(conversationId: string):
     readSavedModelPreferences(SETTINGS_FILE, availableModels),
     availableModels,
   );
-}
-
-function summarizeProjectConversationSnippet(conversationId: string): string | undefined {
-  const detail = readSessionBlocks(conversationId);
-  const blocks = detail?.blocks ?? [];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (!block) {
-      continue;
-    }
-
-    if ((block.type === 'user' || block.type === 'text' || block.type === 'thinking' || block.type === 'error') && 'text' in block) {
-      const text = block.text.replace(/\s+/g, ' ').trim();
-      if (text.length > 0) {
-        return text.length > 180 ? `${text.slice(0, 179).trimEnd()}…` : text;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function listLinkedProjectConversations(projectId: string, profile = getCurrentProfile()): ProjectLinkedConversation[] {
-  const sessionById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
-
-  return listConversationProjectLinks({ profile })
-    .filter((document) => document.relatedProjectIds.includes(projectId))
-    .map((document) => {
-      const session = sessionById.get(document.conversationId);
-      return {
-        conversationId: document.conversationId,
-        title: session?.title ?? document.conversationId,
-        file: session?.file,
-        cwd: session?.cwd,
-        lastActivityAt: session?.lastActivityAt ?? session?.timestamp ?? document.updatedAt,
-        isRunning: Boolean(session?.isRunning),
-        needsAttention: Boolean(session?.needsAttention),
-        snippet: summarizeProjectConversationSnippet(document.conversationId),
-      } satisfies ProjectLinkedConversation;
-    })
-    .sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
-}
-
-function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile()): ProjectTimelineEntry[] {
-  const activityEntries = listActivityForProfile(profile)
-    .filter((entry) => (entry.relatedProjectIds ?? []).includes(detail.project.id));
-
-  const timeline: ProjectTimelineEntry[] = [
-    {
-      id: `project:${detail.project.id}`,
-      kind: 'project',
-      createdAt: detail.project.createdAt,
-      title: 'Project created',
-      href: '#top',
-    },
-  ];
-
-  if (detail.document) {
-    timeline.push({
-      id: `document:${detail.project.id}`,
-      kind: 'document',
-      createdAt: detail.document.updatedAt,
-      title: 'Project doc updated',
-      href: '#project-document',
-    });
-  }
-
-  for (const file of detail.files) {
-    timeline.push({
-      id: `file:${file.id}`,
-      kind: 'file',
-      createdAt: file.updatedAt,
-      title: file.title,
-      href: file.downloadPath,
-    });
-  }
-
-  for (const conversation of detail.linkedConversations) {
-    timeline.push({
-      id: `conversation:${conversation.conversationId}`,
-      kind: 'conversation',
-      createdAt: conversation.lastActivityAt ?? '',
-      title: conversation.title,
-      href: `/conversations/${encodeURIComponent(conversation.conversationId)}`,
-    });
-  }
-
-  for (const activity of activityEntries) {
-    timeline.push({
-      id: `activity:${activity.id}`,
-      kind: 'activity',
-      createdAt: activity.createdAt,
-      title: activity.summary,
-      href: '/inbox',
-    });
-  }
-
-  return timeline
-    .filter((entry) => entry.createdAt.length > 0)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, 12);
-}
-
-function applyProjectProfile<T extends { downloadPath: string }>(items: T[], profile: string): T[] {
-  return items.map((item) => ({
-    ...item,
-    downloadPath: `${item.downloadPath}?${VIEW_PROFILE_QUERY_PARAM}=${encodeURIComponent(profile)}`,
-  }));
-}
-
-function annotateProjectRecord(project: ProjectDetail['project'], profile: string): ProjectDetailWithProfile['project'] {
-  return {
-    ...project,
-    profile,
-  };
-}
-
-function readProjectDetailForProfile(projectId: string, profile = getCurrentProfile()): ProjectDetailWithProfile {
-  const detail = readProjectDetailFromProject({
-    repoRoot: REPO_ROOT,
-    profile,
-    projectId,
-  });
-  const linkedConversations = listLinkedProjectConversations(projectId, profile);
-  const appliedFiles = applyProjectProfile(detail.files, profile);
-  const appliedAttachments = applyProjectProfile(detail.attachments, profile);
-  const appliedArtifacts = applyProjectProfile(detail.artifacts, profile);
-  const enriched: ProjectDetailWithProfile = {
-    ...detail,
-    profile,
-    links: readNodeLinksForProfile('project', detail.project.id, profile),
-    project: annotateProjectRecord(detail.project, profile),
-    files: appliedFiles,
-    attachments: appliedAttachments,
-    artifacts: appliedArtifacts,
-    linkedConversations,
-    timeline: [],
-  };
-  enriched.timeline = buildProjectTimeline(enriched, profile);
-  return enriched;
 }
 
 let processingDeferredResumes = false;

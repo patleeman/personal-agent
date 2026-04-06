@@ -7,7 +7,6 @@ describe('shouldServeCompanionIndex', () => {
     expect(shouldServeCompanionIndex('/app')).toBe(true);
     expect(shouldServeCompanionIndex('/app/')).toBe(true);
     expect(shouldServeCompanionIndex('/app/conversations')).toBe(true);
-    expect(shouldServeCompanionIndex('/app/projects/project-1')).toBe(true);
     expect(shouldServeCompanionIndex('/app/unknown')).toBe(true);
   });
 
@@ -17,7 +16,6 @@ describe('shouldServeCompanionIndex', () => {
     expect(shouldServeCompanionIndex('/conversations/conv-123')).toBe(true);
     expect(shouldServeCompanionIndex('/tasks')).toBe(true);
     expect(shouldServeCompanionIndex('/system')).toBe(true);
-    expect(shouldServeCompanionIndex('/projects')).toBe(true);
     expect(shouldServeCompanionIndex('/notes/memory-index')).toBe(true);
     expect(shouldServeCompanionIndex('/memories/memory-index')).toBe(true);
     expect(shouldServeCompanionIndex('/skills/agent-browser')).toBe(true);

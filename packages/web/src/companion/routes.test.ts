@@ -46,11 +46,9 @@ describe('resolveCompanionRouteRedirect', () => {
   it('redirects legacy knowledge and page-role routes back to inbox', () => {
     expect(resolveCompanionRouteRedirect('/app/knowledge')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/knowledge/')).toBe(COMPANION_INBOX_PATH);
-    expect(resolveCompanionRouteRedirect('/app/projects')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/notes')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/memories')).toBe(COMPANION_INBOX_PATH);
-    expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/notes/memory-index')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/memories/memory-index')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/agent-browser')).toBe(COMPANION_INBOX_PATH);
@@ -60,7 +58,6 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/unknown')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/tasks/task-123/extra')).toBe(COMPANION_INBOX_PATH);
-    expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/notes/memory-index/extra')).toBe(COMPANION_INBOX_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/agent-browser/extra')).toBe(COMPANION_INBOX_PATH);
   });

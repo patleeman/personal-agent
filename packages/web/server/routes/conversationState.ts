@@ -4,11 +4,9 @@ import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-a
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import {
   getConversationExecutionTarget,
-  getConversationProjectLink,
   getExecutionTarget,
   inspectCliBinary,
   setConversationExecutionTarget,
-  setConversationProjectLinks,
 } from '@personal-agent/core';
 import { parsePendingOperation } from '@personal-agent/daemon';
 import {

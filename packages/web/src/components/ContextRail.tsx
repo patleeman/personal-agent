@@ -13,7 +13,6 @@ import {
   buildDraftConversationCwdStorageKey,
   buildDraftConversationExecutionTargetStorageKey,
   DRAFT_CONVERSATION_ID,
-  DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
@@ -31,7 +30,6 @@ import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { NOTE_ID_SEARCH_PARAM } from '../noteWorkspaceState';
 import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {

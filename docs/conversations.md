@@ -68,18 +68,13 @@ Typical references include:
 
 Use references when you want to bring durable context into the current thread without copy-pasting it into the prompt.
 
-When a conversation references a project, that link lives in conversation-local runtime state. The project itself remains portable and should not store the conversation id back into project files.
-
 ## Working directory selection
 
 For new conversations, the working directory is chosen from the strongest available source:
 
 1. an explicit cwd, if one is set
-2. the `repoRoot` of a single referenced project
-3. the saved default cwd from Settings / profile settings
-4. the web server process cwd as a fallback
-
-That means referencing exactly one project with a `repoRoot` can do more than label the thread. It can also set the initial repo context.
+2. the saved default cwd from Settings / profile settings
+3. the web server process cwd as a fallback
 
 ## Execution targets
 

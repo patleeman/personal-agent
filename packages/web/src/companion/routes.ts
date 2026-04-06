@@ -7,12 +7,7 @@ export const COMPANION_SYSTEM_PATH = '/app/system';
 const LEGACY_COMPANION_KNOWLEDGE_PATH = '/app/knowledge';
 const LEGACY_COMPANION_MEMORIES_PATH = '/app/memories';
 const LEGACY_COMPANION_NOTES_PATH = '/app/notes';
-const LEGACY_COMPANION_PROJECTS_PATH = '/app/projects';
 const LEGACY_COMPANION_SKILLS_PATH = '/app/skills';
-const LEGACY_COMPANION_MEMORIES_DETAIL_PREFIX = '/app/memories/';
-const LEGACY_COMPANION_NOTES_DETAIL_PREFIX = '/app/notes/';
-const LEGACY_COMPANION_PROJECTS_DETAIL_PREFIX = '/app/projects/';
-const LEGACY_COMPANION_SKILLS_DETAIL_PREFIX = '/app/skills/';
 
 const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_APP_PATH,
@@ -78,7 +73,6 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
   if (
     normalizedPath === LEGACY_COMPANION_MEMORIES_PATH
     || normalizedPath === LEGACY_COMPANION_NOTES_PATH
-    || normalizedPath === LEGACY_COMPANION_PROJECTS_PATH
     || normalizedPath === LEGACY_COMPANION_SKILLS_PATH
   ) {
     return COMPANION_INBOX_PATH;
@@ -89,10 +83,6 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_NOTES_PATH)) {
-    return COMPANION_INBOX_PATH;
-  }
-
-  if (isSupportedDetailPath(normalizedPath, LEGACY_COMPANION_PROJECTS_PATH)) {
     return COMPANION_INBOX_PATH;
   }
 

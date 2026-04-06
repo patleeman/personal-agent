@@ -13,7 +13,6 @@ import {
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
   clearDraftConversationModel,
-  clearDraftConversationProjectIds,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
@@ -22,7 +21,6 @@ import {
   persistDraftConversationCwd,
   readDraftConversationComposer,
   readDraftConversationCwd,
-  readDraftConversationProjectIds,
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
@@ -537,7 +535,6 @@ export function Sidebar() {
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
-  const [draftReferencedProjectIds, setDraftReferencedProjectIds] = useState(() => readDraftConversationProjectIds());
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -547,12 +544,12 @@ export function Sidebar() {
   } | null>(null);
 
   const draftTab = useMemo(() => {
-    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds)) {
+    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments)) {
       return null;
     }
 
     return buildDraftConversationSessionMeta(undefined, draftCwd);
-  }, [draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds, location.pathname]);
+  }, [draftComposer, draftCwd, draftHasAttachments, location.pathname]);
 
   const visibleConversationTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
@@ -710,7 +707,6 @@ export function Sidebar() {
       setDraftComposer(readDraftConversationComposer());
       setDraftCwd(readDraftConversationCwd());
       setDraftHasAttachments(hasDraftConversationAttachments());
-      setDraftReferencedProjectIds(readDraftConversationProjectIds());
     }
 
     syncDraftState();
@@ -799,7 +795,6 @@ export function Sidebar() {
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
     clearDraftConversationModel();
-    clearDraftConversationProjectIds();
     clearDraftConversationThinkingLevel();
     setDraftComposer('');
     setDraftCwd('');

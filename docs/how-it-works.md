@@ -47,7 +47,7 @@ Common examples:
 - `~/.local/state/personal-agent/pi-agent/sessions/**` (optionally synced when sync is enabled)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
 - inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
-- conversation-local link state such as conversation ↔ referenced project bindings
+- conversation-local link state such as conversation execution-target bindings
 
 Use local runtime state for:
 

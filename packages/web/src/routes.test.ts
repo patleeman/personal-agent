@@ -3,8 +3,6 @@ import { WEB_INSTRUCTIONS_PATH, resolveWebRouteRedirect } from './routes.js';
 
 describe('resolveWebRouteRedirect', () => {
   it('redirects legacy docs routes into the workspace', () => {
-    expect(resolveWebRouteRedirect('/projects')).toBe('/workspace/files');
-    expect(resolveWebRouteRedirect('/projects/continuous-conversations')).toBe('/workspace/files');
     expect(resolveWebRouteRedirect('/notes')).toBe('/workspace/files');
     expect(resolveWebRouteRedirect('/notes/memory-index')).toBe('/workspace/files');
     expect(resolveWebRouteRedirect('/memories')).toBe('/workspace/files');
@@ -22,7 +20,6 @@ describe('resolveWebRouteRedirect', () => {
   });
 
   it('normalizes trailing slashes on legacy routes', () => {
-    expect(resolveWebRouteRedirect('/projects/')).toBe('/workspace/files');
     expect(resolveWebRouteRedirect('/notes/memory-index/')).toBe('/workspace/files');
     expect(resolveWebRouteRedirect('/knowledge/', '?section=instructions&instruction=%2Ftmp%2Fshared%2FAGENTS.md')).toBe('/instructions?instruction=%2Ftmp%2Fshared%2FAGENTS.md');
   });
@@ -31,6 +28,8 @@ describe('resolveWebRouteRedirect', () => {
     expect(resolveWebRouteRedirect(WEB_INSTRUCTIONS_PATH)).toBeNull();
     expect(resolveWebRouteRedirect('/workspace/files')).toBeNull();
     expect(resolveWebRouteRedirect('/conversations')).toBeNull();
+    expect(resolveWebRouteRedirect('/projects')).toBeNull();
+    expect(resolveWebRouteRedirect('/projects/continuous-conversations')).toBeNull();
     expect(resolveWebRouteRedirect('/projects/continuous-conversations/extra')).toBeNull();
   });
 });
