@@ -7,8 +7,10 @@
 import { existsSync, rmSync } from 'fs';
 import { join } from 'path';
 import {
+  deleteDurableRunRecords,
   loadDurableRunStatus,
   listDurableRunIds,
+  resolveDurableRunPaths,
 } from './store.js';
 
 const RETENTION_DAYS = 30;
@@ -65,9 +67,10 @@ export function cleanupRetentionEligibleRuns(runsRoot: string): number {
   let cleaned = 0;
 
   for (const runId of eligible) {
-    const runPath = join(runsRoot, runId);
+    const runPath = resolveDurableRunPaths(runsRoot, runId).root;
     try {
       rmSync(runPath, { recursive: true, force: true });
+      deleteDurableRunRecords(runsRoot, [runId]);
       cleaned++;
     } catch {
       // Ignore cleanup errors

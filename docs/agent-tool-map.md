@@ -22,7 +22,7 @@ Use the CLI mainly for:
 | Find or create durable pages | `note` | page backed by `sync/notes/**` | find/show before new |
 | Create passive async attention items | `activity` | local inbox/activity state | use for async outcomes worth noticing later |
 | Schedule unattended automation | `scheduled_task` | `sync/_tasks/*.task.md` + daemon state | use for later or recurring work |
-| Start detached work now | `run` | `daemon/runs/**` | use for immediate detached shell or agent work |
+| Start detached work now | `run` | `daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` | use for immediate detached shell or agent work |
 | Continue this conversation later without user input | `deferred_resume` | local wakeup state | use for agent-owned continue-later behavior |
 | Remind the user later | `reminder` | local alert + wakeup state | use for user-requested tell-me-later behavior |
 

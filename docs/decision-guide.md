@@ -11,7 +11,7 @@ If you are not sure which surface to use, start here.
 - **note** = durable reusable knowledge
 - **skill** = durable reusable procedure
 - **activity / inbox** = passive async attention
-- **reminder / alert** = interrupting async attention
+- **reminder / notification** = tell-me-later behavior with stronger delivery
 - **deferred resume** = continue this conversation later without the user remembering
 - **run** = detached work started now
 - **scheduled task** = work that should run later or on a schedule
@@ -26,9 +26,9 @@ If you are not sure which surface to use, start here.
 | Save reusable workflow instructions | skill page | `sync/_skills/<skill>/SKILL.md` | AGENTS or ad hoc pages |
 | Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | pages or tracked-page state |
 | Surface async work later without interrupting | activity / inbox | local inbox state | alerts by default |
-| Tell the user later | reminder / alert | local alert + wakeup state | scheduled task if no automation is needed |
+| Tell the user later | reminder | local wakeup + notification state | scheduled task if no automation is needed |
 | Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
-| Run something detached right now | durable background run | `daemon/runs/<run-id>/` | scheduled task |
+| Run something detached right now | durable background run | `daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` | scheduled task |
 | Run something later or repeatedly | scheduled task | `sync/_tasks/*.task.md` | run |
 | Work on local repo files in the web UI | workspace | local repo/filesystem view | tracked-page docs or pages |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory as the first stop |
@@ -59,7 +59,7 @@ Use **AGENTS.md** when the content is durable behavior, user preference, or stan
 
 Use **activity / inbox** when something happened and should be visible later, but does not need to interrupt.
 
-Use **reminder / alert** when the user wants an interrupting callback.
+Use **reminder** when the user wants an interrupting callback or stronger notification delivery.
 
 Use **deferred resume** when the agent should continue later in the same conversation, even if the user forgets.
 

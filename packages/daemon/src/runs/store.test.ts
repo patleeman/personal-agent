@@ -1,19 +1,22 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import BetterSqlite3 from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   appendDurableRunEvent,
+  closeDurableRunStoreConnections,
   createDurableRunManifest,
   createInitialDurableRunStatus,
   listDurableRunIds,
   resolveDurableRunsRoot,
+  resolveDurableRunPaths,
+  resolveRuntimeDbPath,
   loadDurableRunCheckpoint,
   loadDurableRunManifest,
   loadDurableRunStatus,
   readDurableRunEvents,
-  resolveDurableRunPaths,
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
@@ -33,6 +36,7 @@ function createTempDir(prefix: string): string {
 
 describe('durable run store', () => {
   afterEach(async () => {
+    closeDurableRunStoreConnections();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
@@ -58,9 +62,10 @@ describe('durable run store', () => {
   it('resolves the durable runs root under the daemon root', () => {
     const daemonRoot = createTempDir('durable-runs-store-root-');
     expect(resolveDurableRunsRoot(daemonRoot)).toBe(join(daemonRoot, 'runs'));
+    expect(resolveRuntimeDbPath(daemonRoot)).toBe(join(daemonRoot, 'runtime.db'));
   });
 
-  it('saves and loads manifest, status, and checkpoint files', () => {
+  it('persists manifest, status, and checkpoint rows in sqlite', () => {
     const runsRoot = createTempDir('durable-runs-store-save-');
     const paths = resolveDurableRunPaths(runsRoot, 'run-1');
 
@@ -105,21 +110,24 @@ describe('durable run store', () => {
       ...manifest,
       createdAt: '2026-03-12T18:00:00.000Z',
     });
-
     expect(loadDurableRunStatus(paths.statusPath)).toEqual({
       ...status,
       createdAt: '2026-03-12T18:00:00.000Z',
       updatedAt: '2026-03-12T18:01:00.000Z',
       startedAt: '2026-03-12T18:00:30.000Z',
     });
-
     expect(loadDurableRunCheckpoint(paths.checkpointPath)).toEqual({
       ...checkpoint,
       updatedAt: '2026-03-12T18:01:00.000Z',
     });
+
+    expect(existsSync(join(runsRoot, 'runtime.db'))).toBe(true);
+    expect(existsSync(paths.manifestPath)).toBe(false);
+    expect(existsSync(paths.statusPath)).toBe(false);
+    expect(existsSync(paths.checkpointPath)).toBe(false);
   });
 
-  it('appends and reads durable run events from the journal', async () => {
+  it('appends and reads durable run events from sqlite', async () => {
     const runsRoot = createTempDir('durable-runs-store-events-');
     const paths = resolveDurableRunPaths(runsRoot, 'run-1');
 
@@ -140,9 +148,7 @@ describe('durable run store', () => {
       attempt: 1,
     });
 
-    const events = readDurableRunEvents(paths.eventsPath);
-
-    expect(events).toEqual([
+    expect(readDurableRunEvents(paths.eventsPath)).toEqual([
       {
         version: 1,
         runId: 'run-1',
@@ -160,47 +166,21 @@ describe('durable run store', () => {
         payload: undefined,
       },
     ]);
+    expect(existsSync(paths.eventsPath)).toBe(false);
   });
 
-  it('ignores malformed event lines instead of failing the whole journal read', () => {
-    const runsRoot = createTempDir('durable-runs-store-bad-events-');
+  it('ignores legacy file journals after the sqlite cutover', () => {
+    const runsRoot = createTempDir('durable-runs-store-legacy-events-');
     const paths = resolveDurableRunPaths(runsRoot, 'run-1');
 
-    mkdirSync(paths.root, { recursive: true });
-    writeFileSync(paths.eventsPath, [
-      JSON.stringify({
-        version: 1,
-        runId: 'run-1',
-        timestamp: '2026-03-12T18:00:00Z',
-        type: 'run.created',
-      }),
-      '{bad json',
-      JSON.stringify({
-        version: 1,
-        runId: 'run-1',
-        timestamp: 'not-a-date',
-        type: 'broken',
-      }),
-      '',
-    ].join('\n'));
-
-    expect(readDurableRunEvents(paths.eventsPath)).toEqual([
-      {
-        version: 1,
-        runId: 'run-1',
-        timestamp: '2026-03-12T18:00:00.000Z',
-        type: 'run.created',
-        attempt: undefined,
-        payload: undefined,
-      },
-    ]);
+    expect(readDurableRunEvents(paths.eventsPath)).toEqual([]);
   });
 
-  it('lists run ids from the durable runs root', () => {
+  it('lists run ids from sqlite', () => {
     const runsRoot = createTempDir('durable-runs-store-list-');
-
     const a = resolveDurableRunPaths(runsRoot, 'run-a');
     const b = resolveDurableRunPaths(runsRoot, 'run-b');
+
     saveDurableRunStatus(a.statusPath, createInitialDurableRunStatus({ runId: 'run-a' }));
     saveDurableRunStatus(b.statusPath, createInitialDurableRunStatus({ runId: 'run-b' }));
 
@@ -232,166 +212,90 @@ describe('durable run store', () => {
     expect(scanDurableRun(runsRoot, 'missing')).toBeUndefined();
   });
 
-  it('classifies incomplete continue-policy runs as resumable on recovery scan', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-resume-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-continue');
+  it('classifies incomplete runs by resume policy during recovery scan', () => {
+    const runsRoot = createTempDir('durable-runs-store-scan-kinds-');
 
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
+    const continuePaths = resolveDurableRunPaths(runsRoot, 'run-continue');
+    saveDurableRunManifest(continuePaths.manifestPath, createDurableRunManifest({
       id: 'run-continue',
       kind: 'conversation',
       resumePolicy: 'continue',
       createdAt: '2026-03-12T18:00:00Z',
     }));
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
+    saveDurableRunStatus(continuePaths.statusPath, createInitialDurableRunStatus({
       runId: 'run-continue',
       status: 'running',
       createdAt: '2026-03-12T18:00:00Z',
       activeAttempt: 2,
     }));
 
-    expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
-      expect.objectContaining({
-        runId: 'run-continue',
-        problems: [],
-        recoveryAction: 'resume',
-      }),
-    ]);
-  });
-
-  it('classifies incomplete rerun-policy runs as rerun on recovery scan', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-rerun-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-rerun');
-
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
+    const rerunPaths = resolveDurableRunPaths(runsRoot, 'run-rerun');
+    saveDurableRunManifest(rerunPaths.manifestPath, createDurableRunManifest({
       id: 'run-rerun',
       kind: 'scheduled-task',
       resumePolicy: 'rerun',
       createdAt: '2026-03-12T18:00:00Z',
     }));
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
+    saveDurableRunStatus(rerunPaths.statusPath, createInitialDurableRunStatus({
       runId: 'run-rerun',
       status: 'interrupted',
       createdAt: '2026-03-12T18:00:00Z',
       activeAttempt: 1,
     }));
 
-    expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
-      expect.objectContaining({
-        runId: 'run-rerun',
-        problems: [],
-        recoveryAction: 'rerun',
-      }),
-    ]);
-  });
-
-  it('classifies incomplete manual-policy runs as attention on recovery scan', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-attention-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-manual');
-
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
+    const attentionPaths = resolveDurableRunPaths(runsRoot, 'run-manual');
+    saveDurableRunManifest(attentionPaths.manifestPath, createDurableRunManifest({
       id: 'run-manual',
-      kind: 'raw-shell',
+      kind: 'background-run',
       resumePolicy: 'manual',
       createdAt: '2026-03-12T18:00:00Z',
     }));
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
+    saveDurableRunStatus(attentionPaths.statusPath, createInitialDurableRunStatus({
       runId: 'run-manual',
-      status: 'running',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 1,
-    }));
-
-    expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
-      expect.objectContaining({
-        runId: 'run-manual',
-        problems: [],
-        recoveryAction: 'attention',
-      }),
-    ]);
-  });
-
-  it('keeps queued and waiting manual background runs as attention on recovery scan', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-manual-background-');
-
-    const queuedPaths = resolveDurableRunPaths(runsRoot, 'run-background-queued');
-    saveDurableRunManifest(queuedPaths.manifestPath, createDurableRunManifest({
-      id: 'run-background-queued',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(queuedPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-background-queued',
-      status: 'queued',
-      createdAt: '2026-03-12T18:00:00Z',
-      activeAttempt: 0,
-    }));
-
-    const waitingPaths = resolveDurableRunPaths(runsRoot, 'run-background-waiting');
-    saveDurableRunManifest(waitingPaths.manifestPath, createDurableRunManifest({
-      id: 'run-background-waiting',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-12T18:01:00Z',
-    }));
-    saveDurableRunStatus(waitingPaths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-background-waiting',
       status: 'waiting',
-      createdAt: '2026-03-12T18:01:00Z',
+      createdAt: '2026-03-12T18:00:00Z',
       activeAttempt: 0,
     }));
 
     expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
-      expect.objectContaining({
-        runId: 'run-background-queued',
-        problems: [],
-        recoveryAction: 'attention',
-      }),
-      expect.objectContaining({
-        runId: 'run-background-waiting',
-        problems: [],
-        recoveryAction: 'attention',
-      }),
+      expect.objectContaining({ runId: 'run-continue', recoveryAction: 'resume' }),
+      expect.objectContaining({ runId: 'run-manual', recoveryAction: 'attention' }),
+      expect.objectContaining({ runId: 'run-rerun', recoveryAction: 'rerun' }),
     ]);
   });
 
-  it('treats terminal runs as not needing recovery', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-terminal-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-complete');
-
-    saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
-      id: 'run-complete',
-      kind: 'workflow',
-      resumePolicy: 'continue',
-      createdAt: '2026-03-12T18:00:00Z',
-    }));
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({
-      runId: 'run-complete',
-      status: 'completed',
-      createdAt: '2026-03-12T18:00:00Z',
-      updatedAt: '2026-03-12T18:05:00Z',
-      activeAttempt: 1,
-    }));
-
-    expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
-      expect.objectContaining({
-        runId: 'run-complete',
-        problems: [],
-        recoveryAction: 'none',
-      }),
-    ]);
-  });
-
-  it('marks invalid run records during recovery scan', () => {
-    const runsRoot = createTempDir('durable-runs-store-scan-invalid-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-bad');
-
-    mkdirSync(paths.root, { recursive: true });
-    writeFileSync(paths.manifestPath, JSON.stringify({ id: 'different-id' }));
-    writeFileSync(paths.statusPath, JSON.stringify({ runId: 'also-different' }));
+  it('marks invalid sqlite rows during recovery scan', () => {
+    const runsRoot = createTempDir('durable-runs-store-invalid-');
+    const db = new BetterSqlite3(join(runsRoot, 'runtime.db'));
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS runs (
+        run_id TEXT PRIMARY KEY,
+        manifest_json TEXT,
+        created_at TEXT,
+        kind TEXT,
+        resume_policy TEXT,
+        parent_id TEXT,
+        root_id TEXT,
+        source_type TEXT,
+        source_id TEXT,
+        source_file_path TEXT,
+        status_json TEXT,
+        status_status TEXT,
+        status_updated_at TEXT,
+        status_completed_at TEXT,
+        checkpoint_json TEXT,
+        checkpoint_updated_at TEXT,
+        checkpoint_step TEXT
+      );
+    `);
+    db.prepare('INSERT INTO runs (run_id, manifest_json, status_json) VALUES (?, ?, ?)').run(
+      'run-bad',
+      JSON.stringify({ id: 'different-id' }),
+      JSON.stringify({ runId: 'also-different' }),
+    );
+    db.close();
 
     const [scan] = scanDurableRunsForRecovery(runsRoot);
-
     expect(scan?.runId).toBe('run-bad');
     expect(scan?.recoveryAction).toBe('invalid');
     expect(scan?.problems).toEqual([
@@ -431,9 +335,7 @@ describe('durable run store', () => {
       activeAttempt: 1,
     }));
 
-    const summary = summarizeScannedDurableRuns(scanDurableRunsForRecovery(runsRoot));
-
-    expect(summary).toEqual({
+    expect(summarizeScannedDurableRuns(scanDurableRunsForRecovery(runsRoot))).toEqual({
       total: 2,
       recoveryActions: {
         none: 0,
@@ -446,20 +348,6 @@ describe('durable run store', () => {
         running: 1,
         interrupted: 1,
       },
-    });
-  });
-
-  it('writes files under the resolved run paths', () => {
-    const runsRoot = createTempDir('durable-runs-store-paths-');
-    const paths = resolveDurableRunPaths(runsRoot, 'run-1');
-
-    saveDurableRunStatus(paths.statusPath, createInitialDurableRunStatus({ runId: 'run-1' }));
-
-    expect(existsSync(paths.root)).toBe(true);
-    expect(existsSync(paths.statusPath)).toBe(true);
-    expect(JSON.parse(readFileSync(paths.statusPath, 'utf-8'))).toMatchObject({
-      runId: 'run-1',
-      status: 'queued',
     });
   });
 });

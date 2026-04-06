@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
-import { appendFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+import { basename, dirname, join } from 'path';
+import BetterSqlite3 from 'better-sqlite3';
 
 export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell' | 'background-run';
 export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
@@ -14,10 +14,8 @@ export interface DurableRunManifest {
   resumePolicy: DurableRunResumePolicy;
   createdAt: string;
   spec: Record<string, unknown>;
-  // Hierarchy
-  parentId?: string;           // parent run ID (root runs have no parent)
-  rootId?: string;             // root conversation ID
-  // Source attribution
+  parentId?: string;
+  rootId?: string;
   source?: {
     type: string;
     id?: string;
@@ -81,6 +79,25 @@ export interface ScannedDurableRunsSummary {
   recoveryActions: Record<DurableRunRecoveryAction, number>;
   statuses: Partial<Record<DurableRunStatus, number>>;
 }
+
+type SqliteDatabase = InstanceType<typeof BetterSqlite3>;
+
+type StoredRunRow = {
+  run_id: string;
+  manifest_json: string | null;
+  status_json: string | null;
+  checkpoint_json: string | null;
+};
+
+type StoredEventRow = {
+  run_id: string;
+  timestamp: string;
+  type: string;
+  attempt: number | null;
+  payload_json: string | null;
+};
+
+const runtimeDbCache = new Map<string, SqliteDatabase>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -259,13 +276,20 @@ function parseEvent(value: unknown): DurableRunEvent | undefined {
   };
 }
 
-function readJsonFile(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+function serializeJson(value: unknown): string {
+  return JSON.stringify(value);
 }
 
-function writeJsonFile(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, JSON.stringify(value, null, 2));
+function parseStoredJson<T>(raw: string | null): T | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
 }
 
 function terminalStatus(status: DurableRunStatus): boolean {
@@ -297,6 +321,166 @@ function determineRecoveryAction(
 
 export function resolveDurableRunsRoot(daemonRoot: string): string {
   return join(daemonRoot, 'runs');
+}
+
+export function resolveRuntimeDbPath(daemonRoot: string): string {
+  return join(daemonRoot, 'runtime.db');
+}
+
+function resolveRuntimeDbPathFromRunsRoot(runsRoot: string): string {
+  return basename(runsRoot) === 'runs'
+    ? resolveRuntimeDbPath(dirname(runsRoot))
+    : join(runsRoot, 'runtime.db');
+}
+
+function parseRunStoragePath(path: string): { runId: string; runsRoot: string; dbPath: string } {
+  const runRoot = dirname(path);
+  const runsRoot = dirname(runRoot);
+  const runId = toString(runRoot.split(/[\\/]/).at(-1));
+
+  if (!runId) {
+    throw new Error(`Could not resolve run id from path: ${path}`);
+  }
+
+  return {
+    runId,
+    runsRoot,
+    dbPath: resolveRuntimeDbPathFromRunsRoot(runsRoot),
+  };
+}
+
+function openRuntimeDb(dbPath: string): SqliteDatabase {
+  const cached = runtimeDbCache.get(dbPath);
+  if (cached) {
+    return cached;
+  }
+
+  mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
+  const db = new BetterSqlite3(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
+  db.pragma('foreign_keys = ON');
+  db.pragma('busy_timeout = 5000');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS runs (
+      run_id TEXT PRIMARY KEY,
+      manifest_json TEXT,
+      created_at TEXT,
+      kind TEXT,
+      resume_policy TEXT,
+      parent_id TEXT,
+      root_id TEXT,
+      source_type TEXT,
+      source_id TEXT,
+      source_file_path TEXT,
+      status_json TEXT,
+      status_status TEXT,
+      status_updated_at TEXT,
+      status_completed_at TEXT,
+      checkpoint_json TEXT,
+      checkpoint_updated_at TEXT,
+      checkpoint_step TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_runs_parent_id ON runs(parent_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_root_id ON runs(root_id);
+    CREATE INDEX IF NOT EXISTS idx_runs_status_status ON runs(status_status);
+    CREATE INDEX IF NOT EXISTS idx_runs_status_updated_at ON runs(status_updated_at);
+
+    CREATE TABLE IF NOT EXISTS run_events (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      type TEXT NOT NULL,
+      attempt INTEGER,
+      payload_json TEXT,
+      FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_run_events_run_seq ON run_events(run_id, seq);
+    CREATE INDEX IF NOT EXISTS idx_run_events_timestamp ON run_events(timestamp);
+
+    PRAGMA user_version = 1;
+  `);
+  runtimeDbCache.set(dbPath, db);
+  return db;
+}
+
+function runtimeDbExists(runsRoot: string): boolean {
+  return existsSync(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+}
+
+function selectRunRow(runsRoot: string, runId: string): StoredRunRow | undefined {
+  if (!runtimeDbExists(runsRoot)) {
+    return undefined;
+  }
+
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  return db.prepare(`
+    SELECT run_id, manifest_json, status_json, checkpoint_json
+    FROM runs
+    WHERE run_id = ?
+  `).get(runId) as StoredRunRow | undefined;
+}
+
+function selectAllRunRows(runsRoot: string): StoredRunRow[] {
+  if (!runtimeDbExists(runsRoot)) {
+    return [];
+  }
+
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  return db.prepare(`
+    SELECT run_id, manifest_json, status_json, checkpoint_json
+    FROM runs
+    ORDER BY run_id ASC
+  `).all() as StoredRunRow[];
+}
+
+function listChildRunIds(runsRoot: string, parentId: string): string[] {
+  if (!runtimeDbExists(runsRoot)) {
+    return [];
+  }
+
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  const rows = db.prepare(`
+    SELECT run_id
+    FROM runs
+    WHERE parent_id = ?
+    ORDER BY run_id ASC
+  `).all(parentId) as Array<{ run_id: string }>;
+
+  return rows.map((row) => row.run_id);
+}
+
+function deleteRunRows(runsRoot: string, runIds: string[]): void {
+  if (runIds.length === 0 || !runtimeDbExists(runsRoot)) {
+    return;
+  }
+
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  const deleteEvents = db.prepare('DELETE FROM run_events WHERE run_id = ?');
+  const deleteRun = db.prepare('DELETE FROM runs WHERE run_id = ?');
+  const tx = db.transaction((ids: string[]) => {
+    for (const runId of ids) {
+      deleteEvents.run(runId);
+      deleteRun.run(runId);
+    }
+  });
+
+  tx(runIds);
+}
+
+function hydrateManifest(row: StoredRunRow | undefined): DurableRunManifest | undefined {
+  return parseManifest(parseStoredJson(row?.manifest_json ?? null));
+}
+
+function hydrateStatus(row: StoredRunRow | undefined): DurableRunStatusFile | undefined {
+  return parseStatus(parseStoredJson(row?.status_json ?? null));
+}
+
+function hydrateCheckpoint(row: StoredRunRow | undefined): DurableRunCheckpointFile | undefined {
+  return parseCheckpoint(parseStoredJson(row?.checkpoint_json ?? null));
 }
 
 export function resolveDurableRunPaths(runsRoot: string, runId: string): DurableRunPaths {
@@ -364,100 +548,196 @@ export function createInitialDurableRunStatus(input: {
 }
 
 export function saveDurableRunManifest(path: string, manifest: DurableRunManifest): void {
-  writeJsonFile(path, manifest);
+  const { runId, dbPath } = parseRunStoragePath(path);
+  const db = openRuntimeDb(dbPath);
+  db.prepare(`
+    INSERT INTO runs (
+      run_id,
+      manifest_json,
+      created_at,
+      kind,
+      resume_policy,
+      parent_id,
+      root_id,
+      source_type,
+      source_id,
+      source_file_path
+    ) VALUES (
+      @run_id,
+      @manifest_json,
+      @created_at,
+      @kind,
+      @resume_policy,
+      @parent_id,
+      @root_id,
+      @source_type,
+      @source_id,
+      @source_file_path
+    )
+    ON CONFLICT(run_id) DO UPDATE SET
+      manifest_json = excluded.manifest_json,
+      created_at = excluded.created_at,
+      kind = excluded.kind,
+      resume_policy = excluded.resume_policy,
+      parent_id = excluded.parent_id,
+      root_id = excluded.root_id,
+      source_type = excluded.source_type,
+      source_id = excluded.source_id,
+      source_file_path = excluded.source_file_path
+  `).run({
+    run_id: runId,
+    manifest_json: serializeJson(manifest),
+    created_at: manifest.createdAt,
+    kind: manifest.kind,
+    resume_policy: manifest.resumePolicy,
+    parent_id: manifest.parentId ?? null,
+    root_id: manifest.rootId ?? null,
+    source_type: manifest.source?.type ?? null,
+    source_id: manifest.source?.id ?? null,
+    source_file_path: manifest.source?.filePath ?? null,
+  });
 }
 
 export function loadDurableRunManifest(path: string): DurableRunManifest | undefined {
-  if (!existsSync(path)) {
-    return undefined;
-  }
-
-  try {
-    return parseManifest(readJsonFile(path));
-  } catch {
-    return undefined;
-  }
+  const { runId, runsRoot } = parseRunStoragePath(path);
+  return hydrateManifest(selectRunRow(runsRoot, runId));
 }
 
 export function saveDurableRunStatus(path: string, status: DurableRunStatusFile): void {
-  writeJsonFile(path, status);
+  const { runId, dbPath } = parseRunStoragePath(path);
+  const db = openRuntimeDb(dbPath);
+  db.prepare(`
+    INSERT INTO runs (
+      run_id,
+      status_json,
+      status_status,
+      status_updated_at,
+      status_completed_at
+    ) VALUES (
+      @run_id,
+      @status_json,
+      @status_status,
+      @status_updated_at,
+      @status_completed_at
+    )
+    ON CONFLICT(run_id) DO UPDATE SET
+      status_json = excluded.status_json,
+      status_status = excluded.status_status,
+      status_updated_at = excluded.status_updated_at,
+      status_completed_at = excluded.status_completed_at
+  `).run({
+    run_id: runId,
+    status_json: serializeJson(status),
+    status_status: status.status,
+    status_updated_at: status.updatedAt,
+    status_completed_at: status.completedAt ?? null,
+  });
 }
 
 export function loadDurableRunStatus(path: string): DurableRunStatusFile | undefined {
-  if (!existsSync(path)) {
-    return undefined;
-  }
-
-  try {
-    return parseStatus(readJsonFile(path));
-  } catch {
-    return undefined;
-  }
+  const { runId, runsRoot } = parseRunStoragePath(path);
+  return hydrateStatus(selectRunRow(runsRoot, runId));
 }
 
 export function saveDurableRunCheckpoint(path: string, checkpoint: DurableRunCheckpointFile): void {
-  writeJsonFile(path, checkpoint);
+  const { runId, dbPath } = parseRunStoragePath(path);
+  const db = openRuntimeDb(dbPath);
+  db.prepare(`
+    INSERT INTO runs (
+      run_id,
+      checkpoint_json,
+      checkpoint_updated_at,
+      checkpoint_step
+    ) VALUES (
+      @run_id,
+      @checkpoint_json,
+      @checkpoint_updated_at,
+      @checkpoint_step
+    )
+    ON CONFLICT(run_id) DO UPDATE SET
+      checkpoint_json = excluded.checkpoint_json,
+      checkpoint_updated_at = excluded.checkpoint_updated_at,
+      checkpoint_step = excluded.checkpoint_step
+  `).run({
+    run_id: runId,
+    checkpoint_json: serializeJson(checkpoint),
+    checkpoint_updated_at: checkpoint.updatedAt,
+    checkpoint_step: checkpoint.step ?? null,
+  });
 }
 
 export function loadDurableRunCheckpoint(path: string): DurableRunCheckpointFile | undefined {
-  if (!existsSync(path)) {
-    return undefined;
-  }
-
-  try {
-    return parseCheckpoint(readJsonFile(path));
-  } catch {
-    return undefined;
-  }
+  const { runId, runsRoot } = parseRunStoragePath(path);
+  return hydrateCheckpoint(selectRunRow(runsRoot, runId));
 }
 
 export async function appendDurableRunEvent(path: string, event: DurableRunEvent): Promise<void> {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  await appendFile(path, `${JSON.stringify(event)}\n`, 'utf-8');
+  const { runId, dbPath } = parseRunStoragePath(path);
+  const db = openRuntimeDb(dbPath);
+  db.prepare('INSERT INTO runs (run_id) VALUES (?) ON CONFLICT(run_id) DO NOTHING').run(runId);
+  db.prepare(`
+    INSERT INTO run_events (
+      run_id,
+      timestamp,
+      type,
+      attempt,
+      payload_json
+    ) VALUES (?, ?, ?, ?, ?)
+  `).run(
+    runId,
+    event.timestamp,
+    event.type,
+    event.attempt ?? null,
+    event.payload ? serializeJson(event.payload) : null,
+  );
 }
 
 export function readDurableRunEvents(path: string): DurableRunEvent[] {
-  if (!existsSync(path)) {
+  const { runId, dbPath } = parseRunStoragePath(path);
+  if (!existsSync(dbPath)) {
     return [];
   }
 
-  const raw = readFileSync(path, 'utf-8');
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  const events: DurableRunEvent[] = [];
+  const db = openRuntimeDb(dbPath);
+  const rows = db.prepare(`
+    SELECT run_id, timestamp, type, attempt, payload_json
+    FROM run_events
+    WHERE run_id = ?
+    ORDER BY seq ASC
+  `).all(runId) as StoredEventRow[];
 
-  for (const line of lines) {
-    try {
-      const parsed = parseEvent(JSON.parse(line) as unknown);
-      if (parsed) {
-        events.push(parsed);
-      }
-    } catch {
-      // Ignore malformed lines so one bad event does not poison the whole journal.
-    }
-  }
-
-  return events;
+  return rows
+    .map((row) => parseEvent({
+      version: 1,
+      runId: row.run_id,
+      timestamp: row.timestamp,
+      type: row.type,
+      ...(row.attempt !== null ? { attempt: row.attempt } : {}),
+      ...(row.payload_json ? { payload: parseStoredJson<Record<string, unknown>>(row.payload_json) } : {}),
+    }))
+    .filter((event): event is DurableRunEvent => event !== undefined);
 }
 
 export function listDurableRunIds(runsRoot: string): string[] {
-  if (!existsSync(runsRoot)) {
+  if (!runtimeDbExists(runsRoot)) {
     return [];
   }
 
-  return readdirSync(runsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort();
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  const rows = db.prepare('SELECT run_id FROM runs ORDER BY run_id ASC').all() as Array<{ run_id: string }>;
+  return rows.map((row) => row.run_id);
 }
 
 export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableRun | undefined {
-  const paths = resolveDurableRunPaths(runsRoot, runId);
-  if (!existsSync(paths.root)) {
+  const row = selectRunRow(runsRoot, runId);
+  if (!row) {
     return undefined;
   }
-  const manifest = loadDurableRunManifest(paths.manifestPath);
-  const status = loadDurableRunStatus(paths.statusPath);
-  const checkpoint = loadDurableRunCheckpoint(paths.checkpointPath);
+
+  const paths = resolveDurableRunPaths(runsRoot, runId);
+  const manifest = hydrateManifest(row);
+  const status = hydrateStatus(row);
+  const checkpoint = hydrateCheckpoint(row);
   const problems: string[] = [];
 
   if (!manifest) {
@@ -492,9 +772,45 @@ export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableR
 }
 
 export function scanDurableRunsForRecovery(runsRoot: string): ScannedDurableRun[] {
-  return listDurableRunIds(runsRoot)
-    .map((runId) => scanDurableRun(runsRoot, runId))
-    .filter((run): run is ScannedDurableRun => run !== undefined);
+  return selectAllRunRows(runsRoot)
+    .map((row) => {
+      const runId = row.run_id;
+      const paths = resolveDurableRunPaths(runsRoot, runId);
+      const manifest = hydrateManifest(row);
+      const status = hydrateStatus(row);
+      const checkpoint = hydrateCheckpoint(row);
+      const problems: string[] = [];
+
+      if (!manifest) {
+        problems.push('missing or invalid manifest');
+      }
+
+      if (!status) {
+        problems.push('missing or invalid status');
+      }
+
+      if (manifest && manifest.id !== runId) {
+        problems.push(`manifest id mismatch: ${manifest.id}`);
+      }
+
+      if (status && status.runId !== runId) {
+        problems.push(`status runId mismatch: ${status.runId}`);
+      }
+
+      if (checkpoint && checkpoint.runId !== runId) {
+        problems.push(`checkpoint runId mismatch: ${checkpoint.runId}`);
+      }
+
+      return {
+        runId,
+        paths,
+        manifest,
+        status,
+        checkpoint,
+        problems,
+        recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
+      } satisfies ScannedDurableRun;
+    });
 }
 
 export function summarizeScannedDurableRuns(runs: ScannedDurableRun[]): ScannedDurableRunsSummary {
@@ -525,26 +841,13 @@ export function summarizeScannedDurableRuns(runs: ScannedDurableRun[]): ScannedD
   };
 }
 
-// ---------------------------------------------------------------------------
-// Cascade cancel
-// ---------------------------------------------------------------------------
-
-/**
- * Collect all descendant run IDs for a given run.
- * Does not include the run itself.
- */
 export function collectDescendantRunIds(runsRoot: string, runId: string): string[] {
   const descendants: string[] = [];
   const queue: string[] = [runId];
 
   while (queue.length > 0) {
     const currentId = queue.shift()!;
-    const children = listDurableRunIds(runsRoot)
-      .map((id) => {
-        const manifest = loadDurableRunManifest(join(runsRoot, id, 'manifest.json'));
-        return manifest?.parentId === currentId ? id : undefined;
-      })
-      .filter((id): id is string => id !== undefined);
+    const children = listChildRunIds(runsRoot, currentId);
 
     for (const childId of children) {
       descendants.push(childId);
@@ -555,18 +858,11 @@ export function collectDescendantRunIds(runsRoot: string, runId: string): string
   return descendants;
 }
 
-/**
- * Cancel a run and all its descendants.
- * Returns the IDs of all cancelled runs.
- */
 export function cascadeCancelRun(
   runsRoot: string,
   runId: string,
 ): string[] {
-  // Check if the run exists
-  const statusPath = join(runsRoot, runId, 'status.json');
-  const currentStatus = loadDurableRunStatus(statusPath);
-
+  const currentStatus = loadDurableRunStatus(join(runsRoot, runId, 'status.json'));
   if (!currentStatus) {
     return [];
   }
@@ -578,17 +874,10 @@ export function cascadeCancelRun(
   for (const id of allIds) {
     const idStatusPath = join(runsRoot, id, 'status.json');
     const idStatus = loadDurableRunStatus(idStatusPath);
-
-    if (!idStatus) {
+    if (!idStatus || terminalStatus(idStatus.status)) {
       continue;
     }
 
-    // Skip if already terminal
-    if (terminalStatus(idStatus.status)) {
-      continue;
-    }
-
-    // Update to cancelled
     const updatedStatus: DurableRunStatusFile = {
       ...idStatus,
       status: 'cancelled',
@@ -602,15 +891,31 @@ export function cascadeCancelRun(
   return allIds;
 }
 
-/**
- * Check if a run has any non-terminal children.
- */
 export function hasActiveChildren(runsRoot: string, runId: string): boolean {
-  return listDurableRunIds(runsRoot)
-    .map((id) => {
-      const manifest = loadDurableRunManifest(join(runsRoot, id, 'manifest.json'));
-      const status = loadDurableRunStatus(join(runsRoot, id, 'status.json'));
-      return manifest?.parentId === runId && status && !terminalStatus(status.status);
-    })
-    .some(Boolean);
+  if (!runtimeDbExists(runsRoot)) {
+    return false;
+  }
+
+  const db = openRuntimeDb(resolveRuntimeDbPathFromRunsRoot(runsRoot));
+  const row = db.prepare(`
+    SELECT run_id
+    FROM runs
+    WHERE parent_id = ?
+      AND status_status IS NOT NULL
+      AND status_status NOT IN ('completed', 'failed', 'cancelled')
+    LIMIT 1
+  `).get(runId) as { run_id: string } | undefined;
+
+  return Boolean(row);
+}
+
+export function deleteDurableRunRecords(runsRoot: string, runIds: string[]): void {
+  deleteRunRows(runsRoot, runIds);
+}
+
+export function closeDurableRunStoreConnections(): void {
+  for (const db of runtimeDbCache.values()) {
+    db.close();
+  }
+  runtimeDbCache.clear();
 }

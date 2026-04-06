@@ -23,9 +23,11 @@
   "dependencies": {
     "@personal-agent/core": "*",
     "@personal-agent/resources": "*",
+    "better-sqlite3": "^11.10.0",
     "yaml": "^2.8.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "vitest": "4.0.18"
   }
 }

@@ -93,20 +93,18 @@ If you want "run this tomorrow" or "run this every hour," use a scheduled task i
 
 ## Durable state
 
-Runs live under the daemon state root:
+Runs live under the daemon state root.
 
-- `~/.local/state/personal-agent/daemon/runs/<run-id>/`
+The source of truth is:
 
-A run record contains files such as:
+- `~/.local/state/personal-agent/daemon/runtime.db`
 
-- `manifest.json`
-- `status.json`
-- `checkpoint.json`
-- `events.jsonl`
-- `output.log`
-- `result.json`
+Per-run filesystem data still exists for blob-like outputs such as:
 
-That makes runs inspectable and recoverable as daemon-owned background work.
+- `~/.local/state/personal-agent/daemon/runs/<run-id>/output.log`
+- `~/.local/state/personal-agent/daemon/runs/<run-id>/result.json`
+
+That keeps run metadata in SQLite while preserving inspectable logs and results on disk.
 
 ## Task slug and source
 
@@ -132,7 +130,7 @@ Use runs when you want to avoid blocking the current thread. Then inspect the ru
 If the outcome should eventually drive user attention, pair that behavior with the appropriate surface:
 
 - activity / inbox for passive async follow-up
-- reminder / alert for interrupting follow-up
+- reminder / notification delivery for interrupting follow-up
 - conversation wakeup if the result should resume a specific thread
 
 ## Choosing the right tool
