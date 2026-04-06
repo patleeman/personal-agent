@@ -112,11 +112,11 @@ function buildCompanionStateNote(input: {
 
   if (input.notificationsSupported) {
     if (input.notificationPermission === 'granted') {
-      parts.push('Alerts on');
+      parts.push('Notifications on');
     } else if (input.notificationPermission === 'default') {
-      parts.push('Alerts off');
+      parts.push('Notifications off');
     } else if (input.notificationPermission === 'denied') {
-      parts.push('Alerts blocked');
+      parts.push('Notifications blocked');
     }
   }
 
@@ -933,7 +933,7 @@ export function CompanionConversationsPage() {
                   className="rounded-full"
                   style={COMPANION_TOUCH_BUTTON_STYLE}
                 >
-                  Enable alerts
+                  Enable notifications
                 </ToolbarButton>
               ) : null}
             </div>

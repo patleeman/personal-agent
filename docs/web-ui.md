@@ -129,7 +129,7 @@ The Inbox page shows:
 
 - standalone inbox activity
 - archived conversations that need attention
-- active alerts that still need acknowledgement
+- reminder and callback notifications inline with the same list
 
 Typical examples:
 
@@ -141,9 +141,9 @@ Typical examples:
 - approval-needed wakeups
 - scheduled-task callbacks linked back to a conversation
 
-The desktop UI surfaces active alerts in the right-hand context rail, with per-alert actions and a clear-all action so they stay visible without taking over the composer.
+Reminder and callback notifications stay in the main inbox list and can expose per-row actions such as open, mark read, dismiss, and snooze.
 
-See [Alerts and Reminders](./alerts.md).
+See [Reminders and Notification Delivery](./alerts.md).
 
 You can:
 
@@ -185,7 +185,7 @@ Saved conversations also keep their working directory and run context in the sam
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
-When active alerts exist and browser notifications are still off, the desktop web UI still prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
+When reminder/callback notifications exist and browser notifications are still off, the desktop web UI prompts you to enable browser notifications so reminders and callbacks can still interrupt while the tab is hidden.
 
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
@@ -268,7 +268,7 @@ See [Tracked Pages](./projects.md) and [Artifacts and Rendered Outputs](./artifa
 
 The Scheduled page is the UI for daemon tasks.
 
-Tasks are still passive by default. If a task is explicitly bound back to a conversation, the result can also surface later as an alert and conversation wakeup.
+Tasks are still passive by default. If a task is explicitly bound back to a conversation, the result can also surface later as an inbox notification and conversation wakeup.
 
 You can:
 
@@ -364,6 +364,8 @@ You can reference:
 - files in the knowledge vault (for example `@_profiles/datadog/AGENTS.md`)
 
 When you mention these items, the UI resolves them and injects durable context into the live session.
+
+The composer shows the top 12 mention matches at a time; keep typing to narrow the list when the vault is large.
 
 Skills and profile behavior are no longer separate `@` mention targets; reference the underlying vault files directly when you want that exact file in play.
 

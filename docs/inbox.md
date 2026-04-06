@@ -1,8 +1,8 @@
 # Inbox and Activity
 
-The inbox is personal-agent's **durable passive attention surface** for asynchronous things.
+The inbox is personal-agent's **durable in-app attention surface** for asynchronous things.
 
-It is not a second transcript, it is not a copy of every assistant reply, and it is not the interrupting reminder surface.
+It is not a second transcript and it is not a copy of every assistant reply. Reminders and callbacks also surface here instead of going to a separate in-app alert rail.
 
 The inbox exists to answer:
 
@@ -38,13 +38,13 @@ The inbox is a surfacing layer over:
 
 The inbox is therefore an attention queue, not a storage system of its own.
 
-### Notification / alert
+### Notification delivery
 
-A notification or alert is an optional interrupt layered on top of inbox/conversation surfacing.
+Some inbox items can also trigger browser or companion notifications, or keep reminder-specific actions such as snooze and dismiss.
 
-Alerts are intentionally sparser and more disruptive than inbox items.
+There is no separate in-app alert surface anymore. Reminder and callback notifications appear inline in the inbox with everything else.
 
-Notifications are not the durable record. The durable record is the conversation, activity item, alert state, project, artifact, or log.
+Notifications are not the durable record. The durable record is the conversation, activity item, wakeup state, project, artifact, or log.
 
 ---
 
@@ -145,6 +145,7 @@ The web inbox combines:
 
 1. **standalone unread/read activity items** that are not tied to a known conversation
 2. **archived conversations needing attention**
+3. **active reminder/callback notifications** rendered inline with the same list
 
 Open conversations already have a visible place in the sidebar, so they are shown there with attention dots instead of being duplicated in the inbox list.
 
@@ -160,6 +161,16 @@ When the user opens a conversation in the web UI, the conversation attention sta
 ### Standalone activity in the web UI
 
 Standalone activity stays in the inbox list until it is marked read.
+
+### Reminder and callback notifications in the web UI
+
+Reminder and callback notifications show up as normal inbox rows.
+
+They can still expose reminder-specific actions such as:
+
+- mark read / acknowledge
+- dismiss
+- snooze when backed by a wakeup
 
 ### Linked activity behavior
 
@@ -365,11 +376,11 @@ In practice, that means:
 - **foreground work stays in the conversation**
 - **standalone async work becomes activity**
 - **async work tied to a dormant conversation surfaces the conversation**
-- **alerts/notifications are the interrupt layer, not the durable record itself**
+- **notification delivery can make an inbox item harder to miss, but it is not the durable record itself**
 
 ## Related docs
 
 - [Async Attention and Wakeups](./async-attention.md)
-- [Alerts and Reminders](./alerts.md)
+- [Reminders and Notification Delivery](./alerts.md)
 - [Conversations](./conversations.md)
 - [Scheduled Tasks](./scheduled-tasks.md)

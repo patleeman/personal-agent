@@ -41,7 +41,7 @@ afterEach(() => {
 });
 
 describe('AlertToaster', () => {
-  it('prompts to enable browser alerts when notifications are still off', () => {
+  it('prompts to enable browser notifications when notifications are still off', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123']}>
         <AppDataContext.Provider value={{
@@ -69,7 +69,7 @@ describe('AlertToaster', () => {
     expect(html).not.toContain('Acknowledge');
   });
 
-  it('omits the permission prompt once browser alerts are already enabled', () => {
+  it('omits the permission prompt once browser notifications are already enabled', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123']}>
         <AppDataContext.Provider value={{

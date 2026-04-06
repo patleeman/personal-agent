@@ -36,6 +36,27 @@ function renderWithProviders(node: React.ReactNode) {
               ],
               unreadCount: 1,
             },
+            alerts: {
+              activeCount: 1,
+              entries: [
+                {
+                  id: 'alert-1',
+                  profile: 'shared',
+                  kind: 'reminder',
+                  severity: 'disruptive',
+                  status: 'active',
+                  title: 'Approve the lunch order',
+                  body: 'The reminder fired for the lunch order check-in.',
+                  createdAt: '2026-03-25T12:05:00.000Z',
+                  updatedAt: '2026-03-25T12:05:00.000Z',
+                  conversationId: 'attention-1',
+                  wakeupId: 'resume-1',
+                  sourceKind: 'reminder-tool',
+                  sourceId: 'reminder-1',
+                  requiresAck: true,
+                },
+              ],
+            },
             projects: null,
             sessions: null,
             tasks: [
@@ -88,6 +109,7 @@ function renderWithProviders(node: React.ReactNode) {
               ],
             },
             setActivity: vi.fn(),
+            setAlerts: vi.fn(),
             setProjects: vi.fn(),
             setSessions: vi.fn(),
             setTasks: vi.fn(),
@@ -268,9 +290,10 @@ describe('companion operational pages', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the companion inbox with attention conversations and standalone activity', () => {
+  it('renders the companion inbox with reminder notifications, attention conversations, and standalone activity', () => {
     const html = renderWithProviders(<CompanionInboxPage />);
 
+    expect(html).toContain('Approve the lunch order');
     expect(html).toContain('Investigate sync warnings');
     expect(html).toContain('Morning brief task failed');
     expect(html).toContain('Start conversation');

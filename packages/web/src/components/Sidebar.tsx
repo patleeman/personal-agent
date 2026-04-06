@@ -607,16 +607,22 @@ export function Sidebar() {
   }, [openSessionRows, pinnedSessionRows]);
 
   const activeAlertCount = alerts?.activeCount ?? 0;
+  const activeAlertActivityIds = useMemo(
+    () => new Set((alerts?.entries ?? [])
+      .filter((entry) => entry.status === 'active' && typeof entry.activityId === 'string' && entry.activityId.trim().length > 0)
+      .map((entry) => entry.activityId as string)),
+    [alerts?.entries],
+  );
   const standaloneUnreadCount = useMemo(() => {
     const knownConversationIds = new Set([...pinnedSessions, ...tabs, ...archivedSessions].map((session) => session.id));
     return (activity?.entries ?? []).filter((entry) => {
-      if (entry.read) {
+      if (entry.read || activeAlertActivityIds.has(entry.id)) {
         return false;
       }
 
       return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
     }).length;
-  }, [activity?.entries, archivedSessions, pinnedSessions, tabs]);
+  }, [activity?.entries, activeAlertActivityIds, archivedSessions, pinnedSessions, tabs]);
   const notificationCount = standaloneUnreadCount + activeAlertCount;
 
 

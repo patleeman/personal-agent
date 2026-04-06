@@ -248,7 +248,7 @@ export function CompanionLayout() {
     tasks,
     runs,
     setActivity,
-    setAlerts,
+    setAlerts = () => {},
     setTasks,
     setRuns,
   } = useAppData();
@@ -492,7 +492,13 @@ export function CompanionLayout() {
       </header>
     );
   }
-  const inboxBadgeCount = activity?.unreadCount ?? 0;
+  const inboxBadgeCount = useMemo(() => {
+    const activeAlertActivityIds = new Set((alerts?.entries ?? [])
+      .filter((entry) => entry.status === 'active' && typeof entry.activityId === 'string' && entry.activityId.trim().length > 0)
+      .map((entry) => entry.activityId as string));
+    const unreadActivityCount = (activity?.entries ?? []).filter((entry) => !entry.read && !activeAlertActivityIds.has(entry.id)).length;
+    return unreadActivityCount + (alerts?.activeCount ?? 0);
+  }, [activity?.entries, alerts?.activeCount, alerts?.entries]);
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
   const navItems = [
@@ -679,7 +685,7 @@ export function CompanionLayout() {
 
             <div className="min-h-0 flex-1 overflow-y-auto px-0 py-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
               <DrawerSection title="Navigate">
-                <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review unread activity, alerts, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_INBOX_PATH} label="Inbox" detail="Review notifications, reminders, and conversations that need attention." Icon={InboxIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_CONVERSATIONS_PATH} label="Chats" detail="Jump back into live conversations and workspace chats." Icon={ChatsIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_TASKS_PATH} label="Tasks" detail="Review scheduled work and task runs." Icon={TasksIcon} onClick={() => setMenuOpen(false)} />
                 <DrawerLink to={COMPANION_SYSTEM_PATH} label="Settings" detail="System status and safe operational controls." Icon={SettingsIcon} onClick={() => setMenuOpen(false)} />
@@ -709,7 +715,7 @@ export function CompanionLayout() {
                     <span className="mt-0.5 shrink-0"><TasksIcon active /></span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[14px] font-medium text-primary">Enable notifications</p>
-                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">Get alerts for approvals, failures, and activity that needs attention.</p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-secondary">Get notifications for reminders, approvals, and activity that needs attention.</p>
                     </div>
                   </button>
                 ) : null}

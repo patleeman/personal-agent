@@ -168,7 +168,7 @@ See [Sync Guide](./sync.md).
 | Work with the agent right now | conversation | best place for active interaction |
 | Track a real piece of ongoing work | tracked page | durable plan, brief, pages, files, blockers, status, and linked conversations |
 | Save something the agent should know later | page / skill page / AGENTS | reusable durable knowledge |
-| Interrupt yourself later for a reminder or callback | reminder / alert | conversation-bound wakeup plus a disruptive attention surface |
+| Interrupt yourself later for a reminder or callback | reminder / notification | conversation-bound wakeup plus stronger notification delivery |
 | Notice async outcomes later without interrupting yourself | inbox/activity | passive attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
 | Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
@@ -181,7 +181,7 @@ Think about the system this way:
 - **page** = durable knowledge or tracked work
 - **skills** = reusable procedures
 - **tracked pages** = durable tracked work
-- **alerts** = interrupting reminders and callbacks that need acknowledgement
+- **reminder/callback notifications** = interrupting reminders and callbacks that need acknowledgement
 - **inbox** = durable passive attention for async events
 - **scheduled task** = durable automation definition
 - **sync** = cross-machine durable-state replication

@@ -4,6 +4,8 @@ import { cx } from './ui';
 
 type BrowserNotificationPermissionState = NotificationPermission | 'unsupported';
 
+void React;
+
 function readNotificationPermission(): BrowserNotificationPermissionState {
   return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
 }
@@ -73,7 +75,7 @@ export function AlertToaster() {
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3">
       <div className={cx('pointer-events-auto rounded-2xl border border-accent/35 bg-surface/98 px-4 py-3 shadow-lg backdrop-blur')}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Browser alerts</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Browser notifications</p>
         <p className="mt-1 text-[14px] font-semibold text-primary">Enable browser notifications</p>
         <p className="mt-1 text-[13px] leading-6 text-secondary">
           Let reminders and scheduled-task callbacks interrupt even when this tab is hidden.
@@ -84,7 +86,7 @@ export function AlertToaster() {
             className="ui-toolbar-button"
             onClick={() => { void requestNotificationPermission(); }}
           >
-            Enable browser alerts
+            Enable notifications
           </button>
         </div>
       </div>

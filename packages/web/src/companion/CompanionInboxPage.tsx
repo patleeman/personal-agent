@@ -5,12 +5,19 @@ import { BrowserRecordContent, ToolbarButton, browserRecordClass, cx } from '../
 import { useAppData, useAppEvents, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { kindMeta, timeAgo } from '../utils';
-import type { ActivityEntry, CompanionConversationListResult, SessionMeta } from '../types';
+import type { ActivityEntry, AlertEntry, CompanionConversationListResult, SessionMeta } from '../types';
 import { CompanionCardStack } from './CompanionBrowser';
 import { buildCompanionConversationPath, COMPANION_INBOX_PATH } from './routes';
 import { useCompanionTopBarAction } from './CompanionLayout';
 
 type InboxItem =
+  | {
+      type: 'alert';
+      key: string;
+      sortAt: string;
+      read: false;
+      entry: AlertEntry;
+    }
   | {
       type: 'conversation';
       key: string;
@@ -60,6 +67,37 @@ function summarizeActivityDetails(entry: ActivityEntry): string | null {
   return details.split('\n').find((line) => line.trim().length > 0)?.trim() ?? null;
 }
 
+function alertMeta(entry: AlertEntry): { label: string; accentClass: string } {
+  if (entry.kind === 'approval-needed') {
+    return { label: 'approval', accentClass: 'text-warning' };
+  }
+
+  if (entry.kind === 'reminder') {
+    return { label: 'reminder', accentClass: 'text-warning' };
+  }
+
+  if (entry.kind === 'task-failed') {
+    return { label: 'failed', accentClass: 'text-danger' };
+  }
+
+  if (entry.kind === 'blocked') {
+    return { label: 'blocked', accentClass: 'text-danger' };
+  }
+
+  if (entry.kind === 'task-callback') {
+    return { label: 'callback', accentClass: 'text-accent' };
+  }
+
+  return {
+    label: entry.kind.replace(/-/g, ' '),
+    accentClass: 'text-accent',
+  };
+}
+
+function sortActiveAlerts(entries: AlertEntry[]): AlertEntry[] {
+  return [...entries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id));
+}
+
 function collectConversationIds(result: CompanionConversationListResult | null): Set<string> {
   if (!result) {
     return new Set<string>();
@@ -95,7 +133,7 @@ function buildConversationMeta(session: SessionMeta): string {
 
 export function CompanionInboxPage() {
   const navigate = useNavigate();
-  const { activity, setActivity } = useAppData();
+  const { activity, alerts, setActivity, setAlerts = () => {} } = useAppData();
   const { versions } = useAppEvents();
   const { status: sseStatus } = useSseConnection();
   const [filter, setFilter] = useState<'unread' | 'all'>('unread');
@@ -104,6 +142,7 @@ export function CompanionInboxPage() {
   const [clearingInbox, setClearingInbox] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingActivityId, setPendingActivityId] = useState<string | null>(null);
+  const [pendingAlertId, setPendingAlertId] = useState<string | null>(null);
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const {
     data: conversationGroups,
@@ -117,17 +156,49 @@ export function CompanionInboxPage() {
     `companion-inbox:${versions.sessions}:${versions.activity}`,
   );
 
+  const activeAlerts = useMemo(
+    () => sortActiveAlerts((alerts?.entries ?? []).filter((entry) => entry.status === 'active')),
+    [alerts?.entries],
+  );
+  const activeAlertConversationIds = useMemo(
+    () => new Set(activeAlerts
+      .map((entry) => entry.conversationId)
+      .filter((conversationId): conversationId is string => typeof conversationId === 'string' && conversationId.trim().length > 0)),
+    [activeAlerts],
+  );
+  const activeAlertActivityIds = useMemo(
+    () => new Set(activeAlerts
+      .map((entry) => entry.activityId)
+      .filter((activityId): activityId is string => typeof activityId === 'string' && activityId.trim().length > 0)),
+    [activeAlerts],
+  );
   const knownConversationIds = useMemo(
     () => collectConversationIds(conversationGroups),
     [conversationGroups],
   );
   const standaloneActivities = useMemo(
-    () => (activity?.entries ?? []).filter((entry) => !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId))),
-    [activity?.entries, knownConversationIds],
+    () => (activity?.entries ?? []).filter((entry) => {
+      if (activeAlertActivityIds.has(entry.id)) {
+        return false;
+      }
+
+      return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
+    }),
+    [activity?.entries, activeAlertActivityIds, knownConversationIds],
   );
-  const attentionConversations = conversationGroups?.needsReview ?? [];
+  const attentionConversations = useMemo(
+    () => (conversationGroups?.needsReview ?? []).filter((session) => !activeAlertConversationIds.has(session.id)),
+    [activeAlertConversationIds, conversationGroups?.needsReview],
+  );
 
   const allItems = useMemo<InboxItem[]>(() => {
+    const alertItems: InboxItem[] = activeAlerts.map((entry) => ({
+      type: 'alert',
+      key: `alert:${entry.id}`,
+      sortAt: entry.updatedAt,
+      read: false,
+      entry,
+    }));
     const activityItems: InboxItem[] = standaloneActivities.map((entry) => ({
       type: 'activity',
       key: `activity:${entry.id}`,
@@ -143,13 +214,13 @@ export function CompanionInboxPage() {
       session,
     }));
 
-    return [...conversationItems, ...activityItems]
+    return [...alertItems, ...conversationItems, ...activityItems]
       .sort((left, right) => right.sortAt.localeCompare(left.sortAt));
-  }, [attentionConversations, standaloneActivities]);
+  }, [activeAlerts, attentionConversations, standaloneActivities]);
 
   const unreadCount = useMemo(
-    () => attentionConversations.length + standaloneActivities.filter((entry) => !entry.read).length,
-    [attentionConversations.length, standaloneActivities],
+    () => activeAlerts.length + attentionConversations.length + standaloneActivities.filter((entry) => !entry.read).length,
+    [activeAlerts.length, attentionConversations.length, standaloneActivities],
   );
   const visibleItems = useMemo(
     () => filter === 'unread' ? allItems.filter((item) => !item.read) : allItems,
@@ -165,8 +236,9 @@ export function CompanionInboxPage() {
     setActionError(null);
 
     try {
-      const [nextActivity, nextConversations] = await Promise.all([
+      const [nextActivity, nextAlerts, nextConversations] = await Promise.all([
         api.activity(),
+        api.alerts(),
         refetchConversations({ resetLoading: false }),
       ]);
 
@@ -174,6 +246,7 @@ export function CompanionInboxPage() {
         entries: nextActivity,
         unreadCount: nextActivity.filter((entry) => !entry.read).length,
       });
+      setAlerts(nextAlerts);
 
       if (nextConversations) {
         replaceConversationGroups(nextConversations);
@@ -183,7 +256,7 @@ export function CompanionInboxPage() {
     } finally {
       setRefreshingActivity(false);
     }
-  }, [refetchConversations, replaceConversationGroups, setActivity]);
+  }, [refetchConversations, replaceConversationGroups, setActivity, setAlerts]);
 
   const markAllRead = useCallback(async () => {
     if (unreadCount === 0 || markingAll) {
@@ -196,6 +269,7 @@ export function CompanionInboxPage() {
       await Promise.all([
         ...standaloneActivities.filter((entry) => !entry.read).map((entry) => api.markActivityRead(entry.id, true)),
         ...attentionConversations.map((session) => api.markConversationAttentionRead(session.id, true)),
+        ...activeAlerts.map((entry) => api.acknowledgeAlert(entry.id)),
       ]);
       await refreshInbox();
     } catch (error) {
@@ -203,28 +277,35 @@ export function CompanionInboxPage() {
     } finally {
       setMarkingAll(false);
     }
-  }, [attentionConversations, markingAll, refreshInbox, standaloneActivities, unreadCount]);
+  }, [activeAlerts, attentionConversations, markingAll, refreshInbox, standaloneActivities, unreadCount]);
 
   const clearInbox = useCallback(async () => {
     if (allItems.length === 0 || clearingInbox) {
       return;
     }
 
-    if (!window.confirm('Clear the inbox? This deletes standalone activity items and marks attention conversations as read.')) {
+    if (!window.confirm(
+      activeAlerts.length > 0
+        ? 'Clear the inbox? This deletes standalone activity items, marks attention conversations as read, and dismisses active reminder notifications.'
+        : 'Clear the inbox? This deletes standalone activity items and marks attention conversations as read.',
+    )) {
       return;
     }
 
     setClearingInbox(true);
     setActionError(null);
     try {
-      await api.clearInbox();
+      await Promise.all([
+        api.clearInbox(),
+        ...activeAlerts.map((entry) => api.dismissAlert(entry.id)),
+      ]);
       await refreshInbox();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setClearingInbox(false);
     }
-  }, [allItems.length, clearingInbox, refreshInbox]);
+  }, [activeAlerts, allItems.length, clearingInbox, refreshInbox]);
 
   const handleOpenConversation = useCallback(async (session: SessionMeta) => {
     setPendingConversationId(session.id);
@@ -274,6 +355,59 @@ export function CompanionInboxPage() {
       setPendingActivityId(null);
     }
   }, [activity?.entries, setActivity]);
+
+  const handleOpenAlertConversation = useCallback(async (entry: AlertEntry) => {
+    if (!entry.conversationId) {
+      return;
+    }
+
+    setPendingAlertId(entry.id);
+    setActionError(null);
+    try {
+      navigate(buildCompanionConversationPath(entry.conversationId));
+    } finally {
+      setPendingAlertId(null);
+    }
+  }, [navigate]);
+
+  const handleAcknowledgeAlert = useCallback(async (entry: AlertEntry) => {
+    setPendingAlertId(entry.id);
+    setActionError(null);
+    try {
+      await api.acknowledgeAlert(entry.id);
+      await refreshInbox();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAlertId(null);
+    }
+  }, [refreshInbox]);
+
+  const handleDismissAlert = useCallback(async (entry: AlertEntry) => {
+    setPendingAlertId(entry.id);
+    setActionError(null);
+    try {
+      await api.dismissAlert(entry.id);
+      await refreshInbox();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAlertId(null);
+    }
+  }, [refreshInbox]);
+
+  const handleSnoozeAlert = useCallback(async (entry: AlertEntry) => {
+    setPendingAlertId(entry.id);
+    setActionError(null);
+    try {
+      await api.snoozeAlert(entry.id, { delay: '15m' });
+      await refreshInbox();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPendingAlertId(null);
+    }
+  }, [refreshInbox]);
 
   useEffect(() => {
     setTopBarAction(
@@ -337,9 +471,9 @@ export function CompanionInboxPage() {
           {!isLoading && refreshError ? <p className="px-4 text-[13px] text-danger">Unable to load inbox: {refreshError}</p> : null}
           {!isLoading && !refreshError && allItems.length === 0 ? (
             <div className="px-4 pt-5">
-              <p className="text-[15px] text-primary">No inbox items right now.</p>
+              <p className="text-[15px] text-primary">No notifications right now.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Activity, approvals, failures, and conversations that need attention will surface here.
+                Activity, reminders, callbacks, and conversations that need attention will surface here.
               </p>
             </div>
           ) : null}
@@ -354,6 +488,71 @@ export function CompanionInboxPage() {
           {!isLoading && visibleItems.length > 0 ? (
             <CompanionCardStack>
               {visibleItems.map((item) => {
+                if (item.type === 'alert') {
+                  const meta = alertMeta(item.entry);
+                  const busy = pendingAlertId === item.entry.id;
+
+                  return (
+                    <div key={item.key} className={browserRecordClass(false, 'py-3.5')}>
+                      {item.entry.conversationId ? (
+                        <button
+                          type="button"
+                          onClick={() => { void handleOpenAlertConversation(item.entry); }}
+                          disabled={busy}
+                          className="block w-full text-left disabled:cursor-default"
+                        >
+                          <BrowserRecordContent
+                            label={<span className={meta.accentClass}>{meta.label}</span>}
+                            aside={busy ? 'Working…' : timeAgo(item.entry.updatedAt)}
+                            heading={item.entry.title}
+                            summary={item.entry.body}
+                            meta={item.entry.requiresAck ? 'Mark read or dismiss' : 'Open conversation'}
+                            titleClassName="text-[15px]"
+                            summaryClassName="text-[13px]"
+                            metaClassName="text-[11px] break-words"
+                          />
+                        </button>
+                      ) : (
+                        <BrowserRecordContent
+                          label={<span className={meta.accentClass}>{meta.label}</span>}
+                          aside={busy ? 'Working…' : timeAgo(item.entry.updatedAt)}
+                          heading={item.entry.title}
+                          summary={item.entry.body}
+                          meta={item.entry.requiresAck ? 'Mark read or dismiss' : 'Notification'}
+                          titleClassName="text-[15px]"
+                          summaryClassName="text-[13px]"
+                          metaClassName="text-[11px] break-words"
+                        />
+                      )}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+                        {item.entry.wakeupId ? (
+                          <ToolbarButton
+                            onClick={() => { void handleSnoozeAlert(item.entry); }}
+                            disabled={busy}
+                            className="rounded-full"
+                          >
+                            {busy ? 'Working…' : 'Snooze 15m'}
+                          </ToolbarButton>
+                        ) : null}
+                        <ToolbarButton
+                          onClick={() => { void handleAcknowledgeAlert(item.entry); }}
+                          disabled={busy}
+                          className="rounded-full"
+                        >
+                          {busy ? 'Working…' : 'Mark read'}
+                        </ToolbarButton>
+                        <ToolbarButton
+                          onClick={() => { void handleDismissAlert(item.entry); }}
+                          disabled={busy}
+                          className="rounded-full"
+                        >
+                          Dismiss
+                        </ToolbarButton>
+                      </div>
+                    </div>
+                  );
+                }
+
                 if (item.type === 'conversation') {
                   const busy = pendingConversationId === item.session.id;
                   return (

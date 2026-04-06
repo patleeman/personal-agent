@@ -4,8 +4,8 @@ This page explains how `personal-agent` surfaces work that matters later.
 
 The core distinction is:
 
-- **passive attention** → inbox/activity
-- **interrupting attention** → alerts/reminders
+- **in-app attention** → inbox/activity plus reminder/callback notifications shown inline there
+- **stronger delivery** → browser/companion notifications and reminder-specific actions such as snooze
 - **conversation continuation** → wakeups such as deferred resume
 
 ## The three layers
@@ -31,7 +31,7 @@ The attention surface answers:
 
 > what should I notice now or later?
 
-That is where inbox/activity and alerts live.
+That is where inbox/activity live, including reminder and callback notifications rendered inline in the inbox.
 
 ### 3. Wakeup behavior
 
@@ -47,10 +47,10 @@ Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
 | --- | --- | --- | --- |
 | Passive async summary with no conversation | activity / inbox | passive | standalone activity item |
 | Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + linked activity/logs |
-| Human reminder that should interrupt | reminder / alert | interrupting | wakeup + alert + activity/state |
-| Agent should continue this conversation later | deferred resume | usually passive unless paired with alerting | wakeup + conversation |
+| Human reminder that should interrupt | reminder | inbox notification + optional browser/companion delivery | wakeup + notification state + activity/state |
+| Agent should continue this conversation later | deferred resume | usually passive unless paired with notification delivery | wakeup + conversation |
 | Scheduled automation completes later | task activity, optionally callback into a conversation | passive by default | task log + activity + optional conversation wakeup |
-| High-signal blocked or failed background work | alert, often with activity too | interrupting | conversation or activity plus logs |
+| High-signal blocked or failed background work | reminder/callback notification, often with activity too | inbox notification + optional browser/companion delivery | conversation or activity plus logs |
 
 ## Inbox / activity
 
@@ -67,9 +67,9 @@ If the event belongs to a known conversation, keep the durable result with that 
 
 See [Inbox and Activity](./inbox.md).
 
-## Alerts and reminders
+## Reminders and notification delivery
 
-Use alerts when the event should interrupt.
+Use reminder-driven notification delivery when the event should be harder to miss.
 
 Good fits:
 
@@ -78,9 +78,9 @@ Good fits:
 - blocked or failed background work that needs immediate attention
 - scheduled-task callbacks that should be hard to miss
 
-Alerts are intentionally sparse. They sit on top of the durable record and attention model; they are not the durable record themselves.
+These notifications no longer get a separate in-app surface. They show up as normal inbox rows, and can additionally trigger browser/companion notifications when enabled.
 
-See [Alerts and Reminders](./alerts.md).
+See [Reminders and Notification Delivery](./alerts.md).
 
 ## Deferred resume
 
@@ -111,7 +111,7 @@ They:
 When explicitly bound back to a conversation, they can also create:
 
 - a conversation wakeup
-- an alert
+- a stronger inbox notification
 - linked activity
 
 That is the right fit for things like:
@@ -126,7 +126,7 @@ Use these defaults:
 - **foreground work** stays in the conversation
 - **standalone async work** becomes activity
 - **async work tied to a dormant conversation** surfaces the conversation
-- **user-requested tell-me-later behavior** becomes a reminder/alert
+- **user-requested tell-me-later behavior** becomes a reminder with notification delivery
 - **agent-initiated continue-later behavior** becomes deferred resume
 
 
@@ -135,8 +135,8 @@ Use these defaults:
 Do not:
 
 - turn every reply into inbox activity
-- use alerts for ordinary passive async summaries
-- store the durable record only in the alert layer
+- use reminder/callback notification delivery for ordinary passive async summaries
+- store the durable record only in the notification layer
 - use reminders when a scheduled task or deferred resume is the real need
 - copy conversation ids into portable durable files
 
@@ -144,6 +144,6 @@ Do not:
 
 - [Decision Guide](./decision-guide.md)
 - [Inbox and Activity](./inbox.md)
-- [Alerts and Reminders](./alerts.md)
+- [Reminders and Notification Delivery](./alerts.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Conversations](./conversations.md)

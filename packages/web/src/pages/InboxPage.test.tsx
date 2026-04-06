@@ -42,11 +42,21 @@ describe('InboxPage', () => {
 
     vi.mocked(useConversations).mockReturnValue({
       tabs: [],
-      archivedSessions: [createSession({
-        needsAttention: true,
-        attentionUpdatedAt: '2026-03-18T12:05:00.000Z',
-        attentionUnreadActivityCount: 1,
-      })],
+      archivedSessions: [
+        createSession({
+          needsAttention: true,
+          attentionUpdatedAt: '2026-03-18T12:05:00.000Z',
+          attentionUnreadActivityCount: 1,
+        }),
+        createSession({
+          id: 'conv-456',
+          file: '/tmp/conv-456.jsonl',
+          title: 'Open the runbook review',
+          needsAttention: true,
+          attentionUpdatedAt: '2026-03-18T12:06:00.000Z',
+          attentionUnreadMessageCount: 2,
+        }),
+      ],
       openSession: vi.fn(),
       loading: false,
       refetch: vi.fn(),
@@ -58,7 +68,7 @@ describe('InboxPage', () => {
     vi.clearAllMocks();
   });
 
-  it('shows active alerts alongside conversation-open and activity-start actions in the inbox list', () => {
+  it('renders reminder notifications inline with other inbox items', () => {
     const activity: ActivitySnapshot = {
       entries: [
         {
@@ -119,11 +129,12 @@ describe('InboxPage', () => {
     );
 
     expect(html).toContain('Verification failed for web UI deploy');
-    expect(html).toContain('Active alerts');
     expect(html).toContain('Follow up now');
+    expect(html).not.toContain('Active alerts');
     expect(html).toContain('Clear inbox');
     expect(html).toContain('title="Start a new conversation from this inbox item"');
-    expect(html).toContain('Follow up on failed verification');
+    expect(html).toContain('title="Mark this notification read"');
+    expect(html).toContain('Open the runbook review');
     expect(html).toContain('title="Open the conversation that needs attention"');
   });
 });
