@@ -5,7 +5,7 @@ import {
   writePersistedConversationBootstrapEntry,
 } from '../conversationBootstrapPersistence';
 import { useAppEvents } from '../contexts';
-import type { ConversationBootstrapState } from '../types';
+import type { ConversationBootstrapState, SessionDetail } from '../types';
 
 interface CachedConversationBootstrapEntry {
   data: ConversationBootstrapState;
@@ -22,6 +22,40 @@ function readConversationBootstrapSessionSignature(
 
   const bootstrapSignature = data?.sessionDetailSignature?.trim();
   return bootstrapSignature || undefined;
+}
+
+function readConversationBootstrapLastBlockId(
+  data: ConversationBootstrapState | null | undefined,
+): string | undefined {
+  const blockId = data?.sessionDetail?.blocks.at(-1)?.id?.trim();
+  return blockId && blockId.length > 0 ? blockId : undefined;
+}
+
+function mergeAppendOnlyConversationSessionDetail(
+  cached: SessionDetail,
+  nextData: ConversationBootstrapState,
+): SessionDetail | null {
+  const appendOnly = nextData.sessionDetailAppendOnly;
+  if (!appendOnly) {
+    return nextData.sessionDetail;
+  }
+
+  const dropCount = Math.max(0, appendOnly.blockOffset - cached.blockOffset);
+  const retainedBlocks = cached.blocks.slice(dropCount);
+  const nextVisibleLength = Math.max(0, appendOnly.totalBlocks - appendOnly.blockOffset);
+  const retainedCount = Math.max(0, nextVisibleLength - appendOnly.blocks.length);
+  if (retainedCount > retainedBlocks.length) {
+    return null;
+  }
+
+  return {
+    meta: appendOnly.meta,
+    blocks: [...retainedBlocks.slice(retainedBlocks.length - retainedCount), ...appendOnly.blocks],
+    blockOffset: appendOnly.blockOffset,
+    totalBlocks: appendOnly.totalBlocks,
+    contextUsage: appendOnly.contextUsage,
+    signature: appendOnly.signature ?? cached.signature,
+  };
 }
 
 function normalizeConversationBootstrapState(data: ConversationBootstrapState): ConversationBootstrapState {
@@ -57,11 +91,11 @@ function stripConversationBootstrapTransientFlags(
   data: ConversationBootstrapState,
 ): ConversationBootstrapState {
   const normalized = normalizeConversationBootstrapState(data);
-  if (!('sessionDetailUnchanged' in normalized)) {
-    return normalized;
-  }
-
-  const { sessionDetailUnchanged: _sessionDetailUnchanged, ...rest } = normalized;
+  const {
+    sessionDetailUnchanged: _sessionDetailUnchanged,
+    sessionDetailAppendOnly: _sessionDetailAppendOnly,
+    ...rest
+  } = normalized;
   return rest;
 }
 
@@ -70,7 +104,7 @@ export function mergeConversationBootstrapWithCachedSessionDetail(
   nextData: ConversationBootstrapState,
 ): ConversationBootstrapState {
   const normalized = normalizeConversationBootstrapState(nextData);
-  if (!normalized.sessionDetailUnchanged) {
+  if (!normalized.sessionDetailUnchanged && !normalized.sessionDetailAppendOnly) {
     return normalized;
   }
 
@@ -83,15 +117,26 @@ export function mergeConversationBootstrapWithCachedSessionDetail(
 
   const nextSignature = readConversationBootstrapSessionSignature(normalized) ?? null;
   const cachedSignature = cachedDetail.signature?.trim() || readConversationBootstrapSessionSignature(cached) || null;
-  if (nextSignature && cachedSignature && nextSignature !== cachedSignature) {
+  if (nextSignature && cachedSignature && nextSignature !== cachedSignature && !normalized.sessionDetailAppendOnly) {
     return normalized;
   }
 
-  const { sessionDetailUnchanged: _sessionDetailUnchanged, ...rest } = normalized;
+  const mergedDetail = normalized.sessionDetailAppendOnly
+    ? mergeAppendOnlyConversationSessionDetail(cachedDetail, normalized)
+    : cachedDetail;
+  if (!mergedDetail) {
+    return normalized;
+  }
+
+  const {
+    sessionDetailUnchanged: _sessionDetailUnchanged,
+    sessionDetailAppendOnly: _sessionDetailAppendOnly,
+    ...rest
+  } = normalized;
   return {
     ...rest,
-    sessionDetail: cachedDetail,
-    sessionDetailSignature: cachedSignature ?? nextSignature,
+    sessionDetail: mergedDetail,
+    sessionDetailSignature: readConversationBootstrapSessionSignature({ ...rest, sessionDetail: mergedDetail }) ?? cachedSignature ?? nextSignature,
   };
 }
 
@@ -203,11 +248,19 @@ export function fetchConversationBootstrapCached(
     }
 
     const knownSessionSignature = readConversationBootstrapSessionSignature(cached?.data);
+    const cachedSessionDetail = cached?.data.sessionDetail;
     const data = await api.conversationBootstrap(conversationId, {
       ...options,
       ...(knownSessionSignature ? { knownSessionSignature } : {}),
+      ...(typeof cachedSessionDetail?.blockOffset === 'number' ? { knownBlockOffset: cachedSessionDetail.blockOffset } : {}),
+      ...(typeof cachedSessionDetail?.totalBlocks === 'number' ? { knownTotalBlocks: cachedSessionDetail.totalBlocks } : {}),
+      ...(readConversationBootstrapLastBlockId(cached?.data) ? { knownLastBlockId: readConversationBootstrapLastBlockId(cached?.data) } : {}),
     });
-    const nextData = mergeConversationBootstrapWithCachedSessionDetail(cached?.data ?? null, data);
+    let nextData = mergeConversationBootstrapWithCachedSessionDetail(cached?.data ?? null, data);
+    if ((nextData.sessionDetailUnchanged || nextData.sessionDetailAppendOnly) && !nextData.sessionDetail && !nextData.liveSession.live) {
+      const fallback = await api.conversationBootstrap(conversationId, options);
+      nextData = mergeConversationBootstrapWithCachedSessionDetail(cached?.data ?? null, fallback);
+    }
     return writeConversationBootstrapCacheEntry(conversationId, nextData, options, versionKey).data;
   })().finally(() => {
     conversationBootstrapInflight.delete(inflightKey);

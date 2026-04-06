@@ -402,6 +402,7 @@ That means:
 - inbox, projects, sessions, tasks, and system status surfaces update live
 - the global app stream carries lightweight summary state; heavier durable run history and conversation transcript data still load on demand from their own surfaces
 - conversation bootstrap requests reuse cached transcript windows by session-file signature when possible, and the browser keeps recent transcript windows in durable local cache so reopen/reload usually only fetches lightweight live metadata unless that transcript actually changed
+- when a saved conversation transcript only grew at the tail, the UI refresh path now requests just the appended blocks and merges them into the cached window instead of redownloading the whole tail slice
 - you usually do not need to refresh manually
 - if the SSE connection drops, the UI will try to reconnect, including during managed web UI restarts
 

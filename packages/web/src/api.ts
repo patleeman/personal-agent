@@ -177,13 +177,28 @@ export const api = {
     const query = params.toString();
     return get<CompanionConversationListResult>(`/companion/conversations${query ? `?${query}` : ''}`);
   },
-  sessionDetail: (id: string, options?: { tailBlocks?: number; knownSessionSignature?: string }) => {
+  sessionDetail: (id: string, options?: {
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }) => {
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
     }
     if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
       params.set('knownSessionSignature', options.knownSessionSignature.trim());
+    }
+    if (typeof options?.knownBlockOffset === 'number' && Number.isInteger(options.knownBlockOffset) && options.knownBlockOffset >= 0) {
+      params.set('knownBlockOffset', String(options.knownBlockOffset));
+    }
+    if (typeof options?.knownTotalBlocks === 'number' && Number.isInteger(options.knownTotalBlocks) && options.knownTotalBlocks >= 0) {
+      params.set('knownTotalBlocks', String(options.knownTotalBlocks));
+    }
+    if (typeof options?.knownLastBlockId === 'string' && options.knownLastBlockId.trim().length > 0) {
+      params.set('knownLastBlockId', options.knownLastBlockId.trim());
     }
 
     const query = params.toString();
@@ -367,13 +382,28 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
-  conversationBootstrap: (id: string, options?: { tailBlocks?: number; knownSessionSignature?: string }) => {
+  conversationBootstrap: (id: string, options?: {
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }) => {
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
     }
     if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
       params.set('knownSessionSignature', options.knownSessionSignature.trim());
+    }
+    if (typeof options?.knownBlockOffset === 'number' && Number.isInteger(options.knownBlockOffset) && options.knownBlockOffset >= 0) {
+      params.set('knownBlockOffset', String(options.knownBlockOffset));
+    }
+    if (typeof options?.knownTotalBlocks === 'number' && Number.isInteger(options.knownTotalBlocks) && options.knownTotalBlocks >= 0) {
+      params.set('knownTotalBlocks', String(options.knownTotalBlocks));
+    }
+    if (typeof options?.knownLastBlockId === 'string' && options.knownLastBlockId.trim().length > 0) {
+      params.set('knownLastBlockId', options.knownLastBlockId.trim());
     }
 
     const query = params.toString();

@@ -33,7 +33,11 @@ import {
   resumeSession as resumeLocalSession,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
-import { readSessionBlocks, renameStoredSession } from '../conversations/sessions.js';
+import {
+  buildAppendOnlySessionDetailResponse,
+  readSessionBlocks,
+  renameStoredSession,
+} from '../conversations/sessions.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   getDurableRun,
@@ -75,11 +79,37 @@ function initializeConversationStateRoutesContext(
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 }
 
+function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const parsed = typeof candidate === 'string'
+    ? Number.parseInt(candidate, 10)
+    : typeof candidate === 'number'
+      ? candidate
+      : undefined;
+
+  return Number.isInteger(parsed) && (parsed as number) >= 0
+    ? parsed as number
+    : undefined;
+}
+
+function parseTrimmedQueryString(rawValue: unknown): string | undefined {
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof candidate !== 'string') {
+    return undefined;
+  }
+
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 async function readConversationBootstrapState(input: {
   conversationId: string;
   profile: string;
   tailBlocks?: number;
   knownSessionSignature?: string;
+  knownBlockOffset?: number;
+  knownTotalBlocks?: number;
+  knownLastBlockId?: string;
 }) {
   const sessionSignature = readConversationSessionSignature(input.conversationId);
   const sessionDetailReused = Boolean(
@@ -100,15 +130,24 @@ async function readConversationBootstrapState(input: {
         profile: input.profile,
         tailBlocks: input.tailBlocks,
       });
+  const sessionDetailAppendOnly = !sessionDetailReused && input.knownSessionSignature && sessionResult.sessionRead.detail?.signature && input.knownSessionSignature !== sessionResult.sessionRead.detail.signature
+    ? buildAppendOnlySessionDetailResponse({
+        detail: sessionResult.sessionRead.detail,
+        knownBlockOffset: input.knownBlockOffset,
+        knownTotalBlocks: input.knownTotalBlocks,
+        knownLastBlockId: input.knownLastBlockId,
+      })
+    : null;
 
   const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
 
   return {
     state: {
       conversationId: input.conversationId,
-      sessionDetail: sessionResult.sessionRead.detail,
-      sessionDetailSignature: sessionResult.sessionRead.detail?.signature ?? sessionSignature,
+      sessionDetail: sessionDetailAppendOnly ? null : sessionResult.sessionRead.detail,
+      sessionDetailSignature: sessionDetailAppendOnly?.signature ?? sessionResult.sessionRead.detail?.signature ?? sessionSignature,
       ...(sessionDetailReused ? { sessionDetailUnchanged: true } : {}),
+      ...(sessionDetailAppendOnly ? { sessionDetailAppendOnly } : {}),
       liveSession: liveSession
         ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) }
         : { live: false as const },
@@ -137,13 +176,19 @@ export function registerConversationStateRoutes(
       const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
         ? rawKnownSessionSignature.trim()
         : undefined;
+      const knownBlockOffset = parseNonNegativeIntegerQuery(req.query.knownBlockOffset);
+      const knownTotalBlocks = parseNonNegativeIntegerQuery(req.query.knownTotalBlocks);
+      const knownLastBlockId = parseTrimmedQueryString(req.query.knownLastBlockId);
       const bootstrap = await readConversationBootstrapState({
         conversationId: req.params.id,
         profile: getCurrentProfileFn(),
         tailBlocks,
         knownSessionSignature,
+        knownBlockOffset,
+        knownTotalBlocks,
+        knownLastBlockId,
       });
-      if (!bootstrap.state.sessionDetail && !bootstrap.state.sessionDetailUnchanged && !bootstrap.state.liveSession.live) {
+      if (!bootstrap.state.sessionDetail && !bootstrap.state.sessionDetailUnchanged && !bootstrap.state.sessionDetailAppendOnly && !bootstrap.state.liveSession.live) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }

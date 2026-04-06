@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionTree, renameStoredSession } from './sessions.js';
+import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionTree, renameStoredSession } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -147,6 +147,76 @@ describe('sessions', () => {
       'Reply 3',
       'Reply 4',
     ]);
+  });
+
+  it('builds append-only transcript responses when a cached tail window only needs new blocks', () => {
+    const detail = {
+      meta: {
+        id: 'session-append-only',
+        file: '/tmp/session-append-only.jsonl',
+        timestamp: '2026-03-11T12:00:00.000Z',
+        cwd: '/tmp/project',
+        cwdSlug: '--tmp-project--',
+        model: 'test-model',
+        title: 'Append only',
+        messageCount: 6,
+      },
+      blocks: [
+        { type: 'text' as const, id: 'assistant-2', ts: '2026-03-11T12:00:02.000Z', text: 'Reply 2' },
+        { type: 'text' as const, id: 'assistant-3', ts: '2026-03-11T12:00:03.000Z', text: 'Reply 3' },
+        { type: 'text' as const, id: 'assistant-4', ts: '2026-03-11T12:00:04.000Z', text: 'Reply 4' },
+      ],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    };
+
+    expect(buildAppendOnlySessionDetailResponse({
+      detail,
+      knownBlockOffset: 2,
+      knownTotalBlocks: 5,
+      knownLastBlockId: 'assistant-3',
+    })).toEqual({
+      appendOnly: true,
+      meta: detail.meta,
+      blocks: [{ type: 'text', id: 'assistant-4', ts: '2026-03-11T12:00:04.000Z', text: 'Reply 4' }],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    });
+  });
+
+  it('refuses append-only transcript reuse when the cached tail no longer matches the current branch', () => {
+    const detail = {
+      meta: {
+        id: 'session-append-mismatch',
+        file: '/tmp/session-append-mismatch.jsonl',
+        timestamp: '2026-03-11T12:00:00.000Z',
+        cwd: '/tmp/project',
+        cwdSlug: '--tmp-project--',
+        model: 'test-model',
+        title: 'Append mismatch',
+        messageCount: 6,
+      },
+      blocks: [
+        { type: 'text' as const, id: 'assistant-2', ts: '2026-03-11T12:00:02.000Z', text: 'Reply 2' },
+        { type: 'text' as const, id: 'assistant-3b', ts: '2026-03-11T12:00:03.000Z', text: 'Forked reply' },
+        { type: 'text' as const, id: 'assistant-4', ts: '2026-03-11T12:00:04.000Z', text: 'Reply 4' },
+      ],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    };
+
+    expect(buildAppendOnlySessionDetailResponse({
+      detail,
+      knownBlockOffset: 2,
+      knownTotalBlocks: 5,
+      knownLastBlockId: 'assistant-3',
+    })).toBeNull();
   });
 
   it('reports cache and loader telemetry for archived transcript tail reads', () => {

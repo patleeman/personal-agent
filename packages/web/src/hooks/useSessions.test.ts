@@ -26,6 +26,21 @@ function createSessionDetail(signature = 'sig-1'): SessionDetail {
   };
 }
 
+function createWindowedSessionDetail(signature = 'sig-1'): SessionDetail {
+  return {
+    meta: createSessionMeta(),
+    blocks: [
+      { type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text: 'Reply 1' },
+      { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
+      { type: 'text', id: 'assistant-3', ts: '2026-04-06T12:00:03.000Z', text: 'Reply 3' },
+    ],
+    blockOffset: 2,
+    totalBlocks: 5,
+    contextUsage: null,
+    signature,
+  };
+}
+
 describe('mergeSessionDetailResultWithCachedDetail', () => {
   it('reuses the cached transcript when the session detail response is unchanged', () => {
     const cached = createSessionDetail();
@@ -47,6 +62,32 @@ describe('mergeSessionDetailResultWithCachedDetail', () => {
     });
 
     expect(merged).toBeNull();
+  });
+
+  it('merges append-only transcript updates onto the cached window', () => {
+    const cached = createWindowedSessionDetail('sig-1');
+    const merged = mergeSessionDetailResultWithCachedDetail(cached, {
+      appendOnly: true,
+      meta: cached.meta,
+      blocks: [{ type: 'text', id: 'assistant-4', ts: '2026-04-06T12:00:04.000Z', text: 'Reply 4' }],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    });
+
+    expect(merged).toEqual({
+      meta: cached.meta,
+      blocks: [
+        { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
+        { type: 'text', id: 'assistant-3', ts: '2026-04-06T12:00:03.000Z', text: 'Reply 3' },
+        { type: 'text', id: 'assistant-4', ts: '2026-04-06T12:00:04.000Z', text: 'Reply 4' },
+      ],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    });
   });
 
   it('passes through full detail payloads unchanged', () => {

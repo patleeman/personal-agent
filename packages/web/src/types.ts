@@ -574,7 +574,17 @@ export interface SessionDetailUnchangedResponse {
   signature: string | null;
 }
 
-export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse;
+export interface SessionDetailAppendOnlyResponse {
+  appendOnly: true;
+  meta: SessionMeta;
+  blocks: DisplayBlock[];
+  blockOffset: number;
+  totalBlocks: number;
+  contextUsage: SessionContextUsage | null;
+  signature: string | null;
+}
+
+export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse | SessionDetailAppendOnlyResponse;
 
 export interface ConversationTreeNode {
   id: string;
@@ -653,6 +663,7 @@ export interface ConversationBootstrapState {
   sessionDetail: SessionDetail | null;
   sessionDetailSignature?: string | null;
   sessionDetailUnchanged?: boolean;
+  sessionDetailAppendOnly?: SessionDetailAppendOnlyResponse | null;
   liveSession: ConversationBootstrapLiveState;
 }
 

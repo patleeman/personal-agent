@@ -47,6 +47,7 @@ import {
 } from '../conversations/conversationModelPreferences.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
+  buildAppendOnlySessionDetailResponse,
   listSessions,
   readSessionBlock,
   readSessionImageAsset,
@@ -80,6 +81,29 @@ function initializeConversationRoutesContext(
   });
 }
 
+function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const parsed = typeof candidate === 'string'
+    ? Number.parseInt(candidate, 10)
+    : typeof candidate === 'number'
+      ? candidate
+      : undefined;
+
+  return Number.isInteger(parsed) && (parsed as number) >= 0
+    ? parsed as number
+    : undefined;
+}
+
+function parseTrimmedQueryString(rawValue: unknown): string | undefined {
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof candidate !== 'string') {
+    return undefined;
+  }
+
+  const normalized = candidate.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
   router.get('/api/sessions/:id/meta', (req, res) => {
     try {
@@ -110,6 +134,9 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
       const knownSessionSignature = typeof rawKnownSessionSignature === 'string' && rawKnownSessionSignature.trim().length > 0
         ? rawKnownSessionSignature.trim()
         : undefined;
+      const knownBlockOffset = parseNonNegativeIntegerQuery(req.query.knownBlockOffset);
+      const knownTotalBlocks = parseNonNegativeIntegerQuery(req.query.knownTotalBlocks);
+      const knownLastBlockId = parseTrimmedQueryString(req.query.knownLastBlockId);
       const currentSessionSignature = readConversationSessionSignature(req.params.id);
       if (knownSessionSignature && currentSessionSignature && knownSessionSignature === currentSessionSignature) {
         const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
@@ -140,6 +167,34 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
         tailBlocks,
       });
       if (!sessionRead.detail) { res.status(404).json({ error: 'Session not found' }); return; }
+
+      const appendOnly = knownSessionSignature && sessionRead.detail.signature && knownSessionSignature !== sessionRead.detail.signature
+        ? buildAppendOnlySessionDetailResponse({
+            detail: sessionRead.detail,
+            knownBlockOffset,
+            knownTotalBlocks,
+            knownLastBlockId,
+          })
+        : null;
+      if (appendOnly) {
+        const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+        setServerTimingHeaders(res, [
+          { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
+          { name: 'session_read', durationMs: sessionRead.telemetry?.durationMs ?? 0, description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown' },
+          { name: 'total', durationMs },
+        ], {
+          route: 'session-detail',
+          conversationId: req.params.id,
+          ...(tailBlocks ? { tailBlocks } : {}),
+          remoteMirror,
+          sessionRead: sessionRead.telemetry,
+          result: 'append-only',
+          durationMs,
+        });
+
+        res.json(appendOnly);
+        return;
+      }
 
       const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
       setServerTimingHeaders(res, [

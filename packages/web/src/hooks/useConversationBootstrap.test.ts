@@ -38,6 +38,25 @@ function createBootstrapState(overrides?: Partial<ConversationBootstrapState>): 
   };
 }
 
+function createWindowedBootstrapState(): ConversationBootstrapState {
+  return {
+    conversationId: 'conv-1',
+    sessionDetail: {
+      meta: createSessionMeta(),
+      blocks: [
+        { type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text: 'Reply 1' },
+        { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
+        { type: 'text', id: 'assistant-3', ts: '2026-04-06T12:00:03.000Z', text: 'Reply 3' },
+      ],
+      blockOffset: 2,
+      totalBlocks: 5,
+      contextUsage: null,
+      signature: 'sig-1',
+    },
+    liveSession: { live: false },
+  };
+}
+
 describe('buildConversationBootstrapVersionKey', () => {
   it('tracks both session list and session file invalidations', () => {
     expect(buildConversationBootstrapVersionKey({ sessionsVersion: 0, sessionFilesVersion: 0 })).toBe('0:0');
@@ -76,6 +95,39 @@ describe('mergeConversationBootstrapWithCachedSessionDetail', () => {
     expect(merged.sessionDetail).toBeNull();
     expect(merged.sessionDetailUnchanged).toBe(true);
     expect(merged.sessionDetailSignature).toBe('sig-2');
+  });
+
+  it('merges append-only bootstrap transcript updates onto the cached window', () => {
+    const cached = createWindowedBootstrapState();
+    const merged = mergeConversationBootstrapWithCachedSessionDetail(cached, {
+      conversationId: 'conv-1',
+      sessionDetail: null,
+      sessionDetailAppendOnly: {
+        appendOnly: true,
+        meta: createSessionMeta(),
+        blocks: [{ type: 'text', id: 'assistant-4', ts: '2026-04-06T12:00:04.000Z', text: 'Reply 4' }],
+        blockOffset: 3,
+        totalBlocks: 6,
+        contextUsage: null,
+        signature: 'sig-2',
+      },
+      sessionDetailSignature: 'sig-2',
+      liveSession: { live: false },
+    });
+
+    expect(merged.sessionDetail).toEqual({
+      meta: createSessionMeta(),
+      blocks: [
+        { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
+        { type: 'text', id: 'assistant-3', ts: '2026-04-06T12:00:03.000Z', text: 'Reply 3' },
+        { type: 'text', id: 'assistant-4', ts: '2026-04-06T12:00:04.000Z', text: 'Reply 4' },
+      ],
+      blockOffset: 3,
+      totalBlocks: 6,
+      contextUsage: null,
+      signature: 'sig-2',
+    });
+    expect(merged.sessionDetailAppendOnly).toBeUndefined();
   });
 
   it('copies the transcript signature onto the bootstrap envelope when a full detail payload arrives', () => {

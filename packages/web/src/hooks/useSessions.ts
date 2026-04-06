@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useAppEvents } from '../contexts';
-import type { SessionDetail, SessionDetailResult } from '../types';
+import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../types';
 
 interface CachedSessionDetailEntry {
   detail: SessionDetail;
@@ -17,24 +17,59 @@ function readSessionDetailSignature(detail: SessionDetail | null | undefined): s
   return signature && signature.length > 0 ? signature : undefined;
 }
 
+function readSessionDetailLastBlockId(detail: SessionDetail | null | undefined): string | undefined {
+  const blockId = detail?.blocks.at(-1)?.id?.trim();
+  return blockId && blockId.length > 0 ? blockId : undefined;
+}
+
+function mergeAppendOnlySessionDetail(
+  cached: SessionDetail,
+  result: SessionDetailAppendOnlyResponse,
+): SessionDetail | null {
+  const dropCount = Math.max(0, result.blockOffset - cached.blockOffset);
+  const retainedBlocks = cached.blocks.slice(dropCount);
+  const nextVisibleLength = Math.max(0, result.totalBlocks - result.blockOffset);
+  const retainedCount = Math.max(0, nextVisibleLength - result.blocks.length);
+  if (retainedCount > retainedBlocks.length) {
+    return null;
+  }
+
+  return {
+    meta: result.meta,
+    blocks: [...retainedBlocks.slice(retainedBlocks.length - retainedCount), ...result.blocks],
+    blockOffset: result.blockOffset,
+    totalBlocks: result.totalBlocks,
+    contextUsage: result.contextUsage,
+    signature: result.signature ?? cached.signature,
+  };
+}
+
 export function mergeSessionDetailResultWithCachedDetail(
   cached: SessionDetail | null,
   result: SessionDetailResult,
 ): SessionDetail | null {
-  if (!('unchanged' in result)) {
-    return result;
+  if ('unchanged' in result) {
+    if (!cached) {
+      return null;
+    }
+
+    const cachedSignature = readSessionDetailSignature(cached) ?? null;
+    if (result.signature && cachedSignature && result.signature !== cachedSignature) {
+      return null;
+    }
+
+    return cached;
   }
 
-  if (!cached) {
-    return null;
+  if ('appendOnly' in result) {
+    if (!cached) {
+      return null;
+    }
+
+    return mergeAppendOnlySessionDetail(cached, result);
   }
 
-  const cachedSignature = readSessionDetailSignature(cached) ?? null;
-  if (result.signature && cachedSignature && result.signature !== cachedSignature) {
-    return null;
-  }
-
-  return cached;
+  return result;
 }
 
 function buildSessionDetailCacheKey(sessionId: string, options?: { tailBlocks?: number }): string {
@@ -93,6 +128,9 @@ export function fetchSessionDetailCached(
   const request = api.sessionDetail(sessionId, {
     ...options,
     ...(readSessionDetailSignature(cached?.detail) ? { knownSessionSignature: readSessionDetailSignature(cached?.detail) } : {}),
+    ...(typeof cached?.detail?.blockOffset === 'number' ? { knownBlockOffset: cached.detail.blockOffset } : {}),
+    ...(typeof cached?.detail?.totalBlocks === 'number' ? { knownTotalBlocks: cached.detail.totalBlocks } : {}),
+    ...(readSessionDetailLastBlockId(cached?.detail) ? { knownLastBlockId: readSessionDetailLastBlockId(cached?.detail) } : {}),
   })
     .then(async (result) => {
       let detail = mergeSessionDetailResultWithCachedDetail(cached?.detail ?? null, result);
