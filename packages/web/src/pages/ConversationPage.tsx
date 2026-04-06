@@ -933,7 +933,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
-  const { alerts, tasks, sessions, setSessions, setAlerts = () => {} } = useAppData();
+  const { tasks, sessions, setSessions } = useAppData();
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
@@ -1913,10 +1913,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [currentSessionMeta, id]);
 
   const savedConversationSessionFile = currentSessionMeta?.file ?? null;
-  const activeConversationAlerts = useMemo(
-    () => (alerts?.entries ?? []).filter((entry) => entry.status === 'active' && entry.conversationId === id),
-    [alerts?.entries, id],
-  );
   const orderedDeferredResumes = useMemo(
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
@@ -3251,38 +3247,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function acknowledgeConversationAlert(alertId: string) {
-    try {
-      await api.acknowledgeAlert(alertId);
-      const snapshot = await api.alerts();
-      setAlerts(snapshot);
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
-  }
-
-  async function dismissConversationAlert(alertId: string) {
-    try {
-      await api.dismissAlert(alertId);
-      const snapshot = await api.alerts();
-      setAlerts(snapshot);
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
-  }
-
-  async function snoozeConversationAlert(alertId: string) {
-    try {
-      await api.snoozeAlert(alertId, { delay: '15m' });
-      const snapshot = await api.alerts();
-      setAlerts(snapshot);
-      await refetchDeferredResumes().catch(() => {});
-      showNotice('accent', 'Wakeup snoozed for 15m.');
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    }
-  }
-
   async function continueDeferredResumesNow() {
     if (!id) {
       return;
@@ -4106,7 +4070,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || drawingsBusy
     || Boolean(drawingsError)
     || pendingQueue.length > 0
-    || (!draft && activeConversationAlerts.length > 0)
     || (!draft && orderedDeferredResumes.length > 0)
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
   const keyboardOpen = keyboardInset > 120;
@@ -4647,49 +4610,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         )}
                       </div>
                     ))}
-                  </div>
-                )}
-
-                {!draft && activeConversationAlerts.length > 0 && (
-                  <div className="border-b border-border-subtle px-3 py-2.5">
-                    <div className="flex flex-col gap-2">
-                      {activeConversationAlerts.map((alert) => (
-                        <div key={alert.id} className="rounded-xl border border-warning/40 bg-warning/8 px-3 py-2.5">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-warning">Alert</p>
-                              <p className="mt-1 text-[13px] font-semibold text-primary">{alert.title}</p>
-                              <p className="mt-1 whitespace-pre-wrap text-[12px] leading-6 text-secondary">{alert.body}</p>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-3 text-[11px]">
-                              {alert.wakeupId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => { void snoozeConversationAlert(alert.id); }}
-                                  className="text-accent transition-colors hover:text-accent/80"
-                                >
-                                  snooze 15m
-                                </button>
-                              ) : null}
-                              <button
-                                type="button"
-                                onClick={() => { void acknowledgeConversationAlert(alert.id); }}
-                                className="text-accent transition-colors hover:text-accent/80"
-                              >
-                                acknowledge
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { void dismissConversationAlert(alert.id); }}
-                                className="text-dim transition-colors hover:text-danger"
-                              >
-                                dismiss
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
 

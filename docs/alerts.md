@@ -71,7 +71,7 @@ Alerts move through these states:
 - `acknowledged`
 - `dismissed`
 
-`active` alerts show up in the inbox and the in-app alert overlay.
+`active` alerts show up in the inbox and, on the desktop web UI, in the right-hand context rail.
 
 Wakeup-backed alerts can also be **snoozed**, which acknowledges the current alert and reschedules the underlying wakeup for later.
 
@@ -82,8 +82,7 @@ Acknowledging or dismissing an alert does **not** delete the underlying durable 
 The web UI exposes alerts through:
 
 - the **Inbox** page's active alerts section
-- floating in-app alert cards for active disruptive alerts
-- conversation-local alert banners when a linked conversation is open
+- the desktop right-hand context rail, including per-alert actions and a clear-all action
 - browser/companion notifications when explicit alert records arrive and permission has already been granted
 
 The desktop web UI now also prompts you to enable browser notifications the first time active alerts show up while browser alerts are still off.

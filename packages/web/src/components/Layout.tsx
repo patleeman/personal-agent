@@ -1,5 +1,6 @@
 import { Component, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { AlertRailSection } from './AlertRailSection';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
@@ -424,7 +425,10 @@ export function Layout() {
             <>
               <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
               <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 flex flex-col overflow-hidden select-text">
-                <ContextRail />
+                <AlertRailSection />
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <ContextRail />
+                </div>
               </div>
             </>
           ) : null}

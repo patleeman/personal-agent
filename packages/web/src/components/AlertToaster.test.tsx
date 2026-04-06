@@ -64,9 +64,9 @@ describe('AlertToaster', () => {
     );
 
     expect(html).toContain('Enable browser notifications');
-    expect(html).not.toContain('Open alerts');
-    expect(html).toContain('Snooze 15m');
-    expect(html).toContain('Acknowledge');
+    expect(html).not.toContain('Watch the prod gates');
+    expect(html).not.toContain('Snooze 15m');
+    expect(html).not.toContain('Acknowledge');
   });
 
   it('omits the permission prompt once browser alerts are already enabled', () => {
@@ -92,6 +92,6 @@ describe('AlertToaster', () => {
     );
 
     expect(html).not.toContain('Enable browser notifications');
-    expect(html).toContain('Watch the prod gates');
+    expect(html).toBe('');
   });
 });

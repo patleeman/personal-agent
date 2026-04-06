@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouse
 import { useLocation } from 'react-router-dom';
 import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
+import { AlertRailSection } from './AlertRailSection';
 import { ContextRail } from './ContextRail';
 
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;
@@ -150,7 +151,12 @@ export function ConversationWorkspaceShell({ children }: { children: ReactNode }
         className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"
         aria-label="Conversation context"
       >
-        <ContextRail />
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <AlertRailSection />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ContextRail />
+          </div>
+        </div>
       </aside>
     </div>
   );

@@ -141,7 +141,7 @@ Typical examples:
 - approval-needed wakeups
 - scheduled-task callbacks linked back to a conversation
 
-The UI also shows active disruptive alerts as floating in-app cards so they are harder to miss than inbox items outside the inbox page.
+The desktop UI surfaces active alerts in the right-hand context rail, with per-alert actions and a clear-all action so they stay visible without taking over the composer.
 
 See [Alerts and Reminders](./alerts.md).
 
@@ -185,7 +185,7 @@ Saved conversations also keep their working directory and run context in the sam
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
-When active alerts exist and browser notifications are still off, the desktop web UI prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
+When active alerts exist and browser notifications are still off, the desktop web UI still prompts you to enable browser alerts so reminders and callbacks can interrupt even while the tab is hidden.
 
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
