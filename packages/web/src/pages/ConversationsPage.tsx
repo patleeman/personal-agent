@@ -15,6 +15,7 @@ import {
 } from '../runPresentation';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import type { DurableRunRecord, SessionMeta } from '../types';
+import { groupConversationItemsByCwd, type ConversationCwdGroup } from '../conversationCwdGroups';
 import { timeAgo } from '../utils';
 import { EmptyState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx, type PillTone } from '../components/ui';
 
@@ -239,10 +240,6 @@ function sectionMeta(
     parts.push(session.model.split('/').pop() ?? session.model);
   }
 
-  if (session.cwdSlug) {
-    parts.push(session.cwdSlug);
-  }
-
   return parts.join(' · ');
 }
 
@@ -372,8 +369,54 @@ type ConversationListEntry = {
   section: ConversationSection;
 };
 
+type ConversationEntryGroup = ConversationCwdGroup<ConversationListEntry>;
+
 function buildConversationEntries(sessions: SessionMeta[], section: ConversationSection): ConversationListEntry[] {
   return sessions.map((session) => ({ session, section }));
+}
+
+function ConversationGroupRows({
+  group,
+  conversationLinkStates,
+  onOpen,
+  onPin,
+  onUnpin,
+  onClose,
+  onMarkRead,
+  busyId,
+}: {
+  group: ConversationEntryGroup;
+  conversationLinkStates: ReadonlyMap<string, ConversationLinkState>;
+  onOpen: (sessionId: string, options?: { restore?: boolean }) => void;
+  onPin: (sessionId: string) => void;
+  onUnpin: (sessionId: string) => void;
+  onClose: (sessionId: string) => void;
+  onMarkRead: (sessionId: string) => void;
+  busyId: string | null;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="px-3 pb-1">
+        <div className="flex items-center gap-2 text-[11px] font-medium text-secondary">
+          <span>{group.label}</span>
+          <span className="text-dim">{group.items.length}</span>
+        </div>
+        {group.cwd && group.cwd !== group.label ? (
+          <p className="pt-0.5 break-all font-mono text-[11px] text-dim">{group.cwd}</p>
+        ) : null}
+      </div>
+      <ConversationRows
+        entries={group.items}
+        conversationLinkStates={conversationLinkStates}
+        onOpen={onOpen}
+        onPin={onPin}
+        onUnpin={onUnpin}
+        onClose={onClose}
+        onMarkRead={onMarkRead}
+        busyId={busyId}
+      />
+    </div>
+  );
 }
 
 function ConversationRows({
@@ -474,7 +517,8 @@ function ConversationRows({
 
 function SectionBlock({
   label,
-  entries,
+  groups,
+  totalCount,
   conversationLinkStates,
   onOpen,
   onPin,
@@ -484,7 +528,8 @@ function SectionBlock({
   busyId,
 }: {
   label: string;
-  entries: ConversationListEntry[];
+  groups: ConversationEntryGroup[];
+  totalCount: number;
   conversationLinkStates: ReadonlyMap<string, ConversationLinkState>;
   onOpen: (sessionId: string, options?: { restore?: boolean }) => void;
   onPin: (sessionId: string) => void;
@@ -493,29 +538,35 @@ function SectionBlock({
   onMarkRead: (sessionId: string) => void;
   busyId: string | null;
 }) {
-  if (entries.length === 0) {
+  if (totalCount === 0) {
     return null;
   }
 
   return (
-    <section className="space-y-1">
-      <SectionLabel label={label} count={entries.length} className="px-3 pb-1" />
-      <ConversationRows
-        entries={entries}
-        conversationLinkStates={conversationLinkStates}
-        onOpen={onOpen}
-        onPin={onPin}
-        onUnpin={onUnpin}
-        onClose={onClose}
-        onMarkRead={onMarkRead}
-        busyId={busyId}
-      />
+    <section className="space-y-3">
+      <SectionLabel label={label} count={totalCount} className="px-3 pb-1" />
+      <div className="space-y-4">
+        {groups.map((group) => (
+          <ConversationGroupRows
+            key={`cwd:${group.key}`}
+            group={group}
+            conversationLinkStates={conversationLinkStates}
+            onOpen={onOpen}
+            onPin={onPin}
+            onUnpin={onUnpin}
+            onClose={onClose}
+            onMarkRead={onMarkRead}
+            busyId={busyId}
+          />
+        ))}
+      </div>
     </section>
   );
 }
 
 function ArchivedSection({
-  entries,
+  groups,
+  totalCount,
   expanded,
   collapsible,
   onToggle,
@@ -527,7 +578,8 @@ function ArchivedSection({
   onMarkRead,
   busyId,
 }: {
-  entries: ConversationListEntry[];
+  groups: ConversationEntryGroup[];
+  totalCount: number;
   expanded: boolean;
   collapsible: boolean;
   onToggle: () => void;
@@ -539,7 +591,7 @@ function ArchivedSection({
   onMarkRead: (sessionId: string) => void;
   busyId: string | null;
 }) {
-  if (entries.length === 0) {
+  if (totalCount === 0) {
     return null;
   }
 
@@ -547,7 +599,8 @@ function ArchivedSection({
     return (
       <SectionBlock
         label="Archived conversations"
-        entries={entries}
+        groups={groups}
+        totalCount={totalCount}
         conversationLinkStates={conversationLinkStates}
         onOpen={onOpen}
         onPin={onPin}
@@ -570,23 +623,26 @@ function ArchivedSection({
       >
         <div className="flex items-center gap-2">
           <span className="ui-section-label">Archived conversations</span>
-          <span className="ui-section-count">{entries.length}</span>
+          <span className="ui-section-count">{totalCount}</span>
         </div>
         <span className="text-[11px] text-dim">{expanded ? 'Hide' : 'Show'}</span>
       </button>
 
       {expanded ? (
-        <div id="archived-conversations-list">
-          <ConversationRows
-            entries={entries}
-            conversationLinkStates={conversationLinkStates}
-            onOpen={onOpen}
-            onPin={onPin}
-            onUnpin={onUnpin}
-            onClose={onClose}
-            onMarkRead={onMarkRead}
-            busyId={busyId}
-          />
+        <div id="archived-conversations-list" className="space-y-4">
+          {groups.map((group) => (
+            <ConversationGroupRows
+              key={`cwd:${group.key}`}
+              group={group}
+              conversationLinkStates={conversationLinkStates}
+              onOpen={onOpen}
+              onPin={onPin}
+              onUnpin={onUnpin}
+              onClose={onClose}
+              onMarkRead={onMarkRead}
+              busyId={busyId}
+            />
+          ))}
         </div>
       ) : null}
     </section>
@@ -761,7 +817,7 @@ export function ConversationsPage() {
         workspace: 'archived' as const,
         title: session.title,
         summary: 'Still running after you archived it.',
-        meta: ['archived', session.model?.split('/').pop() ?? session.model, session.cwdSlug].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · '),
+        meta: ['archived', session.model?.split('/').pop() ?? session.model].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · '),
         timestampLabel: formatSessionTimestamp(session),
         statusLabel: 'running',
         tone: 'accent' as const,
@@ -802,6 +858,14 @@ export function ConversationsPage() {
   const archivedEntries = useMemo(
     () => buildConversationEntries(archivedVisible, 'archived'),
     [archivedVisible],
+  );
+  const openGroups = useMemo(
+    () => groupConversationItemsByCwd(openEntries, (entry) => entry.session.cwd),
+    [openEntries],
+  );
+  const archivedGroups = useMemo(
+    () => groupConversationItemsByCwd(archivedEntries, (entry) => entry.session.cwd),
+    [archivedEntries],
   );
   const archivedRunningConversationCount = useMemo(
     () => new Set(conversationWorkItems.filter((item) => item.workspace === 'archived' && item.active).map((item) => item.conversationId)).size,
@@ -948,7 +1012,8 @@ export function ConversationsPage() {
                 <div className="space-y-5">
                   <SectionBlock
                     label="Open conversations"
-                    entries={openEntries}
+                    groups={openGroups}
+                    totalCount={openEntries.length}
                     conversationLinkStates={conversationLinkStates}
                     onOpen={handleOpen}
                     onPin={pinSession}
@@ -959,7 +1024,8 @@ export function ConversationsPage() {
                   />
 
                   <ArchivedSection
-                    entries={archivedEntries}
+                    groups={archivedGroups}
+                    totalCount={archivedEntries.length}
                     expanded={showArchivedRows}
                     collapsible={archivedCollapsible}
                     onToggle={() => setArchivedExpanded((current) => !current)}

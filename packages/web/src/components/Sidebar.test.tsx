@@ -241,6 +241,24 @@ describe('Sidebar', () => {
     expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
+  it('groups open conversations by working directory', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
+
+    const html = renderSidebar('/inbox', {
+      sessions: [
+        createSession({ id: 'conv-a1', title: 'First alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
+        createSession({ id: 'conv-b1', title: 'Only beta conversation', cwd: '/tmp/beta-worktree', cwdSlug: 'beta-worktree', file: '/tmp/conv-b1.jsonl' }),
+        createSession({ id: 'conv-a2', title: 'Second alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree', file: '/tmp/conv-a2.jsonl' }),
+      ],
+    });
+
+    expect((html.match(/alpha-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect((html.match(/beta-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('First alpha conversation'));
+    expect(html.indexOf('First alpha conversation')).toBeLessThan(html.indexOf('Second alpha conversation'));
+    expect(html.indexOf('Second alpha conversation')).toBeLessThan(html.indexOf('beta-worktree'));
+  });
+
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {
     const html = renderSidebar('/inbox');
 

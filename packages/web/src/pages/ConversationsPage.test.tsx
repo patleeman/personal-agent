@@ -241,6 +241,54 @@ describe('ConversationsPage', () => {
     expect(html).not.toContain('Archived but still running');
   });
 
+  it('groups conversation rows by working directory', () => {
+    vi.mocked(useConversations).mockReturnValue({
+      pinnedIds: [],
+      openIds: ['alpha-1', 'beta-1', 'alpha-2'],
+      pinnedSessions: [],
+      tabs: [
+        createSession({ id: 'alpha-1', title: 'First alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
+        createSession({ id: 'beta-1', title: 'Only beta conversation', cwd: '/tmp/beta-worktree', cwdSlug: 'beta-worktree', file: '/tmp/beta-1.jsonl' }),
+        createSession({ id: 'alpha-2', title: 'Second alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree', file: '/tmp/alpha-2.jsonl' }),
+      ],
+      archivedSessions: [],
+      closeSession: vi.fn(),
+      pinSession: vi.fn(),
+      unpinSession: vi.fn(),
+      archiveSession: vi.fn(),
+      restoreSession: vi.fn(),
+      refetch: vi.fn(),
+      loading: false,
+    } as never);
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [
+            createSession({ id: 'alpha-1', title: 'First alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
+            createSession({ id: 'beta-1', title: 'Only beta conversation', cwd: '/tmp/beta-worktree', cwdSlug: 'beta-worktree', file: '/tmp/beta-1.jsonl' }),
+            createSession({ id: 'alpha-2', title: 'Second alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree', file: '/tmp/alpha-2.jsonl' }),
+          ],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ConversationsPage />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('First alpha conversation'));
+    expect(html.indexOf('First alpha conversation')).toBeLessThan(html.indexOf('Second alpha conversation'));
+    expect(html.indexOf('Second alpha conversation')).toBeLessThan(html.indexOf('beta-worktree'));
+  });
+
   it('does not treat linked run review as conversation review in the attention filter', () => {
     vi.mocked(useConversations).mockReturnValue({
       pinnedIds: [],
