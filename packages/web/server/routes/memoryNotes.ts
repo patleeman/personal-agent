@@ -5,7 +5,7 @@
 import type { Express, Request } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { getProfilesRoot } from '@personal-agent/core';
+import { getProfilesRoot, getVaultRoot } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
 import {
   buildRecentReadUsage,
@@ -15,6 +15,7 @@ import {
   listSkillsForProfile,
   normalizeMemoryPath,
 } from '../knowledge/memoryDocs.js';
+import { listVaultFiles } from '../knowledge/vaultFiles.js';
 import { logError } from '../middleware/index.js';
 
 let _getCurrentProfile: () => string = () => { throw new Error('not initialized'); };
@@ -105,6 +106,19 @@ export function registerMemoryNotesRoutes(
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
+    }
+  });
+
+  router.get('/api/vault-files', (_req, res) => {
+    try {
+      res.json({
+        root: getVaultRoot(),
+        files: listVaultFiles(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
+      res.status(500).json({ error: message });
     }
   });
 

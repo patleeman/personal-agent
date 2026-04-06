@@ -67,13 +67,30 @@ function toDisplayPath(repoRoot: string, path: string): string {
   return displayed;
 }
 
+const MENTION_REGEX = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
+const TRAILING_MENTION_PUNCTUATION_REGEX = /[),.;:!?\]}>]+$/;
+
+function normalizeMentionId(rawValue: string): string {
+  return rawValue.replace(TRAILING_MENTION_PUNCTUATION_REGEX, '');
+}
+
 export function extractMentionIds(text: string): string[] {
-  const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
   const result: string[] = [];
   const seen = new Set<string>();
+  let match: RegExpExecArray | null = null;
 
-  for (const match of matches) {
-    const id = match.slice(1);
+  while ((match = MENTION_REGEX.exec(text)) !== null) {
+    const start = match.index;
+    const previous = start > 0 ? text[start - 1] : '';
+    if (start > 0 && /[\w./+-]/.test(previous)) {
+      continue;
+    }
+
+    const id = normalizeMentionId(match[0].slice(1));
+    if (!id) {
+      continue;
+    }
+
     appendUnique(result, seen, id);
   }
 

@@ -703,7 +703,7 @@ export function CompanionConversationPage() {
   const trimmedDraft = draft.trim();
   const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
-  const mentionMatch = draft.match(/(^|.*\s)(@[\w-]*)$/);
+  const mentionMatch = draft.match(/(^|.*\s)(@[\w./-]*)$/);
   const shouldLoadMemoryData = isLiveSession
     && !controlState.needsTakeover
     && draft.trimStart().startsWith('/');
@@ -1459,7 +1459,7 @@ export function CompanionConversationPage() {
                   query={mentionQuery}
                   index={mentionIdx}
                   onSelect={(mentionId) => {
-                    setDraft(draft.replace(/@[\w-]*$/, `${mentionId} `));
+                    setDraft(draft.replace(/@[\w./-]*$/, `${mentionId} `));
                     setMentionIdx(0);
                     textareaRef.current?.focus();
                   }}
@@ -1564,7 +1564,7 @@ export function CompanionConversationPage() {
                             const selected = filteredMentions[mentionIdx % (filteredMentions.length || 1)];
                             if (selected) {
                               event.preventDefault();
-                              setDraft(draft.replace(/@[\w-]*$/, `${selected.id} `));
+                              setDraft(draft.replace(/@[\w./-]*$/, `${selected.id} `));
                               setMentionIdx(0);
                               return;
                             }

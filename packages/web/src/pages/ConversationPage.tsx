@@ -745,7 +745,7 @@ function MentionMenu({
   idx: number;
   onSelect: (id: string) => void;
 }) {
-  const filtered = filterMentionItems(items, query);
+  const filtered = filterMentionItems(items, query, { limit: 50 });
   if (!filtered.length) return null;
   return (
     <div className="ui-menu-shell">
@@ -1781,7 +1781,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
-  const { data: profileState } = useApi(api.profiles);
+  const { data: vaultFilesData } = useApi(api.vaultFiles);
   const executionTargetsState = useApi(api.executionTargets);
   const conversationExecutionState = useApi(
     async () => {
@@ -1923,7 +1923,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Derive menu states
   const slashInput = useMemo(() => parseSlashInput(input), [input]);
   const showModelPicker = slashInput?.command === '/model' && input.startsWith('/model ');
-  const mentionMatch  = input.match(/(^|.*\s)(@[\w-]*)$/);
+  const mentionMatch  = input.match(/(^|.*\s)(@[\w./-]*)$/);
   const showSlash     = !!slashInput && input === slashInput.command && !showModelPicker;
   const showMention   = !!mentionMatch && !showSlash && !showModelPicker;
   const slashQuery    = slashInput?.command ?? '';
@@ -1934,9 +1934,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const mentionItems = useMemo(() => buildMentionItems({
     tasks: tasks ?? [],
     memoryDocs: memoryData?.memoryDocs ?? [],
-    skills: memoryData?.skills ?? [],
-    profiles: profileState?.profiles ?? [],
-  }), [tasks, memoryData, profileState]);
+    vaultFiles: vaultFilesData?.files ?? [],
+  }), [tasks, memoryData, vaultFilesData]);
   const currentSessionMeta = useMemo(
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
@@ -3996,9 +3995,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
           }
         } else {
-          const filtered = filterMentionItems(mentionItems, mentionQuery);
+          const filtered = filterMentionItems(mentionItems, mentionQuery, { limit: 50 });
           const sel = filtered[mentionIdx % (filtered.length || 1)];
-          if (sel) { setInput(input.replace(/@[\w-]*$/, sel.id + ' ')); setMentionIdx(0); }
+          if (sel) { setInput(input.replace(/@[\w./-]*$/, sel.id + ' ')); setMentionIdx(0); }
         }
         return;
       }
@@ -4561,7 +4560,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
             setInput(item.insertText); setSlashIdx(0); textareaRef.current?.focus();
           }} />}
-          {showMention && <MentionMenu items={mentionItems} query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
+          {showMention && <MentionMenu items={mentionItems} query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w./-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
           {showModelPicker && <ModelPicker models={modelItems} currentModel={currentModel} query={modelQuery} idx={modelIdx}
             onSelect={selectModel} onClose={() => { setInput(''); textareaRef.current?.focus(); }} />}
 
@@ -4953,7 +4952,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       ? 'Connect to the remote workspace to continue…'
                       : pendingAskUserQuestion
                         ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference pages, tasks, skills, and profiles)'}
+                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
                     title={pendingAskUserQuestion
                       ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                       : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}

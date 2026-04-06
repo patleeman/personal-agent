@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReferencedMemoryDocsContext,
-  buildReferencedProfilesContext,
-  buildReferencedSkillsContext,
   buildReferencedTasksContext,
   extractMentionIds,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
   type PromptReferenceMemoryDoc,
-  type PromptReferenceProfile,
-  type PromptReferenceSkill,
   type PromptReferenceTask,
 } from './promptReferences.js';
 
@@ -44,55 +40,28 @@ const MEMORY_DOCS: PromptReferenceMemoryDoc[] = [
   },
 ];
 
-const SKILLS: PromptReferenceSkill[] = [
-  {
-    name: 'dd-pup-cli',
-    source: 'datadog',
-    description: 'Query Datadog platform data.',
-    path: '/repo/profiles/datadog/agent/skills/dd-pup-cli/INDEX.md',
-  },
-];
-
-const PROFILES: PromptReferenceProfile[] = [
-  {
-    id: 'assistant',
-    source: 'assistant',
-    path: '/repo/profiles/assistant/agent/AGENTS.md',
-  },
-  {
-    id: 'datadog',
-    source: 'datadog',
-    path: '/repo/profiles/datadog/agent/AGENTS.md',
-  },
-  {
-    id: 'shared',
-    source: 'shared',
-    path: '/repo/defaults/agent/AGENTS.md',
-  },
-];
-
 describe('promptReferences', () => {
-  it('extracts unique mention ids in encounter order', () => {
-    expect(extractMentionIds('Check @daily-review and @project-state-model then @daily-review again')).toEqual([
+  it('extracts unique mention ids in encounter order, including vault-style paths', () => {
+    expect(extractMentionIds('Check @daily-review and @_profiles/datadog/AGENTS.md then @daily-review again')).toEqual([
       'daily-review',
-      'project-state-model',
+      '_profiles/datadog/AGENTS.md',
     ]);
   });
 
-  it('resolves project, task, note node, skill, and profile mentions independently', () => {
+  it('resolves project, task, and note node mentions independently', () => {
     expect(resolvePromptReferences({
-      text: 'Use @web-ui with @memory-maintenance @project-state-model @dd-pup-cli and @datadog.',
+      text: 'Use @web-ui with @memory-maintenance and @project-state-model.',
       availableProjectIds: ['web-ui', 'artifact-model'],
       tasks: TASKS,
       memoryDocs: MEMORY_DOCS,
-      skills: SKILLS,
-      profiles: PROFILES,
+      skills: [],
+      profiles: [],
     })).toEqual({
       projectIds: ['web-ui'],
       taskIds: ['memory-maintenance'],
       memoryDocIds: ['project-state-model'],
-      skillNames: ['dd-pup-cli'],
-      profileIds: ['datadog'],
+      skillNames: [],
+      profileIds: [],
     });
   });
 
@@ -101,8 +70,6 @@ describe('promptReferences', () => {
       'memory-maintenance',
       'daily-review',
     ]);
-    expect(pickPromptReferencesInOrder(['dd-pup-cli'], SKILLS).map((skill) => skill.name)).toEqual(['dd-pup-cli']);
-    expect(pickPromptReferencesInOrder(['shared', 'assistant'], PROFILES).map((profile) => profile.id)).toEqual(['shared', 'assistant']);
   });
 
   it('builds scheduled task context with file paths and status', () => {
@@ -123,17 +90,4 @@ describe('promptReferences', () => {
     expect(context).toContain('description: Use this note when the user asks how durable project state is modeled or migrated.');
   });
 
-  it('builds skill and profile context with paths and descriptions', () => {
-    const skillsContext = buildReferencedSkillsContext(SKILLS, '/repo');
-    expect(skillsContext).toContain('Referenced skills:');
-    expect(skillsContext).toContain('@dd-pup-cli');
-    expect(skillsContext).toContain('source: datadog');
-    expect(skillsContext).toContain('description: Query Datadog platform data.');
-
-    const profilesContext = buildReferencedProfilesContext(PROFILES, '/repo');
-    expect(profilesContext).toContain('Referenced profile instructions:');
-    expect(profilesContext).toContain('@datadog: datadog profile');
-    expect(profilesContext).toContain('profiles/datadog/agent/AGENTS.md');
-    expect(profilesContext).toContain('@shared: shared profile');
-  });
 });

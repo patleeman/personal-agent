@@ -976,6 +976,19 @@ export interface MemoryData {
   memoryDocs: MemoryDocItem[];
 }
 
+export interface VaultFileSummary {
+  id: string;
+  name: string;
+  path: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
+
+export interface VaultFileListResult {
+  root: string;
+  files: VaultFileSummary[];
+}
+
 export interface ExecutionTargetPathMapping {
   localPrefix: string;
   remotePrefix: string;

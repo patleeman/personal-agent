@@ -1,6 +1,6 @@
-import type { MemoryDocItem, MemorySkillItem, ScheduledTaskSummary } from './types';
+import type { MemoryDocItem, ScheduledTaskSummary, VaultFileSummary } from './types';
 
-export type MentionKind = 'task' | 'note' | 'skill' | 'profile';
+export type MentionKind = 'task' | 'note' | 'skill' | 'profile' | 'file';
 
 export interface MentionItem {
   id: string;
@@ -14,26 +14,41 @@ function compareMentionItems(left: MentionItem, right: MentionItem): number {
   const kindOrder: Record<MentionKind, number> = {
     task: 0,
     note: 1,
-    skill: 2,
-    profile: 3,
+    file: 2,
+    skill: 3,
+    profile: 4,
   };
 
   return kindOrder[left.kind] - kindOrder[right.kind]
     || left.id.localeCompare(right.id);
 }
 
+const MENTION_REGEX = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
+const TRAILING_MENTION_PUNCTUATION_REGEX = /[),.;:!?\]}>]+$/;
+
+function normalizeMentionId(rawValue: string): string {
+  return rawValue.replace(TRAILING_MENTION_PUNCTUATION_REGEX, '');
+}
+
 function extractMentionIds(text: string): string[] {
-  const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
   const ids: string[] = [];
   const seen = new Set<string>();
+  let match: RegExpExecArray | null = null;
 
-  for (const match of matches) {
-    if (seen.has(match)) {
+  while ((match = MENTION_REGEX.exec(text)) !== null) {
+    const start = match.index;
+    const previous = start > 0 ? text[start - 1] : '';
+    if (start > 0 && /[\w./+-]/.test(previous)) {
       continue;
     }
 
-    seen.add(match);
-    ids.push(match);
+    const id = `@${normalizeMentionId(match[0].slice(1))}`;
+    if (id === '@' || seen.has(id)) {
+      continue;
+    }
+
+    seen.add(id);
+    ids.push(id);
   }
 
   return ids;
@@ -42,8 +57,7 @@ function extractMentionIds(text: string): string[] {
 export function buildMentionItems(input: {
   tasks: ScheduledTaskSummary[];
   memoryDocs: MemoryDocItem[];
-  skills?: MemorySkillItem[];
-  profiles: string[];
+  vaultFiles: VaultFileSummary[];
 }): MentionItem[] {
   const items: MentionItem[] = [
     ...input.tasks.map((task) => ({
@@ -60,43 +74,45 @@ export function buildMentionItems(input: {
       title: doc.title,
       summary: doc.summary,
     })),
-    ...(input.skills ?? []).map((skill) => ({
-      id: `@${skill.name}`,
-      label: skill.name,
-      kind: 'skill' as const,
-      title: skill.name,
-      summary: skill.description,
-    })),
-    ...input.profiles.map((profile) => ({
-      id: `@${profile}`,
-      label: profile,
-      kind: 'profile' as const,
-      title: `${profile} profile`,
-      summary: `${profile} profile instructions`,
+    ...input.vaultFiles.map((file) => ({
+      id: `@${file.id}`,
+      label: file.id,
+      kind: 'file' as const,
+      title: file.name,
+      summary: file.path,
     })),
   ];
 
   return items.sort(compareMentionItems);
 }
 
-export function filterMentionItems(items: MentionItem[], query: string): MentionItem[] {
+export function filterMentionItems(
+  items: MentionItem[],
+  query: string,
+  options: { limit?: number } = {},
+): MentionItem[] {
   const normalizedQuery = query.replace(/^@/, '').trim().toLowerCase();
-  if (!normalizedQuery) {
-    return items;
+  const filtered = !normalizedQuery
+    ? items
+    : items.filter((item) => {
+      const haystacks = [
+        item.id,
+        item.label,
+        item.title,
+        item.summary,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value.toLowerCase());
+
+      return haystacks.some((value) => value.includes(normalizedQuery));
+    });
+
+  const limit = options.limit;
+  if (typeof limit === 'number' && Number.isFinite(limit) && limit >= 0) {
+    return filtered.slice(0, limit);
   }
 
-  return items.filter((item) => {
-    const haystacks = [
-      item.id,
-      item.label,
-      item.title,
-      item.summary,
-    ]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => value.toLowerCase());
-
-    return haystacks.some((value) => value.includes(normalizedQuery));
-  });
+  return filtered;
 }
 
 export function resolveMentionItems(text: string, items: MentionItem[]): MentionItem[] {

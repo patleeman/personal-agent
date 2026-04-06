@@ -21,7 +21,7 @@ function findMentionMatch(value: string, caret: number, selectionEnd: number): M
   }
 
   const prefix = value.slice(0, caret);
-  const match = prefix.match(/(^|.*[\s(])(@[\w-]*)$/);
+  const match = prefix.match(/(^|.*[\s(])(@[\w./-]*)$/);
   const query = match?.[2] ?? null;
   if (!query) {
     return null;

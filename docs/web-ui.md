@@ -359,14 +359,13 @@ The composer supports `@` references.
 
 You can reference:
 
-- pages
+- note pages
 - scheduled tasks
-- skills
-- profiles
+- files in the knowledge vault (for example `@_profiles/datadog/AGENTS.md`)
 
 When you mention these items, the UI resolves them and injects durable context into the live session.
 
-This makes the conversation aware of the durable objects you are pointing at, instead of copying them manually into the prompt.
+Skills and profile behavior are no longer separate `@` mention targets; reference the underlying vault files directly when you want that exact file in play.
 
 ## Working directory selection
 

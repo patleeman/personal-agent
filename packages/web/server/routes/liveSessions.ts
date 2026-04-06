@@ -57,13 +57,12 @@ import { resolveConversationCwd } from '../conversations/conversationCwd.js';
 import { resolveRemoteExecutionCwd } from '../workspace/remoteExecution.js';
 import {
   buildReferencedMemoryDocsContext,
-  buildReferencedProfilesContext,
-  buildReferencedSkillsContext,
   buildReferencedTasksContext,
   expandPromptReferencesWithNodeGraph,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
 } from '../knowledge/promptReferences.js';
+import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import { syncWebLiveConversationRun } from '../conversations/conversationRuns.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from '../workspace/gitStatus.js';
 import {
@@ -117,15 +116,6 @@ let listMemoryDocsFn: () => {
   updated?: string;
 }[] = () => [];
 
-let listSkillsForCurrentProfileFn: () => {
-  name: string;
-  source: string;
-  description: string;
-  path: string;
-}[] = () => [];
-
-let listProfileAgentItemsFn: () => { source: string; path: string }[] = () => [];
-
 const COMPANION_SESSION_COOKIE = 'pa_companion';
 
 function readCookieValue(req: Request, cookieName: string): string {
@@ -161,7 +151,7 @@ function writeSseHeaders(res: Response): void {
 }
 
 function initializeLiveSessionRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
@@ -171,8 +161,6 @@ function initializeLiveSessionRoutesContext(
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
   listMemoryDocsFn = context.listMemoryDocs;
-  listSkillsForCurrentProfileFn = context.listSkillsForCurrentProfile;
-  listProfileAgentItemsFn = context.listProfileAgentItems;
 }
 
 function buildLiveSessionResourceOptions(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -307,34 +295,22 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       summary: doc.summary ?? '',
       description: doc.description ?? '',
     }));
-    const skills = listSkillsForCurrentProfileFn().map((skill) => ({
-      name: skill.name,
-      source: skill.source,
-      description: skill.description,
-      path: skill.path,
-    }));
-    const profileAgents = listProfileAgentItemsFn().map((item) => ({
-      id: item.source,
-      source: item.source,
-      path: item.path,
-    }));
     const promptReferences = resolvePromptReferences({
       text,
       availableProjectIds: [],
       tasks,
       memoryDocs,
-      skills,
-      profiles: profileAgents,
+      skills: [],
+      profiles: [],
     });
     const expandedNodeReferences = expandPromptReferencesWithNodeGraph({
       projectIds: [],
       memoryDocIds: promptReferences.memoryDocIds,
-      skillNames: promptReferences.skillNames,
+      skillNames: [],
     });
     const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
     const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
-    const referencedSkills = pickPromptReferencesInOrder(expandedNodeReferences.skillNames, skills);
-    const referencedProfiles = pickPromptReferencesInOrder(promptReferences.profileIds, profileAgents);
+    const referencedVaultFiles = resolveMentionedVaultFiles(text);
     let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
     if (normalizedAttachmentRefs.length > 0) {
       try {
@@ -365,8 +341,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, getRepoRootFn()) : '',
       referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, getRepoRootFn()) : '',
-      referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, getRepoRootFn()) : '',
-      referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, getRepoRootFn()) : '',
+      referencedVaultFiles.length > 0 ? buildReferencedVaultFilesContext(referencedVaultFiles) : '',
       backgroundRunHiddenContext,
     ].filter(Boolean);
 
@@ -482,8 +457,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       delivery: submittedPrompt.acceptedAs,
       referencedTaskIds: promptReferences.taskIds,
       referencedMemoryDocIds: promptReferences.memoryDocIds,
-      referencedSkillNames: promptReferences.skillNames,
-      referencedProfileIds: promptReferences.profileIds,
+      referencedVaultFileIds: referencedVaultFiles.map((file) => file.id),
       referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
     });
   } catch (err) {
@@ -572,7 +546,7 @@ async function abortLiveSession(sessionId: string): Promise<void> {
 
 export function registerLiveSessionRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
 ): void {
   initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions', (_req, res) => {
@@ -1024,7 +998,7 @@ export function registerLiveSessionRoutes(
 
 export function registerCompanionLiveSessionRoutes(
   router: Pick<Express, 'get' | 'post' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
 ): void {
   initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions', (_req, res) => {
@@ -1194,7 +1168,7 @@ export function registerCompanionLiveSessionRoutes(
 
 export function registerLiveSessionStatsRoutes(
   router: Pick<Express, 'get'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs' | 'listSkillsForCurrentProfile' | 'listProfileAgentItems'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
 ): void {
   initializeLiveSessionRoutesContext(context);
   router.get('/api/live-sessions/:id/stats', (req, res) => {

@@ -142,6 +142,13 @@ describe('chat view streaming disclosure', () => {
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
   });
 
+  it('renders vault file mentions as a single pill', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Open @_profiles/datadog/AGENTS.md before editing.')));
+
+    expect(html).toContain('@_profiles/datadog/AGENTS.md');
+    expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
+  });
+
   it('renders markdown formatting in user messages', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

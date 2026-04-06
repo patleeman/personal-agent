@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import type { MentionItem } from './conversationMentions';
 import { buildNodeMentionHref, type NodeMentionSurface } from './nodeMentionRoutes';
 
-const MENTION_REGEX = /@[\w-]+/g;
+const MENTION_REGEX = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
+const TRAILING_MENTION_PUNCTUATION_REGEX = /[),.;:!?\]}>]+$/;
 
 function isNodeMentionItem(item: MentionItem): boolean {
   return item.kind === 'note' || item.kind === 'skill';
@@ -15,13 +16,14 @@ function splitMentionFragments(text: string): Array<{ text: string; mention: boo
   let match: RegExpExecArray | null = null;
 
   while ((match = MENTION_REGEX.exec(text)) !== null) {
-    const mention = match[0];
+    const rawMention = match[0];
+    const mention = rawMention.replace(TRAILING_MENTION_PUNCTUATION_REGEX, '');
     const start = match.index;
     const end = start + mention.length;
     const previous = start > 0 ? text[start - 1] : '';
     const shouldSkip = start > 0 && /[\w./+-]/.test(previous);
 
-    if (shouldSkip) {
+    if (shouldSkip || mention === '@') {
       continue;
     }
 

@@ -35,18 +35,19 @@ function MentionPill({ text }: { text: string }) {
 
 function splitMentionFragments(text: string): Array<{ text: string; mention: boolean }> {
   const fragments: Array<{ text: string; mention: boolean }> = [];
-  const mentionRegex = /@[\w-]+/g;
+  const mentionRegex = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
   let cursor = 0;
   let match: RegExpExecArray | null = null;
 
   while ((match = mentionRegex.exec(text)) !== null) {
-    const mention = match[0];
+    const rawMention = match[0];
+    const mention = rawMention.replace(/[),.;:!?\]}>]+$/, '');
     const start = match.index;
     const end = start + mention.length;
     const previous = start > 0 ? text[start - 1] : '';
     const shouldSkip = start > 0 && /[\w./+-]/.test(previous);
 
-    if (shouldSkip) {
+    if (shouldSkip || mention === '@') {
       continue;
     }
 
