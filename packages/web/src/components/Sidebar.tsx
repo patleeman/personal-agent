@@ -2,7 +2,6 @@ import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
-import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations';
 import { useAppData } from '../contexts';
 import { sessionNeedsAttention } from '../sessionIndicators';
@@ -23,7 +22,6 @@ import {
   readDraftConversationCwd,
   shouldShowDraftConversationTab,
 } from '../draftConversation';
-import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
 import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
 import {
@@ -517,7 +515,6 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { activity, alerts, runs } = useAppData();
-  const { data: status } = useApi(api.status);
   const {
     pinnedSessions,
     tabs,
@@ -852,14 +849,7 @@ export function Sidebar() {
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
-      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <div className="ui-brand-mark">
-          <span className="ui-brand-mark-text">pa</span>
-        </div>
-        <span className="text-[13px] font-semibold text-primary truncate flex-1">{getSidebarBrandLabel(status?.profile)}</span>
-      </div>
-
-      <div className="pb-2 space-y-0.5">
+      <div className="pt-3 pb-2 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <div className="px-1">
           <button

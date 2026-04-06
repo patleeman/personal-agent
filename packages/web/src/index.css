@@ -174,14 +174,6 @@
     @apply text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight;
   }
 
-  .ui-brand-mark {
-    @apply w-6 h-6 rounded bg-accent/20 flex items-center justify-center shrink-0;
-  }
-
-  .ui-brand-mark-text {
-    @apply text-accent text-[10px] font-bold font-mono;
-  }
-
   .ui-sidebar-nav-item {
     @apply flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
