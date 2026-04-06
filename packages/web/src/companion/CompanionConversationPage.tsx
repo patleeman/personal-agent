@@ -6,7 +6,7 @@ import { Pill, cx } from '../components/ui';
 import { shouldShowScrollToBottomControl } from '../conversationScroll';
 import { useCompanionTopBarAction } from './CompanionLayout';
 import { useApi } from '../hooks';
-import { filterMentionItems, type MentionItem } from '../conversationMentions';
+import { filterMentionItems, MAX_MENTION_MENU_ITEMS, type MentionItem } from '../conversationMentions';
 import { useNodeMentionItems } from '../useNodeMentionItems';
 import {
   readConversationLayout,
@@ -299,7 +299,7 @@ function CompanionMentionMenu({
   index: number;
   onSelect: (id: string) => void;
 }) {
-  const filtered = filterMentionItems(items, query);
+  const filtered = filterMentionItems(items, query, { limit: MAX_MENTION_MENU_ITEMS });
   if (filtered.length === 0) {
     return null;
   }
@@ -1547,7 +1547,7 @@ export function CompanionConversationPage() {
                         }
 
                         if (showMention) {
-                          const filteredMentions = filterMentionItems(companionMentionItems, mentionQuery);
+                          const filteredMentions = filterMentionItems(companionMentionItems, mentionQuery, { limit: MAX_MENTION_MENU_ITEMS });
                           if (event.key === 'ArrowDown') {
                             event.preventDefault();
                             setMentionIdx((current) => current + 1);

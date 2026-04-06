@@ -1,5 +1,7 @@
 import type { MemoryDocItem, ScheduledTaskSummary, VaultFileSummary } from './types';
 
+export const MAX_MENTION_MENU_ITEMS = 12;
+
 export type MentionKind = 'task' | 'note' | 'skill' | 'profile' | 'file';
 
 export interface MentionItem {

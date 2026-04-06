@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState, type KeyboardEventHandler, type TextareaHTMLAttributes } from 'react';
-import { filterMentionItems, type MentionItem } from '../conversationMentions';
+import { filterMentionItems, MAX_MENTION_MENU_ITEMS, type MentionItem } from '../conversationMentions';
 import { useNodeMentionItems } from '../useNodeMentionItems';
 import { Pill, cx } from './ui';
 
@@ -59,7 +59,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
       ? data
       : [];
   const filteredItems = useMemo(
-    () => mentionMatch ? filterMentionItems(items, mentionMatch.query) : [],
+    () => mentionMatch ? filterMentionItems(items, mentionMatch.query, { limit: MAX_MENTION_MENU_ITEMS }) : [],
     [items, mentionMatch],
   );
   const showMentionMenu = !disabled && mentionMatch !== null && filteredItems.length > 0;

@@ -34,7 +34,7 @@ import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
 import { buildDeferredResumeAutoResumeKey } from '../deferredResumeAutoResume';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
-import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
+import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
@@ -745,10 +745,10 @@ function MentionMenu({
   idx: number;
   onSelect: (id: string) => void;
 }) {
-  const filtered = filterMentionItems(items, query, { limit: 50 });
+  const filtered = filterMentionItems(items, query, { limit: MAX_MENTION_MENU_ITEMS });
   if (!filtered.length) return null;
   return (
-    <div className="ui-menu-shell">
+    <div className="ui-menu-shell max-h-[18rem] overflow-y-auto py-1.5">
       <div className="px-3 pt-2 pb-1">
         <p className="ui-section-label">Mention</p>
       </div>
@@ -3995,7 +3995,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
           }
         } else {
-          const filtered = filterMentionItems(mentionItems, mentionQuery, { limit: 50 });
+          const filtered = filterMentionItems(mentionItems, mentionQuery, { limit: MAX_MENTION_MENU_ITEMS });
           const sel = filtered[mentionIdx % (filtered.length || 1)];
           if (sel) { setInput(input.replace(/@[\w./-]*$/, sel.id + ' ')); setMentionIdx(0); }
         }
