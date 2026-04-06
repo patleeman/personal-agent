@@ -234,6 +234,33 @@ type LocalLiveSession = ReturnType<typeof getLocalLiveSessions>[number] & {
   };
 };
 
+export interface PublicLiveSessionMeta {
+  id: string;
+  cwd: string;
+  sessionFile: string;
+  title?: string;
+  isStreaming: boolean;
+  hasPendingHiddenTurn?: boolean;
+}
+
+export function toPublicLiveSessionMeta(session: {
+  id: string;
+  cwd: string;
+  sessionFile: string;
+  title?: string;
+  isStreaming: boolean;
+  hasPendingHiddenTurn?: boolean;
+}): PublicLiveSessionMeta {
+  return {
+    id: session.id,
+    cwd: session.cwd,
+    sessionFile: session.sessionFile,
+    ...(typeof session.title === 'string' ? { title: session.title } : {}),
+    isStreaming: session.isStreaming,
+    ...(typeof session.hasPendingHiddenTurn === 'boolean' ? { hasPendingHiddenTurn: session.hasPendingHiddenTurn } : {}),
+  };
+}
+
 export function listAllLiveSessions(): Array<LocalLiveSession | ReturnType<typeof listRemoteLiveSessions>[number]> {
   const local = getLocalLiveSessions();
   const localManagersById = new Map<string, unknown>(

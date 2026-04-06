@@ -25,6 +25,7 @@ import {
   readConversationModelPreferenceStateById,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
+  toPublicLiveSessionMeta,
 } from '../conversations/conversationService.js';
 import {
   canInjectResumeFallbackPrompt,
@@ -165,7 +166,7 @@ async function readConversationBootstrapState(input: {
         conversationId: input.conversationId,
       }),
       liveSession: liveSession
-        ? { live: true as const, ...liveSession }
+        ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) }
         : { live: false as const },
     },
     telemetry: {
