@@ -3,18 +3,18 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { startBackgroundRun } from '@personal-agent/daemon';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { ensureDaemonAvailable } from '../automation/daemonToolUtils.js';
-import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from '../automation/durableRuns.js';
+import { cancelDurableRun, followUpDurableRun, getDurableRun, getDurableRunLog, listDurableRuns, rerunDurableRun } from '../automation/durableRuns.js';
 
-const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'cancel'] as const;
+const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'rerun', 'follow_up', 'cancel'] as const;
 
 type RunAction = (typeof RUN_ACTION_VALUES)[number];
 
 const RunToolParams = Type.Object({
   action: Type.Union(RUN_ACTION_VALUES.map((value) => Type.Literal(value))),
-  runId: Type.Optional(Type.String({ description: 'Run id for get/logs/cancel actions.' })),
+  runId: Type.Optional(Type.String({ description: 'Run id for get/logs/rerun/follow_up/cancel actions.' })),
   taskSlug: Type.Optional(Type.String({ description: 'Short durable task slug for start, for example code-review.' })),
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
-  prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent.' })),
+  prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent, or the follow-up prompt for follow_up.' })),
   model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
   profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
@@ -88,7 +88,7 @@ export function createRunAgentExtension(options: {
       promptGuidelines: [
         'Use this tool for durable background jobs that should keep running outside the current turn.',
         'Prefer one focused run per independent task slug.',
-        'Use start for detached shell work, start_agent for detached subagents, get/logs for inspection, and cancel to stop a run.',
+        'Use start for detached shell work, start_agent for detached subagents, rerun to replay a stopped run, follow_up to continue a stopped background agent run, get/logs for inspection, and cancel to stop a run.',
         'For time-based runs, use defer/cron/at with start_agent.',
         'For looping agents, use loop=true with start_agent.',
         'For pure time-based conversation wakeups, prefer deferred_resume instead.',
@@ -286,6 +286,48 @@ export function createRunAgentExtension(options: {
                   ...(cron ? { cron } : {}),
                   ...(at ? { at } : {}),
                   ...(loop ? { loop: true } : {}),
+                },
+              };
+            }
+
+            case 'rerun': {
+              const runId = readRequiredString(params.runId, 'runId');
+              await ensureDaemonAvailable();
+              const result = await rerunDurableRun(runId);
+              if (!result.accepted) {
+                throw new Error(result.reason ?? `Could not rerun ${runId}.`);
+              }
+
+              invalidateAppTopics('runs');
+              return {
+                content: [{ type: 'text' as const, text: `Started rerun ${result.runId} from ${runId}.` }],
+                details: {
+                  action: 'rerun',
+                  runId: result.runId,
+                  sourceRunId: runId,
+                  logPath: result.logPath,
+                },
+              };
+            }
+
+            case 'follow_up': {
+              const runId = readRequiredString(params.runId, 'runId');
+              const prompt = params.prompt?.trim() || 'Continue from where you left off.';
+              await ensureDaemonAvailable();
+              const result = await followUpDurableRun(runId, prompt);
+              if (!result.accepted) {
+                throw new Error(result.reason ?? `Could not continue ${runId}.`);
+              }
+
+              invalidateAppTopics('runs');
+              return {
+                content: [{ type: 'text' as const, text: `Started follow-up run ${result.runId} from ${runId}.` }],
+                details: {
+                  action: 'follow_up',
+                  runId: result.runId,
+                  sourceRunId: runId,
+                  prompt,
+                  logPath: result.logPath,
                 },
               };
             }

@@ -8,6 +8,8 @@ import type {
   StartBackgroundRunRequestInput,
   StartBackgroundRunResult,
   CancelDurableRunResult,
+  ReplayDurableRunResult,
+  FollowUpDurableRunResult,
   SyncWebLiveConversationRunResult,
   SyncWebLiveConversationRunRequestInput,
   ListRecoverableWebLiveConversationRunsResult,
@@ -63,6 +65,19 @@ export interface CancelDurableRunRequest {
   runId: string;
 }
 
+export interface RerunDurableRunRequest {
+  id: string;
+  type: 'runs.rerun';
+  runId: string;
+}
+
+export interface FollowUpDurableRunRequest {
+  id: string;
+  type: 'runs.followUp';
+  runId: string;
+  prompt?: string;
+}
+
 export interface SyncWebLiveConversationRunRequest {
   id: string;
   type: 'conversations.sync';
@@ -84,6 +99,8 @@ export type DaemonRequest =
   | StartScheduledTaskRunRequest
   | StartBackgroundRunRequest
   | CancelDurableRunRequest
+  | RerunDurableRunRequest
+  | FollowUpDurableRunRequest
   | SyncWebLiveConversationRunRequest
   | ListRecoverableWebLiveConversationRunsRequest;
 
@@ -100,6 +117,8 @@ export interface DaemonSuccessResponse {
     | StartScheduledTaskRunResult
     | StartBackgroundRunResult
     | CancelDurableRunResult
+    | ReplayDurableRunResult
+    | FollowUpDurableRunResult
     | SyncWebLiveConversationRunResult
     | ListRecoverableWebLiveConversationRunsResult;
 }
@@ -313,6 +332,23 @@ export function parseRequest(raw: string): DaemonRequest {
       id: parsed.id,
       type: 'runs.cancel',
       runId: readRequiredString(parsed.runId, 'runs.cancel runId'),
+    };
+  }
+
+  if (parsed.type === 'runs.rerun') {
+    return {
+      id: parsed.id,
+      type: 'runs.rerun',
+      runId: readRequiredString(parsed.runId, 'runs.rerun runId'),
+    };
+  }
+
+  if (parsed.type === 'runs.followUp') {
+    return {
+      id: parsed.id,
+      type: 'runs.followUp',
+      runId: readRequiredString(parsed.runId, 'runs.followUp runId'),
+      ...(readOptionalString(parsed.prompt) ? { prompt: readOptionalString(parsed.prompt) } : {}),
     };
   }
 

@@ -1,8 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
-import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { getDurableSessionsDir } from '@personal-agent/core';
+import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
@@ -19,6 +17,8 @@ import {
 } from './runs/background-runs.js';
 import { deliverBackgroundRunCallbackWakeup } from './runs/background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './runs/background-run-deferred-resumes.js';
+import { buildFollowUpBackgroundRunInput, buildRerunBackgroundRunInput } from './runs/background-run-replays.js';
+import { resolveBackgroundRunSessionDir } from './runs/background-run-sessions.js';
 import {
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
@@ -40,6 +40,8 @@ import type {
   StartScheduledTaskRunResult,
   StartBackgroundRunResult,
   CancelDurableRunResult,
+  ReplayDurableRunResult,
+  FollowUpDurableRunResult,
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
   SyncWebLiveConversationRunRequestInput,
@@ -75,8 +77,6 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-const BACKGROUND_RUN_SESSIONS_DIR_NAME = '__runs';
-
 function looksLikePaCommand(binary: string | undefined): boolean {
   const normalized = binary?.trim().toLowerCase();
   if (!normalized) {
@@ -111,13 +111,10 @@ function quoteShellArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function resolveBackgroundRunSessionDir(runId: string): string {
-  return join(getDurableSessionsDir(), BACKGROUND_RUN_SESSIONS_DIR_NAME, runId);
-}
-
 function appendBackgroundRunSessionDir(input: {
   argv?: string[];
   shellCommand?: string;
+  continueSession?: boolean;
 }, runId: string): {
   argv?: string[];
   shellCommand?: string;
@@ -135,7 +132,11 @@ function appendBackgroundRunSessionDir(input: {
     }
 
     return {
-      argv: [...argv, '--session-dir', sessionDir],
+      argv: [
+        ...argv,
+        '--session-dir', sessionDir,
+        ...(input.continueSession ? ['--continue'] : []),
+      ],
     };
   }
 
@@ -154,7 +155,7 @@ function appendBackgroundRunSessionDir(input: {
   }
 
   return {
-    shellCommand: `${shellCommand} --session-dir ${quoteShellArg(sessionDir)}`,
+    shellCommand: `${shellCommand} --session-dir ${quoteShellArg(sessionDir)}${input.continueSession ? ' --continue' : ''}`,
   };
 }
 
@@ -526,6 +527,24 @@ export class PersonalAgentDaemon {
       return;
     }
 
+    if (request.type === 'runs.rerun') {
+      this.respond(socket, {
+        id: request.id,
+        ok: true,
+        result: await this.rerunBackgroundRun(request.runId),
+      });
+      return;
+    }
+
+    if (request.type === 'runs.followUp') {
+      this.respond(socket, {
+        id: request.id,
+        ok: true,
+        result: await this.followUpBackgroundRun(request.runId, request.prompt),
+      });
+      return;
+    }
+
     if (request.type === 'conversations.sync') {
       this.respond(socket, {
         id: request.id,
@@ -674,13 +693,59 @@ export class PersonalAgentDaemon {
     await this.surfaceBackgroundRunResults(triggerRunId);
   }
 
-  private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
+  private async finalizeBackgroundRunStartFailure(input: {
+    runId: string;
+    runPaths: ReturnType<typeof resolveDurableRunPaths>;
+    taskSlug: string;
+    cwd: string;
+    startedAt: string;
+    error: string;
+  }): Promise<StartBackgroundRunResult> {
+    await finalizeBackgroundRun({
+      runId: input.runId,
+      runPaths: input.runPaths,
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+      startedAt: input.startedAt,
+      endedAt: new Date().toISOString(),
+      exitCode: 1,
+      signal: null,
+      cancelled: false,
+      error: input.error,
+    });
+
+    return {
+      accepted: false,
+      runId: input.runId,
+      logPath: input.runPaths.outputLogPath,
+      reason: input.error,
+    };
+  }
+
+  private async spawnBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
     const record = await createBackgroundRunRecord(this.runsRoot, input);
     const startedAt = new Date().toISOString();
+
+    if (input.bootstrapSessionDir) {
+      try {
+        cpSync(input.bootstrapSessionDir, resolveBackgroundRunSessionDir(record.runId), { recursive: true, force: true });
+      } catch (error) {
+        return this.finalizeBackgroundRunStartFailure({
+          runId: record.runId,
+          runPaths: record.paths,
+          taskSlug: input.taskSlug,
+          cwd: input.cwd,
+          startedAt,
+          error: `Could not prepare follow-up session: ${(error as Error).message}`,
+        });
+      }
+    }
+
     const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
     const spawnInput = appendBackgroundRunSessionDir({
       argv: record.argv,
       shellCommand: record.shellCommand,
+      continueSession: input.continueSession,
     }, record.runId);
 
     const childEnv = {
@@ -738,24 +803,14 @@ export class PersonalAgentDaemon {
 
     if (!startState.started) {
       outputStream.end();
-      await finalizeBackgroundRun({
+      return this.finalizeBackgroundRunStartFailure({
         runId: record.runId,
         runPaths: record.paths,
         taskSlug: input.taskSlug,
         cwd: input.cwd,
         startedAt,
-        endedAt: new Date().toISOString(),
-        exitCode: 1,
-        signal: null,
-        cancelled: false,
         error: startState.error,
       });
-      return {
-        accepted: false,
-        runId: record.runId,
-        logPath: record.paths.outputLogPath,
-        reason: startState.error,
-      };
     }
 
     const handle: ActiveBackgroundRunHandle = {
@@ -813,6 +868,45 @@ export class PersonalAgentDaemon {
       accepted: true,
       runId: record.runId,
       logPath: record.paths.outputLogPath,
+    };
+  }
+
+  private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
+    return this.spawnBackgroundRun(input);
+  }
+
+  private getReplayableBackgroundRun(runId: string) {
+    const run = scanDurableRun(this.runsRoot, runId);
+    if (!run) {
+      throw new Error(`Run not found: ${runId}`);
+    }
+
+    const status = run.status?.status;
+    if (status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering') {
+      throw new Error(`Run ${runId} is still active.`);
+    }
+
+    return run;
+  }
+
+  private async rerunBackgroundRun(runId: string): Promise<ReplayDurableRunResult> {
+    const run = this.getReplayableBackgroundRun(runId);
+    const result = await this.spawnBackgroundRun(buildRerunBackgroundRunInput(run));
+    return {
+      ...result,
+      sourceRunId: runId,
+    };
+  }
+
+  private async followUpBackgroundRun(runId: string, prompt?: string): Promise<FollowUpDurableRunResult> {
+    const run = this.getReplayableBackgroundRun(runId);
+    const result = await this.spawnBackgroundRun(buildFollowUpBackgroundRunInput(
+      run,
+      prompt?.trim() || 'Continue from where you left off.',
+    ));
+    return {
+      ...result,
+      sourceRunId: runId,
     };
   }
 

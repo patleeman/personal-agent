@@ -6,6 +6,8 @@ const {
   getDurableRunMock,
   getDurableRunLogMock,
   cancelDurableRunMock,
+  rerunDurableRunMock,
+  followUpDurableRunMock,
   ensureDaemonAvailableMock,
   startBackgroundRunMock,
 } = vi.hoisted(() => ({
@@ -13,6 +15,8 @@ const {
   getDurableRunMock: vi.fn(),
   getDurableRunLogMock: vi.fn(),
   cancelDurableRunMock: vi.fn(),
+  rerunDurableRunMock: vi.fn(),
+  followUpDurableRunMock: vi.fn(),
   ensureDaemonAvailableMock: vi.fn(),
   startBackgroundRunMock: vi.fn(),
 }));
@@ -22,6 +26,8 @@ vi.mock('../automation/durableRuns.js', () => ({
   getDurableRun: getDurableRunMock,
   getDurableRunLog: getDurableRunLogMock,
   cancelDurableRun: cancelDurableRunMock,
+  rerunDurableRun: rerunDurableRunMock,
+  followUpDurableRun: followUpDurableRunMock,
 }));
 
 vi.mock('../automation/daemonToolUtils.js', () => ({
@@ -71,6 +77,8 @@ beforeEach(() => {
   cancelDurableRunMock.mockReset();
   ensureDaemonAvailableMock.mockReset();
   startBackgroundRunMock.mockReset();
+  rerunDurableRunMock.mockReset();
+  followUpDurableRunMock.mockReset();
 });
 
 afterEach(() => {
@@ -184,5 +192,58 @@ describe('run agent extension', () => {
       },
     });
     expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
+  });
+
+  it('reruns a stopped durable run through the daemon', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    rerunDurableRunMock.mockResolvedValue({
+      accepted: true,
+      runId: 'run-rerun-123',
+      sourceRunId: 'run-original-123',
+      logPath: '/tmp/run-rerun-123.log',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'rerun',
+        runId: 'run-original-123',
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(rerunDurableRunMock).toHaveBeenCalledWith('run-original-123');
+    expect(result.content[0]?.text).toContain('Started rerun run-rerun-123 from run-original-123');
+  });
+
+  it('continues a stopped background agent run through the daemon', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    followUpDurableRunMock.mockResolvedValue({
+      accepted: true,
+      runId: 'run-followup-123',
+      sourceRunId: 'run-original-123',
+      logPath: '/tmp/run-followup-123.log',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'follow_up',
+        runId: 'run-original-123',
+        prompt: 'Continue from the failed migration step and finish validation.',
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(followUpDurableRunMock).toHaveBeenCalledWith('run-original-123', 'Continue from the failed migration step and finish validation.');
+    expect(result.content[0]?.text).toContain('Started follow-up run run-followup-123 from run-original-123');
   });
 });

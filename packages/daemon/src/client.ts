@@ -13,6 +13,8 @@ import type {
   StartBackgroundRunRequestInput,
   StartBackgroundRunResult,
   CancelDurableRunResult,
+  ReplayDurableRunResult,
+  FollowUpDurableRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
@@ -205,6 +207,33 @@ export async function cancelDurableRun(runId: string, config?: DaemonConfig): Pr
       id: `req_${randomUUID()}`,
       type: 'runs.cancel',
       runId,
+    },
+    config,
+  );
+}
+
+export async function rerunDurableRun(runId: string, config?: DaemonConfig): Promise<ReplayDurableRunResult> {
+  return sendRequest<ReplayDurableRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.rerun',
+      runId,
+    },
+    config,
+  );
+}
+
+export async function followUpDurableRun(
+  runId: string,
+  prompt?: string,
+  config?: DaemonConfig,
+): Promise<FollowUpDurableRunResult> {
+  return sendRequest<FollowUpDurableRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.followUp',
+      runId,
+      ...(typeof prompt === 'string' && prompt.trim().length > 0 ? { prompt: prompt.trim() } : {}),
     },
     config,
   );

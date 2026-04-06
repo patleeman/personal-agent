@@ -59,12 +59,14 @@ export interface TargetAgent {
   prompt: string;
   profile?: string;
   model?: string;
+  noSession?: boolean;
 }
 
 export interface TargetShell {
   type: 'shell';
   command: string;
   cwd?: string;
+  argv?: string[];
 }
 
 export type Target = TargetConversation | TargetAgent | TargetShell;
@@ -219,8 +221,10 @@ export function buildRunSpec(input: ScheduleRunInput): Record<string, unknown> {
       ...('prompt' in input.target ? { prompt: input.target.prompt } : {}),
       ...('command' in input.target ? { command: input.target.command } : {}),
       ...('cwd' in input.target ? { cwd: input.target.cwd } : {}),
+      ...('argv' in input.target ? { argv: input.target.argv } : {}),
       ...('profile' in input.target ? { profile: input.target.profile } : {}),
       ...('model' in input.target ? { model: input.target.model } : {}),
+      ...('noSession' in input.target ? { noSession: input.target.noSession } : {}),
     },
     callback: resolveCallback(input.callback),
   };

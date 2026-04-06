@@ -289,7 +289,7 @@ Native remote MCP config example:
 }
 ```
 
-### `pa runs [list|show|logs|start|start-agent|cancel|help]`
+### `pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help]`
 
 Inspect and manage durable daemon-backed background runs.
 
@@ -301,6 +301,8 @@ pa runs show <id>
 pa runs logs <id> --tail 120
 pa runs start code-review -- npm test
 pa runs start-agent code-review --prompt "review this diff"
+pa runs rerun <id>
+pa runs follow-up <id> --prompt "continue from the failed step"
 pa runs cancel <id>
 ```
 

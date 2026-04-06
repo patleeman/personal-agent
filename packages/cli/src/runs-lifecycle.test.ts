@@ -3,11 +3,23 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { PersonalAgentDaemon, type DaemonConfig } from '@personal-agent/daemon';
+import { PersonalAgentDaemon, resolveDaemonPaths, resolveDurableRunsRoot, scanDurableRun, type DaemonConfig } from '@personal-agent/daemon';
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
+
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
+  const startedAt = Date.now();
+
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error('Timed out waiting for condition');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -110,6 +122,43 @@ describe('runs CLI lifecycle commands', () => {
     expect(output).toContain('Durable run started');
     expect(output).toContain('Run');
     expect(output).toContain('Log');
+  });
+
+  it('reruns durable shell runs via pa runs rerun', async () => {
+    const startLogs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      startLogs.push(String(message ?? ''));
+    });
+
+    const startExitCode = await runCli([
+      'runs',
+      'start',
+      'rerun-source',
+      '--',
+      process.execPath,
+      '-e',
+      "console.log('rerun from cli')",
+    ]);
+
+    expect(startExitCode).toBe(0);
+    const runLine = startLogs.find((line) => line.includes('Run')) ?? '';
+    const sourceRunId = runLine.split(/\s+/).at(-1) ?? '';
+    expect(sourceRunId).toContain('run-rerun-source-');
+
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths().root);
+    await waitFor(() => scanDurableRun(runsRoot, sourceRunId)?.status?.status === 'completed');
+
+    const rerunLogs: string[] = [];
+    vi.restoreAllMocks();
+    vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      rerunLogs.push(String(message ?? ''));
+    });
+
+    const rerunExitCode = await runCli(['runs', 'rerun', sourceRunId]);
+
+    expect(rerunExitCode).toBe(0);
+    expect(rerunLogs.join('\n')).toContain('Durable run rerun started');
+    expect(rerunLogs.join('\n')).toContain(sourceRunId);
   });
 
   it('cancels durable background runs via pa runs cancel', async () => {

@@ -5099,7 +5099,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'runs',
       category: 'automation',
-      usage: 'runs [list|show|logs|start|cancel|help] [args...]',
+      usage: 'runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]',
       description: 'Inspect background runs',
       disableBuiltInHelp: true,
       run: runsCommand,

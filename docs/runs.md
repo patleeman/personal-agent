@@ -73,6 +73,8 @@ pa runs show <id>
 pa runs logs <id> --tail 120
 pa runs start <task-slug> -- <command...>
 pa runs start-agent <task-slug> --prompt "..."
+pa runs rerun <id>
+pa runs follow-up <id> --prompt "continue from the failed step"
 pa runs cancel <id>
 ```
 
@@ -115,6 +117,11 @@ The slug is how you group and recognize the work. It is not a schedule and it do
 ## Relationship to conversations
 
 A run can be launched from the context of a conversation, but the run itself is a detached background record.
+
+Stopped runs are not one-shot anymore:
+
+- use **rerun** to replay the same detached work from scratch
+- use **follow-up** to continue a stopped background agent run with a new prompt while carrying its prior transcript forward
 
 When a run is launched from a web conversation, completion can wake that originating conversation back up with a ready conversation wakeup.
 

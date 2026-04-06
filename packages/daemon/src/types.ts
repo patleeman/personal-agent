@@ -120,6 +120,22 @@ export interface CancelDurableRunResult {
   reason?: string;
 }
 
+export interface ReplayDurableRunResult {
+  accepted: boolean;
+  runId: string;
+  sourceRunId: string;
+  logPath?: string;
+  reason?: string;
+}
+
+export interface FollowUpDurableRunResult {
+  accepted: boolean;
+  runId: string;
+  sourceRunId: string;
+  logPath?: string;
+  reason?: string;
+}
+
 export interface SyncWebLiveConversationRunRequestInput {
   conversationId: string;
   sessionFile: string;

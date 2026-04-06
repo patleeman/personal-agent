@@ -43,6 +43,8 @@ export interface StartBackgroundRunInput {
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
   createdAt?: string;
+  continueSession?: boolean;
+  bootstrapSessionDir?: string;
   /** Override default callback behavior */
   callback?: {
     alertLevel?: 'none' | 'passive' | 'disruptive';
@@ -220,12 +222,14 @@ function buildScheduleRunInputFromBackgroundRun(
       prompt: agent.prompt,
       ...(agent.profile ? { profile: agent.profile } : {}),
       ...(agent.model ? { model: agent.model } : {}),
+      ...(agent.noSession === true ? { noSession: true } : {}),
     };
   } else if (argv) {
     target = {
       type: 'shell',
       command: argv.join(' '),
       cwd: input.cwd,
+      argv,
     };
   } else if (shellCommand) {
     target = {

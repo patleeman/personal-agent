@@ -335,6 +335,49 @@ describe('daemon IPC integration', () => {
     expect(existsSync(run?.paths.resultPath as string)).toBe(true);
   });
 
+  it('reruns a stopped durable shell run', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const firstResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'rerun-shell-test',
+        cwd: createTempDir('bg-run-rerun-cwd-'),
+        argv: [process.execPath, '-e', "console.log('rerun-me')"],
+        source: {
+          type: 'test',
+          id: 'rerun-shell-test',
+        },
+      },
+    });
+
+    expect(firstResponse.ok).toBe(true);
+    const sourceRunId = (firstResponse.result as { runId: string }).runId;
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+    await waitFor(() => scanDurableRun(runsRoot, sourceRunId)?.status?.status === 'completed');
+
+    const rerunResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.rerun',
+      runId: sourceRunId,
+    });
+
+    expect(rerunResponse.ok).toBe(true);
+    expect(rerunResponse.result).toMatchObject({
+      accepted: true,
+      sourceRunId,
+      runId: expect.any(String),
+      logPath: expect.any(String),
+    });
+
+    const rerunId = (rerunResponse.result as { runId: string }).runId;
+    expect(rerunId).not.toBe(sourceRunId);
+    await waitFor(() => scanDurableRun(runsRoot, rerunId)?.status?.status === 'completed');
+    expect(readFileSync(scanDurableRun(runsRoot, rerunId)?.paths.outputLogPath as string, 'utf-8')).toContain('rerun-me');
+  });
+
   it('surfaces a pending background-run result when a resumable background run finishes', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();

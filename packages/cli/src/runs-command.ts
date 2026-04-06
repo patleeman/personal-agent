@@ -1,6 +1,8 @@
 import { existsSync } from 'fs';
 import {
   cancelDurableRun,
+  rerunDurableRun,
+  followUpDurableRun,
   pingDaemon,
   resolveDaemonPaths,
   resolveDurableRunsRoot,
@@ -15,7 +17,7 @@ import { readTailLines } from './file-utils.js';
 import { bullet, dim, keyValue, printDenseCommandList, printDenseUsage, section, statusChip } from './ui.js';
 
 function runsUsageText(): string {
-  return 'Usage: pa runs [list|show|logs|start|start-agent|cancel|help] [args...]';
+  return 'Usage: pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]';
 }
 
 function runsListUsageText(): string {
@@ -36,6 +38,14 @@ function runsStartUsageText(): string {
 
 function runsStartAgentUsageText(): string {
   return 'Usage: pa runs start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]';
+}
+
+function runsRerunUsageText(): string {
+  return 'Usage: pa runs rerun <id>';
+}
+
+function runsFollowUpUsageText(): string {
+  return 'Usage: pa runs follow-up <id> [--prompt <text>]';
 }
 
 function runsCancelUsageText(): string {
@@ -122,7 +132,7 @@ function readBackgroundRunSource(taskSlug: string): { type: string; id?: string;
 function printRunsHelp(): void {
   console.log('Runs');
   console.log('');
-  printDenseUsage('pa runs [list|show|logs|start|cancel|help] [args...]');
+  printDenseUsage('pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]');
   console.log('');
   printDenseCommandList('Commands', [
     { usage: 'list [--json]', description: 'List durable daemon-backed runs with recovery status' },
@@ -130,6 +140,8 @@ function printRunsHelp(): void {
     { usage: 'logs <id> [--tail <n>]', description: 'Show run output log (default: 80 lines)' },
     { usage: 'start <task-slug> [--cwd <path>] [--] <command...>', description: 'Start a durable shell/background run' },
     { usage: 'start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]', description: 'Start a durable background agent run' },
+    { usage: 'rerun <id>', description: 'Replay a stopped durable run from scratch' },
+    { usage: 'follow-up <id> [--prompt <text>]', description: 'Continue a stopped durable background agent run' },
     { usage: 'cancel <id>', description: 'Cancel one durable background run' },
     { usage: 'help', description: 'Show runs help' },
   ]);
@@ -451,6 +463,77 @@ export async function runsCommand(args: string[]): Promise<number> {
     }
 
     console.log(section('Durable agent run started'));
+    console.log(keyValue('Run', result.runId));
+    if (result.logPath) {
+      console.log(keyValue('Log', result.logPath));
+    }
+    console.log(keyValue('Inspect', `pa runs show ${result.runId}`));
+    return 0;
+  }
+
+  if (subcommand === 'rerun') {
+    const positional = rest.filter((arg) => !arg.startsWith('--'));
+    const unknownOptions = rest.filter((arg) => arg.startsWith('--'));
+    if (positional.length !== 1 || unknownOptions.length > 0) {
+      throw new Error(runsRerunUsageText());
+    }
+
+    await ensureDaemonAvailable();
+    const sourceRunId = positional[0] as string;
+    const result = await rerunDurableRun(sourceRunId);
+    if (!result.accepted) {
+      throw new Error(result.reason ?? `Could not rerun ${sourceRunId}`);
+    }
+
+    console.log(section('Durable run rerun started'));
+    console.log(keyValue('Source run', sourceRunId));
+    console.log(keyValue('Run', result.runId));
+    if (result.logPath) {
+      console.log(keyValue('Log', result.logPath));
+    }
+    console.log(keyValue('Inspect', `pa runs show ${result.runId}`));
+    return 0;
+  }
+
+  if (subcommand === 'follow-up') {
+    let prompt: string | undefined;
+    const positional: string[] = [];
+
+    for (let index = 0; index < rest.length; index += 1) {
+      const arg = rest[index] as string;
+
+      if (arg === '--prompt') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) {
+          throw new Error(runsFollowUpUsageText());
+        }
+
+        prompt = value;
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--')) {
+        throw new Error(runsFollowUpUsageText());
+      }
+
+      positional.push(arg);
+    }
+
+    if (positional.length !== 1) {
+      throw new Error(runsFollowUpUsageText());
+    }
+
+    await ensureDaemonAvailable();
+    const sourceRunId = positional[0] as string;
+    const effectivePrompt = prompt?.trim() || 'Continue from where you left off.';
+    const result = await followUpDurableRun(sourceRunId, effectivePrompt);
+    if (!result.accepted) {
+      throw new Error(result.reason ?? `Could not continue ${sourceRunId}`);
+    }
+
+    console.log(section('Durable follow-up run started'));
+    console.log(keyValue('Source run', sourceRunId));
     console.log(keyValue('Run', result.runId));
     if (result.logPath) {
       console.log(keyValue('Log', result.logPath));

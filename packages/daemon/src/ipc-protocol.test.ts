@@ -196,6 +196,36 @@ describe('parseRequest', () => {
     });
   });
 
+  it('parses runs.rerun request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7d',
+      type: 'runs.rerun',
+      runId: 'run-code-review-2026-03-12',
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7d',
+      type: 'runs.rerun',
+      runId: 'run-code-review-2026-03-12',
+    });
+  });
+
+  it('parses runs.followUp request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7e',
+      type: 'runs.followUp',
+      runId: 'run-code-review-2026-03-12',
+      prompt: 'continue from the failing test',
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7e',
+      type: 'runs.followUp',
+      runId: 'run-code-review-2026-03-12',
+      prompt: 'continue from the failing test',
+    });
+  });
+
   it('parses conversations.sync request', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_8',

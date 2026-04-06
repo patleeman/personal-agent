@@ -1,6 +1,8 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import {
   cancelDurableRun as cancelDurableRunFromDaemon,
+  rerunDurableRun as rerunDurableRunFromDaemon,
+  followUpDurableRun as followUpDurableRunFromDaemon,
   getDurableRun as getDurableRunFromDaemon,
   listDurableRuns as listDurableRunsFromDaemon,
   pingDaemon,
@@ -13,6 +15,8 @@ import {
   type GetDurableRunResult,
   type ListDurableRunsResult,
   type ScannedDurableRun,
+  type ReplayDurableRunResult,
+  type FollowUpDurableRunResult,
 } from '@personal-agent/daemon';
 import { decorateRemoteExecutionRun } from '../workspace/remoteExecution.js';
 import { decorateDurableRunAttention, decorateDurableRunsAttention } from './durableRunAttention.js';
@@ -260,4 +264,12 @@ export async function getDurableRunLog(runId: string, tail = 120): Promise<{ pat
 
 export async function cancelDurableRun(runId: string): Promise<CancelDurableRunResult> {
   return cancelDurableRunFromDaemon(runId);
+}
+
+export async function rerunDurableRun(runId: string): Promise<ReplayDurableRunResult> {
+  return rerunDurableRunFromDaemon(runId);
+}
+
+export async function followUpDurableRun(runId: string, prompt?: string): Promise<FollowUpDurableRunResult> {
+  return followUpDurableRunFromDaemon(runId, prompt);
 }
