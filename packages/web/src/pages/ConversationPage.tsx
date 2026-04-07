@@ -4507,8 +4507,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </div>
           </div>
 
-          {(!draft && (branchLabel || gitLineSummary)) || sessionTokens ? (
-            <div className="mt-1.5 flex items-center justify-between gap-3 px-3 text-[10px] text-dim">
+          {draft || ((!draft && (branchLabel || gitLineSummary)) || sessionTokens) ? (
+            <div
+              className="mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim"
+              aria-hidden={draft && !sessionTokens ? true : undefined}
+            >
               <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                 {sessionTokens && (
                   <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>

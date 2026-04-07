@@ -261,4 +261,20 @@ describe('ConversationPage', () => {
       </MemoryRouter>,
     )).not.toThrow();
   });
+
+  it('keeps the new conversation page full-width and shows inline cwd controls', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/new']}>
+        <ConversationPage draft />
+      </MemoryRouter>,
+    );
+
+    expect(html).not.toContain('aria-label="Conversation context"');
+    expect(html).not.toContain('Show right sidebar');
+    expect(html).toContain('Working directory');
+    expect(html).toContain('Choose…');
+    expect(html).toContain('Use the working-directory controls in the composer below');
+    expect(html).toContain('mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim');
+    expect(html).not.toContain('right rail');
+  });
 });
