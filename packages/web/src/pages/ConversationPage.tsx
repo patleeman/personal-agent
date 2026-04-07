@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type RefObject } from 'react';
+import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -19,7 +19,7 @@ import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { getConversationFileTargetFromSearch, resolveConversationFileTarget, setConversationFileTargetInSearch } from '../conversationFiles';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
-import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -373,110 +373,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const HEADER_PREFERENCE_SELECT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none transition-colors focus:border-accent/60 disabled:opacity-50';
-
-function HeaderPreferencesMenu({
-  models,
-  currentModel,
-  currentThinkingLevel,
-  savingPreference,
-  modelSelectRef,
-  thinkingSelectRef,
-  onSelectModel,
-  onSelectThinkingLevel,
-  onClose,
-}: {
-  models: ModelInfo[];
-  currentModel: string;
-  currentThinkingLevel: string;
-  savingPreference: 'model' | 'thinking' | null;
-  modelSelectRef: RefObject<HTMLSelectElement>;
-  thinkingSelectRef: RefObject<HTMLSelectElement>;
-  onSelectModel: (modelId: string) => void;
-  onSelectThinkingLevel: (thinkingLevel: string) => void;
-  onClose: () => void;
-}) {
-  const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
-  const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
-
-  return (
-    <div role="dialog" aria-label="Conversation runtime" className="absolute left-0 top-full z-20 mt-2 w-[min(32rem,calc(100vw-3rem))] rounded-xl border border-border-default bg-surface shadow-xl">
-      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-3 py-2.5">
-        <div>
-          <p className="ui-section-label">Conversation runtime</p>
-          <p className="mt-1 text-[12px] text-secondary">
-            Change the model and thinking level for this conversation.
-          </p>
-        </div>
-        <IconButton onClick={onClose} title="Close conversation runtime" aria-label="Close conversation runtime" compact>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        </IconButton>
-      </div>
-
-      <div className="grid gap-4 p-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
-        <div className="space-y-1.5 min-w-0">
-          <label className="ui-section-label" htmlFor="conversation-model-preference">Model</label>
-          <select
-            ref={modelSelectRef}
-            id="conversation-model-preference"
-            value={currentModel}
-            onChange={(event) => { onSelectModel(event.target.value); }}
-            disabled={savingPreference !== null || models.length === 0}
-            className={HEADER_PREFERENCE_SELECT_CLASS}
-          >
-            {groupedModels.map(([provider, providerModels]) => (
-              <optgroup key={provider} label={provider}>
-                {providerModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name} · {formatContextWindowLabel(model.context)} ctx
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-          <p className="text-[11px] text-dim">
-            {savingPreference === 'model'
-              ? 'Saving model…'
-              : selectedModel
-                ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
-                : 'No model selected.'}
-          </p>
-        </div>
-
-        <div className="space-y-1.5 min-w-0">
-          <label className="ui-section-label" htmlFor="conversation-thinking-preference">Thinking</label>
-          <select
-            ref={thinkingSelectRef}
-            id="conversation-thinking-preference"
-            value={currentThinkingLevel}
-            onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
-            disabled={savingPreference !== null}
-            className={HEADER_PREFERENCE_SELECT_CLASS}
-          >
-            {THINKING_LEVEL_OPTIONS.map((option) => (
-              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <p className="text-[11px] text-dim">
-            {savingPreference === 'thinking'
-              ? 'Saving thinking level…'
-              : `Current thinking level: ${formatThinkingLevelLabel(currentThinkingLevel)}`}
-          </p>
-        </div>
-      </div>
-
-      <div className="border-t border-border-subtle px-3 py-2 text-[11px] text-dim">
-        Changes here only affect this conversation.
-      </div>
-    </div>
-  );
-}
-
-// ── Slash commands ────────────────────────────────────────────────────────────
-
-// ── Context bar ───────────────────────────────────────────────────────────────
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-7 rounded-md border border-border-subtle bg-elevated/60 px-2.5 text-[11px] text-primary outline-none transition-colors focus:border-accent/60 disabled:opacity-50';
 
 interface TokenCounts {
   total: number | null;
@@ -484,151 +381,69 @@ interface TokenCounts {
   segments?: ContextUsageSegment[];
 }
 
-interface ContextBarProps {
-  model?: string;
-  thinkingLevel?: string;
-  tokens?: TokenCounts;
-  executionLabel?: string;
-  executionTitle?: string;
-  executionRemote?: boolean;
-  activePreference?: 'model' | 'thinking' | null;
-  onOpenPreferences?: (preference: 'model' | 'thinking') => void;
+function buildGitLineSummary(git: LiveSessionContext['git']): string | null {
+  if (!git) {
+    return null;
+  }
+
+  if (git.linesAdded === 0 && git.linesDeleted === 0) {
+    return git.changeCount > 0 ? `${git.changeCount} files` : 'clean';
+  }
+
+  return `+${git.linesAdded.toLocaleString()} / -${git.linesDeleted.toLocaleString()}`;
 }
 
-function buildExecutionEnvironmentSummary(): {
-  label: string;
-  title: string;
-  remote: boolean;
-} {
-  return {
-    label: 'local',
-    title: 'Local agent',
-    remote: false,
-  };
-}
-
-const CONTEXT_SEGMENT_STYLES: Record<ContextUsageSegment['key'], string> = {
-  system: 'bg-border-default',
-  user: 'bg-teal/85',
-  assistant: 'bg-accent/90',
-  tool: 'bg-steel/90',
-  summary: 'bg-warning/85',
-  other: 'bg-border-default/80',
-};
-
-function ContextBar({
-  model,
-  thinkingLevel,
-  tokens,
-  executionLabel,
-  executionTitle,
-  executionRemote = false,
-  activePreference = null,
-  onOpenPreferences,
-}: ContextBarProps) {
-  const win = tokens?.contextWindow ?? 200_000;
-  const segments = (tokens?.segments ?? [])
-    .filter((segment) => segment.tokens > 0)
-    .map((segment) => ({
-      ...segment,
-      className: CONTEXT_SEGMENT_STYLES[segment.key] ?? 'bg-border-default/60',
-    }));
-  const total = tokens?.total ?? segments.reduce((sum, segment) => sum + segment.tokens, 0);
-  const contextBreakdownTitle = formatContextBreakdownLabel(segments, win, total);
-  const w = (n: number) => `${Math.max(0, Math.min(100, (n / win) * 100))}%`;
-  const thinkingLabel = formatThinkingLevelLabel(thinkingLevel);
-  const segmentTotal = segments.reduce((sum, segment) => sum + segment.tokens, 0);
-  const canRenderSegments = total !== null && segmentTotal > 0;
-  const filledWidth = total === null ? '100%' : w(total);
+function ConversationPreferencesRow({
+  models,
+  currentModel,
+  currentThinkingLevel,
+  savingPreference,
+  onSelectModel,
+  onSelectThinkingLevel,
+}: {
+  models: ModelInfo[];
+  currentModel: string;
+  currentThinkingLevel: string;
+  savingPreference: 'model' | 'thinking' | null;
+  onSelectModel: (modelId: string) => void;
+  onSelectThinkingLevel: (thinkingLevel: string) => void;
+}) {
+  const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
 
   return (
-    <div className="mt-1 min-w-0 text-[10px] text-secondary">
-      <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-        {model && (
-          <span className="inline-flex min-w-0 items-baseline gap-1.5">
-            <span className="uppercase tracking-[0.14em] text-dim/65">model</span>
-            {onOpenPreferences ? (
-              <button
-                type="button"
-                onClick={() => onOpenPreferences('model')}
-                aria-haspopup="dialog"
-                aria-expanded={activePreference === 'model'}
-                title="Change the model for this conversation"
-                className={cx(
-                  'group -mx-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
-                  activePreference === 'model' ? 'bg-surface text-primary' : 'text-dim',
-                )}
-              >
-                <span className="truncate font-mono">{model}</span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
-              </button>
-            ) : (
-              <span className="truncate font-mono text-dim">{model}</span>
-            )}
-          </span>
-        )}
-        {model && <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />}
-        <span className="inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-          <span className="uppercase tracking-[0.14em] text-dim/65">thinking</span>
-          {onOpenPreferences ? (
-            <button
-              type="button"
-              onClick={() => onOpenPreferences('thinking')}
-              aria-haspopup="dialog"
-              aria-expanded={activePreference === 'thinking'}
-              title="Change the thinking level for this conversation"
-              className={cx(
-                'group -mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
-                activePreference === 'thinking' ? 'bg-surface text-primary' : 'text-primary',
-              )}
-            >
-              <span className="font-mono">{thinkingLabel}</span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-          ) : (
-            <span className="font-mono text-primary">{thinkingLabel}</span>
-          )}
-        </span>
-        <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />
-        <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap overflow-hidden">
-          <span className="uppercase tracking-[0.14em] text-dim/65">context</span>
-          <span
-            className="h-2 w-20 shrink-0 overflow-hidden rounded-full border border-border-default/70 bg-surface shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]"
-            title={contextBreakdownTitle}
-          >
-            {total !== null ? (
-              <span className="flex h-full min-w-0 overflow-hidden rounded-full" style={{ width: filledWidth }}>
-                {canRenderSegments ? segments.map((segment, index) => (
-                  <span
-                    key={segment.key}
-                    className={`h-full ${segment.className} ${index === 0 ? 'rounded-l-full' : ''} ${index === segments.length - 1 ? 'rounded-r-full' : ''}`}
-                    style={{ flexGrow: segment.tokens, flexBasis: 0, minWidth: '2px' }}
-                    title={contextBreakdownTitle}
-                  />
-                )) : (
-                  <span className="h-full w-full rounded-full bg-accent/95" />
-                )}
-              </span>
-            ) : <span className="block h-full w-full rounded-full bg-border-default/25" />}
-          </span>
-          <span className="font-mono text-dim tabular-nums">{formatContextUsageLabel(total, win)}</span>
-        </span>
-        {executionLabel && (
-          <>
-            <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />
-            <span className="inline-flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap" title={executionTitle}>
-              <span className="uppercase tracking-[0.14em] text-dim/65">env</span>
-              <span className={cx('min-w-0 max-w-[12rem] truncate font-mono', executionRemote ? 'text-accent/85' : 'text-dim')}>
-                {executionLabel}
-              </span>
-            </span>
-          </>
-        )}
-      </div>
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-dim">
+      <label className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="uppercase tracking-[0.14em] text-dim/65">model</span>
+        <select
+          value={currentModel}
+          onChange={(event) => { onSelectModel(event.target.value); }}
+          disabled={savingPreference !== null || models.length === 0}
+          className={COMPOSER_PREFERENCE_SELECT_CLASS}
+          aria-label="Conversation model"
+        >
+          {groupedModels.map(([provider, providerModels]) => (
+            <optgroup key={provider} label={provider}>
+              {providerModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      <label className="inline-flex min-w-0 items-center gap-1.5">
+        <span className="uppercase tracking-[0.14em] text-dim/65">thinking</span>
+        <select
+          value={currentThinkingLevel}
+          onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
+          disabled={savingPreference !== null}
+          className={COMPOSER_PREFERENCE_SELECT_CLASS}
+          aria-label="Conversation thinking level"
+        >
+          {THINKING_LEVEL_OPTIONS.map((option) => (
+            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }
@@ -1386,7 +1201,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleSaving(false);
-    setHeaderPreference(null);
     setSavingPreference(null);
     setNotice(null);
 
@@ -1489,20 +1303,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } satisfies TokenCounts;
   }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
 
-  // Line counts for Codex-style status
-  const lineCounts = useMemo(() => {
-    if (!realMessages) return null;
-    let lines = 0;
-    for (const block of realMessages) {
-      if (block.type === 'text' || block.type === 'summary') {
-        lines += (block.text?.split('\n').length ?? 1);
-      }
-    }
-    return lines;
-  }, [realMessages]);
+  const [liveSessionContext, setLiveSessionContext] = useState<LiveSessionContext | null>(null);
 
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
-  const [headerPreference, setHeaderPreference] = useState<'model' | 'thinking' | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -1524,9 +1327,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     showNotice('danger', `Take over this conversation to ${action}.`, 4000);
     return false;
   }, [conversationNeedsTakeover, showNotice]);
-  const headerPreferenceRef = useRef<HTMLDivElement>(null);
-  const headerModelSelectRef = useRef<HTMLSelectElement>(null);
-  const headerThinkingSelectRef = useRef<HTMLSelectElement>(null);
   const composerDraftStorageKey = draft
     ? buildDraftConversationComposerStorageKey()
     : id
@@ -1706,9 +1506,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
-  const conversationBootstrapPendingContext = Boolean(id)
-    && conversationBootstrapLoading
-    && !visibleConversationBootstrap;
 
   useEffect(() => {
     setPendingAssistantStatusLabel(null);
@@ -1825,7 +1622,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
   );
-  const currentCwd = useMemo(() => currentSessionMeta?.cwd ?? null, [currentSessionMeta?.cwd]);
+  const currentCwd = useMemo(
+    () => liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null,
+    [liveSessionContext?.cwd, currentSessionMeta?.cwd],
+  );
+  const branchLabel = liveSessionContext?.branch ?? null;
+  const gitLineSummary = useMemo(
+    () => buildGitLineSummary(liveSessionContext?.git ?? null),
+    [liveSessionContext?.git],
+  );
 
   useEffect(() => {
     const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
@@ -1957,11 +1762,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : '/workspace/files',
     [selectedFileTarget],
   );
-  const executionEnvironmentSummary = useMemo(
-    () => buildExecutionEnvironmentSummary(),
-    [],
-  );
-
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {
       setConversationAttachments([]);
@@ -1984,7 +1784,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return data.resumes;
   }, [id]);
 
+  const refetchLiveSessionContext = useCallback(async () => {
+    if (draft || !id) {
+      setLiveSessionContext(null);
+      return null;
+    }
+
+    try {
+      const next = await api.liveSessionContext(id);
+      setLiveSessionContext(next);
+      return next;
+    } catch {
+      setLiveSessionContext(null);
+      return null;
+    }
+  }, [draft, id]);
+
   useInvalidateOnTopics(['attachments'], refetchConversationAttachments);
+  useInvalidateOnTopics(['workspace'], refetchLiveSessionContext);
 
   const resumeDeferredConversation = useCallback(async () => {
     if (!savedConversationSessionFile) {
@@ -2010,6 +1827,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setDrawingsError(error instanceof Error ? error.message : String(error));
     });
   }, [draft, id, refetchConversationAttachments]);
+
+  useEffect(() => {
+    void refetchLiveSessionContext();
+  }, [refetchLiveSessionContext]);
 
   useEffect(() => {
     if (!id) {
@@ -2327,41 +2148,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => { setSlashIdx(0); }, [slashQuery]);
   useEffect(() => { setModelIdx(0); }, [modelQuery]);
-
-  useEffect(() => {
-    if (!headerPreference) {
-      return;
-    }
-
-    const focusTarget = headerPreference === 'model'
-      ? headerModelSelectRef.current
-      : headerThinkingSelectRef.current;
-    focusTarget?.focus();
-
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (!headerPreferenceRef.current?.contains(target)) {
-        setHeaderPreference(null);
-      }
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setHeaderPreference(null);
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, [headerPreference]);
 
   useEffect(() => {
     return () => {
@@ -2718,10 +2504,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
   }, [currentSurfaceId, ensureConversationCanControl, ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
-
-  function openHeaderPreference(preference: 'model' | 'thinking') {
-    setHeaderPreference((current) => current === preference ? null : preference);
-  }
 
   async function saveModelPreference(modelId: string) {
     if (!modelId || modelId === currentModel || savingPreference !== null) {
@@ -3910,7 +3692,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !stream.hasSnapshot
     && !visibleSessionDetail
     && stream.blocks.length === 0;
-  const hydratingRemoteConversation = false;
   const showConversationLoadingState = !hasRenderableMessages
     && (sessionLoading || hydratingLiveConversation);
 
@@ -4096,6 +3877,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   return (
     <ConversationWorkspaceShell>
+      {({ railOpen, toggleRail }) => (
       <div className="flex h-full flex-col overflow-hidden">
         <PageHeader
         className="gap-2 py-2 min-h-[44px]"
@@ -4114,6 +3896,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         ) : undefined}
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
+            <button
+              type="button"
+              onClick={toggleRail}
+              className="inline-flex items-center justify-center rounded-md p-1 text-dim transition-colors hover:bg-surface hover:text-primary"
+              title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+              aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M15 4v16" />
+              </svg>
+            </button>
             {draft ? (
               <span className="text-dim">draft</span>
             ) : (
@@ -4128,7 +3922,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     {streamingThroughputLabel && <span className="font-mono text-[11px] text-accent/80">· {streamingThroughputLabel}</span>}
                   </span>
                 )}
-                {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
               </>
             )}
           </div>
@@ -4165,11 +3958,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </button>
             </form>
           ) : (
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
               <h1 className="ui-page-title truncate" onDoubleClick={!draft && !conversationNeedsTakeover ? beginTitleEdit : undefined}>{title}</h1>
               {currentCwd && (
-                <span 
-                  className="shrink-0 truncate font-mono text-[11px] text-dim max-w-[24rem]" 
+                <span
+                  className="max-w-[24rem] shrink truncate font-mono text-[11px] text-dim"
                   title={currentCwd}
                 >
                   · {currentCwd}
@@ -4184,31 +3977,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               )}
             </div>
           )}
-          <div ref={headerPreferenceRef} className="relative">
-            <ContextBar
-              model={currentModel || model}
-              thinkingLevel={currentThinkingLevel}
-              tokens={sessionTokens}
-              executionLabel={executionEnvironmentSummary.label}
-              executionTitle={executionEnvironmentSummary.title}
-              executionRemote={executionEnvironmentSummary.remote}
-              activePreference={headerPreference}
-              onOpenPreferences={openHeaderPreference}
-            />
-            {headerPreference && (
-              <HeaderPreferencesMenu
-                models={models}
-                currentModel={currentModel}
-                currentThinkingLevel={currentThinkingLevel}
-                savingPreference={savingPreference}
-                modelSelectRef={headerModelSelectRef}
-                thinkingSelectRef={headerThinkingSelectRef}
-                onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
-                onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
-                onClose={() => { setHeaderPreference(null); }}
-              />
-            )}
-          </div>
         </div>
       </PageHeader>
 
@@ -4584,65 +4352,68 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-end gap-2">
-                  {/* Left side: + button + textarea */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      {/* Codex-style subtle + button */}
-                      <button
-                        type="button"
-                        onClick={openFilePicker}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-end gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={openFilePicker}
+                          disabled={composerDisabled}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-secondary transition-colors hover:bg-elevated/50 hover:text-primary disabled:opacity-40"
+                          title="Attach image or file"
+                          aria-label="Attach image or file"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 5v14" />
+                            <path d="M5 12h14" />
+                          </svg>
+                        </button>
+                        <ConversationPreferencesRow
+                          models={models}
+                          currentModel={currentModel || model || defaultModel}
+                          currentThinkingLevel={currentThinkingLevel}
+                          savingPreference={savingPreference}
+                          onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
+                          onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
+                        />
+                      </div>
+
+                      <textarea
+                        ref={textareaRef}
+                        value={input}
+                        onChange={e => {
+                          setInput(e.target.value);
+                          setSlashIdx(0);
+                          setMentionIdx(0);
+                          rememberComposerSelection(e.target);
+                        }}
+                        onSelect={e => { rememberComposerSelection(e.currentTarget); }}
+                        onClick={e => { rememberComposerSelection(e.currentTarget); }}
+                        onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
+                        onFocus={e => { rememberComposerSelection(e.currentTarget); }}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        rows={1}
                         disabled={composerDisabled}
-                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-secondary hover:text-primary hover:bg-elevated/50 transition-colors disabled:opacity-40"
-                        title="Attach image or file"
-                        aria-label="Attach image or file"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 5v14" />
-                          <path d="M5 12h14" />
-                        </svg>
-                      </button>
+                        className="w-full resize-none bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
+                        placeholder={pendingAskUserQuestion
+                          ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                          : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
+                        title={pendingAskUserQuestion
+                          ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                          : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                        style={{ minHeight: '24px', maxHeight: '160px' }}
+                      />
                     </div>
 
-                    <textarea
-                      ref={textareaRef}
-                      value={input}
-                      onChange={e => {
-                        setInput(e.target.value);
-                        setSlashIdx(0);
-                        setMentionIdx(0);
-                        rememberComposerSelection(e.target);
-                      }}
-                      onSelect={e => { rememberComposerSelection(e.currentTarget); }}
-                      onClick={e => { rememberComposerSelection(e.currentTarget); }}
-                      onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
-                      onFocus={e => { rememberComposerSelection(e.currentTarget); }}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      rows={1}
-                      disabled={composerDisabled}
-                      className="w-full bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
-                      placeholder={pendingAskUserQuestion
-                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
-                      title={pendingAskUserQuestion
-                        ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                        : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                      style={{ minHeight: '24px', maxHeight: '160px' }}
-                    />
-                  </div>
-
-                  {/* Right side: send button + drawing + context/line counts */}
-                  <div className="shrink-0 flex flex-col items-end gap-2">
-                    {/* Top row: send and drawing buttons */}
-                    <div className="flex items-center gap-2">
-                      {/* Drawing button next to send */}
-                      {composerHasContent && !stream.isStreaming && (
+                    <div className="flex shrink-0 items-center gap-2 pb-0.5">
+                      {!stream.isStreaming && (
                         <button
                           type="button"
                           onClick={openDrawingEditor}
                           disabled={composerDisabled}
-                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-secondary hover:text-primary hover:bg-elevated/50 transition-colors disabled:opacity-40"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-secondary transition-colors hover:bg-elevated/50 hover:text-primary disabled:opacity-40"
                           title="Create drawing"
                           aria-label="Create drawing"
                         >
@@ -4653,21 +4424,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         </button>
                       )}
 
-                      {/* Circular up-arrow send button */}
-                      {stream.isStreaming ? (
-                        <button
-                          type="button"
-                          onClick={() => { void stream.abort(); }}
-                          disabled={conversationNeedsTakeover}
-                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-danger/15 text-danger hover:bg-danger/25 transition-colors disabled:opacity-60 disabled:cursor-default"
-                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
-                          aria-label="Stop"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                          </svg>
-                        </button>
-                      ) : composerHasContent ? (
+                      {composerHasContent ? (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -4679,21 +4436,48 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             void submitComposer(behavior);
                           }}
                           disabled={composerDisabled}
-                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-default"
-                          title="Send message"
-                          aria-label="Send message"
+                          className={cx(
+                            'flex h-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+                            composerSubmit.label === 'Send'
+                              ? 'w-8 bg-accent text-white hover:bg-accent/90'
+                              : 'px-3 text-[11px] font-medium',
+                            composerSubmit.label === 'Steer'
+                              ? 'bg-warning/15 text-warning hover:bg-warning/25'
+                              : composerSubmit.label === 'Follow up'
+                                ? 'bg-elevated text-primary hover:bg-elevated/80'
+                                : '',
+                          )}
+                          title={composerSubmit.label}
+                          aria-label={composerSubmit.label}
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m18 15-6-6-6 6" />
+                          {composerSubmit.label === 'Send' ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m18 15-6-6-6 6" />
+                            </svg>
+                          ) : (
+                            <span>{composerSubmit.label}</span>
+                          )}
+                        </button>
+                      ) : stream.isStreaming ? (
+                        <button
+                          type="button"
+                          onClick={() => { void stream.abort(); }}
+                          disabled={conversationNeedsTakeover}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
+                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
+                          aria-label="Stop"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
                           </svg>
                         </button>
                       ) : (
                         <button
                           type="button"
                           disabled={true}
-                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-elevated/50 text-dim/40 cursor-default"
-                          title="Send message"
-                          aria-label="Send message"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-elevated/50 text-dim/40"
+                          title="Send"
+                          aria-label="Send"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="m18 15-6-6-6 6" />
@@ -4701,21 +4485,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         </button>
                       )}
                     </div>
+                  </div>
 
-                    {/* Bottom row: context usage + line counts */}
-                    <div className="flex items-center gap-3 text-[10px] text-dim">
-                      {/* Context usage */}
+                  <div className="flex items-center justify-between gap-3 text-[10px] text-dim">
+                    <div className="flex min-w-0 items-center gap-2">
                       {sessionTokens && (
-                        <span className="flex items-center gap-1.5">
-                          <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
-                        </span>
+                        <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
                       )}
-                      
-                      {/* Line counts */}
-                      {!draft && lineCounts !== null && (
-                        <span className="font-mono tabular-nums">
-                          {lineCounts.toLocaleString()} lines
-                        </span>
+                    </div>
+                    <div className="flex min-w-0 items-center justify-end gap-2 overflow-hidden text-right">
+                      {!draft && branchLabel && (
+                        <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
+                      )}
+                      {!draft && gitLineSummary && (
+                        <span className="font-mono tabular-nums">{gitLineSummary}</span>
                       )}
                     </div>
                   </div>
@@ -4778,6 +4561,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </Suspense>
       )}
       </div>
+      )}
     </ConversationWorkspaceShell>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
@@ -7,6 +7,11 @@ import { ContextRail } from './ContextRail';
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;
 const CONVERSATION_WORKSPACE_RAIL_MAX_WIDTH = 520;
 const CONVERSATION_ARTIFACT_RAIL_TARGET_WIDTH = 460;
+
+export interface ConversationWorkspaceShellControls {
+  railOpen: boolean;
+  toggleRail: () => void;
+}
 
 interface ResizeOptions {
   initial: number;
@@ -30,6 +35,14 @@ function readStoredWidth(storageKey: string, initial: number, min: number): numb
   }
 
   return Math.max(min, initial);
+}
+
+function readStoredRailOpen(storageKey: string): boolean {
+  try {
+    return localStorage.getItem(`${storageKey}:open`) !== '0';
+  } catch {
+    return true;
+  }
 }
 
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
@@ -122,7 +135,11 @@ function ResizeHandle({
   );
 }
 
-export function ConversationWorkspaceShell({ children }: { children: ReactNode }) {
+export function ConversationWorkspaceShell({
+  children,
+}: {
+  children: ReactNode | ((controls: ConversationWorkspaceShellControls) => ReactNode);
+}) {
   const location = useLocation();
   const railPrefs = getRailLayoutPrefs(location.pathname);
   const rail = useResize({
@@ -132,6 +149,7 @@ export function ConversationWorkspaceShell({ children }: { children: ReactNode }
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
+  const [railOpen, setRailOpen] = useState(() => readStoredRailOpen(railPrefs.storageKey));
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const railWidth = selectedArtifactId
     ? clampPanelWidth(
@@ -141,17 +159,42 @@ export function ConversationWorkspaceShell({ children }: { children: ReactNode }
       )
     : rail.width;
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${railPrefs.storageKey}:open`, railOpen ? '1' : '0');
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [railOpen, railPrefs.storageKey]);
+
+  useEffect(() => {
+    if (selectedArtifactId) {
+      setRailOpen(true);
+    }
+  }, [selectedArtifactId]);
+
+  useEffect(() => {
+    setRailOpen(readStoredRailOpen(railPrefs.storageKey));
+  }, [railPrefs.storageKey]);
+
+  const controls = useMemo<ConversationWorkspaceShellControls>(() => ({
+    railOpen,
+    toggleRail: () => { setRailOpen((current) => !current); },
+  }), [railOpen]);
+
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
-      <div className="min-w-0 flex-1">{children}</div>
-      <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-      <aside
-        style={{ width: railWidth }}
-        className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"
-        aria-label="Conversation context"
-      >
-        <ContextRail />
-      </aside>
+      <div className="min-w-0 flex-1">{typeof children === 'function' ? children(controls) : children}</div>
+      {railOpen ? <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} /> : null}
+      {railOpen ? (
+        <aside
+          style={{ width: railWidth }}
+          className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"
+          aria-label="Conversation context"
+        >
+          <ContextRail />
+        </aside>
+      ) : null}
     </div>
   );
 }

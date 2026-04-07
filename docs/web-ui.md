@@ -181,6 +181,8 @@ Conversation lists in the sidebar and on the Conversations page are grouped by w
 
 Saved conversations also keep their working directory and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
 
+The conversation header stays compact: the working directory sits inline beside the title, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
 When reminder/callback notifications exist and browser notifications are still off, the desktop web UI prompts you to enable browser notifications so reminders and callbacks can still interrupt while the tab is hidden.
