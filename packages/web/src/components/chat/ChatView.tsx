@@ -3095,7 +3095,7 @@ export const ChatView = memo(function ChatView({
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className={layout === 'companion' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-5xl pl-6 pr-10 pt-5 pb-24'}>
+      <div className={layout === 'companion' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}>
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}
