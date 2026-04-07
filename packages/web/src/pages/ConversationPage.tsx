@@ -372,7 +372,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-6 rounded-full border border-border-subtle/70 bg-elevated/55 px-2.5 pr-8 text-[10px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-6 rounded-md border border-border-subtle/70 bg-surface/65 px-2 pr-8 text-[10px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
 
 interface TokenCounts {
   total: number | null;
@@ -417,7 +417,7 @@ function ConversationPreferencesRow({
           value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
           disabled={savingPreference !== null || models.length === 0}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[10.5rem] min-w-[8.5rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[9.5rem] min-w-[7.75rem] appearance-none')}
           aria-label="Conversation model"
         >
           {groupedModels.map(([provider, providerModels]) => (
@@ -438,7 +438,7 @@ function ConversationPreferencesRow({
           value={currentThinkingLevel}
           onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[5.75rem] min-w-[5rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[5rem] min-w-[4.5rem] appearance-none')}
           aria-label="Conversation thinking level"
         >
           {THINKING_LEVEL_OPTIONS.map((option) => (
@@ -4331,7 +4331,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               ) : (
                 <div className="flex flex-col gap-0">
-                  <div className="px-3 pt-1.5">
+                  <div className="px-3 pt-1">
                     <textarea
                       ref={textareaRef}
                       value={input}
@@ -4360,7 +4360,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 px-3 py-1">
+                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-0.5">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                       <button
                         type="button"
