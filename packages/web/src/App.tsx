@@ -5,6 +5,13 @@ import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
 import { Layout } from './components/Layout';
+import { resolveConversationIndexRedirect } from './conversationRoutes';
+import {
+  hasDraftConversationAttachments,
+  readDraftConversationComposer,
+  readDraftConversationCwd,
+} from './draftConversation';
+import { useConversations } from './hooks/useConversations';
 import { InboxPage } from './pages/InboxPage';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
 import {
@@ -46,6 +53,19 @@ function WorkspaceRouteRedirect() {
 function LegacyWebRouteRedirect() {
   const location = useLocation();
   const redirectPath = resolveWebRouteRedirect(location.pathname, location.search) ?? '/workspace/files';
+  return <Navigate to={redirectPath} replace />;
+}
+
+function ConversationsRouteRedirect() {
+  const { openIds, pinnedIds } = useConversations();
+  const redirectPath = resolveConversationIndexRedirect({
+    openIds,
+    pinnedIds,
+    hasDraft: readDraftConversationComposer().trim().length > 0
+      || readDraftConversationCwd().trim().length > 0
+      || hasDraftConversationAttachments(),
+  });
+
   return <Navigate to={redirectPath} replace />;
 }
 
@@ -93,7 +113,6 @@ function sortSessionMetas(items: SessionMeta[]): SessionMeta[] {
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
-const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
@@ -524,7 +543,7 @@ export function App() {
                     </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/workspace/files" replace />} />
-                      <Route path="conversations" element={suspendRoute(<ConversationsPage />)} />
+                      <Route path="conversations" element={<ConversationsRouteRedirect />} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
                       <Route path="workspace" element={<WorkspaceRouteRedirect />} />

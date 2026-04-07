@@ -861,14 +861,16 @@ export function Sidebar() {
         <div className="px-1">
           <button
             onClick={() => handleNewConversation()}
-            className="ui-sidebar-nav-item mx-0 flex w-full text-secondary"
+            className={[
+              'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
+              location.pathname.startsWith('/conversations') && 'ui-sidebar-nav-item-active',
+            ].filter(Boolean).join(' ')}
             title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
           >
             <Ico d={PATH.plus} size={15} />
             <span className="flex-1 text-left">Chat</span>
           </button>
         </div>
-        <TopNavItem to="/conversations" icon={PATH.conversations} label="Conversations" />
         <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
       </div>
 

@@ -118,15 +118,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/inbox' },
     },
     {
-      id: 'nav:conversations',
-      section: 'nav',
-      title: 'Conversations',
-      subtitle: 'Browse your full conversation workspace',
-      keywords: ['chat', 'sessions', 'open', 'archived', 'attention'],
-      order: 2,
-      action: { kind: 'navigate', to: '/conversations' },
-    },
-    {
       id: 'nav:workspace',
       section: 'nav',
       title: 'Workspace Files',

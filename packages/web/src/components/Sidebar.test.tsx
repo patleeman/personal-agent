@@ -192,14 +192,14 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Chat'));
-    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Vault'));
+    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Vault'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).toContain('Vault');
+    expect(html).not.toContain('Conversations');
     expect(html).not.toContain('Docs');
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
@@ -326,6 +326,14 @@ describe('Sidebar', () => {
     expect(html).not.toContain('ui-sidebar-subnav-item');
     expect(html).not.toContain('Files');
     expect(html).not.toContain('Changes');
+  });
+
+  it('marks Chat as the active nav on conversation routes', () => {
+    const html = renderSidebar('/conversations/conv-123');
+
+    expect(html).toContain('Chat');
+    expect(html).toContain('ui-sidebar-nav-item-active');
+    expect(html).not.toContain('>Conversations<');
   });
 
   it('treats settings-related routes as part of Settings in the main sidebar', () => {
