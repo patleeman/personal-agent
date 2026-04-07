@@ -2430,16 +2430,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return id;
     }
 
-    if (!savedConversationSessionFile) {
-      throw new Error(`This conversation cannot ${actionDescription} because its session file is unavailable.`);
+    const recovered = await api.recoverConversation(id);
+    if (!recovered.live) {
+      throw new Error(`This conversation could not ${actionDescription}.`);
     }
 
-    const resumed = await api.resumeSession(savedConversationSessionFile);
-    setConfirmedLive(true);
-    streamReconnect();
-    await streamTakeover();
-    return resumed.id;
-  }, [id, isLiveSession, savedConversationSessionFile, streamReconnect, streamTakeover]);
+    if (recovered.conversationId === id) {
+      setConfirmedLive(true);
+      streamReconnect();
+      await streamTakeover();
+    }
+
+    return recovered.conversationId;
+  }, [id, isLiveSession, streamReconnect, streamTakeover]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -3393,15 +3396,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         try {
           await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
         } catch (error) {
-          if (!savedConversationSessionFile || !isConversationSessionNotLiveError(error)) {
+          if (!isConversationSessionNotLiveError(error)) {
             throw error;
           }
 
           setConfirmedLive(false);
-          const resumed = await api.resumeSession(savedConversationSessionFile);
-          if (resumed.id !== id) {
-            ensureConversationTabOpen(resumed.id);
-            navigate(`/conversations/${resumed.id}`);
+          const recovered = await api.recoverConversation(id);
+          if (recovered.conversationId !== id) {
+            ensureConversationTabOpen(recovered.conversationId);
+            navigate(`/conversations/${recovered.conversationId}`);
             return;
           }
 
@@ -3423,7 +3426,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             isLiveSession: false,
             hasVisibleSessionDetail: true,
           }));
-          await api.resumeSession(visibleSessionDetail.meta.file);
+          const recovered = await api.recoverConversation(id);
+          if (recovered.conversationId !== id) {
+            ensureConversationTabOpen(recovered.conversationId);
+            navigate(`/conversations/${recovered.conversationId}`);
+            return;
+          }
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Working…');
