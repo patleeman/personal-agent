@@ -7,6 +7,7 @@ import {
   ConversationPage,
   mergeConversationSessionMeta,
   replaceConversationTitleInSessionList,
+  isConversationSessionNotLiveError,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
@@ -32,6 +33,13 @@ describe('conversation live state helpers', () => {
     expect(resolveConversationLiveSession({ streamBlockCount: 1, isStreaming: false, confirmedLive: null })).toBe(true);
     expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: true, confirmedLive: null })).toBe(true);
     expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
+  });
+
+  it('recognizes the stale live-session prompt failure from the server', () => {
+    expect(isConversationSessionNotLiveError(new Error('Session conv-123 is not live'))).toBe(true);
+    expect(isConversationSessionNotLiveError(new Error('Session not live'))).toBe(true);
+    expect(isConversationSessionNotLiveError(new Error('Not a live session'))).toBe(true);
+    expect(isConversationSessionNotLiveError(new Error('provider unavailable'))).toBe(false);
   });
 
   it('shows the takeover call-to-action only while this surface is mirrored read-only', () => {

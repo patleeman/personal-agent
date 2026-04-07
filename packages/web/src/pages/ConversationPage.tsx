@@ -137,6 +137,14 @@ export function resolveConversationLiveSession(input: {
   return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
 }
 
+export function isConversationSessionNotLiveError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.trim().toLowerCase();
+  return normalized === 'session not live'
+    || normalized === 'not a live session'
+    || normalized.startsWith('session ') && normalized.endsWith(' is not live');
+}
+
 export function resolveConversationPendingStatusLabel(input: {
   isLiveSession: boolean;
   hasVisibleSessionDetail: boolean;
@@ -843,12 +851,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setConfirmedLive(response.live);
         setLiveSessionHasPendingHiddenTurn(response.live && response.hasPendingHiddenTurn === true);
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) {
           return;
         }
 
-        if (sessionsLoaded && sessionSnapshot?.isLive !== true) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.startsWith('404 ') || sessionsLoaded && sessionSnapshot?.isLive !== true) {
           setConfirmedLive(false);
         }
         setLiveSessionHasPendingHiddenTurn(false);
@@ -1651,7 +1660,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [currentSessionMeta, id]);
 
-  const savedConversationSessionFile = currentSessionMeta?.file ?? null;
+  const savedConversationSessionFile = currentSessionMeta?.file
+    ?? visibleSessionDetail?.meta.file
+    ?? null;
   const orderedDeferredResumes = useMemo(
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
@@ -3378,7 +3389,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           isLiveSession,
           hasVisibleSessionDetail: Boolean(visibleSessionDetail),
         }));
-        await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+
+        try {
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+        } catch (error) {
+          if (!savedConversationSessionFile || !isConversationSessionNotLiveError(error)) {
+            throw error;
+          }
+
+          setConfirmedLive(false);
+          const resumed = await api.resumeSession(savedConversationSessionFile);
+          if (resumed.id !== id) {
+            ensureConversationTabOpen(resumed.id);
+            navigate(`/conversations/${resumed.id}`);
+            return;
+          }
+
+          setConfirmedLive(true);
+          stream.reconnect();
+          setPendingAssistantStatusLabel('Resuming…');
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+        }
+
         await refetchConversationAttachments();
 
         window.setTimeout(() => {
