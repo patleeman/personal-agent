@@ -91,7 +91,6 @@ import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
-import { getStreamingThroughputLabel } from '../streamingThroughput';
 
 const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
@@ -373,7 +372,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-5 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-mono text-dim outline-none transition-colors hover:border-border-subtle focus:border-border-default disabled:opacity-40';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-6 rounded-full border border-border-subtle/70 bg-elevated/55 px-2.5 pr-8 text-[10px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
 
 interface TokenCounts {
   total: number | null;
@@ -418,7 +417,7 @@ function ConversationPreferencesRow({
           value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
           disabled={savingPreference !== null || models.length === 0}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[13rem] min-w-[10rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[10.5rem] min-w-[8.5rem] appearance-none')}
           aria-label="Conversation model"
         >
           {groupedModels.map(([provider, providerModels]) => (
@@ -439,7 +438,7 @@ function ConversationPreferencesRow({
           value={currentThinkingLevel}
           onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'min-w-[6.5rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[5.75rem] min-w-[5rem] appearance-none')}
           aria-label="Conversation thinking level"
         >
           {THINKING_LEVEL_OPTIONS.map((option) => (
@@ -1073,10 +1072,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const pendingAskUserQuestion = useMemo(
     () => findPendingAskUserQuestion(realMessages),
     [realMessages],
-  );
-  const streamingThroughputLabel = useMemo(
-    () => getStreamingThroughputLabel(realMessages ?? [], stream.isStreaming),
-    [realMessages, stream.isStreaming],
   );
   const pendingAskUserQuestionKey = useMemo(() => {
     if (!pendingAskUserQuestion) {
@@ -3668,13 +3663,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
   const composerDisabled = conversationNeedsTakeover;
   const hasComposerShelfContent = draftMentionItems.length > 0
-    || attachments.length > 0
-    || drawingAttachments.length > 0
-    || drawingsBusy
-    || Boolean(drawingsError)
     || pendingQueue.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
+  const hasComposerAttachmentShelfContent = attachments.length > 0
+    || drawingAttachments.length > 0
+    || drawingsBusy
+    || Boolean(drawingsError);
   const keyboardOpen = keyboardInset > 120;
   const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
     draft,
@@ -3887,19 +3882,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       <div className="flex h-full flex-col overflow-hidden">
         <PageHeader
         className="gap-2 py-2 min-h-[44px]"
-        leading={!draft ? (
-          <button
-            type="button"
-            onClick={() => { navigate('/conversations'); }}
-            className="ui-icon-button"
-            title="Back to conversations"
-            aria-label="Back to conversations"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </button>
-        ) : undefined}
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
             <button
@@ -3916,20 +3898,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </button>
             {draft ? (
               <span className="text-dim">draft</span>
-            ) : (
-              <>
-                {stream.isStreaming && (
-                  <span
-                    className="inline-flex items-center gap-1.5 text-accent"
-                    title={streamingThroughputLabel ? 'Estimated from streamed output using the same chars/4 token heuristic used elsewhere in Pi.' : undefined}
-                  >
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-                    <span>running</span>
-                    {streamingThroughputLabel && <span className="font-mono text-[11px] text-accent/80">· {streamingThroughputLabel}</span>}
-                  </span>
-                )}
-              </>
-            )}
+            ) : null}
           </div>
         )}
       >
@@ -4018,6 +3987,67 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           {showModelPicker && <ModelPicker models={modelItems} currentModel={currentModel} query={modelQuery} idx={modelIdx}
             onSelect={selectModel} onClose={() => { setInput(''); textareaRef.current?.focus(); }} />}
 
+          {hasComposerAttachmentShelfContent && (
+            <div className="mb-2 max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-1 py-2">
+                  {attachments.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-elevated border border-border-subtle text-[11px] max-w-[220px]">
+                      <span className="shrink-0">{fileIcon(f.type)}</span>
+                      <span className="text-secondary truncate">{f.name}</span>
+                      <span className="text-dim shrink-0">{formatBytes(f.size)}</span>
+                      <button onClick={() => removeAttachment(i)} className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none" title={`Remove ${f.name}`}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {drawingAttachments.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 px-1 pt-1 pb-2">
+                  {drawingAttachments.map((attachment) => (
+                    <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-elevated px-2 py-1 text-[11px] max-w-[270px]">
+                      <img
+                        src={attachment.previewUrl}
+                        alt={buildComposerDrawingPreviewTitle(attachment)}
+                        className="h-7 w-9 rounded object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
+                        <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => editDrawing(attachment.localId)}
+                        className="text-[11px] text-accent transition-colors hover:text-accent/80"
+                        title={`Edit ${attachment.title}`}
+                      >
+                        edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeDrawingAttachment(attachment.localId)}
+                        className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
+                        title={`Remove ${attachment.title}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {drawingsBusy && (
+                <div className="px-1 pt-2 text-[11px] text-dim">Syncing drawings…</div>
+              )}
+
+              {drawingsError && (
+                <div className="px-1 pt-2 text-[11px] text-danger">{drawingsError}</div>
+              )}
+            </div>
+          )}
+
           <div className={cx(
             'ui-input-shell',
             dragOver ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/5' :
@@ -4050,64 +4080,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       </span>
                     ))}
                   </div>
-                )}
-
-                {/* Attachments */}
-                {attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 px-3 pt-3">
-                    {attachments.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface border border-border-subtle text-[11px] max-w-[200px]">
-                        <span className="shrink-0">{fileIcon(f.type)}</span>
-                        <span className="text-secondary truncate">{f.name}</span>
-                        <span className="text-dim shrink-0">{formatBytes(f.size)}</span>
-                        <button onClick={() => removeAttachment(i)} className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none" title={`Remove ${f.name}`}>
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {drawingAttachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                    {drawingAttachments.map((attachment) => (
-                      <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2 py-1 text-[11px] max-w-[270px]">
-                        <img
-                          src={attachment.previewUrl}
-                          alt={buildComposerDrawingPreviewTitle(attachment)}
-                          className="h-7 w-9 rounded object-cover"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
-                          <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => editDrawing(attachment.localId)}
-                          className="text-[11px] text-accent transition-colors hover:text-accent/80"
-                          title={`Edit ${attachment.title}`}
-                        >
-                          edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeDrawingAttachment(attachment.localId)}
-                          className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
-                          title={`Remove ${attachment.title}`}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {drawingsBusy && (
-                  <div className="px-3 pt-2 text-[11px] text-dim">Syncing drawings…</div>
-                )}
-
-                {drawingsError && (
-                  <div className="px-3 pt-2 text-[11px] text-danger">{drawingsError}</div>
                 )}
 
                 {/* Pending steer / follow-up queue */}
@@ -4359,7 +4331,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               ) : (
                 <div className="flex flex-col gap-0">
-                  <div className="px-3 pt-3">
+                  <div className="px-3 pt-1.5">
                     <textarea
                       ref={textareaRef}
                       value={input}
@@ -4384,11 +4356,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                         : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                      style={{ minHeight: '52px', maxHeight: '200px' }}
+                      style={{ minHeight: '44px', maxHeight: '180px' }}
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pt-1">
+                  <div className="flex flex-wrap items-center gap-2 px-3 py-1">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                       <button
                         type="button"
@@ -4433,7 +4405,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           type="button"
                           onClick={() => { void stream.abort(); }}
                           disabled={conversationNeedsTakeover}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
                           title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
                           aria-label="Stop"
                         >
@@ -4456,8 +4428,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           className={cx(
                             'flex h-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
                             composerSubmit.label === 'Send'
-                              ? 'w-9 bg-accent text-white hover:bg-accent/90'
-                              : 'px-3.5 text-[11px] font-medium',
+                              ? 'w-8 bg-accent text-white hover:bg-accent/90'
+                              : 'px-3 text-[11px] font-medium',
                             composerSubmit.label === 'Steer'
                               ? 'bg-warning/15 text-warning hover:bg-warning/25'
                               : composerSubmit.label === 'Follow up'
@@ -4479,7 +4451,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         <button
                           type="button"
                           disabled={true}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default/70 bg-surface/65 text-dim/70"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-default/70 bg-surface/65 text-dim/70"
                           title="Send"
                           aria-label="Send"
                         >
@@ -4490,26 +4462,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       )}
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between gap-3 border-t border-border-subtle/70 px-3 pb-2.5 pt-2 text-[10px] text-dim">
-                    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                      {sessionTokens && (
-                        <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
-                      )}
-                    </div>
-                    <div className="flex min-w-0 items-center justify-end gap-2 overflow-hidden text-right">
-                      {!draft && branchLabel && (
-                        <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
-                      )}
-                      {!draft && gitLineSummary && (
-                        <span className="font-mono tabular-nums">{gitLineSummary}</span>
-                      )}
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
           </div>
+
+          {(!draft && (branchLabel || gitLineSummary)) || sessionTokens ? (
+            <div className="mt-1.5 flex items-center justify-between gap-3 px-3 text-[10px] text-dim">
+              <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+                {sessionTokens && (
+                  <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
+                )}
+              </div>
+              <div className="flex min-w-0 items-center justify-end gap-2 overflow-hidden text-right">
+                {!draft && branchLabel && (
+                  <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
+                )}
+                {!draft && gitLineSummary && (
+                  <span className="font-mono tabular-nums">{gitLineSummary}</span>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       )}
