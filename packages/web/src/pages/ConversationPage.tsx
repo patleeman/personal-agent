@@ -1488,6 +1488,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       segments: historicalUsage?.segments,
     } satisfies TokenCounts;
   }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
+
+  // Line counts for Codex-style status
+  const lineCounts = useMemo(() => {
+    if (!realMessages) return null;
+    let lines = 0;
+    for (const block of realMessages) {
+      if (block.type === 'text' || block.type === 'summary') {
+        lines += (block.text?.split('\n').length ?? 1);
+      }
+    }
+    return lines;
+  }, [realMessages]);
+
+  // Current working directory for header
+  const currentCwd = useMemo(() => {
+    return currentSessionMeta?.cwd ?? null;
+  }, [currentSessionMeta?.cwd]);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [headerPreference, setHeaderPreference] = useState<'model' | 'thinking' | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
@@ -4084,7 +4101,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     <ConversationWorkspaceShell>
       <div className="flex h-full flex-col overflow-hidden">
         <PageHeader
-        className="gap-3 py-2"
+        className="gap-2 py-2 min-h-[44px]"
         leading={!draft ? (
           <button
             type="button"
@@ -4153,6 +4170,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ) : (
             <div className="flex min-w-0 items-center gap-2">
               <h1 className="ui-page-title truncate" onDoubleClick={!draft && !conversationNeedsTakeover ? beginTitleEdit : undefined}>{title}</h1>
+              {currentCwd && (
+                <span 
+                  className="shrink-0 truncate font-mono text-[11px] text-dim max-w-[24rem]" 
+                  title={currentCwd}
+                >
+                  · {currentCwd}
+                </span>
+              )}
               {!draft && id && (
                 <IconButton onClick={beginTitleEdit} title={conversationNeedsTakeover ? 'Take over this conversation to rename it' : 'Rename conversation'} aria-label="Rename conversation" compact disabled={conversationNeedsTakeover}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -4523,7 +4548,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
 
             {/* Textarea */}
-            <div className="flex items-center gap-2 px-3 py-2.5">
+            <div className="px-3 pt-2.5 pb-2.5">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -4562,77 +4587,90 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </button>
                 </div>
               ) : (
-                <>
-                  <IconButton
-                    className="shrink-0"
-                    title="Attach image or Excalidraw file"
-                    aria-label="Attach image or Excalidraw file"
-                    onClick={openFilePicker}
-                    disabled={composerDisabled}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                    </svg>
-                  </IconButton>
+                <div className="flex items-end gap-2">
+                  {/* Left side: + button + textarea */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      {/* Codex-style subtle + button */}
+                      <button
+                        type="button"
+                        onClick={openFilePicker}
+                        disabled={composerDisabled}
+                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-md text-secondary hover:text-primary hover:bg-elevated/50 transition-colors disabled:opacity-40"
+                        title="Attach image or file"
+                        aria-label="Attach image or file"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 5v14" />
+                          <path d="M5 12h14" />
+                        </svg>
+                      </button>
+                    </div>
 
-                  <IconButton
-                    className="shrink-0"
-                    title="Create drawing"
-                    aria-label="Create drawing"
-                    onClick={openDrawingEditor}
-                    disabled={composerDisabled}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  </IconButton>
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={e => {
+                        setInput(e.target.value);
+                        setSlashIdx(0);
+                        setMentionIdx(0);
+                        rememberComposerSelection(e.target);
+                      }}
+                      onSelect={e => { rememberComposerSelection(e.currentTarget); }}
+                      onClick={e => { rememberComposerSelection(e.currentTarget); }}
+                      onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
+                      onFocus={e => { rememberComposerSelection(e.currentTarget); }}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      rows={1}
+                      disabled={composerDisabled}
+                      className="w-full bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
+                      placeholder={pendingAskUserQuestion
+                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
+                      title={pendingAskUserQuestion
+                        ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                        : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                      style={{ minHeight: '24px', maxHeight: '160px' }}
+                    />
+                  </div>
 
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={e => {
-                      setInput(e.target.value);
-                      setSlashIdx(0);
-                      setMentionIdx(0);
-                      rememberComposerSelection(e.target);
-                    }}
-                    onSelect={e => { rememberComposerSelection(e.currentTarget); }}
-                    onClick={e => { rememberComposerSelection(e.currentTarget); }}
-                    onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
-                    onFocus={e => { rememberComposerSelection(e.currentTarget); }}
-                    onKeyDown={handleKeyDown}
-                    onPaste={handlePaste}
-                    rows={1}
-                    disabled={composerDisabled}
-                    className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
-                    placeholder={pendingAskUserQuestion
-                      ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                      : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
-                    title={pendingAskUserQuestion
-                      ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                      : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                    style={{ minHeight: '24px', maxHeight: '160px' }}
-                  />
+                  {/* Right side: send button + drawing + context/line counts */}
+                  <div className="shrink-0 flex flex-col items-end gap-2">
+                    {/* Top row: send and drawing buttons */}
+                    <div className="flex items-center gap-2">
+                      {/* Drawing button next to send */}
+                      {composerHasContent && !stream.isStreaming && (
+                        <button
+                          type="button"
+                          onClick={openDrawingEditor}
+                          disabled={composerDisabled}
+                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md text-secondary hover:text-primary hover:bg-elevated/50 transition-colors disabled:opacity-40"
+                          title="Create drawing"
+                          aria-label="Create drawing"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                        </button>
+                      )}
 
-                  {(stream.isStreaming || composerHasContent) && (
-                    <div className="shrink-0 flex items-center gap-1.5">
-                      {stream.isStreaming && (
+                      {/* Circular up-arrow send button */}
+                      {stream.isStreaming ? (
                         <button
                           type="button"
                           onClick={() => { void stream.abort(); }}
                           disabled={conversationNeedsTakeover}
-                          className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
-                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping the current response' : 'Stop current response'}
-                          aria-label="Stop current response"
+                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-danger/15 text-danger hover:bg-danger/25 transition-colors disabled:opacity-60 disabled:cursor-default"
+                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
+                          aria-label="Stop"
                         >
-                          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                             <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
                           </svg>
-                          Stop
                         </button>
-                      )}
-                      {composerHasContent && (
+                      ) : composerHasContent ? (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -4644,14 +4682,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             void submitComposer(behavior);
                           }}
                           disabled={composerDisabled}
-                          className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
+                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-accent text-white hover:bg-accent/90 transition-colors disabled:opacity-40 disabled:cursor-default"
+                          title="Send message"
+                          aria-label="Send message"
                         >
-                          {composerSubmit.label}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m18 15-6-6-6 6" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={true}
+                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-elevated/50 text-dim/40 cursor-default"
+                          title="Send message"
+                          aria-label="Send message"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m18 15-6-6-6 6" />
+                          </svg>
                         </button>
                       )}
                     </div>
-                  )}
-                </>
+
+                    {/* Bottom row: context usage + line counts */}
+                    <div className="flex items-center gap-3 text-[10px] text-dim">
+                      {/* Context usage */}
+                      {sessionTokens && (
+                        <span className="flex items-center gap-1.5">
+                          <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
+                        </span>
+                      )}
+                      
+                      {/* Line counts */}
+                      {!draft && lineCounts !== null && (
+                        <span className="font-mono tabular-nums">
+                          {lineCounts.toLocaleString()} lines
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

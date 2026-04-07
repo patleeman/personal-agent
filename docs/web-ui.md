@@ -372,6 +372,42 @@ A new conversation uses an explicitly selected working directory when one is set
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
+## Conversation UI Layout
+
+The conversation page uses a Codex-inspired layout for a cleaner, more focused interface.
+
+### Header
+
+The conversation header is compact and single-line, showing:
+- **Title** on the left
+- **Working directory** next to the title (if set)
+- **Edit button** to rename the conversation
+- **Status indicators** on the right (draft mode, streaming indicator)
+
+### Composer Area
+
+The input/composer area features:
+
+- **Subtle + button** for attaching files or images (replaces the older attachment icon)
+- **Text input** in the center
+- **Drawing button** next to the send button
+- **Context usage** displayed below the input on the left side
+- **Line counts** shown below the input on the right side (for existing conversations)
+
+### Send Button
+
+The send button is a circular up-arrow that:
+- Appears when there's content in the composer
+- Is disabled (grayed out) when the composer is empty
+- Turns to a stop button (square icon) when the agent is actively running
+
+### Running State
+
+When the agent is streaming:
+- A pulsing dot indicator appears in the header
+- The send button becomes a stop button
+- Alt+Enter can be used to queue a follow-up prompt while the agent is running
+
 ## Common conversation composer commands
 
 The UI supports slash-style commands in the composer.
