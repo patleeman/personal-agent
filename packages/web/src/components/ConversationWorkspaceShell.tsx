@@ -137,8 +137,10 @@ function ResizeHandle({
 
 export function ConversationWorkspaceShell({
   children,
+  contextRailEnabled = true,
 }: {
   children: ReactNode | ((controls: ConversationWorkspaceShellControls) => ReactNode);
+  contextRailEnabled?: boolean;
 }) {
   const location = useLocation();
   const railPrefs = getRailLayoutPrefs(location.pathname);
@@ -177,16 +179,21 @@ export function ConversationWorkspaceShell({
     setRailOpen(readStoredRailOpen(railPrefs.storageKey));
   }, [railPrefs.storageKey]);
 
+  const effectiveRailOpen = contextRailEnabled && railOpen;
   const controls = useMemo<ConversationWorkspaceShellControls>(() => ({
-    railOpen,
-    toggleRail: () => { setRailOpen((current) => !current); },
-  }), [railOpen]);
+    railOpen: effectiveRailOpen,
+    toggleRail: () => {
+      if (contextRailEnabled) {
+        setRailOpen((current) => !current);
+      }
+    },
+  }), [contextRailEnabled, effectiveRailOpen]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
       <div className="min-w-0 flex-1">{typeof children === 'function' ? children(controls) : children}</div>
-      {railOpen ? <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} /> : null}
-      {railOpen ? (
+      {effectiveRailOpen ? <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} /> : null}
+      {effectiveRailOpen ? (
         <aside
           style={{ width: railWidth }}
           className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"

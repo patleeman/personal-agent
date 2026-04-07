@@ -5,6 +5,7 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
+import { DraftConversationCwdPicker } from '../components/DraftConversationCwdPicker';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
@@ -20,6 +21,7 @@ import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConve
 import { getConversationFileTargetFromSearch, resolveConversationFileTarget, setConversationFileTargetInSearch } from '../conversationFiles';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { buildConversationCwdHistory } from '../conversationCwdHistory';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -62,6 +64,7 @@ import {
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  persistDraftConversationCwd,
   persistDraftConversationModel,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
@@ -1301,15 +1304,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   } = useModels();
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+  const [draftCwdValue, setDraftCwdValue] = useState('');
+  const recentConversationCwds = useMemo(
+    () => buildConversationCwdHistory(sessions, draftCwdValue),
+    [draftCwdValue, sessions],
+  );
 
   useEffect(() => {
     if (!draft) {
+      setDraftCwdValue('');
       return;
     }
 
     const syncDraftPreferences = () => {
       setCurrentModel(readDraftConversationModel().trim() || defaultModel);
       setCurrentThinkingLevel(readDraftConversationThinkingLevel().trim() || defaultThinkingLevel);
+      setDraftCwdValue(readDraftConversationCwd().trim());
     };
 
     syncDraftPreferences();
@@ -3153,6 +3163,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationThinkingLevel();
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
+    setDraftCwdValue('');
     setInput('');
     setAttachments([]);
     setDrawingAttachments([]);
@@ -3166,9 +3177,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  const setDraftConversationCwd = useCallback((nextCwd: string) => {
+    const normalizedCwd = nextCwd.trim();
+    if (normalizedCwd) {
+      persistDraftConversationCwd(normalizedCwd);
+    } else {
+      clearDraftConversationCwd();
+    }
+
+    setDraftCwdValue(normalizedCwd);
+  }, []);
+
+  const clearDraftConversationCwdSelection = useCallback(() => {
+    clearDraftConversationCwd();
+    setDraftCwdValue('');
+  }, []);
+
   function showSessionSummary() {
     const cwd = draft
-      ? (readDraftConversationCwd().trim() || 'unset cwd')
+      ? (draftCwdValue || 'unset cwd')
       : (currentSessionMeta?.cwd ?? 'unknown cwd');
     const modelLabel = currentModel || model || 'unknown model';
     const details = [
@@ -3478,8 +3505,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           hasVisibleSessionDetail: false,
         }));
         try {
-          const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, undefined, {
+          const { id: newId } = await api.createLiveSession(draftCwdValue || undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });
@@ -3958,10 +3984,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
-              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail or use the saved default from Settings.'
+              ? 'Start typing to create a conversation. Choose its initial working directory here, or let the saved default from Settings apply.'
               : isLiveSession
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
+            action={draft ? (
+              <DraftConversationCwdPicker
+                variant="empty-state"
+                value={draftCwdValue}
+                recentCwds={recentConversationCwds}
+                onChange={setDraftConversationCwd}
+                onClear={clearDraftConversationCwdSelection}
+              />
+            ) : undefined}
           />
         )}
         {!showConversationLoadingState && showScrollToBottomControl && (
@@ -3985,10 +4020,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       )}
     </div>
   ), [
+    clearDraftConversationCwdSelection,
     conversationResumeState.actionLabel,
     conversationResumeState.canResume,
     conversationResumeState.title,
     draft,
+    draftCwdValue,
     forkConversationFromMessage,
     hasRenderableMessages,
     rewindConversationFromMessage,
@@ -4004,12 +4041,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     openConversationFilePath,
+    recentConversationCwds,
     displayedPendingAssistantStatusLabel,
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,
     resumeConversation,
     resumeConversationBusy,
+    setDraftConversationCwd,
     selectedArtifactId,
     selectedRunId,
     sessionLoading,
@@ -4056,12 +4095,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <ConversationWorkspaceShell>
+    <ConversationWorkspaceShell contextRailEnabled={!draft}>
       {({ railOpen, toggleRail }) => (
       <div className="flex h-full flex-col overflow-hidden">
         <PageHeader
         className="gap-2 py-2 min-h-[44px]"
-        actions={(
+        actions={!draft ? (
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
             <button
               type="button"
@@ -4075,11 +4114,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 <path d="M15 4v16" />
               </svg>
             </button>
-            {draft ? (
-              <span className="text-dim">draft</span>
-            ) : null}
           </div>
-        )}
+        ) : undefined}
       >
         <div className="flex-1 min-w-0">
           {isEditingTitle && !draft ? (
@@ -4111,6 +4147,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 Cancel
               </button>
             </form>
+          ) : draft ? (
+            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+              <h1 className="ui-page-title truncate">{title}</h1>
+            </div>
           ) : (
             <div className="flex min-w-0 items-center gap-2 overflow-hidden">
               <h1 className="ui-page-title truncate" onDoubleClick={!draft && !conversationNeedsTakeover ? beginTitleEdit : undefined}>{title}</h1>

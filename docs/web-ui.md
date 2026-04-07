@@ -374,7 +374,7 @@ Skills and profile behavior are no longer separate `@` mention targets; referenc
 
 A new conversation uses an explicitly selected working directory when one is set.
 
-The draft page keeps that picker inline in the composer area and offers recent conversation cwd values as one-click buttons plus an overflow dropdown, so starting in a familiar repo is fast without opening a right-side inspector.
+The draft page keeps that picker in the centered empty-state area and offers recent conversation cwd values as one-click buttons plus an overflow dropdown, so starting in a familiar repo is fast without opening a right-side inspector.
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
@@ -387,7 +387,7 @@ The conversation page uses a Codex-inspired layout for a cleaner, more focused i
 The conversation header is compact, showing:
 - **Title** on the left
 - **Working directory** next to the title (if set)
-- **Inline draft working-directory controls** on new conversations
+- **Centered draft working-directory controls** on new conversations
 - **Edit button** to rename existing conversations
 - **Right-rail toggle** on saved conversations
 

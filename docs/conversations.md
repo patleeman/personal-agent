@@ -72,9 +72,11 @@ Use references when you want to bring durable context into the current thread wi
 
 For new conversations, the working directory is chosen from the strongest available source:
 
-1. an explicit cwd, if one is set
+1. an explicit cwd, if one is set from the draft page's centered picker
 2. the saved default cwd from Settings / profile settings
 3. the web server process cwd as a fallback
+
+The draft page keeps recent conversation cwd values in the centered empty-state area so you can reuse a repo quickly without opening a side inspector first.
 
 ## Wakeups and callbacks
 
