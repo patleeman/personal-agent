@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
@@ -77,7 +78,7 @@ let buildLiveSessionResourceOptionsFn: (profile?: string) => Record<string, unkn
   additionalThemePaths: [],
 });
 
-let buildLiveSessionExtensionFactoriesFn: () => unknown[] = () => [];
+let buildLiveSessionExtensionFactoriesFn: () => ExtensionFactory[] = () => [];
 
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
