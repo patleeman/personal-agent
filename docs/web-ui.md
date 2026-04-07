@@ -388,7 +388,7 @@ The conversation header is compact, showing:
 - **Title** on the left
 - **Working directory** next to the title (if set)
 - **Centered draft working-directory controls** on new conversations
-- **Edit button** to rename existing conversations
+- **Clickable title** to rename existing conversations
 - **Right-rail toggle** on saved conversations
 
 ### Composer Area

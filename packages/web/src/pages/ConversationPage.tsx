@@ -4153,7 +4153,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </div>
           ) : (
             <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-              <h1 className="ui-page-title truncate" onDoubleClick={!draft && !conversationNeedsTakeover ? beginTitleEdit : undefined}>{title}</h1>
+              <h1 className="min-w-0 truncate">
+                <button
+                  type="button"
+                  onClick={beginTitleEdit}
+                  title={conversationNeedsTakeover ? 'Take over this conversation to rename it' : 'Rename conversation'}
+                  aria-label={`Rename conversation: ${title}`}
+                  className="ui-page-title inline-block max-w-full truncate rounded-sm text-left transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-default disabled:text-primary disabled:hover:text-primary disabled:opacity-100"
+                  disabled={conversationNeedsTakeover}
+                >
+                  {title}
+                </button>
+              </h1>
               {currentCwd && (
                 <span
                   className="max-w-[24rem] shrink truncate font-mono text-[11px] text-dim"
@@ -4161,13 +4172,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 >
                   · {currentCwd}
                 </span>
-              )}
-              {!draft && id && (
-                <IconButton onClick={beginTitleEdit} title={conversationNeedsTakeover ? 'Take over this conversation to rename it' : 'Rename conversation'} aria-label="Rename conversation" compact disabled={conversationNeedsTakeover}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 21h3.75L17.81 9.94l-3.75-3.75L3 17.25V21Zm14.06-13.06 1.69-1.69a1.5 1.5 0 0 0 0-2.12l-.88-.88a1.5 1.5 0 0 0-2.12 0l-1.69 1.69" />
-                  </svg>
-                </IconButton>
               )}
             </div>
           )}
