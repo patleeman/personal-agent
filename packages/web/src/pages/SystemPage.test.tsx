@@ -35,42 +35,6 @@ function renderSystem(initialEntry: string, element: React.ReactElement) {
               lines: ['daemon ready'],
             },
           },
-          sync: {
-            warnings: [],
-            config: {
-              enabled: true,
-              repoDir: '/tmp/sync',
-              remote: 'origin',
-              branch: 'main',
-              intervalSeconds: 120,
-              autoResolveWithAgent: true,
-              conflictResolverTaskSlug: 'sync-conflict-resolver',
-              resolverCooldownMinutes: 30,
-              autoResolveErrorsWithAgent: true,
-              errorResolverTaskSlug: 'sync-error-resolver',
-              errorResolverCooldownMinutes: 30,
-            },
-            git: {
-              hasRepo: true,
-              dirtyEntries: 1,
-            },
-            daemon: {
-              connected: true,
-              moduleLoaded: true,
-              moduleEnabled: true,
-              moduleDetail: {
-                running: false,
-                lastRunAt: '2026-03-18T17:01:00.000Z',
-                lastSuccessAt: '2026-03-18T17:01:10.000Z',
-                lastCommitAt: '2026-03-18T17:01:12.000Z',
-                lastConflictFiles: [],
-              },
-            },
-            log: {
-              path: '/tmp/sync.log',
-              lines: ['sync complete'],
-            },
-          },
           webUi: {
             warnings: [],
             service: {
@@ -108,7 +72,6 @@ function renderSystem(initialEntry: string, element: React.ReactElement) {
             },
           },
           setDaemon: vi.fn(),
-          setSync: vi.fn(),
           setWebUi: vi.fn(),
         }}>
           {element}
@@ -137,34 +100,28 @@ describe('System settings integration', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the system overview with service cards in settings', () => {
-    const html = renderSystem('/settings?page=system', <SystemSettingsContent />);
+  it('renders the consolidated system section inline', () => {
+    const html = renderSystem('/settings', <SystemSettingsContent />);
 
-    expect(html).toContain('Operational Overview');
+    expect(html).toContain('Operational overview');
     expect(html).toContain('Open runs');
     expect(html).toContain('Update + restart');
     expect(html).toContain('Restart everything');
-    expect(html).toContain('Each service has its own page in the settings rail. Use these cards for a quick status scan.');
-    expect(html).toContain('href="/settings?page=system-sync"');
-    expect(html).toContain('href="/settings?page=system-web-ui"');
-    expect(html).toContain('1 local file changed in the sync repo');
+    expect(html).toContain('Web UI and daemon controls now stay on this page');
+    expect(html).toContain('Restart daemon');
+    expect(html).toContain('Restart web UI');
+    expect(html).toContain('4 modules · queue 0/1000');
     expect(html).toContain('Connected via SSE');
-    expect(html).toContain('Related Views');
-    expect(html).not.toContain('Remote pairing');
-    expect(html).not.toContain('daemon ready');
+    expect(html).not.toContain('Related Views');
   });
 
-  it('renders a dedicated system service page from the settings rail', () => {
-    const html = renderSystem('/settings?page=system-sync', <SystemSettingsContent componentId="sync" />);
+  it('ignores legacy system subpage selection and still renders both services', () => {
+    const html = renderSystem('/settings?page=system-daemon', <SystemSettingsContent componentId="daemon" />);
 
-    expect(html).toContain('System overview');
-    expect(html).toContain('Open runs');
-    expect(html).toContain('Run sync now');
-    expect(html).toContain('tracking origin/main');
-    expect(html).toContain('sync complete');
-    expect(html).not.toContain('Remote pairing');
-    expect(html).toContain('href="/settings?page=system"');
-    expect(html).toContain('via SSE');
-    expect(html).toContain('Related Views');
+    expect(html).toContain('Operational overview');
+    expect(html).toContain('Restart daemon');
+    expect(html).toContain('Restart web UI');
+    expect(html).toContain('daemon ready');
+    expect(html).not.toContain('Related Views');
   });
 });

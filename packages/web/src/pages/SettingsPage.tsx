@@ -16,9 +16,7 @@ import type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../types';
-import { useLocation } from 'react-router-dom';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
-import { getSettingsPage, readSettingsPageId, SettingsSplitLayout } from '../components/SettingsLayout';
 import { SystemSettingsContent } from '../components/SystemSettingsContent';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
@@ -299,7 +297,7 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <div className={cx('ui-panel-muted px-5 py-5', className)}>
+    <section className={cx('space-y-5 border-t border-border-subtle pt-6', className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 max-w-3xl space-y-1">
           <h2 className="text-[15px] font-medium text-primary">{title}</h2>
@@ -307,13 +305,12 @@ function SettingsPanel({
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      <div className="mt-5 min-w-0 space-y-4">{children}</div>
-    </div>
+      <div className="min-w-0 space-y-4">{children}</div>
+    </section>
   );
 }
 
 export function SettingsPage() {
-  const location = useLocation();
   const { theme, themePreference, setThemePreference } = useTheme();
   const {
     data: profileState,
@@ -407,30 +404,13 @@ export function SettingsPage() {
   const oauthTerminalStateKeyRef = useRef<string | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
-  const activePageId = useMemo(() => readSettingsPageId(location.search), [location.search]);
-  const activePage = useMemo(() => getSettingsPage(activePageId), [activePageId]);
-  const activeSystemComponent = useMemo(() => {
-    switch (activePageId) {
-      case 'system-web-ui':
-        return 'web-ui' as const;
-      case 'system-daemon':
-        return 'daemon' as const;
-      case 'system-sync':
-        return 'sync' as const;
-      default:
-        return null;
-    }
-  }, [activePageId]);
 
-  const pageMeta = activePageId.startsWith('system')
-    ? ''
-    : [
-      `theme ${theme}`,
-      profileState ? `profile ${profileState.currentProfile}` : null,
-      modelState?.currentModel ? `model ${modelState.currentModel}` : null,
-    ].filter(Boolean).join(' · ');
-
-  const headingMeta = [activePage.summary, pageMeta].filter(Boolean).join(' · ');
+  const pageMeta = [
+    'Theme, defaults, providers, workspace, and system controls.',
+    `theme ${theme}`,
+    profileState ? `profile ${profileState.currentProfile}` : null,
+    modelState?.currentModel ? `model ${modelState.currentModel}` : null,
+  ].filter(Boolean).join(' · ');
 
   const groupedModels = useMemo(
     () => groupModelsByProvider(modelState?.models ?? []),
@@ -1133,31 +1113,30 @@ export function SettingsPage() {
   }
 
   return (
-    <SettingsSplitLayout>
-      <div className="flex h-full min-h-0 flex-col">
-        <PageHeader actions={activePageId.startsWith('system') ? null : <ToolbarButton onClick={() => {
-          void Promise.all([
-            refetchProfiles({ resetLoading: false }),
-            refetchModels({ resetLoading: false }),
-            refetchModelProviders({ resetLoading: false }),
-            refetchVaultRoot({ resetLoading: false }),
-            refetchDefaultCwd({ resetLoading: false }),
-            refetchConversationTitleSettings({ resetLoading: false }),
-            refetchProviderAuth({ resetLoading: false }),
-            refetchCodexPlanUsage({ resetLoading: false }),
-            refetchStatus({ resetLoading: false }),
-            oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-          ]);
-        }}>↻ Refresh</ToolbarButton>}>
-          <PageHeading
-            title={activePage.label}
-            meta={headingMeta || 'Stable preferences, provider credentials, and interface reset tools.'}
-          />
-        </PageHeader>
+    <div className="flex h-full min-h-0 flex-col">
+      <PageHeader actions={<ToolbarButton onClick={() => {
+        void Promise.all([
+          refetchProfiles({ resetLoading: false }),
+          refetchModels({ resetLoading: false }),
+          refetchModelProviders({ resetLoading: false }),
+          refetchVaultRoot({ resetLoading: false }),
+          refetchDefaultCwd({ resetLoading: false }),
+          refetchConversationTitleSettings({ resetLoading: false }),
+          refetchProviderAuth({ resetLoading: false }),
+          refetchCodexPlanUsage({ resetLoading: false }),
+          refetchStatus({ resetLoading: false }),
+          oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
+        ]);
+      }}>↻ Refresh</ToolbarButton>}>
+        <PageHeading
+          title="Settings"
+          meta={pageMeta}
+        />
+      </PageHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className={cx(activePageId.startsWith('system') ? 'max-w-6xl' : 'max-w-5xl', 'pb-6')}>
-            <section className={cx('space-y-4', activePageId !== 'appearance' && 'hidden')}>
+      <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="max-w-6xl pb-6 space-y-10">
+          <section className="space-y-4">
               <SectionLabel label="Appearance" />
 
               <SettingsPanel
@@ -1177,7 +1156,7 @@ export function SettingsPage() {
               </SettingsPanel>
             </section>
 
-            <section className={cx('space-y-5', activePageId !== 'defaults' && 'hidden')}>
+          <section className="space-y-5">
               <SectionLabel label="Agent defaults" />
 
               <div className="space-y-4">
@@ -1482,7 +1461,7 @@ export function SettingsPage() {
               </div>
             </section>
 
-          <section className={cx('space-y-8', activePageId !== 'providers' && 'hidden')}>
+          <section className="space-y-8">
             <SectionLabel label="Providers & models" />
 
             <div className="space-y-4">
@@ -2239,7 +2218,7 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <section className={cx('space-y-5', activePageId !== 'interface' && 'hidden')}>
+          <section className="space-y-5">
             <SectionLabel label="Interface state" />
 
             <SettingsPanel
@@ -2282,11 +2261,11 @@ export function SettingsPage() {
             </SettingsPanel>
           </section>
 
-          <section className={cx('space-y-5', !activePageId.startsWith('system') && 'hidden')}>
-            <SystemSettingsContent componentId={activeSystemComponent ?? undefined} />
+          <section className="space-y-5">
+            <SystemSettingsContent />
           </section>
 
-          <section className={cx('space-y-4', activePageId !== 'workspace' && 'hidden')}>
+          <section className="space-y-4">
             <SectionLabel label="Workspace" />
 
             <SettingsPanel
@@ -2302,6 +2281,5 @@ export function SettingsPage() {
         </div>
       </div>
     </div>
-    </SettingsSplitLayout>
   );
 }

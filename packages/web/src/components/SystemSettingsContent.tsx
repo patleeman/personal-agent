@@ -3,12 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useSseConnection, useSystemStatus } from '../contexts';
 import type { SystemComponentId } from '../systemSelection';
-import type { DaemonState, SyncState, WebUiState } from '../types';
+import type { DaemonState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
-import { buildSettingsHref } from './SettingsLayout';
 import { SystemServiceSection } from './SystemContextPanel';
-import { Pill, SectionLabel, ToolbarButton, cx, type PillTone } from './ui';
+import { SectionLabel, ToolbarButton } from './ui';
 
 type SystemRowState = 'loading' | 'healthy' | 'issue' | 'offline' | 'disabled' | 'unavailable';
 
@@ -16,54 +15,13 @@ type SystemRowItem = {
   id: SystemComponentId;
   label: string;
   state: SystemRowState;
-  tone: PillTone;
   summary: string;
   meta?: string;
   attention?: string | null;
 };
 
-function toneDotClass(tone: PillTone): string {
-  switch (tone) {
-    case 'success':
-      return 'bg-success';
-    case 'warning':
-      return 'bg-warning';
-    case 'danger':
-      return 'bg-danger';
-    default:
-      return 'bg-border-default';
-  }
-}
-
-function serviceCardClass(tone: PillTone): string {
-  switch (tone) {
-    case 'success':
-      return 'border-success/15 hover:border-success/35';
-    case 'warning':
-      return 'border-warning/20 hover:border-warning/40';
-    case 'danger':
-      return 'border-danger/20 hover:border-danger/40';
-    default:
-      return 'border-border-subtle hover:border-border-default';
-  }
-}
-
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`;
-}
-
-function describeSyncChanges(sync: SyncState): string {
-  const changedFiles = sync.git.dirtyEntries ?? 0;
-
-  if (!sync.git.hasRepo) {
-    return 'Sync repo missing';
-  }
-
-  if (changedFiles === 0) {
-    return 'No local repo changes';
-  }
-
-  return `${pluralize(changedFiles, 'local file')} changed in the sync repo`;
 }
 
 function buildWebUiItem(data: WebUiState | null): SystemRowItem {
@@ -72,7 +30,6 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
       id: 'web-ui',
       label: 'Web UI',
       state: 'loading',
-      tone: 'muted',
       summary: 'Loading service state…',
     };
   }
@@ -92,7 +49,6 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
     id: 'web-ui',
     label: 'Web UI',
     state: warningCount > 0 ? 'issue' : data.service.running ? 'healthy' : 'offline',
-    tone: warningCount > 0 ? 'warning' : data.service.running ? 'success' : 'muted',
     summary,
     meta: [
       `release ${release}`,
@@ -113,7 +69,6 @@ function buildDaemonItem(data: DaemonState | null): SystemRowItem {
       id: 'daemon',
       label: 'Daemon',
       state: 'loading',
-      tone: 'muted',
       summary: 'Loading runtime state…',
     };
   }
@@ -129,7 +84,6 @@ function buildDaemonItem(data: DaemonState | null): SystemRowItem {
     id: 'daemon',
     label: 'Daemon',
     state: data.warnings.length > 0 ? 'issue' : data.runtime.running ? 'healthy' : 'offline',
-    tone: data.warnings.length > 0 ? 'warning' : data.runtime.running ? 'success' : 'muted',
     summary,
     meta: [
       data.runtime.startedAt ? `started ${timeAgo(data.runtime.startedAt)}` : '',
@@ -140,82 +94,21 @@ function buildDaemonItem(data: DaemonState | null): SystemRowItem {
   };
 }
 
-function buildSyncItem(data: SyncState | null): SystemRowItem {
-  if (!data) {
-    return {
-      id: 'sync',
-      label: 'Sync',
-      state: 'loading',
-      tone: 'muted',
-      summary: 'Loading sync repo status…',
-    };
-  }
-
-  const lastSuccess = data.daemon.moduleDetail?.lastSuccessAt ? timeAgo(data.daemon.moduleDetail.lastSuccessAt) : 'never';
-  const summary = !data.config.enabled
-    ? 'Automatic sync disabled'
-    : `${describeSyncChanges(data)} · last success ${lastSuccess}`;
-  const syncState: SystemRowState = !data.config.enabled
-    ? 'disabled'
-    : data.warnings.length > 0 || !data.daemon.connected || !data.git.hasRepo
-      ? 'issue'
-      : 'healthy';
-
-  return {
-    id: 'sync',
-    label: 'Sync',
-    state: syncState,
-    tone: syncState === 'healthy' ? 'success' : syncState === 'disabled' ? 'muted' : 'warning',
-    summary,
-    meta: [
-      data.config.enabled ? `tracking ${data.config.remote}/${data.config.branch}` : '',
-      data.warnings.length > 0 ? pluralize(data.warnings.length, 'warning') : '',
-    ].filter(Boolean).join(' · '),
-    attention: data.warnings[0] ?? (syncState === 'healthy' || syncState === 'disabled' ? null : summary),
-  };
-}
-
-function buildSystemServiceSettingsHref(componentId: SystemComponentId): string {
+function buildSystemSectionHref(componentId: SystemComponentId): string {
   switch (componentId) {
     case 'web-ui':
-      return buildSettingsHref('system-web-ui');
+      return '#settings-system-web-ui';
     case 'daemon':
-      return buildSettingsHref('system-daemon');
-    case 'sync':
-      return buildSettingsHref('system-sync');
+      return '#settings-system-daemon';
   }
 }
 
-function SystemServiceSummaryCard({ item }: { item: SystemRowItem }) {
-  return (
-    <Link
-      to={buildSystemServiceSettingsHref(item.id)}
-      className={cx(
-        'block rounded-[20px] border bg-base px-4 py-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base hover:bg-elevated/60',
-        serviceCardClass(item.tone),
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${toneDotClass(item.tone)}`} />
-          <p className="truncate text-[13px] font-medium text-primary">{item.label}</p>
-        </div>
-        <Pill tone={item.tone}>{item.state}</Pill>
-      </div>
-      <p className="mt-3 text-[13px] text-primary">{item.summary}</p>
-      {item.meta ? <p className="mt-2 text-[11px] leading-relaxed text-secondary">{item.meta}</p> : null}
-    </Link>
-  );
-}
-
-export function SystemSettingsContent({ componentId }: { componentId?: SystemComponentId }) {
+export function SystemSettingsContent({ componentId: _componentId }: { componentId?: SystemComponentId }) {
   const { status: sseStatus } = useSseConnection();
   const {
     daemon,
-    sync,
     webUi,
     setDaemon,
-    setSync,
     setWebUi,
   } = useSystemStatus();
   const [refreshing, setRefreshing] = useState(false);
@@ -241,9 +134,6 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
         api.daemon()
           .then((next) => setDaemon(next))
           .catch((error) => recordError('Daemon', error)),
-        api.sync()
-          .then((next) => setSync(next))
-          .catch((error) => recordError('Sync', error)),
         api.webUiState()
           .then((next) => setWebUi(next))
           .catch((error) => recordError('Web UI', error)),
@@ -255,7 +145,7 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
     } finally {
       setRefreshing(false);
     }
-  }, [setDaemon, setSync, setWebUi]);
+  }, [setDaemon, setWebUi]);
 
   function clearActionMonitor() {
     if (actionTimeoutRef.current !== null) {
@@ -342,10 +232,8 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
   const items = useMemo<SystemRowItem[]>(() => [
     buildWebUiItem(webUi),
     buildDaemonItem(daemon),
-    buildSyncItem(sync),
-  ], [daemon, sync, webUi]);
+  ], [daemon, webUi]);
 
-  const activeItem = componentId ? items.find((item) => item.id === componentId) ?? null : null;
   const canManageApplication = webUi?.service.installed ?? false;
   const attentionItems = items.filter((item) => ['issue', 'offline', 'unavailable'].includes(item.state) && item.attention);
   const attentionCount = attentionItems.length;
@@ -359,10 +247,10 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
         ? `${disabledCount} service${disabledCount === 1 ? '' : 's'} disabled`
         : 'All services healthy';
   const overallStatusDetail = attentionCount > 0
-    ? 'Open the affected service page from the sidebar to review warnings, controls, and recent logs.'
+    ? 'Review the affected sections below for warnings, controls, and recent logs.'
     : disabledCount > 0
       ? 'Disabled services stay visible here so operational state is still easy to inspect.'
-      : 'Web UI, daemon, and sync are all reporting healthy state.';
+      : 'Web UI and daemon are both reporting healthy state.';
   const webUiRelease = webUi?.service.deployment?.activeRelease?.revision
     ?? webUi?.service.deployment?.activeSlot
     ?? 'No active release';
@@ -373,13 +261,6 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
         ? 'Runtime offline'
         : 'Service not installed'
     : 'Loading runtime state…';
-  const syncOverview = sync
-    ? !sync.config.enabled
-      ? 'Automatic sync disabled'
-      : sync.git.hasRepo
-        ? `Tracking ${sync.config.remote}/${sync.config.branch}`
-        : 'Sync repo missing'
-    : 'Loading sync status…';
 
   const globalMessages = (applicationMessage || applicationError || refreshError || !canManageApplication) ? (
     <div className="space-y-1" aria-live="polite">
@@ -394,92 +275,16 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
     </div>
   ) : null;
 
-  const relatedViews = (
-    <section className="ui-panel-muted px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <p className="ui-section-label">Related Views</p>
-          <p className="ui-card-meta max-w-3xl">
-            Use Runs for durable background work, Scheduled tasks for unattended automation, Tools for runtime capabilities, and Instructions for loaded policy sources.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/runs" className="ui-toolbar-button">Runs</Link>
-          <Link to="/scheduled" className="ui-toolbar-button">Scheduled tasks</Link>
-          <Link to="/tools" className="ui-toolbar-button">Tools</Link>
-          <Link to="/instructions" className="ui-toolbar-button">Instructions</Link>
-        </div>
-      </div>
-    </section>
-  );
-
-  if (componentId && activeItem) {
-    return (
-      <div className="space-y-5">
-        <section className="ui-panel-muted px-5 py-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 max-w-3xl space-y-2">
-              <div className="space-y-1">
-                <SectionLabel label="System" />
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="ui-card-title text-[15px]">{activeItem.label}</p>
-                  <Pill tone={activeItem.tone}>{activeItem.state}</Pill>
-                </div>
-                <p className="ui-card-meta max-w-3xl">{activeItem.summary}</p>
-                {activeItem.meta ? <p className="ui-card-meta max-w-3xl">{activeItem.meta}</p> : null}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Link to={buildSettingsHref('system')} className="ui-toolbar-button">System overview</Link>
-              <Link to="/runs" className="ui-toolbar-button">Open runs</Link>
-              <ToolbarButton
-                onClick={() => { void handleApplicationAction('update'); }}
-                disabled={applicationAction !== null || !canManageApplication}
-              >
-                {applicationAction === 'update' ? 'Update requested…' : 'Update + restart'}
-              </ToolbarButton>
-              <ToolbarButton
-                onClick={() => { void handleApplicationAction('restart'); }}
-                disabled={applicationAction !== null || !canManageApplication}
-              >
-                {applicationAction === 'restart' ? 'Restart requested…' : 'Restart everything'}
-              </ToolbarButton>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border-subtle pt-4 text-[12px] text-secondary">
-            <span className={sseStatus === 'open' ? 'text-secondary' : 'text-warning'}>
-              live updates {sseStatus === 'open' ? 'via SSE' : 'offline'}
-            </span>
-            {componentId === 'web-ui' ? (
-              <>
-                <span>·</span>
-                <span className="break-all">release {webUiRelease}</span>
-              </>
-            ) : null}
-          </div>
-
-          {globalMessages ? <div className="mt-4 border-t border-border-subtle pt-4">{globalMessages}</div> : null}
-        </section>
-
-        <SystemServiceSection componentId={componentId} highlighted />
-
-        {relatedViews}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-5">
-      <section className="ui-panel-muted px-5 py-5">
+    <div className="space-y-8">
+      <section className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0 max-w-3xl space-y-2">
             <div className="space-y-1">
-              <SectionLabel label="Overview" />
-              <p className="ui-card-title text-[15px]">Operational Overview</p>
+              <SectionLabel label="System" />
+              <p className="ui-card-title text-[15px]">Operational overview</p>
               <p className="ui-card-meta max-w-3xl">
-                Inspect service health, recent logs, sync state, remote companion access, and restart controls in one place.
+                Inspect service health, recent logs, remote companion access, and restart controls in one place.
               </p>
             </div>
           </div>
@@ -504,38 +309,38 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 border-t border-border-subtle pt-4 md:grid-cols-2 xl:grid-cols-4 xl:gap-0 xl:divide-x xl:divide-border-subtle xl:pt-5">
+        <div className="grid gap-4 border-t border-border-subtle pt-4 md:grid-cols-2 xl:grid-cols-4 xl:gap-0 xl:divide-x xl:divide-border-subtle xl:pt-5">
           <div className="space-y-1 xl:px-4 xl:first:pl-0 xl:last:pr-0">
             <p className="ui-section-label">Health</p>
             <p className="text-[13px] font-medium text-primary">{overallStatusLabel}</p>
             <p className="ui-card-meta">{overallStatusDetail}</p>
           </div>
           <div className="space-y-1 xl:px-4 xl:first:pl-0 xl:last:pr-0">
-            <p className="ui-section-label">Live Updates</p>
+            <p className="ui-section-label">Live updates</p>
             <p className="text-[13px] font-medium text-primary">{sseStatus === 'open' ? 'Connected via SSE' : 'Offline'}</p>
             <p className="ui-card-meta">{sseStatus === 'open' ? 'Fresh service state streams into this page automatically.' : 'Use Refresh to fetch the latest service state.'}</p>
           </div>
           <div className="space-y-1 xl:px-4 xl:first:pl-0 xl:last:pr-0">
-            <p className="ui-section-label">Web UI Release</p>
+            <p className="ui-section-label">Web UI release</p>
             <p className="break-all text-[13px] font-medium text-primary">{webUiRelease}</p>
             <p className="ui-card-meta break-all">{webUi?.service.url ?? 'Desktop URL unavailable'}</p>
           </div>
           <div className="space-y-1 xl:px-4 xl:first:pl-0 xl:last:pr-0">
-            <p className="ui-section-label">Runtime &amp; Sync</p>
+            <p className="ui-section-label">Daemon runtime</p>
             <p className="text-[13px] font-medium text-primary">{daemonOverview}</p>
-            <p className="ui-card-meta">{syncOverview}</p>
+            <p className="ui-card-meta">Queue depth and loaded module count.</p>
           </div>
         </div>
 
-        <div className="mt-5 space-y-2 border-t border-border-subtle pt-4">
+        <div className="space-y-2 border-t border-border-subtle pt-4">
           {attentionItems.length > 0 ? (
             <div className="space-y-1.5">
               <p className="ui-section-label">Attention</p>
               {attentionItems.map((item) => (
                 <p key={item.id} className="ui-card-meta max-w-3xl">
-                  <Link to={buildSystemServiceSettingsHref(item.id)} className="text-accent hover:underline">
+                  <a href={buildSystemSectionHref(item.id)} className="text-accent hover:underline">
                     {item.label}
-                  </Link>
+                  </a>
                   {' · '}
                   {item.attention}
                 </p>
@@ -545,7 +350,7 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
             <div className="space-y-1">
               <p className="ui-section-label">Status</p>
               <p className="ui-card-meta max-w-3xl">
-                Everything looks healthy. Open a service page from the sidebar for controls, operational details, and recent logs.
+                Everything looks healthy. Web UI and daemon controls live inline below.
               </p>
             </div>
           )}
@@ -554,19 +359,17 @@ export function SystemSettingsContent({ componentId }: { componentId?: SystemCom
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="space-y-1">
-          <p className="ui-section-label">Services</p>
-          <p className="ui-card-meta">Each service has its own page in the settings rail. Use these cards for a quick status scan.</p>
+          <SectionLabel label="Services" />
+          <p className="ui-card-meta">Web UI and daemon controls now stay on this page instead of splitting into separate settings subpages.</p>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {items.map((item) => (
-            <SystemServiceSummaryCard key={item.id} item={item} />
-          ))}
+
+        <div className="space-y-6">
+          <SystemServiceSection componentId="web-ui" id="settings-system-web-ui" />
+          <SystemServiceSection componentId="daemon" id="settings-system-daemon" />
         </div>
       </section>
-
-      {relatedViews}
     </div>
   );
 }

@@ -9,7 +9,6 @@ It gives you one place to see:
 - the vault workspace and file browser
 - docs, projects, and skills
 - scheduled tasks
-- sync state
 - daemon state
 - profile and model settings
 
@@ -117,15 +116,15 @@ Use the UI when you want:
 - easy conversation browsing and branching
 - a repo-aware workspace browser and editor
 - project management backed by `state.yaml`
-- visibility into daemon and sync state
+- visibility into daemon and web UI state
 - a visual notes browser
 - live updates without polling
 
 ## Main sections
 
-### Inbox
+### Notifications
 
-The Inbox page shows:
+The Notifications page shows:
 
 - standalone inbox activity
 - archived conversations that need attention
@@ -145,11 +144,13 @@ Reminder and callback notifications stay in the main inbox list and can expose p
 
 See [Reminders and Notification Delivery](./alerts.md).
 
+In the desktop UI, Notifications lives near the bottom of the left sidebar above Settings, and new notification-center items also raise short-lived corner popups.
+
 You can:
 
 - filter unread vs all
 - mark everything read
-- clear surfaced inbox items (deletes standalone activity and marks archived attention conversations read)
+- clear surfaced notifications (deletes standalone activity and marks archived attention conversations read)
 - open individual items or conversations
 
 See [Inbox and Activity](./inbox.md).
@@ -181,7 +182,7 @@ Conversation lists in the sidebar and on the Conversations page are grouped by w
 
 Saved conversations also keep their working directory and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
 
-The conversation header stays compact: the working directory sits inline beside the title, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+The conversation header stays compact: the working directory sits inline beside the title, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header. Draft conversations set their initial working directory from that same header area instead of a dedicated right rail.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -293,16 +294,15 @@ It gives you one place to:
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
 - run per-subsystem actions directly from the page (restart Web UI / daemon, or trigger sync now)
-- jump into the advanced Daemon, Sync, or Web UI pages when you need deeper controls
+- jump into the advanced Daemon or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
 
 The advanced pages still exist for subsystem-specific setup and controls:
 
 - **Daemon** — managed daemon service controls, runtime status, and daemon logs
-- **Sync** — first-time setup, repo configuration, conflict visibility, and manual sync runs
 - **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
 
-See [Daemon and Background Automation](./daemon.md) and [Sync Guide](./sync.md).
+See [Daemon and Background Automation](./daemon.md).
 
 ### Doc workspaces
 
@@ -341,9 +341,9 @@ Settings lets you change:
 - knowledge vault root
 - saved UI state
 
-The settings rail also links out to Runs, Scheduled tasks, Tools, and Instructions for operational work.
+Settings is now one stacked page instead of separate preference and system subpages.
 
-Each settings page uses the same basic treatment: one stacked content column with muted section panels and simple dividers instead of nested cards or page-specific box patterns.
+It keeps defaults, appearance, providers, interface reset tools, workspace info, and system controls together in a single column with simple dividers instead of nested boxes.
 
 The Instructions page follows the same pattern: a stacked source picker and a full-width editor in the center, while the right rail carries source metadata and rendered instruction preview.
 
@@ -374,6 +374,8 @@ Skills and profile behavior are no longer separate `@` mention targets; referenc
 
 A new conversation uses an explicitly selected working directory when one is set.
 
+The draft page keeps that picker inline in the composer area and offers recent conversation cwd values as one-click buttons plus an overflow dropdown, so starting in a familiar repo is fast without opening a right-side inspector.
+
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
 ## Conversation UI Layout
@@ -382,21 +384,23 @@ The conversation page uses a Codex-inspired layout for a cleaner, more focused i
 
 ### Header
 
-The conversation header is compact and single-line, showing:
+The conversation header is compact, showing:
 - **Title** on the left
 - **Working directory** next to the title (if set)
-- **Edit button** to rename the conversation
-- **Status indicators** on the right (draft mode, streaming indicator)
+- **Inline draft working-directory controls** on new conversations
+- **Edit button** to rename existing conversations
+- **Right-rail toggle** on saved conversations
 
 ### Composer Area
 
 The input/composer area features:
 
-- **Subtle + button** for attaching files or images (replaces the older attachment icon)
+- **Subtle + button** for attaching files or images
+- **Drawing button** immediately to the right of attachments
 - **Text input** in the center
-- **Drawing button** next to the send button
+- **Model and thinking selectors** styled as compact runtime controls under the input
 - **Context usage** displayed below the input on the left side
-- **Line counts** shown below the input on the right side (for existing conversations)
+- **Branch and git summaries** shown below the input on the right side for existing conversations
 
 ### Send Button
 
@@ -477,5 +481,4 @@ So, for example:
 - [MCP](./mcp.md)
 - [Inbox and Activity](./inbox.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
-- [Sync Guide](./sync.md)
 - [Daemon and Background Automation](./daemon.md)

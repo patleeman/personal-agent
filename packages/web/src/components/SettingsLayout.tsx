@@ -6,68 +6,23 @@ import { ListLinkRow, SectionLabel } from './ui';
 
 const SETTINGS_BROWSER_WIDTH_STORAGE_KEY = buildRailWidthStorageKey('settings-browser');
 const SETTINGS_PAGE_SEARCH_PARAM = 'page';
-
-export const SETTINGS_PAGE_ITEMS = [
-  {
-    id: 'defaults',
-    navSection: 'preferences',
-    label: 'Defaults',
-    summary: 'Profile, model, cwd, and conversation title defaults.',
-  },
-  {
-    id: 'appearance',
-    navSection: 'preferences',
-    label: 'Appearance',
-    summary: 'Theme and other browser-local display preferences.',
-  },
-  {
-    id: 'providers',
-    navSection: 'preferences',
-    label: 'Providers',
-    summary: 'Custom providers, models, API keys, OAuth, and Codex plan usage.',
-  },
-  {
-    id: 'interface',
-    navSection: 'preferences',
-    label: 'Interface',
-    summary: 'Reset saved UI preferences and cached layout state.',
-  },
-  {
-    id: 'workspace',
-    navSection: 'preferences',
-    label: 'Workspace',
-    summary: 'Current repo root used by the web app runtime.',
-  },
-  {
-    id: 'system',
-    navSection: 'control-center',
-    label: 'System',
-    summary: 'Overview, health, and global operational controls.',
-  },
-  {
-    id: 'system-web-ui',
-    navSection: 'control-center',
-    nested: true,
-    label: 'Web UI',
-    summary: 'Releases, desktop access, companion transport, and pairing.',
-  },
-  {
-    id: 'system-daemon',
-    navSection: 'control-center',
-    nested: true,
-    label: 'Daemon',
-    summary: 'Runtime queue, module state, restart control, and logs.',
-  },
-  {
-    id: 'system-sync',
-    navSection: 'control-center',
-    nested: true,
-    label: 'Sync',
-    summary: 'Repo tracking, sync warnings, manual runs, and logs.',
-  },
+const LEGACY_SETTINGS_PAGE_IDS = [
+  'defaults',
+  'appearance',
+  'providers',
+  'interface',
+  'workspace',
+  'system',
+  'system-web-ui',
+  'system-daemon',
 ] as const;
 
-const SETTINGS_CONTROL_CENTER_ITEMS = [
+const SETTINGS_NAV_ITEMS = [
+  {
+    href: '/settings',
+    label: 'Settings',
+    summary: 'Profile, model, theme, providers, workspace, and system controls on one page.',
+  },
   {
     href: '/runs',
     label: 'Runs',
@@ -90,29 +45,19 @@ const SETTINGS_CONTROL_CENTER_ITEMS = [
   },
 ] as const;
 
-export type SettingsPageId = (typeof SETTINGS_PAGE_ITEMS)[number]['id'];
-
-const DEFAULT_SETTINGS_PAGE_ID: SettingsPageId = 'defaults';
+export type SettingsPageId = (typeof LEGACY_SETTINGS_PAGE_IDS)[number];
 
 export function readSettingsPageId(search: string): SettingsPageId {
   const value = new URLSearchParams(search).get(SETTINGS_PAGE_SEARCH_PARAM)?.trim();
-  if (SETTINGS_PAGE_ITEMS.some((item) => item.id === value)) {
+  if (LEGACY_SETTINGS_PAGE_IDS.some((item) => item === value)) {
     return value as SettingsPageId;
   }
 
-  return DEFAULT_SETTINGS_PAGE_ID;
+  return 'defaults';
 }
 
-export function getSettingsPage(pageId: SettingsPageId) {
-  return SETTINGS_PAGE_ITEMS.find((page) => page.id === pageId) ?? SETTINGS_PAGE_ITEMS[0];
-}
-
-export function buildSettingsHref(pageId: SettingsPageId): string {
-  if (pageId === DEFAULT_SETTINGS_PAGE_ID) {
-    return '/settings';
-  }
-
-  return `/settings?${SETTINGS_PAGE_SEARCH_PARAM}=${encodeURIComponent(pageId)}`;
+export function buildSettingsHref(_pageId: SettingsPageId): string {
+  return '/settings';
 }
 
 function matchesSettingsRoute(pathname: string, href: string): boolean {
@@ -121,46 +66,18 @@ function matchesSettingsRoute(pathname: string, href: string): boolean {
 
 function SettingsNavigationRail() {
   const location = useLocation();
-  const activePageId = location.pathname === '/settings' ? readSettingsPageId(location.search) : null;
-  const preferencePages = SETTINGS_PAGE_ITEMS.filter((page) => page.navSection === 'preferences');
-  const controlCenterPages = SETTINGS_PAGE_ITEMS.filter((page) => page.navSection === 'control-center');
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 space-y-1 border-b border-border-subtle px-4 py-4">
         <p className="ui-card-title">Settings</p>
-        <p className="ui-card-meta">Navigate between stable preferences and control-center views.</p>
+        <p className="ui-card-meta">Stable preferences and adjacent operational pages.</p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto space-y-6 px-4 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="space-y-px">
-          <SectionLabel label="Preferences" className="px-2 pb-1" />
-          {preferencePages.map((page) => (
-            <ListLinkRow
-              key={page.id}
-              to={buildSettingsHref(page.id)}
-              selected={location.pathname === '/settings' && page.id === activePageId}
-            >
-              <p className="ui-row-title">{page.label}</p>
-              <p className="ui-row-summary">{page.summary}</p>
-            </ListLinkRow>
-          ))}
-        </div>
-
-        <div className="space-y-px border-t border-border-subtle pt-4">
-          <SectionLabel label="Control center" className="px-2 pb-1" />
-          {controlCenterPages.map((page) => (
-            <ListLinkRow
-              key={page.id}
-              to={buildSettingsHref(page.id)}
-              selected={location.pathname === '/settings' && page.id === activePageId}
-              className={page.nested ? 'ml-3' : undefined}
-            >
-              <p className="ui-row-title">{page.label}</p>
-              <p className="ui-row-summary">{page.summary}</p>
-            </ListLinkRow>
-          ))}
-          {SETTINGS_CONTROL_CENTER_ITEMS.map((item) => (
+          <SectionLabel label="Pages" className="px-2 pb-1" />
+          {SETTINGS_NAV_ITEMS.map((item) => (
             <ListLinkRow
               key={item.href}
               to={item.href}

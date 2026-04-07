@@ -91,44 +91,6 @@ describe('SettingsPage', () => {
           lines: [],
         },
       },
-      sync: {
-        warnings: [],
-        config: {
-          enabled: true,
-          repoDir: '/tmp/sync',
-          remote: 'origin',
-          branch: 'main',
-          intervalSeconds: 300,
-          autoResolveWithAgent: false,
-          conflictResolverTaskSlug: 'resolve-conflicts',
-          resolverCooldownMinutes: 15,
-          autoResolveErrorsWithAgent: false,
-          errorResolverTaskSlug: 'resolve-errors',
-          errorResolverCooldownMinutes: 15,
-        },
-        git: {
-          hasRepo: true,
-          currentBranch: 'main',
-          dirtyEntries: 0,
-          lastCommit: 'abc123',
-          remoteUrl: 'git@example.com:patrick/personal-agent.git',
-        },
-        daemon: {
-          connected: true,
-          moduleLoaded: true,
-          moduleEnabled: true,
-          moduleDetail: {
-            running: false,
-            lastRunAt: '2026-03-28T00:00:00.000Z',
-            lastSuccessAt: '2026-03-28T00:05:00.000Z',
-            lastCommitAt: '2026-03-28T00:05:00.000Z',
-            lastConflictFiles: [],
-          },
-        },
-        log: {
-          lines: [],
-        },
-      },
       webUi: {
         warnings: [],
         service: {
@@ -165,7 +127,6 @@ describe('SettingsPage', () => {
         },
       },
       setDaemon: vi.fn(),
-      setSync: vi.fn(),
       setWebUi: vi.fn(),
     });
 
@@ -311,6 +272,13 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (key === 'system-companion-auth') {
+        return buildUseApiResult({
+          sessions: [],
+          pendingPairings: [],
+        });
+      }
+
       throw new Error(`Unexpected SettingsPage useApi call for key ${key ?? '<none>'}`);
     });
   });
@@ -320,36 +288,27 @@ describe('SettingsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the defaults page sections', () => {
-    const html = renderPage('/settings?page=defaults');
+  it('renders the condensed single-page settings view', () => {
+    const html = renderPage('/settings');
 
-    expect(html).toContain('Agent defaults');
+    expect(html).toContain('ui-page-title">Settings</h1>');
+    expect(html).toContain('Theme');
     expect(html).toContain('Profile');
     expect(html).toContain('Default model');
-    expect(html).toContain('Knowledge vault root');
-    expect(html).toContain('Default working directory');
-    expect(html).toContain('Conversation titles');
-  });
-
-  it('renders the providers page with provider-model administration and credentials', () => {
-    const html = renderPage('/settings?page=providers');
-
     expect(html).toContain('Provider &amp; model definitions');
-    expect(html).toContain('/tmp/assistant-models.json');
-    expect(html).toContain('Configured providers');
-    expect(html).toContain('Provider credentials');
-    expect(html).toContain('Select a provider to manage credentials.');
-    expect(html).toContain('Codex plan usage');
-    expect(html).toContain('pro account');
+    expect(html).toContain('Operational overview');
+    expect(html).toContain('Web UI');
+    expect(html).toContain('Daemon');
+    expect(html).toContain('Repo root');
   });
 
-  it('renders the consolidated system overview page', () => {
-    const html = renderPage('/settings?page=system');
+  it('renders the same consolidated settings page for legacy query routes', () => {
+    const html = renderPage('/settings?page=system-daemon');
 
-    expect(html).toContain('Operational Overview');
-    expect(html).toContain('Connected via SSE');
-    expect(html).toContain('Web UI Release');
-    expect(html).toContain('Runtime &amp; Sync');
-    expect(html).toContain('All services healthy');
+    expect(html).toContain('ui-page-title">Settings</h1>');
+    expect(html).toContain('Operational overview');
+    expect(html).toContain('Restart daemon');
+    expect(html).toContain('Provider credentials');
+    expect(html).not.toContain('Related Views');
   });
 });

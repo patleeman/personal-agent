@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useSystemStatus } from '../contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
-import type { DaemonState, SyncState, WebUiState } from '../types';
+import type { DaemonState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { useApi } from '../hooks';
@@ -10,12 +10,7 @@ import { ErrorState, LoadingState, Pill, ToolbarButton, cx, type PillTone } from
 
 type SystemPanelData =
   | { kind: 'web-ui'; data: WebUiState }
-  | { kind: 'daemon'; data: DaemonState }
-  | { kind: 'sync'; data: SyncState };
-
-function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
+  | { kind: 'daemon'; data: DaemonState };
 
 function shortLogLabel(path: string | undefined): string {
   if (!path) {
@@ -43,44 +38,6 @@ function systemLabel(running: boolean, warningCount: number, error?: string): st
   }
 
   return running ? 'healthy' : 'offline';
-}
-
-function syncTone(data: SyncState): PillTone {
-  if (!data.config.enabled) {
-    return 'muted';
-  }
-
-  if (data.warnings.length > 0 || !data.daemon.connected || !data.git.hasRepo) {
-    return 'warning';
-  }
-
-  return 'success';
-}
-
-function syncLabel(data: SyncState): string {
-  if (!data.config.enabled) {
-    return 'disabled';
-  }
-
-  if (data.warnings.length > 0 || !data.daemon.connected || !data.git.hasRepo) {
-    return 'issue';
-  }
-
-  return 'healthy';
-}
-
-function describeSyncChanges(data: SyncState): string {
-  const changedFiles = data.git.dirtyEntries ?? 0;
-
-  if (!data.git.hasRepo) {
-    return 'Sync repo missing';
-  }
-
-  if (changedFiles === 0) {
-    return 'Working tree clean';
-  }
-
-  return `${pluralize(changedFiles, 'file')} changed locally in the sync repo`;
 }
 
 function buildPanel(selected: SystemPanelData) {
@@ -145,37 +102,6 @@ function buildPanel(selected: SystemPanelData) {
           { label: 'Started', value: data.runtime.startedAt ? timeAgo(data.runtime.startedAt) : '—' },
         ],
         emptyLogLabel: 'No recent daemon log lines.',
-      };
-    }
-    case 'sync': {
-      const { data } = selected;
-      const lastSuccess = data.daemon.moduleDetail?.lastSuccessAt
-        ? timeAgo(data.daemon.moduleDetail.lastSuccessAt)
-        : 'never';
-
-      return {
-        title: 'Sync',
-        description: 'Git-backed durable-state sync and repo health.',
-        tone: syncTone(data),
-        status: syncLabel(data),
-        warnings: data.warnings,
-        log: data.log,
-        actionLabel: 'Run sync now',
-        actionDisabled: !data.daemon.connected || !data.git.hasRepo,
-        actionDisabledReason: !data.daemon.connected
-          ? 'The daemon must be connected before sync can run.'
-          : !data.git.hasRepo
-            ? 'Configure the sync repo before running sync.'
-            : null,
-        details: [
-          { label: 'Mode', value: data.config.enabled ? 'automatic sync enabled' : 'automatic sync disabled' },
-          { label: 'Daemon', value: data.daemon.connected ? 'connected' : 'offline' },
-          { label: 'Branch', value: `tracking ${data.config.remote}/${data.config.branch}` },
-          { label: 'Changes', value: describeSyncChanges(data) },
-          { label: 'Meaning', value: 'Local changes here mean files in the sync checkout changed locally. That is not automatically an error.' },
-          { label: 'Success', value: `last successful sync ${lastSuccess}` },
-        ],
-        emptyLogLabel: 'No recent sync log lines.',
       };
     }
   }
@@ -301,10 +227,8 @@ export function SystemServiceSection({
 }) {
   const {
     daemon,
-    sync,
     webUi,
     setDaemon,
-    setSync,
     setWebUi,
   } = useSystemStatus();
   const [refreshing, setRefreshing] = useState(false);
@@ -323,10 +247,8 @@ export function SystemServiceSection({
         return webUi ? { kind: 'web-ui', data: webUi } : null;
       case 'daemon':
         return daemon ? { kind: 'daemon', data: daemon } : null;
-      case 'sync':
-        return sync ? { kind: 'sync', data: sync } : null;
     }
-  }, [componentId, daemon, sync, webUi]);
+  }, [componentId, daemon, webUi]);
 
   const panel = useMemo(() => (selected ? buildPanel(selected) : null), [selected]);
 
@@ -346,16 +268,13 @@ export function SystemServiceSection({
         case 'daemon':
           setDaemon(await api.daemon());
           break;
-        case 'sync':
-          setSync(await api.sync());
-          break;
       }
     } catch (refreshError) {
       setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
     } finally {
       setRefreshing(false);
     }
-  }, [componentId, refreshing, setDaemon, setSync, setWebUi]);
+  }, [componentId, refreshing, setDaemon, setWebUi]);
 
   const handleAction = useCallback(async () => {
     if (actionBusy || !selected) {
@@ -378,18 +297,13 @@ export function SystemServiceSection({
           setMessage('Requested a daemon restart.');
           break;
         }
-        case 'sync': {
-          setSync(await api.runSync());
-          setMessage('Requested an immediate sync run.');
-          break;
-        }
       }
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : String(actionError));
     } finally {
       setActionBusy(false);
     }
-  }, [actionBusy, selected, setDaemon, setSync]);
+  }, [actionBusy, selected, setDaemon]);
 
   const handleToggleWebUiTailscale = useCallback(async () => {
     if (actionBusy || !selected || selected.kind !== 'web-ui') {
@@ -420,7 +334,7 @@ export function SystemServiceSection({
     }
 
     return (
-      <section id={id} className="scroll-mt-6 rounded-[24px] border border-border-subtle bg-surface/35 px-5 py-5">
+      <section id={id} className="scroll-mt-6 border-t border-border-subtle pt-6">
         <LoadingState label={loadingLabel} className="justify-start px-0 py-0" />
       </section>
     );
@@ -524,11 +438,11 @@ export function SystemServiceSection({
     <section
       id={id}
       className={cx(
-        'scroll-mt-6 rounded-[24px] border border-border-subtle bg-surface/35',
-        highlighted && 'border-accent/35 ring-1 ring-accent/20',
+        'scroll-mt-6 border-t border-border-subtle pt-6',
+        highlighted && 'border-accent/35',
       )}
     >
-      <div className="space-y-4 px-5 py-5">
+      <div className="space-y-4">
         <div className="space-y-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
