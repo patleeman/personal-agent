@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { buildApiPath } from '../apiBase';
+import { readConversationScopedEventVersion } from '../conversationEventVersions';
+import { useAppEvents } from '../contexts';
 
 export type ConversationEventStreamEvent =
   | { type: 'connected' }
@@ -18,36 +18,6 @@ export function shouldBumpConversationEventVersion(
 }
 
 export function useConversationEventVersion(conversationId: string | null | undefined): number {
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    setVersion(0);
-
-    const normalizedConversationId = typeof conversationId === 'string'
-      ? conversationId.trim()
-      : '';
-    if (!normalizedConversationId) {
-      return;
-    }
-
-    const es = new EventSource(buildApiPath(`/conversations/${encodeURIComponent(normalizedConversationId)}/events`));
-    es.onmessage = (event) => {
-      let payload: ConversationEventStreamEvent;
-      try {
-        payload = JSON.parse(event.data) as ConversationEventStreamEvent;
-      } catch {
-        return;
-      }
-
-      if (shouldBumpConversationEventVersion(payload, normalizedConversationId)) {
-        setVersion((current) => current + 1);
-      }
-    };
-
-    return () => {
-      es.close();
-    };
-  }, [conversationId]);
-
-  return version;
+  const { conversationVersions } = useAppEvents();
+  return readConversationScopedEventVersion(conversationVersions, conversationId);
 }

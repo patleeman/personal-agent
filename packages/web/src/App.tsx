@@ -15,6 +15,10 @@ import {
   SseConnectionContext,
   SystemStatusContext,
 } from './contexts';
+import {
+  INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
+  bumpConversationScopedEventVersions,
+} from './conversationEventVersions';
 import { ThemeProvider } from './theme';
 import type {
   ActivitySnapshot,
@@ -209,6 +213,7 @@ export function App() {
   const [desktopAuth, setDesktopAuth] = useState<DesktopAuthSessionState | null>(null);
   const [titleMap, setTitleMap] = useState<Map<string, string>>(new Map());
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
+  const [conversationVersions, setConversationVersions] = useState(INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS);
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
   const [activity, setActivityState] = useState<ActivitySnapshot | null>(null);
   const [alerts, setAlertsState] = useState<AlertSnapshot | null>(null);
@@ -259,6 +264,10 @@ export function App() {
       const withoutPrevious = previous.filter((session) => session.id !== sessionId);
       return sortSessionMetas([...withoutPrevious, nextSession]);
     });
+  }, []);
+
+  const bumpConversationVersion = useCallback((sessionId: string) => {
+    setConversationVersions((previous) => bumpConversationScopedEventVersions(previous, sessionId));
   }, []);
 
   const refreshSessionMeta = useCallback((sessionId: string) => {
@@ -424,6 +433,7 @@ export function App() {
           setTitle(payload.sessionId, payload.title);
           return;
         case 'session_meta_changed':
+          bumpConversationVersion(payload.sessionId);
           if (isCompanionBrowserRoute()) {
             setEventVersions((prev) => ({
               ...prev,
@@ -433,6 +443,9 @@ export function App() {
           }
 
           void refreshSessionMeta(payload.sessionId);
+          return;
+        case 'session_file_changed':
+          bumpConversationVersion(payload.sessionId);
           return;
         case 'activity_snapshot':
           setActivity({ entries: payload.entries, unreadCount: payload.unreadCount });
@@ -493,7 +506,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, bumpConversationVersion, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (
@@ -508,7 +521,7 @@ export function App() {
   }
 
   return (
-    <AppEventsContext.Provider value={{ versions: eventVersions }}>
+    <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ activity, alerts, projects, sessions, tasks, runs, setActivity, setAlerts, setProjects, setSessions, setTasks, setRuns }}>
           <SystemStatusContext.Provider value={{ daemon, sync, webUi, setDaemon, setSync, setWebUi }}>

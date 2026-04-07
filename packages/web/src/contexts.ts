@@ -2,6 +2,10 @@
  * Shared React contexts for cross-component state.
  */
 import { createContext, useContext } from 'react';
+import {
+  INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
+  type ConversationScopedEventVersions,
+} from './conversationEventVersions';
 import type {
   ActivitySnapshot,
   AlertSnapshot,
@@ -52,10 +56,12 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
 
 export interface AppEventsContextValue {
   versions: AppEventVersions;
+  conversationVersions: ConversationScopedEventVersions;
 }
 
 export const AppEventsContext = createContext<AppEventsContextValue>({
   versions: INITIAL_APP_EVENT_VERSIONS,
+  conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
 });
 
 export function useAppEvents() {

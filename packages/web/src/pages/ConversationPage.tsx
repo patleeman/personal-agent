@@ -1501,10 +1501,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return lines;
   }, [realMessages]);
 
-  // Current working directory for header
-  const currentCwd = useMemo(() => {
-    return currentSessionMeta?.cwd ?? null;
-  }, [currentSessionMeta?.cwd]);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [headerPreference, setHeaderPreference] = useState<'model' | 'thinking' | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
@@ -1829,6 +1825,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
   );
+  const currentCwd = useMemo(() => currentSessionMeta?.cwd ?? null, [currentSessionMeta?.cwd]);
 
   useEffect(() => {
     const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);

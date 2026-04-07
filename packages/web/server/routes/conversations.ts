@@ -9,7 +9,7 @@ import {
   resolveConversationSessionFile,
   publishConversationSessionMetaChanged,
   parseTailBlocksQuery,
-  decorateSessionsWithAttention,
+  listConversationSessionsSnapshot,
   toggleConversationAttention,
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
@@ -48,7 +48,6 @@ import {
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   buildAppendOnlySessionDetailResponse,
-  listSessions,
   readSessionBlock,
   readSessionImageAsset,
   readSessionSearchText,
@@ -304,7 +303,7 @@ export function registerConversationRoutes(
   initializeConversationRoutesContext(context);
   router.get('/api/sessions', (_req, res) => {
     try {
-      res.json(decorateSessionsWithAttention(getCurrentProfileFn(), listSessions()));
+      res.json(listConversationSessionsSnapshot());
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

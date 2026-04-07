@@ -1,0 +1,27 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./api', () => ({
+  api: {
+    sessions: vi.fn(),
+    liveSessions: vi.fn(),
+  },
+}));
+
+import { api } from './api';
+import { fetchSessionsSnapshot } from './sessionSnapshot';
+
+describe('fetchSessionsSnapshot', () => {
+  beforeEach(() => {
+    vi.mocked(api.sessions).mockReset();
+    vi.mocked(api.liveSessions).mockReset();
+  });
+
+  it('uses the server-authoritative sessions snapshot directly', async () => {
+    const sessions = [{ id: 'conv-1', title: 'Conversation', file: '/tmp/conv-1.jsonl' }];
+    vi.mocked(api.sessions).mockResolvedValue(sessions as never);
+
+    await expect(fetchSessionsSnapshot()).resolves.toBe(sessions);
+    expect(api.sessions).toHaveBeenCalledTimes(1);
+    expect(api.liveSessions).not.toHaveBeenCalled();
+  });
+});
