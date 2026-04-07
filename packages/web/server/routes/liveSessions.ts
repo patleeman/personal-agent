@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
@@ -37,7 +38,7 @@ import {
   logWarn,
 } from '../middleware/index.js';
 import { parseTailBlocksQuery } from '../conversations/conversationService.js';
-import { readSessionMeta } from '../conversations/sessions.js';
+import { readSessionBlocks, readSessionMeta } from '../conversations/sessions.js';
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';
 import {
   buildReferencedMemoryDocsContext,
@@ -264,6 +265,24 @@ function buildConversationAttachmentsContext(
   ].join('\n');
 }
 
+async function ensureConversationPromptTargetLive(conversationId: string): Promise<string> {
+  if (isLocalLive(conversationId)) {
+    return conversationId;
+  }
+
+  const sessionFile = readSessionBlocks(conversationId)?.meta.file;
+  if (!sessionFile || !existsSync(sessionFile)) {
+    throw new Error(`Session ${conversationId} is not live`);
+  }
+
+  const resumed = await resumeLocalSession(sessionFile, {
+    ...buildLiveSessionResourceOptionsFn(getCurrentProfileFn()),
+    extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+  });
+  await flushLiveDeferredResumesFn();
+  return resumed.id;
+}
+
 export async function handleLiveSessionPrompt(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;
@@ -340,16 +359,19 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
 
     const hiddenContext = queuedContextBlocks.join('\n\n');
 
+    const liveConversationId = await ensureConversationPromptTargetLive(id);
+    const recoveredLiveEntry = liveRegistry.get(liveConversationId);
+
     if (queuedContextBlocks.length > 0) {
-      await queuePromptContext(id, 'referenced_context', hiddenContext);
+      await queuePromptContext(liveConversationId, 'referenced_context', hiddenContext);
     }
 
-    if (liveEntry?.session.sessionFile) {
+    if (recoveredLiveEntry?.session.sessionFile) {
       await syncWebLiveConversationRun({
-        conversationId: id,
-        sessionFile: liveEntry.session.sessionFile,
-        cwd: liveEntry.cwd,
-        title: liveEntry.title,
+        conversationId: liveConversationId,
+        sessionFile: recoveredLiveEntry.session.sessionFile,
+        cwd: recoveredLiveEntry.cwd,
+        title: recoveredLiveEntry.title,
         profile: currentProfile,
         state: 'running',
         pendingOperation: {
@@ -385,7 +407,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       mimeType: image.mimeType,
       ...(image.name ? { name: image.name } : {}),
     }));
-    const submittedPrompt = await submitLocalPromptSession(id, text, behavior, promptImages, surfaceId) as {
+    const submittedPrompt = await submitLocalPromptSession(liveConversationId, text, behavior, promptImages, surfaceId) as {
       acceptedAs: 'queued' | 'started';
       completion: Promise<void>;
     };
@@ -413,12 +435,12 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
         });
       }
     }).catch(async (err: unknown) => {
-      if (liveEntry?.session.sessionFile) {
+      if (recoveredLiveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
-          conversationId: id,
-          sessionFile: liveEntry.session.sessionFile,
-          cwd: liveEntry.cwd,
-          title: liveEntry.title,
+          conversationId: liveConversationId,
+          sessionFile: recoveredLiveEntry.session.sessionFile,
+          cwd: recoveredLiveEntry.cwd,
+          title: recoveredLiveEntry.title,
           profile: currentProfile,
           state: 'failed',
           lastError: err instanceof Error ? err.message : String(err),
@@ -426,7 +448,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       }
 
       logError('live prompt error', {
-        sessionId: id,
+        sessionId: liveConversationId,
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
