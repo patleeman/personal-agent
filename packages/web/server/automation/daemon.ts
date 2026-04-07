@@ -11,6 +11,7 @@ import {
   pingDaemon,
   resolveDaemonPaths,
 } from '@personal-agent/daemon';
+import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 import {
   getManagedDaemonServiceStatus,
   installManagedDaemonService,
@@ -83,11 +84,12 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
     readSync(fd, buffer, 0, readLength, stats.size - readLength);
 
     const text = buffer.toString('utf-8');
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-      .slice(-maxLines);
+    return filterSystemLogTailLines(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0),
+    ).slice(-maxLines);
   } catch {
     return [];
   } finally {

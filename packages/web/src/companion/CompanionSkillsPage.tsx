@@ -30,7 +30,7 @@ export function CompanionSkillsPage() {
             <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">No skills yet.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Add or sync profile skills in the main workspace and they will appear here automatically.
+                Add profile skills in the main workspace and they will appear here automatically.
               </p>
             </div>
           ) : null}

@@ -4,13 +4,12 @@ import {
   getDurableTasksDir,
   getMachineConfigFilePath,
   getStateRoot,
-  resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
   resolveDeferredResumeStateFile,
   resolveProfileAlertsStateFile,
   resolveProfileConversationAttachmentsDir,
   resolveProfileActivityConversationLinksDir,
-  resolveProfileActivityDir,
+  resolveProfileActivityStateDir,
   resolveProfileConversationArtifactsDir,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
@@ -28,7 +27,6 @@ export type AppEventTopic =
   | 'runs'
   | 'automation'
   | 'daemon'
-  | 'sync'
   | 'webUi'
   | 'workspace';
 
@@ -80,7 +78,6 @@ const ALL_TOPICS: AppEventTopic[] = [
   'runs',
   'automation',
   'daemon',
-  'sync',
   'webUi',
   'workspace',
 ];
@@ -174,17 +171,13 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const daemonConfig = loadDaemonConfig();
   const daemonPaths = resolveDaemonPaths(daemonConfig.ipc.socketPath);
   const daemonRoot = daemonPaths.root;
-  const activityDirs = [
-    resolveProfileActivityDir({ profile }),
-    resolveProfileActivityDir({ stateRoot: daemonRoot, profile }),
+  const activityStateDirs = [
+    resolveProfileActivityStateDir({ profile }),
+    resolveProfileActivityStateDir({ stateRoot: daemonRoot, profile }),
   ];
   const activityConversationLinksDirs = [
     resolveProfileActivityConversationLinksDir({ profile }),
     resolveProfileActivityConversationLinksDir({ stateRoot: daemonRoot, profile }),
-  ];
-  const readStateFiles = [
-    resolveActivityReadStatePath({ profile }),
-    resolveActivityReadStatePath({ stateRoot: daemonRoot, profile }),
   ];
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
   const conversationAttachmentsDir = resolveProfileConversationAttachmentsDir({ profile });
@@ -193,13 +186,11 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
   const alertsStateFile = resolveProfileAlertsStateFile({ profile });
-  const syncRepoDir = daemonConfig.modules.sync?.repoDir;
   const webStateDir = join(getStateRoot(), 'web');
 
   const activitySources: AppEventWatchSource[] = [
-    ...activityDirs.map((path) => ({ path, kind: 'directory' as const })),
+    ...activityStateDirs.map((path) => ({ path, kind: 'directory' as const })),
     ...activityConversationLinksDirs.map((path) => ({ path, kind: 'directory' as const })),
-    ...readStateFiles.map((path) => ({ path, kind: 'file' as const })),
   ];
 
   return {
@@ -231,11 +222,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     daemon: [
       { path: getDaemonConfigFilePath(), kind: 'file' },
       { path: daemonPaths.socketPath, kind: 'file' },
-    ],
-    sync: [
-      { path: getDaemonConfigFilePath(), kind: 'file' },
-      { path: daemonPaths.socketPath, kind: 'file' },
-      ...(syncRepoDir ? [{ path: syncRepoDir, kind: 'directory' as const }] : []),
     ],
     webUi: [
       { path: getMachineConfigFilePath(), kind: 'file' },

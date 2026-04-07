@@ -3,8 +3,6 @@ import { join, resolve } from 'path';
 import {
   getDurableTasksDir,
   getMachineConfigFilePath,
-  getStateRoot,
-  getSyncRoot,
   readMachineConfigSection,
 } from '@personal-agent/core';
 
@@ -24,20 +22,6 @@ export interface TasksModuleConfig {
   defaultTimeoutSeconds: number;
 }
 
-export interface SyncModuleConfig {
-  enabled: boolean;
-  repoDir: string;
-  branch: string;
-  remote: string;
-  intervalSeconds: number;
-  autoResolveWithAgent: boolean;
-  conflictResolverTaskSlug: string;
-  resolverCooldownMinutes: number;
-  autoResolveErrorsWithAgent: boolean;
-  errorResolverTaskSlug: string;
-  errorResolverCooldownMinutes: number;
-}
-
 export interface DaemonConfig {
   logLevel: LogLevel;
   queue: {
@@ -49,10 +33,8 @@ export interface DaemonConfig {
   modules: {
     maintenance: MaintenanceModuleConfig;
     tasks: TasksModuleConfig;
-    sync?: SyncModuleConfig;
   };
 }
-
 
 function expandHome(path: string): string {
   if (path === '~') {
@@ -70,26 +52,6 @@ function getDefaultTasksDir(): string {
   return getDurableTasksDir();
 }
 
-function getDefaultSyncRepoDir(): string {
-  return getSyncRoot(getStateRoot());
-}
-
-export function getDefaultSyncModuleConfig(): SyncModuleConfig {
-  return {
-    enabled: false,
-    repoDir: getDefaultSyncRepoDir(),
-    branch: 'main',
-    remote: 'origin',
-    intervalSeconds: 120,
-    autoResolveWithAgent: true,
-    conflictResolverTaskSlug: 'sync-conflict-resolver',
-    resolverCooldownMinutes: 30,
-    autoResolveErrorsWithAgent: true,
-    errorResolverTaskSlug: 'sync-error-resolver',
-    errorResolverCooldownMinutes: 30,
-  };
-}
-
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {
   return {
     ...config,
@@ -103,14 +65,6 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
         ...config.modules.tasks,
         taskDir: resolve(expandHome(config.modules.tasks.taskDir)),
       },
-      ...(config.modules.sync
-        ? {
-            sync: {
-              ...config.modules.sync,
-              repoDir: resolve(expandHome(config.modules.sync.repoDir)),
-            },
-          }
-        : {}),
     },
   };
 }
@@ -189,7 +143,6 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
       },
-      sync: getDefaultSyncModuleConfig(),
     },
   };
 }

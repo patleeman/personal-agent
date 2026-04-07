@@ -36,7 +36,7 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await installDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {
@@ -51,7 +51,7 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await startDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {
@@ -66,7 +66,7 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await restartDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {
@@ -81,7 +81,7 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await stopDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {
@@ -96,7 +96,7 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await uninstallDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {
@@ -125,7 +125,7 @@ export function registerCompanionDaemonRoutes(router: Pick<Express, 'get' | 'pos
     try {
       suppressMonitoredServiceAttention('daemon');
       const state = await restartDaemonServiceAndReadState();
-      invalidateAppTopics('daemon', 'sync');
+      invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
       logError('request handler error', {

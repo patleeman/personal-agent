@@ -180,7 +180,12 @@ export function mountStaticServerApps(options: {
       });
     }
     app.use(express.static(distDir));
-    app.get('*', (_req, res) => {
+    app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
+
       res.sendFile(join(distDir, 'index.html'));
     });
   } else {

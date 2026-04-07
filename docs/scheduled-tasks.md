@@ -120,7 +120,7 @@ Each run still writes a durable run record, log, and final result under the daem
 
 A scheduled task can optionally callback into the conversation that created it.
 
-That callback path is intentionally separate from the synced `*.task.md` definition because conversation ids and session files are local runtime state.
+That callback path is intentionally separate from the durable `*.task.md` definition because conversation ids and session files are local runtime state.
 
 When enabled, a task completion or failure can create:
 

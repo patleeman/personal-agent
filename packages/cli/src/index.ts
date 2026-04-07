@@ -100,7 +100,6 @@ import {
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
 import { runsCommand } from './runs-command.js';
-import { syncCommand } from './sync-command.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
@@ -2052,8 +2051,8 @@ async function updateCommand(args: string[]): Promise<number> {
     let piUpdated = false;
 
     if (!options.repoOnly) {
-      currentPhase = `sync repo-local pi to latest (${PI_PACKAGE_NAME})`;
-      const piSpinner = spinner(`Syncing repo-local pi to latest (${PI_PACKAGE_NAME})`);
+      currentPhase = `refresh repo-local pi to latest (${PI_PACKAGE_NAME})`;
+      const piSpinner = spinner(`Refreshing repo-local pi to latest (${PI_PACKAGE_NAME})`);
       piSpinner.start();
 
       try {
@@ -2061,9 +2060,9 @@ async function updateCommand(args: string[]): Promise<number> {
         piOutput = piUpdateResult.output;
         piVersion = piUpdateResult.version;
         piUpdated = true;
-        piSpinner.succeed(`Synced repo-local pi to latest (${piVersion})`);
+        piSpinner.succeed(`Refreshed repo-local pi to latest (${piVersion})`);
       } catch (error) {
-        piSpinner.fail('Unable to sync repo-local pi to latest');
+        piSpinner.fail('Unable to refresh repo-local pi to latest');
         throw error;
       }
 
@@ -5103,15 +5102,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       disableBuiltInHelp: true,
       run: runsCommand,
     },
-    {
-      name: 'sync',
-      category: 'automation',
-      usage: 'sync [status|run|setup|help] [args...]',
-      description: 'Manage git sync',
-      disableBuiltInHelp: true,
-      run: syncCommand,
-    },
-
   ];
 
   return definitions;

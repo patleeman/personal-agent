@@ -139,7 +139,7 @@ export function CompanionTasksPage() {
             <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">No scheduled tasks yet.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Create or sync tasks from the main workspace and they will show up here automatically.
+                Create tasks from the main workspace and they will show up here automatically.
               </p>
             </div>
           ) : null}

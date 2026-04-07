@@ -40,7 +40,7 @@ Conversation artifacts live in local runtime state because they are conversation
 
 - `~/.local/state/personal-agent/pi-agent/state/conversation-artifacts/<profile>/<conversationId>/<artifactId>.json`
 
-They are not portable synced node files.
+They are not portable durable page files.
 
 ### Identity and revisions
 

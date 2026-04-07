@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, SyncState, ToolsState, VaultFileListResult, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -130,14 +130,6 @@ export const api = {
   restartDaemonService: () => post<DaemonState>('/daemon/service/restart'),
   stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
   uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
-  sync: () => get<SyncState>('/sync'),
-  runSync: () => post<SyncState>('/sync/run'),
-  setupSync: (input: {
-    repoUrl: string;
-    branch?: string;
-    mode?: 'fresh' | 'bootstrap';
-    repoDir?: string;
-  }) => post<SyncState>('/sync/setup', input),
   webUiState:   () => get<WebUiState>('/web-ui/state'),
   restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
   updateApplication: () => post<ApplicationRestartRequestResult>('/application/update'),
@@ -575,7 +567,11 @@ export const api = {
         ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
       })),
     }),
-  restoreQueuedMessage: (id: string, input: { behavior: 'steer' | 'followUp'; index: number }, surfaceId?: string) =>
+  restoreQueuedMessage: (
+    id: string,
+    input: { behavior: 'steer' | 'followUp'; index: number; previewId?: string },
+    surfaceId?: string,
+  ) =>
     post<{ ok: boolean; text: string; images: PromptImageInput[] }>(`/live-sessions/${id}/dequeue`, {
       ...input,
       ...(surfaceId ? { surfaceId } : {}),

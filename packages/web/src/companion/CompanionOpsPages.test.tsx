@@ -135,38 +135,6 @@ function renderWithProviders(node: React.ReactNode) {
                 },
                 log: { path: '/tmp/daemon.log', lines: ['daemon started', 'queue idle'] },
               },
-              sync: {
-                warnings: ['Sync repo is ahead of remote.'],
-                config: {
-                  enabled: true,
-                  repoDir: '/tmp/sync',
-                  remote: 'origin',
-                  branch: 'main',
-                  intervalSeconds: 300,
-                  autoResolveWithAgent: false,
-                  conflictResolverTaskSlug: 'resolver',
-                  resolverCooldownMinutes: 60,
-                  autoResolveErrorsWithAgent: false,
-                  errorResolverTaskSlug: 'error-resolver',
-                  errorResolverCooldownMinutes: 60,
-                },
-                git: {
-                  hasRepo: true,
-                  dirtyEntries: 2,
-                },
-                daemon: {
-                  connected: true,
-                  moduleLoaded: true,
-                  moduleEnabled: true,
-                  moduleDetail: {
-                    running: false,
-                    lastRunAt: '2026-03-25T11:00:00.000Z',
-                    lastSuccessAt: '2026-03-25T11:00:00.000Z',
-                    lastConflictFiles: [],
-                  },
-                },
-                log: { path: '/tmp/sync.log', lines: ['sync ran', 'pushed changes'] },
-              },
               webUi: {
                 warnings: [],
                 service: {
@@ -187,7 +155,6 @@ function renderWithProviders(node: React.ReactNode) {
                 log: { path: '/tmp/web.log', lines: ['web ui started'] },
               },
               setDaemon: vi.fn(),
-              setSync: vi.fn(),
               setWebUi: vi.fn(),
             }}>
               {node}
@@ -217,7 +184,7 @@ describe('companion operational pages', () => {
                 cwd: '/repo',
                 cwdSlug: 'repo',
                 model: 'openai/gpt-5.4',
-                title: 'Investigate sync warnings',
+                title: 'Investigate daemon warnings',
                 messageCount: 12,
                 needsAttention: true,
                 attentionUnreadActivityCount: 1,
@@ -294,7 +261,7 @@ describe('companion operational pages', () => {
     const html = renderWithProviders(<CompanionInboxPage />);
 
     expect(html).toContain('Approve the lunch order');
-    expect(html).toContain('Investigate sync warnings');
+    expect(html).toContain('Investigate daemon warnings');
     expect(html).toContain('Morning brief task failed');
     expect(html).toContain('Start conversation');
     expect(html).toContain('Mark all read');
@@ -346,7 +313,6 @@ describe('companion operational pages', () => {
 
     expect(html).toContain('Application controls');
     expect(html).toContain('Daemon');
-    expect(html).toContain('Sync');
     expect(html).toContain('Web UI');
     expect(html).toContain('Background runs');
     expect(html).toContain('Restart app');

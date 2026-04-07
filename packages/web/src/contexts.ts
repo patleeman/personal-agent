@@ -15,7 +15,6 @@ import type {
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
-  SyncState,
   WebUiState,
 } from './types';
 
@@ -49,7 +48,6 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   runs: 0,
   automation: 0,
   daemon: 0,
-  sync: 0,
   webUi: 0,
   workspace: 0,
 };
@@ -118,19 +116,15 @@ export function useAppData() {
 
 export interface SystemStatusContextValue {
   daemon: DaemonState | null;
-  sync: SyncState | null;
   webUi: WebUiState | null;
   setDaemon: (value: DaemonState) => void;
-  setSync: (value: SyncState) => void;
   setWebUi: (value: WebUiState) => void;
 }
 
 export const SystemStatusContext = createContext<SystemStatusContextValue>({
   daemon: null,
-  sync: null,
   webUi: null,
   setDaemon: () => {},
-  setSync: () => {},
   setWebUi: () => {},
 });
 

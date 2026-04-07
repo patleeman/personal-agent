@@ -34,7 +34,7 @@ That means `index.ts` now delegates most startup wiring to `app/*`, builds the s
 
 This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGetters(...)` calls across `index.ts`. Route modules now take the context directly during registration rather than relying on exported setter functions.
 
-On the companion surface, the `/api/events` stream also needs to carry the operational snapshots the mobile UI depends on for Tasks and System (`tasks`, `runs`, `daemon`, `sync`, and `webUi`), not just inbox-style topics.
+On the companion surface, the `/api/events` stream also needs to carry the operational snapshots the mobile UI depends on for Tasks and System (`tasks`, `runs`, `daemon`, and `webUi`), not just inbox-style topics.
 
 The companion SPA fallback also has to recognize both canonical `/app/*` URLs and stripped path-proxy requests like `/inbox`, `/conversations`, `/tasks`, `/system`, `/pages`, and `/capture`, because Tailscale Serve mounts the companion behind `/app` while forwarding stripped paths to the restricted companion server.
 

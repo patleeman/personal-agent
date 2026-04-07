@@ -44,7 +44,6 @@ These commands are handled by `personal-agent` itself:
 - `pa node ...` (compatibility alias)
 - `pa mcp ...`
 - `pa runs ...`
-- `pa sync ...`
 - `pa restart`
 - `pa update`
 
@@ -70,7 +69,6 @@ pa inbox list
 pa page list
 pa mcp list
 pa tasks list
-pa sync status
 ```
 
 ### Background automation
@@ -299,30 +297,6 @@ Use this as the main control surface for detached local background work.
 
 See [Runs](./runs.md).
 
-### `pa sync [status|run|setup|help]`
-
-Configure and trigger automatic git sync for durable state.
-
-Examples:
-
-```bash
-pa sync status
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
-pa sync setup --repo <git-url> --branch main --repo-dir ~/.local/state/personal-agent/sync
-pa sync run
-```
-
-Use `--fresh` for first-time setup into a new/empty remote. Use `--bootstrap` on additional devices (or existing remotes with history).
-
-The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module, and enables periodic background git sync.
-
-The managed sync repo syncs everything under `<stateRoot>/sync` by default. Typical durable paths there include `tasks/**`, `pi-agent/sessions/**`, and `pi-agent/state/conversation-attention/**`.
-
-If you use an external knowledge vault, notes, skills, projects, and profile files can live there and sync separately from `pa sync`. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface, so “needs review” follows across machines without dragging the rest of runtime state into sync.
-
-See [Sync Guide](./sync.md).
-
 ### `pa restart [--rebuild]`
 
 Restart the daemon and managed web UI service.
@@ -371,16 +345,6 @@ pa tasks logs morning-report --tail 120
 pa tasks validate --all
 ```
 
-### Configure sync on another device
-
-```bash
-git pull
-pa restart --rebuild
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
-pa sync run
-pa sync status
-```
-
 ## JSON output
 
 Machine-readable output is available for the main inspection commands.
@@ -420,6 +384,5 @@ Or set:
 - [Runs](./runs.md)
 - [MCP](./mcp.md)
 - [Web UI Guide](./web-ui.md)
-- [Sync Guide](./sync.md)
 - [Configuration](./configuration.md)
 - [Troubleshooting](./troubleshooting.md)

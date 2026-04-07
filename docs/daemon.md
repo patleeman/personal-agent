@@ -10,7 +10,6 @@ The daemon is responsible for background automation such as:
 
 - scheduled tasks
 - deferred resume handling
-- git-backed durable-state sync
 - background maintenance
 
 It lets the CLI and web UI stay relatively thin while one process handles long-lived background work.
@@ -21,7 +20,6 @@ You should keep the daemon on if you use:
 
 - scheduled tasks
 - deferred resume
-- git-backed cross-machine sync
 - always-on background workflows
 
 You can still use `pa tui`, the web UI, and many direct features without it, but background behavior becomes limited.
@@ -52,19 +50,6 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 ### Deferred resume
 
 Tracks due deferred work and surfaces it back into durable state when the time arrives.
-
-### Sync
-
-Handles git-backed durable-state sync when configured via `pa sync setup` (or the Web UI Sync page).
-
-This module:
-
-- commits local sync-repo changes when needed
-- fetches/merges/pushes against the configured remote branch
-- records sync/conflict/error status for CLI and web UI inspection
-- can trigger resolver tasks for conflicts and sync errors
-
-See [Sync Guide](./sync.md).
 
 ## Recommended ways to run it
 
@@ -170,6 +155,5 @@ Think of the daemon as the system's background engine:
 - [Decision Guide](./decision-guide.md)
 - [Runs](./runs.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
-- [Sync Guide](./sync.md)
 - [Inbox and Activity](./inbox.md)
 - [Configuration](./configuration.md)

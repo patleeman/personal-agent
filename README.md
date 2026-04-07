@@ -106,11 +106,11 @@ pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
 pa restart                  # Restart daemon + managed web UI
-pa update                   # Pull git changes + refresh repo dependencies + sync pi to latest + rebuild packages + restart services
+pa update                   # Pull git changes + refresh repo dependencies + update Pi to latest + rebuild packages + restart services
 pa update --repo-only       # Pull git changes + skip dependency refresh + rebuild packages + restart services
 ```
 
-> `pa update` runs `npm install`, syncs `@mariozechner/pi-coding-agent@latest` in the repo root, verifies repo-local Pi, and runs `npm run build`.
+> `pa update` runs `npm install`, updates `@mariozechner/pi-coding-agent@latest` in the repo root, verifies repo-local Pi, and runs `npm run build`.
 > If the managed web UI service is installed, `pa update` also stages and health-checks the inactive blue/green web UI slot before swapping the service to it.
 
 ### Profile management
@@ -144,7 +144,7 @@ pa tasks list --status active
 pa tasks list --json --status completed
 pa tasks show <id>
 pa tasks validate --all
-pa tasks validate ~/.local/state/personal-agent/sync/tasks/example.task.md
+pa tasks validate ~/.local/state/personal-agent/sync/_tasks/example.task.md
 pa tasks logs <id> --tail 120
 ```
 
@@ -158,29 +158,19 @@ pa runs logs <id> --tail 120
 pa runs cancel <id>
 ```
 
-### Automatic git sync
-
-```bash
-pa sync status
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
-pa sync run
-```
-
 ## Daemon
 
 `personal-agentd` runs background modules behind a local event bus:
 
 - **maintenance** - Periodic cleanup and retention
 - **tasks** - Scheduled `*.task.md` runs with retries and logs
-- **sync** - Periodic git sync for durable cross-machine state
+- **deferred-resume** - Wake conversations back up when deferred work becomes due
 
 CLI surface:
 
 - `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
 - `pa daemon service install|status|uninstall|help`
 - `pa tasks list|show|validate|logs`
-- `pa sync status|setup|run`
 - `pa restart`
 - `pa update`
 
@@ -227,7 +217,7 @@ Profile resources resolve from:
 
 - `defaults/agent` for repo-managed shared default profile files
 - repo built-ins from `extensions/` and `themes/`
-- synced durable roots under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,notes,tasks,projects}`
+- durable vault roots under `~/Documents/personal-agent/{_profiles,_skills,notes,projects}` plus app-managed task/session state under `~/.local/state/personal-agent/sync/`
 
 Optional local overlay:
 

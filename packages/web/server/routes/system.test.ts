@@ -11,7 +11,6 @@ describe('system route initial app topics', () => {
       'alerts',
       'tasks',
       'daemon',
-      'sync',
       'webUi',
     ]);
   });

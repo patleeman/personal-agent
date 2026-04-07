@@ -20,7 +20,6 @@ const ALL_TOPICS = [
   'runs',
   'automation',
   'daemon',
-  'sync',
   'webUi',
   'workspace',
 ] as const;

@@ -4,14 +4,8 @@ import { requestApplicationRestart, requestApplicationUpdate } from '../ui/appli
 import { readWebUiState } from '../ui/webUi.js';
 import { readCompanionSession } from '../ui/companionAuth.js';
 import { readDaemonState } from '../automation/daemon.js';
-import {
-  parseSyncSetupInput,
-  readSyncState,
-  requestSyncRunAndReadState,
-  setupSyncAndReadState,
-} from '../conversations/sync.js';
 import { getAlertSnapshotForProfile } from '../automation/alerts.js';
-import { invalidateAppTopics, subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
+import { subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
 import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
 import { suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
 import {
@@ -76,8 +70,6 @@ async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknow
       return [{ type: 'runs_snapshot' as const, result: await listDurableRuns() }];
     case 'daemon':
       return [{ type: 'daemon_snapshot' as const, state: await readDaemonState() }];
-    case 'sync':
-      return [{ type: 'sync_snapshot' as const, state: await readSyncState() }];
     case 'webUi':
       return [{ type: 'web_ui_snapshot' as const, state: readWebUiState() }];
     default:
@@ -99,7 +91,6 @@ export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
   'alerts',
   'tasks',
   'daemon',
-  'sync',
   'webUi',
 ];
 const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(INITIAL_APP_EVENT_TOPICS);
@@ -181,55 +172,6 @@ function handleApplicationUpdate(_req: Request, res: Response): void {
   }
 }
 
-async function handleSyncState(_req: Request, res: Response): Promise<void> {
-  try {
-    res.json(await readSyncState());
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-async function handleSyncRun(_req: Request, res: Response): Promise<void> {
-  try {
-    const state = await requestSyncRunAndReadState();
-    invalidateAppTopics('sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-async function handleSyncSetup(req: Request, res: Response): Promise<void> {
-  let input: ReturnType<typeof parseSyncSetupInput>;
-
-  try {
-    input = parseSyncSetupInput(req.body);
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-    return;
-  }
-
-  try {
-    const state = await setupSyncAndReadState(input);
-    invalidateAppTopics('sync');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
 export function registerSystemRoutes(
   router: Pick<Express, 'get' | 'post'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
@@ -305,9 +247,6 @@ export function registerSystemRoutes(
   router.get('/api/status', handleStatus);
   router.post('/api/application/restart', handleApplicationRestart);
   router.post('/api/application/update', handleApplicationUpdate);
-  router.get('/api/sync', handleSyncState);
-  router.post('/api/sync/run', handleSyncRun);
-  router.post('/api/sync/setup', handleSyncSetup);
 }
 
 export function registerCompanionSystemRoutes(
@@ -400,8 +339,6 @@ export function registerCompanionSystemRoutes(
     });
   });
 
-  router.get('/api/sync', handleSyncState);
-  router.post('/api/sync/run', handleSyncRun);
   router.post('/api/application/restart', handleApplicationRestart);
   router.post('/api/application/update', handleApplicationUpdate);
 }

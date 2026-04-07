@@ -28,6 +28,7 @@ import {
   type WebUiBadReleaseSummary,
   type WebUiDeploymentSummary,
 } from '@personal-agent/services';
+import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 
 interface LogTail {
   path?: string;
@@ -118,11 +119,12 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
     readSync(fd, buffer, 0, readLength, stats.size - readLength);
 
     const text = buffer.toString('utf-8');
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-      .slice(-maxLines);
+    return filterSystemLogTailLines(
+      text
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0),
+    ).slice(-maxLines);
   } catch {
     return [];
   } finally {

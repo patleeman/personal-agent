@@ -20,7 +20,7 @@ A page is durable markdown plus optional supporting files:
 
 ## Durable root
 
-The canonical synced durable store is now the vault root under:
+The canonical durable store is now the vault root under:
 
 - `~/.local/state/personal-agent/sync/{notes,projects,_skills}/`
 

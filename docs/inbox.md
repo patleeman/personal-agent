@@ -1,6 +1,6 @@
-# Inbox and Activity
+# Notification Center and Activity
 
-The inbox is personal-agent's **durable in-app attention surface** for asynchronous things.
+The inbox/notification center is personal-agent's **local in-app attention surface** for asynchronous things.
 
 It is not a second transcript and it is not a copy of every assistant reply. Reminders and callbacks also surface here instead of going to a separate in-app alert rail.
 
@@ -139,9 +139,9 @@ Bad examples:
 
 This is the implemented behavior today.
 
-### Web UI inbox
+### Web UI notification center
 
-The web inbox combines:
+The web notification center combines:
 
 1. **standalone unread/read activity items** that are not tied to a known conversation
 2. **archived conversations needing attention**
@@ -160,7 +160,7 @@ When the user opens a conversation in the web UI, the conversation attention sta
 
 ### Standalone activity in the web UI
 
-Standalone activity stays in the inbox list until it is marked read.
+Standalone activity stays in the notification center until it is marked read or culled by retention.
 
 ### Reminder and callback notifications in the web UI
 
@@ -266,19 +266,13 @@ Conversations cannot be deleted via `pa inbox`; mark them read instead.
 
 ## Durable storage
 
-### Activity items
+### Activity items + read-state
 
-Standalone activity items live in local runtime state at:
+Standalone activity items and their read-state live together in local runtime sqlite at:
 
-- `~/.local/state/personal-agent/pi-agent/state/inbox/<profile>/activities/<activity-id>.md`
+- `~/.local/state/personal-agent/pi-agent/state/inbox/<profile>/runtime.db`
 
-These are the durable local records used for standalone inbox activity.
-
-### Activity read-state
-
-Activity read-state lives in local runtime state at:
-
-- `~/.local/state/personal-agent/pi-agent/state/inbox/<profile>/read-state.json`
+These records are machine-local and are not shared between devices.
 
 ### Activity → conversation links
 
@@ -290,13 +284,13 @@ These links let an activity item point to one or more conversations without forc
 
 ### Conversation attention state
 
-Durable synced conversation attention state lives at:
+Durable conversation attention state lives at:
 
 - `~/.local/state/personal-agent/sync/pi-agent/state/conversation-attention/<profile>.json`
 
 This state tracks the conversation's acknowledged message count and last attention-read timestamp.
 
-It is used to determine whether a conversation should surface in the inbox across machines.
+It is used to determine whether a conversation should surface in the inbox again after reloads and restarts.
 
 ---
 
@@ -369,7 +363,7 @@ Practical rule:
 
 ## Summary
 
-The inbox is the durable passive attention layer for asynchronous things.
+The notification center is the passive attention layer for asynchronous things.
 
 In practice, that means:
 

@@ -169,7 +169,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       'tasks',
       'runs',
       'daemon',
-      'sync',
       'webUi',
     );
     return currentProfile;

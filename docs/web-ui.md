@@ -88,7 +88,7 @@ When installed, updates use blue/green staging: the next release is built into t
 
 The UI has a dedicated **System** page for:
 
-- consolidated daemon, sync, and managed web UI status
+- consolidated daemon and managed web UI status
 - quick visibility into the processes and background services the app depends on
 - `pa restart --rebuild` and `pa update` controls for the full managed application
 - recent log tails for each subsystem
@@ -287,13 +287,13 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 
 ### System
 
-The System page consolidates the status surfaces for the daemon, sync, and managed web UI.
+The System page consolidates the status surfaces for the daemon and managed web UI.
 
 It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
-- run per-subsystem actions directly from the page (restart Web UI / daemon, or trigger sync now)
+- run per-subsystem actions directly from the page (restart Web UI or daemon)
 - jump into the advanced Daemon or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
 

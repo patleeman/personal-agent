@@ -1,8 +1,8 @@
 # Profiles, AGENTS, Pages, and Skills
 
-Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a synced durable resource store.
+Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a durable resource store.
 
-A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based synced resources plus machine-local overlays.
+A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based durable resources plus machine-local overlays.
 
 See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the storage compatibility term.
 
@@ -15,7 +15,7 @@ If you need Patrick-specific preferences or standing behavior, the active profil
 Resources resolve in this order:
 
 1. repo `defaults/agent` for shared default profile files
-2. synced durable resource roots under `~/.local/state/personal-agent/sync/`
+2. durable resource roots under `~/.local/state/personal-agent/sync/`
 3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 In addition, repo built-ins are always available from:
@@ -25,7 +25,7 @@ In addition, repo built-ins are always available from:
 
 ## What a profile can contain
 
-The synced durable store can contain:
+The durable store can contain:
 
 - `_profiles/<profile>/AGENTS.md`
 - `_profiles/<profile>/settings.json`
@@ -204,11 +204,11 @@ Important convention:
 
 - shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
 - profile-targeted durable resources are selected by filename or metadata applicability
-- durable note and skill pages live in the synced shared vault under `sync/notes/` and `sync/_skills/`
+- durable note and skill pages live in the shared vault under `sync/notes/` and `sync/_skills/`
 
 In particular:
 
-- there is no profile-local synced `memory/` directory
+- there is no profile-local durable `memory/` directory
 - there is no supported durable note store under `pi-agent-runtime/notes`; that path is legacy migration input only
 - behavior targeting belongs in durable `_profiles/<profile>/{AGENTS.md,settings.json,models.json}` and shared vault content under `notes/**`, `_skills/**`, and `projects/**`
 

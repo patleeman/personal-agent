@@ -51,17 +51,17 @@ Useful commands:
 pa profile use assistant
 ```
 
-This file is machine-local runtime config and is intentionally not part of the synced durable surface.
+This file is machine-local runtime config and is intentionally not part of the durable content surface.
 
 Legacy sibling files such as `daemon.json` and `web.json` are read for compatibility when present, but `config.json` is the single canonical write target now.
 
 ## Profile resource configuration
 
-Profile resources resolve from repo defaults plus synced durable roots:
+Profile resources resolve from repo defaults plus durable roots:
 
 - repo shared defaults from `defaults/agent`
 - repo built-ins from `extensions/` and `themes/`
-- synced durable resources under `~/.local/state/personal-agent/sync/`
+- durable resources under `~/.local/state/personal-agent/sync/`
 
 Common durable roots:
 
@@ -80,7 +80,7 @@ See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 Profile resources resolve in this order:
 
 1. repo `defaults/agent`
-2. synced durable resources under `~/.local/state/personal-agent/sync/`
+2. durable resources under `~/.local/state/personal-agent/sync/`
 3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 Higher layers override lower layers where that makes sense.
@@ -88,7 +88,7 @@ Higher layers override lower layers where that makes sense.
 A simple way to think about it:
 
 - repo defaults = common built-in defaults
-- synced durable roots = shared or profile-targeted overrides
+- durable roots = shared or profile-targeted overrides
 - local overlay = machine-local additions
 
 ## Runtime state location
@@ -121,7 +121,7 @@ Canonical state-home layout:
 └── projects/
 
 ~/.local/state/personal-agent/
-├── sync/                       # git-synced app-managed durable state
+├── sync/                       # app-managed durable state subtree
 │   ├── tasks/
 │   └── pi-agent/
 │       ├── sessions/
@@ -140,25 +140,13 @@ Canonical state-home layout:
 
 Note: legacy top-level `tmux/` and `tmux-logs/` are intentionally not part of the canonical layout.
 
-For git-based automatic cross-machine sync, use:
-
-- `pa sync setup --repo <git-url> --fresh` (first machine / new remote)
-- `pa sync setup --repo <git-url> --bootstrap` (additional machines / existing remote history)
-
-You can do the same setup from the Web UI **Sync** tab.
-
-Setup enables the daemon sync module and schedules periodic background sync.
-
-By default, sync tracks everything under `~/.local/state/personal-agent/sync/`.
-Typical durable paths there include:
+The app-managed durable subtree under `~/.local/state/personal-agent/sync/` holds task definitions plus durable conversation session/attention files:
 
 - `tasks/**`
 - `pi-agent/sessions/**`
 - `pi-agent/state/conversation-attention/**`
 
-The external knowledge vault (default: `~/Documents/personal-agent`) is separate from `pa sync` and can be synced by another tool such as Obsidian Sync. You can override it with `PERSONAL_AGENT_VAULT_ROOT`, set `vaultRoot` in machine `config.json`, or use the desktop web UI Settings page. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced because they live outside the sync root. Under `pi-agent/state`, only `conversation-attention/**` belongs in the synced surface; other runtime state stays local.
-
-See [Sync Guide](./sync.md).
+The external knowledge vault (default: `~/Documents/personal-agent`) stays separate. You can override it with `PERSONAL_AGENT_VAULT_ROOT`, set `vaultRoot` in machine `config.json`, or use the desktop web UI Settings page. Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` stay outside the durable subtree.
 
 ## Important environment variables
 
@@ -251,7 +239,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep durable behavior and knowledge in the synced roots under `~/.local/state/personal-agent/sync/` (with repo defaults in `defaults/agent` and optional machine-local additions in `~/.local/state/personal-agent/config/local`)
+2. keep durable task/session state in the app-managed subtree under `~/.local/state/personal-agent/sync/` and durable knowledge in the external vault plus repo defaults
 3. keep machine-local app behavior in `config/config.json`
 4. keep secrets as 1Password references where possible; use env vars only when a component truly needs them
 
@@ -261,5 +249,4 @@ For most setups:
 - [Getting Started](./getting-started.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
-- [Sync Guide](./sync.md)
 - [Troubleshooting](./troubleshooting.md)

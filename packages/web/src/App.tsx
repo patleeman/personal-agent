@@ -30,7 +30,6 @@ import type {
   DurableRunListResult,
   ScheduledTaskSummary,
   SessionMeta,
-  SyncState,
   WebUiState,
 } from './types';
 
@@ -222,7 +221,6 @@ export function App() {
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
-  const [sync, setSyncState] = useState<SyncState | null>(null);
   const [webUi, setWebUiState] = useState<WebUiState | null>(null);
   const openedOnceRef = useRef(false);
   const inflightSessionMetaRefreshesRef = useRef(new Map<string, Promise<void>>());
@@ -306,10 +304,6 @@ export function App() {
     setDaemonState(state);
   }, []);
 
-  const setSync = useCallback((state: SyncState) => {
-    setSyncState(state);
-  }, []);
-
   const setWebUi = useCallback((state: WebUiState) => {
     setWebUiState(state);
   }, []);
@@ -362,14 +356,6 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    void api.sync()
-      .then((state) => {
-        setSync(state);
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-
     void api.webUiState()
       .then((state) => {
         setWebUi(state);
@@ -377,7 +363,7 @@ export function App() {
       .catch(() => {
         // Keep waiting for SSE or a later retry.
       });
-  }, [setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setWebUi]);
+  }, [setActivity, setAlerts, setDaemon, setRuns, setSessions, setTasks, setWebUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -473,9 +459,6 @@ export function App() {
         case 'daemon_snapshot':
           setDaemon(payload.state);
           return;
-        case 'sync_snapshot':
-          setSync(payload.state);
-          return;
         case 'web_ui_snapshot':
           setWebUi(payload.state);
           return;
@@ -506,7 +489,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, bumpConversationVersion, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, bumpConversationVersion, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (
@@ -524,7 +507,7 @@ export function App() {
     <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ activity, alerts, projects, sessions, tasks, runs, setActivity, setAlerts, setProjects, setSessions, setTasks, setRuns }}>
-          <SystemStatusContext.Provider value={{ daemon, sync, webUi, setDaemon, setSync, setWebUi }}>
+          <SystemStatusContext.Provider value={{ daemon, webUi, setDaemon, setWebUi }}>
             <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
               <ThemeProvider>
                 <BrowserRouter>

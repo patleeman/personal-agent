@@ -110,32 +110,6 @@ Check status:
 pa daemon status
 ```
 
-## Sync does not start (especially on another device)
-
-Typical symptoms in the Sync page:
-
-- `Sync module is disabled in daemon configuration`
-- `Daemon does not report the sync module`
-- `Sync repo is not initialized`
-
-Recommended fix sequence:
-
-```bash
-git pull
-pa restart --rebuild
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
-pa sync run
-pa sync status
-```
-
-Use `--fresh` only for first machine/new remote initialization.
-
-If needed, inspect daemon details:
-
-```bash
-pa daemon status --json
-```
-
 ## Scheduled task is missing
 
 Check that the file:

@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useCompanionTopBarAction } from './CompanionLayout';
 import { api } from '../api';
-import { useAppData, useSseConnection, useSystemStatus } from '../contexts';
+import { useAppData, useSystemStatus } from '../contexts';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
-import type { DaemonState, LogTail, SyncState, WebUiState } from '../types';
+import type { DaemonState, LogTail, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 
 function takeLogLines(log: LogTail | undefined, limit = 30): string[] {
@@ -98,60 +98,6 @@ function DaemonSection({
   );
 }
 
-function SyncSection({
-  sync,
-  busy,
-  onRun,
-}: {
-  sync: SyncState | null;
-  busy: boolean;
-  onRun: () => void;
-}) {
-  if (!sync) {
-    return (
-      <Section title="Sync">
-        <p className="text-[13px] text-dim">Loading sync state…</p>
-      </Section>
-    );
-  }
-
-  const enabled = sync.config.enabled;
-  const healthy = enabled && sync.daemon.connected && sync.git.hasRepo && sync.warnings.length === 0;
-  const tone = !enabled ? 'muted' : healthy ? 'success' : 'warning';
-  const logLines = takeLogLines(sync.log, 24);
-  const dirtyEntries = sync.git.dirtyEntries ?? 0;
-
-  return (
-    <Section
-      title="Sync"
-      action={enabled ? (
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={busy}
-          className="rounded-lg px-2 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/80 disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
-        >
-          {busy ? 'Running…' : 'Run now'}
-        </button>
-      ) : null}
-    >
-      <div className="rounded-xl bg-base/65 px-3 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {statusPill(tone, !enabled ? 'disabled' : healthy ? 'healthy' : 'attention')}
-          <span className="text-[12px] text-secondary">{sync.git.hasRepo ? `${dirtyEntries} local change${dirtyEntries === 1 ? '' : 's'}` : 'repo missing'}</span>
-        </div>
-        <p className="mt-2 break-words text-[12px] text-dim">
-          {enabled ? `tracking ${sync.config.remote}/${sync.config.branch}` : 'automatic sync disabled'}
-          {sync.daemon.moduleDetail?.lastSuccessAt ? ` · last success ${timeAgo(sync.daemon.moduleDetail.lastSuccessAt)}` : ''}
-        </p>
-        {issueSummary(sync.warnings) ? <p className="mt-2 text-[12px] leading-relaxed text-warning">{issueSummary(sync.warnings)}</p> : null}
-      </div>
-      {logLines.length > 0 ? <pre className="overflow-auto whitespace-pre-wrap break-words rounded-xl bg-base/65 px-3 py-3 font-mono text-[11px] leading-relaxed text-secondary">{logLines.join('\n')}</pre> : null}
-      {sync.log.path ? <p className="break-words text-[11px] text-dim">{sync.log.path}</p> : null}
-    </Section>
-  );
-}
-
 function WebUiSection({
   webUi,
   busy,
@@ -204,23 +150,13 @@ function WebUiSection({
 }
 
 export function CompanionSystemPage() {
-  const { status: sseStatus } = useSseConnection();
   const { runs, setRuns } = useAppData();
-  const { daemon, sync, webUi, setDaemon, setSync, setWebUi } = useSystemStatus();
+  const { daemon, webUi, setDaemon, setWebUi } = useSystemStatus();
   const { setTopBarAction } = useCompanionTopBarAction();
   const [refreshing, setRefreshing] = useState(false);
-  const [busyAction, setBusyAction] = useState<'daemon' | 'sync' | 'web-ui' | 'restart-app' | 'update-app' | null>(null);
+  const [busyAction, setBusyAction] = useState<'daemon' | 'web-ui' | 'restart-app' | 'update-app' | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-
-  const systemIssues = useMemo(
-    () => [
-      ...(daemon?.warnings ?? []),
-      ...(sync?.warnings ?? []),
-      ...(webUi?.warnings ?? []),
-    ].filter((warning) => warning.trim().length > 0),
-    [daemon?.warnings, sync?.warnings, webUi?.warnings],
-  );
   const runSummary = runs?.summary ?? null;
   const attentionRuns = (runSummary?.recoveryActions.resume ?? 0)
     + (runSummary?.recoveryActions.rerun ?? 0)
@@ -252,14 +188,12 @@ export function CompanionSystemPage() {
     setRefreshing(true);
     setActionError(null);
     try {
-      const [nextDaemon, nextSync, nextWebUi, nextRuns] = await Promise.all([
+      const [nextDaemon, nextWebUi, nextRuns] = await Promise.all([
         api.daemon(),
-        api.sync(),
         api.webUiState(),
         api.runs(),
       ]);
       setDaemon(nextDaemon);
-      setSync(nextSync);
       setWebUi(nextWebUi);
       setRuns(nextRuns);
     } catch (error) {
@@ -267,7 +201,7 @@ export function CompanionSystemPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [setDaemon, setRuns, setSync, setWebUi]);
+  }, [setDaemon, setRuns, setWebUi]);
 
   useEffect(() => {
     setTopBarAction(
@@ -342,11 +276,6 @@ export function CompanionSystemPage() {
               daemon={daemon}
               busy={busyAction === 'daemon'}
               onRestart={() => { void runAction('daemon', api.restartDaemonService, 'Daemon restarted.'); }}
-            />
-            <SyncSection
-              sync={sync}
-              busy={busyAction === 'sync'}
-              onRun={() => { void runAction('sync', api.runSync, 'Sync run requested.'); }}
             />
             <WebUiSection
               webUi={webUi}

@@ -252,7 +252,7 @@ export function CompanionLayout() {
     setTasks,
     setRuns,
   } = useAppData();
-  const { daemon, sync, webUi, setDaemon, setSync, setWebUi } = useSystemStatus();
+  const { daemon, webUi, setDaemon, setWebUi } = useSystemStatus();
   const { data: companionSession, loading: companionSessionLoading } = useApi(api.companionSession, 'companion-auth-session');
   const [pairingCode, setPairingCode] = useState('');
   const [deviceLabel, setDeviceLabel] = useState(() => readDefaultDeviceLabel());
@@ -545,10 +545,6 @@ export function CompanionLayout() {
       void api.daemon().then(applyIfMounted(setDaemon)).catch(() => undefined);
     }
 
-    if (sync === null) {
-      void api.sync().then(applyIfMounted(setSync)).catch(() => undefined);
-    }
-
     if (webUi === null) {
       void api.webUiState().then(applyIfMounted(setWebUi)).catch(() => undefined);
     }
@@ -566,10 +562,8 @@ export function CompanionLayout() {
     setAlerts,
     setDaemon,
     setRuns,
-    setSync,
     setTasks,
     setWebUi,
-    sync,
     tasks,
     webUi,
   ]);
@@ -722,7 +716,7 @@ export function CompanionLayout() {
               </DrawerSection>
 
               <DrawerSection title="Operational">
-                <DrawerLink to={COMPANION_SYSTEM_PATH} label="System" detail="Daemon, sync, web UI status, and controls." Icon={SystemIcon} onClick={() => setMenuOpen(false)} />
+                <DrawerLink to={COMPANION_SYSTEM_PATH} label="System" detail="Daemon, web UI status, and controls." Icon={SystemIcon} onClick={() => setMenuOpen(false)} />
                 <button
                   type="button"
                   onClick={() => { void handleLogout(); }}

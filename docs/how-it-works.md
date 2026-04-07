@@ -31,20 +31,20 @@ Mutable durable knowledge resources default to the external vault at `~/Document
 - `~/Documents/personal-agent/_profiles/<profile>/models.json`
 - `~/Documents/personal-agent/{notes,projects,_skills}/**`
 
-The managed sync repo under `~/.local/state/personal-agent/sync/` still holds app-managed durable state such as tasks and optional synced conversation data.
+The app-managed durable subtree under `~/.local/state/personal-agent/sync/` still holds task definitions and durable conversation metadata.
 
 ### Local runtime state
 
 This is mutable runtime state rooted at `~/.local/state/personal-agent`.
 
-By default it is machine-local. If you enable git sync (`pa sync setup`), selected roots are replicated across devices.
+By default it is machine-local. Durable task/session state lives under the app-managed subtree, while auth, logs, and other runtime files stay local to the current machine.
 
 Common examples:
 
 - `~/.local/state/personal-agent/pi-agent-runtime/auth.json` (always machine-local)
 - `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
 - `~/.local/state/personal-agent/pi-agent-runtime/notes/**` (legacy machine-local note migration input only, not a supported durable store)
-- `~/.local/state/personal-agent/pi-agent/sessions/**` (optionally synced when sync is enabled)
+- `~/.local/state/personal-agent/sync/pi-agent/sessions/**` (durable conversation session files)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
 - inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
 - conversation-local link state such as conversation execution-target bindings
@@ -153,14 +153,6 @@ Use it for:
 
 See [Daemon and Background Automation](./daemon.md).
 
-### Sync
-
-Sync keeps selected durable state aligned across devices using a git-backed state repo and the daemon sync module.
-
-Use it when you want profile/node/project/session durability across machines.
-
-See [Sync Guide](./sync.md).
-
 ## Choose the right feature
 
 | Need | Best fit | Why |
@@ -171,7 +163,6 @@ See [Sync Guide](./sync.md).
 | Interrupt yourself later for a reminder or callback | reminder / notification | conversation-bound wakeup plus stronger notification delivery |
 | Notice async outcomes later without interrupting yourself | inbox/activity | passive attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
-| Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
 
 ## A useful rule of thumb
 
@@ -184,7 +175,6 @@ Think about the system this way:
 - **reminder/callback notifications** = interrupting reminders and callbacks that need acknowledgement
 - **inbox** = durable passive attention for async events
 - **scheduled task** = durable automation definition
-- **sync** = cross-machine durable-state replication
 - **daemon** = background runner
 
 ## Conversation locality boundary
@@ -237,4 +227,3 @@ That is the intended shape of the product.
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Runs](./runs.md)
-- [Sync Guide](./sync.md)

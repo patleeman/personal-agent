@@ -113,29 +113,10 @@ The web UI is the easiest place to explore:
 - Conversations
 - Projects
 - Scheduled tasks
-- Sync state
 - Notes
 - Settings
 
 See [Web UI Guide](./web-ui.md).
-
-## Optional: set up cross-machine sync
-
-If you want durable state synced across devices, run:
-
-```bash
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
-```
-
-On additional devices, use `--bootstrap` instead:
-
-```bash
-pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
-```
-
-You can also do this from the Web UI **Sync** tab.
-
-See [Sync Guide](./sync.md).
 
 ## Optional: use the terminal UI directly
 
@@ -191,11 +172,10 @@ After this page:
 3. [Knowledge Management System](./knowledge-system.md)
 4. [Agent Tool Map](./agent-tool-map.md)
 5. [Conversations](./conversations.md)
-7. [Web UI Guide](./web-ui.md)
-8. [Sync Guide](./sync.md)
-9. [Tracked Pages](./projects.md)
-10. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-11. [Scheduled Tasks](./scheduled-tasks.md)
+6. [Web UI Guide](./web-ui.md)
+7. [Tracked Pages](./projects.md)
+8. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+9. [Scheduled Tasks](./scheduled-tasks.md)
 
 ## If something fails
 

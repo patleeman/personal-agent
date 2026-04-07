@@ -391,57 +391,6 @@ export interface DaemonState {
   log: LogTail;
 }
 
-export interface SyncConfigSummary {
-  enabled: boolean;
-  repoDir: string;
-  remote: string;
-  branch: string;
-  intervalSeconds: number;
-  autoResolveWithAgent: boolean;
-  conflictResolverTaskSlug: string;
-  resolverCooldownMinutes: number;
-  autoResolveErrorsWithAgent: boolean;
-  errorResolverTaskSlug: string;
-  errorResolverCooldownMinutes: number;
-}
-
-export interface SyncGitSummary {
-  hasRepo: boolean;
-  currentBranch?: string;
-  dirtyEntries?: number;
-  lastCommit?: string;
-  remoteUrl?: string;
-}
-
-export interface SyncModuleRuntimeDetail {
-  running: boolean;
-  lastRunAt?: string;
-  lastSuccessAt?: string;
-  lastCommitAt?: string;
-  lastConflictAt?: string;
-  lastConflictFiles: string[];
-  lastResolverStartedAt?: string;
-  lastResolverResult?: string;
-  lastErrorResolverStartedAt?: string;
-  lastErrorResolverResult?: string;
-  lastError?: string;
-}
-
-export interface SyncDaemonSummary {
-  connected: boolean;
-  moduleLoaded: boolean;
-  moduleEnabled: boolean;
-  moduleDetail?: SyncModuleRuntimeDetail;
-}
-
-export interface SyncState {
-  warnings: string[];
-  config: SyncConfigSummary;
-  git: SyncGitSummary;
-  daemon: SyncDaemonSummary;
-  log: LogTail;
-}
-
 export interface WebUiReleaseSummary {
   slot: 'blue' | 'green';
   slotDir: string;
@@ -613,7 +562,6 @@ export type AppEventTopic =
   | 'tasks'
   | 'runs'
   | 'daemon'
-  | 'sync'
   | 'webUi'
   | 'workspace';
 
@@ -629,7 +577,6 @@ export type AppEvent =
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }
   | { type: 'daemon_snapshot'; state: DaemonState }
-  | { type: 'sync_snapshot'; state: SyncState }
   | { type: 'web_ui_snapshot'; state: WebUiState };
 
 // ── Live session ──────────────────────────────────────────────────────────────
@@ -876,6 +823,7 @@ export interface QueuedPromptPreview {
   text: string;
   imageCount: number;
   restorable?: boolean;
+  pending?: boolean;
 }
 
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
