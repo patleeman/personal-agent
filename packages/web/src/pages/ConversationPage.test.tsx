@@ -16,6 +16,9 @@ import {
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   truncateConversationShelfText,
+  resolveConversationInitialHistoricalWarmupTarget,
+  hasConversationLoadedHistoricalTailBlocks,
+  shouldShowConversationInitialHistoricalWarmupLoader,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -71,6 +74,52 @@ describe('conversation live state helpers', () => {
       hasSavedConversationSessionFile: false,
       hasPendingInitialPrompt: false,
     })).toBe(true);
+  });
+
+  it('warms saved conversations to the automatic tail limit before showing them', () => {
+    expect(resolveConversationInitialHistoricalWarmupTarget({
+      draft: false,
+      conversationId: 'conv-123',
+      liveDecision: false,
+      historicalTotalBlocks: 1500,
+      historicalHasOlderBlocks: true,
+    })).toBe(1200);
+
+    expect(resolveConversationInitialHistoricalWarmupTarget({
+      draft: false,
+      conversationId: 'conv-123',
+      liveDecision: true,
+      historicalTotalBlocks: 1500,
+      historicalHasOlderBlocks: true,
+    })).toBeNull();
+  });
+
+  it('keeps the conversation loader up until the warmed historical tail has arrived', () => {
+    const detail = {
+      blocks: Array.from({ length: 800 }, () => null) as never[],
+      totalBlocks: 1500,
+    };
+
+    expect(hasConversationLoadedHistoricalTailBlocks(detail, 1200)).toBe(false);
+    expect(shouldShowConversationInitialHistoricalWarmupLoader({
+      warmupActive: true,
+      targetTailBlocks: 1200,
+      currentTailBlocks: 1200,
+      loadedTailBlocks: false,
+    })).toBe(true);
+
+    const loadedDetail = {
+      ...detail,
+      blocks: Array.from({ length: 1200 }, () => null) as never[],
+    };
+
+    expect(hasConversationLoadedHistoricalTailBlocks(loadedDetail, 1200)).toBe(true);
+    expect(shouldShowConversationInitialHistoricalWarmupLoader({
+      warmupActive: true,
+      targetTailBlocks: 1200,
+      currentTailBlocks: 1200,
+      loadedTailBlocks: true,
+    })).toBe(false);
   });
 
   it('chooses an immediate pending status label for outbound prompts', () => {

@@ -6,7 +6,7 @@ import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -310,6 +310,50 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
+
+export function resolveConversationInitialHistoricalWarmupTarget(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  liveDecision: boolean | null | undefined;
+  historicalTotalBlocks: number;
+  historicalHasOlderBlocks: boolean;
+}): number | null {
+  if (
+    input.draft
+    || !input.conversationId
+    || input.liveDecision !== false
+    || !input.historicalHasOlderBlocks
+    || input.historicalTotalBlocks <= 0
+  ) {
+    return null;
+  }
+
+  return Math.min(input.historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS);
+}
+
+export function hasConversationLoadedHistoricalTailBlocks(
+  detail: Pick<SessionDetail, 'blocks' | 'totalBlocks'> | null | undefined,
+  targetTailBlocks: number | null,
+): boolean {
+  if (!detail || typeof targetTailBlocks !== 'number' || targetTailBlocks <= 0) {
+    return false;
+  }
+
+  return detail.blocks.length >= Math.min(targetTailBlocks, detail.totalBlocks);
+}
+
+export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
+  warmupActive: boolean;
+  targetTailBlocks: number | null;
+  currentTailBlocks: number;
+  loadedTailBlocks: boolean;
+}): boolean {
+  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || input.targetTailBlocks <= 0) {
+    return false;
+  }
+
+  return input.currentTailBlocks < input.targetTailBlocks || !input.loadedTailBlocks;
+}
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -784,6 +828,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+  const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
   const conversationVersionKey = `${conversationEventVersion}`;
   const {
     data: conversationBootstrap,
@@ -873,6 +918,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     isStreaming: stream.isStreaming,
     confirmedLive,
   });
+  const conversationLiveDecision = visibleConversationBootstrap?.liveSession.live
+    ?? sessionSnapshot?.isLive
+    ?? confirmedLive;
   const currentConversationSurface = findConversationSurface(stream.presence, currentSurfaceId);
   const controllingThisSurface = isLiveSession
     && Boolean(currentSurfaceId)
@@ -888,7 +936,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
-  }, [id]);
+    setInitialHistoricalWarmupConversationId(draft || !id ? null : id);
+  }, [draft, id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
   useEffect(() => {
@@ -1070,7 +1119,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const historicalTotalBlocks = computedMessages && computedMessages.length > 0
     ? computedHistoricalTotalBlocks
     : (preservedTranscriptState?.historicalTotalBlocks ?? computedHistoricalTotalBlocks);
+  const knownHistoricalTotalBlocks = Math.max(historicalTotalBlocks, sessionSnapshot?.messageCount ?? 0);
   const historicalHasOlderBlocks = historicalBlockOffset > 0;
+  const knownHistoricalHasOlderBlocks = knownHistoricalTotalBlocks > historicalTailBlocks;
+  const initialHistoricalWarmupActive = Boolean(id) && initialHistoricalWarmupConversationId === id;
+  const initialHistoricalWarmupTarget = resolveConversationInitialHistoricalWarmupTarget({
+    draft,
+    conversationId: initialHistoricalWarmupActive ? id : null,
+    liveDecision: conversationLiveDecision,
+    historicalTotalBlocks: knownHistoricalTotalBlocks,
+    historicalHasOlderBlocks: historicalHasOlderBlocks || knownHistoricalHasOlderBlocks,
+  });
+  const initialHistoricalWarmupTailLoaded = hasConversationLoadedHistoricalTailBlocks(
+    visibleSessionDetail,
+    initialHistoricalWarmupTarget,
+  );
   const showHistoricalLoadMore = historicalHasOlderBlocks;
   const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
@@ -1583,6 +1646,81 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     initialScrollKey,
     prependRestoreKey: historicalBlockOffset,
   });
+  const showInitialHistoricalWarmupLoader = shouldShowConversationInitialHistoricalWarmupLoader({
+    warmupActive: initialHistoricalWarmupActive,
+    targetTailBlocks: initialHistoricalWarmupTarget,
+    currentTailBlocks: historicalTailBlocks,
+    loadedTailBlocks: initialHistoricalWarmupTailLoaded,
+  });
+  const previousInitialHistoricalWarmupLoaderRef = useRef(false);
+
+  useEffect(() => {
+    if (!initialHistoricalWarmupActive || !id) {
+      return;
+    }
+
+    if (conversationLiveDecision === true || knownHistoricalTotalBlocks <= 0) {
+      setInitialHistoricalWarmupConversationId(null);
+      return;
+    }
+
+    if (!historicalHasOlderBlocks && !knownHistoricalHasOlderBlocks) {
+      if (conversationBootstrapLoading || sessionLoading) {
+        return;
+      }
+
+      setInitialHistoricalWarmupConversationId(null);
+      return;
+    }
+
+    if (conversationLiveDecision !== false || !initialHistoricalWarmupTarget) {
+      return;
+    }
+
+    if (historicalTailBlocks < initialHistoricalWarmupTarget) {
+      setHistoricalTailBlocks(initialHistoricalWarmupTarget);
+      return;
+    }
+
+    if (!initialHistoricalWarmupTailLoaded) {
+      return;
+    }
+
+    setInitialHistoricalWarmupConversationId(null);
+  }, [
+    conversationBootstrapLoading,
+    conversationLiveDecision,
+    historicalHasOlderBlocks,
+    historicalTailBlocks,
+    id,
+    initialHistoricalWarmupActive,
+    initialHistoricalWarmupTailLoaded,
+    initialHistoricalWarmupTarget,
+    knownHistoricalHasOlderBlocks,
+    knownHistoricalTotalBlocks,
+    sessionLoading,
+  ]);
+
+  useEffect(() => {
+    previousInitialHistoricalWarmupLoaderRef.current = false;
+  }, [id]);
+
+  useEffect(() => {
+    const wasLoading = previousInitialHistoricalWarmupLoaderRef.current;
+    previousInitialHistoricalWarmupLoaderRef.current = showInitialHistoricalWarmupLoader;
+
+    if (!wasLoading || showInitialHistoricalWarmupLoader || !id || !realMessages?.length) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [id, realMessages, scrollToBottom, showInitialHistoricalWarmupLoader]);
 
   const loadOlderMessages = useCallback((targetMessageIndex?: number, options?: { automatic?: boolean }) => {
     if (!id || sessionLoading || historicalTotalBlocks <= 0) {
@@ -3733,8 +3871,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !stream.hasSnapshot
     && !visibleSessionDetail
     && stream.blocks.length === 0;
-  const showConversationLoadingState = !hasRenderableMessages
-    && (sessionLoading || hydratingLiveConversation);
+  const showConversationLoadingState = showInitialHistoricalWarmupLoader
+    || (!hasRenderableMessages && (sessionLoading || hydratingLiveConversation));
 
   useEffect(() => {
     if (!id || draft || showConversationLoadingState) {
@@ -3757,7 +3895,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
-        {hasRenderableMessages && realMessages ? (
+        {showConversationLoadingState ? (
+          <LoadingState
+            label={showInitialHistoricalWarmupLoader ? 'Loading conversation…' : 'Loading session…'}
+            className="justify-center h-full"
+          />
+        ) : hasRenderableMessages && realMessages ? (
           <>
             {showHistoricalLoadMore && (
               <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
@@ -3803,11 +3946,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               windowingBadgeTopOffset={showHistoricalLoadMore ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
           </>
-        ) : showConversationLoadingState ? (
-          <LoadingState
-            label="Loading session…"
-            className="justify-center h-full"
-          />
         ) : (
           <EmptyState
             className="h-full flex flex-col justify-center px-8"
@@ -3826,7 +3964,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 : 'Start a Pi session to populate this conversation.'}
           />
         )}
-        {showScrollToBottomControl && (
+        {!showConversationLoadingState && showScrollToBottomControl && (
           <button
             onClick={() => {
               scrollToBottom({ behavior: 'smooth' });
@@ -3837,7 +3975,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </button>
         )}
       </div>
-      {shouldRenderConversationRail && realMessages && (
+      {!showConversationLoadingState && shouldRenderConversationRail && realMessages && (
         <ConversationRail
           messages={realMessages}
           messageIndexOffset={messageIndexOffset}
@@ -3878,6 +4016,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     shouldRenderConversationRail,
     showConversationLoadingState,
     showHistoricalLoadMore,
+    showInitialHistoricalWarmupLoader,
     showScrollToBottomControl,
     stream.isStreaming,
     title,
