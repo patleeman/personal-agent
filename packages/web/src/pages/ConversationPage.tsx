@@ -372,7 +372,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-6 rounded-md border border-border-subtle/70 bg-surface/65 px-2 pr-8 text-[10px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-5 rounded-md border border-border-subtle/70 bg-surface/65 px-1.5 pr-6 text-[9.5px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
 
 interface TokenCounts {
   total: number | null;
@@ -417,7 +417,7 @@ function ConversationPreferencesRow({
           value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
           disabled={savingPreference !== null || models.length === 0}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[9.5rem] min-w-[7.75rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[9rem] min-w-[7rem] appearance-none')}
           aria-label="Conversation model"
         >
           {groupedModels.map(([provider, providerModels]) => (
@@ -438,7 +438,7 @@ function ConversationPreferencesRow({
           value={currentThinkingLevel}
           onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[5rem] min-w-[4.5rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[4.75rem] min-w-[4.25rem] appearance-none')}
           aria-label="Conversation thinking level"
         >
           {THINKING_LEVEL_OPTIONS.map((option) => (
