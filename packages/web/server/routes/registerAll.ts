@@ -6,7 +6,7 @@ import {
   registerCompanionMemoryRoutes,
   registerCompanionModelPreferenceRoutes,
 } from './companionMemory.js';
-import { registerConversationStateRoutes } from './conversationState.js';
+import { registerConversationEventStreamRoute, registerConversationStateRoutes } from './conversationState.js';
 import { registerConversationTitlesRoutes } from './conversationTitles.js';
 import {
   registerCompanionConversationRoutes,
@@ -63,6 +63,7 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
   registerCompanionConversationRoutes(companionApp, context);
 
   registerConversationStateRoutes(app, context);
+  registerConversationEventStreamRoute(companionApp);
 
   registerLiveSessionRoutes(app, context);
   registerLiveSessionStatsRoutes(app, context);

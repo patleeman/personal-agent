@@ -47,6 +47,7 @@ import {
   logSlowConversationPerf,
   setServerTimingHeaders,
 } from '../middleware/index.js';
+import { subscribeAppEvents } from '../shared/appEvents.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readWebUiConfig } from '../ui/webUi.js';
@@ -160,11 +161,39 @@ async function readConversationBootstrapState(input: {
   };
 }
 
+export function registerConversationEventStreamRoute(router: Pick<Express, 'get'>): void {
+  router.get('/api/conversations/:id/events', (req, res) => {
+    const conversationId = req.params.id;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+
+    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
+    const unsubscribe = subscribeAppEvents((event) => {
+      if (
+        (event.type === 'session_meta_changed' || event.type === 'session_file_changed' || event.type === 'live_title')
+        && event.sessionId === conversationId
+      ) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    });
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    });
+  });
+}
+
 export function registerConversationStateRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
 ): void {
   initializeConversationStateRoutesContext(context);
+  registerConversationEventStreamRoute(router);
   router.get('/api/conversations/:id/bootstrap', async (req, res) => {
     const startedAt = process.hrtime.bigint();
 

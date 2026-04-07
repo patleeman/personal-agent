@@ -12,6 +12,7 @@ import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
+import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
@@ -903,6 +904,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
   const { tasks, sessions, setSessions } = useAppData();
+  const conversationEventVersion = useConversationEventVersion(id);
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
@@ -954,10 +956,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+  const conversationVersionKey = `${conversationEventVersion}`;
   const {
     data: conversationBootstrap,
     loading: conversationBootstrapLoading,
-  } = useConversationBootstrap(id, { tailBlocks: historicalTailBlocks });
+  } = useConversationBootstrap(id, {
+    tailBlocks: historicalTailBlocks,
+    versionKey: conversationVersionKey,
+  });
   const visibleConversationBootstrap = id && conversationBootstrap?.conversationId === id
     ? conversationBootstrap
     : null;
@@ -1061,15 +1067,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, versions.sessionFiles);
-  }, [bootstrapSessionDetail, historicalTailBlocks, id, versions.sessionFiles]);
+    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, conversationEventVersion);
+  }, [bootstrapSessionDetail, conversationEventVersion, historicalTailBlocks, id]);
 
   const bootstrapPendingInitialSessionDetail = Boolean(id)
     && conversationBootstrapLoading
     && !bootstrapSessionDetail;
   const { detail: sessionDetail, loading: sessionLoading, error: sessionError } = useSessionDetail(
     bootstrapPendingInitialSessionDetail ? undefined : id,
-    { tailBlocks: historicalTailBlocks },
+    {
+      tailBlocks: historicalTailBlocks,
+      version: conversationEventVersion,
+    },
   );
   const visibleSessionDetail = sessionDetail?.meta.id === id
     ? sessionDetail
@@ -1456,7 +1465,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [defaultModel, defaultThinkingLevel, draft, id, versions.sessionFiles]);
+  }, [conversationEventVersion, defaultModel, defaultThinkingLevel, draft, id]);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {

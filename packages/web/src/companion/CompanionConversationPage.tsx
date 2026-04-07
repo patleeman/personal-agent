@@ -19,6 +19,7 @@ import { buildDeferredResumeIndicatorText, compareDeferredResumes } from '../def
 import { useAppData, useLiveTitles } from '../contexts';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useSessionDetail } from '../hooks/useSessions';
+import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
@@ -514,6 +515,7 @@ export function CompanionConversationPage() {
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
   );
+  const conversationEventVersion = useConversationEventVersion(id);
 
   const shouldSubscribeToLiveStream = Boolean(id) && confirmedLive !== false;
   const stream = useSessionStream(id ?? null, {
@@ -521,7 +523,10 @@ export function CompanionConversationPage() {
     tailBlocks: historicalTailBlocks,
   });
 
-  const { detail: fetchedSessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
+  const { detail: fetchedSessionDetail, loading: sessionLoading } = useSessionDetail(id, {
+    tailBlocks: historicalTailBlocks,
+    version: conversationEventVersion,
+  });
   const sessionDetail = (retainedSessionDetail?.meta.id === id ? retainedSessionDetail : null)
     ?? (fetchedSessionDetail?.meta.id === id ? fetchedSessionDetail : null);
   const savedConversationSessionFile = sessionDetail?.meta.file ?? sessionSnapshot?.file ?? null;
@@ -621,7 +626,7 @@ export function CompanionConversationPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, sessionSnapshot?.model]);
+  }, [conversationEventVersion, id, sessionSnapshot?.model]);
 
   const isLiveSession = resolveCompanionConversationLive({
     streamBlockCount: stream.blocks.length,

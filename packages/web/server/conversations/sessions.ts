@@ -1710,6 +1710,53 @@ export function readSessionMeta(sessionId: string): SessionMeta | null {
   return resolveSessionMeta(sessionId);
 }
 
+function readSessionIdFromSessionRecord(filePath: string): string | null {
+  let fd: number | null = null;
+
+  try {
+    fd = openSync(filePath, 'r');
+    const buffer = Buffer.alloc(4096);
+    const bytesRead = readSync(fd, buffer, 0, buffer.length, 0);
+    if (bytesRead <= 0) {
+      return null;
+    }
+
+    const firstLine = buffer.subarray(0, bytesRead).toString('utf-8').split(/\r?\n/, 1)[0]?.trim();
+    if (!firstLine) {
+      return null;
+    }
+
+    const parsed = parseJsonLine(firstLine);
+    if (!parsed || parsed.type !== 'session') {
+      return null;
+    }
+
+    const sessionId = parsed.id?.trim();
+    return sessionId && sessionId.length > 0 ? sessionId : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) {
+      closeSync(fd);
+    }
+  }
+}
+
+export function readKnownSessionIdByFilePath(filePath: string): string | null {
+  ensurePersistentIndexLoaded();
+
+  const cachedSessionId = sessionMetaCache.get(filePath)?.meta.id?.trim();
+  if (cachedSessionId) {
+    return cachedSessionId;
+  }
+
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  return readSessionIdFromSessionRecord(filePath) ?? readSessionMetaByFile(filePath)?.id ?? null;
+}
+
 export function readSessionSearchText(sessionId: string, maxCharacters = 12_000): string | null {
   const meta = resolveSessionMeta(sessionId);
   if (!meta) {

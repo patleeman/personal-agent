@@ -622,6 +622,7 @@ export type AppEvent =
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'session_meta_changed'; sessionId: string }
+  | { type: 'session_file_changed'; sessionId: string }
   | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
   | { type: 'alerts_snapshot'; entries: AlertEntry[]; activeCount: number }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }

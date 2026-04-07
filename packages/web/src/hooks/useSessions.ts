@@ -154,8 +154,10 @@ export function fetchSessionDetailCached(
   return request;
 }
 
-export function useSessionDetail(sessionId: string | undefined, options?: { tailBlocks?: number }) {
+export function useSessionDetail(sessionId: string | undefined, options?: { tailBlocks?: number; version?: number }) {
   const { versions } = useAppEvents();
+  const detailVersion = options?.version ?? versions.sessionFiles;
+  const cacheOptions = options ? { tailBlocks: options.tailBlocks } : undefined;
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,8 +171,8 @@ export function useSessionDetail(sessionId: string | undefined, options?: { tail
     }
 
     let cancelled = false;
-    const cached = readCachedSessionDetailEntry(sessionId, options);
-    const hasFreshCache = cached?.version === versions.sessionFiles;
+    const cached = readCachedSessionDetailEntry(sessionId, cacheOptions);
+    const hasFreshCache = cached?.version === detailVersion;
 
     setDetail(cached?.detail ?? null);
     setLoading(!cached);
@@ -180,7 +182,7 @@ export function useSessionDetail(sessionId: string | undefined, options?: { tail
       return;
     }
 
-    fetchSessionDetailCached(sessionId, options, versions.sessionFiles)
+    fetchSessionDetailCached(sessionId, cacheOptions, detailVersion)
       .then((data) => {
         if (cancelled) {
           return;
@@ -201,7 +203,7 @@ export function useSessionDetail(sessionId: string | undefined, options?: { tail
     return () => {
       cancelled = true;
     };
-  }, [options?.tailBlocks, sessionId, versions.sessionFiles]);
+  }, [cacheOptions?.tailBlocks, detailVersion, sessionId]);
 
   return { detail, loading, error };
 }

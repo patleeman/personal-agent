@@ -68,8 +68,10 @@ describe('app event monitor', () => {
     writeFileSync(taskStateFile, '{}\n', 'utf-8');
     writeFileSync(profileConfigFile, '{"defaultProfile":"assistant"}\n', 'utf-8');
 
-    const sessionFile = join(sessionsDir, 'conv-1.jsonl');
-    writeFileSync(sessionFile, '{"type":"session"}\n', 'utf-8');
+    const sessionDir = join(sessionsDir, '--tmp-project');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-1.jsonl');
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-1","timestamp":"2026-03-29T00:00:00.000Z","cwd":"/tmp/project"}\n', 'utf-8');
 
     const events: AppEvent[] = [];
     const unsubscribe = subscribeAppEvents((event) => {
@@ -90,6 +92,7 @@ describe('app event monitor', () => {
     appendFileSync(sessionFile, '{"type":"message"}\n', 'utf-8');
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
+    await waitFor(() => events.some((event) => event.type === 'session_file_changed' && event.sessionId === 'conv-1'));
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
@@ -123,11 +126,14 @@ describe('app event monitor', () => {
     events.length = 0;
 
     const pendingSessionFile = join(repoRoot, 'conv-2.pending.jsonl');
-    const sessionFile = join(sessionsDir, 'conv-2.jsonl');
-    writeFileSync(pendingSessionFile, '{"type":"session"}\n', 'utf-8');
+    const sessionDir = join(sessionsDir, '--tmp-project');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-2.jsonl');
+    writeFileSync(pendingSessionFile, '{"type":"session","id":"conv-2","timestamp":"2026-03-29T00:00:00.000Z","cwd":"/tmp/project"}\n', 'utf-8');
     renameSync(pendingSessionFile, sessionFile);
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
+    await waitFor(() => events.some((event) => event.type === 'session_file_changed' && event.sessionId === 'conv-2'));
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();

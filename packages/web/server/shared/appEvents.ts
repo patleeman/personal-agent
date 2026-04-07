@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, normalize } from 'node:path';
 import {
   getDurableTasksDir,
   getMachineConfigFilePath,
@@ -14,6 +14,7 @@ import {
   resolveProfileConversationArtifactsDir,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
+import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic =
@@ -35,7 +36,8 @@ export type AppEvent =
   | { type: 'connected' }
   | { type: 'invalidate'; topics: AppEventTopic[] }
   | { type: 'live_title'; sessionId: string; title: string }
-  | { type: 'session_meta_changed'; sessionId: string };
+  | { type: 'session_meta_changed'; sessionId: string }
+  | { type: 'session_file_changed'; sessionId: string };
 
 export interface AppEventMonitorOptions {
   repoRoot: string;
@@ -125,7 +127,7 @@ function collectDirectoryTree(root: string): string[] {
   return directories;
 }
 
-function normalizeWatchFilename(filename: string | Buffer | null | undefined): string | null {
+function normalizeWatchRelativePath(filename: string | Buffer | null | undefined): string | null {
   if (typeof filename === 'string') {
     return filename;
   }
@@ -137,17 +139,21 @@ function normalizeWatchFilename(filename: string | Buffer | null | undefined): s
   return null;
 }
 
-function matchesWatchFilename(filename: string | Buffer | null | undefined, filterName: string | undefined): boolean {
-  if (!filterName) {
+function resolveWatchPath(rootPath: string, filename: string | Buffer | null | undefined): string | null {
+  const relativePath = normalizeWatchRelativePath(filename);
+  if (!relativePath) {
+    return null;
+  }
+
+  return normalize(join(rootPath, relativePath));
+}
+
+function matchesWatchFilename(changedPath: string | null | undefined, filterName: string | undefined): boolean {
+  if (!filterName || !changedPath) {
     return true;
   }
 
-  const normalized = normalizeWatchFilename(filename);
-  if (!normalized) {
-    return true;
-  }
-
-  return basename(normalized) === filterName;
+  return basename(changedPath) === filterName;
 }
 
 function findNearestExistingDirectory(path: string): string {
@@ -336,15 +342,15 @@ function buildWatchTargets(options: AppEventMonitorOptions, profile: string): Ap
   return [...targets.values()];
 }
 
-function startBasicWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
+function startBasicWatch(path: string, onEvent: (eventKind: AppEventWatchKind, changedPath: string | null) => void): WatchStop {
   const watcher = watch(path, { persistent: false }, (eventType, filename) => {
-    onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
+    onEvent(eventType === 'rename' ? 'rename' : 'change', resolveWatchPath(path, filename));
   });
 
   return () => watcher.close();
 }
 
-function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
+function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, changedPath: string | null) => void): WatchStop {
   const watchers = new Map<string, FSWatcher>();
   let syncTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -367,7 +373,7 @@ function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEve
 
       try {
         const watcher = watch(directory, { persistent: false }, (eventType, filename) => {
-          onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
+          onEvent(eventType === 'rename' ? 'rename' : 'change', resolveWatchPath(directory, filename));
           scheduleSync();
         });
         watchers.set(directory, watcher);
@@ -406,10 +412,10 @@ function startManualDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEve
   };
 }
 
-function startDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => void): WatchStop {
+function startDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatchKind, changedPath: string | null) => void): WatchStop {
   try {
     const watcher = watch(path, { persistent: false, recursive: true }, (eventType, filename) => {
-      onEvent(eventType === 'rename' ? 'rename' : 'change', filename);
+      onEvent(eventType === 'rename' ? 'rename' : 'change', resolveWatchPath(path, filename));
     });
 
     return () => watcher.close();
@@ -428,15 +434,20 @@ function startDirectoryTreeWatch(path: string, onEvent: (eventKind: AppEventWatc
 function startWatchTarget(
   target: AppEventWatchTarget,
   onTopics: (topics: Iterable<AppEventTopic>) => void,
+  queueConversationSessionFileChange: (changedPath: string | null) => void,
   scheduleRebuild: () => void,
 ): WatchStop {
-  const handleEvent = (eventKind: AppEventWatchKind, filename?: string | Buffer | null) => {
-    if (!matchesWatchFilename(filename, target.filterName)) {
+  const handleEvent = (eventKind: AppEventWatchKind, changedPath: string | null) => {
+    if (!matchesWatchFilename(changedPath, target.filterName)) {
       return;
     }
 
     if (target.eventKinds && !target.eventKinds.includes(eventKind)) {
       return;
+    }
+
+    if (target.topics.has('sessionFiles')) {
+      queueConversationSessionFileChange(changedPath);
     }
 
     onTopics(target.topics);
@@ -462,8 +473,8 @@ function startWatchTarget(
 function startProfileConfigWatch(profileConfigFile: string, onChange: () => void): WatchStop {
   const parent = dirname(profileConfigFile);
   if (isDirectory(parent)) {
-    return startBasicWatch(parent, (_eventKind, filename) => {
-      if (!matchesWatchFilename(filename, basename(profileConfigFile))) {
+    return startBasicWatch(parent, (_eventKind, changedPath) => {
+      if (!matchesWatchFilename(changedPath, basename(profileConfigFile))) {
         return;
       }
 
@@ -512,16 +523,33 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
   let invalidateTimer: ReturnType<typeof setTimeout> | undefined;
   let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
   const pendingTopics = new Set<AppEventTopic>();
+  const pendingConversationSessionFilePaths = new Set<string>();
 
   const flushInvalidations = () => {
     invalidateTimer = undefined;
-    if (pendingTopics.size === 0) {
-      return;
-    }
 
     const topics = [...pendingTopics];
     pendingTopics.clear();
-    invalidateAppTopics(...topics);
+    if (topics.length > 0) {
+      invalidateAppTopics(...topics);
+    }
+
+    if (pendingConversationSessionFilePaths.size === 0) {
+      return;
+    }
+
+    const sessionIds = new Set<string>();
+    for (const filePath of pendingConversationSessionFilePaths) {
+      const sessionId = readKnownSessionIdByFilePath(filePath)?.trim();
+      if (sessionId) {
+        sessionIds.add(sessionId);
+      }
+    }
+    pendingConversationSessionFilePaths.clear();
+
+    for (const sessionId of sessionIds) {
+      publishAppEvent({ type: 'session_file_changed', sessionId });
+    }
   };
 
   const queueInvalidation = (topics: Iterable<AppEventTopic>) => {
@@ -536,12 +564,26 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     invalidateTimer = setTimeout(flushInvalidations, 75);
   };
 
+  const queueConversationSessionFileChange = (changedPath: string | null) => {
+    const normalizedPath = changedPath?.trim();
+    if (!normalizedPath || !normalizedPath.endsWith('.jsonl')) {
+      return;
+    }
+
+    pendingConversationSessionFilePaths.add(normalizedPath);
+    if (invalidateTimer) {
+      return;
+    }
+
+    invalidateTimer = setTimeout(flushInvalidations, 75);
+  };
+
   const rebuildWatchers = () => {
     for (const stop of watcherStops) {
       stop();
     }
     watcherStops = buildWatchTargets(options, currentProfile)
-      .map((target) => startWatchTarget(target, queueInvalidation, scheduleRebuild));
+      .map((target) => startWatchTarget(target, queueInvalidation, queueConversationSessionFileChange, scheduleRebuild));
   };
 
   const refreshProfile = () => {
@@ -592,6 +634,7 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     profileWatcherStop?.();
     profileWatcherStop = undefined;
     pendingTopics.clear();
+    pendingConversationSessionFilePaths.clear();
     monitorStop = undefined;
   };
 }
