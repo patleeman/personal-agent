@@ -412,6 +412,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   const configuredSessionId = resolveSessionStreamSubscriptionId(normalizedSessionId, options);
   const requestedSessionId = resolveEffectiveSessionStreamSubscriptionId(normalizedSessionId, options, forcedSessionId);
   const stateSessionIdRef = useRef<string | null>(requestedSessionId);
+  const previousConversationIdRef = useRef<string | null>(null);
+  const previousRequestedSessionIdRef = useRef<string | null>(null);
   const surfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const surfaceType = useMemo(() => detectConversationSurfaceType(), []);
   const registerSurface = options?.registerSurface !== false;
@@ -544,12 +546,20 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   }, [ensureRequestedSubscription, normalizedSessionId]);
 
   useEffect(() => {
+    const requestedSessionIdChanged = previousRequestedSessionIdRef.current !== requestedSessionId;
+    const conversationIdChanged = previousConversationIdRef.current !== normalizedSessionId;
+    if (!requestedSessionIdChanged && !conversationIdChanged) {
+      return;
+    }
+
+    previousConversationIdRef.current = normalizedSessionId;
+    previousRequestedSessionIdRef.current = requestedSessionId;
     stateSessionIdRef.current = requestedSessionId;
     const seededState = readSeededSessionStreamState(requestedSessionId);
     blocksRef.current = seededState.blocks;
     streamingRef.current = seededState.isStreaming;
     setState(seededState);
-  }, [requestedSessionId]);
+  }, [normalizedSessionId, requestedSessionId]);
 
   useEffect(() => {
     if (!requestedSessionId || !shouldPersistWarmLiveSessionState(state)) {
