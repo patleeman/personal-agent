@@ -373,7 +373,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-7 rounded-md border border-border-subtle bg-elevated/60 px-2.5 text-[11px] text-primary outline-none transition-colors focus:border-accent/60 disabled:opacity-50';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-5 rounded border border-transparent bg-transparent px-1.5 text-[10px] font-mono text-dim outline-none transition-colors hover:border-border-subtle focus:border-border-default disabled:opacity-40';
 
 interface TokenCounts {
   total: number | null;
@@ -411,14 +411,14 @@ function ConversationPreferencesRow({
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] text-dim">
-      <label className="inline-flex min-w-0 items-center gap-1.5">
-        <span className="uppercase tracking-[0.14em] text-dim/65">model</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <label className="relative inline-flex min-w-0 items-center">
+        <span className="sr-only">Conversation model</span>
         <select
           value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
           disabled={savingPreference !== null || models.length === 0}
-          className={COMPOSER_PREFERENCE_SELECT_CLASS}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[13rem] min-w-[10rem] appearance-none')}
           aria-label="Conversation model"
         >
           {groupedModels.map(([provider, providerModels]) => (
@@ -429,20 +429,26 @@ function ConversationPreferencesRow({
             </optgroup>
           ))}
         </select>
+        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-3 text-dim/70">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </label>
-      <label className="inline-flex min-w-0 items-center gap-1.5">
-        <span className="uppercase tracking-[0.14em] text-dim/65">thinking</span>
+      <label className="relative inline-flex min-w-0 items-center">
+        <span className="sr-only">Conversation thinking level</span>
         <select
           value={currentThinkingLevel}
           onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={COMPOSER_PREFERENCE_SELECT_CLASS}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'min-w-[6.5rem] appearance-none')}
           aria-label="Conversation thinking level"
         >
           {THINKING_LEVEL_OPTIONS.map((option) => (
             <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
           ))}
         </select>
+        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-3 text-dim/70">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
       </label>
     </div>
   );
@@ -4352,79 +4358,90 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-end gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={openFilePicker}
-                          disabled={composerDisabled}
-                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-secondary transition-colors hover:bg-elevated/50 hover:text-primary disabled:opacity-40"
-                          title="Attach image or file"
-                          aria-label="Attach image or file"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 5v14" />
-                            <path d="M5 12h14" />
-                          </svg>
-                        </button>
-                        <ConversationPreferencesRow
-                          models={models}
-                          currentModel={currentModel || model || defaultModel}
-                          currentThinkingLevel={currentThinkingLevel}
-                          savingPreference={savingPreference}
-                          onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
-                          onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
-                        />
-                      </div>
+                <div className="flex flex-col gap-0">
+                  <div className="px-3 pt-3">
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={e => {
+                        setInput(e.target.value);
+                        setSlashIdx(0);
+                        setMentionIdx(0);
+                        rememberComposerSelection(e.target);
+                      }}
+                      onSelect={e => { rememberComposerSelection(e.currentTarget); }}
+                      onClick={e => { rememberComposerSelection(e.currentTarget); }}
+                      onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
+                      onFocus={e => { rememberComposerSelection(e.currentTarget); }}
+                      onKeyDown={handleKeyDown}
+                      onPaste={handlePaste}
+                      rows={1}
+                      disabled={composerDisabled}
+                      className="w-full resize-none bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
+                      placeholder={pendingAskUserQuestion
+                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
+                      title={pendingAskUserQuestion
+                        ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                        : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                      style={{ minHeight: '52px', maxHeight: '200px' }}
+                    />
+                  </div>
 
-                      <textarea
-                        ref={textareaRef}
-                        value={input}
-                        onChange={e => {
-                          setInput(e.target.value);
-                          setSlashIdx(0);
-                          setMentionIdx(0);
-                          rememberComposerSelection(e.target);
-                        }}
-                        onSelect={e => { rememberComposerSelection(e.currentTarget); }}
-                        onClick={e => { rememberComposerSelection(e.currentTarget); }}
-                        onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
-                        onFocus={e => { rememberComposerSelection(e.currentTarget); }}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        rows={1}
+                  <div className="flex flex-wrap items-center gap-2 px-3 pb-2 pt-1">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openFilePicker}
                         disabled={composerDisabled}
-                        className="w-full resize-none bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
-                        placeholder={pendingAskUserQuestion
-                          ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                          : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
-                        title={pendingAskUserQuestion
-                          ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                          : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                        style={{ minHeight: '24px', maxHeight: '160px' }}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
+                        title="Attach image or file"
+                        aria-label="Attach image or file"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 5v14" />
+                          <path d="M5 12h14" />
+                        </svg>
+                      </button>
+                      <ConversationPreferencesRow
+                        models={models}
+                        currentModel={currentModel || model || defaultModel}
+                        currentThinkingLevel={currentThinkingLevel}
+                        savingPreference={savingPreference}
+                        onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
+                        onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
                       />
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2 pb-0.5">
-                      {!stream.isStreaming && (
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openDrawingEditor}
+                        disabled={composerDisabled || stream.isStreaming}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
+                        title="Create drawing"
+                        aria-label="Create drawing"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
+                      </button>
+
+                      {stream.isStreaming ? (
                         <button
                           type="button"
-                          onClick={openDrawingEditor}
-                          disabled={composerDisabled}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-secondary transition-colors hover:bg-elevated/50 hover:text-primary disabled:opacity-40"
-                          title="Create drawing"
-                          aria-label="Create drawing"
+                          onClick={() => { void stream.abort(); }}
+                          disabled={conversationNeedsTakeover}
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
+                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
+                          aria-label="Stop"
                         >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
                           </svg>
                         </button>
-                      )}
-
-                      {composerHasContent ? (
+                      ) : composerHasContent ? (
                         <button
                           type="button"
                           onClick={(event) => {
@@ -4437,10 +4454,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           }}
                           disabled={composerDisabled}
                           className={cx(
-                            'flex h-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+                            'flex h-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
                             composerSubmit.label === 'Send'
-                              ? 'w-8 bg-accent text-white hover:bg-accent/90'
-                              : 'px-3 text-[11px] font-medium',
+                              ? 'w-9 bg-accent text-white hover:bg-accent/90'
+                              : 'px-3.5 text-[11px] font-medium',
                             composerSubmit.label === 'Steer'
                               ? 'bg-warning/15 text-warning hover:bg-warning/25'
                               : composerSubmit.label === 'Follow up'
@@ -4458,24 +4475,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             <span>{composerSubmit.label}</span>
                           )}
                         </button>
-                      ) : stream.isStreaming ? (
-                        <button
-                          type="button"
-                          onClick={() => { void stream.abort(); }}
-                          disabled={conversationNeedsTakeover}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
-                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
-                          aria-label="Stop"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                          </svg>
-                        </button>
                       ) : (
                         <button
                           type="button"
                           disabled={true}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-elevated/50 text-dim/40"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default/70 bg-surface/65 text-dim/70"
                           title="Send"
                           aria-label="Send"
                         >
@@ -4487,8 +4491,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 text-[10px] text-dim">
-                    <div className="flex min-w-0 items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 border-t border-border-subtle/70 px-3 pb-2.5 pt-2 text-[10px] text-dim">
+                    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                       {sessionTokens && (
                         <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
                       )}
