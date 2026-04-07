@@ -218,6 +218,23 @@ describe('Sidebar', () => {
     expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
+  it('renders compact left-edge indicators for running and review states', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-running', 'conv-review']));
+
+    const html = renderSidebar('/inbox', {
+      sessions: [
+        createSession({ id: 'conv-running', title: 'Active conversation', isRunning: true }),
+        createSession({ id: 'conv-review', title: 'Unread follow-up', file: '/tmp/conv-review.jsonl', needsAttention: true }),
+      ],
+    });
+
+    expect(html).toContain('aria-label="Running conversation"');
+    expect(html).toContain('aria-label="Conversation needs review"');
+    expect(html).toContain('animate-spin');
+    expect(html).not.toContain('>running<');
+    expect(html).not.toContain('>needs review<');
+  });
+
   it('keeps live title overrides scoped to the matching conversation id', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'conv-456']));
 

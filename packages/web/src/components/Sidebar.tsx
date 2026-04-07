@@ -391,20 +391,29 @@ function OpenConversationRow({
         onMouseLeave={onMouseLeave}
         title={rowTitle}
       >
-        <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
+        <div className="flex w-3 shrink-0 flex-col items-center self-stretch">
+          {(session.isRunning || needsAttention) ? (
+            <ConversationStatusText
+              isRunning={session.isRunning}
+              needsAttention={needsAttention}
+              className="mt-0.5 shrink-0"
+            />
+          ) : null}
+          <span
+            aria-hidden="true"
+            className={[
+              'mt-0.5 w-px flex-1 rounded-full transition-colors',
+              active ? 'bg-accent/80' : 'bg-border-subtle',
+            ].join(' ')}
+          />
+        </div>
         <div className={[
           'min-w-0 flex-1',
           showTrailingControls && 'pr-11',
         ].filter(Boolean).join(' ')}>
           <p className="ui-row-title truncate">{session.title}</p>
-          <p className="ui-sidebar-session-meta flex items-center gap-1.5 min-w-0">
+          <p className="ui-sidebar-session-meta flex items-center min-w-0">
             <span className="shrink-0">{timeAgo(session.timestamp)}</span>
-            {(session.isRunning || needsAttention) && (
-              <>
-                <span className="shrink-0 opacity-40">·</span>
-                <ConversationStatusText isRunning={session.isRunning} needsAttention={needsAttention} className="shrink-0" />
-              </>
-            )}
           </p>
         </div>
         {showTrailingControls ? (
