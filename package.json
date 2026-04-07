@@ -33,7 +33,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.65.0"
+    "@mariozechner/pi-coding-agent": "^0.65.2"
   },
   "overrides": {
     "form-data": "^2.5.5",

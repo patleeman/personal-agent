@@ -185,6 +185,8 @@ The conversation header stays compact: the working directory sits inline beside 
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
+Live-conversation control is tracked per connected surface. The desktop web UI and the `/app` companion can mirror the same live session, but desktop SSE connections do not depend on companion auth state unless the request is actually coming through the companion `/app` API surface.
+
 When reminder/callback notifications exist and browser notifications are still off, the desktop web UI prompts you to enable browser notifications so reminders and callbacks can still interrupt while the tab is hidden.
 
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.

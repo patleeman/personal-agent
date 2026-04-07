@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   createSession as createLocalSession,
   destroySession,
@@ -125,6 +124,17 @@ function readCookieValue(req: Request, cookieName: string): string {
 function isValidCompanionSession(req: Request): boolean {
   const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
   return Boolean(readCompanionSession(sessionToken, { touch: false, surface: 'companion' }));
+}
+
+export function shouldRequireCompanionSessionForLiveSessionSse(req: Pick<Request, 'url'> & { originalUrl?: string }): boolean {
+  const requestUrl = typeof req.originalUrl === 'string' && req.originalUrl.trim().length > 0
+    ? req.originalUrl.trim()
+    : typeof req.url === 'string'
+      ? req.url.trim()
+      : '';
+
+  return requestUrl === '/app/api/live-sessions'
+    || requestUrl.startsWith('/app/api/live-sessions/');
 }
 
 function writeSseHeaders(res: Response): void {
@@ -1004,7 +1014,7 @@ export function registerCompanionLiveSessionRoutes(
     writeSseHeaders(res);
 
     const heartbeat = setInterval(() => {
-      if (!isValidCompanionSession(req)) {
+      if (shouldRequireCompanionSessionForLiveSessionSse(req) && !isValidCompanionSession(req)) {
         clearInterval(heartbeat);
         unsubscribe?.();
         res.end();
