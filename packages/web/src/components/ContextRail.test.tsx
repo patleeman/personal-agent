@@ -7,7 +7,7 @@ import { useApi } from '../hooks.js';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
 import type { DurableRunDetailResult, SessionMeta } from '../types.js';
-import { ContextRail } from './ContextRail.js';
+import { ContextRail, formatConversationRailRunSummary, groupConversationRailRunCards } from './ContextRail.js';
 
 vi.mock('../hooks', () => ({
   useApi: vi.fn(),
@@ -91,6 +91,41 @@ function createDetail(overrides: Partial<DurableRunDetailResult['run']> = {}): D
     },
   };
 }
+
+describe('ContextRail run grouping helpers', () => {
+  it('groups related work into user-facing buckets', () => {
+    const groups = groupConversationRailRunCards([
+      { mention: { source: 'mentioned' } },
+      { mention: { source: 'conversation' } },
+      { mention: { source: 'background' } },
+      { mention: { source: 'background' } },
+    ] as Array<{ mention: { source: 'conversation' | 'background' | 'mentioned' | 'other' } }>);
+
+    expect(groups.map((group) => [group.key, group.title, group.items.length])).toEqual([
+      ['conversation', 'This conversation', 1],
+      ['background', 'Background work', 2],
+      ['mentioned', 'Mentioned in the thread', 1],
+    ]);
+  });
+
+  it('uses user-facing summary text for related work', () => {
+    expect(formatConversationRailRunSummary({
+      loading: false,
+      totalCount: 0,
+      activeCount: 0,
+      reviewCount: 0,
+      hasOnlyUnresolvedCards: false,
+    })).toBe('No runs');
+
+    expect(formatConversationRailRunSummary({
+      loading: false,
+      totalCount: 5,
+      activeCount: 2,
+      reviewCount: 1,
+      hasOnlyUnresolvedCards: false,
+    })).toBe('5 runs · 2 active · 1 need review');
+  });
+});
 
 describe('ContextRail run detail', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -283,6 +318,33 @@ describe('ContextRail run detail', () => {
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
     expect(html).not.toContain('Referenced projects');
     expect(html).not.toContain('No referenced projects.');
+  });
+
+  it('limits the saved-conversation rail to runs and details', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/conv-123']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Runs');
+    expect(html).toContain('Details');
+    expect(html).not.toContain('Working directory');
+    expect(html).not.toContain('Changed files');
+    expect(html).not.toContain('Open workspace browser');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {

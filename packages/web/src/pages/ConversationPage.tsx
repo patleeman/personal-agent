@@ -5,7 +5,7 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
-import { DraftConversationCwdPicker } from '../components/DraftConversationCwdPicker';
+import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
@@ -21,7 +21,6 @@ import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConve
 import { getConversationFileTargetFromSearch, resolveConversationFileTarget, setConversationFileTargetInSearch } from '../conversationFiles';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversationHeader';
-import { buildConversationCwdHistory } from '../conversationCwdHistory';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -91,7 +90,7 @@ import {
 } from '../conversationComposerSubmit';
 import { insertReplyQuoteIntoComposer } from '../conversationReplyQuote';
 import { useReloadState } from '../reloadState';
-import { ensureConversationTabOpen } from '../sessionTabs';
+import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
@@ -427,7 +426,57 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-5 rounded-md border border-border-subtle/70 bg-surface/65 px-1.5 pr-6 text-[9.5px] font-medium text-secondary outline-none transition-colors hover:border-border-default focus:border-accent/60 disabled:opacity-40';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z" />
+      <path d="M3.75 9.75h16.5" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 20.25h9" />
+      <path d="m16.875 3.375 3.75 3.75" />
+      <path d="M18.75 1.5a2.652 2.652 0 1 1 3.75 3.75L7.5 20.25l-4.5 1.5 1.5-4.5L18.75 1.5Z" />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 6 12 12" />
+      <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
+function ComposerQueuedSendIcon({ label, className }: { label: 'Steer' | 'Follow up'; className?: string }) {
+  if (label === 'Follow up') {
+    return (
+      <svg className={className} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 14 4 9l5-5" />
+        <path d="M20 20c0-6-4-11-11-11H4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg className={className} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 12h11" />
+      <path d="m11 5 7 7-7 7" />
+    </svg>
+  );
+}
+
+function formatComposerQueuedSendLabel(label: 'Steer' | 'Follow up'): string {
+  return label === 'Follow up' ? 'followup' : 'steer';
+}
 
 interface TokenCounts {
   total: number | null;
@@ -472,7 +521,7 @@ function ConversationPreferencesRow({
           value={currentModel}
           onChange={(event) => { onSelectModel(event.target.value); }}
           disabled={savingPreference !== null || models.length === 0}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[9rem] min-w-[7rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[11.5rem] min-w-[8.25rem] appearance-none')}
           aria-label="Conversation model"
         >
           {groupedModels.map(([provider, providerModels]) => (
@@ -483,7 +532,7 @@ function ConversationPreferencesRow({
             </optgroup>
           ))}
         </select>
-        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-3 text-dim/70">
+        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </label>
@@ -493,14 +542,14 @@ function ConversationPreferencesRow({
           value={currentThinkingLevel}
           onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[4.75rem] min-w-[4.25rem] appearance-none')}
+          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[6.5rem] min-w-[5.75rem] appearance-none')}
           aria-label="Conversation thinking level"
         >
           {THINKING_LEVEL_OPTIONS.map((option) => (
             <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
           ))}
         </select>
-        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-3 text-dim/70">
+        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </label>
@@ -1277,6 +1326,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleSaving(false);
+    setConversationCwdEditorOpen(false);
+    setConversationCwdDraft('');
+    setConversationCwdPickBusy(false);
+    setConversationCwdBusy(false);
+    setConversationCwdError(null);
     setSavingPreference(null);
     setNotice(null);
 
@@ -1305,10 +1359,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const [draftCwdValue, setDraftCwdValue] = useState('');
-  const recentConversationCwds = useMemo(
-    () => buildConversationCwdHistory(sessions, draftCwdValue),
-    [draftCwdValue, sessions],
-  );
+  const [draftCwdEditorOpen, setDraftCwdEditorOpen] = useState(false);
+  const [draftCwdDraft, setDraftCwdDraft] = useState('');
+  const [draftCwdPickBusy, setDraftCwdPickBusy] = useState(false);
+  const [draftCwdError, setDraftCwdError] = useState<string | null>(null);
+  const [conversationCwdEditorOpen, setConversationCwdEditorOpen] = useState(false);
+  const [conversationCwdDraft, setConversationCwdDraft] = useState('');
+  const [conversationCwdPickBusy, setConversationCwdPickBusy] = useState(false);
+  const [conversationCwdBusy, setConversationCwdBusy] = useState(false);
+  const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!draft) {
@@ -1328,6 +1387,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftPreferences);
     };
   }, [defaultModel, defaultThinkingLevel, draft]);
+
+  useEffect(() => {
+    if (!draft) {
+      setDraftCwdEditorOpen(false);
+      setDraftCwdDraft('');
+      setDraftCwdPickBusy(false);
+      setDraftCwdError(null);
+      return;
+    }
+
+    if (!draftCwdEditorOpen) {
+      setDraftCwdDraft(draftCwdValue);
+    }
+  }, [draft, draftCwdEditorOpen, draftCwdValue]);
 
   useEffect(() => {
     if (draft) {
@@ -1781,10 +1854,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [sessionSnapshot, visibleSessionDetail?.meta],
   );
   const currentCwd = useMemo(
-    () => liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null,
-    [liveSessionContext?.cwd, currentSessionMeta?.cwd],
+    () => draft
+      ? (draftCwdValue || null)
+      : (liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null),
+    [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
   );
+  const hasDraftCwd = draftCwdValue.length > 0;
   const branchLabel = liveSessionContext?.branch ?? null;
+
+  useEffect(() => {
+    if (draft) {
+      setConversationCwdEditorOpen(false);
+      setConversationCwdDraft('');
+      setConversationCwdPickBusy(false);
+      setConversationCwdBusy(false);
+      setConversationCwdError(null);
+      return;
+    }
+
+    if (!conversationCwdEditorOpen) {
+      setConversationCwdDraft(currentCwd ?? '');
+    }
+  }, [conversationCwdEditorOpen, currentCwd, draft]);
   const gitLineSummary = useMemo(
     () => buildGitLineSummary(liveSessionContext?.git ?? null),
     [liveSessionContext?.git],
@@ -2499,6 +2590,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    setConversationCwdEditorOpen(false);
+    setConversationCwdError(null);
     setTitleDraft(title === NEW_CONVERSATION_TITLE ? '' : title);
     setIsEditingTitle(true);
   }, [conversationNeedsTakeover, draft, id, title, titleSaving, showNotice]);
@@ -2521,6 +2614,107 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     await renameConversationTo(nextTitle);
   }, [draft, id, renameConversationTo, showNotice, titleDraft]);
+
+  const submitConversationCwdChange = useCallback(async (nextCwdOverride?: string) => {
+    if (draft || !id || conversationCwdBusy) {
+      return;
+    }
+
+    if (!ensureConversationCanControl('change its working directory')) {
+      return;
+    }
+
+    if (stream.isStreaming) {
+      showNotice('danger', 'Stop the current response before changing the working directory.', 4000);
+      return;
+    }
+
+    const nextCwd = (nextCwdOverride ?? conversationCwdDraft).trim();
+    if (!nextCwd) {
+      setConversationCwdError('Enter a directory path.');
+      return;
+    }
+
+    setConversationCwdBusy(true);
+    setConversationCwdError(null);
+
+    try {
+      const result = await api.changeConversationCwd(id, nextCwd, currentSurfaceId);
+      setConversationCwdEditorOpen(false);
+      setConversationCwdDraft(result.cwd);
+
+      if (!result.changed || result.id === id) {
+        void refetchLiveSessionContext();
+        return;
+      }
+
+      ensureConversationTabOpen(result.id);
+      closeConversationTab(id);
+      navigate(`/conversations/${result.id}`);
+    } catch (error) {
+      setConversationCwdError(error instanceof Error ? error.message : 'Could not change the working directory.');
+    } finally {
+      setConversationCwdBusy(false);
+    }
+  }, [conversationCwdBusy, conversationCwdDraft, currentSurfaceId, draft, ensureConversationCanControl, id, navigate, refetchLiveSessionContext, showNotice, stream.isStreaming]);
+
+  const beginConversationCwdEdit = useCallback(() => {
+    if (draft || !id || conversationCwdBusy || conversationCwdPickBusy) {
+      return;
+    }
+
+    if (!ensureConversationCanControl('change its working directory')) {
+      return;
+    }
+
+    if (stream.isStreaming) {
+      showNotice('danger', 'Stop the current response before changing the working directory.', 4000);
+      return;
+    }
+
+    setConversationCwdDraft(currentCwd ?? '');
+    setConversationCwdError(null);
+    setConversationCwdEditorOpen(true);
+  }, [conversationCwdBusy, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming]);
+
+  const cancelConversationCwdEdit = useCallback(() => {
+    setConversationCwdDraft(currentCwd ?? '');
+    setConversationCwdError(null);
+    setConversationCwdEditorOpen(false);
+  }, [currentCwd]);
+
+  const pickConversationCwd = useCallback(async () => {
+    if (draft || !id || conversationCwdPickBusy || conversationCwdBusy) {
+      return;
+    }
+
+    if (!ensureConversationCanControl('change its working directory')) {
+      return;
+    }
+
+    if (stream.isStreaming) {
+      showNotice('danger', 'Stop the current response before changing the working directory.', 4000);
+      return;
+    }
+
+    setConversationCwdPickBusy(true);
+    setConversationCwdError(null);
+
+    try {
+      const result = await api.pickFolder(currentCwd ?? undefined);
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setConversationCwdDraft(result.path);
+      setConversationCwdEditorOpen(false);
+      await submitConversationCwdChange(result.path);
+    } catch (error) {
+      setConversationCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+    } finally {
+      setConversationCwdPickBusy(false);
+    }
+  }, [conversationCwdBusy, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming, submitConversationCwdChange]);
 
   useEffect(() => {
     if (draft || !id || !pendingInitialPrompt || !stream.hasSnapshot) {
@@ -3164,6 +3358,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setDraftCwdValue('');
+    setDraftCwdDraft('');
+    setDraftCwdEditorOpen(false);
+    setDraftCwdPickBusy(false);
+    setDraftCwdError(null);
     setInput('');
     setAttachments([]);
     setDrawingAttachments([]);
@@ -3175,6 +3373,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (location.pathname !== DRAFT_CONVERSATION_ROUTE) {
       navigate(DRAFT_CONVERSATION_ROUTE);
     }
+  }
+
+  async function pickDraftConversationCwd() {
+    if (!draft || draftCwdPickBusy) {
+      return;
+    }
+
+    setDraftCwdPickBusy(true);
+    setDraftCwdError(null);
+    try {
+      const result = await api.pickFolder(draftCwdValue || undefined);
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setDraftConversationCwd(result.path);
+      setDraftCwdDraft(result.path);
+      setDraftCwdEditorOpen(false);
+    } catch (error) {
+      setDraftCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+    } finally {
+      setDraftCwdPickBusy(false);
+    }
+  }
+
+  function startEditingDraftConversationCwd() {
+    setDraftCwdDraft(draftCwdValue);
+    setDraftCwdError(null);
+    setDraftCwdEditorOpen(true);
+  }
+
+  function cancelEditingDraftConversationCwd() {
+    setDraftCwdDraft(draftCwdValue);
+    setDraftCwdError(null);
+    setDraftCwdEditorOpen(false);
+  }
+
+  function saveDraftConversationCwd() {
+    setDraftConversationCwd(draftCwdDraft);
+    setDraftCwdError(null);
+    setDraftCwdEditorOpen(false);
   }
 
   const setDraftConversationCwd = useCallback((nextCwd: string) => {
@@ -3191,6 +3430,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const clearDraftConversationCwdSelection = useCallback(() => {
     clearDraftConversationCwd();
     setDraftCwdValue('');
+    setDraftCwdDraft('');
+    setDraftCwdEditorOpen(false);
+    setDraftCwdError(null);
   }, []);
 
   function showSessionSummary() {
@@ -3623,7 +3865,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number) {
+  async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number, previewId?: string) {
     if (!id || !isLiveSession) {
       showNotice('danger', 'Queued prompts can only be restored from a live session.', 4000);
       return;
@@ -3634,7 +3876,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      const restored = await api.restoreQueuedMessage(id, { behavior, index: queueIndex }, currentSurfaceId);
+      const restored = await api.restoreQueuedMessage(id, {
+        behavior,
+        index: queueIndex,
+        ...(previewId ? { previewId } : {}),
+      }, currentSurfaceId);
       const restoredText = typeof restored.text === 'string' ? restored.text : '';
       const restoredFiles = restoreQueuedImageFiles(restored.images, behavior, queueIndex);
       const hasRestoredText = restoredText.trim().length > 0;
@@ -3866,6 +4112,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
   const composerDisabled = conversationNeedsTakeover;
+  const conversationCwdActionDisabledReason = conversationNeedsTakeover
+    ? 'Take over this conversation to change its working directory.'
+    : stream.isStreaming
+      ? 'Stop the current response before changing the working directory.'
+      : null;
+  const renameConversationDisabled = conversationNeedsTakeover
+    || conversationCwdEditorOpen
+    || conversationCwdPickBusy
+    || conversationCwdBusy;
   const hasComposerShelfContent = draftMentionItems.length > 0
     || pendingQueue.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
@@ -3984,19 +4239,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
-              ? 'Start typing to create a conversation. Choose its initial working directory here, or let the saved default from Settings apply.'
+              ? 'Start typing to create a conversation. Set its initial working directory next to the title, or let the saved default from Settings apply.'
               : isLiveSession
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
-            action={draft ? (
-              <DraftConversationCwdPicker
-                variant="empty-state"
-                value={draftCwdValue}
-                recentCwds={recentConversationCwds}
-                onChange={setDraftConversationCwd}
-                onClear={clearDraftConversationCwdSelection}
-              />
-            ) : undefined}
           />
         )}
         {!showConversationLoadingState && showScrollToBottomControl && (
@@ -4020,12 +4266,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       )}
     </div>
   ), [
-    clearDraftConversationCwdSelection,
     conversationResumeState.actionLabel,
     conversationResumeState.canResume,
     conversationResumeState.title,
     draft,
-    draftCwdValue,
     forkConversationFromMessage,
     hasRenderableMessages,
     rewindConversationFromMessage,
@@ -4041,14 +4285,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     openConversationFilePath,
-    recentConversationCwds,
     displayedPendingAssistantStatusLabel,
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,
     resumeConversation,
     resumeConversationBusy,
-    setDraftConversationCwd,
     selectedArtifactId,
     selectedRunId,
     sessionLoading,
@@ -4148,32 +4390,68 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </button>
             </form>
           ) : draft ? (
-            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-              <h1 className="ui-page-title truncate">{title}</h1>
-            </div>
-          ) : (
-            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-              <h1 className="min-w-0 truncate">
-                <button
-                  type="button"
-                  onClick={beginTitleEdit}
-                  title={conversationNeedsTakeover ? 'Take over this conversation to rename it' : 'Rename conversation'}
-                  aria-label={`Rename conversation: ${title}`}
-                  className="ui-page-title inline-block max-w-full truncate rounded-sm text-left transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-default disabled:text-primary disabled:hover:text-primary disabled:opacity-100"
-                  disabled={conversationNeedsTakeover}
-                >
-                  {title}
-                </button>
-              </h1>
-              {currentCwd && (
-                <span
-                  className="max-w-[24rem] shrink truncate font-mono text-[11px] text-dim"
-                  title={currentCwd}
-                >
-                  · {currentCwd}
-                </span>
+            <div className="space-y-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
+                <h1 className="ui-page-title truncate">{title}</h1>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
+                  <span className="text-dim" aria-hidden="true">·</span>
+                  {hasDraftCwd ? (
+                    <span className="max-w-[32rem] shrink truncate font-mono text-[11px] text-dim" title={draftCwdValue}>
+                      {draftCwdValue}
+                    </span>
+                  ) : (
+                    <button type="button" onClick={startEditingDraftConversationCwd} className="rounded-sm text-[11px] text-dim transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+                      set working directory
+                    </button>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  {hasDraftCwd && !draftCwdEditorOpen && (
+                    <IconButton compact onClick={clearDraftConversationCwdSelection} className="text-danger" title="Clear the draft working directory" aria-label="Clear the draft working directory">
+                      <XIcon />
+                    </IconButton>
+                  )}
+                  <IconButton compact onClick={() => { void pickDraftConversationCwd(); }} disabled={draftCwdPickBusy} className="text-accent" title={draftCwdPickBusy ? 'Choosing working directory…' : 'Choose the initial working directory for this draft conversation'} aria-label="Choose the initial working directory for this draft conversation">
+                    <FolderIcon className={draftCwdPickBusy ? 'animate-pulse' : undefined} />
+                  </IconButton>
+                  <IconButton compact onClick={startEditingDraftConversationCwd} disabled={draftCwdEditorOpen || draftCwdPickBusy} title="Enter the working directory manually" aria-label="Enter the working directory manually">
+                    <PencilIcon />
+                  </IconButton>
+                </div>
+              </div>
+              {draftCwdEditorOpen && (
+                <form className="flex min-w-0 flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); saveDraftConversationCwd(); }}>
+                  <input autoFocus value={draftCwdDraft} onChange={(event) => { setDraftCwdDraft(event.target.value); if (draftCwdError) { setDraftCwdError(null); } }} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); cancelEditingDraftConversationCwd(); } }} placeholder="~/workingdir/repo" spellCheck={false} aria-label="Draft conversation working directory" className="min-w-[16rem] flex-1 rounded-lg border border-border-default bg-surface px-3 py-1.5 text-[12px] font-mono text-primary outline-none transition-colors focus:border-accent/60" disabled={draftCwdPickBusy} />
+                  <button type="submit" className="ui-toolbar-button text-accent" disabled={draftCwdPickBusy}>Save</button>
+                  <button type="button" className="ui-toolbar-button" onClick={cancelEditingDraftConversationCwd} disabled={draftCwdPickBusy}>Cancel</button>
+                </form>
+              )}
+              {draftCwdError && (
+                <p className="text-[11px] text-danger/80">{draftCwdError}</p>
               )}
             </div>
+          ) : (
+            <ConversationSavedHeader
+              title={title}
+              cwd={currentCwd}
+              onTitleClick={!renameConversationDisabled ? beginTitleEdit : undefined}
+              cwdEditing={conversationCwdEditorOpen}
+              cwdDraft={conversationCwdDraft}
+              cwdError={conversationCwdError}
+              cwdPickBusy={conversationCwdPickBusy}
+              cwdSaveBusy={conversationCwdBusy}
+              cwdActionDisabledReason={conversationCwdActionDisabledReason}
+              onPickCwd={() => { void pickConversationCwd(); }}
+              onStartEditingCwd={beginConversationCwdEdit}
+              onCwdDraftChange={(value) => {
+                setConversationCwdDraft(value);
+                if (conversationCwdError) {
+                  setConversationCwdError(null);
+                }
+              }}
+              onCancelEditingCwd={cancelConversationCwdEdit}
+              onSaveCwd={() => { void submitConversationCwdChange(); }}
+            />
           )}
         </div>
       </PageHeader>
@@ -4184,7 +4462,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {/* Input area */}
       {!keyboardOpen && (
         <div
-          className={`px-4 pt-2 transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
+          className={`px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)] transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -4318,7 +4596,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         {msg.restorable !== false ? (
                           <button
                             type="button"
-                            onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
+                            onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex, msg.id); }}
                             disabled={conversationNeedsTakeover}
                             className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
                             title={conversationNeedsTakeover ? 'Take over this conversation before restoring queued prompts' : 'Restore this queued prompt to the composer'}
@@ -4598,17 +4876,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           <path d="M5 12h14" />
                         </svg>
                       </button>
-                      <ConversationPreferencesRow
-                        models={models}
-                        currentModel={currentModel || model || defaultModel}
-                        currentThinkingLevel={currentThinkingLevel}
-                        savingPreference={savingPreference}
-                        onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
-                        onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
-                      />
-                    </div>
-
-                    <div className="ml-auto flex shrink-0 items-center gap-2">
                       <button
                         type="button"
                         onClick={openDrawingEditor}
@@ -4622,20 +4889,60 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                         </svg>
                       </button>
+                      <ConversationPreferencesRow
+                        models={models}
+                        currentModel={currentModel || model || defaultModel}
+                        currentThinkingLevel={currentThinkingLevel}
+                        savingPreference={savingPreference}
+                        onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
+                        onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
+                      />
+                    </div>
 
+                    <div className="ml-auto flex shrink-0 items-center gap-2">
                       {stream.isStreaming ? (
-                        <button
-                          type="button"
-                          onClick={() => { void stream.abort(); }}
-                          disabled={conversationNeedsTakeover}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
-                          title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
-                          aria-label="Stop"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                            <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                          </svg>
-                        </button>
+                        <>
+                          {composerHasContent && (() => {
+                            const queuedSendLabel = composerSubmit.label === 'Follow up' ? 'Follow up' : 'Steer';
+                            return (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  const behavior = resolveConversationComposerSubmitState(
+                                    stream.isStreaming,
+                                    composerAltHeld || event.altKey,
+                                    liveSessionHasPendingHiddenTurn,
+                                  ).behavior;
+                                  void submitComposer(behavior);
+                                }}
+                                disabled={composerDisabled}
+                                className={cx(
+                                  'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
+                                  queuedSendLabel === 'Follow up'
+                                    ? 'bg-elevated text-primary hover:bg-elevated/80'
+                                    : 'bg-warning/15 text-warning hover:bg-warning/25',
+                                )}
+                                title={queuedSendLabel}
+                                aria-label={queuedSendLabel}
+                              >
+                                <ComposerQueuedSendIcon label={queuedSendLabel} className="shrink-0" />
+                                <span>{formatComposerQueuedSendLabel(queuedSendLabel)}</span>
+                              </button>
+                            );
+                          })()}
+                          <button
+                            type="button"
+                            onClick={() => { void stream.abort(); }}
+                            disabled={conversationNeedsTakeover}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
+                            title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
+                            aria-label="Stop"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                              <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
+                            </svg>
+                          </button>
+                        </>
                       ) : composerHasContent ? (
                         <button
                           type="button"
@@ -4688,7 +4995,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               )}
             </div>
-          </div>
 
           {draft || ((!draft && (branchLabel || gitLineSummary)) || sessionTokens) ? (
             <div
@@ -4712,6 +5018,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ) : null}
         </div>
       </div>
+        </div>
       )}
 
       {editingDrawingLocalId && (

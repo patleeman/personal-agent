@@ -12,10 +12,12 @@ import {
   bootstrapStateOrThrow,
   clearActivityConversationLinks,
   createProjectActivityEntry,
+  deleteProfileActivityEntries,
   ensureConversationAttentionBaselines,
   finalizeMachineWebUiConfigState,
   getActivityConversationLink,
   getDurableProfilesDir,
+  hasProfileActivityEntry,
   listProfileActivityEntries,
   listStoredSessions,
   loadProfileActivityReadState,
@@ -23,8 +25,7 @@ import {
   markConversationAttentionUnread,
   preparePiAgentDir,
   readMachineWebUiConfig,
-  resolveActivityEntryPath,
-  resolveProfileActivityDir,
+  resolveProfileActivityDbPath,
   resolveStatePaths,
   saveProfileActivityReadState,
   setActivityConversationLinks,
@@ -2977,13 +2978,13 @@ function buildDefaultInboxActivityId(kind: string, summary: string, createdAt: s
 }
 
 function resolveUniqueInboxActivityId(repoRoot: string, profile: string, desiredId: string): string {
-  if (!existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: desiredId }))) {
+  if (!hasProfileActivityEntry({ repoRoot, profile, activityId: desiredId })) {
     return desiredId;
   }
 
   for (let suffix = 2; suffix <= 999; suffix += 1) {
     const candidate = `${desiredId}-${suffix}`;
-    if (!existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: candidate }))) {
+    if (!hasProfileActivityEntry({ repoRoot, profile, activityId: candidate })) {
       return candidate;
     }
   }
@@ -3331,7 +3332,7 @@ function parseInboxDeleteOptions(args: string[]): {
 function loadInboxState(): {
   repoRoot: string;
   profile: string;
-  activityDir: string;
+  activityStorePath: string;
   readState: Set<string>;
   sessions: ReturnType<typeof listStoredSessions>;
   activityEntries: InboxActivityStateEntry[];
@@ -3341,7 +3342,7 @@ function loadInboxState(): {
 } {
   const profile = resolveProfileName();
   const repoRoot = getRepoRoot();
-  const activityDir = resolveProfileActivityDir({ repoRoot, profile });
+  const activityStorePath = resolveProfileActivityDbPath({ repoRoot, profile });
   const readState = loadProfileActivityReadState({ repoRoot, profile });
   const activityEntries = listProfileActivityEntries({ repoRoot, profile })
     .map(({ path, entry }) => ({
@@ -3425,7 +3426,7 @@ function loadInboxState(): {
   return {
     repoRoot,
     profile,
-    activityDir,
+    activityStorePath,
     readState,
     sessions,
     activityEntries,
@@ -3483,7 +3484,7 @@ async function inboxCommand(args: string[]): Promise<number> {
   if (effectiveSubcommand === 'list') {
     const listArgs = !subcommand || subcommand.startsWith('--') ? args : rest;
     const { jsonMode, limit, readFilter, itemKindFilter } = parseInboxListOptions(listArgs);
-    const { profile, activityDir, standaloneActivityEntries, conversationEntries, surfaceEntries } = loadInboxState();
+    const { profile, activityStorePath, standaloneActivityEntries, conversationEntries, surfaceEntries } = loadInboxState();
     const filteredEntries = surfaceEntries.filter((entry) => {
       if (itemKindFilter !== 'all' && entry.kind !== itemKindFilter) {
         return false;
@@ -3503,7 +3504,7 @@ async function inboxCommand(args: string[]): Promise<number> {
 
     const payload = {
       profile,
-      activityDir,
+      activityStorePath,
       count: surfaceEntries.length,
       filteredCount: filteredEntries.length,
       limit,
@@ -3549,7 +3550,7 @@ async function inboxCommand(args: string[]): Promise<number> {
 
     console.log(section('Inbox'));
     console.log(keyValue('Profile', profile));
-    console.log(keyValue('Activity directory', activityDir));
+    console.log(keyValue('Activity store', activityStorePath));
     console.log(keyValue('Filter', readFilter));
     console.log(keyValue('Kinds', itemKindFilter));
     console.log(keyValue('Showing', `${limitedEntries.length} of ${filteredEntries.length}${filteredEntries.length === surfaceEntries.length ? '' : ` (${surfaceEntries.length} total)`}`));
@@ -3618,7 +3619,7 @@ async function inboxCommand(args: string[]): Promise<number> {
     if (activityMatch) {
       const payload = {
         profile: state.profile,
-        activityDir: state.activityDir,
+        activityStorePath: state.activityStorePath,
         path: activityMatch.path,
         entry: {
           ...activityMatch.entry,
@@ -3633,7 +3634,7 @@ async function inboxCommand(args: string[]): Promise<number> {
 
       console.log(section(`Inbox activity: ${activityMatch.entry.id}`));
       console.log(keyValue('Profile', state.profile));
-      console.log(keyValue('Activity directory', state.activityDir));
+      console.log(keyValue('Activity store', state.activityStorePath));
       console.log(keyValue('Path', activityMatch.path));
       console.log(keyValue('Kind', activityMatch.entry.kind));
       console.log(keyValue('Created', new Date(activityMatch.entry.createdAt).toLocaleString()));
@@ -3714,11 +3715,11 @@ async function inboxCommand(args: string[]): Promise<number> {
 
   if (effectiveSubcommand === 'create') {
     const { jsonMode, id, kind, summary, details, relatedProjectIds, relatedConversationIds, notificationState, createdAt } = parseInboxCreateOptions(rest);
-    const { repoRoot, profile, activityDir, readState } = loadInboxState();
+    const { repoRoot, profile, activityStorePath, readState } = loadInboxState();
     const desiredId = id ?? buildDefaultInboxActivityId(kind, summary, createdAt);
     const finalId = id ? desiredId : resolveUniqueInboxActivityId(repoRoot, profile, desiredId);
 
-    if (id && existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: finalId }))) {
+    if (id && hasProfileActivityEntry({ repoRoot, profile, activityId: finalId })) {
       throw new Error(`An inbox activity item already exists with id: ${finalId}`);
     }
 
@@ -3753,7 +3754,7 @@ async function inboxCommand(args: string[]): Promise<number> {
 
     const payload = {
       profile,
-      activityDir,
+      activityStorePath,
       path,
       entry: {
         ...entry,
@@ -3911,8 +3912,13 @@ async function inboxCommand(args: string[]): Promise<number> {
       path,
     }));
 
+    deleteProfileActivityEntries({
+      repoRoot: state.repoRoot,
+      profile: state.profile,
+      activityIds: deleted.map((item) => item.id),
+    });
+
     for (const item of deleted) {
-      rmSync(item.path, { force: true });
       clearActivityConversationLinks({ profile: state.profile, activityId: item.id });
       state.readState.delete(item.id);
     }

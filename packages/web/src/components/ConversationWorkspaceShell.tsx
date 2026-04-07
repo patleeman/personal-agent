@@ -37,14 +37,6 @@ function readStoredWidth(storageKey: string, initial: number, min: number): numb
   return Math.max(min, initial);
 }
 
-function readStoredRailOpen(storageKey: string): boolean {
-  try {
-    return localStorage.getItem(`${storageKey}:open`) !== '0';
-  } catch {
-    return true;
-  }
-}
-
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
   const [desiredWidth, setDesiredWidth] = useState(() => readStoredWidth(storageKey, initial, min));
 
@@ -151,7 +143,7 @@ export function ConversationWorkspaceShell({
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
-  const [railOpen, setRailOpen] = useState(() => readStoredRailOpen(railPrefs.storageKey));
+  const [railOpen, setRailOpen] = useState(false);
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const railWidth = selectedArtifactId
     ? clampPanelWidth(
@@ -162,22 +154,14 @@ export function ConversationWorkspaceShell({
     : rail.width;
 
   useEffect(() => {
-    try {
-      localStorage.setItem(`${railPrefs.storageKey}:open`, railOpen ? '1' : '0');
-    } catch {
-      // Ignore storage failures.
-    }
-  }, [railOpen, railPrefs.storageKey]);
+    setRailOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (selectedArtifactId) {
       setRailOpen(true);
     }
   }, [selectedArtifactId]);
-
-  useEffect(() => {
-    setRailOpen(readStoredRailOpen(railPrefs.storageKey));
-  }, [railPrefs.storageKey]);
 
   const effectiveRailOpen = contextRailEnabled && railOpen;
   const controls = useMemo<ConversationWorkspaceShellControls>(() => ({

@@ -1,13 +1,13 @@
-import { existsSync, rmSync } from 'node:fs';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   clearActivityConversationLinks,
   createProjectActivityEntry,
+  deleteProfileActivityEntries,
   getActivityConversationLink,
+  hasProfileActivityEntry,
   listProfileActivityEntries,
   loadProfileActivityReadState,
-  resolveActivityEntryPath,
   saveProfileActivityReadState,
   setActivityConversationLinks,
   validateActivityId,
@@ -81,11 +81,11 @@ function resolveUniqueActivityId(options: {
   const baseId = options.desiredId;
   validateActivityId(baseId);
 
-  const exists = (candidate: string): boolean => existsSync(resolveActivityEntryPath({
+  const exists = (candidate: string): boolean => hasProfileActivityEntry({
     stateRoot: options.stateRoot,
     profile: options.profile,
     activityId: candidate,
-  }));
+  });
 
   if (!exists(baseId)) {
     return baseId;
@@ -344,12 +344,13 @@ export function createActivityAgentExtension(options: {
             case 'delete': {
               const activityIds = readActivityIds(params, 'activityId or activityIds');
 
+              deleteProfileActivityEntries({
+                stateRoot: options.stateRoot,
+                profile,
+                activityIds,
+              });
+
               for (const activityId of activityIds) {
-                rmSync(resolveActivityEntryPath({
-                  stateRoot: options.stateRoot,
-                  profile,
-                  activityId,
-                }), { force: true });
                 clearActivityConversationLinks({
                   stateRoot: options.stateRoot,
                   profile,

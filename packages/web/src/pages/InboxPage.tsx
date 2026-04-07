@@ -202,7 +202,7 @@ export function InboxPage() {
   );
   const isLoading = (activity === null || conversationsLoading) && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
   const visibleError = activity === null && sseStatus === 'offline'
-    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest inbox state.'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest notifications.'
     : refreshError;
 
   const refreshInbox = useCallback(async () => {
@@ -257,8 +257,8 @@ export function InboxPage() {
 
     const confirmed = window.confirm(
       activeAlerts.length > 0
-        ? 'Clear the inbox? This deletes standalone activity items, marks archived conversations as read, and dismisses active reminder notifications.'
-        : 'Clear the inbox? This deletes standalone activity items and marks archived conversations as read.',
+        ? 'Clear notifications? This deletes standalone activity items, marks archived conversations as read, and dismisses active reminder notifications.'
+        : 'Clear notifications? This deletes standalone activity items and marks archived conversations as read.',
     );
     if (!confirmed) {
       return;
@@ -382,7 +382,7 @@ export function InboxPage() {
                 disabled={clearingInbox}
                 className="text-[11px]"
               >
-                {clearingInbox ? 'Clearing…' : 'Clear inbox'}
+                {clearingInbox ? 'Clearing…' : 'Clear notifications'}
               </ToolbarButton>
             )}
             {unreadCount > 0 && (
@@ -399,13 +399,13 @@ export function InboxPage() {
         )}
       >
         <PageHeading
-          title="Inbox"
+          title="Notifications"
           meta={`${notificationCount} ${notificationCount === 1 ? 'notification' : 'notifications'}`}
         />
       </PageHeader>
 
-      {isLoading && <LoadingState label="Loading inbox…" className="px-6" />}
-      {visibleError && <ErrorState message={`Failed to load inbox: ${visibleError}`} className="px-6" />}
+      {isLoading && <LoadingState label="Loading notifications…" className="px-6" />}
+      {visibleError && <ErrorState message={`Failed to load notifications: ${visibleError}`} className="px-6" />}
       {actionError && <ErrorState message={actionError} className="px-6" />}
 
       {!isLoading && !visibleError && allItems.length === 0 && (

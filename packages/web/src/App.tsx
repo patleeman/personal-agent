@@ -26,6 +26,11 @@ import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   bumpConversationScopedEventVersions,
 } from './conversationEventVersions';
+import {
+  mergeSessionSnapshotPreservingOrder,
+  removeSessionMetaPreservingOrder,
+  replaceSessionMetaPreservingOrder,
+} from './sessionListState';
 import { ThemeProvider } from './theme';
 import type {
   ActivitySnapshot,
@@ -87,29 +92,6 @@ function isCompanionBrowserRoute(): boolean {
 
   return window.location.pathname === COMPANION_APP_PATH
     || window.location.pathname.startsWith(`${COMPANION_APP_PATH}/`);
-}
-
-function parseSessionActivityAt(session: SessionMeta): number {
-  const parsed = Date.parse(session.lastActivityAt ?? session.timestamp);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function sortSessionMetas(items: SessionMeta[]): SessionMeta[] {
-  return [...items].sort((left, right) => {
-    if (Boolean(left.isLive) !== Boolean(right.isLive)) {
-      return left.isLive ? -1 : 1;
-    }
-
-    if (Boolean(left.needsAttention) !== Boolean(right.needsAttention)) {
-      return left.needsAttention ? -1 : 1;
-    }
-
-    if (Boolean(left.isRunning) !== Boolean(right.isRunning)) {
-      return left.isRunning ? -1 : 1;
-    }
-
-    return parseSessionActivityAt(right) - parseSessionActivityAt(left) || left.title.localeCompare(right.title);
-  });
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
@@ -264,7 +246,7 @@ export function App() {
   const setProjects = useCallback(() => {}, []);
 
   const setSessions = useCallback((items: SessionMeta[]) => {
-    setSessionsState(items);
+    setSessionsState((previous) => mergeSessionSnapshotPreservingOrder(previous, items));
   }, []);
 
   const applySessionMetaUpdate = useCallback((sessionId: string, nextSession: SessionMeta | null) => {
@@ -274,12 +256,10 @@ export function App() {
       }
 
       if (!nextSession) {
-        const filtered = previous.filter((session) => session.id !== sessionId);
-        return filtered.length === previous.length ? previous : filtered;
+        return removeSessionMetaPreservingOrder(previous, sessionId);
       }
 
-      const withoutPrevious = previous.filter((session) => session.id !== sessionId);
-      return sortSessionMetas([...withoutPrevious, nextSession]);
+      return replaceSessionMetaPreservingOrder(previous, nextSession);
     });
   }, []);
 

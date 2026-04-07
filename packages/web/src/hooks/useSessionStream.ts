@@ -105,13 +105,26 @@ export function detectConversationSurfaceType(): LiveSessionSurfaceType {
 
 let optimisticPendingQueueItemCounter = 0;
 
-function createOptimisticPendingQueueItem(text: string): QueuedPromptPreview {
+function createPendingQueuePreview(
+  text: string,
+  options: { imageCount?: number; restorable?: boolean; pending?: boolean } = {},
+): QueuedPromptPreview {
   optimisticPendingQueueItemCounter += 1;
   return {
     id: `optimistic-${optimisticPendingQueueItemCounter}`,
     text,
-    imageCount: 0,
+    imageCount: Math.max(0, options.imageCount ?? 0),
+    ...(typeof options.restorable === 'boolean' ? { restorable: options.restorable } : {}),
+    ...(typeof options.pending === 'boolean' ? { pending: options.pending } : {}),
   };
+}
+
+function createOptimisticPendingQueueItem(text: string, imageCount = 0): QueuedPromptPreview {
+  return createPendingQueuePreview(text, {
+    imageCount,
+    restorable: false,
+    pending: true,
+  });
 }
 
 export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[] {
@@ -121,7 +134,7 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
 
   return value.flatMap((item): QueuedPromptPreview[] => {
     if (typeof item === 'string') {
-      return [createOptimisticPendingQueueItem(item)];
+      return [createPendingQueuePreview(item, { restorable: false })];
     }
 
     if (!item || typeof item !== 'object') {
@@ -129,21 +142,23 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
     }
 
     const candidate = item as Partial<QueuedPromptPreview>;
-    const id = typeof candidate.id === 'string' && candidate.id.trim().length > 0
-      ? candidate.id.trim()
-      : createOptimisticPendingQueueItem(typeof candidate.text === 'string' ? candidate.text : '').id;
-    const text = typeof candidate.text === 'string' && candidate.text.trim().length > 0
-      ? candidate.text.trim()
-      : '(empty queued prompt)';
     const imageCount = Number.isInteger(candidate.imageCount) && Number(candidate.imageCount) > 0
       ? Number(candidate.imageCount)
       : 0;
+    const rawText = typeof candidate.text === 'string' ? candidate.text : '';
+    const text = rawText.trim().length > 0
+      ? rawText.trim()
+      : (imageCount > 0 ? '' : '(empty queued prompt)');
+    const id = typeof candidate.id === 'string' && candidate.id.trim().length > 0
+      ? candidate.id.trim()
+      : createPendingQueuePreview(text).id;
 
     return [{
       id,
       text,
       imageCount,
       ...(typeof candidate.restorable === 'boolean' ? { restorable: candidate.restorable } : {}),
+      ...(typeof candidate.pending === 'boolean' ? { pending: candidate.pending } : {}),
     }];
   });
 }
@@ -152,13 +167,14 @@ export function appendPendingQueueItem(
   state: StreamState,
   behavior: 'steer' | 'followUp',
   text: string,
+  imageCount = 0,
 ): StreamState {
   if (behavior === 'steer') {
     return {
       ...state,
       pendingQueue: {
         ...state.pendingQueue,
-        steering: [...state.pendingQueue.steering, createOptimisticPendingQueueItem(text)],
+        steering: [...state.pendingQueue.steering, createOptimisticPendingQueueItem(text, imageCount)],
       },
     };
   }
@@ -167,7 +183,7 @@ export function appendPendingQueueItem(
     ...state,
     pendingQueue: {
       ...state.pendingQueue,
-      followUp: [...state.pendingQueue.followUp, createOptimisticPendingQueueItem(text)],
+      followUp: [...state.pendingQueue.followUp, createOptimisticPendingQueueItem(text, imageCount)],
     },
   };
 }
@@ -493,7 +509,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       blocksRef.current = [...blocksRef.current, userBlock];
       setState((s) => ({ ...s, blocks: blocksRef.current }));
     } else {
-      setState((s) => appendPendingQueueItem(s, behavior, text));
+      setState((s) => appendPendingQueueItem(s, behavior, text, images?.length ?? 0));
     }
 
     try {

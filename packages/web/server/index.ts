@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
@@ -153,6 +153,7 @@ import {
 } from './automation/inbox.js';
 import {
   clearActivityConversationLinks,
+  deleteProfileActivityEntries,
   deleteConversationArtifact,
   deleteConversationAttachment,
   ensureConversationAttentionBaselines,
@@ -361,10 +362,16 @@ function deleteActivityIdsForProfile(profile: string, activityIds: Iterable<stri
       continue;
     }
 
-    for (const { path, entry } of matchingEntries) {
-      rmSync(path, { force: true });
-      clearActivityConversationLinks({ stateRoot, profile, activityId: entry.id });
-      deletedIds.add(entry.id);
+    const deletedInStateRoot = deleteProfileActivityEntries({
+      repoRoot: REPO_ROOT,
+      stateRoot,
+      profile,
+      activityIds: matchingEntries.map(({ entry }) => entry.id),
+    });
+
+    for (const activityId of deletedInStateRoot) {
+      clearActivityConversationLinks({ stateRoot, profile, activityId });
+      deletedIds.add(activityId);
     }
 
     const readState = loadReadState(stateRoot, profile);

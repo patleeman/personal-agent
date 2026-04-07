@@ -210,14 +210,20 @@ describe('submitLivePromptWithControlRetry', () => {
 describe('normalizePendingQueueItems', () => {
   it('normalizes string queue entries into structured previews', () => {
     expect(normalizePendingQueueItems(['first', 2, null, 'second'])).toEqual([
-      { id: expect.any(String), text: 'first', imageCount: 0 },
-      { id: expect.any(String), text: 'second', imageCount: 0 },
+      { id: expect.any(String), text: 'first', imageCount: 0, restorable: false },
+      { id: expect.any(String), text: 'second', imageCount: 0, restorable: false },
     ]);
   });
 
   it('preserves structured queue previews from the server', () => {
-    expect(normalizePendingQueueItems([{ id: 'steer-0', text: 'draft (+1 image)', imageCount: 1 }])).toEqual([
-      { id: 'steer-0', text: 'draft (+1 image)', imageCount: 1 },
+    expect(normalizePendingQueueItems([{ id: 'steer-0', text: 'draft', imageCount: 1 }])).toEqual([
+      { id: 'steer-0', text: 'draft', imageCount: 1 },
+    ]);
+  });
+
+  it('keeps image-only queue previews empty so the UI can render attachment chrome separately', () => {
+    expect(normalizePendingQueueItems([{ id: 'steer-1', text: '', imageCount: 2 }])).toEqual([
+      { id: 'steer-1', text: '', imageCount: 2 },
     ]);
   });
 
@@ -275,10 +281,16 @@ describe('pending queue optimistic updates', () => {
     });
   });
 
-  it('tracks queued follow-up text in pending queue state immediately', () => {
-    expect(appendPendingQueueItem(INITIAL_STREAM_STATE, 'followUp', 'queued follow-up').pendingQueue).toEqual({
+  it('tracks queued follow-up text and images in pending queue state immediately', () => {
+    expect(appendPendingQueueItem(INITIAL_STREAM_STATE, 'followUp', 'queued follow-up', 2).pendingQueue).toEqual({
       steering: [],
-      followUp: [{ id: expect.any(String), text: 'queued follow-up', imageCount: 0 }],
+      followUp: [{
+        id: expect.any(String),
+        text: 'queued follow-up',
+        imageCount: 2,
+        restorable: false,
+        pending: true,
+      }],
     });
   });
 

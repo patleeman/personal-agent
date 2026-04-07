@@ -674,6 +674,7 @@ export function CompanionConversationPage() {
       id: item.id,
       text: item.text,
       imageCount: item.imageCount,
+      pending: item.pending === true,
       type: 'steer' as const,
       queueIndex: index,
     })),
@@ -681,6 +682,7 @@ export function CompanionConversationPage() {
       id: item.id,
       text: item.text,
       imageCount: item.imageCount,
+      pending: item.pending === true,
       type: 'followUp' as const,
       queueIndex: index,
     })),
@@ -1425,7 +1427,10 @@ export function CompanionConversationPage() {
                           {item.text || '(image only)'}
                         </p>
                         {item.imageCount > 0 ? (
-                          <p className="mt-1 text-[11px] text-dim">{item.imageCount} image{item.imageCount === 1 ? '' : 's'}</p>
+                          <p className="mt-1 text-[11px] text-dim">{item.imageCount} image{item.imageCount === 1 ? '' : 's'} attached</p>
+                        ) : null}
+                        {item.pending ? (
+                          <p className="mt-1 text-[11px] text-dim/80">Queueing…</p>
                         ) : null}
                       </div>
                     </div>

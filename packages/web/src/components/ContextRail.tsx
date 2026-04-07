@@ -2,7 +2,6 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
-import { buildConversationFileHref } from '../conversationFiles';
 import {
   collectConversationRunMentions,
   createConversationLiveRunId,
@@ -28,20 +27,17 @@ import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
+import { readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
   AgentToolInfo,
   DurableRunDetailResult,
-  LiveSessionContext,
   MemoryAgentsItem,
   ScheduledTaskSummary,
-  WorkspaceChangeKind,
 } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
-import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
@@ -61,78 +57,15 @@ function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
   );
 }
 
-const CONVERSATION_RAIL_CACHE_TTL_MS = 5_000;
-
-type ConversationRailCacheEntry<T> = {
-  data: T;
-  fetchedAt: number;
-  versionKey: string;
-};
-
-const liveSessionContextCache = new Map<string, ConversationRailCacheEntry<LiveSessionContext>>();
-const liveSessionContextInflight = new Map<string, Promise<LiveSessionContext>>();
-
-function isConversationRailCacheFresh<T>(
-  entry: ConversationRailCacheEntry<T> | null | undefined,
-  versionKey: string,
-  ttlMs = CONVERSATION_RAIL_CACHE_TTL_MS,
-): boolean {
-  return Boolean(entry)
-    && entry?.versionKey === versionKey
-    && (Date.now() - entry.fetchedAt) <= ttlMs;
-}
-
-function fetchConversationRailCacheEntry<T>(input: {
-  cache: Map<string, ConversationRailCacheEntry<T>>;
-  inflight: Map<string, Promise<T>>;
-  key: string;
-  versionKey: string;
-  fetcher: () => Promise<T>;
-}): Promise<T> {
-  const inflightKey = `${input.key}::${input.versionKey}`;
-  const inflight = input.inflight.get(inflightKey);
-  if (inflight) {
-    return inflight;
-  }
-
-  const request = input.fetcher()
-    .then((data) => {
-      input.cache.set(input.key, {
-        data,
-        fetchedAt: Date.now(),
-        versionKey: input.versionKey,
-      });
-      return data;
-    })
-    .finally(() => {
-      input.inflight.delete(inflightKey);
-    });
-
-  input.inflight.set(inflightKey, request);
-  return request;
-}
-
 export function prefetchConversationRailData(input: {
   conversationId: string;
   workspaceVersion: number;
   runsVersion: number;
 }): Promise<void> {
+  void input.conversationId;
+  void input.workspaceVersion;
   void input.runsVersion;
-  const liveContextVersionKey = `${input.workspaceVersion}`;
-  const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
-
-  const requests: Promise<unknown>[] = [];
-  if (!isConversationRailCacheFresh(cachedContext, liveContextVersionKey)) {
-    requests.push(fetchConversationRailCacheEntry({
-      cache: liveSessionContextCache,
-      inflight: liveSessionContextInflight,
-      key: input.conversationId,
-      versionKey: liveContextVersionKey,
-      fetcher: () => api.liveSessionContext(input.conversationId),
-    }));
-  }
-
-  return Promise.all(requests).then(() => undefined);
+  return Promise.resolve();
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -167,62 +100,6 @@ function EmptyPrompt({ text }: { text: string }) {
     <div className="flex-1 flex items-center justify-center px-4 py-8">
       <p className="text-[12px] text-dim text-center">{text}</p>
     </div>
-  );
-}
-
-const MAX_VISIBLE_WORKING_TREE_CHANGES = 5;
-
-function buildWorkspaceLink(cwd: string, file?: string | null): string {
-  const params = new URLSearchParams();
-  const normalizedCwd = cwd.trim();
-  const normalizedFile = file?.trim() ?? '';
-
-  if (normalizedCwd) {
-    params.set('cwd', normalizedCwd);
-  }
-
-  if (normalizedFile) {
-    params.set('file', normalizedFile);
-  }
-
-  const search = params.toString();
-  return buildWorkspacePath('files', search ? `?${search}` : '');
-}
-
-function workingTreeChangeShortLabel(change: WorkspaceChangeKind): string {
-  switch (change) {
-    case 'modified':
-      return 'M';
-    case 'added':
-      return 'A';
-    case 'deleted':
-      return 'D';
-    case 'renamed':
-      return 'R';
-    case 'copied':
-      return 'C';
-    case 'typechange':
-      return 'T';
-    case 'untracked':
-      return '?';
-    case 'conflicted':
-      return '!';
-  }
-}
-
-function WorkingTreeChangeMark({ change }: { change: WorkspaceChangeKind }) {
-  const toneClass = change === 'deleted' || change === 'conflicted'
-    ? 'bg-danger/12 text-danger'
-    : change === 'added' || change === 'untracked'
-      ? 'bg-teal/12 text-teal'
-      : change === 'renamed' || change === 'copied'
-        ? 'bg-accent/12 text-accent'
-        : 'bg-warning/12 text-warning';
-
-  return (
-    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-semibold leading-none ${toneClass}`}>
-      {workingTreeChangeShortLabel(change)}
-    </span>
   );
 }
 
@@ -263,6 +140,77 @@ function XIcon({ className }: { className?: string }) {
       <path d="M18 6 6 18" />
     </svg>
   );
+}
+
+type ConversationRelatedWorkGroupKey = 'conversation' | 'background' | 'mentioned' | 'other';
+
+interface ConversationRelatedWorkMention {
+  runId: string;
+  label: string;
+  meta: string;
+  selected: boolean;
+  source: ConversationRelatedWorkGroupKey;
+}
+
+interface ConversationRelatedWorkCard {
+  mention: ConversationRelatedWorkMention;
+  record?: DurableRunDetailResult['run'];
+  headline: ReturnType<typeof getRunHeadline> | null;
+  status: { text: string; cls: string };
+  activityAt?: string;
+}
+
+export function groupConversationRailRunCards<T extends { mention: { source: ConversationRelatedWorkGroupKey } }>(cards: T[]): Array<{
+  key: ConversationRelatedWorkGroupKey;
+  title: string;
+  items: T[];
+}> {
+  const groups: Array<{
+    key: ConversationRelatedWorkGroupKey;
+    title: string;
+    items: T[];
+  }> = [
+    { key: 'conversation', title: 'This conversation', items: [] },
+    { key: 'background', title: 'Background work', items: [] },
+    { key: 'mentioned', title: 'Mentioned in the thread', items: [] },
+    { key: 'other', title: 'Other related work', items: [] },
+  ];
+
+  for (const card of cards) {
+    const group = groups.find((entry) => entry.key === card.mention.source) ?? groups[groups.length - 1]!;
+    group.items.push(card);
+  }
+
+  return groups.filter((group) => group.items.length > 0);
+}
+
+export function formatConversationRailRunSummary(input: {
+  loading: boolean;
+  totalCount: number;
+  activeCount: number;
+  reviewCount: number;
+  hasOnlyUnresolvedCards: boolean;
+}): string {
+  if (input.loading && input.hasOnlyUnresolvedCards) {
+    return 'Refreshing runs…';
+  }
+
+  if (input.totalCount === 0) {
+    return 'No runs';
+  }
+
+  if (input.activeCount === input.totalCount && input.reviewCount === 0) {
+    return `${input.activeCount} active`;
+  }
+
+  const parts = [`${input.totalCount} run${input.totalCount === 1 ? '' : 's'}`];
+  if (input.activeCount > 0) {
+    parts.push(`${input.activeCount} active`);
+  }
+  if (input.reviewCount > 0) {
+    parts.push(`${input.reviewCount} need review`);
+  }
+  return parts.join(' · ');
 }
 
 function runStatusText(detail: DurableRunDetailResult['run']): { text: string; cls: string } {
@@ -738,18 +686,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const location = useLocation();
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns } = useAppData();
-  const [data, setData] = useState<LiveSessionContext | null>(null);
-  const execution = null;
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
-  const [workingTreeExpanded, setWorkingTreeExpanded] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [pickCwdBusy, setPickCwdBusy] = useState(false);
-  const [changingCwd, setChangingCwd] = useState(false);
-  const [requestedCwd, setRequestedCwd] = useState('');
-  const [changeCwdBusy, setChangeCwdBusy] = useState(false);
-  const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
 
   useEffect(() => {
     if (runs !== null) {
@@ -778,72 +716,22 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   );
   const runsLoading = runs === null;
   const runsError = null;
-  const liveContextVersionKey = `${versions.workspace}`;
-
-  const load = useCallback((options: {
-    forceContext?: boolean;
-    forceExecution?: boolean;
-  } = {}) => {
-    void options.forceExecution;
-    let cancelled = false;
-    const cachedContext = liveSessionContextCache.get(id) ?? null;
-    const hasFreshContext = !options.forceContext && isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
-
-    setData(cachedContext?.data ?? null);
-    setLoading(!cachedContext);
-    setError(false);
-
-    const contextPromise = hasFreshContext && cachedContext
-      ? Promise.resolve(cachedContext.data)
-      : fetchConversationRailCacheEntry({
-          cache: liveSessionContextCache,
-          inflight: liveSessionContextInflight,
-          key: id,
-          versionKey: liveContextVersionKey,
-          fetcher: () => api.liveSessionContext(id),
-        });
-    contextPromise
-      .then((context) => {
-        if (cancelled) {
-          return;
-        }
-
-        setData(context);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setError(true);
-        setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [id, liveContextVersionKey]);
-
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
   const runMentionsLastFetchedAtRef = useRef(0);
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
-  useEffect(() => load(), [load]);
-
   useEffect(() => {
-    if (loading || (!data && !execution && !error)) {
-      return;
-    }
-
     const frame = requestAnimationFrame(() => {
       completeConversationOpenPhase(id, 'rail', {
-        state: error ? 'error' : 'loaded',
-        hasContext: Boolean(data),
-        hasExecution: Boolean(execution),
+        state: 'loaded',
+        hasContext: false,
+        hasExecution: false,
       });
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [data, error, execution, id, loading]);
+  }, [id]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
@@ -881,20 +769,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id, versions.sessionFiles, isSessionRunning]);
 
   useEffect(() => {
-    setChangingCwd(false);
-    setRequestedCwd('');
-    setPickCwdBusy(false);
-    setChangeCwdBusy(false);
-    setChangeCwdError(null);
     setRunsExpanded(false);
-    setWorkingTreeExpanded(false);
   }, [id]);
-
-  useEffect(() => {
-    if (!changingCwd) {
-      setRequestedCwd(data?.cwd ?? '');
-    }
-  }, [data?.cwd, changingCwd]);
 
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
@@ -914,15 +790,15 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       });
   }, [currentConversationRunId, id, runLookups, runRecordsById]);
   const visibleRunMentions = useMemo(() => {
-    const next: Array<{
-      runId: string;
-      label: string;
-      meta: string;
-      selected: boolean;
-    }> = [];
+    const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();
 
-    const push = (runId: string, label: string, meta: string) => {
+    const push = (
+      runId: string,
+      label: string,
+      meta: string,
+      source: ConversationRelatedWorkGroupKey,
+    ) => {
       if (seen.has(runId)) {
         return;
       }
@@ -933,26 +809,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         label,
         meta,
         selected: selectedRunId === runId,
+        source,
       });
     };
 
-    push(currentConversationRunId, 'Conversation run', 'Tracks this conversation state and recovery metadata.');
+    push(currentConversationRunId, 'This conversation', 'Tracks this conversation state and recovery metadata.', 'conversation');
 
     for (const run of connectedBackgroundRuns) {
-      push(run.runId, 'Background run', 'Started from this conversation.');
+      push(run.runId, 'Background work', 'Started from this conversation.', 'background');
     }
 
     for (const mention of detectedRunMentions) {
       const mentionMeta = mention.mentionCount > 1
         ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
         : `Mentioned ${timeAgo(mention.lastSeenAt)}`;
-      push(mention.runId, 'Mentioned run', mentionMeta);
+      push(mention.runId, 'Mentioned in the thread', mentionMeta, 'mentioned');
     }
 
     return next;
   }, [connectedBackgroundRuns, currentConversationRunId, detectedRunMentions, selectedRunId]);
 
-  const visibleRunCards = useMemo(() => {
+  const visibleRunCards = useMemo<ConversationRelatedWorkCard[]>(() => {
     return visibleRunMentions.map((mention) => {
       const record = runRecordsById.get(mention.runId);
       const headline = record ? getRunHeadline(record, runLookups) : null;
@@ -972,38 +849,21 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     });
   }, [runLookups, runRecordsById, visibleRunMentions]);
 
+  const groupedRunCards = useMemo(
+    () => groupConversationRailRunCards(visibleRunCards),
+    [visibleRunCards],
+  );
   const activeRunCount = visibleRunCards.reduce((count, { record }) => (record && isRefreshingRun(record) ? count + 1 : count), 0);
   const runIssueCount = visibleRunCards.reduce((count, { record }) => (record && record.problems.length > 0 ? count + 1 : count), 0);
   const unresolvedRunCount = visibleRunCards.reduce((count, { record }) => (!record ? count + 1 : count), 0);
-  const runSummary = useMemo(() => {
-    if (runsLoading && visibleRunCards.every(({ record }) => !record)) {
-      return 'Refreshing run metadata…';
-    }
-
-    if (visibleRunCards.length === 0) {
-      return 'No runs';
-    }
-
-    if (activeRunCount === visibleRunCards.length && runIssueCount === 0 && unresolvedRunCount === 0) {
-      return `${activeRunCount} active ${activeRunCount === 1 ? 'run' : 'runs'}`;
-    }
-
-    const parts = [`${visibleRunCards.length} ${visibleRunCards.length === 1 ? 'run' : 'runs'}`];
-
-    if (activeRunCount > 0) {
-      parts.push(`${activeRunCount} active`);
-    }
-
-    if (runIssueCount > 0) {
-      parts.push(`${runIssueCount} with issues`);
-    }
-
-    if (unresolvedRunCount > 0) {
-      parts.push(`${unresolvedRunCount} unresolved`);
-    }
-
-    return parts.join(' · ');
-  }, [activeRunCount, runIssueCount, runsLoading, unresolvedRunCount, visibleRunCards]);
+  const reviewRunCount = runIssueCount + unresolvedRunCount;
+  const runSummary = useMemo(() => formatConversationRailRunSummary({
+    loading: runsLoading,
+    totalCount: visibleRunCards.length,
+    activeCount: activeRunCount,
+    reviewCount: reviewRunCount,
+    hasOnlyUnresolvedCards: visibleRunCards.every(({ record }) => !record),
+  }), [activeRunCount, reviewRunCount, runsLoading, visibleRunCards]);
 
   useEffect(() => {
     if (runsExpanded || selectedRunId || autoExpandedConnectedRunsConversationIdRef.current === id) {
@@ -1029,244 +889,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     });
   }
 
-  async function pickAndSubmitCwd() {
-    if (!data || pickCwdBusy || changeCwdBusy) {
-      return;
-    }
-
-    setPickCwdBusy(true);
-    setChangeCwdError(null);
-    try {
-      const result = await api.pickFolder(data.cwd);
-      if (result.cancelled || !result.path) {
-        return;
-      }
-
-      setRequestedCwd(result.path);
-      setChangingCwd(false);
-      await submitCwdChange(result.path);
-    } catch (error) {
-      setChangeCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
-    } finally {
-      setPickCwdBusy(false);
-    }
-  }
-
-  function startChangingCwd() {
-    if (!data || changeCwdBusy || pickCwdBusy) {
-      return;
-    }
-
-    setRequestedCwd(data.cwd);
-    setChangeCwdError(null);
-    setChangingCwd(true);
-  }
-
-  function cancelChangingCwd() {
-    setRequestedCwd(data?.cwd ?? '');
-    setChangeCwdError(null);
-    setChangingCwd(false);
-  }
-
-  async function submitCwdChange(nextCwdOverride?: string) {
-    if (!data || changeCwdBusy) {
-      return;
-    }
-
-    const nextCwd = (nextCwdOverride ?? requestedCwd).trim();
-    if (!nextCwd) {
-      setChangeCwdError('Enter a directory path.');
-      return;
-    }
-
-    setChangeCwdBusy(true);
-    setChangeCwdError(null);
-
-    try {
-      const result = await api.changeConversationCwd(id, nextCwd);
-      setChangingCwd(false);
-      setRequestedCwd(result.cwd);
-
-      if (!result.changed || result.id === id) {
-        load({ forceContext: true, forceExecution: true });
-        return;
-      }
-
-      ensureConversationTabOpen(result.id);
-      closeConversationTab(id);
-      navigate(`/conversations/${result.id}`);
-    } catch (error) {
-      setChangeCwdError(error instanceof Error ? error.message : 'Could not change the working directory.');
-    } finally {
-      setChangeCwdBusy(false);
-    }
-  }
-
-  if (loading && !data && !execution) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (error && !data && !execution) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
-  if (!data) return null;
-
-  const gitChangeLabel = data.git
-    ? (data.git.changeCount === 0 ? 'working tree clean' : `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`)
-    : null;
-  const workspaceBrowserLink = buildWorkspaceLink(data.cwd);
-  const workingTreeChanges = data.git?.changes ?? [];
-  const visibleWorkingTreeChanges = workingTreeExpanded
-    ? workingTreeChanges
-    : workingTreeChanges.slice(0, MAX_VISIBLE_WORKING_TREE_CHANGES);
-  const hiddenWorkingTreeChangeCount = Math.max(0, workingTreeChanges.length - MAX_VISIBLE_WORKING_TREE_CHANGES);
-  const canToggleWorkingTreeChanges = workingTreeChanges.length > MAX_VISIBLE_WORKING_TREE_CHANGES;
-
+  
   return (
     <div className="space-y-4">
-      <Section title="Properties">
-        <div className="space-y-1">
-          <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Working directory</p>
-          <div className="flex items-start gap-2">
-            <p className="ui-card-body min-w-0 flex-1 break-all pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
-            <div className="flex shrink-0 items-center gap-0.5">
-              <IconButton
-                compact
-                onClick={() => { void pickAndSubmitCwd(); }}
-                disabled={pickCwdBusy || changeCwdBusy}
-                className="text-accent"
-                title={pickCwdBusy ? 'Choosing working directory…' : 'Choose a new working directory for this conversation'}
-                aria-label="Choose a new working directory for this conversation"
-              >
-                <FolderIcon className={pickCwdBusy ? 'animate-pulse' : undefined} />
-              </IconButton>
-              <IconButton
-                compact
-                onClick={startChangingCwd}
-                disabled={changingCwd || changeCwdBusy || pickCwdBusy}
-                title="Enter the working directory manually"
-                aria-label="Enter the working directory manually"
-              >
-                <PencilIcon />
-              </IconButton>
-            </div>
-          </div>
-        </div>
-        {(data.branch || data.git || workspaceBrowserLink) && (
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-secondary">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              {data.branch && (
-                <div className="flex items-center gap-2">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                  <Pill tone="teal" mono>{data.branch}</Pill>
-                </div>
-              )}
-              {data.git && (
-                <span className="font-mono text-dim">
-                  {gitChangeLabel}
-                  {data.git.changeCount > 0 && (
-                    <>
-                      {' '}
-                      <span className="text-success">+{data.git.linesAdded}</span>{' '}
-                      <span className="text-danger">-{data.git.linesDeleted}</span>
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
-            {workspaceBrowserLink && (
-              <Link to={workspaceBrowserLink} className="ui-toolbar-button shrink-0 text-accent">
-                Open workspace browser
-              </Link>
-            )}
-          </div>
-        )}
-        {changingCwd && (
-          <form
-            className="space-y-2 border-t border-border-subtle/70 pt-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitCwdChange();
-            }}
-          >
-            <input
-              autoFocus
-              value={requestedCwd}
-              onChange={(event) => {
-                setRequestedCwd(event.target.value);
-                if (changeCwdError) {
-                  setChangeCwdError(null);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  cancelChangingCwd();
-                }
-              }}
-              placeholder={data.cwd}
-              spellCheck={false}
-              disabled={changeCwdBusy || pickCwdBusy}
-              aria-label="Conversation working directory"
-              className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
-            />
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={cancelChangingCwd}
-                  disabled={changeCwdBusy || pickCwdBusy}
-                  className="ui-toolbar-button"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={changeCwdBusy || pickCwdBusy}
-                  className="ui-toolbar-button text-accent"
-                >
-                  {changeCwdBusy ? 'Switching…' : 'Switch'}
-                </button>
-              </div>
-            </div>
-          </form>
-        )}
-        {visibleWorkingTreeChanges.length > 0 && (
-          <div className="space-y-2 border-t border-border-subtle/70 pt-3">
-            <p className="ui-section-label">Changed files</p>
-            <div className="divide-y divide-border-subtle/70">
-              {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
-                <Link
-                  key={`${change}:${relativePath}`}
-                  to={buildConversationFileHref(location.pathname, location.search, { cwd: data.cwd, file: relativePath })}
-                  className="group grid grid-cols-[1rem,minmax(0,1fr)] items-center gap-2 py-2 transition-colors hover:text-primary"
-                  title={`Open ${relativePath} in the conversation file viewer`}
-                >
-                  <WorkingTreeChangeMark change={change} />
-                  <span className="min-w-0 truncate font-mono text-[10px] leading-4 text-secondary group-hover:text-primary">{relativePath}</span>
-                </Link>
-              ))}
-            </div>
-            {canToggleWorkingTreeChanges && (
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  className="ui-toolbar-button text-accent"
-                  onClick={() => setWorkingTreeExpanded((value) => !value)}
-                >
-                  {workingTreeExpanded ? 'Show less' : `Show ${hiddenWorkingTreeChangeCount} more`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-        {changeCwdError && (
-          <p className="text-[11px] text-danger/80">{changeCwdError}</p>
-        )}
-      </Section>
-
-
       <Section title="Runs">
         <button
           type="button"
@@ -1286,65 +911,78 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         {runsExpanded && (
           <div id={`conversation-runs-${id}`} className="space-y-3 border-t border-border-subtle/70 pt-3">
             {runsLoading && visibleRunCards.every(({ record }) => !record) && (
-              <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
+              <p className="text-[11px] text-dim animate-pulse">Refreshing runs…</p>
             )}
             {runsError && (
               <p className="text-[11px] text-danger/80">{runsError}</p>
             )}
-            {visibleRunCards.length > 0 ? (
-              <div className="divide-y divide-border-subtle/70">
-                {visibleRunCards.map(({ mention, record, headline, status, activityAt }) => {
-                  const isSelected = mention.selected;
-                  const title = headline?.title ?? mention.label;
-                  const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
-                  const showSummary = Boolean(summary && summary !== title);
-                  const issueCount = record?.problems.length ?? 0;
-                  const showRecovery = record && record.recoveryAction !== 'none';
-                  const timeLabel = activityAt ? timeAgo(activityAt) : null;
+            {groupedRunCards.length > 0 ? (
+              <div className="space-y-4">
+                {groupedRunCards.map((group) => (
+                  <div key={group.key} className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="ui-section-label">{group.title}</p>
+                      <span className="text-[10px] text-dim">{group.items.length}</span>
+                    </div>
+                    <div className="divide-y divide-border-subtle/70">
+                      {group.items.map(({ mention, record, headline, status, activityAt }) => {
+                        const isSelected = mention.selected;
+                        const rawTitle = headline?.title ?? mention.label;
+                        const title = record && (rawTitle === record.runId || rawTitle.startsWith('run-') || rawTitle.startsWith('conversation-'))
+                          ? mention.label
+                          : rawTitle;
+                        const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
+                        const showSummary = Boolean(summary && summary !== title);
+                        const issueCount = record?.problems.length ?? 0;
+                        const showRecovery = record && record.recoveryAction !== 'none';
+                        const timeLabel = activityAt ? timeAgo(activityAt) : null;
 
-                  return (
-                    <button
-                      key={mention.runId}
-                      type="button"
-                      onClick={() => openRun(mention.runId)}
-                      className={cx(
-                        'w-full py-2.5 text-left transition-colors',
-                        isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                        {showSummary && (
-                          <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
-                        )}
-                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
-                          <span className={status.cls}>{status.text}</span>
-                          {timeLabel && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-dim">{timeLabel}</span>
-                            </>
-                          )}
-                          {showRecovery && record && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
-                            </>
-                          )}
-                          {issueCount > 0 && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                        return (
+                          <button
+                            key={mention.runId}
+                            type="button"
+                            onClick={() => openRun(mention.runId)}
+                            className={cx(
+                              'w-full py-2.5 text-left transition-colors',
+                              isSelected ? 'text-primary' : 'text-secondary hover:text-primary',
+                            )}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-[12px] font-medium text-primary">{title}</p>
+                              {showSummary && (
+                                <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
+                              )}
+                              <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
+                                <span className={status.cls}>{status.text}</span>
+                                {timeLabel && (
+                                  <>
+                                    <span className="opacity-35">·</span>
+                                    <span className="text-dim">{timeLabel}</span>
+                                  </>
+                                )}
+                                {showRecovery && record && (
+                                  <>
+                                    <span className="opacity-35">·</span>
+                                    <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
+                                  </>
+                                )}
+                                {issueCount > 0 && (
+                                  <>
+                                    <span className="opacity-35">·</span>
+                                    <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : (
-              !runsLoading && !runsError && <p className="text-[11px] text-dim">No active runs right now.</p>
+              !runsLoading && !runsError && <p className="text-[11px] text-dim">No runs right now.</p>
             )}
           </div>
         )}
@@ -2070,7 +1708,7 @@ export function ContextRail() {
   // Inbox
   if (section === 'inbox' && id) return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Inbox" sub={id} />
+      <RailHeader label="Notifications" sub={id} />
       <div className="flex-1 overflow-y-auto">
         <InboxItemContext id={id} />
       </div>
@@ -2078,7 +1716,7 @@ export function ContextRail() {
   );
   if (section === 'inbox') return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Inbox" />
+      <RailHeader label="Notifications" />
       <EmptyPrompt text="Select an item to see details." />
     </div>
   );
@@ -2163,7 +1801,7 @@ export function ContextRail() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-      <p className="text-[12px] text-dim">Select a conversation, page, or inbox item to see context.</p>
+      <p className="text-[12px] text-dim">Select a conversation, page, or notification to see context.</p>
     </div>
   );
 }

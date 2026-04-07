@@ -3,7 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -40,7 +40,7 @@ import {
   type DisplayBlock,
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
-import { logInfo, logWarn } from '../shared/logging.js';
+import { logWarn } from '../shared/logging.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -71,6 +71,7 @@ export interface QueuedPromptPreview {
   id: string;
   text: string;
   imageCount: number;
+  restorable?: boolean;
 }
 
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
@@ -236,23 +237,6 @@ function makeAuth() {
 
 function makeRegistry(auth: AuthStorage) {
   return createRuntimeModelRegistry(auth);
-}
-
-function readRuntimeSettingsObject(): Record<string, unknown> {
-  if (!existsSync(SETTINGS_FILE)) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return parsed as Record<string, unknown>;
-  } catch {
-    return {};
-  }
 }
 
 interface ToolPatchableSessionInternals {
@@ -505,34 +489,89 @@ export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
   return followUp.length === 0;
 }
 
+const INTERNAL_QUEUED_PROMPT_ID_FIELD = '__personalAgentQueuedPromptId';
+let queuedPromptPreviewIdCounter = 0;
+
+function createQueuedPromptPreviewId(queueType: 'steer' | 'followUp'): string {
+  queuedPromptPreviewIdCounter += 1;
+  return `${queueType}-queued-${queuedPromptPreviewIdCounter}`;
+}
+
 function formatQueuedPromptPreviewText(text: string, imageCount: number): string {
   const normalizedText = text.trim();
-  if (normalizedText && imageCount > 0) {
-    return `${normalizedText} (+${imageCount} image${imageCount === 1 ? '' : 's'})`;
-  }
-
   if (normalizedText) {
     return normalizedText;
   }
 
   if (imageCount > 0) {
-    return `${imageCount} image attachment${imageCount === 1 ? '' : 's'}`;
+    return '';
   }
 
   return '(empty queued prompt)';
 }
 
 function buildQueuedPromptPreview(
+  id: string,
+  text: string,
+  imageCount: number,
+  options: { restorable?: boolean } = {},
+): QueuedPromptPreview {
+  return {
+    id,
+    text: formatQueuedPromptPreviewText(text, imageCount),
+    imageCount,
+    ...(typeof options.restorable === 'boolean' ? { restorable: options.restorable } : {}),
+  };
+}
+
+interface InternalQueuedAgentMessage {
+  role?: string;
+  content?: unknown;
+  __personalAgentQueuedPromptId?: string;
+}
+
+interface InternalAgentQueues {
+  steeringQueue?: InternalQueuedAgentMessage[];
+  followUpQueue?: InternalQueuedAgentMessage[];
+}
+
+function ensureQueuedPromptPreviewId(
+  queueType: 'steer' | 'followUp',
+  message: InternalQueuedAgentMessage,
+): string {
+  const existingId = message.__personalAgentQueuedPromptId?.trim();
+  if (existingId) {
+    return existingId;
+  }
+
+  const id = createQueuedPromptPreviewId(queueType);
+  try {
+    Object.defineProperty(message, INTERNAL_QUEUED_PROMPT_ID_FIELD, {
+      value: id,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  } catch {
+    message.__personalAgentQueuedPromptId = id;
+  }
+  return id;
+}
+
+function createVisibleQueueFallbackPreview(
   queueType: 'steer' | 'followUp',
   index: number,
   text: string,
-  imageCount: number,
 ): QueuedPromptPreview {
-  return {
-    id: `${queueType}-${index}`,
-    text: formatQueuedPromptPreviewText(text, imageCount),
-    imageCount,
-  };
+  return buildQueuedPromptPreview(`${queueType}-visible-${index}`, text, 0, { restorable: true });
+}
+
+function isVisibleQueueFallbackPreviewId(
+  queueType: 'steer' | 'followUp',
+  previewId?: string,
+): boolean {
+  const normalizedPreviewId = previewId?.trim() ?? '';
+  return normalizedPreviewId.startsWith(`${queueType}-visible-`);
 }
 
 function readQueuedPromptPreviews(
@@ -540,28 +579,50 @@ function readQueuedPromptPreviews(
   visibleQueue: string[],
   internalQueue: InternalQueuedAgentMessage[] | undefined,
 ): QueuedPromptPreview[] {
-  if (!Array.isArray(internalQueue)) {
-    return visibleQueue.map((text, index) => buildQueuedPromptPreview(queueType, index, text, 0));
+  if (visibleQueue.length === 0) {
+    return [];
   }
+
+  if (!Array.isArray(internalQueue)) {
+    return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
+  }
+
+  const internalUserQueue = internalQueue.filter((queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user');
+  if (internalUserQueue.length === 0) {
+    return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
+  }
+
+  const alignedInternalQueue = internalUserQueue.length > visibleQueue.length
+    ? internalUserQueue.slice(internalUserQueue.length - visibleQueue.length)
+    : internalUserQueue;
 
   const previews: QueuedPromptPreview[] = [];
-  let fallbackIndex = 0;
+  let searchStartIndex = 0;
 
-  for (const queuedMessage of internalQueue) {
-    if (queuedMessage?.role !== 'user') {
-      continue;
+  for (let index = 0; index < visibleQueue.length; index += 1) {
+    const visibleText = visibleQueue[index] ?? '';
+    let matchedPreview: QueuedPromptPreview | null = null;
+
+    for (let searchIndex = searchStartIndex; searchIndex < alignedInternalQueue.length; searchIndex += 1) {
+      const queuedMessage = alignedInternalQueue[searchIndex];
+      const extracted = extractQueuedPromptContent(queuedMessage, visibleText);
+      if (extracted.text !== visibleText) {
+        continue;
+      }
+
+      matchedPreview = buildQueuedPromptPreview(
+        ensureQueuedPromptPreviewId(queueType, queuedMessage),
+        extracted.text,
+        extracted.images.length,
+      );
+      searchStartIndex = searchIndex + 1;
+      break;
     }
 
-    const extracted = extractQueuedPromptContent(queuedMessage, visibleQueue[fallbackIndex] ?? '');
-    previews.push(buildQueuedPromptPreview(queueType, previews.length, extracted.text, extracted.images.length));
-    fallbackIndex += 1;
+    previews.push(matchedPreview ?? createVisibleQueueFallbackPreview(queueType, index, visibleText));
   }
 
-  if (previews.length > 0 || visibleQueue.length === 0) {
-    return previews;
-  }
-
-  return visibleQueue.map((text, index) => buildQueuedPromptPreview(queueType, index, text, 0));
+  return previews;
 }
 
 function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
@@ -579,29 +640,27 @@ function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[
   };
 }
 
-interface InternalQueuedAgentMessage {
-  role?: string;
-  content?: unknown;
-}
-
-interface InternalAgentQueues {
-  steeringQueue?: InternalQueuedAgentMessage[];
-  followUpQueue?: InternalQueuedAgentMessage[];
-}
-
 function removeQueuedUserMessage(
   queue: InternalQueuedAgentMessage[],
-  index: number,
-): InternalQueuedAgentMessage | undefined {
+  input: { index: number; previewId?: string },
+): { message: InternalQueuedAgentMessage; userQueueIndex: number } | undefined {
+  const previewId = input.previewId?.trim() || '';
   let userQueueIndex = 0;
 
   for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
-    if (queue[queueIndex]?.role !== 'user') {
+    const queuedMessage = queue[queueIndex];
+    if (queuedMessage?.role !== 'user') {
       continue;
     }
 
-    if (userQueueIndex === index) {
-      return queue.splice(queueIndex, 1)[0];
+    const matchesPreviewId = previewId.length > 0
+      && queuedMessage.__personalAgentQueuedPromptId === previewId;
+    const matchesIndex = previewId.length === 0 && userQueueIndex === input.index;
+    if (matchesPreviewId || matchesIndex) {
+      return {
+        message: queue.splice(queueIndex, 1)[0],
+        userQueueIndex,
+      };
     }
 
     userQueueIndex += 1;
@@ -1397,6 +1456,10 @@ function wireSession(
       }
     }
 
+    if (event.type === 'queue_update') {
+      broadcastQueueState(entry, true);
+    }
+
     if (event.type === 'message_start' && event.message.role === 'user') {
       if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
         const fallbackTitle = buildFallbackTitleFromContent(event.message.content);
@@ -1935,52 +1998,6 @@ export async function queuePromptContext(
   await entry.session.sendCustomMessage(customMessage);
 }
 
-async function triggerHiddenPrompt(
-  sessionId: string,
-  customType: string,
-  content: string,
-  behavior: 'steer' | 'followUp' = 'followUp',
-): Promise<void> {
-  const entry = registry.get(sessionId);
-  if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  const message = content.trim();
-  if (!message) {
-    return;
-  }
-
-  ensureHiddenTurnState(entry);
-  const activateImmediately = !entry.session.isStreaming
-    && !entry.activeHiddenTurnCustomType
-    && entry.pendingHiddenTurnCustomTypes.length === 0;
-
-  if (activateImmediately) {
-    entry.activeHiddenTurnCustomType = customType;
-  } else {
-    entry.pendingHiddenTurnCustomTypes.push(customType);
-  }
-
-  try {
-    await entry.session.sendCustomMessage({
-      customType,
-      content: message,
-      display: false,
-      details: undefined,
-    }, {
-      deliverAs: behavior,
-      triggerTurn: true,
-    });
-  } catch (error) {
-    if (activateImmediately && entry.activeHiddenTurnCustomType === customType) {
-      entry.activeHiddenTurnCustomType = null;
-    }
-    const index = entry.pendingHiddenTurnCustomTypes.lastIndexOf(customType);
-    if (index >= 0) {
-      entry.pendingHiddenTurnCustomTypes.splice(index, 1);
-    }
-    throw error;
-  }
-}
-
 export async function appendDetachedUserMessage(
   sessionId: string,
   text: string,
@@ -2172,11 +2189,12 @@ export async function submitPromptSession(
   };
 }
 
-export function restoreQueuedMessage(
+export async function restoreQueuedMessage(
   sessionId: string,
   behavior: 'steer' | 'followUp',
   index: number,
-): { text: string; images: PromptImageAttachment[] } {
+  previewId?: string,
+): Promise<{ text: string; images: PromptImageAttachment[] }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   if (!Number.isInteger(index) || index < 0) {
@@ -2191,29 +2209,47 @@ export function restoreQueuedMessage(
     ? internalAgent.steeringQueue
     : internalAgent.followUpQueue;
 
-  if (!Array.isArray(internalQueue)) {
+  if (!Array.isArray(internalQueue) || isVisibleQueueFallbackPreviewId(behavior, previewId)) {
     if (index >= visibleQueue.length) {
       throw new Error('Queued prompt changed before it could be restored. Try again.');
     }
 
-    throw new Error('Queued prompt restore is unavailable for this session.');
+    const previews = visibleQueue.map((text, previewIndex) => createVisibleQueueFallbackPreview(behavior, previewIndex, text));
+    if (previewId && previews[index]?.id !== previewId) {
+      throw new Error('Queued prompt changed before it could be restored. Try again.');
+    }
+
+    const cleared = entry.session.clearQueue();
+    const restoreQueue = behavior === 'steer' ? cleared.steering : cleared.followUp;
+    const restoredText = restoreQueue[index] ?? visibleQueue[index] ?? '';
+    const remainingSteering = behavior === 'steer'
+      ? cleared.steering.filter((_, queueIndex) => queueIndex !== index)
+      : cleared.steering;
+    const remainingFollowUp = behavior === 'followUp'
+      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== index)
+      : cleared.followUp;
+
+    for (const queuedText of remainingSteering) {
+      await entry.session.steer(queuedText);
+    }
+    for (const queuedText of remainingFollowUp) {
+      await entry.session.followUp(queuedText);
+    }
+
+    return { text: restoredText, images: [] };
   }
 
-  const preview = readQueuedPromptPreviews(behavior, [...visibleQueue], internalQueue)[index];
-  if (!preview) {
-    throw new Error('Queued prompt changed before it could be restored. Try again.');
-  }
-
-  const removed = removeQueuedUserMessage(internalQueue, index);
+  const removed = removeQueuedUserMessage(internalQueue, { index, previewId });
   if (!removed) {
     throw new Error('Queued prompt changed before it could be restored. Try again.');
   }
 
+  const fallbackText = visibleQueue[index] ?? '';
   if (index < visibleQueue.length) {
     visibleQueue.splice(index, 1);
   }
 
-  const restored = extractQueuedPromptContent(removed, preview.text);
+  const restored = extractQueuedPromptContent(removed.message, fallbackText);
   broadcastQueueState(entry, true);
   return restored;
 }

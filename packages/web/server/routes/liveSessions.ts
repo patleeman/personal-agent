@@ -682,13 +682,14 @@ export function registerLiveSessionRoutes(
 
   router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
 
-  router.post('/api/live-sessions/:id/dequeue', (req, res) => {
+  router.post('/api/live-sessions/:id/dequeue', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
 
-      const { behavior, index } = req.body as {
+      const { behavior, index, previewId } = req.body as {
         behavior?: 'steer' | 'followUp';
         index?: number;
+        previewId?: string;
         surfaceId?: string;
       };
 
@@ -702,7 +703,12 @@ export function registerLiveSessionRoutes(
         return;
       }
 
-      const restored = restoreQueuedMessage(req.params.id, behavior, index as number);
+      const restored = await restoreQueuedMessage(
+        req.params.id,
+        behavior,
+        index as number,
+        typeof previewId === 'string' ? previewId : undefined,
+      );
       res.json({ ok: true, ...restored });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

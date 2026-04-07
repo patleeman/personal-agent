@@ -1556,12 +1556,82 @@ describe('queued prompt restore', () => {
 
     expect(events).toContainEqual({
       type: 'queue_state',
-      steering: [{ id: 'steer-0', text: '1 image attachment', imageCount: 1 }],
+      steering: [expect.objectContaining({ text: '', imageCount: 1 })],
       followUp: [],
     });
   });
 
-  it('restores a queued prompt back to the composer payload without disturbing other queued items', () => {
+  it('marks fallback queue previews as restorable when the internal queue is unavailable', () => {
+    setLiveEntry('session-visible-only-queue', {
+      sessionId: 'session-visible-only-queue',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Visible-only queue',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => ['queued prompt'],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-visible-only-queue', (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [{ id: 'steer-visible-0', text: 'queued prompt', imageCount: 0, restorable: true }],
+      followUp: [],
+    });
+  });
+
+  it('restores a visible-only queued prompt by clearing and rebuilding the remaining queue', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const clearQueue = vi.fn(() => ({ steering: [...steeringMessages], followUp: [] }));
+    const steer = vi.fn(async (text: string) => {
+      steeringMessages.push(text);
+    });
+
+    setLiveEntry('session-visible-only-restore', {
+      sessionId: 'session-visible-only-restore',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Visible-only restore',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        clearQueue,
+        steer,
+        followUp: vi.fn(async () => undefined),
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    const restored = await restoreQueuedMessage('session-visible-only-restore', 'steer', 1, 'steer-visible-1');
+
+    expect(restored).toEqual({
+      text: 'second queued prompt',
+      images: [],
+    });
+    expect(clearQueue).toHaveBeenCalledTimes(1);
+    expect(steer).toHaveBeenCalledTimes(1);
+    expect(steer).toHaveBeenCalledWith('first queued prompt');
+  });
+
+  it('restores a queued prompt back to the composer payload without disturbing other queued items', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = [
       { role: 'custom', content: 'hidden steer context' },
@@ -1604,9 +1674,12 @@ describe('queued prompt restore', () => {
     subscribe('session-queue-restore', (event) => {
       events.push(event);
     });
+
+    const initialQueueState = events.find((event): event is Extract<SseEvent, { type: 'queue_state' }> => event.type === 'queue_state');
+    const secondPromptPreviewId = initialQueueState?.steering[1]?.id;
     events.length = 0;
 
-    const restored = restoreQueuedMessage('session-queue-restore', 'steer', 1);
+    const restored = await restoreQueuedMessage('session-queue-restore', 'steer', 1, secondPromptPreviewId);
 
     expect(restored).toEqual({
       text: 'second queued prompt',
@@ -1623,7 +1696,124 @@ describe('queued prompt restore', () => {
     ]);
     expect(events).toContainEqual({
       type: 'queue_state',
-      steering: [{ id: 'steer-0', text: 'first queued prompt', imageCount: 0 }],
+      steering: [expect.objectContaining({ text: 'first queued prompt', imageCount: 0 })],
+      followUp: [],
+    });
+  });
+
+  it('ignores stale internal queue entries that already left the visible queue', () => {
+    const steeringMessages = ['second queued prompt'];
+    const steeringQueue = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'first queued prompt' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'second queued prompt' }],
+      },
+    ];
+
+    setLiveEntry('session-stale-internal-queue', {
+      sessionId: 'session-stale-internal-queue',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Stale internal queue',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        agent: {
+          steeringQueue,
+          followUpQueue: [],
+        },
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-stale-internal-queue', (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [expect.objectContaining({ text: 'second queued prompt', imageCount: 0 })],
+      followUp: [],
+    });
+    expect(events).not.toContainEqual({
+      type: 'queue_state',
+      steering: [expect.objectContaining({ text: 'first queued prompt', imageCount: 0 })],
+      followUp: [],
+    });
+  });
+
+  it('restores the intended queued prompt by preview id even after earlier prompts leave the visible queue first', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const steeringQueue = [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'first queued prompt' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'second queued prompt' }],
+      },
+    ];
+
+    setLiveEntry('session-queue-restore-by-id', {
+      sessionId: 'session-queue-restore-by-id',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Restore queued prompt by id',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        agent: {
+          steeringQueue,
+          followUpQueue: [],
+        },
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-queue-restore-by-id', (event) => {
+      events.push(event);
+    });
+
+    const initialQueueState = events.find((event): event is Extract<SseEvent, { type: 'queue_state' }> => event.type === 'queue_state');
+    const secondPromptPreviewId = initialQueueState?.steering[1]?.id;
+    expect(secondPromptPreviewId).toBeTruthy();
+
+    steeringMessages.shift();
+    events.length = 0;
+
+    const restored = await restoreQueuedMessage('session-queue-restore-by-id', 'steer', 0, secondPromptPreviewId);
+
+    expect(restored).toEqual({
+      text: 'second queued prompt',
+      images: [],
+    });
+    expect(steeringMessages).toEqual([]);
+    expect(steeringQueue).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'first queued prompt' }],
+      },
+    ]);
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [],
       followUp: [],
     });
   });

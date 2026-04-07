@@ -76,7 +76,7 @@ For new conversations, the working directory is chosen from the strongest availa
 2. the saved default cwd from Settings / profile settings
 3. the web server process cwd as a fallback
 
-The draft page keeps recent conversation cwd values in the centered empty-state area so you can reuse a repo quickly without opening a side inspector first.
+The draft page keeps recent conversation cwd values in the centered empty-state area so you can reuse a repo quickly without opening a side inspector first. Once a conversation exists, the same header area lets you switch its working directory inline from the top bar.
 
 ## Wakeups and callbacks
 
@@ -107,7 +107,7 @@ Examples include:
 
 These commands operate on the conversation surface. They do not change the underlying durable-state model.
 
-If you queue follow-up work while the agent is still running, the composer shows queued prompt previews in a capped shelf above the input. Long queued prompt text is intentionally truncated there so a large slash command or injected context block does not take over the whole conversation view.
+If you queue follow-up work while the agent is still running, the composer shows queued prompt previews in a capped shelf above the input. Long queued prompt text is intentionally truncated there so a large slash command or injected context block does not take over the whole conversation view. Those previews now show image counts explicitly, and restore actions stay disabled until the queue item is actually confirmed by the live session.
 
 ## Locality boundary
 

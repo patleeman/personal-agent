@@ -178,11 +178,11 @@ Saved conversations show these queued and ready items under **Wakeups**. From th
 
 Conversation unread state only drives per-thread “needs review” markers. Detached background run review stays on the Runs page instead of adding workspace-wide conversation badges.
 
-Conversation lists in the sidebar are grouped by working directory so related threads stay clustered under the same repo or folder. In the sidebar, each working-directory header shows the folder name, reveals the full path on hover, and includes a quick action to start a draft chat in that cwd. Sidebar conversation rows use compact left-edge status markers instead of inline text: a spinner while the agent is still running and a small dot when the conversation needs review.
+Conversation lists in the sidebar are grouped by working directory so related threads stay clustered under the same repo or folder. The sidebar keeps those working-directory sections and open-conversation tabs in their existing layout order instead of re-sorting them by recent activity. Each working-directory header shows the folder name, reveals the full path on hover, and includes a quick action to start a draft chat in that cwd. Sidebar conversation rows use compact left-edge status markers instead of inline text: a spinner while the agent is still running and a small dot when the conversation needs review.
 
-Saved conversations also keep their working directory and run context in the same integrated right-hand inspector style used by the shared node workspace, instead of a separate utility sidebar treatment.
+Saved conversations keep a minimal right-hand inspector focused on runs and details. That rail stays closed by default and opens on demand. In the runs section, conversation work, background work, and thread-mentioned work are grouped separately so the source of each item is clearer than a flat internal run list.
 
-The conversation header stays compact: the working directory sits inline beside the title, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header. Draft conversations set their initial working directory from that same header area instead of a dedicated right rail.
+The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -374,7 +374,7 @@ Skills and profile behavior are no longer separate `@` mention targets; referenc
 
 A new conversation uses an explicitly selected working directory when one is set.
 
-The draft page keeps that picker in the centered empty-state area and offers recent conversation cwd values as one-click buttons plus an overflow dropdown, so starting in a familiar repo is fast without opening a right-side inspector.
+The draft page keeps that picker inline in the header next to the title, so starting in the right repo is fast without opening a right-side inspector. Saved conversations expose the same top-bar area for switching into a different repo or folder later.
 
 Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
@@ -387,9 +387,9 @@ The conversation page uses a Codex-inspired layout for a cleaner, more focused i
 The conversation header is compact, showing:
 - **Title** on the left
 - **Working directory** next to the title (if set)
-- **Centered draft working-directory controls** on new conversations
+- **Inline working-directory controls** in the header for both new and saved conversations
 - **Clickable title** to rename existing conversations
-- **Right-rail toggle** on saved conversations
+- **Right-rail toggle** on saved conversations (closed by default)
 
 ### Composer Area
 
@@ -407,14 +407,15 @@ The input/composer area features:
 The send button is a circular up-arrow that:
 - Appears when there's content in the composer
 - Is disabled (grayed out) when the composer is empty
-- Turns to a stop button (square icon) when the agent is actively running
+- Stays available while the agent is running as a queued **steer** / **followup** action beside the stop button
 
 ### Running State
 
 When the agent is streaming:
 - A pulsing dot indicator appears in the header
-- The send button becomes a stop button
-- Alt+Enter can be used to queue a follow-up prompt while the agent is running
+- A queued-send button appears beside the stop button
+- Holding Alt switches that queued-send action from **steer** to **followup**
+- Alt+Enter can still be used to queue a follow-up prompt while the agent is running
 
 ## Common conversation composer commands
 

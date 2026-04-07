@@ -191,8 +191,9 @@ describe('Sidebar', () => {
   it('renders a flat primary nav for core workspaces', () => {
     const html = renderSidebar('/inbox');
 
-    expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Chat'));
     expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Vault'));
+    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Notifications'));
+    expect(html.indexOf('Notifications')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');

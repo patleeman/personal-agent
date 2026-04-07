@@ -527,6 +527,7 @@ export function Sidebar() {
     pinnedSessions,
     tabs,
     archivedSessions,
+    archivedConversationIds,
     closeSession,
     pinSession,
     unpinSession,
@@ -618,6 +619,12 @@ export function Sidebar() {
       .map((entry) => entry.activityId as string)),
     [alerts?.entries],
   );
+  const activeAlertConversationIds = useMemo(
+    () => new Set((alerts?.entries ?? [])
+      .filter((entry) => entry.status === 'active' && typeof entry.conversationId === 'string' && entry.conversationId.trim().length > 0)
+      .map((entry) => entry.conversationId as string)),
+    [alerts?.entries],
+  );
   const standaloneUnreadCount = useMemo(() => {
     const knownConversationIds = new Set([...pinnedSessions, ...tabs, ...archivedSessions].map((session) => session.id));
     return (activity?.entries ?? []).filter((entry) => {
@@ -628,7 +635,19 @@ export function Sidebar() {
       return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
     }).length;
   }, [activity?.entries, activeAlertActivityIds, archivedSessions, pinnedSessions, tabs]);
-  const notificationCount = standaloneUnreadCount + activeAlertCount;
+  const archivedConversationIdSet = useMemo(
+    () => new Set(archivedConversationIds),
+    [archivedConversationIds],
+  );
+  const attentionConversationCount = useMemo(
+    () => archivedSessions.filter((session) => (
+      sessionNeedsAttention(session)
+      && !archivedConversationIdSet.has(session.id)
+      && !activeAlertConversationIds.has(session.id)
+    )).length,
+    [activeAlertConversationIds, archivedConversationIdSet, archivedSessions],
+  );
+  const notificationCount = standaloneUnreadCount + activeAlertCount + attentionConversationCount;
 
 
   function clearDragState() {
@@ -857,7 +876,6 @@ export function Sidebar() {
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
       <div className="pt-3 pb-2 space-y-0.5">
-        <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={notificationCount} />
         <div className="px-1">
           <button
             onClick={() => handleNewConversation()}
@@ -965,6 +983,7 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
+        <TopNavItem to="/inbox" icon={PATH.inbox} label="Notifications" badge={notificationCount} />
         <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
       </div>
     </aside>

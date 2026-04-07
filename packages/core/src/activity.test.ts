@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -8,13 +8,14 @@ import {
   loadProfileActivityReadState,
   resolveActivityEntryPath,
   resolveActivityReadStatePath,
+  resolveProfileActivityDbPath,
   resolveProfileActivityDir,
   resolveProfileActivityStateDir,
   saveProfileActivityReadState,
   validateActivityId,
   writeProfileActivityEntry,
 } from './activity.js';
-import { createProjectActivityEntry } from './project-artifacts.js';
+import { createProjectActivityEntry, writeProjectActivityEntry } from './project-artifacts.js';
 
 const tempDirs: string[] = [];
 
@@ -64,16 +65,16 @@ describe('activity read state', () => {
     expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set());
   });
 
-  it('saves and reloads normalized read ids', () => {
+  it('saves and reloads normalized read ids in sqlite', () => {
     const stateRoot = createTempStateRoot();
     const path = saveProfileActivityReadState({
       stateRoot,
       profile: 'datadog',
-      ids: [' newer ', '', 'older', 'newer'],
+      ids: [' newer ', '', 'older', 'newer', 'bad/id'],
     });
 
-    expect(path).toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'read-state.json'));
-    expect(readFileSync(path, 'utf-8')).toBe('["newer","older"]');
+    expect(path).toBe(resolveProfileActivityDbPath({ stateRoot, profile: 'datadog' }));
+    expect(existsSync(path)).toBe(true);
     expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set(['newer', 'older']));
   });
 });
@@ -111,9 +112,31 @@ describe('activity storage', () => {
     expect(entries.map((entry) => entry.entry.id)).toEqual(['newer', 'older']);
     expect(entries[0]?.path).toBe(newerPath);
     expect(entries[1]?.path).toBe(olderPath);
+    expect(newerPath).toBe(`${resolveProfileActivityDbPath({ stateRoot, profile: 'datadog' })}#activity/newer`);
+    expect(olderPath).toBe(`${resolveProfileActivityDbPath({ stateRoot, profile: 'datadog' })}#activity/older`);
   });
 
-  it('ignores malformed activity entries', () => {
+  it('migrates legacy markdown entries and read-state into sqlite storage', () => {
+    const stateRoot = createTempStateRoot();
+    const legacyEntryPath = resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'legacy-item' });
+    mkdirSync(resolveProfileActivityDir({ stateRoot, profile: 'datadog' }), { recursive: true });
+    writeProjectActivityEntry(legacyEntryPath, createProjectActivityEntry({
+      id: 'legacy-item',
+      createdAt: '2026-03-10T08:00:00.000Z',
+      profile: 'datadog',
+      kind: 'note',
+      summary: 'Migrated from markdown.',
+    }));
+    writeFileSync(resolveActivityReadStatePath({ stateRoot, profile: 'datadog' }), JSON.stringify(['legacy-item']));
+
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' }).map((entry) => entry.entry.id)).toEqual(['legacy-item']);
+    expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set(['legacy-item']));
+    expect(existsSync(legacyEntryPath)).toBe(false);
+    expect(existsSync(resolveActivityReadStatePath({ stateRoot, profile: 'datadog' }))).toBe(false);
+    expect(existsSync(resolveProfileActivityDbPath({ stateRoot, profile: 'datadog' }))).toBe(true);
+  });
+
+  it('ignores malformed legacy activity entries', () => {
     const stateRoot = createTempStateRoot();
 
     writeProfileActivityEntry({
@@ -128,6 +151,7 @@ describe('activity storage', () => {
       }),
     });
 
+    mkdirSync(resolveProfileActivityDir({ stateRoot, profile: 'datadog' }), { recursive: true });
     writeFileSync(resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'broken' }), '');
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });

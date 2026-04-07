@@ -1,7 +1,7 @@
-import { rmSync } from 'node:fs';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import {
   clearActivityConversationLinks,
+  deleteProfileActivityEntries,
   getActivityConversationLink,
   listProfileActivityEntries,
   loadProfileActivityReadState,
@@ -133,10 +133,15 @@ function deleteActivityIdsForProfile(profile: string, activityIds: Iterable<stri
       continue;
     }
 
-    for (const { path, entry } of matchingEntries) {
-      rmSync(path, { force: true });
-      clearActivityConversationLinks({ stateRoot, profile, activityId: entry.id });
-      deletedIds.add(entry.id);
+    const deletedInStateRoot = deleteProfileActivityEntries({
+      stateRoot,
+      profile,
+      activityIds: matchingEntries.map(({ entry }) => entry.id),
+    });
+
+    for (const activityId of deletedInStateRoot) {
+      clearActivityConversationLinks({ stateRoot, profile, activityId });
+      deletedIds.add(activityId);
     }
 
     const readState = loadReadState(stateRoot, profile);

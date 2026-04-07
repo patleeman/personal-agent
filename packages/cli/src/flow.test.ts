@@ -6,6 +6,10 @@ import {
   createProjectActivityEntry,
   getActivityConversationLink,
   getDurableSessionsDir,
+  listProfileActivityEntries,
+  loadProfileActivityReadState,
+  resolveProfileActivityDbPath,
+  saveProfileActivityReadState,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -53,12 +57,8 @@ function writeSessionFile(stateRoot: string, relativePath: string, lines: unknow
   return filePath;
 }
 
-function activityPath(stateRoot: string, profile: string, activityId: string): string {
-  return join(stateRoot, 'pi-agent', 'state', 'inbox', profile, 'activities', `${activityId}.md`);
-}
-
-function activityReadStatePath(stateRoot: string, profile: string): string {
-  return join(stateRoot, 'pi-agent', 'state', 'inbox', profile, 'read-state.json');
+function activityDbPath(stateRoot: string, profile: string): string {
+  return resolveProfileActivityDbPath({ stateRoot, profile });
 }
 
 function createFakePiBinary(argsLogPath: string): string {
@@ -433,14 +433,16 @@ describe('CLI command flows', () => {
     expect(output).toContain('"summary": "Daily report ready."');
     expect(output).toContain('"read": false');
 
-    const createdActivityPath = activityPath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog', 'daily-report');
-    expect(existsSync(createdActivityPath)).toBe(true);
+    const createdActivityDbPath = activityDbPath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog');
+    expect(existsSync(createdActivityDbPath)).toBe(true);
 
-    const activityMarkdown = readFileSync(createdActivityPath, 'utf-8');
-    expect(activityMarkdown).toContain('Daily report ready.');
-    expect(activityMarkdown).toContain('Saved the report artifact.');
-    expect(activityMarkdown).toContain('relatedProjectIds: reporting');
-    expect(activityMarkdown).not.toContain('relatedConversationIds');
+    const storedActivity = listProfileActivityEntries({
+      stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
+      profile: 'datadog',
+    })[0]?.entry;
+    expect(storedActivity?.summary).toBe('Daily report ready.');
+    expect(storedActivity?.details).toBe('Saved the report artifact.');
+    expect(storedActivity?.relatedProjectIds).toEqual(['reporting']);
 
     expect(getActivityConversationLink({
       stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
@@ -478,8 +480,8 @@ describe('CLI command flows', () => {
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     expect(await runCli(['inbox', 'read', 'daily-report'])).toBe(0);
-    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
-      .toBe('["daily-report"]');
+    expect(loadProfileActivityReadState({ stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT, profile: 'datadog' }))
+      .toEqual(new Set(['daily-report']));
 
     let logs: string[] = [];
     let logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
@@ -491,8 +493,8 @@ describe('CLI command flows', () => {
     logSpy.mockRestore();
 
     expect(await runCli(['inbox', 'unread', 'daily-report'])).toBe(0);
-    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
-      .toBe('[]');
+    expect(loadProfileActivityReadState({ stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT, profile: 'datadog' }))
+      .toEqual(new Set());
 
     logs = [];
     logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
@@ -612,10 +614,11 @@ describe('CLI command flows', () => {
         summary: 'Daily report completed.',
       }),
     });
-    writeFileSync(
-      activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'),
-      JSON.stringify(['daily-report']),
-    );
+    saveProfileActivityReadState({
+      stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
+      profile: 'datadog',
+      ids: ['daily-report'],
+    });
     setActivityConversationLinks({
       stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
       profile: 'datadog',
@@ -629,9 +632,9 @@ describe('CLI command flows', () => {
 
     expect(await runCli(['inbox', 'delete', 'daily-report'])).toBe(0);
 
-    expect(existsSync(activityPath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog', 'daily-report'))).toBe(false);
-    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
-      .toBe('[]');
+    expect(listProfileActivityEntries({ stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT, profile: 'datadog' })).toHaveLength(0);
+    expect(loadProfileActivityReadState({ stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT, profile: 'datadog' }))
+      .toEqual(new Set());
     expect(getActivityConversationLink({
       stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
       profile: 'datadog',
