@@ -11,10 +11,7 @@ export function shouldBumpConversationEventVersion(
   payload: ConversationEventStreamEvent,
   conversationId: string,
 ): boolean {
-  return (
-    (payload.type === 'session_meta_changed' || payload.type === 'session_file_changed')
-    && payload.sessionId === conversationId
-  );
+  return payload.type === 'session_file_changed' && payload.sessionId === conversationId;
 }
 
 export function useConversationEventVersion(conversationId: string | null | undefined): number {

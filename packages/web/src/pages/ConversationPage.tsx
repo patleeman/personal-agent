@@ -95,7 +95,7 @@ const ConversationTree = lazy(() => import('../components/ConversationTree').the
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
 const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
-const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
+const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
@@ -242,6 +242,53 @@ export function shouldShowConversationTakeoverBanner(input: {
   return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
 }
 
+export function resolveConversationSavedHeaderStatus(input: {
+  draft: boolean;
+  isLiveSession: boolean;
+  isStreaming: boolean;
+  conversationNeedsTakeover: boolean;
+  sessionMeta?: Pick<SessionMeta, 'isLive' | 'isRunning' | 'needsAttention'> | null;
+}): {
+  label: string;
+  tone: 'accent' | 'warning' | 'muted';
+  spinning?: boolean;
+} | null {
+  if (input.draft) {
+    return null;
+  }
+
+  if (input.isStreaming || input.sessionMeta?.isRunning === true) {
+    return {
+      label: input.conversationNeedsTakeover ? 'Running elsewhere' : 'Running',
+      tone: input.conversationNeedsTakeover ? 'muted' : 'accent',
+      spinning: true,
+    };
+  }
+
+  if (input.conversationNeedsTakeover) {
+    return {
+      label: 'Live elsewhere',
+      tone: 'muted',
+    };
+  }
+
+  if (input.isLiveSession || input.sessionMeta?.isLive === true) {
+    return {
+      label: 'Live',
+      tone: 'accent',
+    };
+  }
+
+  if (input.sessionMeta?.needsAttention === true) {
+    return {
+      label: 'Needs review',
+      tone: 'warning',
+    };
+  }
+
+  return null;
+}
+
 export function resolveConversationPageTitle(input: {
   draft: boolean;
   titleOverride?: string | null;
@@ -360,9 +407,9 @@ function findConversationSurface(
 }
 
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
-const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
+const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
-const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
+const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
 export function resolveConversationInitialHistoricalWarmupTarget(input: {
@@ -382,7 +429,9 @@ export function resolveConversationInitialHistoricalWarmupTarget(input: {
     return null;
   }
 
-  return Math.min(input.historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS);
+  // Keep the first paint small when switching threads. Older history can load
+  // lazily in the background or on demand instead of blocking open.
+  return null;
 }
 
 export function hasConversationLoadedHistoricalTailBlocks(
@@ -1961,6 +2010,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : (liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null),
     [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
   );
+  const conversationHeaderStatus = useMemo(() => resolveConversationSavedHeaderStatus({
+    draft,
+    isLiveSession,
+    isStreaming: stream.isStreaming,
+    conversationNeedsTakeover,
+    sessionMeta: currentSessionMeta,
+  }), [conversationNeedsTakeover, currentSessionMeta, draft, isLiveSession, stream.isStreaming]);
   const hasDraftCwd = draftCwdValue.length > 0;
   const branchLabel = liveSessionContext?.branch ?? null;
 
@@ -4302,8 +4358,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     hasRenderableMessages,
     hasVisibleSessionDetail: Boolean(visibleSessionDetail),
   });
-  const showConversationLoadingState = showInitialHistoricalWarmupLoader
-    || showBootstrapLoadingState
+  const showConversationLoadingState = showBootstrapLoadingState
     || (!hasRenderableMessages && (sessionLoading || hydratingLiveConversation));
   const visibleTranscriptState = hasRenderableMessages && realMessages
     ? {
@@ -4622,6 +4677,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               cwdPickBusy={conversationCwdPickBusy}
               cwdSaveBusy={conversationCwdBusy}
               cwdActionDisabledReason={conversationCwdActionDisabledReason}
+              statusLabel={conversationHeaderStatus?.label ?? null}
+              statusTone={conversationHeaderStatus?.tone}
+              statusSpinning={conversationHeaderStatus?.spinning === true}
               onPickCwd={() => { void pickConversationCwd(); }}
               onStartEditingCwd={beginConversationCwdEdit}
               onCwdDraftChange={(value) => {

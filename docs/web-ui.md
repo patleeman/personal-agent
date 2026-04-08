@@ -437,8 +437,9 @@ That means:
 - the global app stream carries lightweight summary state, and the server-side `/api/sessions` snapshot now merges live controller state before it reaches the browser; heavier durable run history and conversation transcript data still load on demand from their own surfaces
 - conversation bootstrap requests reuse cached transcript windows by session-file signature when possible, and the browser keeps recent transcript windows in durable local cache so reopen/reload usually only fetches lightweight live metadata unless that transcript actually changed
 - when a saved conversation transcript only grew at the tail, the UI refresh path now requests just the appended blocks and merges them into the cached window instead of redownloading the whole tail slice
-- opening a saved conversation now keeps the transcript behind a loading state while the initial history warmup fetches its larger tail window, then reveals the conversation already settled at the bottom instead of visibly appending older chunks during open
-- open conversation pages now derive their transcript refresh version from the shared app event stream, so unrelated conversation churn elsewhere in the app no longer forces the current page to refetch its bootstrap state or open a second per-conversation SSE connection
+- opening a saved conversation now starts from a smaller tail window so thread switches paint faster, while older history backfills lazily in the background or on demand
+- open conversation tabs are prewarmed in the background so switching between already-open threads usually reuses hot transcript and live-session state instead of starting from cold
+- open conversation pages now derive their transcript refresh version from conversation file changes instead of metadata-only churn, so running-state updates do not force needless transcript bootstrap refetches
 - you usually do not need to refresh manually
 - if the SSE connection drops, the UI will try to reconnect, including during managed web UI restarts
 

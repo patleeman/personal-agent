@@ -191,11 +191,11 @@ function useViewportWidth() {
   return viewportWidth;
 }
 
-const ENABLE_OPEN_CONVERSATION_WARMING = false;
-const OPEN_TAB_WARM_TAIL_BLOCKS = 400;
-const OPEN_TAB_WARM_BOOT_DELAY_MS = 750;
-const OPEN_TAB_WARM_START_DELAY_MS = 150;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 75;
+const ENABLE_OPEN_CONVERSATION_WARMING = true;
+const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
+const OPEN_TAB_WARM_BOOT_DELAY_MS = 250;
+const OPEN_TAB_WARM_START_DELAY_MS = 75;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 50;
 
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);

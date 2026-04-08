@@ -1,5 +1,5 @@
 import type { FormEvent } from 'react';
-import { IconButton } from './ui';
+import { IconButton, cx } from './ui';
 
 function FolderIcon({ className }: { className?: string }) {
   return (
@@ -30,6 +30,9 @@ interface ConversationSavedHeaderProps {
   cwdPickBusy?: boolean;
   cwdSaveBusy?: boolean;
   cwdActionDisabledReason?: string | null;
+  statusLabel?: string | null;
+  statusTone?: 'accent' | 'warning' | 'muted';
+  statusSpinning?: boolean;
   summarizeAndForkBusy?: boolean;
   summarizeAndForkDisabled?: boolean;
   summarizeAndForkTitle?: string | null;
@@ -51,6 +54,9 @@ export function ConversationSavedHeader({
   cwdPickBusy = false,
   cwdSaveBusy = false,
   cwdActionDisabledReason,
+  statusLabel,
+  statusTone = 'muted',
+  statusSpinning = false,
   summarizeAndForkBusy = false,
   summarizeAndForkDisabled = false,
   summarizeAndForkTitle,
@@ -67,6 +73,11 @@ export function ConversationSavedHeader({
     ? 'Choosing working directory…'
     : (cwdActionDisabledReason ?? 'Choose a new working directory for this conversation');
   const editTitle = cwdActionDisabledReason ?? 'Enter the working directory manually';
+  const statusClasses = statusTone === 'accent'
+    ? 'text-accent'
+    : statusTone === 'warning'
+      ? 'text-warning'
+      : 'text-dim';
 
   return (
     <div className="space-y-2">
@@ -85,6 +96,19 @@ export function ConversationSavedHeader({
           </h1>
         ) : (
           <h1 className="ui-page-title min-w-0 truncate">{title}</h1>
+        )}
+        {statusLabel && (
+          <span className={cx('inline-flex shrink-0 items-center gap-1.5 text-[11px]', statusClasses)}>
+            {statusSpinning ? (
+              <span
+                aria-hidden="true"
+                className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin"
+              />
+            ) : (
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+            )}
+            <span>{statusLabel}</span>
+          </span>
         )}
         {cwd && (
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
