@@ -273,6 +273,41 @@ export function replaceConversationTitleInSessionList<T extends { id: string; ti
   return changed ? updatedSessions : sessions;
 }
 
+export function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  streamTitle: string | null | undefined;
+  liveTitle: string | null | undefined;
+  sessions: T[] | null;
+}): {
+  normalizedTitle: string | null;
+  shouldPushLiveTitle: boolean;
+  nextSessions: T[] | null;
+} {
+  if (input.draft || !input.conversationId) {
+    return {
+      normalizedTitle: null,
+      shouldPushLiveTitle: false,
+      nextSessions: input.sessions,
+    };
+  }
+
+  const normalizedTitle = normalizeConversationTitle(input.streamTitle);
+  if (!normalizedTitle) {
+    return {
+      normalizedTitle: null,
+      shouldPushLiveTitle: false,
+      nextSessions: input.sessions,
+    };
+  }
+
+  return {
+    normalizedTitle,
+    shouldPushLiveTitle: normalizeConversationTitle(input.liveTitle) !== normalizedTitle,
+    nextSessions: replaceConversationTitleInSessionList(input.sessions, input.conversationId, normalizedTitle),
+  };
+}
+
 export function mergeConversationSessionMeta(
   detailMeta: SessionMeta | null | undefined,
   sessionSnapshot: SessionMeta | null | undefined,
@@ -1349,6 +1384,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     sessionTitle: id ? sessions?.find((session) => session.id === id)?.title : undefined,
   });
   const model = visibleSessionDetail?.meta.model;
+
+  useEffect(() => {
+    const { normalizedTitle, shouldPushLiveTitle, nextSessions } = resolveConversationStreamTitleSync({
+      draft,
+      conversationId: id,
+      streamTitle: stream.title,
+      liveTitle: id ? titles.get(id) : undefined,
+      sessions,
+    });
+
+    if (!normalizedTitle) {
+      return;
+    }
+
+    if (shouldPushLiveTitle && id) {
+      pushTitle(id, normalizedTitle);
+    }
+
+    if (nextSessions && nextSessions !== sessions) {
+      setSessions(nextSessions);
+    }
+  }, [draft, id, pushTitle, sessions, setSessions, stream.title, titles]);
 
   // Model
   const {

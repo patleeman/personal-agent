@@ -12,6 +12,7 @@ import {
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
   resolveDisplayedConversationPendingStatusLabel,
+  resolveConversationStreamTitleSync,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
@@ -230,6 +231,43 @@ describe('conversation live state helpers', () => {
     ]);
     expect(replaceConversationTitleInSessionList(sessions, 'conv-123', 'Old title')).toBe(sessions);
     expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '')).toBe(sessions);
+  });
+
+  it('pushes live stream titles into shared sidebar state immediately', () => {
+    const sessions = [
+      { id: 'conv-123', title: 'New Conversation' },
+      { id: 'conv-456', title: 'Other title' },
+    ];
+
+    expect(resolveConversationStreamTitleSync({
+      draft: false,
+      conversationId: 'conv-123',
+      streamTitle: '  Better title  ',
+      liveTitle: 'New Conversation',
+      sessions,
+    })).toEqual({
+      normalizedTitle: 'Better title',
+      shouldPushLiveTitle: true,
+      nextSessions: [
+        { id: 'conv-123', title: 'Better title' },
+        { id: 'conv-456', title: 'Other title' },
+      ],
+    });
+
+    expect(resolveConversationStreamTitleSync({
+      draft: false,
+      conversationId: 'conv-123',
+      streamTitle: 'Better title',
+      liveTitle: 'Better title',
+      sessions,
+    })).toEqual({
+      normalizedTitle: 'Better title',
+      shouldPushLiveTitle: false,
+      nextSessions: [
+        { id: 'conv-123', title: 'Better title' },
+        { id: 'conv-456', title: 'Other title' },
+      ],
+    });
   });
 
   it('preserves deferred resumes from the session snapshot when detail meta omits them', () => {
