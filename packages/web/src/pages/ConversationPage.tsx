@@ -4534,14 +4534,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
               windowingBadgeTopOffset={visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
-            {showInlineConversationLoadingState && (
-              <div className="sticky bottom-0 z-10 bg-base/85 px-6 py-4 backdrop-blur-sm">
-                <LoadingState
-                  label={renderingStaleTranscript ? 'Loading new messages…' : 'Loading messages…'}
-                  className="justify-center"
-                />
-              </div>
-            )}
           </>
         ) : (
           <EmptyState
@@ -4572,6 +4564,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </button>
         )}
       </div>
+      {showInlineConversationLoadingState && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-base/85 px-6 py-4 backdrop-blur-sm">
+          <LoadingState
+            label={renderingStaleTranscript ? 'Loading new messages…' : 'Loading messages…'}
+            className="justify-center"
+          />
+        </div>
+      )}
       {!showConversationLoadingState && shouldRenderConversationRail && realMessages && (
         <ConversationRail
           messages={realMessages}
