@@ -121,6 +121,26 @@ export function truncateConversationShelfText(
   return charLimited.endsWith('…') ? charLimited : `${charLimited.trimEnd()}…`;
 }
 
+export function formatQueuedPromptShelfText(text: string, imageCount: number): string {
+  if (text.trim().length > 0) {
+    return text;
+  }
+
+  if (imageCount > 0) {
+    return '(image only)';
+  }
+
+  return '(empty queued prompt)';
+}
+
+export function formatQueuedPromptImageSummary(imageCount: number): string | null {
+  if (imageCount <= 0) {
+    return null;
+  }
+
+  return `${imageCount} image${imageCount === 1 ? '' : 's'} attached`;
+}
+
 export function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
   confirmedLive: boolean | null,
@@ -4612,7 +4632,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         <Pill tone={msg.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
                           {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
                         </Pill>
-                        <p className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">{truncateConversationShelfText(msg.text)}</p>
+                        <div className="min-w-0">
+                          <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
+                            {truncateConversationShelfText(formatQueuedPromptShelfText(msg.text, msg.imageCount))}
+                          </p>
+                          {formatQueuedPromptImageSummary(msg.imageCount) ? (
+                            <p className="mt-0.5 text-[11px] text-dim">{formatQueuedPromptImageSummary(msg.imageCount)}</p>
+                          ) : null}
+                        </div>
                         {msg.restorable !== false ? (
                           <button
                             type="button"

@@ -530,9 +530,29 @@ interface InternalQueuedAgentMessage {
   __personalAgentQueuedPromptId?: string;
 }
 
+interface InternalQueuedAgentQueueContainer {
+  messages?: InternalQueuedAgentMessage[];
+}
+
+type InternalQueuedAgentQueue = InternalQueuedAgentMessage[] | InternalQueuedAgentQueueContainer;
+
 interface InternalAgentQueues {
-  steeringQueue?: InternalQueuedAgentMessage[];
-  followUpQueue?: InternalQueuedAgentMessage[];
+  steeringQueue?: InternalQueuedAgentQueue;
+  followUpQueue?: InternalQueuedAgentQueue;
+}
+
+function resolveInternalQueuedMessages(
+  queue: InternalQueuedAgentQueue | undefined,
+): InternalQueuedAgentMessage[] | undefined {
+  if (Array.isArray(queue)) {
+    return queue;
+  }
+
+  if (queue && typeof queue === 'object' && Array.isArray(queue.messages)) {
+    return queue.messages;
+  }
+
+  return undefined;
 }
 
 function ensureQueuedPromptPreviewId(
@@ -577,17 +597,18 @@ function isVisibleQueueFallbackPreviewId(
 function readQueuedPromptPreviews(
   queueType: 'steer' | 'followUp',
   visibleQueue: string[],
-  internalQueue: InternalQueuedAgentMessage[] | undefined,
+  internalQueue: InternalQueuedAgentQueue | undefined,
 ): QueuedPromptPreview[] {
   if (visibleQueue.length === 0) {
     return [];
   }
 
-  if (!Array.isArray(internalQueue)) {
+  const internalQueueMessages = resolveInternalQueuedMessages(internalQueue);
+  if (!Array.isArray(internalQueueMessages)) {
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
 
-  const internalUserQueue = internalQueue.filter((queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user');
+  const internalUserQueue = internalQueueMessages.filter((queuedMessage): queuedMessage is InternalQueuedAgentMessage => queuedMessage?.role === 'user');
   if (internalUserQueue.length === 0) {
     return visibleQueue.map((text, index) => createVisibleQueueFallbackPreview(queueType, index, text));
   }
@@ -2205,9 +2226,9 @@ export async function restoreQueuedMessage(
     ? entry.session.getSteeringMessages()
     : entry.session.getFollowUpMessages()) as string[];
   const internalAgent = entry.session.agent as unknown as InternalAgentQueues;
-  const internalQueue = behavior === 'steer'
+  const internalQueue = resolveInternalQueuedMessages(behavior === 'steer'
     ? internalAgent.steeringQueue
-    : internalAgent.followUpQueue;
+    : internalAgent.followUpQueue);
 
   if (!Array.isArray(internalQueue) || isVisibleQueueFallbackPreviewId(behavior, previewId)) {
     if (index >= visibleQueue.length) {

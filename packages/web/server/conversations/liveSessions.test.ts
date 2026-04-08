@@ -1540,11 +1540,15 @@ describe('queued prompt restore', () => {
         getFollowUpMessages: () => [],
         isStreaming: true,
         agent: {
-          steeringQueue: [{
-            role: 'user',
-            content: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
-          }],
-          followUpQueue: [],
+          steeringQueue: {
+            messages: [{
+              role: 'user',
+              content: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+            }],
+          },
+          followUpQueue: {
+            messages: [],
+          },
         },
       },
     });
@@ -1633,21 +1637,23 @@ describe('queued prompt restore', () => {
 
   it('restores a queued prompt back to the composer payload without disturbing other queued items', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
-    const steeringQueue = [
-      { role: 'custom', content: 'hidden steer context' },
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'first queued prompt' }],
-      },
-      { role: 'custom', content: 'more hidden steer context' },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'second queued prompt' },
-          { type: 'image', data: 'b64-image', mimeType: 'image/png' },
-        ],
-      },
-    ];
+    const steeringQueue = {
+      messages: [
+        { role: 'custom', content: 'hidden steer context' },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+        { role: 'custom', content: 'more hidden steer context' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'second queued prompt' },
+            { type: 'image', data: 'b64-image', mimeType: 'image/png' },
+          ],
+        },
+      ],
+    };
 
     setLiveEntry('session-queue-restore', {
       sessionId: 'session-queue-restore',
@@ -1665,7 +1671,9 @@ describe('queued prompt restore', () => {
         getFollowUpMessages: () => [],
         agent: {
           steeringQueue,
-          followUpQueue: [],
+          followUpQueue: {
+            messages: [],
+          },
         },
       },
     });
@@ -1686,14 +1694,16 @@ describe('queued prompt restore', () => {
       images: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
     });
     expect(steeringMessages).toEqual(['first queued prompt']);
-    expect(steeringQueue).toEqual([
-      { role: 'custom', content: 'hidden steer context' },
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'first queued prompt' }],
-      },
-      { role: 'custom', content: 'more hidden steer context' },
-    ]);
+    expect(steeringQueue).toEqual({
+      messages: [
+        { role: 'custom', content: 'hidden steer context' },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+        { role: 'custom', content: 'more hidden steer context' },
+      ],
+    });
     expect(events).toContainEqual({
       type: 'queue_state',
       steering: [expect.objectContaining({ text: 'first queued prompt', imageCount: 0 })],
@@ -1703,16 +1713,18 @@ describe('queued prompt restore', () => {
 
   it('ignores stale internal queue entries that already left the visible queue', () => {
     const steeringMessages = ['second queued prompt'];
-    const steeringQueue = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'first queued prompt' }],
-      },
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'second queued prompt' }],
-      },
-    ];
+    const steeringQueue = {
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'second queued prompt' }],
+        },
+      ],
+    };
 
     setLiveEntry('session-stale-internal-queue', {
       sessionId: 'session-stale-internal-queue',
@@ -1730,7 +1742,9 @@ describe('queued prompt restore', () => {
         getFollowUpMessages: () => [],
         agent: {
           steeringQueue,
-          followUpQueue: [],
+          followUpQueue: {
+            messages: [],
+          },
         },
       },
     });
@@ -1754,16 +1768,18 @@ describe('queued prompt restore', () => {
 
   it('restores the intended queued prompt by preview id even after earlier prompts leave the visible queue first', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
-    const steeringQueue = [
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'first queued prompt' }],
-      },
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'second queued prompt' }],
-      },
-    ];
+    const steeringQueue = {
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'second queued prompt' }],
+        },
+      ],
+    };
 
     setLiveEntry('session-queue-restore-by-id', {
       sessionId: 'session-queue-restore-by-id',
@@ -1781,7 +1797,9 @@ describe('queued prompt restore', () => {
         getFollowUpMessages: () => [],
         agent: {
           steeringQueue,
-          followUpQueue: [],
+          followUpQueue: {
+            messages: [],
+          },
         },
       },
     });
@@ -1805,12 +1823,14 @@ describe('queued prompt restore', () => {
       images: [],
     });
     expect(steeringMessages).toEqual([]);
-    expect(steeringQueue).toEqual([
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'first queued prompt' }],
-      },
-    ]);
+    expect(steeringQueue).toEqual({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+      ],
+    });
     expect(events).toContainEqual({
       type: 'queue_state',
       steering: [],

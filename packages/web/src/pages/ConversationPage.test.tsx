@@ -18,6 +18,8 @@ import {
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   truncateConversationShelfText,
+  formatQueuedPromptShelfText,
+  formatQueuedPromptImageSummary,
   resolveConversationInitialHistoricalWarmupTarget,
   hasConversationLoadedHistoricalTailBlocks,
   shouldShowConversationInitialHistoricalWarmupLoader,
@@ -349,6 +351,20 @@ describe('conversation live state helpers', () => {
 
   it('truncates oversized queued prompt previews by character count', () => {
     expect(truncateConversationShelfText('abcdefghijklmnopqrstuvwxyz', { maxLines: 10, maxChars: 8 })).toBe('abcdefgh…');
+  });
+
+  it('renders image-only queued prompts with an explicit placeholder', () => {
+    expect(formatQueuedPromptShelfText('', 1)).toBe('(image only)');
+  });
+
+  it('renders empty queued prompts distinctly when no images are attached', () => {
+    expect(formatQueuedPromptShelfText('', 0)).toBe('(empty queued prompt)');
+  });
+
+  it('summarizes queued image attachments', () => {
+    expect(formatQueuedPromptImageSummary(0)).toBeNull();
+    expect(formatQueuedPromptImageSummary(1)).toBe('1 image attached');
+    expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
   });
 });
 
