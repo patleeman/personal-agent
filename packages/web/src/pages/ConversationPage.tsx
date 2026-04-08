@@ -1446,6 +1446,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [titleSaving, setTitleSaving] = useState(false);
+  const [summaryForkBusy, setSummaryForkBusy] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1453,6 +1454,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setIsEditingTitle(false);
     setTitleDraft('');
     setTitleSaving(false);
+    setSummaryForkBusy(false);
     setConversationCwdEditorOpen(false);
     setConversationCwdDraft('');
     setConversationCwdPickBusy(false);
@@ -1473,7 +1475,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     streamTitle: stream.title,
     liveTitle: id ? titles.get(id) : undefined,
     detailTitle: visibleSessionDetail?.meta.title,
-  const [summaryForkBusy, setSummaryForkBusy] = useState(false);
     sessionTitle: id ? sessions?.find((session) => session.id === id)?.title : undefined,
   });
   const model = visibleSessionDetail?.meta.model;
@@ -1481,7 +1482,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     const { normalizedTitle, shouldPushLiveTitle, nextSessions } = resolveConversationStreamTitleSync({
       draft,
-    setSummaryForkBusy(false);
       conversationId: id,
       streamTitle: stream.title,
       liveTitle: id ? titles.get(id) : undefined,
@@ -3120,33 +3120,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  function addImageAttachments(files: File[]) {
-    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length > 0) {
-      setAttachments((prev) => [...prev, ...imageFiles]);
-    }
-  }
-
-  async function addComposerFiles(files: File[]) {
-    const nextImageFiles: File[] = [];
-    const nextDrawingAttachments: ComposerDrawingAttachment[] = [];
-    const rejectedFiles: string[] = [];
-
-    for (const file of files) {
-      if (isPotentialExcalidrawFile(file)) {
-        try {
-          const drawing = await buildComposerDrawingFromFile(file);
-          nextDrawingAttachments.push(drawing);
-          continue;
-        } catch (error) {
-          if (file.name.trim().toLowerCase().endsWith('.excalidraw')) {
-            showNotice('danger', `Failed to parse ${file.name}: ${error instanceof Error ? error.message : String(error)}`, 4000);
-            continue;
-          }
-        }
-      }
-
-      if (file.type.startsWith('image/')) {
   async function summarizeAndForkConversation() {
     if (draft || !id) {
       showNotice('danger', 'Summarize + fork requires an existing conversation.', 4000);
@@ -3179,6 +3152,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  function addImageAttachments(files: File[]) {
+    const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length > 0) {
+      setAttachments((prev) => [...prev, ...imageFiles]);
+    }
+  }
+
+  async function addComposerFiles(files: File[]) {
+    const nextImageFiles: File[] = [];
+    const nextDrawingAttachments: ComposerDrawingAttachment[] = [];
+    const rejectedFiles: string[] = [];
+
+    for (const file of files) {
+      if (isPotentialExcalidrawFile(file)) {
+        try {
+          const drawing = await buildComposerDrawingFromFile(file);
+          nextDrawingAttachments.push(drawing);
+          continue;
+        } catch (error) {
+          if (file.name.trim().toLowerCase().endsWith('.excalidraw')) {
+            showNotice('danger', `Failed to parse ${file.name}: ${error instanceof Error ? error.message : String(error)}`, 4000);
+            continue;
+          }
+        }
+      }
+
+      if (file.type.startsWith('image/')) {
         nextImageFiles.push(file);
         continue;
       }
@@ -3749,6 +3749,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           showNotice('danger', `Fork failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
         }
         return { kind: 'handled' };
+      case 'summarizeFork':
+        setInput('');
+        await summarizeAndForkConversation();
+        return { kind: 'handled' };
       case 'image':
         setInput('');
         openFilePicker();
@@ -3776,10 +3780,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (!ensureConversationCanControl('reload its resources')) {
             return { kind: 'handled' };
           }
-      case 'summarizeFork':
-        setInput('');
-        await summarizeAndForkConversation();
-        return { kind: 'handled' };
           await api.reloadSession(liveConversationId, currentSurfaceId);
           showNotice('accent', 'Session resources reloaded.');
         } catch (error) {
@@ -4314,6 +4314,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || conversationCwdEditorOpen
     || conversationCwdPickBusy
     || conversationCwdBusy;
+  const summarizeAndForkDisabled = summaryForkBusy || stream.isStreaming;
+  const summarizeAndForkTitle = summaryForkBusy
+    ? 'Creating a summary fork…'
+    : stream.isStreaming
+      ? 'Stop the current response before starting a summary fork.'
+      : 'Duplicate this thread, compact the copy, and open it as a new conversation.';
   const hasComposerShelfContent = draftMentionItems.length > 0
     || pendingQueue.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
@@ -4341,12 +4347,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     return drawingAttachments.find((attachment) => attachment.localId === editingDrawingLocalId) ?? null;
   }, [drawingAttachments, editingDrawingLocalId]);
-  const summarizeAndForkDisabled = summaryForkBusy || stream.isStreaming;
-  const summarizeAndForkTitle = summaryForkBusy
-    ? 'Creating a summary fork…'
-    : stream.isStreaming
-      ? 'Stop the current response before starting a summary fork.'
-      : 'Duplicate this thread, compact the copy, and open it as a new conversation.';
   const hydratingLiveConversation = isLiveSession
     && !stream.hasSnapshot
     && !visibleSessionDetail
@@ -4680,6 +4680,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               statusLabel={conversationHeaderStatus?.label ?? null}
               statusTone={conversationHeaderStatus?.tone}
               statusSpinning={conversationHeaderStatus?.spinning === true}
+              summarizeAndForkBusy={summaryForkBusy}
+              summarizeAndForkDisabled={summarizeAndForkDisabled}
+              summarizeAndForkTitle={summarizeAndForkTitle}
               onPickCwd={() => { void pickConversationCwd(); }}
               onStartEditingCwd={beginConversationCwdEdit}
               onCwdDraftChange={(value) => {
@@ -4690,6 +4693,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               }}
               onCancelEditingCwd={cancelConversationCwdEdit}
               onSaveCwd={() => { void submitConversationCwdChange(); }}
+              onSummarizeAndFork={() => { void summarizeAndForkConversation(); }}
             />
           )}
         </div>
@@ -4747,9 +4751,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               {drawingAttachments.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 px-1 pt-1 pb-2">
                   {drawingAttachments.map((attachment) => (
-              summarizeAndForkBusy={summaryForkBusy}
-              summarizeAndForkDisabled={summarizeAndForkDisabled}
-              summarizeAndForkTitle={summarizeAndForkTitle}
                     <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-elevated px-2 py-1 text-[11px] max-w-[270px]">
                       <img
                         src={attachment.previewUrl}
@@ -4760,7 +4761,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
                         <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
                       </div>
-              onSummarizeAndFork={() => { void summarizeAndForkConversation(); }}
                       <button
                         type="button"
                         onClick={() => editDrawing(attachment.localId)}
