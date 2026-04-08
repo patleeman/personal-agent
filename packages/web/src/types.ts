@@ -722,6 +722,7 @@ export type SseEvent =
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
+  | { type: 'cwd_changed';     newConversationId: string; cwd: string; autoContinued: boolean }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }

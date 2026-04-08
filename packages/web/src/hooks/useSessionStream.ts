@@ -32,6 +32,7 @@ export interface StreamState {
   contextUsage: SessionContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   presence: LiveSessionPresenceState;
+  cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
 export function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
@@ -57,6 +58,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   contextUsage: null,
   pendingQueue: { steering: [], followUp: [] },
   presence: createEmptyLiveSessionPresenceState(),
+  cwdChange: null,
 };
 
 const SURFACE_STORAGE_KEY = 'pa.live-session.surface-id';
@@ -689,6 +691,17 @@ export function applyEvent(
       streamingRef.current = false;
       blocksRef.current = blocks;
       return { ...prev, blocks, isStreaming: false };
+    }
+
+    case 'cwd_changed': {
+      return {
+        ...prev,
+        cwdChange: {
+          newConversationId: event.newConversationId,
+          cwd: event.cwd,
+          autoContinued: event.autoContinued,
+        },
+      };
     }
 
     case 'user_message': {

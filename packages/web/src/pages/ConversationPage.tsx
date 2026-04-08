@@ -959,6 +959,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const streamTakeover = stream.takeover;
   const currentSurfaceId = stream.surfaceId;
 
+  useEffect(() => {
+    const pendingCwdChange = stream.cwdChange;
+    if (!id || !pendingCwdChange || pendingCwdChange.newConversationId === id) {
+      return;
+    }
+
+    ensureConversationTabOpen(pendingCwdChange.newConversationId);
+    navigate(`/conversations/${pendingCwdChange.newConversationId}`);
+  }, [id, navigate, stream.cwdChange]);
+
   useLayoutEffect(() => {
     if (!id || draft) {
       return;

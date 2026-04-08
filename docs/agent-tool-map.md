@@ -25,6 +25,7 @@ Use the CLI mainly for:
 | Start detached work now | `run` | `daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` | use for immediate detached shell or agent work |
 | Continue this conversation later without user input | `deferred_resume` | local wakeup state | use for agent-owned continue-later behavior |
 | Remind the user later | `reminder` | local alert + wakeup state | use for user-requested tell-me-later behavior |
+| Move this conversation into another repo or folder | `change_working_directory` | live conversation state | forks into a new live conversation after the current turn; optionally continue there automatically |
 
 | Ask for a specific user choice or answer | `ask_user_question` | conversation interaction | use focused questions and then stop for input |
 | Pause until the user replies or approves | `wait_for_user` | conversation interaction | use when you truly need input before continuing |
@@ -61,6 +62,7 @@ There is no dedicated `skill` CRUD tool in this environment. Edit `sync/_skills/
 - **passive async attention** → `activity`
 - **remind me later** → `reminder`
 - **continue later without asking me** → `deferred_resume`
+- **switch this thread into another repo/folder** → `change_working_directory`
 - **run later / every day / on a schedule** → `scheduled_task`
 - **start detached work now** → `run`
 - **workflow steps inside this thread** → deleted

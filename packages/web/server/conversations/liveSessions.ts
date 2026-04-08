@@ -108,6 +108,7 @@ export type SseEvent =
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
+  | { type: 'cwd_changed';     newConversationId: string; cwd: string; autoContinued: boolean }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }
@@ -127,6 +128,12 @@ export interface PromptImageAttachment {
   data: string;
   mimeType: string;
   name?: string;
+}
+
+interface PendingConversationWorkingDirectoryChange {
+  cwd: string;
+  continuePrompt?: string;
+  loaderOptions: LiveSessionLoaderOptions;
 }
 
 // ── Internal entry ────────────────────────────────────────────────────────────
@@ -170,6 +177,7 @@ export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => 
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
 const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
+const pendingConversationWorkingDirectoryChanges = new Map<string, PendingConversationWorkingDirectoryChange>();
 
 export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycleHandler): () => void {
   lifecycleHandlers.add(handler);
@@ -1451,6 +1459,7 @@ function wireSession(
       }
       void syncDurableConversationRun(entry, 'waiting');
       notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
+      void applyPendingConversationWorkingDirectoryChange(entry);
     }
 
     if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
@@ -1782,7 +1791,7 @@ export function getSessionContextUsage(sessionId: string): LiveContextUsage | nu
   return readContextUsagePayload(entry.session);
 }
 
-interface LiveSessionLoaderOptions {
+export interface LiveSessionLoaderOptions {
   agentDir?: string;
   extensionFactories?: ExtensionFactory[];
   additionalExtensionPaths?: string[];
@@ -1901,6 +1910,108 @@ export async function createSessionFromExisting(
   const id = session.sessionId;
   wireSession(id, session, cwd);
   return { id, sessionFile: session.sessionFile ?? '' };
+}
+
+export async function requestConversationWorkingDirectoryChange(
+  input: {
+    conversationId: string;
+    cwd: string;
+    continuePrompt?: string;
+  },
+  loaderOptions: LiveSessionLoaderOptions = {},
+): Promise<{
+  conversationId: string;
+  cwd: string;
+  queued: boolean;
+  unchanged?: boolean;
+}> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId is required.');
+  }
+
+  const nextCwd = input.cwd.trim();
+  if (!nextCwd) {
+    throw new Error('cwd is required.');
+  }
+
+  const entry = registry.get(conversationId);
+  if (!entry) {
+    throw new Error(`Session ${conversationId} is not live.`);
+  }
+
+  if (!entry.session.sessionFile?.trim()) {
+    throw new Error('Conversation working directory changes require a persisted session file.');
+  }
+
+  if (nextCwd === entry.cwd) {
+    pendingConversationWorkingDirectoryChanges.delete(conversationId);
+    return {
+      conversationId,
+      cwd: entry.cwd,
+      queued: false,
+      unchanged: true,
+    };
+  }
+
+  pendingConversationWorkingDirectoryChanges.set(conversationId, {
+    cwd: nextCwd,
+    continuePrompt: input.continuePrompt?.trim() || undefined,
+    loaderOptions,
+  });
+
+  return {
+    conversationId,
+    cwd: nextCwd,
+    queued: true,
+  };
+}
+
+async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry): Promise<void> {
+  const pending = pendingConversationWorkingDirectoryChanges.get(entry.sessionId);
+  if (!pending) {
+    return;
+  }
+
+  pendingConversationWorkingDirectoryChanges.delete(entry.sessionId);
+  ensureSessionFileExists(entry.session.sessionManager);
+
+  const sourceSessionFile = entry.session.sessionFile?.trim();
+  if (!sourceSessionFile) {
+    broadcast(entry, {
+      type: 'error',
+      message: 'Could not change the working directory because the session file is unavailable.',
+    });
+    return;
+  }
+
+  try {
+    const result = await createSessionFromExisting(sourceSessionFile, pending.cwd, pending.loaderOptions);
+    const autoContinued = Boolean(pending.continuePrompt);
+
+    broadcast(entry, {
+      type: 'cwd_changed',
+      newConversationId: result.id,
+      cwd: pending.cwd,
+      autoContinued,
+    });
+    destroySession(entry.sessionId);
+
+    if (pending.continuePrompt) {
+      void promptSession(result.id, pending.continuePrompt).catch((error) => {
+        logWarn('failed to continue conversation after working directory change', {
+          conversationId: result.id,
+          cwd: pending.cwd,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+        });
+      });
+    }
+  } catch (error) {
+    broadcast(entry, {
+      type: 'error',
+      message: `Could not change the working directory: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
 }
 
 /** Resume an existing session file into a live session. */

@@ -57,6 +57,28 @@ describe('shouldRetrySessionStreamAfterError', () => {
   });
 });
 
+describe('applyEvent cwd changes', () => {
+  it('stores pending working-directory redirects from the live stream', () => {
+    const state = applyEvent(
+      INITIAL_STREAM_STATE,
+      { current: [] as MessageBlock[] },
+      { current: false },
+      {
+        type: 'cwd_changed',
+        newConversationId: 'conv-next',
+        cwd: '/tmp/next-repo',
+        autoContinued: true,
+      },
+    );
+
+    expect(state.cwdChange).toEqual({
+      newConversationId: 'conv-next',
+      cwd: '/tmp/next-repo',
+      autoContinued: true,
+    });
+  });
+});
+
 afterEach(() => {
   vi.useRealTimers();
 });

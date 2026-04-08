@@ -78,6 +78,8 @@ For new conversations, the working directory is chosen from the strongest availa
 
 The draft page keeps recent conversation cwd values in the centered empty-state area so you can reuse a repo quickly without opening a side inspector first. Once a conversation exists, the same header area lets you switch its working directory inline from the top bar.
 
+Live sessions also expose a `change_working_directory` agent tool. When the agent uses it, the cwd switch happens after the current turn by forking into a new live conversation rooted at the requested directory, and the web UI follows that new conversation automatically.
+
 ## Wakeups and callbacks
 
 Conversations can be resumed later by several mechanisms:

@@ -437,6 +437,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary bg-elevated',  tone: 'muted' },
   artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent bg-accent/5',     tone: 'accent' },
   ask_user_question: { icon: '?', label: 'question',   color: 'text-warning bg-warning/5',   tone: 'warning' },
+  change_working_directory: { icon: '↗', label: 'cwd', color: 'text-teal bg-teal/5', tone: 'teal' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning bg-warning/5', tone: 'warning' },
 };
 function toolMeta(t: string) {

@@ -523,6 +523,15 @@ export function CompanionConversationPage() {
     tailBlocks: historicalTailBlocks,
   });
 
+  useEffect(() => {
+    const pendingCwdChange = stream.cwdChange;
+    if (!id || !pendingCwdChange || pendingCwdChange.newConversationId === id) {
+      return;
+    }
+
+    navigate(buildCompanionConversationPath(pendingCwdChange.newConversationId));
+  }, [id, navigate, stream.cwdChange]);
+
   const { detail: fetchedSessionDetail, loading: sessionLoading } = useSessionDetail(id, {
     tailBlocks: historicalTailBlocks,
     version: conversationEventVersion,

@@ -10,6 +10,7 @@ import {
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
+  requestConversationWorkingDirectoryChange,
   submitPromptSession,
   queuePromptContext,
   registry,
@@ -67,6 +68,60 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('requestConversationWorkingDirectoryChange', () => {
+  it('returns unchanged when the requested cwd matches the live session', async () => {
+    setLiveEntry('session-same-cwd', {
+      sessionId: 'session-same-cwd',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Same cwd',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        isStreaming: true,
+        sessionFile: '/tmp/session-same-cwd.jsonl',
+      },
+    });
+
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: 'session-same-cwd',
+      cwd: '/tmp/workspace',
+    })).resolves.toEqual({
+      conversationId: 'session-same-cwd',
+      cwd: '/tmp/workspace',
+      queued: false,
+      unchanged: true,
+    });
+  });
+
+  it('queues a cwd change for a live session', async () => {
+    setLiveEntry('session-next-cwd', {
+      sessionId: 'session-next-cwd',
+      cwd: '/tmp/workspace-a',
+      listeners: new Set(),
+      title: 'Next cwd',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        isStreaming: true,
+        sessionFile: '/tmp/session-next-cwd.jsonl',
+      },
+    });
+
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: 'session-next-cwd',
+      cwd: '/tmp/workspace-b',
+      continuePrompt: 'Continue in the other repo.',
+    })).resolves.toEqual({
+      conversationId: 'session-next-cwd',
+      cwd: '/tmp/workspace-b',
+      queued: true,
+    });
+  });
 });
 
 describe('canInjectResumeFallbackPrompt', () => {

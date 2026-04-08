@@ -12,10 +12,12 @@ import {
 import { createActivityAgentExtension } from '../extensions/activityAgentExtension.js';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
+import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
 import { createDeferredResumeAgentExtension } from '../extensions/deferredResumeAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
+import { requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
 import { clearMemoryBrowserCaches, warmMemoryBrowserCaches } from '../knowledge/memoryDocs.js';
 import { invalidateAppTopics } from '../middleware/index.js';
 import { readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences } from '../ui/profilePreferences.js';
@@ -105,6 +107,12 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         getCurrentProfile,
       }),
       createAskUserQuestionAgentExtension(),
+      createChangeWorkingDirectoryAgentExtension({
+        requestConversationWorkingDirectoryChange: (input) => requestConversationWorkingDirectoryChange(input, {
+          ...buildLiveSessionResourceOptions(getCurrentProfile()),
+          extensionFactories: buildLiveSessionExtensionFactories(),
+        }),
+      }),
       createRunAgentExtension({
         getCurrentProfile,
         repoRoot,
