@@ -363,4 +363,16 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('>draft<');
     expect(html).not.toContain('right rail');
   });
+
+  it('keeps the saved conversation composer constrained to the main content column', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/test-session']}>
+        <Routes>
+          <Route path="/conversations/:id" element={<ConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('mx-auto w-full max-w-6xl');
+  });
 });

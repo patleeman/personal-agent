@@ -4493,7 +4493,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
         )}
 
-        <div className="relative">
+        <div className="relative mx-auto w-full max-w-6xl">
           {showSlash   && <SlashMenu items={slashItems} idx={slashIdx} onSelect={(item) => {
             const c = item.displayCmd.trim();
             const parsedConversationSlash = parseConversationSlashCommand(c);
