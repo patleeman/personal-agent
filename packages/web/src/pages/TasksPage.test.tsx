@@ -71,4 +71,35 @@ describe('TasksPage', () => {
     expect(html).not.toContain('href="/settings"');
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
   });
+
+  it('renders the create automation form in a modal when requested', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations?new=1']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            activity: null,
+            alerts: null,
+            projects: null,
+            sessions: null,
+            runs: null,
+            tasks: [],
+            setActivity: vi.fn(),
+            setAlerts: vi.fn(),
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('aria-label="Create automation"');
+    expect(html).toContain('New automation');
+    expect(html).not.toContain('No automations yet.');
+  });
 });

@@ -153,7 +153,7 @@ It is **not** the same as a generic reminder. For direct human reminders, prefer
 The Automations page lets you:
 
 - inspect discovered automations
-- create a new automation from the UI
+- create a new automation from a centered modal launched from the page toolbar
 - enable or disable an automation
 - edit an automation from the detail rail with a focused form
 - adjust common recurring schedules with an interactive schedule builder or fall back to raw cron

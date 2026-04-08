@@ -320,6 +320,30 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('No referenced projects.');
   });
 
+  it('keeps the automations rail in browse mode while the create modal is open', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations?new=1']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Select an automation or start a new one.');
+    expect(html).not.toContain('Create an automation');
+  });
+
   it('limits the saved-conversation rail to runs and details', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/conv-123']}>

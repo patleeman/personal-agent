@@ -492,7 +492,7 @@ function TaskLogSection({ taskId }: { taskId: string }) {
   );
 }
 
-export function ScheduledTaskCreatePanel() {
+export function ScheduledTaskCreatePanel({ onCancel }: { onCancel?: () => void } = {}) {
   const navigate = useNavigate();
   const { setTasks } = useAppData();
   const [draft, setDraft] = useState<TaskFormState>(() => createDefaultTaskFormState());
@@ -525,7 +525,7 @@ export function ScheduledTaskCreatePanel() {
       saving={saving}
       error={saveError}
       onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-      onCancel={() => navigate('/automations')}
+      onCancel={onCancel ?? (() => navigate('/automations'))}
       onSubmit={() => { void handleCreate(); }}
     />
   );

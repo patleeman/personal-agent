@@ -43,7 +43,6 @@ import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
-const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
 
@@ -1634,7 +1633,6 @@ export function ContextRail() {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
-  const creatingScheduledTask = scheduledSection && new URLSearchParams(location.search).get('new') === '1';
   const selectedPlanId = new URLSearchParams(location.search).get('plan')?.trim() || null;
   const creatingPlan = new URLSearchParams(location.search).get('new') === '1';
 
@@ -1684,12 +1682,6 @@ export function ContextRail() {
   );
 
   // Automations
-  if (creatingScheduledTask) return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Automation" sub="new" />
-      {suspendRailPanel(<ScheduledTaskCreatePanel />, 'Loading task editor…')}
-    </div>
-  );
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Automation" sub={id} />

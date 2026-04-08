@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { ScheduledTaskCreatePanel } from '../components/ScheduledTaskPanel';
 import { useAppData, useSseConnection } from '../contexts';
 import type { ScheduledTaskSummary } from '../types';
 import { formatTaskSchedule } from '../taskSchedule';
@@ -21,6 +22,41 @@ function statusText(task: ScheduledTaskSummary): { text: string; cls: string } {
   if (task.lastStatus === 'failure') return { text: 'failed', cls: 'text-danger' };
   if (!task.enabled) return { text: 'disabled', cls: 'text-dim' };
   return { text: 'pending', cls: 'text-dim' };
+}
+
+function CreateTaskModal({ onClose }: { onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div
+      className="ui-overlay-backdrop"
+      style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create automation"
+        className="ui-dialog-shell"
+        style={{ maxWidth: '840px', maxHeight: 'calc(100vh - 5rem)', overscrollBehavior: 'contain' }}
+      >
+        <ScheduledTaskCreatePanel onCancel={onClose} />
+      </div>
+    </div>
+  );
 }
 
 function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; isSelected: boolean; onRefetch: () => void }) {
@@ -166,8 +202,23 @@ export function TasksPage() {
   const runningCount = tasks?.filter((task) => task.running).length ?? 0;
   const showingCreateForm = new URLSearchParams(location.search).get('new') === '1';
 
+  const setCreateTaskOpen = useCallback((open: boolean) => {
+    const nextSearch = new URLSearchParams(location.search);
+    if (open) {
+      nextSearch.set('new', '1');
+    } else {
+      nextSearch.delete('new');
+    }
+
+    const nextSearchString = nextSearch.toString();
+    navigate({
+      pathname: location.pathname,
+      search: nextSearchString ? `?${nextSearchString}` : '',
+    });
+  }, [location.pathname, location.search, navigate]);
+
   function toggleCreateTask() {
-    navigate(showingCreateForm ? '/automations' : '/automations?new=1');
+    setCreateTaskOpen(!showingCreateForm);
   }
 
   return (
@@ -218,6 +269,8 @@ export function TasksPage() {
           </div>
         )}
       </div>
+
+      {showingCreateForm && <CreateTaskModal onClose={() => setCreateTaskOpen(false)} />}
     </div>
   );
 }
