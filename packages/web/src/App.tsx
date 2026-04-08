@@ -47,17 +47,12 @@ import type {
 
 function LegacyTaskRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();
-  return <Navigate to={id ? `/scheduled/${id}` : '/scheduled'} replace />;
-}
-
-function WorkspaceRouteRedirect() {
-  const location = useLocation();
-  return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
+  return <Navigate to={id ? `/automations/${id}` : '/automations'} replace />;
 }
 
 function LegacyWebRouteRedirect() {
   const location = useLocation();
-  const redirectPath = resolveWebRouteRedirect(location.pathname, location.search) ?? '/workspace/files';
+  const redirectPath = resolveWebRouteRedirect(location.pathname, location.search) ?? '/conversations/new';
   return <Navigate to={redirectPath} replace />;
 }
 
@@ -101,8 +96,6 @@ const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ defau
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
-const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((module) => ({ default: module.WorkspacePage })));
-const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').then((module) => ({ default: module.WorkspaceChangesPage })));
 const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
 const CompanionInboxPage = lazy(() => import('./companion/CompanionInboxPage').then((module) => ({ default: module.CompanionInboxPage })));
 const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
@@ -526,9 +519,8 @@ export function App() {
                       <Route path="conversations" element={<ConversationsRouteRedirect />} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
-                      <Route path="workspace" element={<WorkspaceRouteRedirect />} />
-                      <Route path="workspace/files" element={suspendRoute(<WorkspacePage />)} />
-                      <Route path="workspace/changes" element={suspendRoute(<WorkspaceChangesPage />)} />
+                      <Route path="workspace" element={<Navigate to="/conversations/new" replace />} />
+                      <Route path="workspace/*" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
@@ -544,10 +536,10 @@ export function App() {
                       <Route path="skills/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="nodes" element={<LegacyWebRouteRedirect />} />
                       <Route path="nodes/*" element={<LegacyWebRouteRedirect />} />
-                      <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
-                      <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
-                      <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="automations" element={suspendRoute(<TasksPage />)} />
+                      <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
+                      <Route path="scheduled" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="scheduled/:id" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tools" element={suspendRoute(<ToolsPage />)} />

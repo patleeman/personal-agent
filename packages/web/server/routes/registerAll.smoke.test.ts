@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AddressInfo } from 'node:net';
@@ -88,7 +88,6 @@ describe('registerServerRoutes smoke test', () => {
       listProfileAgentItems: () => [],
       withTemporaryProfileAgentDir: async (_profile, run) => run(tempRoot),
       getDurableRunSnapshot: async () => null,
-      draftWorkspaceCommitMessage: async () => ({ subject: 'smoke commit' }),
     };
 
     const app = express();
@@ -112,24 +111,25 @@ describe('registerServerRoutes smoke test', () => {
   });
 
   it('serves core app routes through the shared route registry', async () => {
-    const [profilesResponse, titlesResponse, workspaceResponse] = await Promise.all([
+    const [profilesResponse, titlesResponse, defaultCwdResponse] = await Promise.all([
       fetch(`${appBaseUrl}/api/profiles`),
       fetch(`${appBaseUrl}/api/conversation-titles/settings`),
-      fetch(`${appBaseUrl}/api/workspace?cwd=${encodeURIComponent(workspaceDir)}`),
+      fetch(`${appBaseUrl}/api/default-cwd`),
     ]);
 
     expect(profilesResponse.status).toBe(200);
     expect(titlesResponse.status).toBe(200);
-    expect(workspaceResponse.status).toBe(200);
+    expect(defaultCwdResponse.status).toBe(200);
 
     expect(await profilesResponse.json()).toMatchObject({
       currentProfile: 'assistant',
       profiles: ['assistant', 'other'],
     });
     expect(await titlesResponse.json()).toEqual(expect.any(Object));
-    expect(await workspaceResponse.json()).toMatchObject({
-      root: realpathSync(workspaceDir),
-    });
+    expect(await defaultCwdResponse.json()).toEqual(expect.objectContaining({
+      currentCwd: expect.any(String),
+      effectiveCwd: expect.any(String),
+    }));
   });
 
   it('serves command execution through the app surface', async () => {

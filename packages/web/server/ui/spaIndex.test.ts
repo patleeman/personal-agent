@@ -11,6 +11,6 @@ describe('resolveSpaIndexRelativePath', () => {
   it('keeps desktop routes on the main html entry', () => {
     expect(resolveSpaIndexRelativePath('/')).toBe('index.html');
     expect(resolveSpaIndexRelativePath('/conversations/123')).toBe('index.html');
-    expect(resolveSpaIndexRelativePath('/workspace/files')).toBe('index.html');
+    expect(resolveSpaIndexRelativePath('/conversations/new')).toBe('index.html');
   });
 });

@@ -412,7 +412,6 @@ export function Layout() {
     || location.pathname.startsWith('/nodes')
     || location.pathname.startsWith('/settings')
     || location.pathname.startsWith('/system')
-    || location.pathname.startsWith('/workspace')
   );
 
   return (

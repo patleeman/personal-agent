@@ -11,7 +11,7 @@ A personal application layer over Pi that keeps:
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
 - **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
 - **Daemon** - Background processing for maintenance + scheduled tasks
-- **Web UI** - Browser-based workspace, conversations, projects, and system controls
+- **Web UI** - Browser-based conversations, projects, and system controls
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
 ## Packages
@@ -34,7 +34,7 @@ Start here:
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs
-- `docs/workspace.md` - repo-aware workspace browser and editor
+- `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
 - `docs/artifacts.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
@@ -233,7 +233,7 @@ See docs:
 - `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
 - `docs/automation.md` - automation surfaces and tradeoffs
-- `docs/workspace.md` - repo-aware workspace browser and editor
+- `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
 - `docs/artifacts.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking

@@ -118,31 +118,13 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/inbox' },
     },
     {
-      id: 'nav:workspace',
-      section: 'nav',
-      title: 'Workspace Files',
-      subtitle: 'Browse files, inspect diffs, and edit code',
-      keywords: ['files', 'tree', 'editor', 'workspace'],
-      order: 3,
-      action: { kind: 'navigate', to: '/workspace/files' },
-    },
-    {
-      id: 'nav:workspace-changes',
-      section: 'nav',
-      title: 'Workspace Changes',
-      subtitle: 'Review git status, stage files, and commit changes',
-      keywords: ['git', 'diff', 'commit', 'changes', 'workspace'],
-      order: 4,
-      action: { kind: 'navigate', to: '/workspace/changes' },
-    },
-    {
       id: 'nav:scheduled',
       section: 'nav',
-      title: 'Scheduled Tasks',
+      title: 'Automations',
       subtitle: 'Browse unattended automation',
       keywords: ['automation', 'scheduled', 'tasks', 'cron'],
       order: 8,
-      action: { kind: 'navigate', to: '/scheduled' },
+      action: { kind: 'navigate', to: '/automations' },
     },
     {
       id: 'nav:tools',
@@ -305,7 +287,7 @@ function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<Comma
       meta: metaParts.join(' · '),
       keywords: [task.id, task.filePath, task.scheduleType, task.prompt, task.cron ?? '', task.model ?? '', task.lastStatus ?? ''],
       order: index,
-      action: { kind: 'navigate', to: `/scheduled/${encodeURIComponent(task.id)}` },
+      action: { kind: 'navigate', to: `/automations/${encodeURIComponent(task.id)}` },
     };
   });
 }
@@ -320,7 +302,7 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
       case 'archived':
         return `No archived conversations match “${query}”.`;
       case 'tasks':
-        return `No scheduled tasks match “${query}”.`;
+        return `No automations match “${query}”.`;
       default:
         return `No results match “${query}”.`;
     }
@@ -332,7 +314,7 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
     case 'archived':
       return 'No archived conversations yet.';
     case 'tasks':
-      return 'No scheduled tasks yet.';
+      return 'No automations yet.';
     default:
       return 'Nothing to show yet.';
   }
@@ -700,7 +682,7 @@ export function CommandPalette() {
             <div>
               <p className="ui-section-label text-[11px]">Command palette</p>
               <p className="text-[12px] text-secondary mt-1">
-                Unified search for navigation, chats, archived history, and scheduled tasks.
+                Unified search for navigation, chats, archived history, and automations.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">

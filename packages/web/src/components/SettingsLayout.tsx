@@ -21,7 +21,7 @@ const SETTINGS_NAV_ITEMS = [
   {
     href: '/settings',
     label: 'Settings',
-    summary: 'Profile, model, theme, providers, workspace, and system controls on one page.',
+    summary: 'Profile, model, theme, providers, default cwd, and system controls on one page.',
   },
   {
     href: '/runs',
@@ -29,9 +29,9 @@ const SETTINGS_NAV_ITEMS = [
     summary: 'Durable background work and recovery review.',
   },
   {
-    href: '/scheduled',
-    label: 'Scheduled tasks',
-    summary: 'Browse cron jobs, one-time tasks, and unattended automation.',
+    href: '/automations',
+    label: 'Automations',
+    summary: 'Browse scheduled prompts, one-time runs, and unattended automation.',
   },
   {
     href: '/tools',

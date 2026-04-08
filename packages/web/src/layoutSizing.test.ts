@@ -50,16 +50,6 @@ describe('layout sizing helpers', () => {
       initialMainWidthRatio: 0.7,
     });
 
-    expect(getRailLayoutPrefs('/workspace/files')).toEqual({
-      storageKey: 'pa:rail-width:workspace-files',
-      initialWidth: 380,
-    });
-
-    expect(getRailLayoutPrefs('/workspace/changes')).toEqual({
-      storageKey: 'pa:rail-width:workspace-changes',
-      initialWidth: 380,
-    });
-
     expect(getRailLayoutPrefs('/settings')).toEqual({
       storageKey: 'pa:rail-width:settings',
       initialWidth: 380,

@@ -52,7 +52,7 @@ Those four pages should answer most agent questions quickly.
 ## Interfaces
 
 - [Web UI Guide](./web-ui.md)
-- [Workspace](./workspace.md)
+- [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Native UI Automation](./native-ui-automation.md)
 
@@ -79,7 +79,7 @@ Those four pages should answer most agent questions quickly.
 | Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md), [Pages](./pages.md) |
 | How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Notification Center and Activity](./inbox.md), [Reminders and Notification Delivery](./alerts.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
-| How do I work with local repo files in the UI? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
+| How should I handle local repo files now? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
 | How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Tracked Pages](./projects.md), [Web UI Guide](./web-ui.md) |
 | Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
@@ -89,14 +89,14 @@ Those four pages should answer most agent questions quickly.
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
-| Work on local repo files in the web UI | workspace | local filesystem / git-backed workspace state |
+| Work on local repo files | your editor / file manager | local filesystem / git-backed repo state |
 | Track ongoing work or reusable knowledge in the shared durable layer | page | `~/Documents/personal-agent/{notes,projects,_skills}/**` |
 | Store durable behavior or preferences | `AGENTS.md`, settings, skill pages | repo defaults + `~/Documents/personal-agent/_profiles/<profile>/{AGENTS.md,settings.json,models.json}` + `~/Documents/personal-agent/_skills/**` |
 | Render inspectable outputs in the current conversation | conversation artifact | local conversation-artifact state |
 | Notice async outcomes later without interrupting yourself | notification center / activity | local runtime inbox state |
 | Interrupt yourself later or wake a conversation back up | reminder / notification / deferred resume | local runtime wakeup + notification state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` |
-| Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/_tasks/*.task.md` + local daemon state |
+| Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` |
 
 ## Read this if you are an agent
 

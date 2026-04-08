@@ -6,7 +6,6 @@ It gives you one place to see:
 
 - inbox attention
 - conversations
-- the vault workspace and file browser
 - docs, projects, and skills
 - scheduled tasks
 - daemon state
@@ -114,7 +113,6 @@ Use the UI when you want:
 
 - a persistent inbox
 - easy conversation browsing and branching
-- a repo-aware workspace browser and editor
 - project management backed by `state.yaml`
 - visibility into daemon and web UI state
 - a visual notes browser
@@ -193,27 +191,15 @@ When reminder/callback notifications exist and browser notifications are still o
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
 
-### Vault
+### Files and the vault
 
 The default landing view is a new conversation at `/conversations/new`.
 
-The Vault workspace at `/workspace/files` still opens the configured knowledge vault root by default, so the workspace browser remains the primary way to move around the durable Obsidian-style vault.
+The desktop web UI no longer includes a dedicated Vault/workspace file browser. Use your normal editor or file manager for raw file work, and use the web UI for conversations, automation, inbox, and durable app state.
 
-### Workspace
-
-The Workspace page is a local file browser and editor for the current codebase.
-
-You can:
-
-- browse a repo-root file tree from the right-hand panel while editing in the main pane
-- jump straight to changed files from git status
-- inspect a side-by-side word-level diff for the selected file
-- open the same workspace in VS Code when you want a fuller editor
-
-When the selected folder lives inside a git repo, the page automatically roots itself at the repo top level so the tree and changed-file list line up with git.
+The app still keeps working-directory selection where it matters for conversations and automation setup.
 
 See [Workspace](./workspace.md).
-
 
 
 Each preset is a named ordered todo list of skill items.
@@ -267,21 +253,21 @@ From a tracked page workspace you can:
 
 See [Tracked Pages](./projects.md) and [Artifacts and Rendered Outputs](./artifacts.md).
 
-### Scheduled
+### Automations
 
-The Scheduled page is the UI for daemon tasks.
+The Automations page is the UI for daemon-managed scheduled prompts.
 
-Tasks are still passive by default. If a task is explicitly bound back to a conversation, the result can also surface later as an inbox notification and conversation wakeup.
+Automations are still passive by default. If an automation is explicitly bound back to a conversation, the result can also surface later as an inbox notification and conversation wakeup.
 
 You can:
 
-- see discovered tasks
+- see discovered automations
 - see current status and recent runs
-- create a new task from the page header / detail rail flow
-- enable or disable a task
-- edit task settings and prompt from the detail rail
+- create a new automation from the page header / detail rail flow
+- enable or disable an automation
+- edit automation settings and prompt from the detail rail
 - use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
-- run a task immediately
+- run an automation immediately
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 

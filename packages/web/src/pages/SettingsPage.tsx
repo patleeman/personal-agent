@@ -1262,7 +1262,7 @@ export function SettingsPage() {
 
                 <SettingsPanel
                   title="Knowledge vault root"
-                  description="Sets the canonical vault location for notes, skills, and profile files. The agent and workspace/browser use this path as the durable knowledge home."
+                  description="Sets the canonical vault location for notes, skills, and profile files. The agent and supporting vault lookups use this path as the durable knowledge home."
                 >
                   {vaultRootLoading && !vaultRootState ? (
                     <p className="ui-card-meta">Loading knowledge vault root…</p>

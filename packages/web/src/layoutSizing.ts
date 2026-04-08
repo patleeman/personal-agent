@@ -14,14 +14,6 @@ export function getRailPageKey(pathname: string): string {
   const section = parts[0] ?? 'default';
 
   switch (section) {
-    case 'workspace':
-      if (parts[1] === 'changes') {
-        return 'workspace-changes';
-      }
-      if (parts[1] === 'files') {
-        return 'workspace-files';
-      }
-      return 'workspace';
     case 'scheduled':
     case 'runs':
     case 'conversations':
@@ -81,9 +73,6 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
     case 'inbox':
     case 'memory':
     case 'knowledge':
-    case 'workspace':
-    case 'workspace-files':
-    case 'workspace-changes':
     case 'system':
     case 'settings':
     case 'default':

@@ -42,14 +42,14 @@ function buildKnowledgeRedirect(search: string): string {
     return buildInstructionHref(getKnowledgeInstructionPath(search));
   }
 
-  return '/workspace/files';
+  return '/conversations/new';
 }
 
 export function resolveWebRouteRedirect(pathname: string, search = ''): string | null {
   const normalizedPath = normalizePathname(pathname);
 
   if (normalizedPath === LEGACY_NODES_PATH) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (normalizedPath === LEGACY_KNOWLEDGE_PATH) {
@@ -57,27 +57,27 @@ export function resolveWebRouteRedirect(pathname: string, search = ''): string |
   }
 
   if (normalizedPath === LEGACY_NOTES_PATH || normalizedPath === LEGACY_MEMORIES_PATH || normalizedPath === LEGACY_PROJECTS_PATH) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_NOTES_PATH)) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_MEMORIES_PATH)) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_PROJECTS_PATH)) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (normalizedPath === LEGACY_SKILLS_PATH) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   if (isSupportedDetailPath(normalizedPath, LEGACY_SKILLS_PATH)) {
-    return '/workspace/files';
+    return '/conversations/new';
   }
 
   return null;

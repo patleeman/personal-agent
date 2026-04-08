@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
@@ -280,8 +280,8 @@ export const api = {
   taskDetail: (id: string) =>
     get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   createTask: (input: {
-    taskId: string;
-    enabled: boolean;
+    title: string;
+    enabled?: boolean;
     cron?: string | null;
     at?: string | null;
     model?: string | null;
@@ -292,13 +292,14 @@ export const api = {
   setTaskEnabled: (id: string, enabled: boolean) =>
     patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
   saveTask: (id: string, input: {
-    enabled: boolean;
+    title?: string;
+    enabled?: boolean;
     cron?: string | null;
     at?: string | null;
     model?: string | null;
     cwd?: string | null;
     timeoutSeconds?: number | null;
-    prompt: string;
+    prompt?: string;
   }) => patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, input),
   taskLog: (id: string) =>
     get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
@@ -317,38 +318,6 @@ export const api = {
     post<FolderPickerResult>('/folder-picker', { cwd }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
-  workspaceSnapshot: (cwd?: string) =>
-    get<WorkspaceSnapshot>(`/workspace${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
-  workspaceGitStatus: (cwd?: string) =>
-    get<WorkspaceGitStatusSummary>(`/workspace/git-status${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
-  workspaceGitDiff: (path: string, scope: WorkspaceGitScope, cwd?: string) => {
-    const params = new URLSearchParams({ path, scope });
-    if (cwd) {
-      params.set('cwd', cwd);
-    }
-    return get<WorkspaceGitDiffDetail>(`/workspace/git-diff?${params.toString()}`);
-  },
-  workspaceGitStage: (path: string, cwd?: string) =>
-    post<WorkspaceGitStatusSummary>('/workspace/git/stage', { path, cwd }),
-  workspaceGitUnstage: (path: string, cwd?: string) =>
-    post<WorkspaceGitStatusSummary>('/workspace/git/unstage', { path, cwd }),
-  workspaceGitStageAll: (cwd?: string) =>
-    post<WorkspaceGitStatusSummary>('/workspace/git/stage-all', { cwd }),
-  workspaceGitUnstageAll: (cwd?: string) =>
-    post<WorkspaceGitStatusSummary>('/workspace/git/unstage-all', { cwd }),
-  workspaceGitDraftCommitMessage: (cwd?: string) =>
-    post<WorkspaceCommitDraftResult>('/workspace/git/draft-commit-message', { cwd }),
-  workspaceGitCommit: (message: string, cwd?: string) =>
-    post<WorkspaceGitCommitResult>('/workspace/git/commit', { message, cwd }),
-  workspaceFile: (path: string, cwd?: string) => {
-    const params = new URLSearchParams({ path });
-    if (cwd) {
-      params.set('cwd', cwd);
-    }
-    return get<WorkspaceFileDetail>(`/workspace/file?${params.toString()}`);
-  },
-  workspaceFileSave: (path: string, content: string, cwd?: string) =>
-    post<WorkspaceFileDetail>('/workspace/file', { path, content, cwd }),
 
   // ── Memory browser ────────────────────────────────────────────────────────
   memory:         (options?: { profile?: string }) => getMemoryData(options),

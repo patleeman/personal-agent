@@ -9,7 +9,7 @@ The server root is now intentionally shallow:
 - `routes/` — Express route registration modules
 - `conversations/` — session reads, live sessions, conversation memory, and conversation services
 - `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes
-- `workspace/` — workspace browser, git helpers, folder picker
+- `workspace/` — repo-status helpers and folder picker
 - `models/` — model defaults, providers, auth, usage
 - `knowledge/` — memory docs, prompt references, node links
 - `ui/` — web UI config, companion auth, SPA helpers, web-specific preferences
@@ -47,7 +47,6 @@ The companion SPA fallback also has to recognize both canonical `/app/*` URLs an
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel; companion surface is read-focused |
 | `routes/runsOps.ts` | run attention helpers | Keeps the run-ops endpoints separate from the main run listing routes |
-| `routes/workspace.ts` | workspace browsing and git operations | Injects cwd helpers and commit-message drafting |
 | `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session helpers that were previously inline |
 | `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/skill table data with tags and page metadata |
 | `routes/folderPicker.ts` | folder picker endpoint | Small wrapper around the folder picker service |

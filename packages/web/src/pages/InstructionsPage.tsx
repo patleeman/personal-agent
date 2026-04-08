@@ -22,7 +22,7 @@ import { useApi } from '../hooks';
 import { getKnowledgeInstructionPath } from '../knowledgeSelection';
 import { useTheme } from '../theme';
 import type { MemoryAgentsItem } from '../types';
-import { editorChromeTheme, languageExtensionForPath } from '../workspaceBrowser';
+import { editorChromeTheme, languageExtensionForPath } from '../codeEditor';
 
 const INSTRUCTION_SEARCH_PARAM = 'instruction';
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';

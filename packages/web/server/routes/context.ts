@@ -11,13 +11,19 @@ export interface LiveSessionResourceOptions extends Record<string, unknown> {
 
 export interface CurrentProfileTaskSummary {
   id: string;
-  filePath: string;
+  title: string;
+  filePath?: string;
   prompt: string;
   enabled: boolean;
   running: boolean;
   cron?: string;
+  at?: string;
   model?: string;
+  cwd?: string;
   lastStatus?: string;
+  lastRunAt?: string;
+  lastSuccessAt?: string;
+  lastAttemptCount?: number;
 }
 
 export interface MemoryDocSummary {
@@ -66,11 +72,6 @@ export interface ServerRouteContext {
   listProfileAgentItems: () => ProfileAgentItemSummary[];
   withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
   getDurableRunSnapshot: (runId: string, tail: number) => Promise<unknown | null>;
-  draftWorkspaceCommitMessage: (input: {
-    draftSource: ReturnType<typeof import('../workspace/workspaceBrowser.js').readWorkspaceGitDraftSource>;
-    authFile: string;
-    settingsFile: string;
-  }) => Promise<unknown>;
 }
 
 export interface RegisterServerRoutesInput {

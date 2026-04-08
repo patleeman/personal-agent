@@ -7,7 +7,6 @@ import {
   OPEN_NOTE_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   OPEN_SKILL_IDS_STORAGE_KEY,
-  OPEN_WORKSPACE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
@@ -192,8 +191,8 @@ describe('Sidebar', () => {
   it('renders a flat primary nav for core workspaces', () => {
     const html = renderSidebar('/inbox');
 
-    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Vault'));
-    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Threads'));
+    expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Automations'));
+    expect(html.indexOf('Automations')).toBeLessThan(html.indexOf('Threads'));
     expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Notifications'));
     expect(html.indexOf('Notifications')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
@@ -201,7 +200,8 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Alerts');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
-    expect(html).toContain('Vault');
+    expect(html).not.toContain('Vault');
+    expect(html).toContain('Automations');
     expect(html).toContain('Threads');
     expect(html).not.toContain('Conversations');
     expect(html).not.toContain('Docs');
@@ -326,26 +326,16 @@ describe('Sidebar', () => {
     expect(html).toContain('padding-left:14px');
   });
 
-  it('renders grouped open shelves for workspaces without the removed docs shelf', () => {
+  it('keeps the sidebar focused on chat and system surfaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
-    storage.setItem(OPEN_WORKSPACE_IDS_STORAGE_KEY, JSON.stringify(['/tmp/repo']));
 
     const html = renderSidebar('/inbox');
 
     expect(html).not.toContain('Open Docs');
     expect(html).not.toContain('Draft doc');
-    expect(html).toContain('Open Workspaces');
-    expect(html).toContain('repo');
-  });
-
-  it('keeps the workspace nav simple on workspace routes', () => {
-    const html = renderSidebar('/workspace/changes?cwd=/tmp/repo');
-
-    expect(html).toContain('href="/workspace/files"');
-    expect(html).not.toContain('ui-sidebar-subnav-item');
-    expect(html).not.toContain('Files');
-    expect(html).not.toContain('Changes');
+    expect(html).not.toContain('Open Workspaces');
+    expect(html).not.toContain('Vault');
   });
 
   it('marks Chat as the active nav on conversation routes', () => {

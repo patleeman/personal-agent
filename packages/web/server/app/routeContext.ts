@@ -31,7 +31,6 @@ interface CreateServerRouteContextOptions {
   listProfileAgentItems: () => ProfileAgentItemSummary[];
   withTemporaryProfileAgentDir: ServerRouteContext['withTemporaryProfileAgentDir'];
   getDurableRunSnapshot: ServerRouteContext['getDurableRunSnapshot'];
-  draftWorkspaceCommitMessage: ServerRouteContext['draftWorkspaceCommitMessage'];
 }
 
 export function createServerRouteContext(options: CreateServerRouteContextOptions): ServerRouteContext {
@@ -61,6 +60,5 @@ export function createServerRouteContext(options: CreateServerRouteContextOption
     listProfileAgentItems: options.listProfileAgentItems,
     withTemporaryProfileAgentDir: options.withTemporaryProfileAgentDir,
     getDurableRunSnapshot: options.getDurableRunSnapshot,
-    draftWorkspaceCommitMessage: options.draftWorkspaceCommitMessage,
   };
 }

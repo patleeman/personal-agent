@@ -27,7 +27,6 @@ import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
   ActivityEntry,
@@ -47,7 +46,6 @@ const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel
 const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
-const WorkspaceRail = lazy(() => import('./WorkspaceRail').then((module) => ({ default: module.WorkspaceRail })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
   return (
@@ -1516,7 +1514,7 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
           <button type="button" onClick={() => { void handleRunNow(); }} disabled={runningNow || data.running} className="ui-toolbar-button text-accent">
             {runningNow ? 'Running…' : 'Run now'}
           </button>
-          <Link to={`/scheduled/${encodeURIComponent(data.id)}`} className="ui-toolbar-button">Open task editor</Link>
+          <Link to={`/automations/${encodeURIComponent(data.id)}`} className="ui-toolbar-button">Open automation</Link>
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -1685,23 +1683,23 @@ export function ContextRail() {
     </ConversationInspectorShell>
   );
 
-  // Scheduled tasks
+  // Automations
   if (creatingScheduledTask) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Scheduled task" sub="new" />
+      <RailHeader label="Automation" sub="new" />
       {suspendRailPanel(<ScheduledTaskCreatePanel />, 'Loading task editor…')}
     </div>
   );
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Scheduled task" sub={id} />
-      {suspendRailPanel(<ScheduledTaskPanel id={id} />, 'Loading scheduled task…')}
+      <RailHeader label="Automation" sub={id} />
+      {suspendRailPanel(<ScheduledTaskPanel id={id} />, 'Loading automation…')}
     </div>
   );
   if (scheduledSection) return (
     <div className="flex-1 flex flex-col">
       <RailHeader label="Scheduled" />
-      <EmptyPrompt text="Select a scheduled task or start a new one." />
+      <EmptyPrompt text="Select an automation or start a new one." />
     </div>
   );
 
@@ -1741,19 +1739,6 @@ export function ContextRail() {
         <RailHeader label="Tools" />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {suspendRailPanel(<ToolsContextPanel />, 'Loading tools…')}
-        </div>
-      </div>
-    );
-  }
-
-  // Workspace
-  if (section === 'workspace') {
-    const workspaceMode = readWorkspaceModeFromPathname(location.pathname);
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Workspace" sub={workspaceMode} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {suspendRailPanel(<WorkspaceRail />, workspaceMode === 'changes' ? 'Loading changes…' : 'Loading workspace tree…')}
         </div>
       </div>
     );

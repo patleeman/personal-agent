@@ -36,7 +36,6 @@ import {
   registerCompanionWebUiRoutes,
   registerWebUiRoutes,
 } from './webUi.js';
-import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerServerRoutes({ app, companionApp, context }: RegisterServerRoutesInput): void {
   registerProfileRoutes(app, context);
@@ -76,8 +75,6 @@ export function registerServerRoutes({ app, companionApp, context }: RegisterSer
   registerConversationTitlesRoutes(app, context);
 
   registerRunAppRoutes(app, context);
-
-  registerWorkspaceRoutes(app, context);
 
   registerMemoryNotesRoutes(app, context);
 

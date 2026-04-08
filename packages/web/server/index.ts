@@ -11,21 +11,6 @@ import { resolveConversationCwd, resolveRequestedCwd } from './conversations/con
 import { pickFolder } from './workspace/folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './workspace/gitStatus.js';
 import {
-  commitWorkspaceGitChanges,
-  readWorkspaceFile,
-  readWorkspaceGitDiff,
-  readWorkspaceGitDraftSource,
-  readWorkspaceGitStatus,
-  readWorkspacePreviewAsset,
-  readWorkspaceSnapshot,
-  retainWorkspaceWatch,
-  stageAllWorkspaceGitChanges,
-  stageWorkspaceGitPath,
-  unstageAllWorkspaceGitChanges,
-  unstageWorkspaceGitPath,
-  writeWorkspaceFile,
-} from './workspace/workspaceBrowser.js';
-import {
   installDaemonServiceAndReadState,
   readDaemonState,
   restartDaemonServiceAndReadState,
@@ -82,19 +67,13 @@ import { createProfileState } from './app/profileState.js';
 import { createServerRouteContext } from './app/routeContext.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './ui/webUiPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './ui/settingsPersistence.js';
-import { draftWorkspaceCommitMessage } from './workspace/workspaceCommitDraft.js';
 import {
   getProfileConfigFilePath,
 } from './ui/profilePreferences.js';
 import { syncDaemonTaskScopeToProfile } from './automation/daemonProfileSync.js';
 import {
-  buildScheduledTaskMarkdown,
   getScheduledTaskStateFilePath,
   loadScheduledTasksForProfile,
-  readScheduledTaskFileMetadata,
-  taskDirForProfile,
-  validateScheduledTaskDefinition,
-  type TaskRuntimeEntry,
 } from './automation/scheduledTasks.js';
 import {
   createSession as createLocalSession,
@@ -205,7 +184,6 @@ import {
   parsePendingOperation,
   resolveDaemonPaths,
   resolveDurableRunsRoot,
-  startScheduledTaskRun,
   type BackgroundRunResultSummary,
 } from '@personal-agent/daemon';
 import {
@@ -609,16 +587,16 @@ function buildInboxActivityConversationContext(entry: ActivityEntryWithConversat
 
 function listTasksForCurrentProfile() {
   const loaded = loadScheduledTasksForProfile(getCurrentProfile());
-  const runtimeByFilePath = new Map(loaded.runtimeEntries.map((task) => [task.filePath, task]));
   const runtimeById = new Map(
     loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
   );
 
   return loaded.tasks.map((task) => {
-    const runtime = loaded.runtimeState[task.key] ?? runtimeByFilePath.get(task.filePath) ?? runtimeById.get(task.id);
+    const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
     return {
       id: task.id,
-      filePath: task.filePath,
+      title: task.title,
+      filePath: task.legacyFilePath,
       scheduleType: task.schedule.type,
       running: runtime?.running ?? false,
       enabled: task.enabled,
@@ -626,6 +604,7 @@ function listTasksForCurrentProfile() {
       at: task.schedule.type === 'at' ? task.schedule.at : undefined,
       prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
       model: task.modelRef,
+      cwd: task.cwd,
       lastStatus: runtime?.lastStatus,
       lastRunAt: runtime?.lastRunAt,
       lastSuccessAt: runtime?.lastSuccessAt,
@@ -645,25 +624,6 @@ function readRequiredTaskId(value: unknown): string {
   }
 
   return normalized;
-}
-
-function buildTaskDetailResponse(task: { filePath: string }, runtime?: TaskRuntimeEntry) {
-  const metadata = readScheduledTaskFileMetadata(task.filePath);
-  return {
-    ...(runtime ?? {}),
-    id: metadata.id,
-    filePath: task.filePath,
-    scheduleType: metadata.scheduleType,
-    running: runtime?.running ?? false,
-    enabled: metadata.enabled,
-    cron: metadata.cron,
-    at: metadata.at,
-    model: metadata.model,
-    cwd: metadata.cwd,
-    timeoutSeconds: metadata.timeoutSeconds,
-    prompt: metadata.promptBody,
-    fileContent: metadata.fileContent,
-  };
 }
 
 function getSessionLastActivityAt(sessionFile: string, fallback: string): string {
@@ -1300,7 +1260,6 @@ const routeContext = createServerRouteContext({
   listProfileAgentItems: () => [],
   withTemporaryProfileAgentDir,
   getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
-  draftWorkspaceCommitMessage,
 });
 
 registerServerRoutes({

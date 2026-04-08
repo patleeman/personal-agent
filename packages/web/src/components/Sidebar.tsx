@@ -22,13 +22,6 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { timeAgo } from '../utils';
-import { baseName, buildWorkspacePath, buildWorkspaceSearch, readWorkspaceCwdFromSearch } from '../workspaceBrowser';
-import {
-  useOpenResourceShelf,
-  closeOpenResourceShelfItem,
-  pinOpenResourceShelfItem,
-  unpinOpenResourceShelfItem,
-} from '../openResourceShelves';
 import { buildNestedSessionRows, type SessionLineageRow } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
@@ -50,6 +43,7 @@ const PATH = {
   notes: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
   skills: 'M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125',
   workspace: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
+  automations: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   settings: 'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close: 'M6 18 18 6M6 6l12 12',
   pin: 'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
@@ -62,7 +56,7 @@ const PATH = {
 const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
-const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/tools', '/instructions'] as const;
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/automations', '/scheduled', '/tools', '/instructions'] as const;
 
 type PointerPosition = { x: number; y: number };
 
@@ -222,139 +216,11 @@ function TopNavItem({
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-      <span className="ui-section-label">{label}</span>
-    </div>
-  );
-}
-
 function PinnedIndicator() {
   return (
     <span role="img" aria-label="Pinned" className="inline-flex items-center justify-center rounded-md p-1 text-accent/80">
       <Ico d={PATH.pin} size={10} />
     </span>
-  );
-}
-
-function ShelfRow({
-  to,
-  active,
-  title,
-  meta,
-  pinned,
-  onPin,
-  onUnpin,
-  onClose,
-}: {
-  to: string;
-  active: boolean;
-  title: string;
-  meta?: string;
-  pinned?: boolean;
-  onPin?: () => void;
-  onUnpin?: () => void;
-  onClose?: () => void;
-}) {
-  const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLAnchorElement>();
-
-  const showTrailingControls = hovered || pinned;
-
-  return (
-    <Link
-      ref={hoverRef}
-      to={to}
-      className={[
-        'ui-sidebar-session-row select-none',
-        active && 'ui-sidebar-session-row-active',
-      ].filter(Boolean).join(' ')}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    >
-      <span aria-hidden="true" className={['mt-0.5 self-stretch w-px rounded-full shrink-0 transition-colors', active ? 'bg-accent/80' : 'bg-border-subtle'].join(' ')} />
-      <div className={[
-        'min-w-0 flex-1',
-        showTrailingControls && 'pr-11',
-      ].filter(Boolean).join(' ')}>
-        <p className="ui-row-title truncate">{title}</p>
-        {meta && <p className="ui-sidebar-session-meta truncate">{meta}</p>}
-      </div>
-      {showTrailingControls ? (
-        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-          {!hovered && pinned ? <PinnedIndicator /> : null}
-          {hovered && pinned && onUnpin ? (
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onUnpin();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Unpin"
-              aria-label="Unpin"
-            >
-              <Ico d={PATH.unpin} size={10} />
-            </button>
-          ) : null}
-          {hovered && !pinned && onPin ? (
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onPin();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Pin"
-              aria-label="Pin"
-            >
-              <Ico d={PATH.pin} size={10} />
-            </button>
-          ) : null}
-          {hovered && !pinned && onClose ? (
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onClose();
-              }}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Close"
-              aria-label="Close"
-            >
-              <Ico d={PATH.close} size={10} />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </Link>
   );
 }
 
@@ -616,10 +482,6 @@ function ShelfDropZone({
   );
 }
 
-function buildWorkspaceHref(cwd: string): string {
-  return buildWorkspacePath('files', buildWorkspaceSearch('', { cwd, file: null, changeScope: null }));
-}
-
 function resolveConversationRowGroupCwd(
   row: SessionLineageRow,
   rowsBySessionId: ReadonlyMap<string, { row: SessionLineageRow }>,
@@ -655,8 +517,6 @@ export function Sidebar() {
     loading,
   } = useConversations();
 
-  const workspaceShelf = useOpenResourceShelf('workspace');
-
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
@@ -690,19 +550,7 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
-  const selectedWorkspaceId = useMemo(
-    () => location.pathname.startsWith('/workspace') ? readWorkspaceCwdFromSearch(location.search) : null,
-    [location.pathname, location.search],
-  );
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
-
-  const openWorkspaces = useMemo(
-    () => [
-      ...workspaceShelf.pinnedIds.map((id) => ({ id, pinned: true })),
-      ...workspaceShelf.openIds.map((id) => ({ id, pinned: false })),
-    ],
-    [workspaceShelf.openIds, workspaceShelf.pinnedIds],
-  );
   const runsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
@@ -1015,13 +863,6 @@ export function Sidebar() {
     }
   }
 
-  function handleCloseWorkspace(workspaceId: string) {
-    closeOpenResourceShelfItem('workspace', workspaceId);
-    if (selectedWorkspaceId === workspaceId && location.pathname.startsWith('/workspace')) {
-      navigate(buildWorkspacePath('files'));
-    }
-  }
-
   const pinnedDropTargetActive = dropTarget?.section === 'pinned' && dropTarget.sessionId === null;
   const openDropTargetActive = dropTarget?.section === 'open' && dropTarget.sessionId === null;
 
@@ -1041,7 +882,7 @@ export function Sidebar() {
             <span className="flex-1 text-left">Chat</span>
           </button>
         </div>
-        <TopNavItem to="/workspace/files" icon={PATH.workspace} label="Vault" forceActive={location.pathname.startsWith('/workspace')} />
+        <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
@@ -1121,27 +962,6 @@ export function Sidebar() {
             );
           })}
         </div>
-
-        {openWorkspaces.length > 0 && (
-          <>
-            <SectionHeader label="Open Workspaces" />
-            <div className="py-1 space-y-0.5">
-              {openWorkspaces.map((item) => (
-                <ShelfRow
-                  key={item.id}
-                  to={buildWorkspaceHref(item.id)}
-                  active={location.pathname.startsWith('/workspace') && selectedWorkspaceId === item.id}
-                  title={baseName(item.id)}
-                  meta={item.id}
-                  pinned={item.pinned}
-                  onPin={item.pinned ? undefined : () => pinOpenResourceShelfItem('workspace', item.id)}
-                  onUnpin={item.pinned ? () => unpinOpenResourceShelfItem('workspace', item.id) : undefined}
-                  onClose={item.pinned ? undefined : () => handleCloseWorkspace(item.id)}
-                />
-              ))}
-            </div>
-          </>
-        )}
       </div>
 
       <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
