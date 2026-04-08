@@ -2068,6 +2068,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return data.attachments;
   }, [id]);
 
+  const shouldFetchLiveSessionGitContext = !draft
+    && Boolean(id)
+    && conversationLiveDecision === true
+    && !conversationBootstrapLoading
+    && !sessionLoading
+    && !stream.isStreaming;
+
   const refetchDeferredResumes = useCallback(async () => {
     if (!id) {
       setDeferredResumes([]);
@@ -2095,8 +2102,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, id]);
 
+  const refetchLiveSessionContextIfReady = useCallback(async () => {
+    if (!shouldFetchLiveSessionGitContext && !liveSessionContext) {
+      return null;
+    }
+
+    return refetchLiveSessionContext();
+  }, [liveSessionContext, refetchLiveSessionContext, shouldFetchLiveSessionGitContext]);
+
   useInvalidateOnTopics(['attachments'], refetchConversationAttachments);
-  useInvalidateOnTopics(['workspace'], refetchLiveSessionContext);
+  useInvalidateOnTopics(['workspace'], refetchLiveSessionContextIfReady);
 
   const resumeDeferredConversation = useCallback(async () => {
     if (!savedConversationSessionFile) {
@@ -2124,8 +2139,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id, refetchConversationAttachments]);
 
   useEffect(() => {
-    void refetchLiveSessionContext();
-  }, [refetchLiveSessionContext]);
+    if (conversationLiveDecision !== true) {
+      setLiveSessionContext(null);
+      return;
+    }
+
+    if (!shouldFetchLiveSessionGitContext) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void refetchLiveSessionContext().catch(() => {});
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [conversationLiveDecision, refetchLiveSessionContext, shouldFetchLiveSessionGitContext]);
 
   useEffect(() => {
     if (!id) {

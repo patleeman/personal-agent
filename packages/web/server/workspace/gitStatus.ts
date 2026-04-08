@@ -38,14 +38,21 @@ export interface GitStatusReadTelemetry {
 
 const GIT_STATUS_CACHE_TTL_MS = 3_000;
 const GIT_STATUS_DEGRADED_CACHE_TTL_MS = 15_000;
+const GIT_REPO_INFO_CACHE_TTL_MS = 30_000;
 const GIT_STATUS_TOTAL_BUDGET_MS = 2_000;
 const GIT_STATUS_COMMAND_TIMEOUT_MS = 1_500;
+const MAX_GIT_STATUS_CACHE_ENTRIES = 64;
+const MAX_GIT_REPO_INFO_CACHE_ENTRIES = 256;
 const gitStatusSummaryCache = new Map<string, {
   fetchedAt: number;
   ttlMs: number;
   summary: GitStatusSummary | null;
   hasRepo: boolean;
   degraded: boolean;
+}>();
+const gitRepoInfoCache = new Map<string, {
+  fetchedAt: number;
+  repo: GitRepoInfo | null;
 }>();
 
 type HeadCommitState = 'present' | 'absent' | 'unknown';
@@ -97,14 +104,35 @@ function remainingBudgetTimeout(deadlineAt: number): number | null {
   return Math.max(50, Math.min(GIT_STATUS_COMMAND_TIMEOUT_MS, remainingMs));
 }
 
-function cacheGitStatusSummary(cwd: string, summary: GitStatusSummary | null, hasRepo: boolean, degraded: boolean): void {
-  gitStatusSummaryCache.set(cwd, {
+function trimOldestEntries<T>(cache: Map<string, T>, maxEntries: number): void {
+  while (cache.size > maxEntries) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+
+    cache.delete(oldestKey);
+  }
+}
+
+function cacheGitStatusSummary(cacheKey: string, summary: GitStatusSummary | null, hasRepo: boolean, degraded: boolean): void {
+  gitStatusSummaryCache.set(cacheKey, {
     fetchedAt: Date.now(),
     ttlMs: degraded ? GIT_STATUS_DEGRADED_CACHE_TTL_MS : GIT_STATUS_CACHE_TTL_MS,
     summary,
     hasRepo,
     degraded,
   });
+  trimOldestEntries(gitStatusSummaryCache, MAX_GIT_STATUS_CACHE_ENTRIES);
+}
+
+function cacheGitRepoInfo(cwd: string, repo: GitRepoInfo | null): GitRepoInfo | null {
+  gitRepoInfoCache.set(cwd, {
+    fetchedAt: Date.now(),
+    repo,
+  });
+  trimOldestEntries(gitRepoInfoCache, MAX_GIT_REPO_INFO_CACHE_ENTRIES);
+  return repo;
 }
 
 export function countGitStatusEntries(output: string): number {
@@ -326,21 +354,26 @@ function readUntrackedDiffSummary(cwd: string, untrackedPaths: string[], deadlin
 }
 
 export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
+  const cached = gitRepoInfoCache.get(cwd);
+  if (cached && (Date.now() - cached.fetchedAt) <= GIT_REPO_INFO_CACHE_TTL_MS) {
+    return cached.repo;
+  }
+
   try {
     const isWorkTree = runGitCommand(['rev-parse', '--is-inside-work-tree'], cwd).trim();
     if (isWorkTree !== 'true') {
-      return null;
+      return cacheGitRepoInfo(cwd, null);
     }
 
     const root = resolve(runGitCommand(['rev-parse', '--show-toplevel'], cwd).trim());
     const name = basename(root).trim();
     if (!name) {
-      return null;
+      return cacheGitRepoInfo(cwd, null);
     }
 
-    return { root, name };
+    return cacheGitRepoInfo(cwd, { root, name });
   } catch {
-    return null;
+    return cacheGitRepoInfo(cwd, null);
   }
 }
 
@@ -349,22 +382,8 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
   telemetry: GitStatusReadTelemetry;
 } {
   const startedAt = process.hrtime.bigint();
-  const cached = gitStatusSummaryCache.get(cwd);
-  if (cached && (Date.now() - cached.fetchedAt) <= cached.ttlMs) {
-    return {
-      summary: cached.summary,
-      telemetry: {
-        cache: 'hit',
-        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
-        hasRepo: cached.hasRepo,
-        degraded: cached.degraded,
-      },
-    };
-  }
-
   const repo = readGitRepoInfo(cwd);
   if (!repo) {
-    cacheGitStatusSummary(cwd, null, false, false);
     return {
       summary: null,
       telemetry: {
@@ -377,10 +396,23 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
   }
 
   const repoRoot = repo.root;
+  const cached = gitStatusSummaryCache.get(repoRoot);
+  if (cached && (Date.now() - cached.fetchedAt) <= cached.ttlMs) {
+    return {
+      summary: cached.summary,
+      telemetry: {
+        cache: 'hit',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        hasRepo: cached.hasRepo,
+        degraded: cached.degraded,
+      },
+    };
+  }
+
   const deadlineAt = Date.now() + GIT_STATUS_TOTAL_BUDGET_MS;
   const statusTimeoutMs = remainingBudgetTimeout(deadlineAt);
   if (!statusTimeoutMs) {
-    cacheGitStatusSummary(cwd, null, true, true);
+    cacheGitStatusSummary(repoRoot, null, true, true);
     return {
       summary: null,
       telemetry: {
@@ -394,7 +426,7 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
 
   const statusResult = runGitCommandAllowFailure(['status', '--porcelain=v1', '--branch', '--untracked-files=all'], repoRoot, statusTimeoutMs);
   if (statusResult.exitCode !== 0) {
-    cacheGitStatusSummary(cwd, null, true, true);
+    cacheGitStatusSummary(repoRoot, null, true, true);
     return {
       summary: null,
       telemetry: {
@@ -441,7 +473,7 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
     changes,
   } satisfies GitStatusSummary;
 
-  cacheGitStatusSummary(cwd, summary, true, degraded);
+  cacheGitStatusSummary(repoRoot, summary, true, degraded);
   return {
     summary,
     telemetry: {

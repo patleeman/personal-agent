@@ -106,6 +106,32 @@ describe('readGitStatusSummary', () => {
     expect(secondRead.telemetry.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('shares cached git status across different cwd values in the same repo', () => {
+    const dir = createTempDir('pa-web-git-repo-shared-cache-');
+    runGit(['init'], dir);
+
+    const nested = join(dir, 'packages', 'web');
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(dir, 'tracked.txt'), 'one\n');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+
+    writeFileSync(join(dir, 'tracked.txt'), 'one\ntwo\n');
+
+    const firstRead = readGitStatusSummaryWithTelemetry(dir);
+    expect(firstRead.telemetry).toMatchObject({
+      cache: 'miss',
+      hasRepo: true,
+    });
+
+    const secondRead = readGitStatusSummaryWithTelemetry(nested);
+    expect(secondRead.summary).toEqual(firstRead.summary);
+    expect(secondRead.telemetry).toMatchObject({
+      cache: 'hit',
+      hasRepo: true,
+    });
+  });
+
   it('summarizes staged, unstaged, and untracked changes', () => {
     const dir = createTempDir('pa-web-git-repo-');
     runGit(['init'], dir);
