@@ -47,6 +47,27 @@ describe('ConversationSavedHeader', () => {
     expect(html).toContain('Enter the working directory manually');
   });
 
+  it('renders the summarize and fork action when provided', () => {
+    const html = renderToString(
+      <ConversationSavedHeader
+        title="Fix the top bar"
+        cwd="/tmp/personal-agent"
+        cwdEditing={false}
+        cwdDraft="/tmp/personal-agent"
+        summarizeAndForkTitle="Duplicate this thread, compact the copy, and open it as a new conversation"
+        onPickCwd={() => {}}
+        onStartEditingCwd={() => {}}
+        onCwdDraftChange={() => {}}
+        onCancelEditingCwd={() => {}}
+        onSaveCwd={() => {}}
+        onSummarizeAndFork={() => {}}
+      />,
+    );
+
+    expect(html).toContain('aria-label="Summarize and fork this conversation"');
+    expect(html).toContain('≋⑂ summarize + fork');
+  });
+
   it('renders the inline cwd editor when requested', () => {
     const html = renderToString(
       <ConversationSavedHeader

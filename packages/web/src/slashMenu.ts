@@ -18,6 +18,7 @@ export const BASE_SLASH_COMMANDS = [
   { cmd: '/name', icon: '✎', desc: 'Set session display name' },
   { cmd: '/session', icon: 'ⓘ', desc: 'Show session info and stats' },
   { cmd: '/fork', icon: '⑂', desc: 'Create a new fork from a previous message' },
+  { cmd: '/summarize-fork', icon: '≋', desc: 'Duplicate this thread, compact the copy, and open it as a new conversation' },
   { cmd: '/tree', icon: '⎇', desc: 'Navigate session tree (switch branches)' },
   { cmd: '/new', icon: '↺', desc: 'Start a new session' },
   { cmd: '/compact', icon: '≡', desc: 'Manually compact the session context' },

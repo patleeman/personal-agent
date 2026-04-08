@@ -163,6 +163,7 @@ The UI supports:
 - resumed sessions from saved history
 - message streaming
 - conversation forks
+- summary forks
 - branch navigation
 - context usage display
 - file/image input
@@ -180,7 +181,7 @@ Conversation lists in the sidebar live under a dedicated **Threads** section and
 
 Saved conversations keep a minimal right-hand inspector focused on runs and details. That rail stays closed by default and opens on demand. In the runs section, conversation work, background work, and thread-mentioned work are grouped separately so the source of each item is clearer than a flat internal run list.
 
-The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. Saved conversations also expose a header-level summarize + fork action that duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 

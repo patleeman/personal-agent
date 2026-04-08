@@ -6,6 +6,7 @@ export const CONVERSATION_MENU_SLASH_COMMANDS = [
   '/name',
   '/session',
   '/fork',
+  '/summarize-fork',
   '/tree',
   '/new',
   '/compact',
@@ -29,6 +30,7 @@ export type ConversationSlashCommand =
   | { action: 'export'; outputPath?: string }
   | { action: 'fork' }
   | { action: 'image' }
+  | { action: 'summarizeFork' }
   | { action: 'name'; name?: string }
   | { action: 'new' }
   | { action: 'reload' }
@@ -86,6 +88,8 @@ export function parseConversationSlashCommand(input: string): ConversationSlashP
       };
     case '/fork':
       return parseNoArgCommand('fork', argument, 'Usage: /fork');
+    case '/summarize-fork':
+      return parseNoArgCommand('summarizeFork', argument, 'Usage: /summarize-fork');
     case '/image':
       return parseNoArgCommand('image', argument, 'Usage: /image');
     case '/name':

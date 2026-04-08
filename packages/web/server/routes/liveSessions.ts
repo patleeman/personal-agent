@@ -8,6 +8,7 @@ import {
   exportSessionHtml,
   forkSession,
   getLiveSessions as getLocalLiveSessions,
+  summarizeAndForkSession,
   getLiveSessionForkEntries,
   getSessionContextUsage,
   getSessionStats,
@@ -879,6 +880,22 @@ export function registerLiveSessionRoutes(
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/live-sessions/:id/summarize-fork', async (req, res) => {
+    try {
+      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+      res.json(await summarizeAndForkSession(req.params.id, buildLiveSessionResourceOptions()));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeLiveConversationControlError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });

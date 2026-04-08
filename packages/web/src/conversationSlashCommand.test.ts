@@ -50,6 +50,10 @@ describe('parseConversationSlashCommand', () => {
       kind: 'command',
       command: { action: 'summarize' },
     });
+    expect(parseConversationSlashCommand('/summarize-fork')).toEqual({
+      kind: 'command',
+      command: { action: 'summarizeFork' },
+    });
     expect(parseConversationSlashCommand('/think next step')).toEqual({
       kind: 'command',
       command: { action: 'think', topic: 'next step' },

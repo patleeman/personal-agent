@@ -2413,3 +2413,33 @@ export function destroySession(sessionId: string): void {
   registry.delete(sessionId);
   publishSessionMetaChanged(sessionId);
 }
+export async function summarizeAndForkSession(
+  sessionId: string,
+  options: LiveSessionLoaderOptions = {},
+): Promise<{ newSessionId: string; sessionFile: string }> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  if (entry.session.isStreaming) {
+    throw new Error('Cannot summarize and fork while a response is running. Use stop first.');
+  }
+
+  const sourceSessionFile = entry.session.sessionFile;
+  if (!sourceSessionFile) {
+    throw new Error('Cannot summarize and fork a live session without a session file.');
+  }
+
+  const duplicated = await createSessionFromExisting(sourceSessionFile, entry.cwd, options);
+
+  try {
+    await compactSession(duplicated.id);
+  } catch (error) {
+    destroySession(duplicated.id);
+    throw error;
+  }
+
+  return { newSessionId: duplicated.id, sessionFile: duplicated.sessionFile };
+}
+

@@ -549,6 +549,8 @@ export const api = {
     post<LiveSessionPresenceState>(`/live-sessions/${id}/takeover`, { surfaceId }),
   compactSession: (id: string, customInstructions?: string, surfaceId?: string) =>
     post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions, ...(surfaceId ? { surfaceId } : {}) }),
+  summarizeAndForkSession: (id: string, surfaceId?: string) =>
+    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/summarize-fork`, surfaceId ? { surfaceId } : {}),
   reloadSession: (id: string, surfaceId?: string) =>
     post<{ ok: boolean }>(`/live-sessions/${id}/reload`, surfaceId ? { surfaceId } : {}),
   exportSession: (id: string, outputPath?: string) =>
