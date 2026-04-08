@@ -1,6 +1,6 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { loadDaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
@@ -133,6 +133,7 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
     return cached;
   }
 
+  mkdirSync(dirname(resolved), { recursive: true });
   const db = new BetterSqlite3(resolved);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');

@@ -6,8 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createDurableRunManifest,
   createInitialDurableRunStatus,
+  createStoredAutomation,
+  getAutomationDbPath,
+  loadDaemonConfig,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
+  saveAutomationRuntimeStateMap,
   saveDurableRunManifest,
   saveDurableRunStatus,
 } from '@personal-agent/daemon';
@@ -42,6 +46,61 @@ afterEach(async () => {
 });
 
 describe('tasks command status rendering', () => {
+  it('lists sqlite-backed automations even when no legacy task files exist', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const taskDir = createTempDir('personal-agent-cli-tasks-');
+
+    const daemonConfigPath = join(configDir, 'daemon.json');
+    writeFile(
+      daemonConfigPath,
+      JSON.stringify({
+        modules: {
+          tasks: {
+            taskDir,
+          },
+        },
+      }),
+    );
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_DAEMON_CONFIG = daemonConfigPath;
+
+    const dbPath = getAutomationDbPath(loadDaemonConfig());
+    const automation = createStoredAutomation({
+      dbPath,
+      profile: 'default',
+      title: 'Daily bug scan',
+      prompt: 'Scan recent commits for regressions and summarize likely issues.',
+      cron: '0 9 * * 1-5',
+    });
+    saveAutomationRuntimeStateMap({
+      [automation.id]: {
+        id: automation.id,
+        filePath: automation.filePath,
+        scheduleType: automation.schedule.type,
+        running: false,
+        lastStatus: 'success',
+        lastRunAt: '2026-03-02T23:59:20.002Z',
+        lastSuccessAt: '2026-03-02T23:59:20.002Z',
+      },
+    }, { dbPath });
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['--plain', 'tasks', 'list']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('Automation DB'))).toBe(true);
+    expect(logs.some((line) => line.includes('Daily bug scan'))).toBe(true);
+    expect(logs.some((line) => line.includes(automation.id))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
   it('shows completed for one-time tasks that already finished successfully', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const configDir = createTempDir('personal-agent-cli-config-');

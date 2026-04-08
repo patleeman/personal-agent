@@ -48,7 +48,11 @@ import {
 import {
   daemonStatusJson,
   emitDaemonEventNonFatal,
+  ensureLegacyTaskImports,
+  getAutomationDbPath,
   getDaemonStatus,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
   loadDaemonConfig,
   pingDaemon,
   readDaemonPid,
@@ -59,7 +63,7 @@ import {
   stopDaemonGracefully,
   parseTaskDefinition,
   type DaemonStatus,
-  type ParsedTaskDefinition,
+  type StoredAutomation,
 } from '@personal-agent/daemon';
 import {
   activateWebUiSlot,
@@ -2180,13 +2184,23 @@ type TaskListStatus = (typeof TASK_LIST_STATUS_FILTERS)[number];
 type TaskListStatusFilter = TaskListStatus | 'all';
 
 interface TaskListEntry {
-  task: ParsedTaskDefinition;
+  task: StoredAutomation;
   runtime: TaskRuntimeRecord | undefined;
   status: TaskListStatus;
 }
 
-function isTaskStateRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+interface ResolvedTaskRuntimePaths {
+  taskDir: string;
+  stateFile: string;
+  dbPath: string;
+  runsRoot: string;
+}
+
+interface LoadedTaskCatalog {
+  paths: ResolvedTaskRuntimePaths;
+  tasks: StoredAutomation[];
+  runtimeState: Record<string, TaskRuntimeRecord>;
+  parseErrors: TaskParseError[];
 }
 
 function listTaskDefinitionFiles(taskDir: string): string[] {
@@ -2225,99 +2239,34 @@ function listTaskDefinitionFiles(taskDir: string): string[] {
   return output;
 }
 
-function loadTaskDefinitions(taskDir: string, defaultTimeoutSeconds: number): {
-  tasks: ParsedTaskDefinition[];
-  parseErrors: TaskParseError[];
-} {
-  const files = listTaskDefinitionFiles(taskDir);
-  const tasks: ParsedTaskDefinition[] = [];
-  const parseErrors: TaskParseError[] = [];
-
-  for (const filePath of files) {
-    try {
-      const task = parseTaskDefinition({
-        filePath,
-        rawContent: readFileSync(filePath, 'utf-8'),
-        defaultTimeoutSeconds,
-      });
-      tasks.push(task);
-    } catch (error) {
-      parseErrors.push({
-        filePath,
-        error: (error as Error).message,
-      });
-    }
-  }
-
-  tasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
-
-  return {
-    tasks,
-    parseErrors,
-  };
-}
-
-function resolveTaskRuntimePaths(config: ReturnType<typeof loadDaemonConfig>): {
-  taskDir: string;
-  stateFile: string;
-  runsRoot: string;
-} {
+function resolveTaskRuntimePaths(config: ReturnType<typeof loadDaemonConfig>): ResolvedTaskRuntimePaths {
   const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
   return {
     taskDir: config.modules.tasks.taskDir,
     stateFile: join(daemonPaths.root, 'task-state.json'),
+    dbPath: getAutomationDbPath(config),
     runsRoot: resolveDurableRunsRoot(daemonPaths.root),
   };
 }
 
-function loadTaskRuntimeState(stateFile: string): Record<string, TaskRuntimeRecord> {
-  if (!existsSync(stateFile)) {
-    return {};
-  }
+function loadTaskCatalog(config: ReturnType<typeof loadDaemonConfig>): LoadedTaskCatalog {
+  const paths = resolveTaskRuntimePaths(config);
+  const importResult = ensureLegacyTaskImports({
+    taskDir: paths.taskDir,
+    defaultTimeoutSeconds: config.modules.tasks.defaultTimeoutSeconds,
+    dbPath: paths.dbPath,
+    legacyStateFile: paths.stateFile,
+  });
 
-  try {
-    const parsed = JSON.parse(readFileSync(stateFile, 'utf-8')) as unknown;
-    if (!isTaskStateRecord(parsed)) {
-      return {};
-    }
-
-    const tasks = parsed.tasks;
-    if (!isTaskStateRecord(tasks)) {
-      return {};
-    }
-
-    const output: Record<string, TaskRuntimeRecord> = {};
-
-    for (const [key, value] of Object.entries(tasks)) {
-      if (!isTaskStateRecord(value)) {
-        continue;
-      }
-
-      output[key] = {
-        id: typeof value.id === 'string' ? value.id : undefined,
-        filePath: typeof value.filePath === 'string' ? value.filePath : undefined,
-        running: typeof value.running === 'boolean' ? value.running : undefined,
-        runningStartedAt: typeof value.runningStartedAt === 'string' ? value.runningStartedAt : undefined,
-        lastStatus: typeof value.lastStatus === 'string' ? value.lastStatus : undefined,
-        lastRunAt: typeof value.lastRunAt === 'string' ? value.lastRunAt : undefined,
-        lastSuccessAt: typeof value.lastSuccessAt === 'string' ? value.lastSuccessAt : undefined,
-        lastFailureAt: typeof value.lastFailureAt === 'string' ? value.lastFailureAt : undefined,
-        lastError: typeof value.lastError === 'string' ? value.lastError : undefined,
-        lastLogPath: typeof value.lastLogPath === 'string' ? value.lastLogPath : undefined,
-        lastAttemptCount: typeof value.lastAttemptCount === 'number' ? value.lastAttemptCount : undefined,
-        oneTimeResolvedAt: typeof value.oneTimeResolvedAt === 'string' ? value.oneTimeResolvedAt : undefined,
-        oneTimeResolvedStatus: typeof value.oneTimeResolvedStatus === 'string' ? value.oneTimeResolvedStatus : undefined,
-        oneTimeCompletedAt: typeof value.oneTimeCompletedAt === 'string' ? value.oneTimeCompletedAt : undefined,
-      };
-    }
-
-    return output;
-  } catch {
-    return {};
-  }
+  return {
+    paths,
+    tasks: listStoredAutomations({ dbPath: paths.dbPath }),
+    runtimeState: loadAutomationRuntimeStateMap({ dbPath: paths.dbPath }) as Record<string, TaskRuntimeRecord>,
+    parseErrors: importResult.parseErrors,
+  };
 }
 
-function formatTaskSchedule(task: ParsedTaskDefinition): string {
+function formatTaskSchedule(task: Pick<StoredAutomation, 'schedule'>): string {
   if (task.schedule.type === 'cron') {
     return `cron ${task.schedule.expression}`;
   }
@@ -2326,7 +2275,7 @@ function formatTaskSchedule(task: ParsedTaskDefinition): string {
 }
 
 function resolveTaskListStatus(
-  task: ParsedTaskDefinition,
+  task: Pick<StoredAutomation, 'schedule' | 'enabled'>,
   runtime: TaskRuntimeRecord | undefined,
 ): TaskListStatus {
   if (runtime?.running === true) {
@@ -2351,8 +2300,8 @@ function resolveTaskListStatus(
   return task.enabled ? 'active' : 'disabled';
 }
 
-function toTaskListEntry(task: ParsedTaskDefinition, runtimeState: Record<string, TaskRuntimeRecord>): TaskListEntry {
-  const runtime = runtimeState[task.key];
+function toTaskListEntry(task: StoredAutomation, runtimeState: Record<string, TaskRuntimeRecord>): TaskListEntry {
+  const runtime = runtimeState[task.id];
 
   return {
     task,
@@ -2363,6 +2312,7 @@ function toTaskListEntry(task: ParsedTaskDefinition, runtimeState: Record<string
 
 function toTaskListPayload(entry: TaskListEntry): {
   id: string;
+  title: string;
   enabled: boolean;
   status: TaskListStatus;
   schedule: string;
@@ -2370,13 +2320,15 @@ function toTaskListPayload(entry: TaskListEntry): {
   model: string | null;
   cwd: string | null;
   timeoutSeconds: number;
-  filePath: string;
+  filePath: string | null;
+  legacyFilePath: string | null;
   runtime: TaskRuntimeRecord | null;
 } {
   const { task, runtime, status } = entry;
 
   return {
     id: task.id,
+    title: task.title,
     enabled: task.enabled,
     status,
     schedule: formatTaskSchedule(task),
@@ -2384,7 +2336,8 @@ function toTaskListPayload(entry: TaskListEntry): {
     model: task.modelRef ?? null,
     cwd: task.cwd ?? null,
     timeoutSeconds: task.timeoutSeconds,
-    filePath: task.filePath,
+    filePath: task.legacyFilePath ?? null,
+    legacyFilePath: task.legacyFilePath ?? null,
     runtime: runtime ?? null,
   };
 }
@@ -2452,19 +2405,13 @@ function findLatestTaskLogFile(runsRoot: string, taskId: string): string | undef
   return withMtime[0]?.path;
 }
 
-function resolveTaskById(tasks: ParsedTaskDefinition[], id: string): ParsedTaskDefinition {
-  const matches = tasks.filter((task) => task.id === id);
-
-  if (matches.length === 0) {
+function resolveTaskById(tasks: StoredAutomation[], id: string): StoredAutomation {
+  const task = tasks.find((entry) => entry.id === id);
+  if (!task) {
     throw new Error(`No task found with id: ${id}`);
   }
 
-  if (matches.length > 1) {
-    const files = matches.map((task) => task.filePath).join(', ');
-    throw new Error(`Task id is ambiguous (${id}). Matches: ${files}`);
-  }
-
-  return matches[0] as ParsedTaskDefinition;
+  return task;
 }
 
 function isTaskOption(arg: string): boolean {
@@ -2542,10 +2489,10 @@ function printTasksHelp(): void {
   printDenseUsage('pa tasks [list|show|validate|logs|help]');
   console.log('');
   printDenseCommandList('Commands', [
-    { usage: 'list [--json] [--status <all|running|active|completed|disabled|pending|error>]', description: 'List parsed scheduled tasks with runtime status' },
-    { usage: 'show <id> [--json]', description: 'Show one task definition and runtime state' },
-    { usage: 'validate [--all|file]', description: 'Validate task file frontmatter and prompt body' },
-    { usage: 'logs <id> [--tail <n>]', description: 'Show latest task run log (default: 80 lines)' },
+    { usage: 'list [--json] [--status <all|running|active|completed|disabled|pending|error>]', description: 'List automations from SQLite and imported legacy task files' },
+    { usage: 'show <id> [--json]', description: 'Show one automation definition and runtime state' },
+    { usage: 'validate [--all|file]', description: 'Validate legacy task file frontmatter and prompt body' },
+    { usage: 'logs <id> [--tail <n>]', description: 'Show latest automation run log (default: 80 lines)' },
     { usage: 'help', description: 'Show tasks help' },
   ]);
 }
@@ -2568,9 +2515,7 @@ async function tasksCommand(args: string[]): Promise<number> {
     const { jsonMode, statusFilter } = parseTaskListOptions(rest);
 
     const config = loadDaemonConfig();
-    const paths = resolveTaskRuntimePaths(config);
-    const { tasks, parseErrors } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
-    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+    const { paths, tasks, runtimeState, parseErrors } = loadTaskCatalog(config);
 
     const taskEntries = tasks.map((task) => toTaskListEntry(task, runtimeState));
     const filteredTaskEntries = statusFilter === 'all'
@@ -2596,15 +2541,15 @@ async function tasksCommand(args: string[]): Promise<number> {
       return parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Scheduled tasks'));
-    console.log(keyValue('Task directory', paths.taskDir));
-    console.log(keyValue('Task state file', paths.stateFile));
+    console.log(section('Automations'));
+    console.log(keyValue('Automation DB', paths.dbPath));
+    console.log(keyValue('Legacy task directory', paths.taskDir));
     console.log(keyValue('Status filter', statusFilter));
 
     if (tasks.length === 0) {
-      console.log(dim('No valid task files found.'));
+      console.log(dim('No automations found.'));
     } else if (filteredTaskEntries.length === 0) {
-      console.log(dim(`No tasks matched status filter: ${statusFilter}`));
+      console.log(dim(`No automations matched status filter: ${statusFilter}`));
     }
 
     for (const entry of filteredTaskEntries) {
@@ -2613,9 +2558,14 @@ async function tasksCommand(args: string[]): Promise<number> {
 
       console.log('');
       console.log(bullet(`${task.id}: ${status}`));
+      if (task.title && task.title !== task.id) {
+        console.log(keyValue('Title', task.title, 4));
+      }
       console.log(keyValue('Schedule', formatTaskSchedule(task), 4));
       console.log(keyValue('Profile', task.profile, 4));
-      console.log(keyValue('File', task.filePath, 4));
+      if (task.legacyFilePath) {
+        console.log(keyValue('Imported from', task.legacyFilePath, 4));
+      }
 
       if (runtime?.lastRunAt) {
         console.log(keyValue('Last run', new Date(runtime.lastRunAt).toLocaleString(), 4));
@@ -2628,9 +2578,9 @@ async function tasksCommand(args: string[]): Promise<number> {
 
     if (parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${parseErrors.length} task file(s) failed to parse`));
+      console.log(warning(`${parseErrors.length} legacy task file(s) failed to import`));
       for (const issue of parseErrors) {
-        console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
+        console.log(keyValue('Import error', `${issue.filePath}: ${issue.error}`, 4));
       }
     }
 
@@ -2648,11 +2598,9 @@ async function tasksCommand(args: string[]): Promise<number> {
 
     const taskId = nonJsonArgs[0] as string;
     const config = loadDaemonConfig();
-    const paths = resolveTaskRuntimePaths(config);
-    const { tasks } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
-    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+    const { paths, tasks, runtimeState } = loadTaskCatalog(config);
     const task = resolveTaskById(tasks, taskId);
-    const runtime = runtimeState[task.key];
+    const runtime = runtimeState[task.id];
 
     const payload = {
       paths,
@@ -2665,12 +2613,16 @@ async function tasksCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Task: ${task.id}`));
+    console.log(section(`Automation: ${task.id}`));
+    console.log(keyValue('Title', task.title));
     console.log(keyValue('Schedule', formatTaskSchedule(task)));
     console.log(keyValue('Enabled', task.enabled ? 'yes' : 'no'));
     console.log(keyValue('Profile', task.profile));
-    console.log(keyValue('File', task.filePath));
-    console.log(keyValue('Task directory', paths.taskDir));
+    console.log(keyValue('Automation DB', paths.dbPath));
+    console.log(keyValue('Legacy task directory', paths.taskDir));
+    if (task.legacyFilePath) {
+      console.log(keyValue('Imported from', task.legacyFilePath));
+    }
 
     if (task.modelRef) {
       console.log(keyValue('Model', task.modelRef));
@@ -2784,12 +2736,12 @@ async function tasksCommand(args: string[]): Promise<number> {
       return invalidCount > 0 ? 1 : 0;
     }
 
-    console.log(section('Task validation'));
+    console.log(section('Legacy task validation'));
     console.log(keyValue('Task directory', paths.taskDir));
     console.log(keyValue('Files checked', results.length));
 
     if (results.length === 0) {
-      console.log(dim('No task files found.'));
+      console.log(dim('No legacy task files found.'));
       return 0;
     }
 
@@ -2841,12 +2793,10 @@ async function tasksCommand(args: string[]): Promise<number> {
 
     const taskId = positional[0] as string;
     const config = loadDaemonConfig();
-    const paths = resolveTaskRuntimePaths(config);
-    const { tasks } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
-    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+    const { paths, tasks, runtimeState } = loadTaskCatalog(config);
     const task = resolveTaskById(tasks, taskId);
 
-    let logPath = runtimeState[task.key]?.lastLogPath;
+    let logPath = runtimeState[task.id]?.lastLogPath;
 
     if (!logPath || !existsSync(logPath)) {
       logPath = findLatestTaskLogFile(paths.runsRoot, task.id);

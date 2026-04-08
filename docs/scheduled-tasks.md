@@ -164,6 +164,10 @@ See [Web UI Guide](./web-ui.md).
 
 ## Managing tasks from the CLI
 
+`pa tasks` now reads from the SQLite automation store.
+
+Legacy `*.task.md` files are still supported as import sources, and `pa tasks validate` remains the way to check those files before import.
+
 ### List tasks
 
 ```bash
@@ -179,7 +183,7 @@ pa tasks show <id>
 pa tasks show <id> --json
 ```
 
-### Validate task files
+### Validate legacy task files
 
 ```bash
 pa tasks validate
@@ -228,11 +232,11 @@ pa tasks validate --all
 
 ## Recommended workflow
 
-1. create or update the `*.task.md` file
-2. validate it with `pa tasks validate --all`
-3. check daemon status with `pa daemon status`
-4. inspect runs with `pa tasks show <id>` and `pa tasks logs <id>`
-5. look for the resulting activity in the inbox if the task is meant to surface attention
+1. create or edit automations in the web UI when possible
+2. use `pa tasks list`, `pa tasks show <id>`, and `pa tasks logs <id>` to inspect SQLite-backed automations from the CLI
+3. if you still manage legacy `*.task.md` files, validate them with `pa tasks validate --all` before expecting them to import cleanly
+4. check daemon status with `pa daemon status`
+5. look for the resulting activity in the inbox if the automation is meant to surface attention
 
 ## Related docs
 
