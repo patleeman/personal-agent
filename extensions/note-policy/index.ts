@@ -1,5 +1,5 @@
-import { basename, join, relative } from 'node:path';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { existsSync } from 'node:fs';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   getDurableNotesDir,
@@ -7,6 +7,7 @@ import {
   getDurableTasksDir,
   getProfilesRoot,
   getVaultRoot,
+  loadUnifiedNodes,
 } from '@personal-agent/core';
 import {
   renderPromptCatalogTemplate,
@@ -34,11 +35,13 @@ export interface NoteProfileContext {
   activeNotesDir?: string;
 }
 
-interface NoteDefinition {
+interface ResourceDefinition {
   name: string;
   description: string;
   path: string;
 }
+
+type LoadedNode = ReturnType<typeof loadUnifiedNodes>['nodes'][number];
 
 function sanitizeProfileName(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
@@ -71,45 +74,33 @@ function toDisplayPath(cwd: string, path: string): string {
   return displayed && !displayed.startsWith('..') ? displayed.replace(/\\/g, '/') : path;
 }
 
-function extractFrontmatterBlock(content: string): string | null {
-  return content.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/)?.[1] ?? null;
+function listAvailableNotes(nodes: LoadedNode[]): ResourceDefinition[] {
+  return nodes
+    .filter((node) => node.kinds.includes('note'))
+    .map((node) => ({
+      name: node.id,
+      description: (node.summary || node.description || '').trim(),
+      path: node.filePath,
+    }))
+    .filter((node) => node.description.length > 0)
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function parseMarkdownFrontmatter(content: string): Record<string, string> {
-  const body = extractFrontmatterBlock(content);
-  if (!body) return {};
-  const output: Record<string, string> = {};
-  for (const line of body.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const sep = trimmed.indexOf(':');
-    if (sep <= 0) continue;
-    const key = trimmed.slice(0, sep).trim().toLowerCase();
-    const value = trimmed.slice(sep + 1).trim().replace(/^['"]|['"]$/g, '');
-    if (key && value) output[key] = value;
-  }
-  return output;
-}
-
-function listAvailableNotes(notesDir: string | undefined): NoteDefinition[] {
-  if (!notesDir || !existsSync(notesDir)) return [];
-  const discovered: NoteDefinition[] = [];
-  for (const entry of readdirSync(notesDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const noteFile = join(notesDir, entry.name, 'INDEX.md');
-    if (!existsSync(noteFile)) continue;
-    try {
-      const content = readFileSync(noteFile, 'utf-8');
-      const frontmatter = parseMarkdownFrontmatter(content);
-      if ((frontmatter.kind ?? '').trim().toLowerCase() !== 'note') continue;
-      const name = (frontmatter.id ?? basename(entry.name)).trim();
-      const description = (frontmatter.summary ?? frontmatter.description ?? '').trim();
-      if (name && description) discovered.push({ name, description, path: noteFile });
-    } catch {
-      // Ignore malformed note nodes.
-    }
-  }
-  return discovered.sort((l, r) => l.name.localeCompare(r.name));
+function listAvailableSkills(activeProfile: string, nodes: LoadedNode[]): ResourceDefinition[] {
+  const normalizedProfile = activeProfile.trim().toLowerCase();
+  return nodes
+    .filter((node) => node.kinds.includes('skill'))
+    .filter((node) => node.profiles.length === 0 || node.profiles.some((value) => {
+      const normalizedValue = value.toLowerCase();
+      return normalizedValue === normalizedProfile || normalizedValue === 'shared';
+    }))
+    .map((node) => ({
+      name: node.id,
+      description: (node.summary || node.description || '').trim(),
+      path: node.filePath,
+    }))
+    .filter((node) => node.description.length > 0)
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
@@ -142,6 +133,7 @@ export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
 function buildNoteTemplateVariables(cwd: string, context: ReturnType<typeof resolveNoteProfileContext>) {
   const notesDir = context.activeNotesDir;
   const notesAvailable = !!(notesDir && existsSync(notesDir));
+  const { nodes } = loadUnifiedNodes();
 
   return {
     active_profile: context.activeProfile,
@@ -158,7 +150,14 @@ function buildNoteTemplateVariables(cwd: string, context: ReturnType<typeof reso
     notes_dir: notesDir ? toDisplayPath(cwd, notesDir) : 'unavailable',
     docs_dir: toDisplayPath(cwd, join(context.repoRoot, 'docs')),
     docs_index: toDisplayPath(cwd, join(context.repoRoot, 'docs', 'README.md')),
-    available_notes: listAvailableNotes(notesDir),
+    available_skills: listAvailableSkills(context.activeProfile, nodes).map((skill) => ({
+      ...skill,
+      path: toDisplayPath(cwd, skill.path),
+    })),
+    available_notes: listAvailableNotes(nodes).map((note) => ({
+      ...note,
+      path: toDisplayPath(cwd, note.path),
+    })),
   };
 }
 

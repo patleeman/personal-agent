@@ -76,6 +76,18 @@ Use the active-profile `AGENTS.md`, skills, and shared note nodes as the durable
 - Index: {{ docs_index }}
 - Follow markdown cross-references before implementing.
 
+{% if available_skills %}
+## Available Skills
+<available_skills>
+{% for skill in available_skills %}
+  <skill id="{{ skill.name }}" location="{{ skill.path }}">
+    {{ skill.description }}
+  </skill>
+{% endfor %}
+</available_skills>
+Read the matching SKILL.md when the user refers to that workflow, asks to use a named skill, or the task clearly matches it.
+{% endif %}
+
 {% if notes_available %}
 ## Shared Notes & Available Nodes
 - Shared notes dir: {{ notes_dir }}

@@ -27,6 +27,25 @@ status: active
 `);
 }
 
+function writeSkillNode(skillsDir: string, skillId: string, description: string, profiles: string[] = []): void {
+  mkdirSync(join(skillsDir, skillId), { recursive: true });
+  const profilesBlock = profiles.length > 0
+    ? `profiles:\n${profiles.map((profile) => `  - ${profile}`).join('\n')}\n`
+    : '';
+  writeFileSync(join(skillsDir, skillId, 'SKILL.md'), `---
+name: ${skillId}
+description: ${description}
+${profilesBlock}metadata:
+  id: ${skillId}
+  title: ${skillId}
+  summary: ${description}
+  status: active
+---
+
+# ${skillId}
+`);
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
@@ -51,6 +70,9 @@ describe('note policy extension', () => {
     mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
     mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
     writeNoteNode(join(stateRoot, 'vault', 'notes'), 'runpod', 'Provisioning notes for short-lived GPU pods.');
+    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'shared-skill', 'Shared skill available to every profile.', ['shared']);
+    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'datadog-skill', 'Datadog-only skill available in the datadog profile.', ['datadog']);
+    writeSkillNode(join(stateRoot, 'vault', '_skills'), 'default-skill', 'Default-only skill that should not appear for datadog.', ['default']);
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -76,6 +98,11 @@ describe('note policy extension', () => {
     expect(prompt).toContain('- vault_root: vault');
     expect(prompt).toContain('- Shared notes dir: vault/notes');
     expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
+    expect(prompt).toContain('<available_skills>');
+    expect(prompt).toContain('<skill id="shared-skill"');
+    expect(prompt).toContain('<skill id="datadog-skill"');
+    expect(prompt).not.toContain('<skill id="default-skill"');
+    expect(prompt).toContain('vault/_skills/shared-skill/SKILL.md');
     expect(prompt).toContain('<available_notes>');
     expect(prompt).toContain('<note id="runpod"');
     expect(prompt).toContain('vault/notes/runpod/INDEX.md');
