@@ -258,6 +258,8 @@ See [Tracked Pages](./projects.md) and [Artifacts and Rendered Outputs](./artifa
 
 The Automations page is the UI for daemon-managed scheduled prompts.
 
+It is a dedicated top-level page in the main nav rather than a Settings subpage, so the task list can use the full center pane while the detail rail stays on the right.
+
 Automations are still passive by default. If an automation is explicitly bound back to a conversation, the result can also surface later as an inbox notification and conversation wakeup.
 
 You can:
