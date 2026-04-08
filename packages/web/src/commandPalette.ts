@@ -37,7 +37,7 @@ export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, strin
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  tasks: 'Scheduled tasks',
+  tasks: 'Automations',
 };
 
 export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
@@ -45,7 +45,7 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'tasks', label: 'Scheduled' },
+  { value: 'tasks', label: 'Automations' },
 ];
 
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {

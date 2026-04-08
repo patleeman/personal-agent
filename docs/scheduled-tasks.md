@@ -24,19 +24,19 @@ Do not confuse scheduled tasks with:
 - **reminders** — those are conversation-bound wakeups with alert delivery
 - **durable background runs** — those are detached jobs launched on demand with `pa runs start`
 
-## Where task files live
+## Where automations live
 
-Recommended location:
+Canonical storage:
 
-- `~/.local/state/personal-agent/sync/_tasks/*.task.md`
+- `~/.local/state/personal-agent/daemon/runtime.db`
 
-Only files ending in `.task.md` are discovered automatically.
+Automation definitions and scheduler runtime state now live in the daemon SQLite database.
 
-If daemon config does not override the task directory, discovery defaults to the shared durable task directory and filters by each task file's `profile` frontmatter.
+Legacy `*.task.md` files under the daemon task directory are treated as import sources, not the primary record. If present, they are imported into SQLite and then the daemon/UI operate on the database copy.
 
-## What a task file looks like
+## Legacy task-file import format
 
-A scheduled task is Markdown with YAML frontmatter.
+Legacy scheduled-task files are Markdown with YAML frontmatter.
 
 ```md
 ---
@@ -53,6 +53,8 @@ Summarize yesterday's work and top priorities for today.
 
 The Markdown body is the prompt sent to Pi.
 
+New automations created from the web UI are stored directly in SQLite instead of writing `*.task.md` files.
+
 See the full example at [docs/examples/scheduled-task.task.md](./examples/scheduled-task.task.md).
 
 ## Required schedule fields
@@ -61,6 +63,17 @@ A task must define exactly one of:
 
 - `cron` — recurring schedule
 - `at` — one-time timestamp
+
+## Web UI automation fields
+
+The Automations page exposes the same core fields as Codex-style scheduled prompts:
+
+- title
+- prompt
+- working directory (`cwd`)
+- schedule (`cron` or one-time `at`)
+
+Model and timeout still exist internally, but the default UI flow is intentionally narrow.
 
 ## Frontmatter reference
 
@@ -137,15 +150,15 @@ It is **not** the same as a generic reminder. For direct human reminders, prefer
 
 ## Managing tasks from the web UI
 
-The Scheduled page lets you:
+The Automations page lets you:
 
-- inspect discovered tasks
-- create a new task from the UI
-- enable or disable a task
-- edit a task from the detail rail with a form
+- inspect discovered automations
+- create a new automation from the UI
+- enable or disable an automation
+- edit an automation from the detail rail with a focused form
 - adjust common recurring schedules with an interactive schedule builder or fall back to raw cron
-- run a task immediately
-- inspect task status visually
+- run an automation immediately
+- inspect automation status visually
 
 See [Web UI Guide](./web-ui.md).
 
@@ -187,10 +200,10 @@ Default daemon state root:
 
 - `~/.local/state/personal-agent/daemon`
 
-Useful files:
+Useful storage:
 
-- task state: `task-state.json`
-- run logs: `task-runs/<task-id>/...`
+- automation definitions + scheduler state: `runtime.db`
+- durable run logs/results: `runs/<run-id>/{output.log,result.json}`
 
 Useful status command:
 

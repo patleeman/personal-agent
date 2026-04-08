@@ -98,12 +98,26 @@ export type {
   ScannedDurableRun,
   ScannedDurableRunsSummary,
 } from './runs/store.js';
+export {
+  getAutomationDbPath,
+  listStoredAutomations,
+  getStoredAutomation,
+  createStoredAutomation,
+  updateStoredAutomation,
+  deleteStoredAutomation,
+  loadAutomationRuntimeStateMap,
+  loadAutomationSchedulerState,
+  saveAutomationRuntimeStateMap,
+  saveAutomationSchedulerState,
+  ensureLegacyTaskImports,
+} from './automation-store.js';
 export { parseTaskDefinition } from './modules/tasks-parser.js';
 export {
   surfaceReadyDeferredResume,
   buildDeferredResumeActivityId,
   buildDeferredResumeAlertId,
 } from './conversation-wakeups.js';
+export type { StoredAutomation, LegacyAutomationImportIssue, AutomationMutationInput, AutomationSchedulerState } from './automation-store.js';
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type {
   DaemonEvent,

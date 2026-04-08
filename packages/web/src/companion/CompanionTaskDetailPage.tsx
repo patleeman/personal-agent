@@ -105,7 +105,7 @@ export function CompanionTaskDetailPage() {
             </button>
           </div>
           <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Scheduled task</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">{task?.id ?? 'Task'}</h1>
+          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">{task?.title ?? task?.id ?? 'Task'}</h1>
           {task && status ? (
             <>
               <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-secondary">{task.prompt.trim() || 'No prompt body.'}</p>

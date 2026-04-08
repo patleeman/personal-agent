@@ -65,7 +65,7 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
 
   return (
     <ListLinkRow
-      to={`/scheduled/${task.id}`}
+      to={`/automations/${task.id}`}
       selected={isSelected}
       leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${statusDotClass(task)}`} />}
       trailing={(
@@ -91,7 +91,8 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
         </div>
       )}
     >
-      <p className="ui-row-title-mono">{task.id}</p>
+      <p className="ui-row-title">{task.title ?? task.id}</p>
+      <p className="ui-row-meta font-mono text-[11px] text-dim">{task.id}</p>
 
       {task.prompt && (
         <p
@@ -147,7 +148,7 @@ export function TasksPage() {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const isLoading = tasks === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
   const visibleError = tasks === null && sseStatus === 'offline'
-    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest scheduled tasks.'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest automations.'
     : refreshError;
 
   const refreshTasks = useCallback(async () => {
@@ -167,7 +168,7 @@ export function TasksPage() {
   const showingCreateForm = new URLSearchParams(location.search).get('new') === '1';
 
   function toggleCreateTask() {
-    navigate(showingCreateForm ? '/scheduled' : '/scheduled?new=1');
+    navigate(showingCreateForm ? '/automations' : '/automations?new=1');
   }
 
   return (
@@ -175,12 +176,12 @@ export function TasksPage() {
       <div className="flex flex-col h-full">
         <PageHeader actions={(
         <>
-          <ToolbarButton onClick={toggleCreateTask}>{showingCreateForm ? 'Close new task' : '+ New task'}</ToolbarButton>
+          <ToolbarButton onClick={toggleCreateTask}>{showingCreateForm ? 'Close new automation' : '+ New automation'}</ToolbarButton>
           <ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>
         </>
       )}>
         <PageHeading
-          title="Scheduled"
+          title="Automations"
           meta={
             tasks && (
               <>
@@ -197,17 +198,13 @@ export function TasksPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {isLoading && <LoadingState label="Loading scheduled tasks…" />}
-        {visibleError && <ErrorState message={`Failed to load scheduled tasks: ${visibleError}`} />}
+        {isLoading && <LoadingState label="Loading automations…" />}
+        {visibleError && <ErrorState message={`Failed to load automations: ${visibleError}`} />}
         {!isLoading && !visibleError && tasks?.length === 0 && !showingCreateForm && (
           <EmptyState
-            title="No scheduled tasks."
-            body={
-              <>
-                Create a <code className="font-mono text-accent">*.task.md</code> file in your profile&apos;s <code className="font-mono text-secondary">agent/tasks</code> folder, or use the new-task form.
-              </>
-            }
-            action={<ToolbarButton onClick={toggleCreateTask}>Create task</ToolbarButton>}
+            title="No automations yet."
+            body="Create an automation with a title, prompt, working directory, and schedule."
+            action={<ToolbarButton onClick={toggleCreateTask}>Create automation</ToolbarButton>}
           />
         )}
         {!isLoading && tasks && (

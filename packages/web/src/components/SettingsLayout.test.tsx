@@ -39,12 +39,12 @@ describe('SettingsSplitLayout', () => {
 
     expect(html).toContain('Settings');
     expect(html).toContain('Runs');
-    expect(html).toContain('Scheduled tasks');
+    expect(html).toContain('Automations');
     expect(html).toContain('Tools');
     expect(html).toContain('Instructions');
     expect(html).toContain('href="/settings"');
     expect(html).toContain('href="/runs"');
-    expect(html).toContain('href="/scheduled"');
+    expect(html).toContain('href="/automations"');
     expect(html).not.toContain('href="/settings?page=providers"');
     expect(html).not.toContain('href="/settings?page=system"');
   });

@@ -56,22 +56,22 @@ describe('parseRequest', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_6',
       type: 'runs.startTask',
-      filePath: '/tmp/task.task.md',
+      taskId: 'daily-status',
     }));
 
     expect(parsed).toEqual({
       id: 'req_6',
       type: 'runs.startTask',
-      filePath: '/tmp/task.task.md',
+      taskId: 'daily-status',
     });
   });
 
-  it('rejects runs.startTask request without filePath', () => {
+  it('rejects runs.startTask request without taskId', () => {
     expect(() => parseRequest(JSON.stringify({
       id: 'req_7',
       type: 'runs.startTask',
-      filePath: '',
-    }))).toThrow('runs.startTask filePath must be a non-empty string');
+      taskId: '',
+    }))).toThrow('runs.startTask taskId must be a non-empty string');
   });
 
   it('parses runs.startBackground request', () => {

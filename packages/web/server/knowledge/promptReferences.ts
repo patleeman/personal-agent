@@ -3,12 +3,15 @@ import { getProfilesRoot, loadUnifiedNodes, type UnifiedNodeRecord } from '@pers
 
 export interface PromptReferenceTask {
   id: string;
-  filePath: string;
+  title?: string;
+  filePath?: string;
   prompt: string;
   enabled: boolean;
   running: boolean;
   cron?: string;
+  at?: string;
   model?: string;
+  cwd?: string;
   lastStatus?: string;
 }
 
@@ -256,11 +259,19 @@ export function buildReferencedTasksContext(tasks: PromptReferenceTask[], repoRo
     ...tasks.map((task) => {
       const lines = [
         `- @${task.id}`,
-        `  path: ${toDisplayPath(repoRoot, task.filePath)}`,
       ];
 
+      if (task.title) {
+        lines.push(`  title: ${task.title}`);
+      }
+      if (task.filePath) {
+        lines.push(`  path: ${toDisplayPath(repoRoot, task.filePath)}`);
+      }
       if (task.cron) {
         lines.push(`  cron: ${task.cron}`);
+      }
+      if (task.at) {
+        lines.push(`  at: ${task.at}`);
       }
       if (task.model) {
         lines.push(`  model: ${task.model}`);

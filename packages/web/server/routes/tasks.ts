@@ -1,24 +1,25 @@
 /**
  * Scheduled task routes
- * 
+ *
  * Handles CRUD operations and execution for scheduled tasks.
  */
 
 import type { Express } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import {
-  buildScheduledTaskMarkdown,
-  loadScheduledTasksForProfile,
-  readScheduledTaskFileMetadata,
-  resolveScheduledTaskForProfile,
-  taskDirForProfile,
-  validateScheduledTaskDefinition,
-} from '../automation/scheduledTasks.js';
-import { startScheduledTaskRun } from '@personal-agent/daemon';
+  createStoredAutomation,
+  startScheduledTaskRun,
+  updateStoredAutomation,
+  type StoredAutomation,
+} from '@personal-agent/daemon';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { findTaskForProfile, readRequiredTaskId } from '../automation/taskService.js';
+import { findTaskForProfile } from '../automation/taskService.js';
+import {
+  loadScheduledTasksForProfile,
+  toScheduledTaskMetadata,
+  type TaskRuntimeEntry,
+} from '../automation/scheduledTasks.js';
 
 /**
  * Gets the current profile getter for use in route handlers.
@@ -47,7 +48,7 @@ export function registerCompanionTaskRunRoutes(
         res.status(400).json({ error: 'Task has no prompt body' });
         return;
       }
-      const result = await startScheduledTaskRun(resolvedTask.task.filePath);
+      const result = await startScheduledTaskRun(resolvedTask.task.id);
       if (!result.accepted) {
         res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
         return;
@@ -60,12 +61,16 @@ export function registerCompanionTaskRunRoutes(
   });
 }
 
-function buildTaskDetailResponse(task: { filePath: string }, runtime?: { running?: boolean; lastStatus?: string; lastRunAt?: string; lastSuccessAt?: string; lastAttemptCount?: number; lastLogPath?: string }) {
-  const metadata = readScheduledTaskFileMetadata(task.filePath);
+function buildTaskDetailResponse(
+  task: StoredAutomation,
+  runtime?: TaskRuntimeEntry,
+) {
+  const metadata = toScheduledTaskMetadata(task);
   return {
     ...(runtime ?? {}),
     id: metadata.id,
-    filePath: task.filePath,
+    title: metadata.title,
+    filePath: task.legacyFilePath,
     scheduleType: metadata.scheduleType,
     running: runtime?.running ?? false,
     enabled: metadata.enabled,
@@ -75,7 +80,8 @@ function buildTaskDetailResponse(task: { filePath: string }, runtime?: { running
     cwd: metadata.cwd,
     timeoutSeconds: metadata.timeoutSeconds,
     prompt: metadata.promptBody,
-    fileContent: metadata.fileContent,
+    lastStatus: runtime?.lastStatus,
+    lastRunAt: runtime?.lastRunAt,
   };
 }
 
@@ -90,16 +96,16 @@ export function registerTaskRoutes(
   router.get('/api/tasks', (_req, res) => {
     try {
       const loaded = loadScheduledTasksForProfile(getCurrentProfileFn());
-      const runtimeByFilePath = new Map(loaded.runtimeEntries.map((task) => [task.filePath, task]));
       const runtimeById = new Map(
         loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
       );
 
       const tasks = loaded.tasks.map((task) => {
-        const runtime = loaded.runtimeState[task.key] ?? runtimeByFilePath.get(task.filePath) ?? runtimeById.get(task.id);
+        const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
         return {
           id: task.id,
-          filePath: task.filePath,
+          title: task.title,
+          filePath: task.legacyFilePath,
           scheduleType: task.schedule.type,
           running: runtime?.running ?? false,
           enabled: task.enabled,
@@ -107,6 +113,7 @@ export function registerTaskRoutes(
           at: task.schedule.type === 'at' ? task.schedule.at : undefined,
           prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
           model: task.modelRef,
+          cwd: task.cwd,
           lastStatus: runtime?.lastStatus,
           lastRunAt: runtime?.lastRunAt,
           lastSuccessAt: runtime?.lastSuccessAt,
@@ -127,7 +134,7 @@ export function registerTaskRoutes(
   router.post('/api/tasks', (req, res) => {
     try {
       const body = req.body as {
-        taskId?: string;
+        title?: string;
         enabled?: boolean;
         cron?: string | null;
         at?: string | null;
@@ -137,37 +144,24 @@ export function registerTaskRoutes(
         prompt?: string;
       };
       const profile = getCurrentProfileFn();
-      const taskId = readRequiredTaskId(body.taskId);
-      const filePath = join(taskDirForProfile(profile), `${taskId}.task.md`);
-      const loaded = loadScheduledTasksForProfile(profile);
-
-      if (existsSync(filePath) || loaded.tasks.some((task) => task.id === taskId)) {
-        res.status(409).json({ error: `Task already exists: ${taskId}` });
-        return;
-      }
-
-      const content = buildScheduledTaskMarkdown({
-        taskId,
+      const task = createStoredAutomation({
         profile,
+        title: body.title ?? '',
         enabled: body.enabled ?? true,
         cron: body.cron,
         at: body.at,
-        model: body.model,
+        modelRef: body.model,
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt ?? '',
       });
 
-      validateScheduledTaskDefinition(filePath, content);
-
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, content, 'utf-8');
       invalidateAppTopics('tasks');
 
-      const savedTask = resolveScheduledTaskForProfile(profile, taskId);
+      const savedTask = findTaskForProfile(profile, task.id);
       res.status(201).json({
         ok: true,
-        task: buildTaskDetailResponse(savedTask.task, savedTask.runtime),
+        task: buildTaskDetailResponse(savedTask?.task ?? task, savedTask?.runtime),
       });
     } catch (err) {
       logError('request handler error', {
@@ -181,6 +175,7 @@ export function registerTaskRoutes(
   router.patch('/api/tasks/:id', (req, res) => {
     try {
       const body = req.body as {
+        title?: string;
         enabled?: boolean;
         cron?: string | null;
         at?: string | null;
@@ -192,45 +187,21 @@ export function registerTaskRoutes(
       const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
-      const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
-      const enabled = body.enabled;
-      const toggleOnly = requestedKeys.length === 1 && requestedKeys[0] === 'enabled' && typeof enabled === 'boolean';
-
-      if (toggleOnly) {
-        let content = readFileSync(resolvedTask.task.filePath, 'utf-8');
-        if (/enabled:\s*(true|false)/.test(content)) {
-          content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
-        } else {
-          content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
-        }
-        writeFileSync(resolvedTask.task.filePath, content, 'utf-8');
-        invalidateAppTopics('tasks');
-
-        const updatedTask = resolveScheduledTaskForProfile(getCurrentProfileFn(), resolvedTask.task.id);
-        res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
-        return;
-      }
-
-      const schedule = resolvedTask.task.schedule;
-      const nextContent = buildScheduledTaskMarkdown({
-        taskId: resolvedTask.task.id,
-        profile: resolvedTask.task.profile,
-        enabled: body.enabled ?? resolvedTask.task.enabled,
-        cron: body.cron !== undefined ? body.cron : schedule.type === 'cron' ? schedule.expression : undefined,
-        at: body.at !== undefined ? body.at : schedule.type === 'at' ? schedule.at : undefined,
-        model: body.model !== undefined ? body.model : resolvedTask.task.modelRef,
-        cwd: body.cwd !== undefined ? body.cwd : resolvedTask.task.cwd,
-        timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : resolvedTask.task.timeoutSeconds,
-        prompt: body.prompt ?? resolvedTask.task.prompt,
+      const updatedTask = updateStoredAutomation(resolvedTask.task.id, {
+        title: body.title,
+        enabled: body.enabled,
+        cron: body.cron,
+        at: body.at,
+        modelRef: body.model,
+        cwd: body.cwd,
+        timeoutSeconds: body.timeoutSeconds,
+        prompt: body.prompt,
       });
 
-      validateScheduledTaskDefinition(resolvedTask.task.filePath, nextContent);
-
-      writeFileSync(resolvedTask.task.filePath, nextContent, 'utf-8');
       invalidateAppTopics('tasks');
 
-      const updatedTask = resolveScheduledTaskForProfile(getCurrentProfileFn(), resolvedTask.task.id);
-      res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
+      const refreshedTask = findTaskForProfile(getCurrentProfileFn(), updatedTask.id);
+      res.json({ ok: true, task: buildTaskDetailResponse(refreshedTask?.task ?? updatedTask, refreshedTask?.runtime) });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -243,7 +214,10 @@ export function registerTaskRoutes(
   router.get('/api/tasks/:id/log', (req, res) => {
     try {
       const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
-      if (!resolvedTask?.runtime?.lastLogPath || !existsSync(resolvedTask.runtime.lastLogPath)) {
+      if (!resolvedTask?.runtime?.lastLogPath) {
+        res.status(404).json({ error: 'No log available' }); return;
+      }
+      if (!existsSync(resolvedTask.runtime.lastLogPath)) {
         res.status(404).json({ error: 'No log available' }); return;
       }
       const log = readFileSync(resolvedTask.runtime.lastLogPath, 'utf-8');
@@ -278,7 +252,7 @@ export function registerTaskRoutes(
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
       if (!resolvedTask.task.prompt.trim()) { res.status(400).json({ error: 'Task has no prompt body' }); return; }
 
-      const result = await startScheduledTaskRun(resolvedTask.task.filePath);
+      const result = await startScheduledTaskRun(resolvedTask.task.id);
       if (!result.accepted) {
         res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
         return;

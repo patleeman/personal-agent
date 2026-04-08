@@ -1,5 +1,3 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
@@ -8,15 +6,18 @@ import {
   readSessionConversationId,
   setTaskCallbackBinding,
 } from '@personal-agent/core';
-import { startScheduledTaskRun, type ParsedTaskDefinition } from '@personal-agent/daemon';
+import {
+  createStoredAutomation,
+  deleteStoredAutomation,
+  startScheduledTaskRun,
+  updateStoredAutomation,
+  type ParsedTaskDefinition,
+} from '@personal-agent/daemon';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { ensureDaemonAvailable } from '../automation/daemonToolUtils.js';
 import {
-  buildScheduledTaskMarkdown,
   loadScheduledTasksForProfile,
   resolveScheduledTaskForProfile,
-  taskDirForProfile,
-  validateScheduledTaskDefinition,
   type LoadedScheduledTasksForProfile,
   type TaskRuntimeEntry,
 } from '../automation/scheduledTasks.js';
@@ -75,7 +76,7 @@ function formatTaskList(loaded: LoadedScheduledTasksForProfile): string {
     const status = runtime?.running
       ? 'running'
       : runtime?.lastStatus ?? (task.enabled ? 'active' : 'disabled');
-    return `- @${task.id} [${status}] ${formatSchedule(task)} · ${task.filePath}`;
+    return `- @${task.id} [${status}] ${task.title ?? task.id} · ${formatSchedule(task)}`;
   });
 
   if (loaded.parseErrors.length > 0) {
@@ -92,12 +93,16 @@ function formatTaskDetail(
 ): string {
   const lines = [
     `Task @${task.id}`,
+    `title: ${task.title ?? task.id}`,
     `schedule: ${formatSchedule(task)}`,
     `enabled: ${task.enabled ? 'true' : 'false'}`,
     `profile: ${task.profile}`,
-    `file: ${task.filePath}`,
     `timeoutSeconds: ${task.timeoutSeconds}`,
   ];
+
+  if (!task.filePath.startsWith('/__automations__/')) {
+    lines.push(`legacyFile: ${task.filePath}`);
+  }
 
   if (task.modelRef) {
     lines.push(`model: ${task.modelRef}`);
@@ -127,10 +132,6 @@ function formatTaskDetail(
 
   lines.push('', task.prompt);
   return lines.join('\n');
-}
-
-function fileNameForTaskId(taskId: string): string {
-  return `${taskId}.task.md`;
 }
 
 export function createScheduledTaskAgentExtension(options: {
@@ -186,23 +187,29 @@ export function createScheduledTaskAgentExtension(options: {
               const loaded = loadScheduledTasksForProfile(profile);
               const taskId = readRequiredString(params.taskId, 'taskId');
               const existing = loaded.tasks.find((task) => task.id === taskId);
-              const schedule = existing?.schedule;
-              const content = buildScheduledTaskMarkdown({
-                taskId,
-                profile,
-                enabled: params.enabled ?? existing?.enabled ?? true,
-                cron: params.cron ?? (schedule?.type === 'cron' ? schedule.expression : undefined),
-                at: params.at ?? (schedule?.type === 'at' ? schedule.at : undefined),
-                model: params.model ?? existing?.modelRef,
-                cwd: params.cwd ?? existing?.cwd,
-                timeoutSeconds: params.timeoutSeconds ?? existing?.timeoutSeconds,
-                prompt: params.prompt ?? existing?.prompt ?? '',
-              });
-              const filePath = existing?.filePath ?? join(taskDirForProfile(profile), fileNameForTaskId(taskId));
-              validateScheduledTaskDefinition(filePath, content);
-
-              mkdirSync(dirname(filePath), { recursive: true });
-              writeFileSync(filePath, content);
+              const saved = existing
+                ? updateStoredAutomation(taskId, {
+                  title: taskId,
+                  enabled: params.enabled ?? existing.enabled,
+                  cron: params.cron ?? (existing.schedule.type === 'cron' ? existing.schedule.expression : undefined),
+                  at: params.at ?? (existing.schedule.type === 'at' ? existing.schedule.at : undefined),
+                  modelRef: params.model ?? existing.modelRef,
+                  cwd: params.cwd ?? existing.cwd,
+                  timeoutSeconds: params.timeoutSeconds ?? existing.timeoutSeconds,
+                  prompt: params.prompt ?? existing.prompt,
+                })
+                : createStoredAutomation({
+                  id: taskId,
+                  profile,
+                  title: taskId,
+                  enabled: params.enabled ?? true,
+                  cron: params.cron,
+                  at: params.at,
+                  modelRef: params.model,
+                  cwd: params.cwd,
+                  timeoutSeconds: params.timeoutSeconds,
+                  prompt: params.prompt ?? '',
+                });
 
               if (params.deliverResultToConversation === true) {
                 const sessionFile = ctx.sessionManager.getSessionFile();
@@ -235,15 +242,14 @@ export function createScheduledTaskAgentExtension(options: {
                   action: 'save',
                   profile,
                   taskId,
-                  filePath,
+                  filePath: saved.filePath,
                 },
               };
             }
 
             case 'delete': {
               const taskId = readRequiredString(params.taskId, 'taskId');
-              const { task } = resolveScheduledTaskForProfile(profile, taskId);
-              rmSync(task.filePath, { force: true });
+              deleteStoredAutomation(taskId, { profile });
               clearTaskCallbackBinding({ profile, taskId });
               invalidateAppTopics('tasks');
 
@@ -262,11 +268,7 @@ export function createScheduledTaskAgentExtension(options: {
               if (params.taskId) {
                 const taskId = readRequiredString(params.taskId, 'taskId');
                 const match = loaded.tasks.find((task) => task.id === taskId);
-                const parseError = loaded.parseErrors.find((entry) =>
-                  entry.filePath === join(taskDirForProfile(profile), fileNameForTaskId(taskId))
-                  || entry.filePath.endsWith(`/${fileNameForTaskId(taskId)}`)
-                  || entry.filePath.endsWith(`\\${fileNameForTaskId(taskId)}`),
-                );
+                const parseError = loaded.parseErrors.find((entry) => entry.filePath.includes(taskId));
 
                 if (!match && !parseError) {
                   throw new Error(`Task not found: ${taskId}`);
@@ -313,7 +315,7 @@ export function createScheduledTaskAgentExtension(options: {
               const taskId = readRequiredString(params.taskId, 'taskId');
               const { task } = resolveScheduledTaskForProfile(profile, taskId);
               await ensureDaemonAvailable();
-              const result = await startScheduledTaskRun(task.filePath);
+              const result = await startScheduledTaskRun(task.id);
               if (!result.accepted) {
                 throw new Error(result.reason ?? `Could not start scheduled task @${taskId}.`);
               }

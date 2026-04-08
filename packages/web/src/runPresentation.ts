@@ -449,8 +449,10 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
     const taskId = run.manifest?.source?.id ?? readSpec(run, 'taskId');
     const task = taskById(lookups, taskId);
-    const title = excerpt(task?.prompt) ?? taskId ?? run.runId;
-    const summary = taskId ? `Scheduled task · ${taskId}` : 'Scheduled task';
+    const title = task?.title ?? excerpt(task?.prompt) ?? taskId ?? run.runId;
+    const summary = task?.title && taskId && task.title !== taskId
+      ? `Scheduled task · ${task.title}`
+      : taskId ? `Scheduled task · ${taskId}` : 'Scheduled task';
     return { title, summary };
   }
 
@@ -522,9 +524,11 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
       connections.push({
         key: `task:${taskId}`,
         label: 'Scheduled task',
-        value: taskId,
-        to: `/scheduled/${encodeURIComponent(taskId)}`,
-        detail: excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath,
+        value: task?.title ?? taskId,
+        to: `/automations/${encodeURIComponent(taskId)}`,
+        detail: task?.title && task.title !== taskId
+          ? taskId
+          : excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath,
       });
     }
   }
@@ -582,7 +586,7 @@ export function getRunPrimaryActionLabel(connection: RunConnection | undefined):
   }
 
   if (connection.label === 'Scheduled task') {
-    return 'Open task';
+    return 'Open automation';
   }
 
   if (connection.label.startsWith('Conversation')) {

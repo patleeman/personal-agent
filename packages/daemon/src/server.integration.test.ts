@@ -283,7 +283,7 @@ describe('daemon IPC integration', () => {
     const response = await sendRequest(socketPath, {
       id: `req_${randomUUID()}`,
       type: 'runs.startTask',
-      filePath: '/tmp/run-now.task.md',
+      taskId: 'run-now',
     });
 
     expect(response.ok).toBe(true);

@@ -1,9 +1,10 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from './config.js';
+import { loadAutomationRuntimeStateMap } from './automation-store.js';
 import { resolveDaemonPaths } from './paths.js';
 import { resolveDurableRunsRoot, scanDurableRun } from './runs/store.js';
 import type { TaskRunRequest, TaskRunResult } from './modules/tasks-runner.js';
@@ -161,7 +162,7 @@ Recover me after daemon restart
     const daemon1 = new server.PersonalAgentDaemon(config);
     await daemon1.start();
 
-    const firstRun = await client.startScheduledTaskRun(taskPath, config);
+    const firstRun = await client.startScheduledTaskRun('recover-me', config);
     expect(firstRun).toMatchObject({
       accepted: true,
       runId: expect.any(String),
@@ -181,10 +182,8 @@ Recover me after daemon restart
       }),
     });
 
-    const interruptedTaskState = JSON.parse(readFileSync(join(daemonPaths.root, 'task-state.json'), 'utf-8')) as {
-      tasks: Record<string, { activeRunId?: string; lastRunId?: string; lastStatus?: string }>;
-    };
-    expect(interruptedTaskState.tasks[taskPath]).toMatchObject({
+    const interruptedTaskState = loadAutomationRuntimeStateMap({ dbPath: join(daemonPaths.root, 'runtime.db') });
+    expect(interruptedTaskState['recover-me']).toMatchObject({
       activeRunId: firstRun.runId,
       lastRunId: firstRun.runId,
       lastStatus: 'skipped',
@@ -235,32 +234,18 @@ Recover me after daemon restart
     });
 
     await waitForCondition(() => {
-      const recoveredTaskState = JSON.parse(readFileSync(join(daemonPaths.root, 'task-state.json'), 'utf-8')) as {
-        tasks: Record<string, {
-          activeRunId?: string;
-          lastRunId?: string;
-          oneTimeResolvedStatus?: string;
-          lastStatus?: string;
-        }>;
-      };
-      return recoveredTaskState.tasks[taskPath]?.activeRunId === undefined
-        && recoveredTaskState.tasks[taskPath]?.lastRunId === recoveredRunId
-        && recoveredTaskState.tasks[taskPath]?.oneTimeResolvedStatus === 'success'
-        && recoveredTaskState.tasks[taskPath]?.lastStatus === 'success';
+      const recoveredTaskState = loadAutomationRuntimeStateMap({ dbPath: join(daemonPaths.root, 'runtime.db') });
+      return recoveredTaskState['recover-me']?.activeRunId === undefined
+        && recoveredTaskState['recover-me']?.lastRunId === recoveredRunId
+        && recoveredTaskState['recover-me']?.oneTimeResolvedStatus === 'success'
+        && recoveredTaskState['recover-me']?.lastStatus === 'success';
     });
 
-    const recoveredTaskState = JSON.parse(readFileSync(join(daemonPaths.root, 'task-state.json'), 'utf-8')) as {
-      tasks: Record<string, {
-        activeRunId?: string;
-        lastRunId?: string;
-        oneTimeResolvedStatus?: string;
-        lastStatus?: string;
-      }>;
-    };
-    expect(recoveredTaskState.tasks[taskPath]?.activeRunId).toBeUndefined();
-    expect(recoveredTaskState.tasks[taskPath]?.lastRunId).toBe(recoveredRunId);
-    expect(recoveredTaskState.tasks[taskPath]?.oneTimeResolvedStatus).toBe('success');
-    expect(recoveredTaskState.tasks[taskPath]?.lastStatus).toBe('success');
+    const recoveredTaskState = loadAutomationRuntimeStateMap({ dbPath: join(daemonPaths.root, 'runtime.db') });
+    expect(recoveredTaskState['recover-me']?.activeRunId).toBeUndefined();
+    expect(recoveredTaskState['recover-me']?.lastRunId).toBe(recoveredRunId);
+    expect(recoveredTaskState['recover-me']?.oneTimeResolvedStatus).toBe('success');
+    expect(recoveredTaskState['recover-me']?.lastStatus).toBe('success');
 
     await daemon2.stop();
   });

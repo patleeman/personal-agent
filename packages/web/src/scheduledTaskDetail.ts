@@ -15,11 +15,12 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
 
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string'
+    && isOptionalString(record.title)
     && typeof record.running === 'boolean'
     && typeof record.enabled === 'boolean'
     && typeof record.scheduleType === 'string'
     && typeof record.prompt === 'string'
-    && typeof record.fileContent === 'string'
+    && isOptionalString(record.filePath)
     && isOptionalString(record.cron)
     && isOptionalString(record.at)
     && isOptionalString(record.model)
@@ -29,6 +30,6 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.lastRunAt);
 }
 
-export function getScheduledTaskBody(fileContent: string): string {
-  return fileContent.replace(/^---[\s\S]*?---\n?/, '').trim();
+export function getScheduledTaskBody(prompt: string): string {
+  return prompt.trim();
 }

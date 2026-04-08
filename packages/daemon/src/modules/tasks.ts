@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
@@ -14,6 +14,16 @@ import {
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
 import {
+  deleteStoredAutomation,
+  ensureLegacyTaskImports,
+  getStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
+  loadAutomationSchedulerState,
+  saveAutomationRuntimeStateMap,
+  saveAutomationSchedulerState,
+} from '../automation-store.js';
+import {
   surfaceReadyDeferredResume,
 } from '../conversation-wakeups.js';
 import {
@@ -25,6 +35,7 @@ import {
   createInitialDurableRunStatus,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
+  resolveRuntimeDbPath,
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
@@ -33,20 +44,16 @@ import {
 import type { DaemonModule } from './types.js';
 import {
   cronMatches,
-  parseTaskDefinition,
   type ParsedCronExpression,
   type ParsedTaskDefinition,
 } from './tasks-parser.js';
 import {
   createEmptyTaskState,
-  loadTaskState,
-  saveTaskState,
   type TaskRuntimeState,
   type TaskStateFile,
 } from './tasks-store.js';
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 
-const TASK_FILE_SUFFIX = '.task.md';
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
 
 interface MissedTaskRunSummary {
@@ -247,9 +254,13 @@ function toMissedTaskActivityDetails(input: {
 }): string {
   const sections = [
     'Reason:\nDaemon was not running during the scheduled task window.',
+    `Task:\n${input.task.title ?? input.task.id}`,
     `Schedule:\n${formatTaskSchedule(input.task)}`,
-    `Task file:\n${input.task.filePath}`,
   ];
+
+  if (!input.task.filePath.startsWith('/__automations__/')) {
+    sections.push(`Legacy task file:\n${input.task.filePath}`);
+  }
 
   if (input.missedRuns.count === 1) {
     sections.push(`Missed run:\n${input.missedRuns.firstScheduledAt}`);
@@ -272,40 +283,6 @@ function toMissedTaskActivityDetails(input: {
   sections.push('Next step:\nRun the task manually if it is still needed.');
 
   return sections.join('\n\n');
-}
-
-function collectTaskFiles(rootDir: string): string[] {
-  if (!existsSync(rootDir)) {
-    return [];
-  }
-
-  const output: string[] = [];
-  const stack = [resolve(rootDir)];
-
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-    const entries = readdirSync(current, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = join(current, entry.name);
-
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-        continue;
-      }
-
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      if (entry.name.endsWith(TASK_FILE_SUFFIX)) {
-        output.push(fullPath);
-      }
-    }
-  }
-
-  output.sort();
-  return output;
 }
 
 function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition): TaskRuntimeState {
@@ -386,18 +363,19 @@ export function createTasksModule(
   const activeRuns = new Map<string, RunningTaskHandle>();
   let stopping = false;
   let tickInProgress = false;
-  let stateFile = '';
+  let runtimeDbPath = '';
   let durableRunsRoot = '';
   let moduleStartedAtMs = 0;
   let taskState = createEmptyTaskState();
 
   const persistState = (logger: { warn: (message: string) => void }): void => {
-    if (!stateFile) {
+    if (!runtimeDbPath) {
       return;
     }
 
     try {
-      saveTaskState(stateFile, taskState);
+      saveAutomationRuntimeStateMap(taskState.tasks, { dbPath: runtimeDbPath });
+      saveAutomationSchedulerState({ lastEvaluatedAt: taskState.lastEvaluatedAt }, { dbPath: runtimeDbPath });
     } catch (error) {
       const message = (error as Error).message;
       state.lastError = message;
@@ -636,7 +614,8 @@ export function createTasksModule(
       createdAt: startedAt,
       spec: {
         taskId: task.id,
-        filePath: task.filePath,
+        title: task.title ?? task.id,
+        filePath: task.filePath.startsWith('/__automations__/') ? undefined : task.filePath,
         profile: task.profile,
         scheduleType: task.schedule.type,
         schedule: formatTaskSchedule(task),
@@ -646,7 +625,7 @@ export function createTasksModule(
       source: {
         type: 'scheduled-task',
         id: task.id,
-        filePath: task.filePath,
+        ...(task.filePath.startsWith('/__automations__/') ? {} : { filePath: task.filePath }),
       },
     }));
 
@@ -980,24 +959,29 @@ export function createTasksModule(
     payload: Record<string, unknown>,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
   ): Promise<void> => {
-    const filePath = typeof payload.filePath === 'string' && payload.filePath.trim().length > 0
-      ? resolve(payload.filePath)
+    const taskId = typeof payload.taskId === 'string' && payload.taskId.trim().length > 0
+      ? payload.taskId.trim()
       : undefined;
     const runIdOverride = typeof payload.runId === 'string' && payload.runId.trim().length > 0
       ? payload.runId.trim()
       : undefined;
 
-    if (!filePath) {
-      context.logger.warn('ignoring requested task run without filePath');
+    if (!taskId) {
+      context.logger.warn('ignoring requested task run without taskId');
       return;
     }
 
     try {
-      const task = parseTaskDefinition({
-        filePath,
-        rawContent: readFileSync(filePath, 'utf-8'),
+      ensureLegacyTaskImports({
+        taskDir,
         defaultTimeoutSeconds,
+        dbPath: runtimeDbPath,
       });
+      const task = getStoredAutomation(taskId, { dbPath: runtimeDbPath });
+      if (!task) {
+        context.logger.warn(`ignoring requested task run for missing task id=${taskId}`);
+        return;
+      }
       const record = ensureTaskRecord(taskState, task);
 
       if (activeRuns.has(task.key)) {
@@ -1009,7 +993,7 @@ export function createTasksModule(
       startTaskRun(task, record, context, { runIdOverride });
       persistState(context.logger);
     } catch (error) {
-      context.logger.warn(`failed to start requested task run file=${filePath}: ${(error as Error).message}`);
+      context.logger.warn(`failed to start requested task run id=${taskId}: ${(error as Error).message}`);
     }
   };
 
@@ -1036,20 +1020,13 @@ export function createTasksModule(
   ): Promise<void> => {
     const recoveryTime = now();
     const recoveryIso = recoveryTime.toISOString();
-    const files = collectTaskFiles(taskDir);
+    ensureLegacyTaskImports({
+      taskDir,
+      defaultTimeoutSeconds,
+      dbPath: runtimeDbPath,
+    });
 
-    for (const filePath of files) {
-      let task: ParsedTaskDefinition;
-
-      try {
-        task = parseTaskDefinition({
-          filePath,
-          rawContent: readFileSync(filePath, 'utf-8'),
-          defaultTimeoutSeconds,
-        });
-      } catch {
-        continue;
-      }
+    for (const task of listStoredAutomations({ dbPath: runtimeDbPath })) {
 
       const record = ensureTaskRecord(taskState, task);
       if (!task.enabled || !record.activeRunId || activeRuns.has(task.key)) {
@@ -1115,10 +1092,7 @@ export function createTasksModule(
       }
 
       try {
-        if (existsSync(record.filePath)) {
-          rmSync(record.filePath, { force: true });
-        }
-
+        deleteStoredAutomation(record.id, { dbPath: runtimeDbPath });
         delete taskState.tasks[key];
         context.logger.info(`reaped resolved one-time task id=${record.id} status=${record.oneTimeResolvedStatus ?? 'unknown'}`);
       } catch (error) {
@@ -1148,29 +1122,20 @@ export function createTasksModule(
       state.lastTickAt = nowIso;
       state.lastError = undefined;
 
-      const files = collectTaskFiles(taskDir);
-      const parsedTasks: ParsedTaskDefinition[] = [];
-      const activeTaskKeys = new Set<string>();
-      let parseErrors = 0;
-
-      for (const filePath of files) {
-        try {
-          const content = readFileSync(filePath, 'utf-8');
-          const parsed = parseTaskDefinition({
-            filePath,
-            rawContent: content,
-            defaultTimeoutSeconds,
-          });
-          parsedTasks.push(parsed);
-          activeTaskKeys.add(parsed.key);
-        } catch (error) {
-          parseErrors += 1;
-          context.logger.warn(`invalid task file ${filePath}: ${(error as Error).message}`);
-        }
-      }
+      const importResult = ensureLegacyTaskImports({
+        taskDir,
+        defaultTimeoutSeconds,
+        dbPath: runtimeDbPath,
+      });
+      const parsedTasks = listStoredAutomations({ dbPath: runtimeDbPath });
+      const activeTaskKeys = new Set(parsedTasks.map((task) => task.key));
 
       state.knownTasks = parsedTasks.length;
-      state.parseErrors = parseErrors;
+      state.parseErrors = importResult.parseErrors.length;
+
+      for (const issue of importResult.parseErrors) {
+        context.logger.warn(`invalid task file ${issue.filePath}: ${issue.error}`);
+      }
 
       reconcileDeletedTaskState(activeTaskKeys);
 
@@ -1294,13 +1259,20 @@ export function createTasksModule(
 
     async start(context): Promise<void> {
       moduleStartedAtMs = now().getTime();
-      stateFile = join(context.paths.root, 'task-state.json');
+      runtimeDbPath = resolveRuntimeDbPath(context.paths.root);
       durableRunsRoot = resolveDurableRunsRoot(context.paths.root);
 
       mkdirSync(taskDir, { recursive: true, mode: 0o700 });
       mkdirSync(durableRunsRoot, { recursive: true, mode: 0o700 });
 
-      taskState = loadTaskState(stateFile, context.logger);
+      ensureLegacyTaskImports({
+        taskDir,
+        defaultTimeoutSeconds,
+        dbPath: runtimeDbPath,
+      });
+      taskState = createEmptyTaskState();
+      taskState.tasks = loadAutomationRuntimeStateMap({ dbPath: runtimeDbPath });
+      taskState.lastEvaluatedAt = loadAutomationSchedulerState({ dbPath: runtimeDbPath }).lastEvaluatedAt;
       state.runningTasks = 0;
 
       await recoverInterruptedTaskRuns(context);
@@ -1338,7 +1310,7 @@ export function createTasksModule(
     getStatus(): Record<string, unknown> {
       return {
         taskDir,
-        stateFile,
+        runtimeDbPath,
         runsRoot: durableRunsRoot,
         durableRunsRoot,
         knownTasks: state.knownTasks,

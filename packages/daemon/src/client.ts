@@ -176,12 +176,12 @@ export async function getDurableRun(runId: string, config?: DaemonConfig): Promi
   );
 }
 
-export async function startScheduledTaskRun(filePath: string, config?: DaemonConfig): Promise<StartScheduledTaskRunResult> {
+export async function startScheduledTaskRun(taskId: string, config?: DaemonConfig): Promise<StartScheduledTaskRunResult> {
   return sendRequest<StartScheduledTaskRunResult>(
     {
       id: `req_${randomUUID()}`,
       type: 'runs.startTask',
-      filePath,
+      taskId,
     },
     config,
   );

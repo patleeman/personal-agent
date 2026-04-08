@@ -38,6 +38,7 @@ export interface ParsedTaskDefinition {
   filePath: string;
   fileName: string;
   id: string;
+  title?: string;
   enabled: boolean;
   schedule: ParsedTaskSchedule;
   prompt: string;
@@ -387,6 +388,7 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
   }
 
   const enabled = readEnabled(section.attributes);
+  const title = readOptionalString(section.attributes, 'title');
 
   const cron = readOptionalString(section.attributes, 'cron');
   const at = readOptionalString(section.attributes, 'at');
@@ -441,6 +443,7 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     filePath: resolve(options.filePath),
     fileName,
     id,
+    title,
     enabled,
     schedule,
     prompt: section.body,

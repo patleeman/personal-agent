@@ -271,7 +271,12 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
   const stream = createWriteStream(logPath, { flags: 'a', encoding: 'utf-8' });
 
   writeLine(stream, `# task=${request.task.id}`);
-  writeLine(stream, `# file=${request.task.filePath}`);
+  if (request.task.title) {
+    writeLine(stream, `# title=${request.task.title}`);
+  }
+  if (!request.task.filePath.startsWith('/__automations__/')) {
+    writeLine(stream, `# file=${request.task.filePath}`);
+  }
   writeLine(stream, `# profile=${request.task.profile}`);
   writeLine(stream, `# attempt=${request.attempt}`);
   writeLine(stream, `# startedAt=${startedAt}`);

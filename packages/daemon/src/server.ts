@@ -504,7 +504,7 @@ export class PersonalAgentDaemon {
       this.respond(socket, {
         id: request.id,
         ok: true,
-        result: await this.startScheduledTaskRun(request.filePath),
+        result: await this.startScheduledTaskRun(request.taskId),
       });
       return;
     }
@@ -614,13 +614,13 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private async startScheduledTaskRun(filePath: string): Promise<StartScheduledTaskRunResult> {
+  private async startScheduledTaskRun(taskId: string): Promise<StartScheduledTaskRunResult> {
     const runId = `task-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const accepted = this.bus.publish(createDaemonEvent({
       type: 'tasks.run.requested',
       source: 'daemon:ipc',
       payload: {
-        filePath,
+        taskId,
         runId,
         requestedAt: new Date().toISOString(),
       },

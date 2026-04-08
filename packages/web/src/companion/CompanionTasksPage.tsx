@@ -61,8 +61,6 @@ export function CompanionTasksPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const sortedTasks = useMemo(() => sortTasks(tasks ?? []), [tasks]);
-  const runningCount = sortedTasks.filter((task) => task.running).length;
-  const failureCount = sortedTasks.filter((task) => task.lastStatus === 'failure').length;
   const isLoading = tasks === null && sseStatus !== 'offline';
 
   const refreshTasks = useCallback(async () => {
@@ -157,7 +155,7 @@ export function CompanionTasksPage() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
                             <Link to={buildCompanionTaskPath(task.id)} className="truncate text-[15px] font-medium leading-tight text-primary hover:text-accent">
-                              {task.id}
+                              {task.title ?? task.id}
                             </Link>
                             <p className="mt-1 text-[12px] leading-relaxed text-secondary">{previewTaskPrompt(task.prompt)}</p>
                             <p className="mt-2 break-words text-[11px] text-dim">

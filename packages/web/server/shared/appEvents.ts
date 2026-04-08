@@ -216,6 +216,8 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     tasks: [
       { path: tasksDir, kind: 'directory' },
       { path: options.taskStateFile, kind: 'file' },
+      { path: `${options.taskStateFile}-wal`, kind: 'file' },
+      { path: `${options.taskStateFile}-shm`, kind: 'file' },
     ],
     runs: [{ path: runsRoot, kind: 'directory' }],
     automation: [],

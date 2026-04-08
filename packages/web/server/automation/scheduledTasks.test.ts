@@ -45,7 +45,7 @@ describe('scheduledTasks', () => {
 
     expect(readScheduledTaskFileMetadata(filePath)).toEqual({
       id: 'demo',
-      fileContent: expect.any(String),
+      title: 'demo',
       enabled: false,
       scheduleType: 'cron',
       cron: '0 9 * * *',
@@ -106,7 +106,7 @@ describe('scheduledTasks', () => {
       expect.objectContaining({
         id: 'daily',
         filePath: validFilePath,
-        running: true,
+        running: false,
         lastStatus: 'success',
         lastAttemptCount: 2,
       }),
@@ -114,7 +114,7 @@ describe('scheduledTasks', () => {
 
     const resolved = resolveScheduledTaskForProfile('assistant', 'daily');
     expect(resolved.task.filePath).toBe(validFilePath);
-    expect(resolved.runtime).toEqual(expect.objectContaining({ running: true, lastStatus: 'success' }));
+    expect(resolved.runtime).toEqual(expect.objectContaining({ running: false, lastStatus: 'success' }));
   });
 
   it('filters repo-managed tasks by the current profile', () => {

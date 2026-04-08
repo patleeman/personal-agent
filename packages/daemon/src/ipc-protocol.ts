@@ -50,7 +50,7 @@ export interface GetDurableRunRequest {
 export interface StartScheduledTaskRunRequest {
   id: string;
   type: 'runs.startTask';
-  filePath: string;
+  taskId: string;
 }
 
 export interface StartBackgroundRunRequest {
@@ -315,7 +315,7 @@ export function parseRequest(raw: string): DaemonRequest {
     return {
       id: parsed.id,
       type: 'runs.startTask',
-      filePath: readRequiredString(parsed.filePath, 'runs.startTask filePath'),
+      taskId: readRequiredString(parsed.taskId, 'runs.startTask taskId'),
     };
   }
 

@@ -84,7 +84,7 @@ describe('runPresentation', () => {
         key: 'task:daily-report',
         label: 'Scheduled task',
         value: 'daily-report',
-        to: '/scheduled/daily-report',
+        to: '/automations/daily-report',
         detail: 'Summarize yesterday and today.',
       },
       {
@@ -226,9 +226,9 @@ describe('runPresentation', () => {
       }],
     })).toMatchObject({
       label: 'Scheduled task',
-      to: '/scheduled/daily-report',
+      to: '/automations/daily-report',
     });
-    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(scheduledRun))).toBe('Open task');
+    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(scheduledRun))).toBe('Open automation');
 
     const deferredRun = createRun({
       manifest: {

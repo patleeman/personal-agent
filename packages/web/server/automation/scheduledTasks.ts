@@ -1,11 +1,15 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { getDurableTasksDir } from '@personal-agent/core';
 import {
+  ensureLegacyTaskImports,
+  getAutomationDbPath,
+  getStoredAutomation,
+  listStoredAutomations,
+  loadAutomationRuntimeStateMap,
   loadDaemonConfig,
   parseTaskDefinition,
-  resolveDaemonPaths,
   type ParsedTaskDefinition,
+  type StoredAutomation,
 } from '@personal-agent/daemon';
 
 export interface TaskRuntimeEntry {
@@ -23,7 +27,7 @@ export interface TaskRuntimeEntry {
 
 export interface ScheduledTaskFileMetadata {
   id: string;
-  fileContent: string;
+  title: string;
   enabled: boolean;
   scheduleType: ParsedTaskDefinition['schedule']['type'];
   cron?: string;
@@ -43,7 +47,7 @@ export interface ScheduledTaskParseError {
 
 export interface LoadedScheduledTasksForProfile {
   taskDir: string;
-  tasks: ParsedTaskDefinition[];
+  tasks: StoredAutomation[];
   parseErrors: ScheduledTaskParseError[];
   runtimeState: Record<string, TaskRuntimeEntry>;
   runtimeEntries: TaskRuntimeEntry[];
@@ -71,11 +75,45 @@ function yamlString(value: string): string {
   return JSON.stringify(value);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+function toRuntimeEntries(): { runtimeState: Record<string, TaskRuntimeEntry>; runtimeEntries: TaskRuntimeEntry[] } {
+  const runtimeState = loadAutomationRuntimeStateMap({ dbPath: getAutomationDbPath() });
+  const entries = Object.values(runtimeState).map((record) => ({
+    id: record.id,
+    filePath: record.filePath,
+    scheduleType: record.scheduleType,
+    running: record.running,
+    lastStatus: record.lastStatus,
+    lastRunAt: record.lastRunAt,
+    lastSuccessAt: record.lastSuccessAt,
+    lastScheduledMinute: record.lastScheduledMinute,
+    lastAttemptCount: record.lastAttemptCount,
+    lastLogPath: record.lastLogPath,
+  }));
+
+  return {
+    runtimeState: Object.fromEntries(entries.flatMap((entry) => entry.id ? [[entry.id, entry] as const] : [])),
+    runtimeEntries: entries,
+  };
 }
 
-function readParsedTaskDefinition(filePath: string, rawContent: string): ParsedTaskDefinition {
+function hydrateMetadata(task: StoredAutomation): ScheduledTaskFileMetadata {
+  return {
+    id: task.id,
+    title: task.title,
+    enabled: task.enabled,
+    scheduleType: task.schedule.type,
+    cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
+    at: task.schedule.type === 'at' ? task.schedule.at : undefined,
+    model: task.modelRef,
+    profile: task.profile,
+    cwd: task.cwd,
+    timeoutSeconds: task.timeoutSeconds,
+    prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
+    promptBody: task.prompt,
+  };
+}
+
+export function validateScheduledTaskDefinition(filePath: string, rawContent: string): ParsedTaskDefinition {
   return parseTaskDefinition({
     filePath,
     rawContent,
@@ -83,16 +121,12 @@ function readParsedTaskDefinition(filePath: string, rawContent: string): ParsedT
   });
 }
 
-export function validateScheduledTaskDefinition(filePath: string, rawContent: string): ParsedTaskDefinition {
-  return readParsedTaskDefinition(filePath, rawContent);
-}
-
 export function getScheduledTaskStateFilePath(): string {
-  return join(resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root, 'task-state.json');
+  return getAutomationDbPath();
 }
 
 export function taskDirForProfile(_profile: string): string {
-  return getDurableTasksDir();
+  return loadDaemonConfig().modules.tasks.taskDir;
 }
 
 export function listScheduledTaskDefinitionFiles(taskDir: string): string[] {
@@ -113,7 +147,6 @@ export function listScheduledTaskDefinitionFiles(taskDir: string): string[] {
         stack.push(fullPath);
         continue;
       }
-
       if (entry.isFile() && entry.name.endsWith('.task.md')) {
         output.push(fullPath);
       }
@@ -125,41 +158,7 @@ export function listScheduledTaskDefinitionFiles(taskDir: string): string[] {
 }
 
 export function loadScheduledTaskRuntimeState(): Record<string, TaskRuntimeEntry> {
-  const stateFile = getScheduledTaskStateFilePath();
-  if (!existsSync(stateFile)) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(stateFile, 'utf-8')) as { tasks?: Record<string, unknown> };
-    if (!isRecord(parsed.tasks)) {
-      return {};
-    }
-
-    const output: Record<string, TaskRuntimeEntry> = {};
-    for (const [key, value] of Object.entries(parsed.tasks)) {
-      if (!isRecord(value) || typeof value.filePath !== 'string' || value.filePath.trim().length === 0) {
-        continue;
-      }
-
-      output[key] = {
-        id: typeof value.id === 'string' ? value.id : undefined,
-        filePath: value.filePath,
-        scheduleType: typeof value.scheduleType === 'string' ? value.scheduleType : undefined,
-        running: typeof value.running === 'boolean' ? value.running : undefined,
-        lastStatus: typeof value.lastStatus === 'string' ? value.lastStatus : undefined,
-        lastRunAt: typeof value.lastRunAt === 'string' ? value.lastRunAt : undefined,
-        lastSuccessAt: typeof value.lastSuccessAt === 'string' ? value.lastSuccessAt : undefined,
-        lastScheduledMinute: typeof value.lastScheduledMinute === 'string' ? value.lastScheduledMinute : undefined,
-        lastAttemptCount: typeof value.lastAttemptCount === 'number' ? value.lastAttemptCount : undefined,
-        lastLogPath: typeof value.lastLogPath === 'string' ? value.lastLogPath : undefined,
-      };
-    }
-
-    return output;
-  } catch {
-    return {};
-  }
+  return toRuntimeEntries().runtimeState;
 }
 
 export function inferTaskProfileFromFilePath(filePath: string): string | undefined {
@@ -170,11 +169,11 @@ export function inferTaskProfileFromFilePath(filePath: string): string | undefin
 
 export function readScheduledTaskFileMetadata(filePath: string): ScheduledTaskFileMetadata {
   const fileContent = readFileSync(filePath, 'utf-8');
-  const parsed = readParsedTaskDefinition(filePath, fileContent);
+  const parsed = validateScheduledTaskDefinition(filePath, fileContent);
 
   return {
     id: parsed.id,
-    fileContent,
+    title: parsed.title ?? parsed.id,
     enabled: parsed.enabled,
     scheduleType: parsed.schedule.type,
     cron: parsed.schedule.type === 'cron' ? parsed.schedule.expression : undefined,
@@ -189,43 +188,20 @@ export function readScheduledTaskFileMetadata(filePath: string): ScheduledTaskFi
 }
 
 export function loadScheduledTasksForProfile(profile: string): LoadedScheduledTasksForProfile {
+  const config = loadDaemonConfig();
   const taskDir = taskDirForProfile(profile);
-  const tasks: ParsedTaskDefinition[] = [];
-  const parseErrors: ScheduledTaskParseError[] = [];
-
-  for (const filePath of listScheduledTaskDefinitionFiles(taskDir)) {
-    try {
-      const parsed = readParsedTaskDefinition(filePath, readFileSync(filePath, 'utf-8'));
-      if (parsed.profile !== profile) {
-        continue;
-      }
-      tasks.push(parsed);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes(`profile`) || message.length > 0) {
-        parseErrors.push({
-          filePath,
-          error: message,
-        });
-      }
-    }
-  }
-
-  tasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
-
-  const runtimeState = loadScheduledTaskRuntimeState();
-  const runtimeEntries = Object.values(runtimeState)
-    .filter((task) => taskBelongsToProfile(task, profile))
-    .sort((left, right) => {
-      const leftId = left.id ?? '';
-      const rightId = right.id ?? '';
-      return leftId.localeCompare(rightId) || left.filePath.localeCompare(right.filePath);
-    });
+  const importResult = ensureLegacyTaskImports({
+    taskDir,
+    defaultTimeoutSeconds: config.modules.tasks.defaultTimeoutSeconds,
+    dbPath: getAutomationDbPath(config),
+  });
+  const tasks = listStoredAutomations({ profile, dbPath: getAutomationDbPath(config) });
+  const { runtimeState, runtimeEntries } = toRuntimeEntries();
 
   return {
     taskDir,
     tasks,
-    parseErrors,
+    parseErrors: importResult.parseErrors,
     runtimeState,
     runtimeEntries,
   };
@@ -233,31 +209,27 @@ export function loadScheduledTasksForProfile(profile: string): LoadedScheduledTa
 
 export function resolveScheduledTaskForProfile(profile: string, taskId: string): {
   taskDir: string;
-  task: ParsedTaskDefinition;
+  task: StoredAutomation;
   runtime?: TaskRuntimeEntry;
 } {
   const loaded = loadScheduledTasksForProfile(profile);
-  const matches = loaded.tasks.filter((task) => task.id === taskId);
+  const task = getStoredAutomation(taskId, { profile, dbPath: getAutomationDbPath() });
 
-  if (matches.length === 0) {
+  if (!task) {
     throw new Error(`Task not found: ${taskId}`);
   }
 
-  if (matches.length > 1) {
-    throw new Error(`Task id is ambiguous (${taskId}). Matches: ${matches.map((task) => task.filePath).join(', ')}`);
-  }
-
-  const task = matches[0] as ParsedTaskDefinition;
   return {
     taskDir: loaded.taskDir,
     task,
-    runtime: loaded.runtimeState[task.key],
+    runtime: loaded.runtimeState[task.id],
   };
 }
 
 export function buildScheduledTaskMarkdown(input: {
   taskId: string;
   profile: string;
+  title?: string | null;
   enabled: boolean;
   cron?: string | null;
   at?: string | null;
@@ -275,8 +247,14 @@ export function buildScheduledTaskMarkdown(input: {
   const lines = [
     '---',
     `id: ${yamlString(input.taskId)}`,
-    `enabled: ${input.enabled ? 'true' : 'false'}`,
   ];
+
+  const title = readOptionalString(input.title ?? undefined);
+  if (title) {
+    lines.push(`title: ${yamlString(title)}`);
+  }
+
+  lines.push(`enabled: ${input.enabled ? 'true' : 'false'}`);
 
   if (cron) {
     lines.push(`cron: ${yamlString(cron)}`);
@@ -322,4 +300,8 @@ export function taskBelongsToProfile(task: { filePath: string }, profile: string
   } catch {
     return false;
   }
+}
+
+export function toScheduledTaskMetadata(task: StoredAutomation): ScheduledTaskFileMetadata {
+  return hydrateMetadata(task);
 }

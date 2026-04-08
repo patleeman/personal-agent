@@ -28,14 +28,11 @@ const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors';
 
 interface TaskFormState {
-  taskId: string;
-  enabled: boolean;
+  title: string;
   scheduleMode: 'cron' | 'at';
   cronEditor: CronEditorState;
   atValue: string;
-  model: string;
   cwd: string;
-  timeoutSeconds: string;
   prompt: string;
 }
 
@@ -48,28 +45,22 @@ function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: string 
 
 function createDefaultTaskFormState(): TaskFormState {
   return {
-    taskId: '',
-    enabled: true,
+    title: '',
     scheduleMode: 'cron',
     cronEditor: createCronEditorState('0 9 * * 1-5'),
     atValue: '',
-    model: '',
     cwd: '',
-    timeoutSeconds: '',
     prompt: '',
   };
 }
 
 function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
   return {
-    taskId: task.id,
-    enabled: task.enabled,
+    title: task.title ?? task.id,
     scheduleMode: task.at ? 'at' : 'cron',
     cronEditor: createCronEditorState(task.cron),
     atValue: toDateTimeLocalValue(task.at),
-    model: task.model ?? '',
     cwd: task.cwd ?? '',
-    timeoutSeconds: task.timeoutSeconds !== undefined ? String(task.timeoutSeconds) : '',
     prompt: task.prompt,
   };
 }
@@ -98,16 +89,9 @@ function resolveCronExpression(state: TaskFormState): string {
     : state.cronEditor.rawCron.trim();
 }
 
-function validateTaskForm(state: TaskFormState, mode: 'create' | 'edit'): string | null {
-  if (mode === 'create') {
-    const taskId = state.taskId.trim();
-    if (!taskId) {
-      return 'Task id is required.';
-    }
-
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(taskId)) {
-      return 'Task id must use only letters, numbers, hyphens, or underscores.';
-    }
+function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): string | null {
+  if (!state.title.trim()) {
+    return 'Title is required.';
   }
 
   if (!state.prompt.trim()) {
@@ -122,24 +106,15 @@ function validateTaskForm(state: TaskFormState, mode: 'create' | 'edit'): string
     return 'Choose when this one-time task should run.';
   }
 
-  if (state.timeoutSeconds.trim()) {
-    const timeout = Number.parseInt(state.timeoutSeconds, 10);
-    if (!Number.isFinite(timeout) || timeout < 1) {
-      return 'Timeout must be a positive number of seconds.';
-    }
-  }
-
   return null;
 }
 
 function createTaskMutationPayload(state: TaskFormState) {
   return {
-    enabled: state.enabled,
+    title: state.title.trim(),
     cron: state.scheduleMode === 'cron' ? resolveCronExpression(state) : null,
     at: state.scheduleMode === 'at' ? fromDateTimeLocalValue(state.atValue) : null,
-    model: state.model.trim() || null,
     cwd: state.cwd.trim() || null,
-    timeoutSeconds: state.timeoutSeconds.trim() ? Number.parseInt(state.timeoutSeconds, 10) : null,
     prompt: state.prompt,
   };
 }
@@ -380,34 +355,22 @@ function TaskEditorForm({
     <div className="space-y-4 px-4 py-4 overflow-y-auto">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <p className="ui-card-title font-mono break-all">{mode === 'create' ? 'new task' : value.taskId}</p>
-          <p className="ui-card-meta">{mode === 'create' ? 'Create a scheduled task' : 'Edit task'}</p>
+          <p className="ui-card-title break-all">{mode === 'create' ? 'New automation' : value.title}</p>
+          <p className="ui-card-meta">{mode === 'create' ? 'Create an automation' : 'Edit automation'}</p>
         </div>
         <button type="button" onClick={onCancel} className="ui-toolbar-button">Cancel</button>
       </div>
 
       <div className="border-t border-border-subtle pt-4 space-y-4">
-        {mode === 'create' && (
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Task id</label>
-            <input
-              value={value.taskId}
-              onChange={(event) => onChange({ taskId: event.target.value })}
-              className={`${INPUT_CLASS} font-mono`}
-              placeholder="daily-status"
-            />
-            <p className="text-[11px] text-dim">Use lowercase letters, numbers, hyphens, or underscores.</p>
-          </div>
-        )}
-
-        <label className="flex items-center gap-2 text-[13px] text-secondary">
+        <div className="space-y-1.5">
+          <label className="ui-card-meta">Title</label>
           <input
-            type="checkbox"
-            checked={value.enabled}
-            onChange={(event) => onChange({ enabled: event.target.checked })}
+            value={value.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+            className={INPUT_CLASS}
+            placeholder="Daily bug scan"
           />
-          Enabled
-        </label>
+        </div>
 
         <div className="space-y-2">
           <p className="ui-card-meta">Schedule</p>
@@ -449,34 +412,12 @@ function TaskEditorForm({
 
       <div className="border-t border-border-subtle pt-4 space-y-4">
         <div className="space-y-1.5">
-          <label className="ui-card-meta">Model</label>
-          <input
-            value={value.model}
-            onChange={(event) => onChange({ model: event.target.value })}
-            className={`${INPUT_CLASS} font-mono`}
-            placeholder="Optional"
-          />
-        </div>
-
-        <div className="space-y-1.5">
           <label className="ui-card-meta">Working directory</label>
           <input
             value={value.cwd}
             onChange={(event) => onChange({ cwd: event.target.value })}
             className={INPUT_CLASS}
             placeholder="Optional"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Timeout seconds</label>
-          <input
-            type="number"
-            min={1}
-            value={value.timeoutSeconds}
-            onChange={(event) => onChange({ timeoutSeconds: event.target.value })}
-            className={INPUT_CLASS}
-            placeholder="Blank uses the daemon default"
           />
         </div>
       </div>
@@ -496,7 +437,7 @@ function TaskEditorForm({
 
       <div className="flex items-center gap-3 pb-2">
         <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
-          {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create task' : 'Save task')}
+          {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create automation' : 'Save automation')}
         </ToolbarButton>
         <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
           Cancel
@@ -567,12 +508,9 @@ export function ScheduledTaskCreatePanel() {
     setSaving(true);
     setSaveError(null);
     try {
-      const response = await api.createTask({
-        taskId: draft.taskId.trim(),
-        ...createTaskMutationPayload(draft),
-      });
+      const response = await api.createTask(createTaskMutationPayload(draft));
       await refreshTaskSnapshot(setTasks);
-      navigate(`/scheduled/${encodeURIComponent(response.task.id)}`);
+      navigate(`/automations/${encodeURIComponent(response.task.id)}`);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -587,7 +525,7 @@ export function ScheduledTaskCreatePanel() {
       saving={saving}
       error={saveError}
       onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-      onCancel={() => navigate('/scheduled')}
+      onCancel={() => navigate('/automations')}
       onSubmit={() => { void handleCreate(); }}
     />
   );
@@ -672,12 +610,13 @@ export function ScheduledTaskPanel({ id }: { id: string }) {
     <div className="space-y-4 px-4 py-4 overflow-y-auto">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <p className="ui-card-title font-mono break-all">{taskDetail.id}</p>
+          <p className="ui-card-title break-all">{taskDetail.title ?? taskDetail.id}</p>
           <p className="ui-card-meta">
             <span className={status.cls}>{status.text}</span>
             {taskDetail.lastRunAt && <><span className="opacity-40 mx-1.5">·</span>last run {timeAgo(taskDetail.lastRunAt)}</>}
             {!taskDetail.enabled && <><span className="opacity-40 mx-1.5">·</span>disabled</>}
           </p>
+          <p className="text-[12px] text-secondary">{taskDetail.id}</p>
         </div>
         <ToolbarButton onClick={() => {
           setDraft(createTaskFormState(taskDetail));

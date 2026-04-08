@@ -84,13 +84,19 @@ let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 let listTasksForCurrentProfileFn: () => {
   id: string;
-  filePath: string;
+  title?: string;
+  filePath?: string;
   prompt: string;
   enabled: boolean;
   running: boolean;
   cron?: string;
+  at?: string;
   model?: string;
+  cwd?: string;
   lastStatus?: string;
+  lastRunAt?: string;
+  lastSuccessAt?: string;
+  lastAttemptCount?: number;
 }[] = () => [];
 
 let listMemoryDocsFn: () => {

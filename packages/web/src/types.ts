@@ -249,7 +249,8 @@ export interface ProjectDetail {
 
 export interface ScheduledTaskSummary {
   id: string;
-  filePath: string;
+  title?: string;
+  filePath?: string;
   scheduleType: string;
   running: boolean;
   enabled: boolean;
@@ -257,6 +258,7 @@ export interface ScheduledTaskSummary {
   at?: string;
   prompt: string;
   model?: string;
+  cwd?: string;
   lastStatus?: string;
   lastRunAt?: string;
   lastSuccessAt?: string;
@@ -265,6 +267,8 @@ export interface ScheduledTaskSummary {
 
 export interface ScheduledTaskDetail {
   id: string;
+  title?: string;
+  filePath?: string;
   running: boolean;
   enabled: boolean;
   scheduleType: string;
@@ -276,7 +280,6 @@ export interface ScheduledTaskDetail {
   prompt: string;
   lastStatus?: string;
   lastRunAt?: string;
-  fileContent: string;
 }
 
 export interface DurableRunSource {
@@ -583,7 +586,7 @@ export type AppEvent =
 
 export interface GitWorkingTreeChange {
   relativePath: string;
-  change: WorkspaceChangeKind;
+  change: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked' | 'conflicted';
 }
 
 export interface GitWorkingTreeSummary {
@@ -643,120 +646,6 @@ export interface ConversationCwdChangeResult {
 export interface FolderPickerResult {
   path: string | null;
   cancelled: boolean;
-}
-
-// ── Workspace browser ───────────────────────────────────────────────────────
-
-export type WorkspaceChangeKind =
-  | 'modified'
-  | 'added'
-  | 'deleted'
-  | 'renamed'
-  | 'copied'
-  | 'typechange'
-  | 'untracked'
-  | 'conflicted';
-
-export interface WorkspaceTreeNode {
-  name: string;
-  path: string;
-  relativePath: string;
-  kind: 'directory' | 'file';
-  exists: boolean;
-  change: WorkspaceChangeKind | null;
-  children?: WorkspaceTreeNode[];
-}
-
-export interface WorkspaceChangeEntry {
-  path: string;
-  relativePath: string;
-  exists: boolean;
-  change: WorkspaceChangeKind;
-}
-
-export interface WorkspaceSnapshot {
-  cwd: string;
-  root: string;
-  repoRoot: string | null;
-  branch: string | null;
-  focusPath: string | null;
-  fileCount: number;
-  changedCount: number;
-  truncated: boolean;
-  tree: WorkspaceTreeNode[];
-  changes: WorkspaceChangeEntry[];
-}
-
-export interface WorkspaceFileDetail {
-  cwd: string;
-  root: string;
-  repoRoot: string | null;
-  path: string;
-  relativePath: string;
-  exists: boolean;
-  sizeBytes: number;
-  binary: boolean;
-  tooLarge: boolean;
-  content: string | null;
-  originalContent: string | null;
-  change: WorkspaceChangeKind | null;
-  diff: string | null;
-}
-
-export type WorkspaceGitScope = 'staged' | 'unstaged' | 'untracked' | 'conflicted';
-
-export interface WorkspaceGitStatusEntry {
-  path: string;
-  relativePath: string;
-  exists: boolean;
-  stagedChange: WorkspaceChangeKind | null;
-  unstagedChange: WorkspaceChangeKind | null;
-  oldRelativePath: string | null;
-}
-
-export interface WorkspaceGitStatusSummary {
-  cwd: string;
-  root: string;
-  repoRoot: string | null;
-  branch: string | null;
-  focusPath: string | null;
-  stagedCount: number;
-  unstagedCount: number;
-  untrackedCount: number;
-  conflictedCount: number;
-  entries: WorkspaceGitStatusEntry[];
-}
-
-export interface WorkspaceGitDiffDetail {
-  cwd: string;
-  root: string;
-  repoRoot: string;
-  branch: string | null;
-  path: string;
-  relativePath: string;
-  exists: boolean;
-  scope: WorkspaceGitScope;
-  change: WorkspaceChangeKind | null;
-  oldRelativePath: string | null;
-  diff: string;
-}
-
-export interface WorkspaceCommitDraftResult {
-  subject: string;
-  body: string | null;
-  message: string;
-  source: 'ai' | 'fallback';
-  notice: string | null;
-}
-
-export interface WorkspaceGitCommitResult {
-  cwd: string;
-  root: string;
-  repoRoot: string;
-  branch: string | null;
-  commitSha: string;
-  subject: string;
-  body: string | null;
 }
 
 export interface LiveSessionMeta {
