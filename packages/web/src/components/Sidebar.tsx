@@ -25,6 +25,7 @@ import { timeAgo } from '../utils';
 import { buildNestedSessionRows, type SessionLineageRow } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
+import { resolveConversationCloseRedirect } from '../conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../localSettings';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -550,6 +551,10 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
+  const resolveCloseRedirectPath = useCallback((closingId: string) => resolveConversationCloseRedirect({
+    orderedIds: visibleConversationTabs.map((session) => session.id),
+    closingId,
+  }), [visibleConversationTabs]);
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
   const runsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
@@ -822,7 +827,7 @@ export function Sidebar() {
     }
 
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
-      navigate('/conversations/new');
+      navigate(resolveCloseRedirectPath(DRAFT_CONVERSATION_ID));
       window.setTimeout(closeDraft, 0);
       return;
     }
@@ -841,7 +846,7 @@ export function Sidebar() {
     }
 
     if (closingActiveConversation) {
-      navigate('/conversations/new');
+      navigate(resolveCloseRedirectPath(sessionId));
       window.setTimeout(closeConversation, 0);
       return;
     }
