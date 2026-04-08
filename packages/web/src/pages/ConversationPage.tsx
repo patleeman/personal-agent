@@ -4023,14 +4023,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });
           const attachmentRefs = await persistPromptDrawings(newId);
-
-          rememberComposerInput(inputSnapshot, newId);
-          persistPendingConversationPrompt(newId, {
+          const initialPrompt = {
             text: textToSend,
             behavior: queuedBehavior,
             images: promptImages,
             attachmentRefs,
-          });
+          };
+
+          rememberComposerInput(inputSnapshot, newId);
+
+          try {
+            // Start the first turn immediately instead of waiting for the new
+            // conversation page to mount, connect SSE, and receive its first
+            // snapshot. That avoids "new conversation hangs if I click away"
+            // because the initial prompt no longer depends on the page staying open.
+            await api.promptSession(
+              newId,
+              initialPrompt.text,
+              initialPrompt.behavior,
+              initialPrompt.images,
+              initialPrompt.attachmentRefs,
+            );
+          } catch (error) {
+            persistPendingConversationPrompt(newId, initialPrompt);
+            showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+          }
+
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
           clearDraftConversationModel();
