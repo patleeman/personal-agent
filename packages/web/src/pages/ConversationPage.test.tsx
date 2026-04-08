@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,6 +24,44 @@ import {
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+type ParsedNode = {
+  nodeName?: string;
+  attrs?: Array<{ name: string; value: string }>;
+  childNodes?: ParsedNode[];
+  parentNode?: ParsedNode | null;
+};
+
+function getNodeClassList(node: ParsedNode): string[] {
+  const value = node.attrs?.find((attr) => attr.name === 'class')?.value ?? '';
+  return value.split(/\s+/).filter(Boolean);
+}
+
+function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode | null {
+  if (getNodeClassList(node).includes(className)) {
+    return node;
+  }
+
+  for (const child of node.childNodes ?? []) {
+    const match = findFirstNodeByClass(child, className);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function hasAncestorWithClass(node: ParsedNode | null | undefined, className: string): boolean {
+  let current = node?.parentNode ?? null;
+  while (current) {
+    if (getNodeClassList(current).includes(className)) {
+      return true;
+    }
+    current = current.parentNode ?? null;
+  }
+  return false;
+}
 
 describe('conversation live state helpers', () => {
   it('keeps the live stream enabled until the conversation is confirmed not live', () => {
@@ -362,6 +401,26 @@ describe('ConversationPage', () => {
     expect(html).toContain('Choose the initial working directory for this draft conversation');
     expect(html).not.toContain('>draft<');
     expect(html).not.toContain('right rail');
+  });
+
+  it('renders the composer context row below the input shell', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/new']}>
+        <ConversationPage draft />
+      </MemoryRouter>,
+    );
+
+    const tree = parseFragment(html) as ParsedNode;
+    const inputShell = findFirstNodeByClass(tree, 'ui-input-shell');
+    const composerMeta = findFirstNodeByClass(tree, 'conversation-composer-meta');
+
+    expect(inputShell).toBeTruthy();
+    expect(composerMeta).toBeTruthy();
+    expect(hasAncestorWithClass(composerMeta, 'ui-input-shell')).toBe(false);
+    expect(composerMeta?.parentNode).toBe(inputShell?.parentNode);
+
+    const siblings = inputShell?.parentNode?.childNodes?.filter((node) => node.nodeName !== '#text') ?? [];
+    expect(siblings.indexOf(inputShell as ParsedNode)).toBeLessThan(siblings.indexOf(composerMeta as ParsedNode));
   });
 
   it('keeps the saved conversation composer constrained to the main content column', () => {

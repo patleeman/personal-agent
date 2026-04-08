@@ -5015,10 +5015,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
               )}
             </div>
+          </div>
 
           {draft || ((!draft && (branchLabel || gitLineSummary)) || sessionTokens) ? (
             <div
-              className="mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim"
+              className="conversation-composer-meta mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim"
               aria-hidden={draft && !sessionTokens ? true : undefined}
             >
               <div className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -5038,7 +5039,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ) : null}
         </div>
       </div>
-        </div>
       )}
 
       {editingDrawingLocalId && (
