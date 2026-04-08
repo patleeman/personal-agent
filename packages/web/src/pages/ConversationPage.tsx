@@ -409,6 +409,27 @@ export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
   return input.currentTailBlocks < input.targetTailBlocks || !input.loadedTailBlocks;
 }
 
+export function shouldShowConversationBootstrapLoadingState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  conversationBootstrapLoading: boolean;
+  hasRenderableMessages: boolean;
+  hasVisibleSessionDetail: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.conversationBootstrapLoading
+    && !input.hasRenderableMessages
+    && !input.hasVisibleSessionDetail;
+}
+
+export function shouldShowConversationInlineLoadingState(input: {
+  showConversationLoadingState: boolean;
+  hasVisibleTranscript: boolean;
+}): boolean {
+  return input.showConversationLoadingState && input.hasVisibleTranscript;
+}
+
 // ── Model picker ──────────────────────────────────────────────────────────────
 
 function useModels() {
@@ -1190,10 +1211,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     historicalBlockOffset: number;
     historicalTotalBlocks: number;
   } | null>(null);
-
-  useEffect(() => {
-    setStableTranscriptState(null);
-  }, [id]);
 
   useEffect(() => {
     if (!id || !computedMessages || computedMessages.length === 0) {
@@ -4278,8 +4295,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !stream.hasSnapshot
     && !visibleSessionDetail
     && stream.blocks.length === 0;
+  const showBootstrapLoadingState = shouldShowConversationBootstrapLoadingState({
+    draft,
+    conversationId: id,
+    conversationBootstrapLoading,
+    hasRenderableMessages,
+    hasVisibleSessionDetail: Boolean(visibleSessionDetail),
+  });
   const showConversationLoadingState = showInitialHistoricalWarmupLoader
+    || showBootstrapLoadingState
     || (!hasRenderableMessages && (sessionLoading || hydratingLiveConversation));
+  const visibleTranscriptState = hasRenderableMessages && realMessages
+    ? {
+        conversationId: id ?? 'draft-conversation',
+        messages: realMessages,
+        historicalBlockOffset,
+        historicalTotalBlocks,
+      }
+    : (showConversationLoadingState && !draft ? stableTranscriptState : null);
+  const visibleTranscriptMessages = visibleTranscriptState?.messages;
+  const visibleTranscriptMessageIndexOffset = visibleTranscriptState?.historicalBlockOffset ?? 0;
+  const visibleTranscriptHasOlderBlocks = !showConversationLoadingState
+    && !draft
+    && Boolean(id)
+    && visibleTranscriptState?.conversationId === id
+    && showHistoricalLoadMore;
+  const renderingStaleTranscript = Boolean(visibleTranscriptState?.conversationId && id && visibleTranscriptState.conversationId !== id);
+  const showInlineConversationLoadingState = shouldShowConversationInlineLoadingState({
+    showConversationLoadingState,
+    hasVisibleTranscript: Boolean(visibleTranscriptMessages?.length),
+  });
+  const showBlockingConversationLoadingState = showConversationLoadingState && !showInlineConversationLoadingState;
 
   useEffect(() => {
     if (!id || draft || showConversationLoadingState) {
@@ -4302,17 +4348,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
-        {showConversationLoadingState ? (
+        {showBlockingConversationLoadingState ? (
           <LoadingState
-            label={showInitialHistoricalWarmupLoader ? 'Loading conversation…' : 'Loading session…'}
+            label="Loading messages…"
             className="justify-center h-full"
           />
-        ) : hasRenderableMessages && realMessages ? (
+        ) : visibleTranscriptMessages ? (
           <>
-            {showHistoricalLoadMore && (
+            {visibleTranscriptHasOlderBlocks && (
               <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
                 <div className="min-w-0 text-[11px] text-secondary">
-                  Showing the latest <span className="font-medium text-primary">{realMessages.length}</span> of{' '}
+                  Showing the latest <span className="font-medium text-primary">{realMessages?.length ?? visibleTranscriptMessages.length}</span> of{' '}
                   <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
                 </div>
                 <button
@@ -4326,31 +4372,39 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
             <ChatView
-              key={id ?? 'draft-conversation'}
-              messages={realMessages}
-              messageIndexOffset={messageIndexOffset}
+              key={visibleTranscriptState?.conversationId ?? id ?? 'draft-conversation'}
+              messages={visibleTranscriptMessages}
+              messageIndexOffset={visibleTranscriptMessageIndexOffset}
               scrollContainerRef={scrollRef}
-              focusMessageIndex={requestedFocusMessageIndex}
-              isStreaming={stream.isStreaming}
-              isCompacting={stream.isCompacting}
-              pendingStatusLabel={displayedPendingAssistantStatusLabel}
-              onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
-              onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
-              onReplyToSelection={handleReplyToSelection}
-              onHydrateMessage={hydrateHistoricalBlock}
-              hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
-              onOpenArtifact={openArtifact}
-              activeArtifactId={selectedArtifactId}
-              onOpenRun={openRun}
-              activeRunId={selectedRunId}
-              onSubmitAskUserQuestion={submitAskUserQuestion}
+              focusMessageIndex={renderingStaleTranscript ? null : requestedFocusMessageIndex}
+              isStreaming={renderingStaleTranscript ? false : stream.isStreaming}
+              isCompacting={renderingStaleTranscript ? false : stream.isCompacting}
+              pendingStatusLabel={renderingStaleTranscript ? null : displayedPendingAssistantStatusLabel}
+              onForkMessage={!renderingStaleTranscript && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+              onRewindMessage={!renderingStaleTranscript && id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
+              onReplyToSelection={renderingStaleTranscript ? undefined : handleReplyToSelection}
+              onHydrateMessage={renderingStaleTranscript ? undefined : hydrateHistoricalBlock}
+              hydratingMessageBlockIds={renderingStaleTranscript ? undefined : hydratingHistoricalBlockIdSet}
+              onOpenArtifact={renderingStaleTranscript ? undefined : openArtifact}
+              activeArtifactId={renderingStaleTranscript ? null : selectedArtifactId}
+              onOpenRun={renderingStaleTranscript ? undefined : openRun}
+              activeRunId={renderingStaleTranscript ? null : selectedRunId}
+              onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
-              onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
-              resumeConversationBusy={resumeConversationBusy}
-              resumeConversationTitle={conversationResumeState.title}
+              onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}
+              resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
+              resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
-              windowingBadgeTopOffset={showHistoricalLoadMore ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
+              windowingBadgeTopOffset={visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
+            {showInlineConversationLoadingState && (
+              <div className="sticky bottom-0 z-10 bg-base/85 px-6 py-4 backdrop-blur-sm">
+                <LoadingState
+                  label={renderingStaleTranscript ? 'Loading new messages…' : 'Loading messages…'}
+                  className="justify-center"
+                />
+              </div>
+            )}
           </>
         ) : (
           <EmptyState
@@ -4397,34 +4451,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draft,
     forkConversationFromMessage,
     hasRenderableMessages,
-    rewindConversationFromMessage,
-    historicalBlockOffset,
-    historicalTotalBlocks,
     hydrateHistoricalBlock,
     hydratingHistoricalBlockIdSet,
     id,
     isLiveSession,
     jumpToMessage,
     loadOlderMessages,
-    messageIndexOffset,
     openArtifact,
     openRun,
     displayedPendingAssistantStatusLabel,
     realMessages,
-    submitAskUserQuestion,
+    renderingStaleTranscript,
     requestedFocusMessageIndex,
     resumeConversation,
     resumeConversationBusy,
+    rewindConversationFromMessage,
     selectedArtifactId,
     selectedRunId,
     sessionLoading,
     shouldRenderConversationRail,
     showConversationLoadingState,
-    showHistoricalLoadMore,
-    showInitialHistoricalWarmupLoader,
+    showInlineConversationLoadingState,
     showScrollToBottomControl,
+    stream.isCompacting,
     stream.isStreaming,
+    submitAskUserQuestion,
+    historicalTotalBlocks,
     title,
+    visibleTranscriptHasOlderBlocks,
+    visibleTranscriptMessageIndexOffset,
+    visibleTranscriptMessages,
+    visibleTranscriptState?.conversationId,
   ]);
 
   const missingConversation = shouldShowMissingConversationState({

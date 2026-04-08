@@ -169,7 +169,7 @@ The UI supports:
 - file/image input
 - rich markdown rendering in conversation messages
 
-A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading.
+A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading. When you switch to another saved conversation, the current transcript stays visible and the panel shows an inline `Loading new messages…` indicator until the next conversation history is ready.
 
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 

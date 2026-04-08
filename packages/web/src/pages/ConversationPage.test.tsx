@@ -23,6 +23,8 @@ import {
   resolveConversationInitialHistoricalWarmupTarget,
   hasConversationLoadedHistoricalTailBlocks,
   shouldShowConversationInitialHistoricalWarmupLoader,
+  shouldShowConversationBootstrapLoadingState,
+  shouldShowConversationInlineLoadingState,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -161,6 +163,57 @@ describe('conversation live state helpers', () => {
       targetTailBlocks: 1200,
       currentTailBlocks: 1200,
       loadedTailBlocks: true,
+    })).toBe(false);
+  });
+
+  it('shows a loading state while the next conversation bootstrap is still fetching', () => {
+    expect(shouldShowConversationBootstrapLoadingState({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationBootstrapLoading: true,
+      hasRenderableMessages: false,
+      hasVisibleSessionDetail: false,
+    })).toBe(true);
+
+    expect(shouldShowConversationBootstrapLoadingState({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationBootstrapLoading: false,
+      hasRenderableMessages: false,
+      hasVisibleSessionDetail: false,
+    })).toBe(false);
+
+    expect(shouldShowConversationBootstrapLoadingState({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationBootstrapLoading: true,
+      hasRenderableMessages: true,
+      hasVisibleSessionDetail: false,
+    })).toBe(false);
+
+    expect(shouldShowConversationBootstrapLoadingState({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationBootstrapLoading: true,
+      hasRenderableMessages: false,
+      hasVisibleSessionDetail: true,
+    })).toBe(false);
+  });
+
+  it('keeps the current transcript visible while the next one is still loading', () => {
+    expect(shouldShowConversationInlineLoadingState({
+      showConversationLoadingState: true,
+      hasVisibleTranscript: true,
+    })).toBe(true);
+
+    expect(shouldShowConversationInlineLoadingState({
+      showConversationLoadingState: true,
+      hasVisibleTranscript: false,
+    })).toBe(false);
+
+    expect(shouldShowConversationInlineLoadingState({
+      showConversationLoadingState: false,
+      hasVisibleTranscript: true,
     })).toBe(false);
   });
 
