@@ -2511,19 +2511,6 @@ export async function forkSession(
   return { newSessionId: resumed.id, sessionFile: forkedSessionFile };
 }
 
-/** Cleanly dispose a live session. */
-export function destroySession(sessionId: string): void {
-  const entry = registry.get(sessionId);
-  if (!entry) return;
-  clearContextUsageTimer(entry);
-  void syncDurableConversationRun(entry, entry.session.isStreaming ? 'interrupted' : 'waiting', {
-    force: true,
-    ...(entry.session.isStreaming ? { lastError: 'Live session disposed while a response was active.' } : {}),
-  });
-  entry.session.dispose();
-  registry.delete(sessionId);
-  publishSessionMetaChanged(sessionId);
-}
 export async function summarizeAndForkSession(
   sessionId: string,
   options: LiveSessionLoaderOptions = {},
@@ -2552,5 +2539,20 @@ export async function summarizeAndForkSession(
   }
 
   return { newSessionId: duplicated.id, sessionFile: duplicated.sessionFile };
+}
+
+/** Cleanly dispose a live session. */
+export function destroySession(sessionId: string): void {
+  pendingConversationWorkingDirectoryChanges.delete(sessionId);
+  const entry = registry.get(sessionId);
+  if (!entry) return;
+  clearContextUsageTimer(entry);
+  void syncDurableConversationRun(entry, entry.session.isStreaming ? 'interrupted' : 'waiting', {
+    force: true,
+    ...(entry.session.isStreaming ? { lastError: 'Live session disposed while a response was active.' } : {}),
+  });
+  entry.session.dispose();
+  registry.delete(sessionId);
+  publishSessionMetaChanged(sessionId);
 }
 
