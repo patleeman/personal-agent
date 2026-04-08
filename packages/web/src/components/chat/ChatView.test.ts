@@ -127,6 +127,23 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-markdown-code-copy');
   });
 
+  it('does not auto-link file paths inside assistant message text', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
+      'Touch packages/web/src/App.tsx next.',
+      '',
+      '`packages/web/src/main.tsx`',
+      '',
+      '[relative file](packages/web/src/filePathLinks.tsx)',
+    ].join('\n'), { onOpenFilePath: () => undefined })));
+
+    expect(html).toContain('packages/web/src/App.tsx');
+    expect(html).toContain('packages/web/src/main.tsx');
+    expect(html).toContain('relative file');
+    expect(html).not.toContain('data-file-path-link=');
+    expect(html).not.toContain('role="button"');
+    expect(html).not.toContain('href="packages/web/src/filePathLinks.tsx"');
+  });
+
   it('renders project mentions as pills inside markdown text', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Check @web-ui before touching @projects.')));
 
@@ -182,6 +199,26 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('Continuous conversations next chunk ui');
     expect(html).toContain('text-left');
     expect(html).toContain('linked run');
+  });
+
+  it('renders tool input and output as plain text without file path buttons', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'cat packages/web/src/App.tsx' },
+        output: 'Updated packages/web/src/App.tsx',
+        status: 'running',
+      }],
+      isStreaming: true,
+      onOpenFilePath: () => undefined,
+    }));
+
+    expect(html).toContain('cat packages/web/src/App.tsx');
+    expect(html).toContain('Updated packages/web/src/App.tsx');
+    expect(html).not.toContain('data-file-path-link=');
+    expect(html).not.toContain('role="button"');
   });
 
   it('shows only the latest 5 internal-work steps by default and summarizes older ones above', () => {

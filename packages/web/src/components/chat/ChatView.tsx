@@ -20,7 +20,6 @@ import {
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
-import { FilePathButton, FilePathPreformattedText, normalizeDetectedFilePath, renderFilePathTextFragments } from '../../filePathLinks';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { getStreamingThroughputLabel } from '../../streamingThroughput';
 import { Pill, SurfacePanel, cx } from '../ui';
@@ -66,17 +65,13 @@ function splitMentionFragments(text: string): Array<{ text: string; mention: boo
   return fragments;
 }
 
-function renderEnhancedTextFragments(text: string, onOpenFilePath?: (path: string) => void): ReactNode[] {
+function renderEnhancedTextFragments(text: string): ReactNode[] {
   return splitMentionFragments(text).map((fragment, index) => {
     if (fragment.mention) {
       return <MentionPill key={`${fragment.text}-${index}`} text={fragment.text} />;
     }
 
-    return (
-      <React.Fragment key={`${index}-${fragment.text}`}>
-        {renderFilePathTextFragments(fragment.text, { onOpenFilePath, keyPrefix: `fragment-${index}` })}
-      </React.Fragment>
-    );
+    return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
   });
 }
 
@@ -162,16 +157,12 @@ function renderChildrenWithMentions(children: ReactNode, onOpenFilePath?: (path:
   });
 }
 
-function MarkdownCodeBlock({ children, onOpenFilePath }: { children: ReactNode; onOpenFilePath?: (path: string) => void }) {
+function MarkdownCodeBlock({ children }: { children: ReactNode }) {
   const { content } = extractMarkdownCodeBlock(children);
 
   return (
     <div className="ui-markdown-code-block">
-      <FilePathPreformattedText
-        text={content}
-        onOpenFilePath={onOpenFilePath}
-        className="whitespace-pre-wrap break-all"
-      />
+      <pre className="whitespace-pre-wrap break-all"><code>{content}</code></pre>
     </div>
   );
 }
@@ -197,20 +188,21 @@ const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text
           th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</th>,
           td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</td>,
           a: ({ href, children, title }) => {
-            const filePath = typeof href === 'string' ? normalizeDetectedFilePath(href) : null;
-            if (filePath && onOpenFilePath) {
-              const label = extractMarkdownTextContent(children).trim() || href || filePath;
-              return <FilePathButton path={filePath} displayText={label} onOpenFilePath={onOpenFilePath} />;
+            if (typeof href !== 'string' || href.trim().length === 0) {
+              return <span title={title}>{children}</span>;
             }
 
-            const isExternal = typeof href === 'string' && !href.startsWith('#');
+            if (href.startsWith('#')) {
+              return <a href={href} title={title}>{children}</a>;
+            }
+
+            const isExternal = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(href);
+            if (!isExternal) {
+              return <span title={title}>{children}</span>;
+            }
+
             return (
-              <a
-                href={href}
-                title={title}
-                target={isExternal ? '_blank' : undefined}
-                rel={isExternal ? 'noreferrer' : undefined}
-              >
+              <a href={href} title={title} target="_blank" rel="noreferrer">
                 {children}
               </a>
             );
@@ -220,8 +212,8 @@ const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text
               <table>{children}</table>
             </div>
           ),
-          pre: ({ children }) => <MarkdownCodeBlock onOpenFilePath={onOpenFilePath}>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => <InlineMarkdownCode className={className} onOpenFilePath={onOpenFilePath}>{children}</InlineMarkdownCode>,
+          pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
+          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
           img: ({ src, alt, title }) => src
             ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
             : <span className="text-dim">{alt ?? 'image'}</span>,
@@ -1358,11 +1350,7 @@ function ToolBlock({
         <div className="border-t border-border-subtle/70">
           <div className="px-2.5 py-2 bg-black/5">
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
-            <FilePathPreformattedText
-              text={JSON.stringify(block.input, null, 2)}
-              onOpenFilePath={onOpenFilePath}
-              className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75"
-            />
+            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">{JSON.stringify(block.input, null, 2)}</pre>
           </div>
           {(isRunning || output || outputDeferred) && (
             <div className={cx('px-2.5 py-2', isRunning && output && 'max-h-40 overflow-y-auto')}>
@@ -1382,11 +1370,7 @@ function ToolBlock({
                 )}
               </div>
               {output ? (
-                <FilePathPreformattedText
-                  text={output}
-                  onOpenFilePath={onOpenFilePath}
-                  className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75"
-                />
+                <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">{output}</pre>
               ) : isRunning ? (
                 <p className="text-[11px] italic leading-relaxed opacity-55">Waiting for output…</p>
               ) : outputDeferred ? (
@@ -1802,7 +1786,7 @@ function ErrorBlock({
       <div className="flex-1 min-w-0 space-y-2">
         <div {...replySelectionScopeProps}>
           {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
-          <span className="text-danger/85 leading-relaxed">{renderFilePathTextFragments(block.message, { onOpenFilePath, keyPrefix: 'error' })}</span>
+          <span className="text-danger/85 leading-relaxed">{block.message}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {replySelectionActions && <ReplySelectionInlineActions onReply={replySelectionActions.onReply} onCopy={replySelectionActions.onCopy} />}

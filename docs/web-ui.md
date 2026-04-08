@@ -168,7 +168,7 @@ The UI supports:
 - branch navigation
 - context usage display
 - file/image input
-- clickable inline file paths in assistant messages without breaking normal text selection
+- rich markdown rendering in conversation messages
 
 A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading.
 
