@@ -72,6 +72,16 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('Resuming…');
   });
 
+  it('renders the compaction status indicator even when the latest block is from the assistant', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Most recent assistant reply' }],
+      isCompacting: true,
+      isStreaming: false,
+    }));
+
+    expect(html).toContain('Compacting context…');
+  });
+
   it('collapses auto-opened blocks once live streaming ends unless manually overridden', () => {
     expect(resolveDisclosureOpen(true, 'auto')).toBe(true);
     expect(resolveDisclosureOpen(false, 'auto')).toBe(false);
