@@ -169,7 +169,7 @@ The UI supports:
 - file/image input
 - rich markdown rendering in conversation messages
 
-A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading. When you switch to another saved conversation, the current transcript stays visible and the panel shows an inline `Loading new messages…` indicator until the next conversation history is ready.
+A new draft conversation becomes a live session when you send the first prompt. The UI keeps the queued user turn visible and shows a pending status immediately, even while the live session is still being created or its first SSE snapshot is loading. When you switch to another saved conversation, the current transcript stays visible and the panel shows an inline `Loading new messages…` indicator until the next conversation history is ready. Scroll reset waits for the replacement transcript instead of re-running against the preserved old one, so the panel should not yank the visible transcript around during that handoff.
 
 If a deferred resume or reminder becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click when that wakeup allows auto-resume.
 
@@ -181,7 +181,7 @@ Conversation lists in the sidebar live under a dedicated **Threads** section and
 
 Saved conversations keep a minimal right-hand inspector focused on runs and details. That rail stays closed by default and opens on demand. In the runs section, conversation work, background work, and thread-mentioned work are grouped separately so the source of each item is clearer than a flat internal run list.
 
-The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. Saved conversations also expose a header-level summarize + fork action that duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. Saved conversations expose a summarize + fork button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 

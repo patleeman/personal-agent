@@ -33,15 +33,11 @@ interface ConversationSavedHeaderProps {
   statusLabel?: string | null;
   statusTone?: 'accent' | 'warning' | 'muted';
   statusSpinning?: boolean;
-  summarizeAndForkBusy?: boolean;
-  summarizeAndForkDisabled?: boolean;
-  summarizeAndForkTitle?: string | null;
   onPickCwd: () => void;
   onStartEditingCwd: () => void;
   onCwdDraftChange: (value: string) => void;
   onCancelEditingCwd: () => void;
   onSaveCwd: () => void;
-  onSummarizeAndFork?: () => void;
 }
 
 export function ConversationSavedHeader({
@@ -57,15 +53,11 @@ export function ConversationSavedHeader({
   statusLabel,
   statusTone = 'muted',
   statusSpinning = false,
-  summarizeAndForkBusy = false,
-  summarizeAndForkDisabled = false,
-  summarizeAndForkTitle,
   onPickCwd,
   onStartEditingCwd,
   onCwdDraftChange,
   onCancelEditingCwd,
   onSaveCwd,
-  onSummarizeAndFork,
 }: ConversationSavedHeaderProps) {
   const pickDisabled = Boolean(cwdActionDisabledReason) || cwdPickBusy || cwdSaveBusy;
   const editDisabled = Boolean(cwdActionDisabledReason) || cwdEditing || cwdPickBusy || cwdSaveBusy;
@@ -141,18 +133,6 @@ export function ConversationSavedHeader({
               </IconButton>
             </div>
           </div>
-        )}
-        {onSummarizeAndFork && (
-          <button
-            type="button"
-            onClick={onSummarizeAndFork}
-            disabled={summarizeAndForkDisabled}
-            title={summarizeAndForkTitle ?? 'Duplicate this thread, compact the copy, and open it as a new conversation'}
-            aria-label="Summarize and fork this conversation"
-            className="ui-toolbar-button shrink-0 px-2 py-1 text-accent"
-          >
-            {summarizeAndForkBusy ? 'Summarizing…' : '≋⑂ summarize + fork'}
-          </button>
         )}
       </div>
       {cwdEditing && (

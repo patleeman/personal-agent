@@ -3,7 +3,7 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionMeta } from '../types.js';
+import type { MessageBlock, SessionMeta } from '../types.js';
 import {
   ConversationPage,
   mergeConversationSessionMeta,
@@ -26,6 +26,7 @@ import {
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInlineLoadingState,
+  resolveConversationVisibleScrollBinding,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -252,6 +253,64 @@ describe('conversation live state helpers', () => {
       showConversationLoadingState: false,
       hasVisibleTranscript: true,
     })).toBe(false);
+  });
+
+  it('binds scroll state to the preserved transcript while a replacement conversation is still loading', () => {
+    const preservedMessages: MessageBlock[] = [{
+      type: 'text',
+      ts: '2026-04-06T10:00:00.000Z',
+      text: 'Preserved transcript block',
+    }];
+
+    expect(resolveConversationVisibleScrollBinding({
+      draft: false,
+      routeConversationId: 'conv-next',
+      realMessages: undefined,
+      stableTranscriptState: {
+        conversationId: 'conv-prev',
+        messages: preservedMessages,
+      },
+      showConversationLoadingState: true,
+      initialScrollKey: 'conv-next:settled',
+      isStreaming: true,
+    })).toEqual({
+      conversationId: 'conv-prev',
+      messages: preservedMessages,
+      initialScrollKey: null,
+      isStreaming: false,
+      usingStableTranscript: true,
+    });
+  });
+
+  it('keeps scroll state attached to the active transcript once the conversation is ready', () => {
+    const realMessages: MessageBlock[] = [{
+      type: 'text',
+      ts: '2026-04-06T10:01:00.000Z',
+      text: 'Fresh transcript block',
+    }];
+
+    expect(resolveConversationVisibleScrollBinding({
+      draft: false,
+      routeConversationId: 'conv-next',
+      realMessages,
+      stableTranscriptState: {
+        conversationId: 'conv-prev',
+        messages: [{
+          type: 'text',
+          ts: '2026-04-06T10:00:00.000Z',
+          text: 'Old transcript block',
+        }],
+      },
+      showConversationLoadingState: false,
+      initialScrollKey: 'conv-next:settled',
+      isStreaming: true,
+    })).toEqual({
+      conversationId: 'conv-next',
+      messages: realMessages,
+      initialScrollKey: 'conv-next:settled',
+      isStreaming: true,
+      usingStableTranscript: false,
+    });
   });
 
   it('chooses an immediate pending status label for outbound prompts', () => {
@@ -539,5 +598,8 @@ describe('ConversationPage', () => {
     );
 
     expect(html).toContain('mx-auto w-full max-w-6xl');
+    expect(html).toContain('aria-label="Summarize and fork this conversation"');
+    expect(html).toContain('summarize + fork');
+    expect(html).toContain('Show right sidebar');
   });
 });

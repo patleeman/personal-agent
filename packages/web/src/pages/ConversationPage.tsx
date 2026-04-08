@@ -479,6 +479,49 @@ export function shouldShowConversationInlineLoadingState(input: {
   return input.showConversationLoadingState && input.hasVisibleTranscript;
 }
 
+export function resolveConversationVisibleScrollBinding(input: {
+  draft: boolean;
+  routeConversationId: string | null | undefined;
+  realMessages: MessageBlock[] | undefined;
+  stableTranscriptState: {
+    conversationId: string;
+    messages: MessageBlock[];
+  } | null;
+  showConversationLoadingState: boolean;
+  initialScrollKey: string | null;
+  isStreaming: boolean;
+}): {
+  conversationId: string | null;
+  messages: MessageBlock[] | undefined;
+  initialScrollKey: string | null;
+  isStreaming: boolean;
+  usingStableTranscript: boolean;
+} {
+  const hasRenderableMessages = (input.realMessages?.length ?? 0) > 0;
+  const usingStableTranscript = !hasRenderableMessages
+    && input.showConversationLoadingState
+    && !input.draft
+    && Boolean(input.stableTranscriptState);
+
+  if (usingStableTranscript) {
+    return {
+      conversationId: input.stableTranscriptState?.conversationId ?? null,
+      messages: input.stableTranscriptState?.messages,
+      initialScrollKey: null,
+      isStreaming: false,
+      usingStableTranscript: true,
+    };
+  }
+
+  return {
+    conversationId: input.routeConversationId ?? null,
+    messages: input.realMessages,
+    initialScrollKey: input.initialScrollKey,
+    isStreaming: input.isStreaming,
+    usingStableTranscript: false,
+  };
+}
+
 // ── Model picker ──────────────────────────────────────────────────────────────
 
 function useModels() {
@@ -574,6 +617,18 @@ function XIcon({ className }: { className?: string }) {
     <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m6 6 12 12" />
       <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
+function SummarizeForkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 7.5h6.25" />
+      <path d="M4 12h6.25" />
+      <path d="M4 16.5h6.25" />
+      <path d="M14 6v5.75a2.25 2.25 0 0 0 2.25 2.25H20.5" />
+      <path d="m17.5 11 3 3-3 3" />
     </svg>
   );
 }
@@ -1316,10 +1371,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showHistoricalLoadMore = historicalHasOlderBlocks;
   const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
+  const hasRenderableMessages = messageCount > 0;
   const initialScrollKey = useMemo(() => getConversationInitialScrollKey(id ?? null, {
     isLiveSession,
     hasLiveSnapshot: stream.hasSnapshot,
   }), [id, isLiveSession, stream.hasSnapshot]);
+  const hydratingLiveConversation = isLiveSession
+    && !stream.hasSnapshot
+    && !visibleSessionDetail
+    && stream.blocks.length === 0;
+  const showBootstrapLoadingState = shouldShowConversationBootstrapLoadingState({
+    draft,
+    conversationId: id,
+    conversationBootstrapLoading,
+    hasRenderableMessages,
+    hasVisibleSessionDetail: Boolean(visibleSessionDetail),
+  });
+  const showConversationLoadingState = showBootstrapLoadingState
+    || (!hasRenderableMessages && (sessionLoading || hydratingLiveConversation));
+  const scrollBinding = resolveConversationVisibleScrollBinding({
+    draft,
+    routeConversationId: id,
+    realMessages,
+    stableTranscriptState,
+    showConversationLoadingState,
+    initialScrollKey,
+    isStreaming: stream.isStreaming,
+  });
   const pendingAskUserQuestion = useMemo(
     () => findPendingAskUserQuestion(realMessages),
     [realMessages],
@@ -1872,12 +1950,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     scrollToBottom,
     capturePrependRestore,
   } = useConversationScroll({
-    conversationId: id ?? null,
-    messages: realMessages,
+    conversationId: scrollBinding.conversationId,
+    messages: scrollBinding.messages,
     scrollRef,
     sessionLoading,
-    isStreaming: stream.isStreaming,
-    initialScrollKey,
+    isStreaming: scrollBinding.isStreaming,
+    initialScrollKey: scrollBinding.initialScrollKey,
     prependRestoreKey: historicalBlockOffset,
   });
   const showInitialHistoricalWarmupLoader = shouldShowConversationInitialHistoricalWarmupLoader({
@@ -4303,7 +4381,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     liveSessionHasPendingHiddenTurn,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
-  const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
   const composerDisabled = conversationNeedsTakeover;
   const conversationCwdActionDisabledReason = conversationNeedsTakeover
     ? 'Take over this conversation to change its working directory.'
@@ -4347,19 +4424,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     return drawingAttachments.find((attachment) => attachment.localId === editingDrawingLocalId) ?? null;
   }, [drawingAttachments, editingDrawingLocalId]);
-  const hydratingLiveConversation = isLiveSession
-    && !stream.hasSnapshot
-    && !visibleSessionDetail
-    && stream.blocks.length === 0;
-  const showBootstrapLoadingState = shouldShowConversationBootstrapLoadingState({
-    draft,
-    conversationId: id,
-    conversationBootstrapLoading,
-    hasRenderableMessages,
-    hasVisibleSessionDetail: Boolean(visibleSessionDetail),
-  });
-  const showConversationLoadingState = showBootstrapLoadingState
-    || (!hasRenderableMessages && (sessionLoading || hydratingLiveConversation));
   const visibleTranscriptState = hasRenderableMessages && realMessages
     ? {
         conversationId: id ?? 'draft-conversation',
@@ -4575,26 +4639,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   return (
     <ConversationWorkspaceShell contextRailEnabled={!draft}>
       {({ railOpen, toggleRail }) => (
-      <div className="flex h-full flex-col overflow-hidden">
-        <PageHeader
-        className="gap-2 py-2 min-h-[44px]"
-        actions={!draft ? (
-          <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
-            <button
-              type="button"
-              onClick={toggleRail}
-              className="inline-flex items-center justify-center rounded-md p-1 text-dim transition-colors hover:bg-surface hover:text-primary"
-              title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-              aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <path d="M15 4v16" />
-              </svg>
-            </button>
-          </div>
-        ) : undefined}
-      >
+        <div className="flex h-full flex-col overflow-hidden">
+          <PageHeader
+            className="min-h-[44px] gap-2 py-2"
+            actions={!draft ? (
+              <div className="flex shrink-0 items-center gap-2">
+                {id && (
+                  <div className="flex items-center border-l border-border-subtle pl-3">
+                    <button
+                      type="button"
+                      onClick={() => { void summarizeAndForkConversation(); }}
+                      disabled={summarizeAndForkDisabled}
+                      title={summarizeAndForkTitle}
+                      aria-label="Summarize and fork this conversation"
+                      className="ui-toolbar-button shrink-0 rounded-xl px-3.5 py-2 text-accent"
+                    >
+                      <SummarizeForkIcon className={cx('h-3.5 w-3.5 shrink-0', summaryForkBusy && 'animate-pulse')} />
+                      <span>{summaryForkBusy ? 'summarizing…' : 'summarize + fork'}</span>
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleRail}
+                  className="inline-flex items-center justify-center rounded-md p-1 text-dim transition-colors hover:bg-surface hover:text-primary"
+                  title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+                  aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    <path d="M15 4v16" />
+                  </svg>
+                </button>
+              </div>
+            ) : undefined}
+          >
         <div className="flex-1 min-w-0">
           {isEditingTitle && !draft ? (
             <form
@@ -4680,9 +4759,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               statusLabel={conversationHeaderStatus?.label ?? null}
               statusTone={conversationHeaderStatus?.tone}
               statusSpinning={conversationHeaderStatus?.spinning === true}
-              summarizeAndForkBusy={summaryForkBusy}
-              summarizeAndForkDisabled={summarizeAndForkDisabled}
-              summarizeAndForkTitle={summarizeAndForkTitle}
               onPickCwd={() => { void pickConversationCwd(); }}
               onStartEditingCwd={beginConversationCwdEdit}
               onCwdDraftChange={(value) => {
@@ -4693,7 +4769,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               }}
               onCancelEditingCwd={cancelConversationCwdEdit}
               onSaveCwd={() => { void submitConversationCwdChange(); }}
-              onSummarizeAndFork={() => { void summarizeAndForkConversation(); }}
             />
           )}
         </div>
