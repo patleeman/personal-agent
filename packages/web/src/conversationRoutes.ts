@@ -1,6 +1,6 @@
 import { DRAFT_CONVERSATION_ID, DRAFT_CONVERSATION_ROUTE } from './draftConversation';
 
-const DEFAULT_CONVERSATIONS_REDIRECT_PATH = '/workspace/files';
+const DEFAULT_CONVERSATIONS_REDIRECT_PATH = DRAFT_CONVERSATION_ROUTE;
 
 function normalizeConversationId(value: unknown): string | null {
   if (typeof value !== 'string') {

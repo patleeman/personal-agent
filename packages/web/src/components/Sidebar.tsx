@@ -32,6 +32,7 @@ import {
 import { buildNestedSessionRows, type SessionLineageRow } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
+import { buildSidebarNavSectionStorageKey } from '../localSettings';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (
@@ -54,8 +55,11 @@ const PATH = {
   pin: 'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
   unpin: 'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
   chevronDown: 'm6 9 6 6 6-6',
+  chevronRight: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
 };
+
+const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/scheduled', '/tools', '/instructions'] as const;
@@ -121,6 +125,53 @@ function useSidebarRowHover<T extends HTMLElement>() {
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
   };
+}
+
+function readCollapsedConversationGroupKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const value of parsed) {
+      if (typeof value !== 'string') {
+        continue;
+      }
+
+      const normalized = value.trim();
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      keys.push(normalized);
+    }
+
+    return keys;
+  } catch {
+    return [];
+  }
+}
+
+function writeCollapsedConversationGroupKeys(keys: readonly string[]): void {
+  try {
+    if (keys.length > 0) {
+      localStorage.setItem(THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY, JSON.stringify(keys));
+      return;
+    }
+
+    localStorage.removeItem(THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function matchesSettingsRoute(pathname: string): boolean {
@@ -235,6 +286,14 @@ function ShelfRow({
           {hovered && pinned && onUnpin ? (
             <button
               type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -250,6 +309,14 @@ function ShelfRow({
           {hovered && !pinned && onPin ? (
             <button
               type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -265,6 +332,14 @@ function ShelfRow({
           {hovered && !pinned && onClose ? (
             <button
               type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -286,23 +361,44 @@ function ShelfRow({
 function ConversationCwdGroupHeader({
   label,
   cwd,
+  collapsed,
+  onToggleCollapsed,
   onNewConversation,
 }: {
   label: string;
   cwd: string | null;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onNewConversation: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   const hoverTitle = cwd ?? label;
   const newConversationTitle = cwd
     ? `New conversation in ${cwd}`
     : 'New conversation';
+  const toggleTitle = `${collapsed ? 'Expand' : 'Collapse'} ${label}`;
+  const iconPath = hovered
+    ? (collapsed ? PATH.chevronRight : PATH.chevronDown)
+    : PATH.workspace;
 
   return (
     <div className="px-4 pt-3 pb-1">
       <div className="flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-tight text-primary" title={hoverTitle}>
-          {label}
-        </p>
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-primary transition-colors hover:bg-white/5"
+          title={hoverTitle}
+          aria-label={toggleTitle}
+          aria-expanded={!collapsed}
+        >
+          <span className="shrink-0 text-secondary">
+            <Ico d={iconPath} size={13} />
+          </span>
+          <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight">{label}</span>
+        </button>
         <button
           type="button"
           onClick={onNewConversation}
@@ -422,6 +518,14 @@ function OpenConversationRow({
             {hovered && pinned && onUnpin ? (
               <button
                 type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -437,6 +541,14 @@ function OpenConversationRow({
             {hovered && !pinned && onPin ? (
               <button
                 type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -452,6 +564,14 @@ function OpenConversationRow({
             {hovered && !pinned && onClose ? (
               <button
                 type="button"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
                 onClick={(event) => {
                   event.preventDefault();
                   event.stopPropagation();
@@ -540,6 +660,7 @@ export function Sidebar() {
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
+  const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -611,6 +732,10 @@ export function Sidebar() {
 
     return groupConversationItemsByCwd(combinedRows, (item) => resolveConversationRowGroupCwd(item.row, rowsBySessionId));
   }, [openSessionRows, pinnedSessionRows]);
+  const collapsedConversationGroupKeySet = useMemo(
+    () => new Set(collapsedConversationGroupKeys),
+    [collapsedConversationGroupKeys],
+  );
 
   const activeAlertCount = alerts?.activeCount ?? 0;
   const activeAlertActivityIds = useMemo(
@@ -649,6 +774,20 @@ export function Sidebar() {
   );
   const notificationCount = standaloneUnreadCount + activeAlertCount + attentionConversationCount;
 
+  const toggleConversationGroupCollapsed = useCallback((groupKey: string) => {
+    const normalizedGroupKey = groupKey.trim();
+    if (!normalizedGroupKey) {
+      return;
+    }
+
+    setCollapsedConversationGroupKeys((current) => {
+      const next = current.includes(normalizedGroupKey)
+        ? current.filter((key) => key !== normalizedGroupKey)
+        : [...current, normalizedGroupKey];
+      writeCollapsedConversationGroupKeys(next);
+      return next;
+    });
+  }, []);
 
   function clearDragState() {
     setDraggingSessionId(null);
@@ -819,34 +958,47 @@ export function Sidebar() {
   }, [handleNewConversation, navigateOpenConversation]);
 
   function handleCloseDraftTab() {
-    clearDraftConversationAttachments();
-    clearDraftConversationComposer();
-    clearDraftConversationCwd();
-    clearDraftConversationModel();
-    clearDraftConversationThinkingLevel();
-    setDraftComposer('');
-    setDraftCwd('');
-    setDraftHasAttachments(false);
+    const closeDraft = () => {
+      clearDraftConversationAttachments();
+      clearDraftConversationComposer();
+      clearDraftConversationCwd();
+      clearDraftConversationModel();
+      clearDraftConversationThinkingLevel();
+      setDraftComposer('');
+      setDraftCwd('');
+      setDraftHasAttachments(false);
+    };
 
     if (draggingSessionId === DRAFT_CONVERSATION_ID) {
       clearDragState();
     }
 
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
-      navigate('/conversations');
+      navigate('/conversations/new');
+      window.setTimeout(closeDraft, 0);
+      return;
     }
+
+    closeDraft();
   }
 
   function handleCloseConversation(sessionId: string) {
-    closeSession(sessionId);
+    const closeConversation = () => {
+      closeSession(sessionId);
+    };
+    const closingActiveConversation = location.pathname === `/conversations/${sessionId}`;
 
     if (draggingSessionId === sessionId) {
       clearDragState();
     }
 
-    if (location.pathname === `/conversations/${sessionId}`) {
-      navigate('/conversations');
+    if (closingActiveConversation) {
+      navigate('/conversations/new');
+      window.setTimeout(closeConversation, 0);
+      return;
     }
+
+    closeConversation();
   }
 
   function handlePinConversation(sessionId: string) {
@@ -894,6 +1046,10 @@ export function Sidebar() {
 
       <div className="mx-3 border-t border-border-subtle my-2" />
 
+      <div className="px-4 pb-1">
+        <p className="ui-section-label">Threads</p>
+      </div>
+
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
         <div className="py-1 space-y-0.5">
           {!loading && pinnedSessions.length === 0 && draggingSection === 'open' ? (
@@ -918,46 +1074,52 @@ export function Sidebar() {
             <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
           ) : null}
 
-          {groupedConversationRows.map((group) => (
-            <div key={`cwd:${group.key}`} className="space-y-0.5 pt-3 first:pt-0">
-              <ConversationCwdGroupHeader
-                label={group.label}
-                cwd={group.cwd}
-                onNewConversation={() => handleNewConversation(group.cwd)}
-              />
-              {group.items.map(({ row: { session, depth, parentSessionId }, section, pinned }) => {
-                const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-                const canDrag = !isDraftTab && depth === 0;
-                const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
-                  ? dropTarget.position
-                  : null;
-                const parentTitle = section === 'pinned'
-                  ? (parentSessionId ? pinnedSessionsById.get(parentSessionId)?.title : undefined)
-                  : (parentSessionId ? openSessionsById.get(parentSessionId)?.title : undefined);
+          {groupedConversationRows.map((group) => {
+            const collapsed = collapsedConversationGroupKeySet.has(group.key);
 
-                return (
-                  <OpenConversationRow
-                    key={session.id}
-                    session={session}
-                    active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
-                    pinned={pinned}
-                    canDrag={canDrag}
-                    isDragging={canDrag && draggingSessionId === session.id}
-                    dropPosition={dropPosition}
-                    depth={depth}
-                    nestedUnderTitle={parentTitle}
-                    onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
-                    onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
-                    onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
-                    onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
-                    onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
-                    onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
-                    onDragEnd={canDrag ? () => clearDragState() : undefined}
-                  />
-                );
-              })}
-            </div>
-          ))}
+            return (
+              <div key={`cwd:${group.key}`} className="space-y-0.5 pt-3 first:pt-0">
+                <ConversationCwdGroupHeader
+                  label={group.label}
+                  cwd={group.cwd}
+                  collapsed={collapsed}
+                  onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
+                  onNewConversation={() => handleNewConversation(group.cwd)}
+                />
+                {!collapsed ? group.items.map(({ row: { session, depth, parentSessionId }, section, pinned }) => {
+                  const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
+                  const canDrag = !isDraftTab && depth === 0;
+                  const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+                    ? dropTarget.position
+                    : null;
+                  const parentTitle = section === 'pinned'
+                    ? (parentSessionId ? pinnedSessionsById.get(parentSessionId)?.title : undefined)
+                    : (parentSessionId ? openSessionsById.get(parentSessionId)?.title : undefined);
+
+                  return (
+                    <OpenConversationRow
+                      key={session.id}
+                      session={session}
+                      active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
+                      pinned={pinned}
+                      canDrag={canDrag}
+                      isDragging={canDrag && draggingSessionId === session.id}
+                      dropPosition={dropPosition}
+                      depth={depth}
+                      nestedUnderTitle={parentTitle}
+                      onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
+                      onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
+                      onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
+                      onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
+                      onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
+                      onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
+                      onDragEnd={canDrag ? () => clearDragState() : undefined}
+                    />
+                  );
+                }) : null}
+              </div>
+            );
+          })}
         </div>
 
         {openWorkspaces.length > 0 && (

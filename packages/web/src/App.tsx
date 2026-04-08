@@ -522,7 +522,7 @@ export function App() {
                       <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
-                      <Route index element={<Navigate to="/workspace/files" replace />} />
+                      <Route index element={<Navigate to="/conversations/new" replace />} />
                       <Route path="conversations" element={<ConversationsRouteRedirect />} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />

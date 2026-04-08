@@ -25,11 +25,11 @@ describe('resolveConversationIndexRedirect', () => {
     })).toBe('/conversations/new');
   });
 
-  it('falls back to the workspace when nothing is open', () => {
+  it('falls back to a new conversation when nothing is open', () => {
     expect(resolveConversationIndexRedirect({
       openIds: ['   ', 'new'],
       pinnedIds: [''],
       hasDraft: false,
-    })).toBe('/workspace/files');
+    })).toBe('/conversations/new');
   });
 });

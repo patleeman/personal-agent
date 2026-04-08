@@ -10,6 +10,7 @@ import {
   OPEN_WORKSPACE_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
+  buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
 import type { DurableRunListResult, DurableRunRecord, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
@@ -192,7 +193,8 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Vault'));
-    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Notifications'));
+    expect(html.indexOf('Vault')).toBeLessThan(html.indexOf('Threads'));
+    expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Notifications'));
     expect(html.indexOf('Notifications')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
@@ -200,6 +202,7 @@ describe('Sidebar', () => {
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).toContain('Vault');
+    expect(html).toContain('Threads');
     expect(html).not.toContain('Conversations');
     expect(html).not.toContain('Docs');
     expect(html).not.toContain('Capabilities');
@@ -258,7 +261,7 @@ describe('Sidebar', () => {
     expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
-  it('groups open conversations by working directory with quick-start actions in the headers', () => {
+  it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
 
     const html = renderSidebar('/inbox', {
@@ -273,10 +276,26 @@ describe('Sidebar', () => {
     expect((html.match(/beta-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect(html).toContain('title="/tmp/alpha-worktree"');
     expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
+    expect(html).toContain('aria-label="Collapse alpha-worktree"');
+    expect(html).toContain('aria-expanded="true"');
     expect(html).not.toContain('>2</span>');
     expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('First alpha conversation'));
     expect(html.indexOf('First alpha conversation')).toBeLessThan(html.indexOf('Second alpha conversation'));
     expect(html.indexOf('Second alpha conversation')).toBeLessThan(html.indexOf('beta-worktree'));
+  });
+
+  it('hides conversation rows for collapsed cwd groups', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
+    storage.setItem(
+      buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups'),
+      JSON.stringify(['/Users/patrickc.lee/personal/personal-agent']),
+    );
+
+    const html = renderSidebar('/inbox');
+
+    expect(html).toContain('aria-label="Expand personal-agent"');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Clarify background run link');
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {
