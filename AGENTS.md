@@ -28,6 +28,7 @@ If the goal is to publish a downloadable installable macOS app on GitHub Release
 1. From the repo root, bump the version with `npm run release:patch`, `npm run release:minor`, or `npm run release:major`.
 2. Push the commit and tag with `git push --follow-tags`.
 3. The `Release` GitHub Actions workflow runs on pushed `v*` tags, builds the macOS desktop app, and creates the GitHub release with the generated `.dmg` and `.zip` artifacts.
+4. Current packaging uses ad-hoc signing for macOS arm64 so releases open as unsigned apps instead of failing with the unbypassable “app is damaged” dialog. Full Apple signing/notarization is still not configured.
 
 Important: pushing commits to `master` does not create a GitHub release by itself. The release workflow only runs when the version tag is pushed.
 

@@ -56,4 +56,6 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 ## Current scope
 
-This release flow currently targets macOS arm64 only and does not perform signing or notarization yet.
+This release flow currently targets macOS arm64 only.
+
+It now uses ad-hoc signing so downloaded builds do not hit the unbypassable “app is damaged” failure on Apple Silicon. It still does not perform Apple Developer ID signing or notarization yet, so macOS will continue to show the normal unverified-app warning for downloaded releases until that is added.
