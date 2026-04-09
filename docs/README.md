@@ -53,7 +53,6 @@ Then use this order:
 - [Native UI Automation](./native-ui-automation.md)
 - [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
 - [Release cycle](./release-cycle.md)
-- [Protected downloads via Cloudflare R2](./protected-downloads.md)
 
 ## System surfaces
 

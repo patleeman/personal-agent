@@ -54,20 +54,17 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 - notarizes the packaged app and staples it
 - notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
-- can then be followed by `npm run downloads:upload:desktop-release` when the signed build should power the protected Cloudflare updater feed
 
 GitHub Actions no longer publishes shipped release artifacts automatically. `.github/workflows/release.yml` is now only a manual smoke-build workflow for unsigned CI packaging checks.
 
 ## Desktop update checks
 
-The packaged desktop app now uses Electron's native macOS updater against the protected Cloudflare Worker feed:
+The packaged desktop app checks GitHub Releases for newer versions:
 
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check
-- when a newer release exists, the app downloads the signed `.zip` from the protected `updates/stable` feed and prompts to install and relaunch in place
-- the updater feed expects `latest-mac.yml`, the matching `.zip`, and the `.zip.blockmap` to be uploaded to `updates/stable/`
-
-The packaged app reads its protected updater credentials from `auto-update-config.json`, which `npm run desktop:dist` generates from Patrick's local download token before packaging.
+- when a newer release exists, it opens the signed installer download or release page in the browser for manual install
+- unpackaged development runs keep update checks disabled
 
 ## Packaged desktop runtime layout
 
@@ -82,10 +79,9 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 This release flow currently targets macOS arm64 only.
 
-Shipped binaries can either be uploaded to GitHub releases from Patrick's local signed build path or published through the protected Cloudflare R2 Worker flow documented in [Protected downloads via Cloudflare R2](./protected-downloads.md).
+Shipped binaries are published through GitHub releases from Patrick's local signed build path.
 
 ## Related docs
 
 - [Electron desktop app plan](./electron-desktop-app-plan.md)
 - [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
-- [Protected downloads via Cloudflare R2](./protected-downloads.md)

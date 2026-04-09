@@ -34,17 +34,6 @@ Important: pushing commits or tags to `master` does not create a GitHub release 
 
 See `docs/release-cycle.md` for the fuller release notes.
 
-## Protected download distribution
-
-If the goal is light-gated binary distribution instead of public GitHub release assets, use the private Cloudflare R2 bucket + Worker flow in `docs/protected-downloads.md`.
-
-From the repo root:
-
-1. `npm run downloads:deploy` deploys the token-gated Worker defined in `tools/cloudflare-download-gate/`.
-2. `npm run downloads:upload:desktop-release` uploads the signed `.dmg`, `.zip`, `latest-mac.yml`, and `.blockmap` files into the private `personal-agent-downloads` bucket using the expected archive and updater prefixes.
-3. The desktop app now uses that protected `updates/stable` feed for in-app macOS auto-update when the build includes the local download token.
-4. Share the versioned Worker URL and the bearer token instead of publishing the binaries publicly.
-
 ## Docs are for agents
 
 The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.

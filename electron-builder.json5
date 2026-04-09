@@ -12,11 +12,6 @@
   extraMetadata: {
     main: './dist/main.js',
   },
-  publish: {
-    provider: 'generic',
-    url: 'https://personal-agent-download-gate.patricklee.workers.dev/updates/stable',
-    useMultipleRangeRequest: false,
-  },
   electronUpdaterCompatibility: '>=2.16',
   icon: 'packages/desktop/assets/icon.png',
   extraResources: [
@@ -35,10 +30,6 @@
     {
       from: 'prompt-catalog',
       to: 'prompt-catalog',
-    },
-    {
-      from: 'build/generated/auto-update-config.json',
-      to: 'auto-update-config.json',
     },
   ],
   mac: {

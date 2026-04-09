@@ -18,8 +18,7 @@
     "@personal-agent/daemon": "*",
     "@personal-agent/resources": "*",
     "@personal-agent/services": "*",
-    "@personal-agent/web": "*",
-    "electron-updater": "^6.8.3"
+    "@personal-agent/web": "*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
