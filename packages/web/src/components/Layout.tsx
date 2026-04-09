@@ -4,7 +4,7 @@ import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
-import { DesktopHostIndicator } from './DesktopHostIndicator';
+import { DesktopTopBar } from './DesktopTopBar';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
@@ -437,7 +437,7 @@ export function Layout() {
 
         <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
           <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
-            <DesktopHostIndicator environment={desktopEnvironment} />
+            <DesktopTopBar environment={desktopEnvironment} forceVisible />
             <Outlet />
           </main>
 

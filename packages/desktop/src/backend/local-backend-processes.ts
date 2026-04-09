@@ -66,7 +66,7 @@ export class LocalBackendProcesses {
 
     const runtime = resolveDesktopRuntimePaths();
     this.daemonProcess = spawnLoggedChild({
-      command: process.execPath,
+      command: runtime.nodeCommand,
       args: [runtime.daemonEntryFile, '--foreground'],
       cwd: runtime.repoRoot,
       env: process.env,
@@ -76,7 +76,7 @@ export class LocalBackendProcesses {
     await waitForDaemonHealthy();
 
     this.webProcess = spawnLoggedChild({
-      command: process.execPath,
+      command: runtime.nodeCommand,
       args: [runtime.webServerEntryFile],
       cwd: runtime.repoRoot,
       env: {

@@ -11,6 +11,41 @@
     @apply text-base font-semibold text-primary;
   }
 
+  .ui-desktop-top-bar {
+    @apply sticky top-0 z-20 flex items-center gap-3 border-b border-border-subtle bg-base/95 px-4 py-3 backdrop-blur-sm;
+    min-height: 54px;
+    -webkit-app-region: drag;
+  }
+
+  .ui-desktop-top-bar__drag-region {
+    @apply absolute inset-0;
+    -webkit-app-region: drag;
+  }
+
+  .ui-desktop-top-bar__leading {
+    @apply relative z-10 flex items-center pl-16;
+  }
+
+  .ui-desktop-top-bar__controls {
+    @apply flex items-center gap-1.5;
+  }
+
+  .ui-desktop-top-bar__center {
+    @apply relative z-10 min-w-0 flex-1 text-center;
+  }
+
+  .ui-desktop-top-bar__title {
+    @apply truncate text-[13px] font-semibold text-primary;
+  }
+
+  .ui-desktop-top-bar__meta {
+    @apply truncate pt-0.5 text-[11px] text-secondary;
+  }
+
+  .ui-desktop-top-bar__trailing {
+    @apply relative z-10 flex items-center justify-end;
+  }
+
   .ui-page-meta {
     @apply text-xs text-secondary mt-0.5 font-mono;
   }

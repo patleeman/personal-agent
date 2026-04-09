@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
@@ -9,6 +10,17 @@ import type { HostManager } from './hosts/host-manager.js';
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   return resolve(currentDir, 'preload.js');
+}
+
+export interface DesktopNavigationState {
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+function toDesktopShellUrl(url: string): string {
+  const parsed = new URL(url);
+  parsed.searchParams.set('desktop-shell', '1');
+  return parsed.toString();
 }
 
 export class DesktopWindowController {
@@ -26,9 +38,10 @@ export class DesktopWindowController {
     const host = this.hostManager.getActiveHostRecord();
     const partition = getHostBrowserPartition(host.id);
     const baseUrl = await this.hostManager.getActiveHostBaseUrl();
-    const targetUrl = new URL(pathname, baseUrl).toString();
+    const targetUrl = toDesktopShellUrl(new URL(pathname, baseUrl).toString());
 
     const window = this.ensureWindow(partition);
+    await window.webContents.session.clearCache();
     if (window.webContents.getURL() !== targetUrl) {
       await window.loadURL(targetUrl);
     }
@@ -47,9 +60,11 @@ export class DesktopWindowController {
   async openAbsoluteUrl(url: string): Promise<void> {
     const host = this.hostManager.getActiveHostRecord();
     const partition = getHostBrowserPartition(host.id);
+    const targetUrl = toDesktopShellUrl(url);
     const window = this.ensureWindow(partition);
-    if (window.webContents.getURL() !== url) {
-      await window.loadURL(url);
+    await window.webContents.session.clearCache();
+    if (window.webContents.getURL() !== targetUrl) {
+      await window.loadURL(targetUrl);
     }
 
     if (!window.isVisible()) {
@@ -65,6 +80,31 @@ export class DesktopWindowController {
 
   hideMainWindow(): void {
     this.mainWindow?.hide();
+  }
+
+  getNavigationState(): DesktopNavigationState {
+    return {
+      canGoBack: this.mainWindow?.webContents.canGoBack() ?? false,
+      canGoForward: this.mainWindow?.webContents.canGoForward() ?? false,
+    };
+  }
+
+  async goBack(): Promise<DesktopNavigationState> {
+    if (this.mainWindow?.webContents.canGoBack()) {
+      this.mainWindow.webContents.goBack();
+      await delay(120);
+    }
+
+    return this.getNavigationState();
+  }
+
+  async goForward(): Promise<DesktopNavigationState> {
+    if (this.mainWindow?.webContents.canGoForward()) {
+      this.mainWindow.webContents.goForward();
+      await delay(120);
+    }
+
+    return this.getNavigationState();
   }
 
   private ensureWindow(partition: string): BrowserWindow {
@@ -89,6 +129,9 @@ export class DesktopWindowController {
       ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y } : {}),
       title: 'Personal Agent',
       icon: runtime.colorIconFile,
+      autoHideMenuBar: true,
+      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
+      trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 14 } : undefined,
       webPreferences: {
         preload: resolvePreloadPath(),
         partition,

@@ -5,6 +5,7 @@ import { getStateRoot } from '@personal-agent/core';
 
 export interface DesktopRuntimePaths {
   repoRoot: string;
+  nodeCommand: string;
   daemonEntryFile: string;
   webServerEntryFile: string;
   webDistDir: string;
@@ -53,6 +54,8 @@ export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
 
   mkdirSync(desktopLogsDir, { recursive: true, mode: 0o700 });
 
+  const nodeCommand = process.env.PERSONAL_AGENT_NODE_PATH?.trim() || 'node';
+
   const daemonEntryFile = resolveExistingFile('daemon entry file', [
     resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js'),
   ]);
@@ -71,6 +74,7 @@ export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
 
   return {
     repoRoot,
+    nodeCommand,
     daemonEntryFile,
     webServerEntryFile,
     webDistDir,
