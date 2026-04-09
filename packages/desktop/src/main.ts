@@ -53,6 +53,15 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNewConversation: () => {
       void hostManager?.openNewConversation().then((url) => windowController?.openAbsoluteUrl(url));
     },
+    onCloseConversation: () => {
+      windowController?.sendShortcutToFocusedWindow('close-conversation');
+    },
+    onPreviousConversation: () => {
+      windowController?.sendShortcutToFocusedWindow('previous-conversation');
+    },
+    onNextConversation: () => {
+      windowController?.sendShortcutToFocusedWindow('next-conversation');
+    },
     onConnections: () => {
       void windowController?.openMainWindow('/settings#desktop-connections');
     },

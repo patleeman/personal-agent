@@ -38,6 +38,18 @@ Behavior to expect:
 - quitting from the tray or app menu shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 
+## Desktop shortcuts
+
+When the UI is running inside Electron, the app menu owns a few desktop-specific conversation shortcuts:
+
+- `Cmd/Ctrl+N` — new conversation
+- `Cmd/Ctrl+W` — close the current conversation surface
+- `Cmd/Ctrl+[` / `Cmd/Ctrl+]` — previous / next conversation
+- `Cmd/Ctrl+,` — open desktop connections
+- `Cmd/Ctrl+K` — open the command palette
+
+Window hiding is still available from the native window controls and the tray; `Cmd/Ctrl+W` is reserved for closing conversation tabs instead.
+
 ## Host modes
 
 ### Local host

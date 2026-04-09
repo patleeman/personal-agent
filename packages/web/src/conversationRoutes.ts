@@ -32,7 +32,7 @@ export function buildConversationPath(id: string): string {
   return `/conversations/${encodeURIComponent(id)}`;
 }
 
-function buildConversationSurfacePath(id: string): string {
+export function buildConversationSurfacePath(id: string): string {
   return id === DRAFT_CONVERSATION_ID ? DRAFT_CONVERSATION_ROUTE : buildConversationPath(id);
 }
 
@@ -60,6 +60,32 @@ export function resolveConversationIndexRedirect(input: {
   }
 
   return DEFAULT_CONVERSATIONS_REDIRECT_PATH;
+}
+
+export function resolveConversationAdjacentPath(input: {
+  orderedIds?: Iterable<unknown>;
+  activeId?: unknown;
+  direction: -1 | 1;
+}): string | null {
+  const orderedIds = Array.from(input.orderedIds ?? [])
+    .map((value) => normalizeConversationSurfaceId(value))
+    .filter((value): value is string => Boolean(value));
+  if (orderedIds.length === 0) {
+    return null;
+  }
+
+  const activeId = normalizeConversationSurfaceId(input.activeId);
+  if (!activeId) {
+    return buildConversationSurfacePath(input.direction > 0 ? orderedIds[0] : orderedIds[orderedIds.length - 1]);
+  }
+
+  const activeIndex = orderedIds.findIndex((value) => value === activeId);
+  if (activeIndex === -1) {
+    return buildConversationSurfacePath(input.direction > 0 ? orderedIds[0] : orderedIds[orderedIds.length - 1]);
+  }
+
+  const nextIndex = (activeIndex + input.direction + orderedIds.length) % orderedIds.length;
+  return buildConversationSurfacePath(orderedIds[nextIndex]);
 }
 
 export function resolveConversationCloseRedirect(input: {

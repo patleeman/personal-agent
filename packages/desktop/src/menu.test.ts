@@ -5,6 +5,9 @@ function createActions() {
   return {
     onOpen: vi.fn(),
     onNewConversation: vi.fn(),
+    onCloseConversation: vi.fn(),
+    onPreviousConversation: vi.fn(),
+    onNextConversation: vi.fn(),
     onConnections: vi.fn(),
     onCheckForUpdates: vi.fn(),
     onRestartBackend: vi.fn(),
@@ -36,8 +39,14 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     ]));
 
     const fileMenu = template[1];
+    expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
+      expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
+      expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
+    ]));
     expect(fileMenu?.submenu).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Connections…' }),
+      expect.objectContaining({ role: 'close' }),
     ]));
   });
 
@@ -58,6 +67,9 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Open Personal Agent', accelerator: 'CommandOrControl+Shift+A' }),
       expect.objectContaining({ label: 'New Conversation', accelerator: 'CommandOrControl+N' }),
+      expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
+      expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
+      expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Connections…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Backend' }),

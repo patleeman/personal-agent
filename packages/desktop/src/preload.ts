@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
+const SHORTCUT_CHANNEL = `${CHANNEL_PREFIX}:shortcut`;
+const SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -11,6 +13,8 @@ const domGlobals = globalThis as typeof globalThis & {
       setAttribute(name: string, value: string): void;
     };
   };
+  dispatchEvent?: (event: { type: string }) => boolean;
+  CustomEvent?: new <T>(type: string, init?: { detail?: T }) => { type: string; detail?: T };
 };
 
 const desktopBridge = {
@@ -35,5 +39,15 @@ if (domGlobals.document?.documentElement) {
 if (domGlobals.document?.body) {
   domGlobals.document.body.setAttribute('data-personal-agent-desktop', '1');
 }
+
+ipcRenderer.on(SHORTCUT_CHANNEL, (_event, action: unknown) => {
+  if (!domGlobals.dispatchEvent || typeof domGlobals.CustomEvent !== 'function') {
+    return;
+  }
+
+  domGlobals.dispatchEvent(new domGlobals.CustomEvent(SHORTCUT_EVENT, {
+    detail: { action },
+  }));
+});
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

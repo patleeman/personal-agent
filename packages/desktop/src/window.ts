@@ -18,6 +18,8 @@ export interface DesktopNavigationState {
   canGoForward: boolean;
 }
 
+export type DesktopRendererShortcutAction = 'close-conversation' | 'previous-conversation' | 'next-conversation';
+
 type ManagedWindowRole = 'main' | 'remote';
 
 function toDesktopShellUrl(url: string): string {
@@ -98,6 +100,18 @@ export class DesktopWindowController {
 
   async goForwardForWebContents(webContentsId: number): Promise<DesktopNavigationState> {
     return this.goForward(this.trackedWindows.get(webContentsId)?.window);
+  }
+
+  sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const trackedWindow = focusedWindow ? this.trackedWindows.get(focusedWindow.webContents.id)?.window : undefined;
+    const targetWindow = trackedWindow ?? this.mainWindow;
+
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return;
+    }
+
+    targetWindow.webContents.send('personal-agent-desktop:shortcut', action);
   }
 
   private async openWindowForHost(hostId: string, pathname: string, role: ManagedWindowRole): Promise<void> {

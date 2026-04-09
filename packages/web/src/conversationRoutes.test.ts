@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { resolveConversationCloseRedirect, resolveConversationIndexRedirect } from './conversationRoutes';
+import {
+  resolveConversationAdjacentPath,
+  resolveConversationCloseRedirect,
+  resolveConversationIndexRedirect,
+} from './conversationRoutes';
 
 describe('resolveConversationIndexRedirect', () => {
   it('prefers the open workspace conversations', () => {
@@ -31,6 +35,37 @@ describe('resolveConversationIndexRedirect', () => {
       pinnedIds: [''],
       hasDraft: false,
     })).toBe('/conversations/new');
+  });
+});
+
+describe('resolveConversationAdjacentPath', () => {
+  it('cycles forward through the ordered conversations and wraps around', () => {
+    expect(resolveConversationAdjacentPath({
+      orderedIds: ['pinned-1', 'open-1', 'new'],
+      activeId: 'open-1',
+      direction: 1,
+    })).toBe('/conversations/new');
+
+    expect(resolveConversationAdjacentPath({
+      orderedIds: ['pinned-1', 'open-1', 'new'],
+      activeId: 'new',
+      direction: 1,
+    })).toBe('/conversations/pinned-1');
+  });
+
+  it('falls back to the edge conversation when nothing is active', () => {
+    expect(resolveConversationAdjacentPath({
+      orderedIds: ['pinned-1', 'open-1'],
+      direction: -1,
+    })).toBe('/conversations/open-1');
+  });
+
+  it('returns null when no workspace conversations are available', () => {
+    expect(resolveConversationAdjacentPath({
+      orderedIds: [],
+      activeId: 'open-1',
+      direction: 1,
+    })).toBeNull();
   });
 });
 

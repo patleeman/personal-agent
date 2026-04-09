@@ -24,7 +24,8 @@ import {
 import { timeAgo } from '../utils';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
-import { resolveConversationCloseRedirect } from '../conversationRoutes';
+import { getDesktopBridge } from '../desktopBridge';
+import { resolveConversationAdjacentPath, resolveConversationCloseRedirect } from '../conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../localSettings';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -55,8 +56,11 @@ const PATH = {
 
 const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
 
-const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
+const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
+const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/automations', '/scheduled', '/tools', '/instructions'] as const;
+
+type DesktopConversationShortcutAction = 'close-conversation' | 'previous-conversation' | 'next-conversation';
 
 type PointerPosition = { x: number; y: number };
 
@@ -182,6 +186,26 @@ function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string)
 
 function hasOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop') !== null;
+}
+
+function isMacPlatform(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  return /mac|iphone|ipad|ipod/i.test(navigator.platform);
+}
+
+function getNewConversationHotkeyLabel(): string {
+  if (getDesktopBridge() !== null) {
+    return isMacPlatform() ? '⌘N' : 'Ctrl+N';
+  }
+
+  return SIDEBAR_BROWSER_NEW_CHAT_HOTKEY;
+}
+
+function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
+  return value === 'close-conversation' || value === 'previous-conversation' || value === 'next-conversation';
 }
 
 function TopNavItem({
@@ -489,6 +513,10 @@ export function Sidebar() {
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
   );
+  const workspaceConversationTabs = useMemo(
+    () => [...pinnedSessions, ...visibleConversationTabs],
+    [pinnedSessions, visibleConversationTabs],
+  );
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -498,10 +526,17 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
+  const activeConversationSurfaceId = useMemo(() => {
+    if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
+      return DRAFT_CONVERSATION_ID;
+    }
+
+    return activeConversationId;
+  }, [activeConversationId, location.pathname]);
   const resolveCloseRedirectPath = useCallback((closingId: string) => resolveConversationCloseRedirect({
-    orderedIds: visibleConversationTabs.map((session) => session.id),
+    orderedIds: workspaceConversationTabs.map((session) => session.id),
     closingId,
-  }), [visibleConversationTabs]);
+  }), [workspaceConversationTabs]);
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
   const groupedConversationRows = useMemo(() => groupConversationItemsByCwd([
     ...pinnedSessions.map((session) => ({ session, section: 'pinned' as const, pinned: true })),
@@ -660,24 +695,17 @@ export function Sidebar() {
     navigate('/conversations/new');
   }, [navigate]);
 
-  const navigateOpenConversation = useCallback((direction: -1 | 1) => {
-    if (tabs.length === 0) {
-      return;
+  const navigateConversation = useCallback((direction: -1 | 1) => {
+    const nextPath = resolveConversationAdjacentPath({
+      orderedIds: workspaceConversationTabs.map((session) => session.id),
+      activeId: activeConversationSurfaceId,
+      direction,
+    });
+
+    if (nextPath) {
+      navigate(nextPath);
     }
-
-    const activeIndex = activeConversationId
-      ? tabs.findIndex((session) => session.id === activeConversationId)
-      : -1;
-
-    if (activeIndex === -1) {
-      const fallbackIndex = direction > 0 ? 0 : tabs.length - 1;
-      navigate(`/conversations/${tabs[fallbackIndex].id}`);
-      return;
-    }
-
-    const nextIndex = (activeIndex + direction + tabs.length) % tabs.length;
-    navigate(`/conversations/${tabs[nextIndex].id}`);
-  }, [activeConversationId, navigate, tabs]);
+  }, [activeConversationSurfaceId, navigate, workspaceConversationTabs]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -698,19 +726,19 @@ export function Sidebar() {
 
       if (event.code === 'BracketLeft' || key === '[' || key === '{') {
         event.preventDefault();
-        navigateOpenConversation(-1);
+        navigateConversation(-1);
         return;
       }
 
       if (event.code === 'BracketRight' || key === ']' || key === '}') {
         event.preventDefault();
-        navigateOpenConversation(1);
+        navigateConversation(1);
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNewConversation, navigateOpenConversation]);
+  }, [handleNewConversation, navigateConversation]);
 
   function handleCloseDraftTab() {
     const closeDraft = () => {
@@ -756,6 +784,77 @@ export function Sidebar() {
     closeConversation();
   }
 
+  function handleClosePinnedConversation(sessionId: string) {
+    const closeConversation = () => {
+      unpinSession(sessionId, { open: false });
+    };
+    const closingActiveConversation = location.pathname === `/conversations/${sessionId}`;
+
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+
+    if (closingActiveConversation) {
+      navigate(resolveCloseRedirectPath(sessionId));
+      window.setTimeout(closeConversation, 0);
+      return;
+    }
+
+    closeConversation();
+  }
+
+  function handleCloseActiveConversation() {
+    if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
+      handleCloseDraftTab();
+      return;
+    }
+
+    if (!activeConversationId) {
+      return;
+    }
+
+    if (pinnedSessions.some((session) => session.id === activeConversationId)) {
+      handleClosePinnedConversation(activeConversationId);
+      return;
+    }
+
+    if (tabs.some((session) => session.id === activeConversationId)) {
+      handleCloseConversation(activeConversationId);
+    }
+  }
+
+  useEffect(() => {
+    if (getDesktopBridge() === null) {
+      return;
+    }
+
+    function handleDesktopShortcut(event: Event) {
+      if (hasOverlayOpen()) {
+        return;
+      }
+
+      const action = (event as CustomEvent<{ action?: unknown }>).detail?.action;
+      if (!isDesktopConversationShortcutAction(action)) {
+        return;
+      }
+
+      if (action === 'close-conversation') {
+        handleCloseActiveConversation();
+        return;
+      }
+
+      if (action === 'previous-conversation') {
+        navigateConversation(-1);
+        return;
+      }
+
+      navigateConversation(1);
+    }
+
+    window.addEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
+    return () => window.removeEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
+  }, [handleCloseActiveConversation, navigateConversation]);
+
   function handlePinConversation(sessionId: string) {
     pinSession(sessionId);
     if (draggingSessionId === sessionId) {
@@ -770,6 +869,8 @@ export function Sidebar() {
     }
   }
 
+  const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
+
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
       <div className="pt-3 pb-2 space-y-0.5">
@@ -780,7 +881,7 @@ export function Sidebar() {
               'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
               location.pathname.startsWith('/conversations') && 'ui-sidebar-nav-item-active',
             ].filter(Boolean).join(' ')}
-            title={`Chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+            title={`Chat (${newConversationHotkeyLabel})`}
           >
             <Ico d={PATH.plus} size={15} />
             <span className="flex-1 text-left">Chat</span>

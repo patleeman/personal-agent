@@ -3,6 +3,9 @@ import { Menu, app, type MenuItemConstructorOptions } from 'electron';
 export interface DesktopApplicationMenuActions {
   onOpen: () => void;
   onNewConversation: () => void;
+  onCloseConversation: () => void;
+  onPreviousConversation: () => void;
+  onNextConversation: () => void;
   onConnections: () => void;
   onCheckForUpdates: () => void;
   onRestartBackend: () => void;
@@ -35,9 +38,31 @@ export function buildDesktopApplicationMenuTemplate(
         accelerator: 'CommandOrControl+N',
         click: actions.onNewConversation,
       },
+      {
+        label: 'Close Conversation',
+        accelerator: 'CommandOrControl+W',
+        click: actions.onCloseConversation,
+      },
+      {
+        label: 'Previous Conversation',
+        accelerator: 'CommandOrControl+[',
+        click: actions.onPreviousConversation,
+      },
+      {
+        label: 'Next Conversation',
+        accelerator: 'CommandOrControl+]',
+        click: actions.onNextConversation,
+      },
       ...(isMac
-        ? []
+        ? [
+            {
+              type: 'separator' as const,
+            },
+          ]
         : [
+            {
+              type: 'separator' as const,
+            },
             {
               label: 'Connections…',
               accelerator: 'CommandOrControl+,',
@@ -47,26 +72,26 @@ export function buildDesktopApplicationMenuTemplate(
               label: 'Check for Updates…',
               click: actions.onCheckForUpdates,
             },
+            {
+              type: 'separator' as const,
+            },
           ]),
-      {
-        type: 'separator',
-      },
       {
         label: 'Restart Backend',
         click: actions.onRestartBackend,
       },
-      {
-        type: 'separator',
-      },
-      isMac
-        ? {
-            role: 'close',
-          }
-        : {
-            label: `Quit ${appName}`,
-            accelerator: 'Alt+F4',
-            click: actions.onQuit,
-          },
+      ...(!isMac
+        ? [
+            {
+              type: 'separator' as const,
+            },
+            {
+              label: `Quit ${appName}`,
+              accelerator: 'Alt+F4',
+              click: actions.onQuit,
+            },
+          ]
+        : []),
     ],
   };
 
