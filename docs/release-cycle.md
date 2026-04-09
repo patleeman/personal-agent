@@ -80,4 +80,4 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 This release flow currently targets macOS arm64 only.
 
-Shipped GitHub release artifacts are expected to come from Patrick's locally signed and notarized build path. CI no longer acts as the source of truth for downloadable release binaries.
+Shipped binaries can either be uploaded to GitHub releases from Patrick's local signed build path or published through the protected Cloudflare R2 Worker flow documented in [Protected downloads via Cloudflare R2](./protected-downloads.md).

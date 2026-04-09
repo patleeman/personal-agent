@@ -34,6 +34,16 @@ Important: pushing commits or tags to `master` does not create a GitHub release 
 
 See `docs/release-cycle.md` for the fuller release notes.
 
+## Protected download distribution
+
+If the goal is light-gated binary distribution instead of public GitHub release assets, use the private Cloudflare R2 bucket + Worker flow in `docs/protected-downloads.md`.
+
+From the repo root:
+
+1. `npm run downloads:deploy` deploys the token-gated Worker defined in `tools/cloudflare-download-gate/`.
+2. `npm run downloads:upload -- --prefix releases/v<version>/ <files...>` uploads signed artifacts into the private `personal-agent-downloads` bucket.
+3. Share the Worker URL and the bearer token instead of publishing the binaries publicly.
+
 ## Docs are for agents
 
 The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.

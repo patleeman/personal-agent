@@ -22,6 +22,8 @@
     "release:desktop:patch": "npm run release:patch && npm run release:publish",
     "release:desktop:minor": "npm run release:minor && npm run release:publish",
     "release:desktop:major": "npm run release:major && npm run release:publish",
+    "downloads:deploy": "wrangler deploy --config tools/cloudflare-download-gate/wrangler.toml",
+    "downloads:upload": "node scripts/upload-protected-downloads.mjs",
     "version": "node scripts/sync-workspace-versions.mjs && npm install --package-lock-only --ignore-scripts && git add package-lock.json packages/*/package.json",
     "lint": "eslint packages extensions --ext .ts,.tsx",
     "test": "vitest run",

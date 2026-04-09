@@ -1,0 +1,10 @@
+name = "personal-agent-download-gate"
+main = "src/index.ts"
+compatibility_date = "2026-04-09"
+workers_dev = true
+preview_urls = false
+account_id = "b7683453ae10184ab220f316c25f4076"
+
+[[r2_buckets]]
+binding = "DOWNLOADS"
+bucket_name = "personal-agent-downloads"
