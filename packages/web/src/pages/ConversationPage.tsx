@@ -4614,12 +4614,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       type="button"
                       onClick={() => { void summarizeAndForkConversation(); }}
                       disabled={summarizeAndForkDisabled}
-                      title={summarizeAndForkTitle}
-                      aria-label="Summarize and fork this conversation"
-                      className="ui-toolbar-button shrink-0 rounded-xl px-3.5 py-2 text-accent"
+                      title={summaryForkBusy ? 'Summarizing and forking this conversation' : summarizeAndForkTitle}
+                      aria-label={summaryForkBusy ? 'Summarizing and forking this conversation' : 'Summarize and fork this conversation'}
+                      className="ui-toolbar-button shrink-0 rounded-xl px-2.5 py-2 text-accent"
                     >
                       <SummarizeForkIcon className={cx('h-3.5 w-3.5 shrink-0', summaryForkBusy && 'animate-pulse')} />
-                      <span>{summaryForkBusy ? 'summarizing…' : 'summarize + fork'}</span>
                     </button>
                   </div>
                 )}

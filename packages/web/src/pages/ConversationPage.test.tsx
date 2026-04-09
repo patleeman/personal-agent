@@ -562,7 +562,7 @@ describe('ConversationPage', () => {
 
     expect(html).toContain('mx-auto w-full max-w-6xl');
     expect(html).toContain('aria-label="Summarize and fork this conversation"');
-    expect(html).toContain('summarize + fork');
+    expect(html).not.toContain('summarize + fork');
     expect(html).toContain('Show right sidebar');
   });
 });
