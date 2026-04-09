@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,7 +14,7 @@ if (typeof rootPackage.version !== 'string' || rootPackage.version.trim().length
 const version = rootPackage.version;
 const packagesDir = join(repoRoot, 'packages');
 const packageNames = readdirSync(packagesDir, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory())
+  .filter((entry) => entry.isDirectory() && existsSync(join(packagesDir, entry.name, 'package.json')))
   .map((entry) => entry.name)
   .sort();
 
