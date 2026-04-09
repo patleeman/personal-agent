@@ -69,7 +69,7 @@ The web UI exposes reminder/callback notifications through:
 - per-row actions such as open, mark read, dismiss, and snooze when available
 - browser/companion notifications when explicit notification records arrive and permission has already been granted
 
-The desktop web UI also prompts you to enable browser notifications when active reminder/callback notifications exist and browser notifications are still off.
+The desktop web UI can still deliver browser notifications for active reminder/callback notifications when browser notification permission has already been granted.
 
 ## Practical rule of thumb
 

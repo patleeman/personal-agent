@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppData } from '../contexts';
-import { cx } from './ui';
 
 type BrowserNotificationPermissionState = NotificationPermission | 'unsupported';
 
@@ -14,16 +13,6 @@ export function AlertToaster() {
   const { alerts } = useAppData();
   const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermissionState>(() => readNotificationPermission());
   const previousActiveAlertIdsRef = useRef<Set<string>>(new Set());
-  const showPermissionPrompt = notificationPermission === 'default' && (alerts?.activeCount ?? 0) > 0;
-
-  const requestNotificationPermission = useCallback(async () => {
-    if (typeof Notification === 'undefined' || notificationPermission !== 'default') {
-      return;
-    }
-
-    const nextPermission = await Notification.requestPermission();
-    setNotificationPermission(nextPermission);
-  }, [notificationPermission]);
 
   useEffect(() => {
     function syncNotificationPermission() {
@@ -68,28 +57,5 @@ export function AlertToaster() {
     previousActiveAlertIdsRef.current = nextIds;
   }, [alerts?.entries, notificationPermission]);
 
-  if (!showPermissionPrompt) {
-    return null;
-  }
-
-  return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-[min(420px,calc(100vw-2rem))] flex-col gap-3">
-      <div className={cx('pointer-events-auto rounded-2xl border border-accent/35 bg-surface/98 px-4 py-3 shadow-lg backdrop-blur')}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Browser notifications</p>
-        <p className="mt-1 text-[14px] font-semibold text-primary">Enable browser notifications</p>
-        <p className="mt-1 text-[13px] leading-6 text-secondary">
-          Let reminders and scheduled-task callbacks interrupt even when this tab is hidden.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="ui-toolbar-button"
-            onClick={() => { void requestNotificationPermission(); }}
-          >
-            Enable notifications
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }

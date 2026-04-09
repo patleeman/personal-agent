@@ -142,7 +142,7 @@ Reminder and callback notifications stay in the main inbox list and can expose p
 
 See [Reminders and Notification Delivery](./alerts.md).
 
-In the desktop UI, Notifications lives near the bottom of the left sidebar above Settings, and new notification-center items also raise short-lived corner popups.
+In the desktop UI, Notifications lives near the bottom of the left sidebar above Settings.
 
 You can:
 
@@ -181,13 +181,13 @@ Conversation lists in the sidebar live under a dedicated **Threads** section and
 
 Saved conversations keep a minimal right-hand inspector focused on runs and details. That rail stays closed by default and opens on demand. In the runs section, conversation work, background work, and thread-mentioned work are grouped separately so the source of each item is clearer than a flat internal run list.
 
-The conversation header stays compact: the working directory sits inline beside the title, and both draft and saved conversations can change it from that same header area without opening the right rail. Saved conversations expose a summarize + fork button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+The conversation header stays compact: it keeps the title and inline working-directory controls together, and both draft and saved conversations can change that cwd from the same header area without opening the right rail. Saved-conversation status stays out of the title bar; live/running and needs-review signals are handled elsewhere in the UI instead of next to the title. Saved conversations expose a summarize + fork icon button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
 Live-conversation control is tracked per connected surface. The desktop web UI and the `/app` companion can mirror the same live session, but desktop SSE connections do not depend on companion auth state unless the request is actually coming through the companion `/app` API surface.
 
-When reminder/callback notifications exist and browser notifications are still off, the desktop web UI prompts you to enable browser notifications so reminders and callbacks can still interrupt while the tab is hidden.
+When browser notifications are already enabled, reminder/callback notifications can still interrupt while the tab is hidden.
 
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 

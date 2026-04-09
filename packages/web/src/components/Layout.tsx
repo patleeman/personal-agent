@@ -1,7 +1,6 @@
 import { Component, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
-import { NotificationCenterToaster } from './NotificationCenterToaster';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
@@ -443,7 +442,6 @@ export function Layout() {
         <WarmLiveConversationSubscription key={conversationId} sessionId={conversationId} />
       ))}
 
-      <NotificationCenterToaster />
       <AlertToaster />
       <CommandPalette />
     </>
