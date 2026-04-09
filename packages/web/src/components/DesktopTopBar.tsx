@@ -4,6 +4,16 @@ import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
 import { ToolbarButton } from './ui';
 
+function LeftSidebarToggleIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
+      <path d="M4.75 2v10" />
+      {open ? <path d="M6 7h2.5" /> : <path d="M7.9 5.4 6.2 7l1.7 1.6" />}
+    </svg>
+  );
+}
+
 function RightRailToggleIcon({ open }: { open: boolean }) {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
@@ -41,11 +51,15 @@ function readBrowserNavigationState(): DesktopNavigationState {
 
 export function DesktopTopBar({
   environment,
+  sidebarOpen,
+  onToggleSidebar,
   showRailToggle,
   railOpen,
   onToggleRail,
 }: {
   environment: DesktopEnvironmentState | null;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
   showRailToggle: boolean;
   railOpen: boolean;
   onToggleRail: () => void;
@@ -122,11 +136,19 @@ export function DesktopTopBar({
       <div className="ui-desktop-top-bar__leading">
         <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
         <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-          <ToolbarButton className="ui-desktop-top-bar__nav-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back">
+          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
             ←
           </ToolbarButton>
-          <ToolbarButton className="ui-desktop-top-bar__nav-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward">
+          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
             →
+          </ToolbarButton>
+          <ToolbarButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={onToggleSidebar}
+            aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          >
+            <LeftSidebarToggleIcon open={sidebarOpen} />
           </ToolbarButton>
         </div>
       </div>
@@ -134,7 +156,7 @@ export function DesktopTopBar({
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
         {showRailToggle ? (
           <ToolbarButton
-            className="ui-desktop-top-bar__action-button"
+            className="ui-desktop-top-bar__icon-button"
             onClick={onToggleRail}
             aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
             title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}

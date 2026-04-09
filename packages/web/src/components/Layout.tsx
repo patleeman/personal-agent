@@ -375,6 +375,7 @@ export function Layout() {
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const railMinWidth = 160;
   const railMaxWidth = getRailMaxWidth({
     viewportWidth,
@@ -434,17 +435,21 @@ export function Layout() {
       <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
         <DesktopTopBar
           environment={desktopEnvironment}
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((current) => !current)}
           showRailToggle={canShowContextRail}
           railOpen={showContextRail}
           onToggleRail={() => setRailOpen((current) => !current)}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
-            <Sidebar />
-          </div>
+          {sidebarOpen ? (
+            <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
+              <Sidebar />
+            </div>
+          ) : null}
 
-          <ResizeHandle onMouseDown={sidebar.onMouseDown} />
+          {sidebarOpen ? <ResizeHandle onMouseDown={sidebar.onMouseDown} /> : null}
 
           <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
             <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">

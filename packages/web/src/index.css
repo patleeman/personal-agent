@@ -35,8 +35,8 @@
     @apply flex items-center gap-0.5;
   }
 
-  .ui-desktop-top-bar__nav-button {
-    @apply h-6 min-h-0 min-w-[24px] rounded-md border-0 bg-transparent px-1.5 text-[11px] shadow-none;
+  .ui-desktop-top-bar__icon-button {
+    @apply h-6 min-h-0 min-w-[24px] rounded-md border-0 bg-transparent px-1.5 text-[11px] text-secondary shadow-none transition-colors hover:bg-elevated/55 hover:text-primary disabled:bg-transparent disabled:text-dim disabled:opacity-100;
   }
 
   .ui-desktop-top-bar__center {
@@ -48,7 +48,7 @@
   }
 
   .ui-desktop-top-bar__action-button {
-    @apply h-6 min-h-0 min-w-[24px] rounded-md border-0 bg-transparent px-1.5 text-[11px] shadow-none;
+    @apply h-6 min-h-0 rounded-md border-0 bg-transparent px-1.5 text-[11px] shadow-none;
   }
 
   .ui-page-meta {
