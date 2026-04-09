@@ -11,7 +11,7 @@ import {
   PINNED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
-import type { DurableRunListResult, DurableRunRecord, SessionMeta } from '../types.js';
+import type { DurableRunListResult, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -48,66 +48,6 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     messageCount: 4,
     isRunning: false,
     ...overrides,
-  };
-}
-
-function createSubagentRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
-  return {
-    runId: 'run-subagent-123',
-    paths: {
-      root: '/tmp/runs/run-subagent-123',
-      manifestPath: '/tmp/runs/run-subagent-123/manifest.json',
-      statusPath: '/tmp/runs/run-subagent-123/status.json',
-      checkpointPath: '/tmp/runs/run-subagent-123/checkpoint.json',
-      eventsPath: '/tmp/runs/run-subagent-123/events.jsonl',
-      outputLogPath: '/tmp/runs/run-subagent-123/output.log',
-      resultPath: '/tmp/runs/run-subagent-123/result.json',
-    },
-    manifest: {
-      version: 1,
-      id: 'run-subagent-123',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-16T09:30:00.000Z',
-      spec: {
-        taskSlug: 'subagent',
-      },
-      source: {
-        type: 'tool',
-        id: 'conv-123',
-      },
-    },
-    status: {
-      version: 1,
-      runId: 'run-subagent-123',
-      status: 'running',
-      createdAt: '2026-03-16T09:30:00.000Z',
-      updatedAt: '2026-03-16T09:31:00.000Z',
-      activeAttempt: 1,
-      startedAt: '2026-03-16T09:30:10.000Z',
-    },
-    checkpoint: {
-      version: 1,
-      runId: 'run-subagent-123',
-      updatedAt: '2026-03-16T09:31:00.000Z',
-      payload: {},
-    },
-    problems: [],
-    recoveryAction: 'none',
-    ...overrides,
-  };
-}
-
-function createRunList(runs: DurableRunRecord[]): DurableRunListResult {
-  return {
-    scannedAt: '2026-03-16T09:31:00.000Z',
-    runsRoot: '/tmp/runs',
-    summary: {
-      total: runs.length,
-      recoveryActions: {},
-      statuses: {},
-    },
-    runs,
   };
 }
 
@@ -306,8 +246,8 @@ describe('Sidebar', () => {
     expect(html).not.toContain('move between pinned and open conversations');
   });
 
-  it('indents subagent conversations under their parent conversation', () => {
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'child-1']));
+  it('keeps child conversations flat in the explicit tab order', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['child-1', 'conv-123']));
 
     const html = renderSidebar('/inbox', {
       sessions: [
@@ -316,15 +256,14 @@ describe('Sidebar', () => {
           id: 'child-1',
           file: '/tmp/child-1.jsonl',
           title: 'Child subagent conversation',
-          sourceRunId: 'run-subagent-123',
+          parentSessionId: 'conv-123',
         }),
       ],
-      runs: createRunList([createSubagentRun()]),
     });
 
-    expect(html.indexOf('Parent conversation')).toBeLessThan(html.indexOf('Child subagent conversation'));
-    expect(html).toContain('Nested under Parent conversation');
-    expect(html).toContain('padding-left:14px');
+    expect(html.indexOf('Child subagent conversation')).toBeLessThan(html.indexOf('Parent conversation'));
+    expect(html).not.toContain('Nested under Parent conversation');
+    expect(html).not.toContain('padding-left:14px');
   });
 
   it('keeps the sidebar focused on chat and system surfaces', () => {

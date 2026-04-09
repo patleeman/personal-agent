@@ -22,7 +22,6 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { timeAgo } from '../utils';
-import { buildNestedSessionRows, type SessionLineageRow } from '../sessionLineage';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
 import { resolveConversationCloseRedirect } from '../conversationRoutes';
@@ -287,8 +286,6 @@ function OpenConversationRow({
   canDrag = false,
   isDragging = false,
   dropPosition = null,
-  depth = 0,
-  nestedUnderTitle,
   onPin,
   onUnpin,
   onClose,
@@ -303,8 +300,6 @@ function OpenConversationRow({
   canDrag?: boolean;
   isDragging?: boolean;
   dropPosition?: OpenConversationDropPosition | null;
-  depth?: number;
-  nestedUnderTitle?: string;
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
@@ -317,15 +312,11 @@ function OpenConversationRow({
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
 
   const showTrailingControls = hovered || pinned;
-  const rowTitle = [
-    depth > 0 && nestedUnderTitle ? `Nested under ${nestedUnderTitle}` : undefined,
-    canDrag ? 'Drag to reorder conversations' : undefined,
-  ].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
+  const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
 
   return (
     <div
       className="relative"
-      style={depth > 0 ? { paddingLeft: `${depth * 14}px` } : undefined}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragOver={canDrag ? onDragOver : undefined}
@@ -458,29 +449,10 @@ function OpenConversationRow({
   );
 }
 
-function resolveConversationRowGroupCwd(
-  row: SessionLineageRow,
-  rowsBySessionId: ReadonlyMap<string, { row: SessionLineageRow }>,
-): string {
-  let currentRow = row;
-  const visited = new Set<string>();
-
-  while (currentRow.parentSessionId && !visited.has(currentRow.session.id)) {
-    visited.add(currentRow.session.id);
-    const parentRow = rowsBySessionId.get(currentRow.parentSessionId)?.row;
-    if (!parentRow) {
-      break;
-    }
-    currentRow = parentRow;
-  }
-
-  return currentRow.session.cwd;
-}
-
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, alerts, runs } = useAppData();
+  const { activity, alerts } = useAppData();
   const {
     pinnedSessions,
     tabs,
@@ -531,35 +503,10 @@ export function Sidebar() {
     closingId,
   }), [visibleConversationTabs]);
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
-  const runsById = useMemo(
-    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
-    [runs],
-  );
-  const pinnedSessionRows = useMemo(
-    () => buildNestedSessionRows(pinnedSessions, runsById),
-    [pinnedSessions, runsById],
-  );
-  const openSessionRows = useMemo(
-    () => buildNestedSessionRows(visibleConversationTabs, runsById),
-    [runsById, visibleConversationTabs],
-  );
-  const pinnedSessionsById = useMemo(
-    () => new Map(pinnedSessions.map((session) => [session.id, session] as const)),
-    [pinnedSessions],
-  );
-  const openSessionsById = useMemo(
-    () => new Map(visibleConversationTabs.map((session) => [session.id, session] as const)),
-    [visibleConversationTabs],
-  );
-  const groupedConversationRows = useMemo(() => {
-    const combinedRows = [
-      ...pinnedSessionRows.map((row) => ({ row, section: 'pinned' as const, pinned: true })),
-      ...openSessionRows.map((row) => ({ row, section: 'open' as const, pinned: false })),
-    ];
-    const rowsBySessionId = new Map(combinedRows.map((item) => [item.row.session.id, item] as const));
-
-    return groupConversationItemsByCwd(combinedRows, (item) => resolveConversationRowGroupCwd(item.row, rowsBySessionId));
-  }, [openSessionRows, pinnedSessionRows]);
+  const groupedConversationRows = useMemo(() => groupConversationItemsByCwd([
+    ...pinnedSessions.map((session) => ({ session, section: 'pinned' as const, pinned: true })),
+    ...visibleConversationTabs.map((session) => ({ session, section: 'open' as const, pinned: false })),
+  ], (item) => item.session.cwd), [pinnedSessions, visibleConversationTabs]);
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -866,15 +813,12 @@ export function Sidebar() {
                   onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
                   onNewConversation={() => handleNewConversation(group.cwd)}
                 />
-                {!collapsed ? group.items.map(({ row: { session, depth, parentSessionId }, section, pinned }) => {
+                {!collapsed ? group.items.map(({ session, section, pinned }) => {
                   const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-                  const canDrag = !isDraftTab && depth === 0;
+                  const canDrag = !isDraftTab;
                   const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
                     ? dropTarget.position
                     : null;
-                  const parentTitle = section === 'pinned'
-                    ? (parentSessionId ? pinnedSessionsById.get(parentSessionId)?.title : undefined)
-                    : (parentSessionId ? openSessionsById.get(parentSessionId)?.title : undefined);
 
                   return (
                     <OpenConversationRow
@@ -885,8 +829,6 @@ export function Sidebar() {
                       canDrag={canDrag}
                       isDragging={canDrag && draggingSessionId === session.id}
                       dropPosition={dropPosition}
-                      depth={depth}
-                      nestedUnderTitle={parentTitle}
                       onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
                       onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
                       onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
