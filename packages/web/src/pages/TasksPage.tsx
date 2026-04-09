@@ -75,7 +75,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)' }}
+      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', paddingTop: 0 }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -116,7 +116,7 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)' }}
+      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', paddingTop: 0 }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -373,6 +373,7 @@ function AutomationDetailView({
                 <DetailMetaRow label="Automation ID" value={effectiveSummary.id} />
                 <DetailMetaRow label="Folder" value={detail?.cwd || effectiveSummary.cwd || 'Current workspace'} />
                 <DetailMetaRow label="Model" value={detail?.model || effectiveSummary.model || 'Default'} />
+                {detail?.thinkingLevel && <DetailMetaRow label="Reasoning" value={detail.thinkingLevel} />}
                 {typeof detail?.timeoutSeconds === 'number' && <DetailMetaRow label="Timeout" value={`${detail.timeoutSeconds}s`} />}
                 {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
                   <DetailMetaRow label="Attempts" value={String(effectiveSummary.lastAttemptCount)} />

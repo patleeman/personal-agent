@@ -33,6 +33,7 @@ export interface ScheduledTaskFileMetadata {
   cron?: string;
   at?: string;
   model?: string;
+  thinkingLevel?: string;
   profile?: string;
   cwd?: string;
   timeoutSeconds?: number;
@@ -105,6 +106,7 @@ function hydrateMetadata(task: StoredAutomation): ScheduledTaskFileMetadata {
     cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
     at: task.schedule.type === 'at' ? task.schedule.at : undefined,
     model: task.modelRef,
+    thinkingLevel: task.thinkingLevel,
     profile: task.profile,
     cwd: task.cwd,
     timeoutSeconds: task.timeoutSeconds,
@@ -234,6 +236,7 @@ export function buildScheduledTaskMarkdown(input: {
   cron?: string | null;
   at?: string | null;
   model?: string | null;
+  thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt: string;
@@ -267,6 +270,11 @@ export function buildScheduledTaskMarkdown(input: {
   const model = readOptionalString(input.model);
   if (model) {
     lines.push(`model: ${yamlString(model)}`);
+  }
+
+  const thinkingLevel = readOptionalString(input.thinkingLevel);
+  if (thinkingLevel) {
+    lines.push(`thinking: ${yamlString(thinkingLevel)}`);
   }
 
   const cwd = readOptionalString(input.cwd);

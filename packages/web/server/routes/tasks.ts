@@ -77,6 +77,7 @@ function buildTaskDetailResponse(
     cron: metadata.cron,
     at: metadata.at,
     model: metadata.model,
+    thinkingLevel: metadata.thinkingLevel,
     cwd: metadata.cwd,
     timeoutSeconds: metadata.timeoutSeconds,
     prompt: metadata.promptBody,
@@ -113,6 +114,7 @@ export function registerTaskRoutes(
           at: task.schedule.type === 'at' ? task.schedule.at : undefined,
           prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
           model: task.modelRef,
+          thinkingLevel: task.thinkingLevel,
           cwd: task.cwd,
           lastStatus: runtime?.lastStatus,
           lastRunAt: runtime?.lastRunAt,
@@ -139,6 +141,7 @@ export function registerTaskRoutes(
         cron?: string | null;
         at?: string | null;
         model?: string | null;
+        thinkingLevel?: string | null;
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
@@ -151,6 +154,7 @@ export function registerTaskRoutes(
         cron: body.cron,
         at: body.at,
         modelRef: body.model,
+        thinkingLevel: body.thinkingLevel,
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt ?? '',
@@ -180,6 +184,7 @@ export function registerTaskRoutes(
         cron?: string | null;
         at?: string | null;
         model?: string | null;
+        thinkingLevel?: string | null;
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
@@ -193,6 +198,7 @@ export function registerTaskRoutes(
         cron: body.cron,
         at: body.at,
         modelRef: body.model,
+        thinkingLevel: body.thinkingLevel,
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt,

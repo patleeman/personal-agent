@@ -133,8 +133,9 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('aria-label="Create automation"');
-    expect(html).toContain('New automation');
-    expect(html).toContain('Choose…');
+    expect(html).toContain('Automation title');
+    expect(html).toContain('Select project');
+    expect(html).toContain('Worktree');
     expect(html).toContain('No automations yet.');
   });
 });

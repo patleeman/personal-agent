@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
 import { useApi } from '../hooks';
+import { THINKING_LEVEL_OPTIONS } from '../modelPreferences';
 import { isScheduledTaskDetail } from '../scheduledTaskDetail';
 import {
   buildCronFromEasyTaskSchedule,
@@ -23,7 +24,6 @@ import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
-const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[12rem] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors';
 
@@ -32,7 +32,10 @@ interface TaskFormState {
   scheduleMode: 'cron' | 'at';
   cronEditor: CronEditorState;
   atValue: string;
-  cwd: string;
+  runIn: 'local' | 'worktree';
+  projectPath: string;
+  model: string;
+  thinkingLevel: string;
   prompt: string;
 }
 
@@ -49,7 +52,10 @@ function createDefaultTaskFormState(): TaskFormState {
     scheduleMode: 'cron',
     cronEditor: createCronEditorState('0 9 * * 1-5'),
     atValue: '',
-    cwd: '',
+    runIn: 'worktree',
+    projectPath: '',
+    model: '',
+    thinkingLevel: '',
     prompt: '',
   };
 }
@@ -60,7 +66,10 @@ function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
     scheduleMode: task.at ? 'at' : 'cron',
     cronEditor: createCronEditorState(task.cron),
     atValue: toDateTimeLocalValue(task.at),
-    cwd: task.cwd ?? '',
+    runIn: task.cwd ? 'worktree' : 'local',
+    projectPath: task.cwd ?? '',
+    model: task.model ?? '',
+    thinkingLevel: task.thinkingLevel ?? '',
     prompt: task.prompt,
   };
 }
@@ -114,7 +123,9 @@ function createTaskMutationPayload(state: TaskFormState) {
     title: state.title.trim(),
     cron: state.scheduleMode === 'cron' ? resolveCronExpression(state) : null,
     at: state.scheduleMode === 'at' ? fromDateTimeLocalValue(state.atValue) : null,
-    cwd: state.cwd.trim() || null,
+    model: state.model.trim() || null,
+    thinkingLevel: state.thinkingLevel.trim() || null,
+    cwd: state.runIn === 'worktree' ? (state.projectPath.trim() || null) : null,
     prompt: state.prompt,
   };
 }
@@ -332,60 +343,32 @@ function CronBuilderEditor({
   );
 }
 
-function TaskFolderField({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (cwd: string) => void;
-}) {
-  const [pickBusy, setPickBusy] = useState(false);
-  const [pickError, setPickError] = useState<string | null>(null);
-
-  async function handlePickFolder() {
-    if (pickBusy) {
-      return;
-    }
-
-    setPickBusy(true);
-    setPickError(null);
-    try {
-      const result = await api.pickFolder(value.trim() || undefined);
-      if (result.cancelled || !result.path) {
-        return;
-      }
-
-      onChange(result.path);
-    } catch (nextError) {
-      setPickError(nextError instanceof Error ? nextError.message : 'Could not choose a folder.');
-    } finally {
-      setPickBusy(false);
-    }
+function summarizePathLabel(path: string): string {
+  const trimmed = path.trim().replace(/\/$/, '');
+  if (!trimmed) {
+    return 'Select project';
   }
 
-  return (
-    <div className="space-y-1.5">
-      <label className="ui-card-meta">Working directory</label>
-      <div className="flex items-center gap-2">
-        <input
-          value={value}
-          onChange={(event) => {
-            if (pickError) {
-              setPickError(null);
-            }
-            onChange(event.target.value);
-          }}
-          className={`${INPUT_CLASS} font-mono`}
-          placeholder="Optional"
-          spellCheck={false}
-        />
-        <ToolbarButton type="button" onClick={() => { void handlePickFolder(); }} disabled={pickBusy} className="shrink-0 whitespace-nowrap text-accent">
-          {pickBusy ? 'Choosing…' : 'Choose…'}
-        </ToolbarButton>
-      </div>
-      {pickError && <p className="text-[12px] text-danger">{pickError}</p>}
-    </div>
+  const segments = trimmed.split('/').filter(Boolean);
+  return segments[segments.length - 1] ?? trimmed;
+}
+
+function footerPickerButtonClass(active: boolean): string {
+  return cx(
+    'inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] text-primary transition-colors',
+    active
+      ? 'border-border-default bg-surface'
+      : 'border-border-subtle bg-base/70 hover:border-border-default hover:bg-surface',
   );
+}
+
+function formatScheduleButtonLabel(state: TaskFormState): string {
+  if (state.scheduleMode === 'at') {
+    return state.atValue ? formatTaskSchedule({ at: fromDateTimeLocalValue(state.atValue) ?? undefined }) : 'One time';
+  }
+
+  const cron = resolveCronExpression(state);
+  return cron ? formatTaskSchedule({ cron }) : 'Schedule';
 }
 
 function TaskEditorForm({
@@ -405,98 +388,209 @@ function TaskEditorForm({
   onCancel: () => void;
   onSubmit: () => void;
 }) {
+  const { projects } = useAppData();
   const validationError = useMemo(() => validateTaskForm(value, mode), [mode, value]);
+  const [openMenu, setOpenMenu] = useState<'runIn' | 'project' | 'schedule' | 'more' | null>(null);
+  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const { data: cwdState } = useApi(async () => api.defaultCwd(), 'task-editor-default-cwd');
+  const { data: modelState } = useApi(async () => api.models(), 'task-editor-models');
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuRootRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    if (value.runIn === 'worktree' && !value.projectPath.trim() && cwdState?.effectiveCwd) {
+      onChange({ projectPath: cwdState.effectiveCwd });
+    }
+  }, [cwdState?.effectiveCwd, onChange, value.projectPath, value.runIn]);
+
+  const projectOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const entries: Array<{ label: string; path: string }> = [];
+
+    for (const project of projects ?? []) {
+      const path = project.repoRoot?.trim();
+      if (!path || seen.has(path)) {
+        continue;
+      }
+
+      seen.add(path);
+      entries.push({ label: project.title, path });
+    }
+
+    const defaultPath = cwdState?.effectiveCwd?.trim();
+    if (defaultPath && !seen.has(defaultPath)) {
+      entries.unshift({ label: summarizePathLabel(defaultPath), path: defaultPath });
+      seen.add(defaultPath);
+    }
+
+    const currentPath = value.projectPath.trim();
+    if (currentPath && !seen.has(currentPath)) {
+      entries.unshift({ label: summarizePathLabel(currentPath), path: currentPath });
+    }
+
+    return entries;
+  }, [cwdState?.effectiveCwd, projects, value.projectPath]);
+
+  const selectedProjectLabel = projectOptions.find((entry) => entry.path === value.projectPath.trim())?.label
+    ?? summarizePathLabel(value.projectPath);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
-        <div className="space-y-1 min-w-0">
-          <p className="ui-card-title break-all">{mode === 'create' ? 'New automation' : value.title}</p>
-          <p className="ui-card-meta">{mode === 'create' ? 'Create an automation' : 'Edit automation'}</p>
-        </div>
-        <button type="button" onClick={onCancel} className="ui-toolbar-button">Cancel</button>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-          <div className="space-y-4">
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(18rem,1.2fr)]">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Title</label>
-                <input
-                  value={value.title}
-                  onChange={(event) => onChange({ title: event.target.value })}
-                  className={INPUT_CLASS}
-                  placeholder="Daily bug scan"
-                />
-              </div>
-
-              <TaskFolderField value={value.cwd} onChange={(cwd) => onChange({ cwd })} />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Prompt</label>
-              <MentionTextarea
-                value={value.prompt}
-                onValueChange={(prompt) => onChange({ prompt })}
-                className={TEXTAREA_CLASS}
-              />
-            </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="space-y-4">
+          <div className="rounded-[24px] border border-border-subtle bg-base/45 px-5 py-4">
+            <input
+              value={value.title}
+              onChange={(event) => onChange({ title: event.target.value })}
+              className="w-full bg-transparent text-[28px] font-semibold tracking-[-0.03em] text-primary outline-none placeholder:text-dim"
+              placeholder="Automation title"
+            />
           </div>
 
-          <div className="space-y-4 border-t border-border-subtle pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
-            <div className="space-y-2">
-              <p className="ui-card-meta">Schedule</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => onChange({ scheduleMode: 'cron' })}
-                  className={scheduleModeButtonClass(value.scheduleMode === 'cron')}
-                >
-                  recurring
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ scheduleMode: 'at' })}
-                  className={scheduleModeButtonClass(value.scheduleMode === 'at')}
-                >
-                  one time
-                </button>
-              </div>
-            </div>
-
-            {value.scheduleMode === 'cron' ? (
-              <CronBuilderEditor
-                value={value.cronEditor}
-                onChange={(cronEditor) => onChange({ cronEditor })}
-              />
-            ) : (
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Run at</label>
-                <input
-                  type="datetime-local"
-                  value={value.atValue}
-                  onChange={(event) => onChange({ atValue: event.target.value })}
-                  className={INPUT_CLASS}
-                />
-              </div>
-            )}
+          <div className="rounded-[24px] border border-border-subtle bg-base/45 px-5 py-4">
+            <MentionTextarea
+              value={value.prompt}
+              onValueChange={(prompt) => onChange({ prompt })}
+              className="min-h-[18rem] w-full resize-none bg-transparent text-[15px] leading-7 text-primary outline-none placeholder:text-dim"
+              placeholder="Add prompt…"
+            />
           </div>
         </div>
       </div>
 
-      <div className="border-t border-border-subtle px-5 py-3">
+      <div className="border-t border-border-subtle px-5 py-4" ref={menuRootRef}>
         {(validationError || error) && (
           <p className="mb-3 text-[12px] text-danger">{validationError ?? error}</p>
         )}
 
-        <div className="flex items-center gap-3">
-          <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
-            {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create automation' : 'Save automation')}
-          </ToolbarButton>
-          <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
-            Cancel
-          </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <button type="button" onClick={() => setOpenMenu((current) => current === 'runIn' ? null : 'runIn')} className={footerPickerButtonClass(openMenu === 'runIn')}>
+                <span>{value.runIn === 'local' ? 'Local' : 'Worktree'}</span>
+              </button>
+              {openMenu === 'runIn' && (
+                <div className="ui-menu-shell left-0 right-auto min-w-[170px] px-2 py-2">
+                  {(['local', 'worktree'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        onChange({ runIn: option });
+                        setOpenMenu(null);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-elevated"
+                    >
+                      <span>{option === 'local' ? 'Local' : 'Worktree'}</span>
+                      {value.runIn === option ? <span>✓</span> : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button type="button" onClick={() => setOpenMenu((current) => current === 'project' ? null : 'project')} className={footerPickerButtonClass(openMenu === 'project')}>
+                <span>{value.projectPath.trim() ? selectedProjectLabel : 'Select project'}</span>
+              </button>
+              {openMenu === 'project' && (
+                <div className="ui-menu-shell left-0 right-auto min-w-[220px] px-2 py-2">
+                  {projectOptions.length === 0 ? (
+                    <p className="px-3 py-2 text-[12px] text-dim">No projects available.</p>
+                  ) : projectOptions.map((entry) => (
+                    <button
+                      key={entry.path}
+                      type="button"
+                      onClick={() => {
+                        onChange({ projectPath: entry.path, runIn: 'worktree' });
+                        setOpenMenu(null);
+                      }}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-elevated"
+                    >
+                      <span className="truncate">{entry.label}</span>
+                      {value.projectPath.trim() === entry.path ? <span>✓</span> : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button type="button" onClick={() => setOpenMenu((current) => current === 'schedule' ? null : 'schedule')} className={footerPickerButtonClass(openMenu === 'schedule')}>
+                <span>{formatScheduleButtonLabel(value)}</span>
+              </button>
+              {openMenu === 'schedule' && (
+                <div className="ui-menu-shell left-0 right-auto w-[340px] px-3 py-3">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => onChange({ scheduleMode: 'cron' })} className={scheduleModeButtonClass(value.scheduleMode === 'cron')}>Recurring</button>
+                      <button type="button" onClick={() => onChange({ scheduleMode: 'at' })} className={scheduleModeButtonClass(value.scheduleMode === 'at')}>One time</button>
+                    </div>
+                    {value.scheduleMode === 'cron' ? (
+                      <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
+                    ) : (
+                      <div className="space-y-1.5">
+                        <label className="ui-card-meta">Run at</label>
+                        <input
+                          type="datetime-local"
+                          value={value.atValue}
+                          onChange={(event) => onChange({ atValue: event.target.value })}
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="relative">
+              <button type="button" onClick={() => setOpenMenu((current) => current === 'more' ? null : 'more')} className={footerPickerButtonClass(openMenu === 'more')}>
+                <span>…</span>
+              </button>
+              {openMenu === 'more' && (
+                <div className="ui-menu-shell left-0 right-auto w-[280px] px-3 py-3">
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="ui-card-meta">Model</label>
+                      <select value={value.model} onChange={(event) => onChange({ model: event.target.value })} className={SELECT_CLASS}>
+                        <option value="">Default</option>
+                        {(modelState?.models ?? []).map((model) => (
+                          <option key={model.id} value={model.id}>{model.id}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="ui-card-meta">Reasoning</label>
+                      <select value={value.thinkingLevel} onChange={(event) => onChange({ thinkingLevel: event.target.value })} className={SELECT_CLASS}>
+                        {THINKING_LEVEL_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
+              Cancel
+            </button>
+            <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
+              {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create' : 'Save')}
+            </ToolbarButton>
+          </div>
         </div>
       </div>
     </div>

@@ -91,6 +91,10 @@ function toTaskRunArgs(task: ParsedTaskDefinition, resolvedProfile: ResolvedReso
     args.push('--model', task.modelRef);
   }
 
+  if (task.thinkingLevel) {
+    args.push('--thinking', task.thinkingLevel);
+  }
+
   args.push('-p', task.prompt);
   return args;
 }
@@ -345,7 +349,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       },
     };
 
-    writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''} -p <task prompt>`);
+    writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''}${request.task.thinkingLevel ? ` --thinking ${request.task.thinkingLevel}` : ''} -p <task prompt>`);
     writeLine(stream, '# mode=subprocess');
     writeLine(stream, '');
 

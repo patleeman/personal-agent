@@ -248,8 +248,9 @@ You can:
 - create a new automation from the page header modal
 - enable or disable an automation
 - edit automation settings and prompt from the in-page edit modal
-- choose the automation working directory with the folder picker from the modal
-- use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
+- choose Run in and project/worktree from the modal footer pickers
+- adjust model and reasoning from the modal overflow menu
+- use a recurring or one-time schedule picker from the modal footer
 - run an automation immediately
 
 See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).

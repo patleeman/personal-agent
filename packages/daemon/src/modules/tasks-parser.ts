@@ -44,6 +44,7 @@ export interface ParsedTaskDefinition {
   prompt: string;
   profile: string;
   modelRef?: string;
+  thinkingLevel?: string;
   cwd?: string;
   timeoutSeconds: number;
 }
@@ -435,6 +436,7 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     modelRef = model;
   }
 
+  const thinkingLevel = readOptionalString(section.attributes, 'thinking');
   const cwdRaw = readOptionalString(section.attributes, 'cwd');
   const cwd = cwdRaw ? resolve(expandHome(cwdRaw)) : undefined;
 
@@ -449,6 +451,7 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     prompt: section.body,
     profile,
     modelRef,
+    thinkingLevel,
     cwd,
     timeoutSeconds: readTimeoutSeconds(section.attributes, options.defaultTimeoutSeconds),
   };

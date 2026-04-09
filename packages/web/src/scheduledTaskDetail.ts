@@ -24,6 +24,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.cron)
     && isOptionalString(record.at)
     && isOptionalString(record.model)
+    && isOptionalString(record.thinkingLevel)
     && isOptionalString(record.cwd)
     && isOptionalNumber(record.timeoutSeconds)
     && isOptionalString(record.lastStatus)

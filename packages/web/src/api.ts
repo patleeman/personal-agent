@@ -282,6 +282,7 @@ export const api = {
     cron?: string | null;
     at?: string | null;
     model?: string | null;
+    thinkingLevel?: string | null;
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt: string;
@@ -294,6 +295,7 @@ export const api = {
     cron?: string | null;
     at?: string | null;
     model?: string | null;
+    thinkingLevel?: string | null;
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;

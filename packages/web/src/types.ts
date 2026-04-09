@@ -258,6 +258,7 @@ export interface ScheduledTaskSummary {
   at?: string;
   prompt: string;
   model?: string;
+  thinkingLevel?: string;
   cwd?: string;
   lastStatus?: string;
   lastRunAt?: string;
@@ -275,6 +276,7 @@ export interface ScheduledTaskDetail {
   cron?: string;
   at?: string;
   model?: string;
+  thinkingLevel?: string;
   cwd?: string;
   timeoutSeconds?: number;
   prompt: string;
