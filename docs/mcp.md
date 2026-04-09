@@ -1,34 +1,36 @@
 # MCP
 
-`personal-agent` can inspect and call configured MCP servers through `pa mcp` and the runtime's MCP-aware tool layer.
+`personal-agent` can inspect and call configured MCP servers through `pa mcp` and through Pi's MCP-aware runtime.
 
-Use MCP when the capability should come from a configured external tool server rather than from built-in local tools or ad hoc shell commands.
+Use MCP when the capability should come from a configured external tool server rather than from a built-in local tool or ad hoc shell command.
 
-## When to use MCP
+## When to use it
 
 Good fits:
 
-- SaaS or internal systems exposed through MCP servers
+- SaaS or internal systems already exposed through MCP
 - authenticated remote tool access
-- discovering server tools and schemas before calling them
-- using one shared tool contract across conversations and CLI inspection
+- probing server/tool schemas before use
+- reusing one tool contract across CLI and conversations
 
-Do not reach for MCP when a dedicated first-party tool already exists in the agent runtime for the task.
+Do not reach for MCP when a dedicated first-party runtime tool already exists.
 
-## Core model
+## Server types
 
-An MCP server is configured as either:
+An MCP server can be configured as either:
 
-- **stdio** — a local command started by the client
+- **stdio** — a local command the client starts
 - **remote** — an HTTP/SSE MCP endpoint
 
-`personal-agent` can:
+## Config discovery
 
-- list configured servers
-- probe server tool metadata
-- inspect one server or one tool
-- call a tool directly
-- manage OAuth login/logout for supported remote servers
+By default, MCP config is searched in this order:
+
+1. `./mcp_servers.json` in the current working directory
+2. `~/.mcp_servers.json`
+3. `~/.config/mcp/mcp_servers.json`
+
+You can also pass an explicit config path with `-c` / `--config`.
 
 ## CLI commands
 
@@ -38,43 +40,30 @@ pa mcp list --probe
 pa mcp info <server>
 pa mcp info <server>/<tool>
 pa mcp grep '*jira*'
-pa mcp call <server> <tool> '{"key":"value"}'
+pa mcp call <server> <tool> '{}'
 pa mcp auth <server>
 pa mcp logout <server>
 ```
 
-`pa mcp list` is config-only by default. Use `--probe` when you want to connect and fetch tool metadata.
+`pa mcp call` reads JSON from stdin if the JSON argument is omitted.
 
-## Config discovery
+## OAuth and auth state
 
-By default, MCP config is discovered from paths such as:
+Remote MCP servers can use OAuth.
 
-- `./mcp_servers.json`
-- `~/.mcp_servers.json`
-- `~/.config/mcp/mcp_servers.json`
+- `pa mcp auth <server>` triggers login or connectivity validation
+- `pa mcp logout <server>` clears stored OAuth state for that server
 
-The config contains an `mcpServers` object describing the available servers.
+Auth state is machine-local, not part of the shared vault.
 
-## Remote auth
+## Practical flow
 
-Remote MCP servers can require OAuth.
-
-`pa mcp auth <server>` starts the login flow using the server's configured callback information. `pa mcp logout <server>` removes the stored auth state for that server.
-
-## Web UI relationship
-
-The Web UI **Tools** page is the inspection surface for available tools, dependent CLI tools, and configured MCP servers.
-
-Use it when you want to inspect the configured tool environment visually rather than through the CLI.
-
-## Practical rule of thumb
-
-Use MCP when the thing you need already exists as a configured tool server.
-
-Use local agent tools when the runtime already exposes a direct capability.
+1. `pa mcp list --probe`
+2. `pa mcp info <server>/<tool>`
+3. `pa mcp auth <server>` if needed
+4. call the tool from the CLI or let the conversation runtime use it
 
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Web UI Guide](./web-ui.md)
-- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
+- [Tools page in the Web UI](./web-ui.md)

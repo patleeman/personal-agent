@@ -4,350 +4,208 @@
 
 It has two jobs:
 
-1. launch Pi with the right profile resources
-2. manage the durable features around Pi
+1. launch Pi with the right layered profile resources
+2. manage the durable surfaces around Pi
 
-## Command model
+Inside a live conversation, prefer the built-in runtime tools over shelling out to `pa`. Use the CLI when you are operating the local system directly.
 
-### 1. Run Pi with profile resources
+## Command map
 
-Use:
+Top-level commands:
 
-```bash
+```text
+pa status
 pa tui
-pa tui --profile assistant
-pa tui -p "hello"
-pa tui --profile assistant -p "hello"
-```
-
-Pi passthrough now requires the explicit `tui` subcommand. Unknown top-level commands or options are CLI errors.
-
-Example:
-
-```bash
-pa tui -p "summarize this repo"
-```
-
-### 2. Manage durable features
-
-These commands are handled by `personal-agent` itself:
-
-- `pa status`
-- `pa install ...`
-- `pa profile ...`
-- `pa doctor`
-- `pa daemon ...`
-- `pa tasks ...`
-- `pa inbox ...`
-- `pa ui ...`
-- `pa mcp ...`
-- `pa runs ...`
-- `pa restart`
-- `pa update`
-
-## Most useful commands
-
-### Setup and health
-
-```bash
+pa install
+pa profile
 pa doctor
-pa install https://github.com/davebcn87/pi-autoresearch
-pa profile list
-pa profile use <name>
-pa daemon status
+pa restart
+pa update
+pa daemon
+pa tasks
+pa inbox
+pa ui
+pa mcp
+pa runs
 ```
 
-### Daily use
+## Launch Pi
+
+Use `pa tui` to start Pi with the resolved profile resources:
 
 ```bash
-pa ui open
 pa tui
-pa tui -p "hello"
-pa inbox list
-pa tasks list
-pa runs list
-pa mcp list
+pa tui --profile shared
+pa tui -p "summarize this repo"
+pa tui -- --model kimi-coding/k2p5
 ```
 
-### Background automation
+Pi passthrough is explicit now: use the `tui` subcommand.
+
+## Inspect local status
 
 ```bash
-pa daemon start
-pa daemon service install
-pa tasks validate --all
-pa tasks logs <id>
+pa status
+pa doctor
 ```
 
-## Top-level command reference
+- `pa status` gives the quick machine summary
+- `pa doctor` validates the local install and runtime wiring
 
-### `pa tui [args...]`
-
-Launch Pi with the resolved active profile.
-
-### `pa install <source> [--profile <name> | -l | --local]`
-
-Add a Pi package source to durable `pa` settings.
-
-By default this writes to the active profile's mutable `settings.json` in the configured profiles root.
-Use `--local` to write to the machine-local overlay instead.
-
-Examples:
-
-```bash
-pa install https://github.com/davebcn87/pi-autoresearch
-pa install npm:@scope/package@1.2.3
-pa install ./my-package
-pa install --profile assistant https://github.com/user/repo
-pa install --local ./my-package
-```
-
-### `pa profile [list|show|use]`
-
-Manage the active profile.
-
-Examples:
+## Profile management
 
 ```bash
 pa profile list
 pa profile show
-pa profile use assistant
+pa profile show shared
+pa profile use shared
 ```
 
-### `pa status`
-
-Show a compact top-level status view for the local setup.
-
-### `pa doctor [--json]`
-
-Run setup checks.
-
-### `pa daemon [status|start|stop|restart|logs|service|help]`
-
-Manage the background daemon.
-
-Examples:
+## Install package sources
 
 ```bash
-pa daemon status
-pa daemon start
-pa daemon service install
+pa install https://github.com/user/pi-extension
+pa install --profile shared npm:@scope/package@1.2.3
+pa install --local ./my-extension
 ```
 
-### `pa tasks [list|show|validate|logs]`
+This writes package sources into profile settings or the local overlay.
 
-Inspect scheduled daemon tasks.
-
-Examples:
-
-```bash
-pa tasks list
-pa tasks show <id>
-pa tasks validate --all
-pa tasks logs <id> --tail 120
-```
-
-See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
-
-### `pa inbox [list|show|create|read|unread|delete]`
-
-Inspect and manage surfaced inbox items.
-
-Examples:
-
-```bash
-pa inbox list
-pa inbox list --conversations
-pa inbox show activity:nightly-review
-pa inbox show conversation:conv-123
-pa inbox create "Nightly review finished" --kind note
-pa inbox read conversation:conv-123
-```
-
-See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
-
-### `pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|uninstall|help]`
-
-Inspect or manage the local web UI.
-
-Important behavior:
-
-- `pa ui` with no subcommand shows status
-- `pa ui open` opens the existing UI in a browser
-- `pa ui foreground --open` starts a foreground server and opens it
-- `pa ui install|start|stop|restart|uninstall` manage the installed service
-- `pa ui pairing-code` creates a short-lived pairing code for remote desktop or companion access
-
-Examples:
+## Web UI
 
 ```bash
 pa ui
 pa ui open
 pa ui foreground --open
-pa ui foreground --port 4000 --tailscale-serve
-pa ui logs --tail 120
-pa ui install --port 3741 --tailscale-serve
+pa ui install
+pa ui start
+pa ui stop
 pa ui restart
+pa ui logs --tail 120
+pa ui pairing-code
 ```
 
-`--tailscale-serve` enables Tailscale Serve for the foreground session or managed-service action immediately via the `tailscale` CLI.
-`--no-tailscale-serve` updates the saved preference first, then makes a best-effort attempt to remove the existing Serve mappings without blocking foreground launch when `tailscale` is unavailable.
-If the configured companion port is already busy, foreground launch picks a temporary free companion port for that session.
+Notes:
 
-The older `pa ui service <action>` form still works as a compatibility path for managed-service actions.
+- `pa ui` with no subcommand shows status and hints
+- `pa ui foreground --open` is the fastest local launch
+- managed web UI service commands use launchd on macOS and systemd user services on Linux
+- `pa ui pairing-code` creates a short-lived pairing code for remote desktop or companion access
 
-See [Web UI Guide](./web-ui.md).
-
-### `pa mcp [list|info|grep|call|auth|logout]`
-
-Inspect and call configured MCP servers using pa’s native MCP client.
-
-Examples:
+## Daemon
 
 ```bash
-pa mcp list
-pa mcp list --probe
-pa mcp list --probe -d
-pa mcp info atlassian
-pa mcp info atlassian/getConfluencePage
-pa mcp grep '*jira*'
-pa mcp call atlassian getAccessibleAtlassianResources '{}'
-pa mcp auth slack
-pa mcp logout slack
+pa daemon status
+pa daemon start
+pa daemon stop
+pa daemon restart
+pa daemon logs
+pa daemon service install
+pa daemon service status
+pa daemon service uninstall
 ```
 
-`pa mcp list` is config-only by default. Use `--probe` to connect to servers and fetch tool metadata.
+Use the daemon if you rely on scheduled tasks, deferred resumes, or durable runs.
 
-See [MCP](./mcp.md).
+## Inbox
 
-Native remote MCP config example:
-
-```json
-{
-  "mcpServers": {
-    "atlassian": {
-      "type": "remote",
-      "url": "https://mcp.atlassian.com/v1/mcp"
-    },
-    "slack": {
-      "type": "remote",
-      "url": "https://mcp.slack.com/mcp",
-      "callback": {
-        "host": "localhost",
-        "port": 3118,
-        "path": "/callback"
-      },
-      "oauth": {
-        "clientId": "1601185624273.8899143856786"
-      }
-    }
-  }
-}
+```bash
+pa inbox list
+pa inbox show <selector>
+pa inbox read <selector>
+pa inbox unread <selector>
+pa inbox delete <activity-id>
+pa inbox create "Summary" --details "Body"
 ```
 
-### `pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help]`
+The inbox mixes activity records and conversation attention.
 
-Inspect and manage durable daemon-backed background runs.
+## Scheduled tasks
 
-Examples:
+```bash
+pa tasks list
+pa tasks list --status active
+pa tasks show <id>
+pa tasks validate --all
+pa tasks validate ~/.local/state/personal-agent/sync/_tasks/example.task.md
+pa tasks logs <id> --tail 120
+```
+
+`pa tasks` inspects the daemon-backed task registry and still validates legacy markdown task files.
+
+## Durable runs
 
 ```bash
 pa runs list
 pa runs show <id>
 pa runs logs <id> --tail 120
-pa runs start code-review -- npm test
-pa runs start-agent code-review --prompt "review this diff"
+pa runs start docs-refresh -- bash -lc 'npm test'
+pa runs start-agent code-review --prompt "review the current diff"
 pa runs rerun <id>
-pa runs follow-up <id> --prompt "continue from the failed step"
+pa runs follow-up <id> --prompt "continue from the last checkpoint"
 pa runs cancel <id>
 ```
 
-Use this as the main control surface for detached local background work.
+Use runs for detached work that starts now.
 
-See [Runs](../internal-skills/runs/INDEX.md).
-
-### `pa restart [--rebuild]`
-
-Restart the daemon and managed web UI service.
-Use `--rebuild` to rebuild repo packages first, then restart the managed web UI so it serves the fresh build.
-
-### `pa update [--repo-only]`
-
-Pull latest changes, refresh dependencies, rebuild packages, and restart background services.
-If the managed web UI service is installed, `pa update` restarts it after the rebuild so it serves the fresh build.
-
-## Common workflows
-
-### Run one prompt with the active profile
+## MCP
 
 ```bash
-pa tui -p "Summarize the latest inbox items"
+pa mcp list
+pa mcp list --probe
+pa mcp info <server>
+pa mcp info <server>/<tool>
+pa mcp grep '*jira*'
+pa mcp call <server> <tool> '{}'
+pa mcp auth <server>
+pa mcp logout <server>
 ```
 
-### Open the UI and inspect background state
+## Update and restart helpers
 
 ```bash
-pa ui --open
-pa daemon status
-pa tasks list
-pa runs list
-pa inbox list --unread
+pa restart
+pa update
+pa update --repo-only
 ```
 
-### Inspect the local runtime surfaces
+- `pa restart` restarts the daemon and managed web UI if installed
+- `pa update` pulls repo changes, refreshes dependencies, rebuilds, and restarts services
+
+## Practical CLI flows
+
+### Bring up the web stack
 
 ```bash
-pa status
-pa daemon status
-pa ui
-pa tasks list
-pa runs list
-pa inbox list --unread
+pa daemon start
+pa ui foreground --open
 ```
 
-### Debug a scheduled task
+### Run an investigation in the background
 
 ```bash
-pa tasks show morning-report
-pa tasks logs morning-report --tail 120
+pa runs start-agent repo-audit --prompt "audit the repo for stale docs and summarize fixes"
+pa runs logs <run-id>
+```
+
+### Validate task files after edits
+
+```bash
 pa tasks validate --all
+pa tasks list --status error
 ```
 
-## JSON output
-
-Machine-readable output is available for the main inspection commands.
-
-Examples:
+### Inspect configured MCP servers
 
 ```bash
-pa doctor --json
-pa daemon status --json
-pa tasks list --json
-pa tasks show <id> --json
-pa inbox list --json
-pa runs list --json
+pa mcp list --probe -d
 ```
-
-## Plain output
-
-If you want simpler terminal output:
-
-```bash
-pa --plain ...
-```
-
-Or set:
-
-- `PERSONAL_AGENT_PLAIN_OUTPUT=1`
-- `NO_COLOR=1`
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
 - [Getting Started](./getting-started.md)
-- [How personal-agent works](./how-it-works.md)
-- [Conversations](./conversations.md)
-- [Runs](../internal-skills/runs/INDEX.md)
-- [MCP](./mcp.md)
 - [Web UI Guide](./web-ui.md)
-- [Configuration](./configuration.md)
-- [Troubleshooting](./troubleshooting.md)
+- [Daemon and Background Automation](./daemon.md)
+- [MCP](./mcp.md)
+- [Runs](../internal-skills/runs/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

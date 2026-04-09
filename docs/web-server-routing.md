@@ -1,78 +1,79 @@
 # Web server route modules
 
-`packages/web/server/index.ts` now mostly wires shared dependencies, mounts route modules, and starts the app. HTTP handlers live under `packages/web/server/routes/*`, and the server implementation code is grouped by domain instead of sitting flat in the root.
+The web server source now lives under `packages/web/server/`.
+
+`index.ts` mostly bootstraps the app, builds shared context, mounts routes, and starts the HTTP server. Most HTTP behavior lives in domain folders and route registration modules.
 
 ## Server layout
 
-The server root is now intentionally shallow:
+Current source layout:
 
+- `app/` — bootstrap and profile/runtime wiring
+- `automation/` — daemon, inbox, alerts, deferred resumes, durable runs, scheduled tasks
+- `conversations/` — live sessions, titles, cwd, recovery, conversation services
+- `extensions/` — web-runtime tool extensions such as reminders, runs, tasks, artifacts, and activity
+- `knowledge/` — memory docs, prompt references, vault file helpers
+- `models/` — model registry, preferences, providers, auth, usage
 - `routes/` — Express route registration modules
-- `conversations/` — session reads, live sessions, conversation memory, and conversation services
-- `automation/` — daemon, runs, scheduled tasks, alerts, inbox, deferred resumes
-- `workspace/` — repo-status helpers and folder picker
-- `models/` — model defaults, providers, auth, usage
-- `knowledge/` — memory docs, prompt references, node links
-- `ui/` — web UI config, companion auth, SPA helpers, web-specific preferences
-- `extensions/` — agent extension factories
-- `app/` — server bootstrap/profile/runtime wiring that should not live in route modules
-- `shared/` — shared HTTP/logging/security/event helpers
+- `shared/` — app events, SSE snapshots, logging, security helpers
+- `ui/` — SPA serving, companion auth, settings persistence, profile defaults
+- `workspace/` — folder picker and repo-status helpers
 
-Use the route module that matches the domain first, then reach into the matching domain folder for implementation code. When a background helper needs a built JS entrypoint, keep that entrypoint in its domain folder and resolve it relative to the built module instead of adding top-level re-export stubs in `server/`.
+## Two app surfaces
 
-## Routing pattern
+The server mounts routes for two related HTTP surfaces:
 
-Route mounting now goes through a shared `ServerRouteContext` and a single `registerServerRoutes({ app, companionApp, context })` entrypoint in `routes/`.
+- the full desktop web UI
+- the narrower companion surface used under `/app`
 
-That means `index.ts` now delegates most startup wiring to `app/*`, builds the shared route context once, then the route layer handles the per-domain wiring. The important split is:
+That is why many route files have both desktop and companion registration helpers.
 
-- `app/profileState.ts` — active-profile lifecycle, materialization, and live-session resource wiring
-- `app/bootstrap.ts` — Express app setup, background monitors, static SPA mounting, and server listen helpers
-- `app/routeContext.ts` — shared `ServerRouteContext` builder
+## Route registration pattern
+
+Route mounting goes through a shared context and one central entrypoint:
+
 - `routes/context.ts` — typed route dependency surface
-- `routes/registerAll.ts` — central route mounting order and dependency injection
-- `routes/<domain>.ts` — actual handlers for each domain
+- `routes/registerAll.ts` — route mounting order and dependency injection
+- `app/routeContext.ts` — builder for the shared `ServerRouteContext`
 
-This keeps the bootstrap wiring in one place instead of scattering `set*RoutesGetters(...)` calls across `index.ts`. Route modules now take the context directly during registration rather than relying on exported setter functions.
+The important point is that route modules get the context directly during registration instead of relying on scattered setter functions.
 
-On the companion surface, the `/api/events` stream also needs to carry the operational snapshots the mobile UI depends on for Tasks and System (`tasks`, `runs`, `daemon`, and `webUi`), not just inbox-style topics.
+## Notable route groups
 
-The companion SPA fallback also has to recognize both canonical `/app/*` URLs and stripped path-proxy requests like `/inbox`, `/conversations`, `/tasks`, `/system`, `/pages`, and `/capture`, because Tailscale Serve mounts the companion behind `/app` while forwarding stripped paths to the restricted companion server.
+Current route groups include:
 
-## Route modules worth knowing
+- profiles
+- daemon
+- tasks
+- models
+- tools
+- auth and companion auth
+- system / web UI state
+- conversations / live sessions
+- activity and alerts
+- runs
+- memory notes / companion memory
+- folder picker
+- shell helpers
 
-| File | Responsibility | Notes |
-| --- | --- | --- |
-| `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads. The companion surface also mounts the read-only session detail/meta/block routes so mobile conversation links can open transcripts directly. |
-| `routes/conversationState.ts` | conversation bootstrap, recover, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
-| `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
-| `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel; companion surface is read-focused |
-| `routes/runsOps.ts` | run attention helpers | Keeps the run-ops endpoints separate from the main run listing routes |
-| `routes/memoryNotes.ts` | memory browser, note CRUD, note-start flow | Uses the memory/session helpers that were previously inline |
-| `routes/nodes.ts` | unified page-browser dataset for the Pages page | Returns the mixed note/skill table data with tags and page metadata |
-| `routes/folderPicker.ts` | folder picker endpoint | Small wrapper around the folder picker service |
-| `routes/shell.ts` | ad-hoc shell command execution | Wrapper for the `/api/run` endpoint |
-| `routes/tasks.ts` | scheduled tasks and companion task run trigger | Shares task lookup logic through `taskService.ts` |
-| `routes/models.ts`, `routes/daemon.ts`, `routes/webUi.ts`, `routes/system.ts`, `routes/activity.ts`, `routes/alerts.ts`, `routes/auth.ts`, `routes/profiles.ts`, `routes/tools.ts`, `routes/conversationTitles.ts` | the remaining app/companion route domains | Existing modules, now mounted from the same barrel. `routes/models.ts` also owns runtime default settings endpoints such as `/api/default-cwd` and conversation-plan library/default routes. |
+## Live updates
 
-## Shared helper files
+The `/api/events` SSE stream carries snapshot-style updates used by the desktop UI and the companion.
 
-A few shared service/helper files exist to keep the route modules from becoming monoliths:
+Those topics include at least:
 
-- `conversations/conversationService.ts` — shared conversation snapshot/detail/bootstrap helpers used across conversation, run, and companion routes
-- `automation/taskService.ts` — task ID/profile lookup helpers
-- `knowledge/memoryDocs.ts` — shared note, skill, and memory document helpers; profile-sensitive calls now take the profile explicitly instead of relying on a module-level setter
-- `shared/*` — cross-cutting helpers for logging, security headers, SSE/cookie helpers, and app events
+- activity
+- alerts
+- sessions
+- tasks
+- runs
+- daemon
+- web UI state
 
-## When adding or moving a route
+The companion depends on those operational snapshots too, not just inbox-style invalidation.
 
-- Put the handler in the smallest domain module that owns the behavior.
-- Add the dependency to `ServerRouteContext` when the route needs shared state or helpers from `index.ts`.
-- Keep status codes and error messages stable.
-- Validate with:
-  - `npm run build:ts`
-  - `npm --prefix packages/web run build:server`
-  - `npx vitest run $(find packages/web/server -name '*.test.ts' | sort)`
+## Related docs
 
-If a handler needs a helper that only exists in `index.ts`, prefer exporting the helper or moving it into the matching domain/shared file over duplicating the logic.
-
-There is also a route-level smoke test at `packages/web/server/routes/registerAll.smoke.test.ts` that mounts the shared route registry on real Express apps and checks both app and companion surfaces.
+- [Web UI Guide](./web-ui.md)
+- [Electron desktop app](./electron-desktop-app-plan.md)
+- [Daemon and Background Automation](./daemon.md)

@@ -2,167 +2,92 @@
 
 Tracked pages are the durable home for ongoing work in `personal-agent`.
 
-Use a tracked page when a thread of work should survive the current conversation and you want durable status, next steps, blockers, child pages, or page files.
-
-Do not use a tracked page for general reusable knowledge. That belongs in a normal page. Do not keep the same topic as both a top-level reusable page and a tracked page unless they are genuinely different things.
+Use a tracked page when the work should survive the current conversation and you want durable status, next steps, milestones, blockers, attachments, or related artifacts.
 
 ## Mental model
 
-A useful rule of thumb is:
+A useful rule of thumb:
 
-- conversation = active interaction right now
-- page = durable knowledge or tracked work
-- tracked page = durable tracked work with structured execution state
-- skill = reusable procedure
+- conversation = active execution right now
+- note page = reusable knowledge
+- skill page = reusable procedure
+- tracked page = durable active work
 
-If the work should still make sense next week and has an active plan, it probably belongs in a tracked page.
+If the work should still make sense next week and needs a living status record, it probably belongs in a tracked page.
 
 ## On-disk shape
 
-Tracked pages are stored in project packages:
+Tracked pages live in project packages under the durable vault:
 
-- `~/.local/state/personal-agent/sync/projects/<projectId>/project.md`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/state.yaml`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/attachments/`
-- `~/.local/state/personal-agent/sync/projects/<projectId>/artifacts/`
-- optional supporting files under `~/.local/state/personal-agent/sync/projects/<projectId>/documents/`
-- optional child pages anywhere under `sync/projects/<projectId>/` or `sync/notes/` with `links.parent: <projectId>`
+```text
+~/Documents/personal-agent/projects/<projectId>/
+├── project.md
+├── state.yaml
+├── attachments/
+├── artifacts/
+└── documents/
+```
 
-`project.md` is the canonical tracked-page document.
+`project.md` is the main human-readable record.
+
+`state.yaml` is the structured execution state.
 
 ## What goes where
 
 ### `project.md`
 
-Use `project.md` for the durable tracked-page record:
+Use it for:
 
 - what the work is
 - why it exists
-- the current direction
-- the most important constraints or decisions
-- the shipped result or final decision when it is done
-- compact structured sections like goal, blockers, progress, milestones, and tasks
+- current summary
+- plan and notes that should stay human-readable
+- links to related work
 
-The frontmatter is also where tracked-page identity lives:
+### `state.yaml`
 
-- `id`
-- `title`
-- `summary`
-- `status`
-- tracked-page tags like `type:project`, `profile:<profile>`, and optional `cwd:<repoRoot>`
-- `createdAt`
-- `updatedAt`
+Use it for structured status such as:
 
-### Child pages
+- status and milestones
+- tasks / next steps
+- blockers
+- timestamps
+- machine-readable validation data
 
-Use child pages for material that belongs to one tracked page but would bloat the overview doc:
+### Supporting directories
 
-- design notes
-- decision logs
-- checkpoints
-- meeting writeups
-- detailed research
-- implementation sketches
+Use these only when they add value:
 
-They are normal pages with `links.parent: <projectId>`, not files in a special tracked-page-only notes bucket.
+- `attachments/` for files that belong to the tracked work
+- `artifacts/` for rendered deliverables kept with the project
+- `documents/` for supporting docs that are too big or specific for `project.md`
 
-### `attachments/` and `artifacts/`
+## Child pages
 
-Use these for work-specific files you want to keep with the page:
+Tracked work can have child pages.
 
-- screenshots
-- reports
-- exports
-- sample data
-- generated deliverables
+Those children can live inside the project package or elsewhere in the vault as long as the relationship is explicit.
 
-These are durable tracked-page files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md).
+## What does not belong here
 
-### `documents/`
+Do not use a tracked page for:
 
-Use `documents/` sparingly for supporting files that should live with the tracked-page package but do not belong in the main page or a child page.
-
-## Writing style
-
-Use these defaults:
-
-- prefer human-readable titles; keep raw slugs in ids and directory names
-- keep `summary` to one sentence
-- start `project.md` with a plain-English overview
-- keep `project.md` high-signal and move long detail into child pages
-- avoid template filler and empty headings
-- prefer a few concrete bullets over bloated PM boilerplate
-- keep current status and recent progress truthful and current
-- when a tracked page is done, say what shipped or what decision was made
-
-A bad tracked-page doc reads like scaffolding. A good tracked-page doc reads like a concise handoff.
-
-## Reusable pages vs tracked pages
-
-Use a tracked page when the content is about one active workstream.
-
-Use a normal page when the content is reusable outside one active tracked page.
-
-Good examples for tracked pages:
-
-- a feature or product initiative
-- a migration
-- an evaluation effort
-- an investigation with active next steps
-
-Good examples for reusable pages:
-
-- a reusable runbook
-- machine or environment reference notes
-- architecture guidance used by multiple projects
-- a decision or reference that should outlive one workstream
-
-If a top-level reusable page grows active status, blockers, and next steps, promote it into a tracked page.
-
-## Status and archiving
-
-Projects should usually use a small status vocabulary:
-
-- `active`
-- `paused`
-- `done`
-
-`archivedAt` is separate from workflow status. Use it to hide finished or inactive work without deleting it.
-
-## Linked conversations
-
-Conversations can reference one or more pages.
-
-Those conversation ↔ page links stay in local runtime state, not in portable tracked-page files.
-
-Do not store conversation ids or session ids in tracked pages or child-page frontmatter.
+- general reusable reference material
+- profile behavior and preferences
+- work that is only a one-off conversation with no durable execution state
 
 ## Validation
 
-Validate projects with:
+Validate tracked pages with:
 
 ```bash
+npm run validate:projects
 node scripts/validate-projects.mjs --profile <profile>
-node scripts/validate-projects.mjs --profile <profile> --project <projectId>
-node scripts/validate-projects.mjs --path <absolute-path-to-project-state.yaml>
+node scripts/validate-projects.mjs --project <projectId>
 ```
-
-## Scheduled tasks vs tracked-page tasks
-
-Tracked-page tasks are just tracked-page checklist items.
-
-Scheduled tasks are daemon automation definitions under:
-
-- `~/.local/state/personal-agent/sync/_tasks/*.task.md`
-
-See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
+- [Knowledge Management System](./knowledge-system.md)
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
-- [How personal-agent works](./how-it-works.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

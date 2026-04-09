@@ -2,77 +2,65 @@
 
 `personal-agentd` is the shared background process behind unattended behavior.
 
-If you care about scheduled tasks, deferred work, or durable background automation, you usually want the daemon running.
+If you care about scheduled tasks, deferred resumes, or daemon-backed durable runs, you usually want the daemon running.
 
 ## What the daemon does
 
-The daemon is responsible for background automation such as:
+The daemon owns background automation such as:
 
 - scheduled tasks
-- deferred resume handling
-- background maintenance
+- deferred resume wakeups
+- durable background runs
+- maintenance and cleanup
 
-It lets the CLI and web UI stay relatively thin while one process handles long-lived background work.
+It gives the CLI and web UI one place to hand off long-lived work.
+
+## On-disk state
+
+By default, daemon state lives under:
+
+```text
+~/.local/state/personal-agent/daemon/
+├── personal-agentd.sock
+├── logs/
+│   └── daemon.log
+├── runtime.db
+└── runs/
+```
+
+Important pieces:
+
+- `runtime.db` stores daemon-backed runtime state, including durable run metadata and task scheduler state
+- `runs/<run-id>/` stores per-run logs and results
 
 ## When you need it
 
-You should keep the daemon on if you use:
+Keep the daemon on if you use:
 
 - scheduled tasks
-- deferred resume
-- always-on background workflows
+- deferred resumes
+- durable runs
+- unattended background workflows that should survive the current shell
 
-You can still use `pa tui`, the web UI, and many direct features without it, but background behavior becomes limited.
-
-## What happens if the daemon is off
-
-When the daemon is unavailable:
-
-- direct CLI and web conversation work can still continue
-- scheduled tasks do not run
-- daemon-backed background events are disabled
-- some integrations fall back to degraded behavior instead of hard-failing
+You can still use `pa tui` and much of the web UI without it, but background behavior becomes limited.
 
 ## Built-in modules
 
 ### Maintenance
 
-Handles periodic housekeeping such as log cleanup.
+Periodic housekeeping for daemon runtime files.
 
 ### Tasks
 
-Discovers and runs `*.task.md` files.
-
-This module is what powers scheduled task runs, retries, and logs.
-
-See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
+Loads scheduled task files, keeps runtime state in SQLite, runs due work, and tracks retries/status.
 
 ### Deferred resume
 
-Tracks due deferred work and surfaces it back into durable state when the time arrives.
+Wakes saved conversations back up when deferred work becomes due.
 
-## Recommended ways to run it
+## Service management
 
-### Recommended: managed service
-
-```bash
-pa daemon service install
-```
-
-Supported platforms:
-
-- macOS (`launchd`)
-- Linux (`systemd --user`)
-
-### Foreground mode
-
-Useful for testing:
-
-```bash
-pa daemon start
-```
-
-## Basic commands
+CLI surface:
 
 ```bash
 pa daemon status
@@ -85,75 +73,24 @@ pa daemon service status
 pa daemon service uninstall
 ```
 
-## Status and logs
+Managed services use:
 
-Check current status:
+- `launchd` on macOS
+- `systemd --user` on Linux
 
-```bash
-pa daemon status
-pa daemon status --json
-```
+## What happens if the daemon is off
 
-Show log location and PID:
+When the daemon is unavailable:
 
-```bash
-pa daemon logs
-```
-
-## Where daemon state lives
-
-Default root:
-
-- `~/.local/state/personal-agent/daemon`
-
-Common files:
-
-- socket: `personal-agentd.sock`
-- pid: `personal-agentd.pid`
-- log: `logs/daemon.log`
-- task runtime state: `task-state.json`
-- task run logs: `task-runs/**`
-
-## Relationship to other features
-
-### Scheduled tasks
-
-The daemon discovers task files and executes them.
-
-Without the daemon, scheduled tasks do not run.
-
-### Inbox
-
-Scheduled task and deferred-resume events can create durable local inbox activity.
-
-## Configuration
-
-Main machine-local config file:
-
-- `~/.local/state/personal-agent/config/config.json` (`daemon` section)
-
-Use it to control:
-
-- task discovery path
-- retry behavior
-- tick interval
-- default timeout
-- socket path and queue settings
-
-See [Configuration](./configuration.md).
-
-## A practical mental model
-
-Think of the daemon as the system's background engine:
-
-- conversations are foreground work
-- the daemon is background work
-- the inbox is where important async outcomes surface later
+- direct live conversation work can still continue
+- scheduled tasks do not run
+- deferred resumes do not fire
+- daemon-backed runs cannot be managed normally
+- some surfaces fall back to degraded behavior instead of hard-failing
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
+- [Command-Line Guide (`pa`)](./command-line.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
-- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
-- [Configuration](./configuration.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

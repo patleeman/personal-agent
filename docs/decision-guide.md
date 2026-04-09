@@ -1,18 +1,18 @@
 # Decision Guide
 
-This page is the fast routing guide for agents using `personal-agent`.
+This is the fast routing guide for `personal-agent`.
 
 If you are not sure which surface to use, start here.
 
 ## The shortest version
 
 - **conversation** = active work right now
-- **project** = durable tracked work
-- **note** = durable reusable knowledge
-- **skill** = durable reusable procedure
+- **note page** = reusable knowledge
+- **skill page** = reusable procedure
+- **tracked page** = ongoing work with durable status
 - **activity / inbox** = passive async attention
-- **reminder / notification** = tell-me-later behavior with stronger delivery
-- **deferred resume** = continue this conversation later without the user remembering
+- **reminder** = tell me later
+- **deferred resume** = continue this conversation later
 - **run** = detached work started now
 - **scheduled task** = work that should run later or on a schedule
 
@@ -20,97 +20,59 @@ If you are not sure which surface to use, start here.
 
 | If you need to… | Use | Durable home | Do not default to |
 | --- | --- | --- | --- |
-| Work with the agent right now | conversation | conversation/session state | inbox or page as the primary work surface |
-| Keep ongoing work alive across conversations | tracked page | `sync/projects/<id>/project.md` | top-level reusable page or long conversation history |
-| Save reusable knowledge or references | page | `sync/notes/**` | tracked-page docs or random conversation text |
-| Save reusable workflow instructions | skill page | `sync/_skills/<skill>/SKILL.md` | AGENTS or ad hoc pages |
-| Save durable behavior or preferences | `AGENTS.md` or profile settings | repo/profile durable resources | pages or tracked-page state |
-| Surface async work later without interrupting | activity / inbox | local inbox state | alerts by default |
-| Tell the user later | reminder | local wakeup + notification state | scheduled task if no automation is needed |
-| Continue the same conversation later without user input | deferred resume | local wakeup state | reminder |
-| Run something detached right now | durable background run | `daemon/runtime.db` + `daemon/runs/<run-id>/{output.log,result.json}` | scheduled task |
-| Run something later or repeatedly | scheduled task | `sync/_tasks/*.task.md` | run |
-| Work on local repo files | your editor / file manager | local repo/filesystem view | tracked-page docs or pages |
-| Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory as the first stop |
-| Keep a file with a specific tracked page | tracked-page attachment or tracked-page artifact | `sync/projects/<id>/attachments|artifacts/` | top-level page assets |
-| Call external tool servers through MCP | MCP server config + MCP calls | MCP config + auth state | hand-rolled shell scripts by default |
+| Work with the agent right now | conversation | session state | inbox item or note page |
+| Save reusable knowledge | note page | `~/Documents/personal-agent/notes/**` | long conversation history |
+| Save reusable workflow instructions | skill page | `~/Documents/personal-agent/_skills/<skill>/SKILL.md` | `AGENTS.md` or ad hoc notes |
+| Keep ongoing work alive across conversations | tracked page | `~/Documents/personal-agent/projects/<id>/project.md` | a top-level note or a giant thread |
+| Save durable behavior or profile defaults | `AGENTS.md`, profile settings, models | `~/Documents/personal-agent/_profiles/<profile>/` | notes or conversations |
+| Surface async results without interrupting much | activity / inbox | machine-local inbox state | reminders by default |
+| Tell the user later | reminder | machine-local wakeup + alert state | scheduled task if no automation is needed |
+| Continue the same conversation later | deferred resume | machine-local wakeup state | reminder |
+| Run something detached right now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` | scheduled task |
+| Run something later or repeatedly | scheduled task | `~/.local/state/personal-agent/sync/{_tasks|tasks}/**` | run |
+| Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | tracked-page artifact directory first |
+| Work on repo files | editor / terminal / file manager | local filesystem | trying to turn notes into a file browser |
 
-## Work surfaces
+## Common calls
 
-### Conversation vs project vs note vs skill
+### Conversation vs note vs tracked page vs skill
 
-Use a **conversation** for active interaction.
+Use a **conversation** when the work is happening now.
 
-Promote the work into a **project** when it needs:
+Use a **note page** when the content should still be reusable outside the current task.
 
-- durable status
-- blockers or milestones
-- project child pages or files
-- continuity across conversations
+Use a **tracked page** when the work has durable status, next steps, blockers, or attachments.
 
-Use a **note** when the content is reusable outside one workstream.
+Use a **skill page** when the content is a reusable procedure that should be invoked again later.
 
-Use a **skill** when the content is a reusable procedure the agent should follow.
+### Activity vs reminder vs deferred resume
 
-Use **AGENTS.md** when the content is durable behavior, user preference, or standing policy.
+Use **activity / inbox** when the result should be visible later but does not need to interrupt.
 
-## Async attention surfaces
+Use a **reminder** when a human-facing nudge matters.
 
-Use **activity / inbox** when something happened and should be visible later, but does not need to interrupt.
+Use **deferred resume** when the right outcome is “wake this conversation back up.”
 
-Use **reminder** when the user wants an interrupting callback or stronger notification delivery.
+### Run vs scheduled task
 
-Use **deferred resume** when the agent should continue later in the same conversation, even if the user forgets.
+Use a **run** when the work starts now and should continue detached from the current thread.
 
-If async work belongs to an existing conversation, keep the durable result with that conversation and surface the conversation in attention flows.
+Use a **scheduled task** when the work should happen later, once, or repeatedly.
 
-## Automation surfaces
+## Practical rules
 
-
-Use **runs** for detached local work you want to start now.
-
-Use **scheduled tasks** for unattended work that should happen later or repeatedly.
-
-A simple rule:
-
-- **now, detached** → run
-- **later or recurring** → scheduled task
-
-## Local vs portable state
-
-Portable durable files should store stable things like:
-
-- ids
-- summaries
-- paths
-- timestamps
-
-Portable durable files should **not** store:
-
-- conversation ids
-- session ids
-- machine-local bindings
-- local daemon/runtime state
-
-If a value only makes sense on one machine or one live conversation, keep it in local runtime state.
-
-## Where Patrick-specific preferences live
-
-When you need Patrick's preferences or standing instructions, look in this order:
-
-1. active profile `AGENTS.md`
-2. repo `AGENTS.md`
-3. relevant skill pages
-
-The docs explain the product model. `AGENTS.md` explains how this particular agent should behave.
+1. If it is reusable knowledge, put it in the vault.
+2. If it is ongoing work, give it a tracked page.
+3. If it is just active execution, keep it in the conversation.
+4. If it should happen later, choose reminder, deferred resume, run, or scheduled task based on who must remember.
+5. If you only need local file edits, use your editor.
 
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
 - [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Workspace](./workspace.md)
-- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Tracked Pages](./projects.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
+- [Runs](../internal-skills/runs/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

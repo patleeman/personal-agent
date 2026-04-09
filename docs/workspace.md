@@ -1,44 +1,43 @@
 # Workspace
 
-The standalone Workspace file browser/editor has been removed from the desktop web UI.
+The old in-app workspace file browser/editor has been removed from the desktop web UI.
 
-Use your normal file tool for raw file work instead:
+Use your normal file tools instead:
 
 - VS Code / Cursor / Zed for editing
 - Finder or your OS file manager for browsing
-- Obsidian for note-centric vault browsing
-- git in your terminal or editor for staging/commits
+- git in your terminal or editor for staging and history
+- Obsidian if you want a vault-oriented browser for notes
 
-## Why it was removed
+## Why
 
-The in-app workspace was trying to be a general file browser, editor, diff viewer, and git client inside an app whose real strengths are conversations, durable pages, inbox, and automation.
+The in-app workspace tried to be a file browser, editor, diff viewer, and git client inside a product whose main strengths are conversations, durable knowledge, inbox, and automation.
 
-In practice, external tools are better at file work, so the web UI no longer tries to duplicate them.
+External tools are better for raw file work, so the product no longer tries to duplicate them.
 
 ## What remains
 
-A few workspace-aware pieces still exist behind the scenes:
+A few workspace-aware pieces still exist:
 
 - conversations still track a working directory
-- folder picking still exists where cwd selection matters
-- repo-aware context can still inform conversation state
+- folder picking still exists where cwd matters
+- file mentions and repo-aware context still inform conversation state
+- settings still expose workspace and vault information
 
-But there is no longer a dedicated `/workspace/files` or `/workspace/changes` destination for day-to-day browsing/editing.
+But there is no dedicated day-to-day `/workspace/files` or `/workspace/changes` surface anymore.
 
-## Practical rule of thumb
+## Practical rule
 
 Use `personal-agent` for:
 
 - conversations
-- reminders, wakeups, and inbox
+- inbox and reminders
 - durable notes, skills, and tracked work
-- automation and run orchestration
+- runs, scheduled tasks, and other automation
 
-Use your editor or file manager for files.
+Use your editor or terminal for files.
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
 - [Web UI Guide](./web-ui.md)
-- [Command-Line Guide (`pa`)](./command-line.md)

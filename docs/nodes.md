@@ -1,46 +1,38 @@
 # Nodes
 
-`Node` is now the **legacy/internal storage term** for what the product calls a **page**.
+`node` is now mostly a legacy or internal storage term for what the product model calls a **page**.
 
 If you are deciding how to think about durable information in `personal-agent`, use [Pages](./pages.md) first.
 
-## What changed
+## Why you still see the word
 
-The product model is now:
+You may still encounter `node` in:
 
-- **page** = the universal durable unit
-- **note / project / skill** = page roles or workflows
+- internal APIs
+- older scripts and tests
+- compatibility routes and historical docs
+- some storage helpers around unified durable content
 
-The implementation still uses `node` in some API names and historical compatibility surfaces, so you will still see `node` in:
+That does not change the preferred mental model.
 
-- some internal APIs and code paths
-- older docs, links, or scripts that have not been updated yet
-- historical references to older CLI or UI surfaces
+## Current guidance
 
-That does **not** mean users or agents should lead with `node` as the mental model.
+When writing docs, UI copy, or normal operating notes, say:
 
-## When to use this page
+- **page** for the umbrella concept
+- **note**, **skill**, or **tracked page** for the specific role
 
-Use this doc when you need the storage compatibility context:
+Use `node` only when you are dealing with compatibility or implementation details.
 
-- why some compatibility surfaces still say `node`
-- why some APIs still say `node`
-- why older docs, links, or scripts may still use the term
+## Notes on storage
 
-For the actual product model, read [Pages](./pages.md).
+There is still internal support for unified node-style storage and migration, but the main durable authoring paths remain:
 
-## Compatibility surfaces
-
-These are the places you may still encounter node terminology:
-
-- older `/nodes` links and API clients
-- legacy scripts that still use node terminology
-- stale docs that have not yet been refreshed
-
-The preferred user-facing language is now just **page**.
+- `notes/`
+- `_skills/`
+- `projects/`
 
 ## Related docs
 
 - [Pages](./pages.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Command-Line Guide (`pa`)](./command-line.md)

@@ -1,248 +1,95 @@
 # Profiles, AGENTS, Pages, and Skills
 
-Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a durable resource store.
+Profiles are how `personal-agent` changes behavior, prompting, defaults, and available resources around the shared durable vault.
 
-A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based durable resources plus machine-local overlays.
+A profile is not just a label. It is a layered resource bundle.
 
-See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the storage compatibility term.
-
-If you want the single conceptual overview of pages, skills, tracked pages, and `AGENTS.md` as one memory system, start with [Knowledge Management System](./knowledge-system.md).
-
-If you need Patrick-specific preferences or standing behavior, the active profile's `AGENTS.md` is the canonical home. Use this page to understand how that fits with pages, skills, tracked pages, and layered resources.
-
-## The layer model
+## Layer order
 
 Resources resolve in this order:
 
-1. repo `defaults/agent` for shared default profile files
-2. durable resource roots under `~/.local/state/personal-agent/sync/`
-3. local overlay (`~/.local/state/personal-agent/config/local` by default)
-
-In addition, repo built-ins are always available from:
-
-- `extensions/`
-- `themes/`
+1. repo defaults from `defaults/agent`
+2. vault profile files from `~/Documents/personal-agent/_profiles/<profile>/`
+3. machine-local overlay from `~/.local/state/personal-agent/config/local`
+4. repo built-ins from `extensions/`, `themes/`, and `prompt-catalog/`
 
 ## What a profile can contain
 
-The durable store can contain:
+The durable vault can contain:
 
 - `_profiles/<profile>/AGENTS.md`
 - `_profiles/<profile>/settings.json`
 - `_profiles/<profile>/models.json`
 - `_skills/**`
 - `notes/**`
-- `tasks/*.task.md`
-- `projects/<projectId>/{project.md,state.yaml}`
+- `projects/**`
 
-Repo built-ins still provide:
+Scheduled tasks are separate: they stay under the machine-local state root instead of the shared vault.
 
-- `extensions/`
-- `themes/`
-- prompt-catalog content
-
-## Example layout
+## Vault layout
 
 ```text
-<repo>/
-├── defaults/
-│   └── agent/
-│       └── settings.json
-├── extensions/
-└── themes/
-
-~/.local/state/personal-agent/
-└── sync/
-    ├── _profiles/
-    │   ├── default/
-    │   │   ├── AGENTS.md
-    │   │   ├── settings.json
-    │   │   └── models.json
-    │   └── datadog/
-    │       ├── AGENTS.md
-    │       └── settings.json
-    ├── _skills/
-    ├── notes/
-    ├── tasks/
-    └── projects/
+~/Documents/personal-agent/
+├── _profiles/
+│   └── <profile>/
+│       ├── AGENTS.md
+│       ├── settings.json
+│       └── models.json
+├── _skills/
+├── notes/
+└── projects/
 ```
 
-## What belongs where
+## What each piece is for
 
-| Place | Use it for |
+| Path | Purpose |
 | --- | --- |
-| `_profiles/<profile>/AGENTS.md` | durable role, behavior rules, and operating policy fragments |
-| `_skills/<skill>/SKILL.md` | reusable workflow skill pages |
-| `notes/**` | shared durable pages |
-| `notes/<id>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that page |
-| `notes/<id>/assets/**` | non-markdown assets used by that page |
-| `tasks/*.task.md` | scheduled automation |
-| `projects/` | long-running tracked work |
-| `_profiles/<profile>/settings.json` | profile-specific runtime defaults such as theme and model prefs |
-| `_profiles/<profile>/models.json` | profile-specific model provider definitions and overrides |
+| `_profiles/<profile>/AGENTS.md` | durable behavior and standing instructions |
+| `_profiles/<profile>/settings.json` | profile-specific defaults such as themes and interface/model prefs |
+| `_profiles/<profile>/models.json` | model provider definitions and overrides |
+| `_skills/<skill>/SKILL.md` | reusable workflow procedures |
+| `notes/**` | reusable durable knowledge |
+| `projects/**` | tracked work with durable state |
 
-## `AGENTS.md`: durable identity and behavior
+## Local overlay
 
-`AGENTS.md` is where the durable behavioral contract lives.
-
-Use it for:
-
-- mission and role
-- user preferences
-- operating rules
-- constraints and standing instructions
-
-Do not use it for:
-
-- transient project state
-- one-off reminders
-- conversation-local context
-
-## Skill pages: reusable workflows
-
-Skills are reusable, named workflow pages the agent can invoke when appropriate.
-
-Use a skill node when you want something that is:
-
-- reusable across conversations
-- broader than one project
-- procedural rather than purely referential
-
-Examples:
-
-- a morning report workflow
-- a calendar workflow
-- a Git or release workflow
-- a browser-automation workflow
-
-Skill pages live under `sync/_skills/<skill>/SKILL.md` and typically include supporting `scripts/`, `references/`, and `assets/` directories.
-
-For Pi compatibility, skill node frontmatter keeps:
-
-- `name`
-- `description`
-
-Alongside node fields such as:
-
-- `id`
-- `kind: skill`
-- `title`
-- `summary`
-
-## Note nodes: durable knowledge and reference nodes
-
-Notes are durable knowledge nodes.
-
-Use them for:
-
-- runbooks
-- research notes
-- domain references
-- architecture notes
-- decision summaries
-- distilled conversation captures
-- structure notes / maps of content when they genuinely help
-
-A reusable page can be a single markdown file in `notes/` or a note package directory with an `INDEX.md` file when it needs supporting material. Supporting directories are freeform.
-
-Use these naming rules:
-
-- simple note: `notes/<id>.md`
-- note package: `notes/<id>/INDEX.md`
-- the filename or package directory should match the note `id`
-
-Reusable pages may also include an optional `description` field for agent-facing guidance about how the page should be used or when it should be consulted.
+The local overlay defaults to:
 
 ```text
-note-id/
-├── INDEX.md
-├── references/
-└── assets/
+~/.local/state/personal-agent/config/local
 ```
 
-Simple notes can also live directly as `notes/<note-id>.md`.
+Use it for machine-local tweaks that should not live in the shared vault.
 
-Typical note-node frontmatter:
+Typical uses:
 
-```md
----
-id: desktop-gpu-server
-kind: note
-title: Desktop GPU-enabled server notes
-summary: Reference facts for a local Ubuntu GPU-enabled server.
-description: Use this note when deciding whether local desktop compute is a better fit than renting remote GPUs.
-status: active
-tags:
-  - desktop
-  - gpu
-  - ubuntu
-updatedAt: 2026-03-28
-metadata:
-  area: compute
-  type: reference
----
-```
+- local `AGENTS.md` additions
+- local settings or models overrides
+- machine-local extensions, prompts, themes, or skills
 
-Use tag `structure` when a page mostly organizes other pages.
-There is no separate hub kind.
+## Skills
 
-Do not create empty hub or index pages by default. If a topic already has a real tracked-page or skill home, put the content there instead of duplicating it as a top-level page.
+Skill pages are reusable procedures, not profile settings.
 
-## Project pages
+Use a skill when the content answers:
 
-Tracked pages are stored under `sync/projects/<id>/` with:
+> how should we do this workflow again later?
 
-- `project.md` for the human handoff / overview
-- optional `documents/`, `attachments/`, and `artifacts/` directories for supporting material
-- optional child pages elsewhere in `sync/projects/**` or `sync/notes/**` linked back with `links.parent: <projectId>`
+Keep the skill self-contained and practical. Supporting files such as `references/` or `scripts/` are fine inside the skill package.
 
-See [Tracked Pages](./projects.md).
+## Notes and tracked pages
 
-## Shared resources vs profile-targeted resources
+Notes, skills, and tracked pages all live in the same vault, but they do different jobs:
 
-Important convention:
+- note page = reusable knowledge
+- skill page = reusable procedure
+- tracked page = active work with durable execution state
 
-- shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
-- profile-targeted durable resources are selected by filename or metadata applicability
-- durable note and skill pages live in the shared vault under `sync/notes/` and `sync/_skills/`
+## Profile selection
 
-In particular:
+The selected default profile is machine-local and stored in `~/.local/state/personal-agent/config/config.json`.
 
-- there is no profile-local durable `memory/` directory
-- there is no supported durable note store under `pi-agent-runtime/notes`; that path is legacy migration input only
-- behavior targeting belongs in durable `_profiles/<profile>/{AGENTS.md,settings.json,models.json}` and shared vault content under `notes/**`, `_skills/**`, and `projects/**`
-
-## Pages vs tracked pages vs inbox
-
-This distinction still matters.
-
-Use:
-
-- **pages** for reusable durable knowledge
-- **tracked pages** for current tracked work state, handoff context, child pages, and page files
-- **inbox** for asynchronous outcomes that need attention later
-
-A good rule:
-
-- if it is reusable knowledge, store it in a page
-- if it is about one piece of ongoing work, store it in a tracked page
-- if it is an async event worth noticing, surface it in the inbox
-- if it already has a tracked-page or skill home, do not also keep it as a duplicate top-level page
-
-## Writing style for pages and tracked pages
-
-Use these defaults for durable node prose:
-
-- keep ids stable and slug-like, but make titles human-readable
-- keep `summary` to one sentence
-- start the note entry file (`<id>.md` or `INDEX.md`) with a plain-English opening
-- keep overview docs high-signal and move long detail into `references/` or project child pages
-- avoid placeholder sections, stale scaffolding, and empty structure pages
-- update or remove stale text instead of letting it linger
-
-## Commands you will use
-
-### Profile commands
+You can inspect or change it with:
 
 ```bash
 pa profile list
@@ -250,54 +97,18 @@ pa profile show
 pa profile use <name>
 ```
 
-### Shared note files
+## Package installs
 
-Shared note pages live under the vault `notes/` directory.
+`pa install` writes package sources into either:
 
-Create or edit them directly as markdown files, usually either:
+- the active profile settings
+- the local overlay settings
 
-- `notes/<note-id>.md`
-- `notes/<note-id>/INDEX.md`
-
-If legacy files still exist under `~/.local/state/personal-agent/pi-agent-runtime/notes`, loaders migrate them into the vault `notes/` directory and the vault copy becomes canonical.
-
-## Local overlay
-
-The optional local overlay defaults to:
-
-- `~/.local/state/personal-agent/config/local`
-
-Use it for machine-local additions that should not live in the repo.
-
-It can contain the same kinds of runtime resources as a profile layer, such as:
-
-- skills
-- prompts
-- themes
-- extensions
-- settings overrides
-
-## Important boundary for agents
-
-Do not store conversation ids or session ids in portable durable files.
-
-That includes:
-
-- note-node frontmatter/metadata
-- tracked-page files
-- activity frontmatter
-- any profile-local schema meant to be portable
-
-Conversation-local bindings belong in local runtime state.
+That is how profile-specific or machine-local external Pi packages are added without editing repo defaults.
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Nodes](./nodes.md)
-- [How personal-agent works](./how-it-works.md)
+- [Pages](./pages.md)
 - [Tracked Pages](./projects.md)
-- [Conversations](./conversations.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
-- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
-- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
+- [Command-Line Guide (`pa`)](./command-line.md)

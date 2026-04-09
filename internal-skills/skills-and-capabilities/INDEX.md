@@ -27,7 +27,7 @@ See [Pages](../../docs/pages.md) for the product model and [Nodes](../../docs/no
 
 Skill pages live in the shared durable vault plus optional local overlay skill dirs:
 
-- `~/.local/state/personal-agent/sync/_skills/<skill>/SKILL.md`
+- `~/Documents/personal-agent/_skills/<skill>/SKILL.md`
 - local overlay skill dirs
 - repo defaults and built-in runtime capabilities
 
@@ -46,8 +46,8 @@ Examples include:
 
 Skill pages are surfaced in user-facing places like:
 
-- the Notes / knowledge surfaces in the web UI
 - the agent's normal resource loading when a profile is active
+- conversation mentions and runtime resource discovery
 
 ## Extensions
 
@@ -88,8 +88,9 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 
 ### Web UI
 
-- note and project surfaces show durable page content
 - conversations can reference skills with `@`
+- the Tools page shows the live runtime tool definitions and prompt assembly
+- the Instructions page shows loaded instruction sources
 - live sessions use the active profile's runtime behavior
 
 ### CLI / TUI

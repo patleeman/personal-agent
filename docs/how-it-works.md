@@ -2,227 +2,119 @@
 
 `personal-agent` is a durable application layer around Pi.
 
-The core idea is simple:
+The main idea is simple:
 
 - keep shared defaults in the repo
-- keep mutable durable state under `~/.local/state/personal-agent`
-- use the right durable surface for each kind of work
+- keep durable knowledge in an external vault
+- keep machine-local runtime state under `~/.local/state/personal-agent`
+- use the smallest correct durable surface for each job
 
-This page is the main mental model for both users and agents.
+If you want the fastest routing layer first, read [Decision Guide](./decision-guide.md).
 
-If you need a faster routing layer first, read [Decision Guide](./decision-guide.md). If you need the live-tool mapping, use the runtime tool schema.
+## The three places state can live
 
-## The two kinds of state
+### 1. Repo-managed defaults
 
-### Shared defaults + mutable profile state
+These ship with the repo and are shared through git:
 
-Shared defaults remain repo-managed.
+- `defaults/agent`
+- `extensions/`
+- `themes/`
+- `internal-skills/`
+- `prompt-catalog/`
 
-Common repo-managed examples:
+### 2. Durable knowledge vault
 
-- `defaults/agent/settings.json`
-- `extensions/**`
-- `themes/**`
+By default, durable knowledge lives at:
 
-Mutable durable knowledge resources default to the external vault at `~/Documents/personal-agent`:
+```text
+~/Documents/personal-agent/
+```
 
-- `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md`
-- `~/Documents/personal-agent/_profiles/<profile>/settings.json`
-- `~/Documents/personal-agent/_profiles/<profile>/models.json`
-- `~/Documents/personal-agent/{notes,projects,_skills}/**`
+That vault holds:
 
-The app-managed durable subtree under `~/.local/state/personal-agent/sync/` still holds task definitions and durable conversation metadata.
+- `_profiles/<profile>/AGENTS.md`
+- `_profiles/<profile>/{settings.json,models.json}`
+- `_skills/<skill>/SKILL.md`
+- `notes/**`
+- `projects/**`
 
-### Local runtime state
+This is the canonical home for durable knowledge, procedures, tracked work, and profile behavior.
 
-This is mutable runtime state rooted at `~/.local/state/personal-agent`.
+### 3. Machine-local runtime state
 
-By default it is machine-local. Durable task/session state lives under the app-managed subtree, while auth, logs, and other runtime files stay local to the current machine.
+Machine-local state defaults to:
 
-Common examples:
+```text
+~/.local/state/personal-agent/
+```
 
-- `~/.local/state/personal-agent/pi-agent-runtime/auth.json` (always machine-local)
-- `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
-- `~/.local/state/personal-agent/pi-agent-runtime/notes/**` (legacy machine-local note migration input only, not a supported durable store)
-- `~/.local/state/personal-agent/sync/pi-agent/sessions/**` (durable conversation session files)
-- `~/.local/state/personal-agent/daemon/**` (machine-local)
-- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
-- conversation-local link state such as conversation execution-target bindings
+Common pieces:
 
-Use local runtime state for:
+- `config/config.json` — machine config, selected default profile, web UI prefs, vault override
+- `daemon/` — daemon socket, log, runtime DB, durable runs
+- `web/` — companion auth and web runtime state
+- `desktop/` — Electron desktop config and logs
+- `sync/{_tasks|tasks}/` — scheduled task files
 
-- live sessions
-- auth
-- logs
-- spools
-- process state
-- queue state
-- anything tied to one machine or one live conversation
+This state is durable on one machine, but it is not the portable vault.
 
-## The main durable surfaces
+## How a session starts
 
-### Conversation
+When you start Pi through `pa`, `personal-agent` resolves a layered profile:
 
-A conversation is where interactive work happens.
+1. repo defaults from `defaults/agent`
+2. vault profile files from `~/Documents/personal-agent/_profiles/<profile>/`
+3. machine-local overlay from `~/.local/state/personal-agent/config/local`
+4. built-in repo extensions/themes and any discovered package sources
 
-Use a conversation for:
+Those layers are materialized into the runtime that Pi actually sees.
 
-- back-and-forth work with the agent
-- active coding or research sessions
-- live problem solving
+## Durable surfaces
 
-A conversation is not the right place to store durable project plans or reusable knowledge.
+| Surface | Purpose | Durable home |
+| --- | --- | --- |
+| Conversation | active work right now | session state |
+| Note page | reusable knowledge | vault `notes/` |
+| Skill page | reusable procedure | vault `_skills/` |
+| Tracked page | ongoing work | vault `projects/` |
+| Activity / inbox | passive async attention | machine-local inbox state |
+| Reminder / alert | stronger tell-me-later delivery | machine-local alert/wakeup state |
+| Deferred resume | wake this conversation later | machine-local wakeup state |
+| Run | detached work started now | daemon runtime DB + `daemon/runs/` |
+| Scheduled task | later/recurring automation | machine-local `sync/{_tasks|tasks}/` |
+| Conversation artifact | rendered thread-local output | conversation artifact state |
 
-### Inbox / activity
+## Interfaces on top of the same model
 
-The inbox is the durable attention surface for asynchronous things.
+### CLI
 
-Use it for:
+`pa` launches Pi and manages the durable surfaces around it.
 
-- scheduled task results
-- deferred resumes
-- background failures
-- important asynchronous summaries worth noticing later
+### Web UI
 
-Do not use it as a second transcript.
+The web UI is the main day-to-day operator surface. It exposes conversations, inbox, automations, tools, instructions, settings, and a narrower companion/mobile surface.
 
-See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
+### Electron desktop shell
 
-### Project
-
-A project is the durable home for long-running work across conversations.
-
-Use it for:
-
-- goals
-- status
-- blockers
-- recent progress
-- a canonical project brief
-- optional milestones
-- project tasks
-- appended notes
-- attachments and project artifacts
-- linked conversations shown by the UI
-
-If the work should still make sense next week, it probably belongs in a project.
-
-See [Tracked Pages](./projects.md).
-
-### Pages
-
-Pages are the unified durable product model for notes, projects, and skills.
-
-Use them for:
-
-- profile behavior files in the vault at `_profiles/<profile>/AGENTS.md`
-- reusable workflow skill pages backed by `_skills/<skill>/SKILL.md`
-- durable note pages backed by `notes/**` as `notes/<id>.md` or `notes/<id>/INDEX.md`, plus package-local `references/` when needed
-- structured tracked pages backed by `projects/<projectId>/project.md` plus supporting files
-
-The user-facing model is pages, and the on-disk durable model now matches that vault layout directly.
-
-See [Pages](./pages.md) and [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
-
-### Scheduled task
-
-A scheduled task is unattended automation.
-
-Use it when something should run later or on a schedule, even when no conversation is open.
-
-Examples:
-
-- morning reports
-- recurring checks
-- background prompts that create inbox activity
-- scheduled callbacks that later wake a conversation back up
-
-See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
+The desktop app wraps the web UI, owns a local backend while it is running, and can switch to saved web or SSH hosts.
 
 ### Daemon
 
-The daemon is the shared background worker.
+The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable runs.
 
-It is what makes unattended behavior reliable.
+## Rules that keep the system coherent
 
-Use it for:
-
-- scheduled tasks
-- deferred resume
-- background event handling
-
-See [Daemon and Background Automation](./daemon.md).
-
-## Choose the right feature
-
-| Need | Best fit | Why |
-| --- | --- | --- |
-| Work with the agent right now | conversation | best place for active interaction |
-| Track a real piece of ongoing work | tracked page | durable plan, brief, pages, files, blockers, status, and linked conversations |
-| Save something the agent should know later | page / skill page / AGENTS | reusable durable knowledge |
-| Interrupt yourself later for a reminder or callback | reminder / notification | conversation-bound wakeup plus stronger notification delivery |
-| Notice async outcomes later without interrupting yourself | inbox/activity | passive attention surface, not a transcript |
-| Run something on a schedule | scheduled task | unattended automation |
-
-## A useful rule of thumb
-
-Think about the system this way:
-
-- **conversation** = active work
-- **page** = durable knowledge or tracked work
-- **skills** = reusable procedures
-- **tracked pages** = durable tracked work
-- **reminder/callback notifications** = interrupting reminders and callbacks that need acknowledgement
-- **inbox** = durable passive attention for async events
-- **scheduled task** = durable automation definition
-- **daemon** = background runner
-
-## Conversation locality boundary
-
-This is an important rule for agents.
-
-Portable durable files should not store conversation ids or session ids.
-
-That means:
-
-- do not put conversation ids in tracked-page `state.yaml` or `project.md`
-- do not put conversation ids in reusable-page frontmatter, state, or metadata
-- do not key repo files by conversation id
-
-If you need conversation-local bindings, keep them in local runtime state.
-
-Portable files should point to stable things such as:
-
-- page ids
-- task ids
-- file paths
-- timestamps
-- summaries
-
-## How the pieces work together
-
-A common workflow looks like this:
-
-1. Start in a conversation through the web UI or TUI.
-2. Create or reference a tracked page if the work is ongoing.
-3. Use the active profile's AGENTS, skill pages, and shared pages to guide behavior and bring in durable knowledge.
-4. If the work should happen later, put it into a scheduled task.
-5. When asynchronous work finishes, the result shows up in the inbox or, for higher-signal reminders/callbacks, as an alert tied back to the originating conversation.
-
-That is the intended shape of the product.
+- conversations are for execution, not long-term storage
+- durable knowledge belongs in the vault
+- scheduled task files stay machine-local
+- profile behavior belongs in `AGENTS.md` and profile settings, not in random notes
+- if a feature needs later attention, use inbox, reminder, deferred resume, run, or scheduled task explicitly
 
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Getting Started](./getting-started.md)
+- [Configuration](./configuration.md)
 - [Conversations](./conversations.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Workspace](./workspace.md)
-- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Web UI Guide](./web-ui.md)
-- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
-- [Tracked Pages](./projects.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
-- [Runs](../internal-skills/runs/INDEX.md)

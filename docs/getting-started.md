@@ -4,12 +4,12 @@ This guide gets `personal-agent` into a usable state quickly.
 
 ## What you are setting up
 
-`personal-agent` gives Pi a durable layer:
+`personal-agent` adds a durable layer around Pi:
 
-- profiles and reusable resources live in git
-- mutable runtime state stays local
-- the daemon handles background automation
-- the web UI and CLI expose the same underlying agent system
+- repo-managed defaults live in git
+- durable knowledge lives in an external vault
+- machine-local runtime state stays under `~/.local/state/personal-agent`
+- the CLI, web UI, daemon, and desktop shell all sit on top of the same state model
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ npm run build
 npm link --workspace @personal-agent/cli
 ```
 
-If you do not want to link the CLI globally, you can run it with:
+If you do not want to link the CLI globally:
 
 ```bash
 npm exec pa -- --help
@@ -39,145 +39,114 @@ Run:
 
 ```bash
 pa doctor
+pa status
 ```
 
-This confirms that:
+`pa doctor` should confirm that Pi, the runtime paths, and built artifacts are available.
 
-- a runnable Pi binary is available
-- profiles can be discovered
-- runtime state paths are valid
-- the runtime agent directory can be prepared
+## Choose a profile
 
-## Choose your default profile
-
-List profiles:
+List the available profiles:
 
 ```bash
 pa profile list
 ```
 
-Set one:
+Switch the default profile if needed:
 
 ```bash
-pa profile use assistant
+pa profile use shared
 ```
 
-You can always override per run:
+The selected default profile is stored in `~/.local/state/personal-agent/config/config.json`.
 
-```bash
-pa tui --profile assistant
-pa tui --profile assistant -p "hello"
+## Understand the default paths
+
+Durable knowledge defaults to the external vault:
+
+```text
+~/Documents/personal-agent/
+├── _profiles/
+├── _skills/
+├── notes/
+└── projects/
 ```
 
-## Start the daemon
+Machine-local runtime state defaults to:
 
-The daemon is recommended if you use:
-
-- scheduled tasks
-- deferred resume
-- always-on background automation
-
-Recommended:
-
-```bash
-pa daemon service install
+```text
+~/.local/state/personal-agent/
+├── config/
+├── daemon/
+├── desktop/
+├── web/
+└── sync/
 ```
 
-If you just want to try it in the foreground first:
+Scheduled task files stay under the machine-local `sync/` subtree, not in the shared vault.
 
-```bash
-pa daemon start
-```
+## Start an interface
 
-Check status:
-
-```bash
-pa daemon status
-```
-
-## Open the web UI
-
-Start the app:
-
-```bash
-pa ui --open
-```
-
-By default it runs on:
-
-- `http://localhost:3741`
-
-The web UI is the easiest place to explore:
-
-- Inbox
-- Conversations
-- Projects
-- Scheduled tasks
-- Notes
-- Settings
-
-See [Web UI Guide](./web-ui.md).
-
-## Optional: use the terminal UI directly
-
-Launch Pi with your resolved profile resources:
+### TUI
 
 ```bash
 pa tui
 ```
 
-Or send a one-off prompt:
+### Web UI
 
 ```bash
-pa tui -p "Summarize my current profile"
+pa ui foreground --open
 ```
 
-## First things to try
-
-### Inspect durable state
+For day-to-day use as a managed service:
 
 ```bash
-pa inbox list
-pa tasks list
-pa runs list
+pa ui install
 ```
 
-### Open a conversation in the web UI
+### Electron desktop shell
 
-- run `pa ui open`
-- start a new conversation
-- mention a vault file directly with `@path/to/file` when you want durable context in the thread
+```bash
+npm run desktop:start
+```
 
-### Create a durable note
+The desktop shell owns its own local backend while it is running. If a daemon or web UI is already running separately on the same machine, stop those first.
 
-Create `notes/<id>.md` under your vault root (default `~/Documents/personal-agent`) with frontmatter plus a markdown body, or use the desktop Instructions page when you specifically want to edit layered `AGENTS.md` files.
+## Create your first durable instructions
 
-### Validate scheduled tasks
+Use one of these paths:
+
+- edit `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md` directly
+- open the web UI and use the [Instructions page](./web-ui.md)
+
+Use `AGENTS.md` for durable behavior and preferences, not for project notes.
+
+## Create durable knowledge
+
+Use the vault directly for now:
+
+- note page: `~/Documents/personal-agent/notes/<id>.md`
+- note package: `~/Documents/personal-agent/notes/<id>/INDEX.md`
+- skill: `~/Documents/personal-agent/_skills/<skill>/SKILL.md`
+- tracked page: `~/Documents/personal-agent/projects/<projectId>/project.md`
+
+Use [Knowledge Management System](./knowledge-system.md) and [Pages](./pages.md) for the model behind those files.
+
+## Validate scheduled tasks
+
+If you already have task files:
 
 ```bash
 pa tasks validate --all
 ```
 
-## Recommended reading order
+Example task files live under `docs/examples/` and runtime task files live under `~/.local/state/personal-agent/sync/{_tasks|tasks}/`.
 
-After this page:
+## Good next docs
 
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
-3. [Knowledge Management System](./knowledge-system.md)
-5. [Conversations](./conversations.md)
-6. [Web UI Guide](./web-ui.md)
-7. [Tracked Pages](./projects.md)
-8. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-9. [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
-
-## If something fails
-
-Start with:
-
-```bash
-pa doctor
-pa daemon status
-```
-
-Then use [Troubleshooting](./troubleshooting.md).
+3. [Web UI Guide](./web-ui.md)
+4. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+5. [Tracked Pages](./projects.md)

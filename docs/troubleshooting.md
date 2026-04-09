@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This page covers the most common user-facing failures in `personal-agent`.
+This page covers the most common failures in `personal-agent`.
 
 ## Start here
 
@@ -8,24 +8,22 @@ Run these first:
 
 ```bash
 pa doctor
+pa status
 pa daemon status
-pa profile show
+pa ui status
 ```
 
-If scheduled tasks are involved:
+If tasks or runs are involved:
 
 ```bash
 pa tasks list
 pa tasks validate --all
+pa runs list
 ```
 
 ## `pa` cannot find Pi
 
-Typical message:
-
-- `Unable to find a runnable pi binary`
-
-Fix:
+Typical fix:
 
 ```bash
 npm install
@@ -38,193 +36,162 @@ Optional global fallback:
 npm install -g @mariozechner/pi-coding-agent
 ```
 
-## Unknown or missing profile
+## Web UI will not start
 
-Typical message:
-
-- `Unknown profile: <name>`
-
-Check available profiles:
+Check whether the build exists and whether the port is already occupied:
 
 ```bash
-pa profile list
+pa ui status
+lsof -i tcp:3741
 ```
 
-Set a valid default:
+Useful fixes:
 
-```bash
-pa profile use assistant
-```
-
-## Runtime state path points inside the repo
-
-`personal-agent` expects mutable runtime state outside the git repo.
-
-Fix by resetting or overriding the state root:
-
-```bash
-export PERSONAL_AGENT_STATE_ROOT="$HOME/.local/state/personal-agent"
-```
-
-## Web UI does not start
-
-Common reason:
-
-- the web app build is missing
-
-Build it:
-
-```bash
-npm run build
-```
-
-Then start again:
-
-```bash
-pa ui --open
-```
+- run `npm run build`
+- stop the process already using the port
+- use `pa ui foreground --port <port>` for a one-off override
 
 ## Daemon is not running
 
-Typical symptom:
-
-- scheduled tasks do not run
-- background automation is missing
-- warnings mention disabled background events
-
-Fix:
+Inspect status and logs:
 
 ```bash
-pa daemon start
+pa daemon status
+pa daemon logs
 ```
 
-Recommended long-term fix:
+If you want the background service installed persistently:
 
 ```bash
 pa daemon service install
 ```
 
-Check status:
+## Scheduled tasks are not firing
+
+Check all of these:
 
 ```bash
 pa daemon status
-```
-
-## Scheduled task is missing
-
-Check that the file:
-
-- is in the configured task directory
-- ends with `.task.md`
-- has valid YAML frontmatter
-- has a non-empty Markdown body
-
-Validate everything:
-
-```bash
 pa tasks validate --all
+pa tasks list --status error
+pa tasks show <id>
+pa tasks logs <id>
 ```
 
-## Scheduled task was skipped
+Common causes:
 
-Common reasons:
+- daemon is off
+- invalid task frontmatter
+- task file is in the wrong directory
+- one-time task already completed
+- task run is failing and needs log inspection
 
-- the previous run was still active
-- a one-time `at` task was due while the daemon was offline
+## Durable run is stuck or failed
 
-Inspect:
+Inspect the run directly:
 
 ```bash
-pa tasks show <id>
+pa runs show <id>
+pa runs logs <id> --tail 200
 ```
 
-Look at last status, last error, and one-time resolution fields.
+If appropriate:
 
-## No task logs found
+- `pa runs rerun <id>`
+- `pa runs follow-up <id> --prompt "..."`
+- `pa runs cancel <id>`
 
-Either:
+## Pairing code or companion access fails
 
-- the task has never run
-- logs were reaped
-- the task id is wrong
+Remember the current rules:
+
+- pairing codes expire after 10 minutes
+- paired sessions expire after 30 days of inactivity unless refreshed by active use
+- `pa ui pairing-code` needs the local web UI/admin surface reachable
+
+If needed, generate a new code and pair again.
+
+## Tailscale Serve is not exposing the UI
+
+Check the current web UI status and preference first:
+
+```bash
+pa ui status
+```
+
+If you are using a managed service, restart it after changing settings:
+
+```bash
+pa ui restart
+```
+
+## Vault path looks wrong
+
+Inspect the effective machine config:
+
+- `~/.local/state/personal-agent/config/config.json`
+- `PERSONAL_AGENT_VAULT_ROOT` if set in your shell/service environment
+
+The environment variable wins over machine config.
+
+## Electron desktop shell will not launch
+
+The local desktop backend intentionally refuses to start if:
+
+- another daemon is already running outside the desktop app
+- port `3741` is already in use
+
+Stop the external daemon/web UI first, then launch the desktop app again.
+
+Desktop logs live under:
+
+```text
+~/.local/state/personal-agent/desktop/logs/
+```
+
+## SSH remote desktop host will not connect
 
 Check:
 
-```bash
-pa tasks show <id>
-pa tasks list --status running
-```
+- `ssh` works manually to the target host
+- the remote repo root is correct
+- the remote machine has `pa` available
+- the remote web UI port is reachable through the tunnel
 
-## Inbox looks empty or stale
+The desktop SSH controller defaults the remote repo root to `~/workingdir/personal-agent` and the remote web UI port to `3741` unless you override them.
 
-Remember:
+## MCP auth problems
 
-- the current inbox is activity-backed
-- not every conversation reply creates an inbox item
-- the inbox mainly reflects asynchronous events
-
-Refresh or inspect via CLI:
+Useful checks:
 
 ```bash
-pa inbox list
-pa inbox list --unread
+pa mcp list --probe
+pa mcp info <server>
+pa mcp auth <server>
 ```
 
-If you expected a task result, verify the task actually ran.
+Common causes:
 
-## Durable page files fail to parse
+- wrong `mcp_servers.json`
+- missing OAuth client metadata for remote MCP servers
+- stale machine-local auth state
 
-Inspect the relevant vault file directly and check its frontmatter and body.
+## Useful log locations
 
-Common problems:
+By default:
 
-- missing YAML frontmatter
-- missing required keys such as `id`, `kind`, `title`, or `summary`
-- duplicate ids
-- empty body
-- stale old-format content that still assumes `MEMORY.md` or legacy metadata fields
-
-## `pa update` fails
-
-`pa update` does several things:
-
-- pulls latest repo changes
-- refreshes dependencies
-- rebuilds packages
-- restarts background services
-
-If dependency refresh is the problem, try:
-
-```bash
-pa update --repo-only
+```text
+~/.local/state/personal-agent/daemon/logs/daemon.log
+~/.local/state/personal-agent/web/logs/web.log
+~/.local/state/personal-agent/desktop/logs/main.log
+~/.local/state/personal-agent/desktop/logs/daemon.log
+~/.local/state/personal-agent/desktop/logs/web-ui.log
 ```
 
-## Need logs and machine-readable state
+## Related docs
 
-Useful commands:
-
-```bash
-pa doctor --json
-pa daemon status --json
-pa tasks list --json
-pa inbox list --json
-pa runs list --json
-```
-
-Useful log locations:
-
-- daemon: `~/.local/state/personal-agent/daemon/logs/daemon.log`
-- web UI: `~/.local/state/personal-agent/web/logs/web.log`
-
-## Still stuck?
-
-Collect:
-
-```bash
-pa doctor --json
-pa daemon status --json
-pa profile show
-pa tasks list --json
-```
-
-and include relevant recent logs.
+- [Getting Started](./getting-started.md)
+- [Configuration](./configuration.md)
+- [Daemon and Background Automation](./daemon.md)
+- [Web UI Guide](./web-ui.md)
+- [Electron desktop app](./electron-desktop-app-plan.md)

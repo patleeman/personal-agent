@@ -69,9 +69,9 @@ This is the right way to iterate on the same rendered output without creating a 
 
 ## Project artifacts
 
-Project artifacts are plain durable files stored with one project under:
+Project artifacts are plain durable files stored with one tracked page under:
 
-- `sync/projects/<projectId>/artifacts/`
+- `~/Documents/personal-agent/projects/<projectId>/artifacts/`
 
 Use them for:
 
@@ -83,8 +83,8 @@ Use them for:
 
 Project artifacts are different from conversation artifacts:
 
-- they are durable project files, not conversation-viewer records
-- they travel with the project node
+- they are durable tracked-page files, not conversation-viewer records
+- they travel with the tracked page package
 - they are the right fit when the output belongs to the project as a deliverable
 
 ## Conversation artifact vs project artifact

@@ -1,241 +1,151 @@
 # personal-agent
 
-A personal application layer over Pi that keeps:
+`personal-agent` is a durable application layer over Pi.
 
-- **product code and shared defaults in git** (`defaults/`, `extensions/`, `themes/`)
-- **mutable profile skills + runtime state local** (`~/.local/state/personal-agent`)
-- **web UI + daemon-backed automation** for daily use
+It keeps repo-managed defaults in git, durable knowledge in an external vault, and machine-local runtime state under `~/.local/state/personal-agent`. The result is one system that can be used from the CLI, the web UI, or the Electron desktop shell without turning conversations into your long-term storage layer.
 
-## Features
+## Current feature set
 
-- **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
-- **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
-- **Daemon** - Background processing for maintenance, wakeups, and scheduled automations
-- **Web UI** - Browser-based conversations, automations, runs, and system controls
-- **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
+- profile-aware `pa` CLI for launching Pi and managing local services
+- external durable vault at `~/Documents/personal-agent` for `_profiles`, `_skills`, `notes`, and `projects`
+- daemon-backed runs, scheduled tasks, deferred resumes, reminders, inbox delivery, and wakeups
+- web UI for conversations, notifications, automations, tools, instructions, and settings
+- paired companion/mobile surface under `/app` when the web UI is exposed through Tailscale Serve
+- Electron desktop shell that owns a local backend and can connect to saved web or SSH hosts
+- MCP inspection/calls plus package-source installs for extending Pi
 
 ## Packages
 
-- `@personal-agent/core` — runtime path/bootstrap + profile data merge engine
-- `@personal-agent/resources` — profile discovery/materialization + Pi resource args
-- `@personal-agent/daemon` — shared background daemon (`personal-agentd`) with event bus + modules
-- `@personal-agent/cli` — `pa` wrapper command
-- `@personal-agent/services` — managed daemon/web UI service utilities and deployment helpers
+- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers
+- `@personal-agent/resources` — profile resolution, layered resource materialization, Pi resource args
+- `@personal-agent/cli` — `pa` command
+- `@personal-agent/daemon` — background daemon, scheduled tasks, durable runs, deferred resumes
+- `@personal-agent/services` — launchd/systemd helpers for daemon and web UI
+- `@personal-agent/web` — web UI client and server
+- `@personal-agent/desktop` — Electron desktop shell
 
 ## Documentation
 
-Start here:
+Start with:
 
-- `docs/README.md` - agent/operator docs map
-- `docs/getting-started.md` - first-run setup
-- `docs/decision-guide.md` - which durable surface or feature to use
-- `docs/how-it-works.md` - mental model and durable surfaces
-- `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
-- `docs/conversations.md` - conversation model, wakeups, and references
-- `internal-skills/scheduled-tasks/INDEX.md` - scheduled automations and legacy task-file import
-- `internal-skills/runs/INDEX.md` - durable background runs
-- `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
-- `internal-skills/artifacts/INDEX.md` - conversation artifacts and project artifacts
-- `docs/web-ui.md` - web UI guide
-- `docs/projects.md` - durable project tracking
-- `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
-- `docs/troubleshooting.md` - common failures and fixes
+- `docs/README.md` — docs map
+- `docs/getting-started.md` — install and first-run flow
+- `docs/decision-guide.md` — which surface to use
+- `docs/how-it-works.md` — durable-state mental model
+- `docs/web-ui.md` — desktop web UI, companion, pairing, and live updates
+- `docs/electron-desktop-app-plan.md` — current desktop-shell overview
+- `docs/command-line.md` — `pa` command guide
 
-## Installation (from source)
+Built-in runtime feature guides live under `internal-skills/`:
+
+- `internal-skills/runs/INDEX.md`
+- `internal-skills/scheduled-tasks/INDEX.md`
+- `internal-skills/async-attention/INDEX.md`
+- `internal-skills/artifacts/INDEX.md`
+- `internal-skills/inbox/INDEX.md`
+- `internal-skills/alerts/INDEX.md`
+
+## Install from source
 
 Prerequisites:
 
 - Node.js 20+
 - npm
 
-Pi availability options:
-
-1. **Repo-local Pi (recommended in this repo):** `npm install` in this repo installs `@mariozechner/pi-coding-agent` under `node_modules`, and `pa` will use it automatically.
-2. **Global Pi fallback:** `npm install -g @mariozechner/pi-coding-agent` (optional).
+From the repo root:
 
 ```bash
-# In this repo
 npm install
 npm run build
 npm link --workspace @personal-agent/cli
 ```
 
-Verify install:
-
-```bash
-pa --help
-pa doctor
-```
-
-If you prefer not to link globally, run `pa` via npm exec:
+If you do not want to link the CLI globally:
 
 ```bash
 npm exec pa -- --help
 ```
 
-### First run
+## First run
 
 ```bash
-# Show CLI help
-pa
-
-# Set your profile (e.g., datadog or keep shared)
-pa profile use datadog
-
-# Verify setup
 pa doctor
-
-# Launch Pi TUI
+pa profile list
+pa profile use shared
 pa tui
 ```
 
-Extensions with npm dependencies are auto-installed on first use.
-
-## CLI Examples
-
-### Core commands
+Other useful entry points:
 
 ```bash
-pa                          # Show help
-pa tui                      # Launch Pi TUI with default profile
-pa tui --profile datadog    # One-off profile override for this launch
-pa tui -p "hello"           # Launch with initial prompt
-pa tui -- --model kimi-coding/k2p5    # Pass args to pi
-pa doctor                   # Validate setup
-pa doctor --json            # Machine-readable status
-pa restart                  # Restart daemon + managed web UI
-pa update                   # Pull git changes + refresh repo dependencies + update Pi to latest + rebuild packages + restart services
-pa update --repo-only       # Pull git changes + skip dependency refresh + rebuild packages + restart services
+pa ui foreground --open      # desktop web UI
+pa ui install                # managed web UI service
+npm run desktop:start        # Electron desktop shell
 ```
 
-> `pa update` runs `npm install`, updates `@mariozechner/pi-coding-agent@latest` in the repo root, verifies repo-local Pi, and runs `npm run build`.
-> If the managed web UI service is installed, `pa update` restarts it after the rebuild so it serves the fresh build output.
-
-### Profile management
+## Common commands
 
 ```bash
-pa profile list             # List available profiles
-pa profile use datadog      # Set default profile
-pa profile show             # Show current profile details
-pa profile show datadog     # Show specific profile
-```
-
-### Daemon management
-
-```bash
-pa daemon                   # Show daemon command help
-pa daemon status            # Check daemon status
-pa daemon status --json     # Machine-readable daemon status
-pa daemon start             # Start background daemon
-pa daemon stop              # Stop daemon
-pa daemon restart           # Restart daemon only
-pa daemon logs              # View daemon log path + PID
-pa daemon service install   # Install daemon as managed user service
-pa restart                  # Restart daemon + managed web UI
-```
-
-### Scheduled tasks
-
-```bash
+pa status
+pa doctor
+pa profile show
+pa ui
+pa daemon status
+pa inbox list
 pa tasks list
-pa tasks list --status active
-pa tasks list --json --status completed
-pa tasks show <id>
-pa tasks validate --all
-pa tasks validate ~/.local/state/personal-agent/sync/_tasks/example.task.md
-pa tasks logs <id> --tail 120
+pa runs list
+pa mcp list --probe
 ```
 
-### Durable background runs
+A few higher-signal flows:
 
 ```bash
-pa runs start code-review -- pa tui -p "review this diff"
-pa runs list
-pa runs show <id>
-pa runs logs <id> --tail 120
-pa runs cancel <id>
+pa ui pairing-code
+pa runs start-agent docs-refresh --prompt "refresh the docs"
+pa install --profile shared https://github.com/user/pi-extension
+pa restart
+pa update --repo-only
 ```
 
-## Daemon
+## State layout
 
-`personal-agentd` runs background modules behind a local event bus:
+Shared defaults stay in the repo:
 
-- **maintenance** - Periodic cleanup and retention
-- **tasks** - Scheduled automations with retries, runtime state, and legacy `*.task.md` import
-- **deferred-resume** - Wake conversations back up when deferred work becomes due
+- `defaults/agent`
+- `extensions/`
+- `internal-skills/`
+- `prompt-catalog/`
+- `themes/`
 
-CLI surface:
+Durable portable knowledge defaults to the external vault:
 
-- `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
-- `pa daemon service install|status|uninstall|help`
-- `pa tasks list|show|validate|logs`
-- `pa restart`
-- `pa update`
+- `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md`
+- `~/Documents/personal-agent/_profiles/<profile>/{settings.json,models.json}`
+- `~/Documents/personal-agent/{_skills,notes,projects}/**`
 
-When daemon is unavailable, clients warn and continue (non-fatal).
+Machine-local runtime state defaults to:
 
-## Extensions
+- `~/.local/state/personal-agent/config/config.json`
+- `~/.local/state/personal-agent/daemon/**`
+- `~/.local/state/personal-agent/web/**`
+- `~/.local/state/personal-agent/desktop/**`
+- `~/.local/state/personal-agent/sync/{_tasks|tasks}/**`
 
-Pi extensions are auto-discovered from repo and local overlay layers:
+## Repo extensions
 
-- `extensions/*`
-- `~/.local/state/personal-agent/config/local/extensions/*`
+The repo currently ships these built-in Pi extensions:
 
-Extensions with `package.json` dependencies are auto-installed on first use.
+- `note-policy` — injects profile/vault context and available notes/skills/internal skills into the runtime prompt
+- `web-tools` — `web_search` and `web_fetch`
+- `daemon-run-orchestration-prompt` — extra system-prompt guidance for durable background orchestration
 
-Built-in extensions in this repo:
+## Release flow
 
-- `memory` - Active-profile node policy (AGENTS.md + skills) plus shared global note-node guidance
-- `at-autocomplete-performance` - Faster `@` path completion in large repos
-- `deferred-resume` - Resume this same TUI session later after a delay
-- `web-tools` - Web search/integration
-- `daemon-run-orchestration-prompt` - System-prompt policy for daemon-backed background orchestration and status reporting
+Desktop releases are tag-driven:
 
-See `internal-skills/skills-and-capabilities/INDEX.md` for a user-facing overview of skills and runtime capabilities.
+```bash
+npm run release:patch   # or release:minor / release:major
+git push --follow-tags
+```
 
-## Runtime notes
-
-Optional runtime env vars:
-
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes, set `0` to disable timeout)
-
-If you use `op://...` references for secrets, ensure 1Password CLI (`op`) is installed and authenticated (service-account flow: `OP_SERVICE_ACCOUNT_TOKEN`).
-
-TUI theme mapping is configured in profile `settings.json`:
-
-- `themeDark` (theme name for dark mode)
-- `themeLight` (theme name for light mode)
-- `themeMode` (`system` | `dark` | `light`, default `system`)
-
-When both `themeDark` and `themeLight` are set, `pa` selects one on launch and writes it to runtime `settings.json` before starting Pi.
-
-## Profiles
-
-Profile resources resolve from:
-
-- `defaults/agent` for repo-managed shared default profile files
-- repo built-ins from `extensions/` and `themes/`
-- durable vault roots under `~/Documents/personal-agent/{_profiles,_skills,notes,projects}` plus app-managed task/session state under `~/.local/state/personal-agent/sync/`
-
-Optional local overlay:
-
-- `~/.local/state/personal-agent/config/local`
-
-See docs:
-
-- `docs/README.md` - agent/operator docs map
-- `docs/getting-started.md` - first-run setup
-- `docs/decision-guide.md` - which durable surface or feature to use
-- `docs/how-it-works.md` - mental model and durable surfaces
-- `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
-- `docs/conversations.md` - conversation model, wakeups, and references
-- `internal-skills/scheduled-tasks/INDEX.md` - scheduled automations and legacy task-file import
-- `internal-skills/runs/INDEX.md` - durable background runs
-- `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
-- `internal-skills/artifacts/INDEX.md` - conversation artifacts and project artifacts
-- `docs/web-ui.md` - web UI guide
-- `docs/projects.md` - durable project tracking
-- `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
-- `internal-skills/skills-and-capabilities/INDEX.md` - skills and runtime capabilities
-- `docs/daemon.md` - daemon and background automation
-- `docs/troubleshooting.md` - debugging and recovery
+That pushes a `v*` tag, triggers `.github/workflows/release.yml`, builds the macOS desktop app, and publishes `.dmg` and `.zip` artifacts to GitHub Releases.
