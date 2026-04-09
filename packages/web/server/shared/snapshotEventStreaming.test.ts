@@ -15,6 +15,29 @@ describe('streamSnapshotEvents', () => {
     expect(writes).toEqual(['sessions', 'activity', 'runs']);
   });
 
+  it('writes each event from array snapshots and skips empty builders', async () => {
+    const writes: string[] = [];
+
+    await streamSnapshotEvents(['sessions', 'activity', 'runs'], {
+      buildEvents: (topic) => {
+        if (topic === 'sessions') {
+          return [{ topic: 'sessions-1' }, { topic: 'sessions-2' }];
+        }
+
+        if (topic === 'activity') {
+          return null;
+        }
+
+        return undefined;
+      },
+      writeEvent: (event) => {
+        writes.push(event.topic);
+      },
+    });
+
+    expect(writes).toEqual(['sessions-1', 'sessions-2']);
+  });
+
   it('writes earlier snapshot events before later slow topics finish', async () => {
     const writes: string[] = [];
     let releaseSessions!: () => void;

@@ -1,6 +1,6 @@
-import BetterSqlite3 from 'better-sqlite3';
+import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { loadDaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
@@ -43,8 +43,6 @@ export interface AutomationSchedulerState {
   lastEvaluatedAt?: string;
 }
 
-type SqliteDatabase = InstanceType<typeof BetterSqlite3>;
-
 type StoredAutomationRow = {
   id: string;
   profile: string;
@@ -84,6 +82,14 @@ type AutomationStateRow = {
 
 const LEGACY_TASK_FILE_SUFFIX = '.task.md';
 const dbCache = new Map<string, SqliteDatabase>();
+
+export function closeAutomationDbs(): void {
+  for (const db of dbCache.values()) {
+    db.close();
+  }
+
+  dbCache.clear();
+}
 
 function readOptionalString(value: string | null | undefined): string | undefined {
   const normalized = value?.trim();
@@ -136,7 +142,7 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   }
 
   mkdirSync(dirname(resolved), { recursive: true });
-  const db = new BetterSqlite3(resolved);
+  const db = openSqliteDatabase(resolved);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
@@ -499,6 +505,11 @@ export function deleteStoredAutomation(id: string, options: { profile?: string; 
 
   const db = openAutomationDb(options.dbPath);
   const result = db.prepare('DELETE FROM automations WHERE id = ?').run(id);
+
+  if (result.changes > 0 && existing.legacyFilePath) {
+    rmSync(existing.legacyFilePath, { force: true });
+  }
+
   return result.changes > 0;
 }
 
@@ -673,7 +684,7 @@ export function ensureLegacyTaskImports(options: {
 
   tx();
 
-  const legacyStateFile = options.legacyStateFile ?? join(dirname(getAutomationDbPath()), 'task-state.json');
+  const legacyStateFile = options.legacyStateFile ?? join(dirname(options.dbPath ?? getAutomationDbPath()), 'task-state.json');
   if (existsSync(legacyStateFile)) {
     const legacyState = loadTaskState(legacyStateFile);
     const existingStateIds = new Set((db.prepare('SELECT automation_id FROM automation_state').all() as Array<{ automation_id: string }>).map((row) => row.automation_id));

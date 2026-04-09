@@ -230,7 +230,7 @@ export function getDurableMemoryDir(vaultRoot: string = getVaultRoot()): string 
 }
 
 export function getDurableTasksDir(syncRoot: string = getSyncRoot()): string {
-  return resolveDurableDir(syncRoot, '_tasks', 'tasks');
+  return resolveDurableDir(syncRoot, 'tasks', '_tasks');
 }
 
 export function getDurableProjectsDir(vaultRoot: string = getVaultRoot()): string {

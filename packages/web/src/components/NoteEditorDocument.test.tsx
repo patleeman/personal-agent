@@ -1,43 +1,12 @@
-import React from 'react';
-import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { NoteEditorDocument } from './NoteEditorDocument';
+import { readEditableNoteBody } from '../noteDocument';
 
-(globalThis as typeof globalThis & { React?: typeof React }).React = React;
-
-describe('NoteEditorDocument', () => {
-  it('renders note meta when provided', () => {
-    const html = renderToString(
-      <NoteEditorDocument
-        title="Example"
-        onTitleChange={() => {}}
-        description="Use this when the user asks about note routing."
-        onDescriptionChange={() => {}}
-        body=""
-        onBodyChange={() => {}}
-        meta={<><span>@example</span><span>updated just now</span></>}
-      />,
-    );
-
-    expect(html).toContain('@example');
-    expect(html).toContain('updated just now');
-    expect(html).toContain('For the agent (optional)');
-    expect(html).toContain('Use this when the user asks about note routing.');
+describe('note editor document helpers', () => {
+  it('returns the body without frontmatter or the managed heading', () => {
+    expect(readEditableNoteBody('---\ntitle: Example\n---\n\n# Example\n\nBody', 'Example')).toBe('Body');
   });
 
-  it('does not render the old inline tag rail', () => {
-    const html = renderToString(
-      <NoteEditorDocument
-        title="Example"
-        onTitleChange={() => {}}
-        description=""
-        onDescriptionChange={() => {}}
-        body=""
-        onBodyChange={() => {}}
-      />,
-    );
-
-    expect(html).not.toContain('ui-note-inline-tags');
-    expect(html).not.toContain('ui-note-tag-link');
+  it('keeps body content when the leading heading is not the managed note title', () => {
+    expect(readEditableNoteBody('---\ntitle: Example\n---\n\n# Something else\n\nBody', 'Example')).toBe('# Something else\n\nBody');
   });
 });

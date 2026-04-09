@@ -14,6 +14,9 @@ export * from './profile/index.js';
 // Runtime state exports
 export * from './runtime/index.js';
 
+// SQLite helpers
+export * from './sqlite.js';
+
 // Machine-local config exports
 export * from './machine-config.js';
 

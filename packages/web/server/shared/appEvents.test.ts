@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, mkdtempSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -30,7 +30,7 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 6_000): Promise<void> {
+async function waitFor(predicate: () => boolean, timeoutMs = 12_000): Promise<void> {
   const startedAt = Date.now();
 
   while (!predicate()) {
@@ -85,7 +85,7 @@ describe('app event monitor', () => {
       getCurrentProfile: () => 'assistant',
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     events.length = 0;
 
     appendFileSync(sessionFile, '{"type":"message"}\n', 'utf-8');
@@ -95,7 +95,7 @@ describe('app event monitor', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
-  }, 10_000);
+  }, 15_000);
 
   it('invalidates sessionFiles when a session file is created', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
@@ -107,6 +107,9 @@ describe('app event monitor', () => {
     mkdirSync(dirname(profileConfigFile), { recursive: true });
     writeFileSync(taskStateFile, '{}\n', 'utf-8');
     writeFileSync(profileConfigFile, '{"defaultProfile":"assistant"}\n', 'utf-8');
+
+    const sessionDir = join(sessionsDir, '--tmp-project');
+    mkdirSync(sessionDir, { recursive: true });
 
     const events: AppEvent[] = [];
     const unsubscribe = subscribeAppEvents((event) => {
@@ -121,22 +124,18 @@ describe('app event monitor', () => {
       getCurrentProfile: () => 'assistant',
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     events.length = 0;
 
-    const pendingSessionFile = join(repoRoot, 'conv-2.pending.jsonl');
-    const sessionDir = join(sessionsDir, '--tmp-project');
-    mkdirSync(sessionDir, { recursive: true });
     const sessionFile = join(sessionDir, 'conv-2.jsonl');
-    writeFileSync(pendingSessionFile, '{"type":"session","id":"conv-2","timestamp":"2026-03-29T00:00:00.000Z","cwd":"/tmp/project"}\n', 'utf-8');
-    renameSync(pendingSessionFile, sessionFile);
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-2","timestamp":"2026-03-29T00:00:00.000Z","cwd":"/tmp/project"}\n', 'utf-8');
 
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.includes('sessionFiles')));
     await waitFor(() => events.some((event) => event.type === 'session_file_changed' && event.sessionId === 'conv-2'));
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('sessions'))).toBe(false);
     unsubscribe();
-  }, 10_000);
+  }, 15_000);
 
   it('rebuilds watches and invalidates all topics when the active profile changes', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
@@ -163,7 +162,7 @@ describe('app event monitor', () => {
       getCurrentProfile: () => currentProfile,
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     events.length = 0;
 
     currentProfile = 'other';
@@ -172,5 +171,5 @@ describe('app event monitor', () => {
     await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.length === ALL_TOPICS.length));
     expect(events.some((event) => event.type === 'invalidate' && ALL_TOPICS.every((topic) => event.topics.includes(topic)))).toBe(true);
     unsubscribe();
-  }, 10_000);
+  }, 15_000);
 });

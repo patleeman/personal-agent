@@ -35,6 +35,7 @@ function createTempRepo(): string {
   tempDirs.push(dir);
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(dir, 'sync');
   return dir;
 }
 

@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  closeActivityDbs,
   listProfileActivityEntries,
   loadProfileActivityReadState,
   resolveActivityEntryPath,
@@ -20,6 +21,7 @@ import { createProjectActivityEntry, writeProjectActivityEntry } from './project
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  closeActivityDbs();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 

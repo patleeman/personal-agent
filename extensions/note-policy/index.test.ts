@@ -168,7 +168,7 @@ summary: How built-in rendered outputs behave.
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');
     expect(prompt).toContain('- AGENTS.md: none (shared profile does not use AGENTS.md)');
-    expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', '_tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
+    expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
     expect(prompt).not.toContain('## Shared Notes & Available Nodes');
   });
 
@@ -254,7 +254,7 @@ summary: How built-in rendered outputs behave.
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(context.activeAgentsFile).toBe(join(stateRoot, 'vault', '_profiles', 'datadog', 'AGENTS.md'));
     expect(context.activeSkillsDir).toBe(join(stateRoot, 'vault', '_skills'));
-    expect(context.activeTasksDir).toBe(join(stateRoot, 'sync', '_tasks'));
+    expect(context.activeTasksDir).toBe(join(stateRoot, 'sync', 'tasks'));
     expect(context.activeNotesDir).toBe(join(stateRoot, 'vault', 'notes'));
   });
 });

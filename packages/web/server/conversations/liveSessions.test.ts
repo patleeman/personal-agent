@@ -4,28 +4,42 @@ import { join } from 'node:path';
 import { getDurableSessionsDir } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  abortSession,
+  appendDetachedUserMessage,
+  appendVisibleCustomMessage,
   canInjectResumeFallbackPrompt,
+  compactSession,
+  destroySession,
   ensureSessionFileExists,
+  exportSessionHtml,
+  getLiveSessionForkEntries,
   getLiveSessions,
+  getSessionContextUsage,
+  getSessionStats,
+  isLive,
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
-  requestConversationWorkingDirectoryChange,
-  submitPromptSession,
   queuePromptContext,
   registry,
   refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
+  reloadSessionResources,
   renameSession,
+  requestConversationWorkingDirectoryChange,
   resolveLastCompletedConversationEntryId,
   resolvePersistentSessionDir,
   resolveStableSessionTitle,
   restoreQueuedMessage,
+  resumeSession,
   subscribe,
+  submitPromptSession,
   takeOverSessionControl,
   toSse,
+  updateLiveSessionModelPreferences,
   type SseEvent,
 } from './liveSessions.js';
+import * as conversationModelPreferences from './conversationModelPreferences.js';
 import { clearSessionCaches } from './sessions.js';
 
 const tempDirs: string[] = [];
@@ -122,6 +136,26 @@ describe('resolveLastCompletedConversationEntryId', () => {
     ].join('\n'));
 
     expect(resolveLastCompletedConversationEntryId(sessionFile)).toBe('user-1');
+  });
+
+  it('returns null when the durable transcript does not contain a completed user or assistant turn', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-no-completed-turn.jsonl');
+    writeFileSync(sessionFile, [
+      'not json at all',
+      JSON.stringify({ type: 'session', id: 'session-no-completed-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'toolResult', content: [{ type: 'text', text: 'tool-only transcript' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    expect(resolveLastCompletedConversationEntryId(sessionFile)).toBeNull();
   });
 });
 
@@ -255,6 +289,166 @@ describe('canInjectResumeFallbackPrompt', () => {
     });
 
     expect(canInjectResumeFallbackPrompt('session-queued-resume-fallback')).toBe(false);
+  });
+});
+
+describe('live session registry helpers', () => {
+  it('reports live registry membership, titles, pending hidden turns, and fork entries', () => {
+    const forkEntries = [{ id: 'user-1' }];
+
+    setLiveEntry('session-helper', {
+      sessionId: 'session-helper',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'New Conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      session: {
+        sessionFile: '/tmp/session-helper.jsonl',
+        sessionName: 'Persisted title',
+        isStreaming: false,
+        getUserMessagesForForking: () => forkEntries,
+      },
+    });
+
+    expect(isLive('session-helper')).toBe(true);
+    expect(isLive('missing-session')).toBe(false);
+    expect(getLiveSessions()).toContainEqual({
+      id: 'session-helper',
+      cwd: '/tmp/workspace',
+      sessionFile: '/tmp/session-helper.jsonl',
+      title: 'Persisted title',
+      isStreaming: false,
+      hasPendingHiddenTurn: true,
+    });
+    expect(getLiveSessionForkEntries('session-helper')).toBe(forkEntries);
+    expect(getLiveSessionForkEntries('missing-session')).toBeNull();
+  });
+
+  it('short-circuits resumeSession when the session file is already live', async () => {
+    setLiveEntry('session-resume-short-circuit', {
+      sessionId: 'session-resume-short-circuit',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Already live',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile: '/tmp/already-live.jsonl',
+        isStreaming: false,
+      },
+    });
+
+    await expect(resumeSession('/tmp/already-live.jsonl')).resolves.toEqual({
+      id: 'session-resume-short-circuit',
+    });
+  });
+});
+
+describe('working directory change validation', () => {
+  it('rejects invalid working directory change requests before queueing them', async () => {
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: '   ',
+      cwd: '/tmp/workspace',
+    })).rejects.toThrow('conversationId is required.');
+
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: 'session-missing-cwd',
+      cwd: '   ',
+    })).rejects.toThrow('cwd is required.');
+
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: 'missing-session',
+      cwd: '/tmp/workspace',
+    })).rejects.toThrow('Session missing-session is not live.');
+
+    setLiveEntry('session-no-session-file', {
+      sessionId: 'session-no-session-file',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'No file',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile: '   ',
+        isStreaming: false,
+      },
+    });
+
+    await expect(requestConversationWorkingDirectoryChange({
+      conversationId: 'session-no-session-file',
+      cwd: '/tmp/next-workspace',
+    })).rejects.toThrow('Conversation working directory changes require a persisted session file.');
+  });
+});
+
+describe('session stats and context usage', () => {
+  it('returns null for missing or failing session stats lookups', () => {
+    expect(getSessionStats('missing-session')).toBeNull();
+
+    setLiveEntry('session-stats-error', {
+      sessionId: 'session-stats-error',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Stats error',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        getSessionStats: () => {
+          throw new Error('stats unavailable');
+        },
+      },
+    });
+
+    expect(getSessionStats('session-stats-error')).toBeNull();
+  });
+
+  it('reads session stats and enriches live context usage with model metadata', () => {
+    setLiveEntry('session-usage', {
+      sessionId: 'session-usage',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Usage',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        getSessionStats: () => ({
+          tokens: { input: 4, output: 6, total: 10 },
+          cost: 0.25,
+        }),
+        getContextUsage: () => ({
+          tokens: 12,
+          contextWindow: 96,
+          percent: 12.5,
+        }),
+        messages: [{
+          role: 'user',
+          content: [{ type: 'text', text: 'Count the context tokens.' }],
+        }],
+        model: { id: 'gpt-5' },
+      },
+    });
+
+    expect(getSessionStats('session-usage')).toEqual({
+      tokens: { input: 4, output: 6, total: 10 },
+      cost: 0.25,
+    });
+    expect(getSessionContextUsage('missing-session')).toBeNull();
+    expect(getSessionContextUsage('session-usage')).toEqual(expect.objectContaining({
+      tokens: 12,
+      contextWindow: 96,
+      percent: 12.5,
+      modelId: 'gpt-5',
+      segments: expect.arrayContaining([
+        expect.objectContaining({ key: 'user', label: 'user' }),
+      ]),
+    }));
   });
 });
 
@@ -1947,6 +2141,66 @@ describe('queued prompt restore', () => {
       followUp: [],
     });
   });
+
+  it('rejects invalid queued prompt restore requests when the queue changed', async () => {
+    setLiveEntry('session-queue-restore-invalid', {
+      sessionId: 'session-queue-restore-invalid',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Restore queued prompt invalid',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => ['queued prompt'],
+        getFollowUpMessages: () => [],
+        clearQueue: vi.fn(() => ({ steering: ['queued prompt'], followUp: [] })),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', -1)).rejects.toThrow('Queued message index must be a non-negative integer');
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 1)).rejects.toThrow('Queued prompt changed before it could be restored. Try again.');
+    await expect(restoreQueuedMessage('session-queue-restore-invalid', 'steer', 0, 'steer-visible-9')).rejects.toThrow('Queued prompt changed before it could be restored. Try again.');
+  });
+
+  it('rebuilds remaining follow-up prompts after restoring a visible-only follow-up item', async () => {
+    const followUpMessages = ['first follow-up', 'second follow-up'];
+    const followUp = vi.fn(async (text: string) => {
+      followUpMessages.push(text);
+    });
+
+    setLiveEntry('session-follow-up-restore', {
+      sessionId: 'session-follow-up-restore',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Follow-up restore',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => followUpMessages,
+        clearQueue: vi.fn(() => ({ steering: [], followUp: [...followUpMessages] })),
+        steer: vi.fn(async () => undefined),
+        followUp,
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    const restored = await restoreQueuedMessage('session-follow-up-restore', 'followUp', 0, 'followUp-visible-0');
+
+    expect(restored).toEqual({ text: 'first follow-up', images: [] });
+    expect(followUp).toHaveBeenCalledWith('second follow-up');
+  });
 });
 
 describe('queuePromptContext', () => {
@@ -2008,6 +2262,166 @@ describe('queuePromptContext', () => {
     }, {
       deliverAs: 'nextTurn',
     });
+  });
+
+  it('ignores blank hidden context payloads', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-blank-context', {
+      sessionId: 'session-blank-context',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Blank context',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await queuePromptContext('session-blank-context', 'referenced_context', '   ');
+
+    expect(sendCustomMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('appendDetachedUserMessage', () => {
+  it('appends a detached user message and promotes it into the fallback title when needed', async () => {
+    const appendMessage = vi.fn();
+
+    setLiveEntry('session-detached-user', {
+      sessionId: 'session-detached-user',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'New Conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: { appendMessage },
+        sessionName: undefined,
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    });
+
+    await appendDetachedUserMessage('session-detached-user', '  Keep this draft alive.  ');
+
+    expect(appendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'user',
+      content: [{ type: 'text', text: 'Keep this draft alive.' }],
+    }));
+    expect(registry.get('session-detached-user')?.session.state.messages).toEqual([
+      expect.objectContaining({
+        role: 'user',
+        content: [{ type: 'text', text: 'Keep this draft alive.' }],
+      }),
+    ]);
+    expect(getLiveSessions()).toContainEqual(expect.objectContaining({
+      id: 'session-detached-user',
+      title: 'Keep this draft alive.',
+    }));
+  });
+
+  it('rejects detached user messages for missing or streaming sessions and ignores blank text', async () => {
+    await expect(appendDetachedUserMessage('missing-session', 'hello')).rejects.toThrow('Session missing-session is not live');
+
+    const appendMessage = vi.fn();
+    setLiveEntry('session-detached-streaming', {
+      sessionId: 'session-detached-streaming',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Streaming',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: { appendMessage },
+        getContextUsage: () => null,
+        isStreaming: true,
+      },
+    });
+
+    await expect(appendDetachedUserMessage('session-detached-streaming', 'hello')).rejects.toThrow('Session session-detached-streaming is currently streaming');
+
+    setLiveEntry('session-detached-blank', {
+      sessionId: 'session-detached-blank',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'No change',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: { appendMessage },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    });
+
+    await appendDetachedUserMessage('session-detached-blank', '   ');
+    expect(appendMessage).not.toHaveBeenCalled();
+    expect(registry.get('session-detached-blank')?.session.state.messages).toEqual([]);
+  });
+});
+
+describe('appendVisibleCustomMessage', () => {
+  it('sends visible custom messages for idle sessions and ignores blank payloads', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-visible-custom-message', {
+      sessionId: 'session-visible-custom-message',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Visible custom message',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await appendVisibleCustomMessage('session-visible-custom-message', 'automation_note', '  Show this note.  ', { severity: 'info' });
+    await appendVisibleCustomMessage('session-visible-custom-message', 'automation_note', '   ');
+
+    expect(sendCustomMessage).toHaveBeenCalledTimes(1);
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'automation_note',
+      content: 'Show this note.',
+      display: true,
+      details: { severity: 'info' },
+    });
+  });
+
+  it('rejects visible custom messages while the session is streaming', async () => {
+    setLiveEntry('session-visible-custom-streaming', {
+      sessionId: 'session-visible-custom-streaming',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Visible custom streaming',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        sendCustomMessage: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(appendVisibleCustomMessage('session-visible-custom-streaming', 'automation_note', 'show this')).rejects.toThrow('Session session-visible-custom-streaming is currently streaming');
   });
 });
 
@@ -2108,6 +2522,75 @@ describe('submitPromptSession', () => {
     expect(submitted.acceptedAs).toBe('started');
     await submitted.completion;
     expect(prompt).toHaveBeenCalledWith('send this anyway');
+  });
+
+  it('reports queued acceptance when the prompt is enqueued as follow-up work', async () => {
+    const followUp = vi.fn(async () => undefined);
+
+    setLiveEntry('session-submit-queued', {
+      sessionId: 'session-submit-queued',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Queued submit',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+        followUp,
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+      },
+    });
+
+    const submitted = await submitPromptSession('session-submit-queued', 'keep going', 'followUp');
+
+    expect(submitted.acceptedAs).toBe('queued');
+    await expect(submitted.completion).resolves.toBeUndefined();
+    expect(followUp).toHaveBeenCalledWith('keep going');
+  });
+
+  it('surfaces assistant prompt failures before the full prompt promise settles', async () => {
+    const listeners = new Set<(event: AgentSessionEvent) => void>();
+
+    setLiveEntry('session-submit-error', {
+      sessionId: 'session-submit-error',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Errored submit',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        subscribe(listener: (event: AgentSessionEvent) => void) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        prompt: vi.fn(async () => {
+          listeners.forEach((listener) => {
+            listener(asAgentSessionEvent({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                content: [],
+                stopReason: 'error',
+                errorMessage: 'Codex error: upstream overloaded',
+                timestamp: 1,
+              },
+            }));
+          });
+        }),
+      },
+    });
+
+    await expect(submitPromptSession('session-submit-error', 'hello there')).rejects.toThrow('Codex error: upstream overloaded');
   });
 });
 
@@ -2232,6 +2715,199 @@ describe('promptSession', () => {
     expect(steer).not.toHaveBeenCalled();
     expect(followUp).toHaveBeenCalledWith('my missing message');
   });
+
+  it('retries queued steering prompts without images when the model rejects image input', async () => {
+    const steer = vi.fn(async (_text: string, images?: unknown[]) => {
+      if (images) {
+        throw new Error('Image input is unsupported for this text-only model.');
+      }
+    });
+
+    setLiveEntry('session-steer-image-fallback', {
+      sessionId: 'session-steer-image-fallback',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Steer image fallback',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+        prompt: vi.fn(async () => undefined),
+        steer,
+        followUp: vi.fn(async () => undefined),
+      },
+    });
+
+    const image = { type: 'image' as const, data: 'b64-image', mimeType: 'image/png' };
+    await promptSession('session-steer-image-fallback', 'continue with this screenshot', 'steer', [image]);
+
+    expect(steer).toHaveBeenNthCalledWith(1, 'continue with this screenshot', [image]);
+    expect(steer).toHaveBeenNthCalledWith(2, 'continue with this screenshot');
+  });
+
+  it('rethrows unrelated image prompt failures instead of silently retrying', async () => {
+    const prompt = vi.fn(async () => {
+      throw new Error('network unavailable');
+    });
+
+    setLiveEntry('session-image-error', {
+      sessionId: 'session-image-error',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Image error',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(promptSession(
+      'session-image-error',
+      'continue with this screenshot',
+      undefined,
+      [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+    )).rejects.toThrow('network unavailable');
+    expect(prompt).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('session actions', () => {
+  it('compacts a live session and broadcasts the refreshed snapshot and context usage', async () => {
+    const compact = vi.fn(async () => ({ summary: 'compacted' }));
+    const events: SseEvent[] = [];
+
+    setLiveEntry('session-compact', {
+      sessionId: 'session-compact',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Compact this session',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      contextUsageTimer: setTimeout(() => undefined, 10_000),
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'compactionSummary',
+              summary: '## Goal\nKeep the compacted context visible.',
+              timestamp: 1,
+            },
+          ],
+          streamingMessage: null,
+        },
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Context tokens' }] }],
+        getContextUsage: () => ({ tokens: 8, contextWindow: 64, percent: 12.5 }),
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        compact,
+        isStreaming: false,
+      },
+    });
+
+    registry.get('session-compact')?.listeners.add({
+      send: (event: SseEvent) => {
+        events.push(event);
+      },
+    } as never);
+
+    await expect(compactSession('session-compact', 'summarize this first')).resolves.toEqual({ summary: 'compacted' });
+
+    expect(compact).toHaveBeenCalledWith('summarize this first');
+    expect(registry.get('session-compact')?.lastCompactionSummaryTitle).toBe('Manual compaction');
+    expect(registry.get('session-compact')?.contextUsageTimer).toBeUndefined();
+    expect(events).toContainEqual(expect.objectContaining({ type: 'snapshot' }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'context_usage',
+      usage: expect.objectContaining({ tokens: 8 }),
+    }));
+  });
+
+  it('reloads, exports, aborts, and destroys live sessions through the underlying session object', async () => {
+    const abort = vi.fn(async () => undefined);
+    const dispose = vi.fn();
+    const exportToHtml = vi.fn(async (outputPath?: string) => outputPath ?? '/tmp/default.html');
+    const reload = vi.fn(async () => undefined);
+
+    setLiveEntry('session-actions', {
+      sessionId: 'session-actions',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Session actions',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      contextUsageTimer: setTimeout(() => undefined, 10_000),
+      session: {
+        getContextUsage: () => null,
+        isStreaming: false,
+        abort,
+        dispose,
+        exportToHtml,
+        reload,
+      },
+    });
+
+    await reloadSessionResources('session-actions');
+    await expect(exportSessionHtml('session-actions', '/tmp/session-actions.html')).resolves.toBe('/tmp/session-actions.html');
+    await abortSession('session-actions');
+    await abortSession('missing-session');
+    destroySession('session-actions');
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(exportToHtml).toHaveBeenCalledWith('/tmp/session-actions.html');
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(isLive('session-actions')).toBe(false);
+  });
+
+  it('updates live session model preferences with the current session state', async () => {
+    const applyPreferences = vi.spyOn(conversationModelPreferences, 'applyConversationModelPreferencesToLiveSession')
+      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+
+    try {
+      setLiveEntry('session-model-preferences', {
+        sessionId: 'session-model-preferences',
+        cwd: '/tmp/workspace',
+        listeners: new Set(),
+        title: 'Model preferences',
+        autoTitleRequested: false,
+        lastContextUsageJson: null,
+        lastQueueStateJson: null,
+        session: {
+          model: { id: 'gpt-4.1' },
+          thinkingLevel: 'low',
+        },
+      });
+
+      await expect(updateLiveSessionModelPreferences(
+        'session-model-preferences',
+        { model: 'gpt-5', thinkingLevel: 'high' },
+        [{ id: 'gpt-5', provider: 'openai' }] as never,
+      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+
+      expect(applyPreferences).toHaveBeenCalledWith(
+        registry.get('session-model-preferences')?.session,
+        { model: 'gpt-5', thinkingLevel: 'high' },
+        { currentModel: 'gpt-4.1', currentThinkingLevel: 'low' },
+        [{ id: 'gpt-5', provider: 'openai' }],
+      );
+    } finally {
+      applyPreferences.mockRestore();
+    }
+  });
 });
 
 describe('event translation', () => {
@@ -2279,6 +2955,38 @@ describe('event translation', () => {
       type: 'error',
       message: 'Codex error: upstream overloaded',
     });
+  });
+
+  it('translates tool completions, auto compaction starts, and unknown events consistently', () => {
+    expect(toSse(asAgentSessionEvent({
+      type: 'tool_execution_end',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      isError: false,
+      result: {
+        content: [
+          { type: 'text', text: 'first line' },
+          { type: 'image', data: 'ignored' },
+          { type: 'text', text: 'second line' },
+        ],
+        details: { size: 2 },
+      },
+    }))).toEqual(expect.objectContaining({
+      type: 'tool_end',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      isError: false,
+      output: 'first line\nsecond line',
+      details: { size: 2 },
+      durationMs: expect.any(Number),
+    }));
+
+    expect(toSse(asAgentSessionEvent({
+      type: 'compaction_start',
+      reason: 'overflow',
+    }))).toEqual({ type: 'compaction_start', mode: 'auto' });
+
+    expect(toSse(asAgentSessionEvent({ type: 'unhandled_event_type' }))).toBeNull();
   });
 });
 

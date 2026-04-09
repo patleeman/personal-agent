@@ -117,7 +117,7 @@ describe('profile and config path helpers', () => {
     expect(getDurableNodesDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'nodes'));
     expect(getDurableNotesDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'notes'));
     expect(getDurableMemoryDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'notes'));
-    expect(getDurableTasksDir()).toBe('/runtime/state/sync/_tasks');
+    expect(getDurableTasksDir()).toBe('/runtime/state/sync/tasks');
     expect(getDurableProjectsDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'projects'));
     expect(getLocalProfileDir()).toBe('/runtime/state/config/local');
   });

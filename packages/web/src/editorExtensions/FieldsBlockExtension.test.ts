@@ -1,20 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseFieldsBlockItems, serializeFieldsBlockItems } from './FieldsBlockExtension';
+import { stripMarkdownFrontmatter } from '../noteDocument';
 
-describe('FieldsBlockExtension helpers', () => {
-  it('parses colon-delimited key value rows', () => {
-    expect(parseFieldsBlockItems('summary: Durable note\nstatus: active\ntags: notes, ui')).toEqual([
-      { key: 'summary', value: 'Durable note' },
-      { key: 'status', value: 'active' },
-      { key: 'tags', value: 'notes, ui' },
-    ]);
-  });
+describe('legacy fields block markdown', () => {
+  it('preserves unsupported :::fields blocks in the editable note body', () => {
+    const content = '---\ntitle: Durable note\n---\n\n:::fields\nsummary: Durable note\nstatus: active\n:::';
 
-  it('drops empty rows when serializing', () => {
-    expect(serializeFieldsBlockItems([
-      { key: 'summary', value: 'Durable note' },
-      { key: '', value: '' },
-      { key: 'status', value: 'active' },
-    ])).toBe('summary: Durable note\nstatus: active');
+    expect(stripMarkdownFrontmatter(content)).toBe(':::fields\nsummary: Durable note\nstatus: active\n:::');
   });
 });

@@ -11,18 +11,16 @@ vi.mock('../../useNodeMentionItems', () => ({
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 describe('RichMarkdownRenderer', () => {
-  it('renders custom fields blocks', () => {
+  it('renders unsupported custom directives as plain markdown text', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <RichMarkdownRenderer content={':::fields\nsummary: Durable note\nstatus: active\n:::'} />
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Fields');
-    expect(html).toContain('summary');
-    expect(html).toContain('Durable note');
-    expect(html).toContain('status');
-    expect(html).toContain('active');
+    expect(html).toContain(':::fields');
+    expect(html).toContain('summary: Durable note');
+    expect(html).toContain('status: active');
   });
 
   it('strips frontmatter when requested', () => {

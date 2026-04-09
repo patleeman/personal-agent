@@ -99,6 +99,7 @@ export type {
   ScannedDurableRunsSummary,
 } from './runs/store.js';
 export {
+  closeAutomationDbs,
   getAutomationDbPath,
   listStoredAutomations,
   getStoredAutomation,

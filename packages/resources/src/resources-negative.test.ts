@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -12,6 +12,7 @@ import {
 } from './index.js';
 
 const tempDirs: string[] = [];
+const originalEnv = { ...process.env };
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -33,6 +34,7 @@ function writeFile(path: string, content: string): void {
 }
 
 afterEach(async () => {
+  process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -100,11 +102,13 @@ describe('resources negative tests', () => {
   });
 
   describe('materializeProfileToAgentDir edge cases', () => {
-    it('does not create APPEND_SYSTEM when neither prompt catalog system sections nor append files exist', () => {
+    it('writes APPEND_SYSTEM with durable vault guidance even when no other system append content exists', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
+      const syncRoot = join(profilesRoot, '..');
 
+      process.env.PERSONAL_AGENT_VAULT_ROOT = syncRoot;
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
@@ -114,7 +118,9 @@ describe('resources negative tests', () => {
       });
       materializeProfileToAgentDir(resolved, runtime);
 
-      expect(existsSync(join(runtime, 'APPEND_SYSTEM.md'))).toBe(false);
+      const appendSystemPath = join(runtime, 'APPEND_SYSTEM.md');
+      expect(existsSync(appendSystemPath)).toBe(true);
+      expect(readFileSync(appendSystemPath, 'utf-8')).toContain(`The canonical durable knowledge vault root is: ${syncRoot}`);
     });
 
     it('handles runtime directory that does not exist', () => {

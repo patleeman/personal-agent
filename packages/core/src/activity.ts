@@ -1,19 +1,17 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
-import BetterSqlite3 from 'better-sqlite3';
 import {
   createProjectActivityEntry,
   readProjectActivityEntry,
   type ProjectActivityEntryDocument,
   type ProjectActivityNotificationState,
 } from './project-artifacts.js';
+import { type SqliteDatabase, openSqliteDatabase } from './sqlite.js';
 import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ACTIVITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ACTIVITY_NOTIFICATION_STATE_VALUES = new Set<ProjectActivityNotificationState>(['none', 'queued', 'sent', 'failed']);
-
-type SqliteDatabase = InstanceType<typeof BetterSqlite3>;
 
 type StoredActivityRow = {
   id: string;
@@ -22,6 +20,14 @@ type StoredActivityRow = {
 };
 
 const runtimeDbCache = new Map<string, SqliteDatabase>();
+
+export function closeActivityDbs(): void {
+  for (const db of runtimeDbCache.values()) {
+    db.close();
+  }
+
+  runtimeDbCache.clear();
+}
 
 export interface ResolveActivityOptions {
   profile: string;
@@ -171,7 +177,7 @@ function openActivityDb(options: ResolveActivityOptions, create = false): Sqlite
   }
 
   mkdirSync(resolveProfileActivityStateDir(options), { recursive: true, mode: 0o700 });
-  const db = new BetterSqlite3(dbPath);
+  const db = openSqliteDatabase(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');

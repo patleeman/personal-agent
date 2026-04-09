@@ -29,6 +29,8 @@ function createTestRepo(stateRoot?: string): string {
   writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
   if (stateRoot) {
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
     writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
     writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
   }
@@ -236,6 +238,8 @@ describe('profile command failure paths', () => {
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
 
     const logs: string[] = [];
     const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {

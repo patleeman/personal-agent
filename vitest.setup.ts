@@ -1,6 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach } from 'vitest';
+import { closeActivityDbs } from './packages/core/src/activity.js';
+import { closeAutomationDbs } from './packages/daemon/src/automation-store.js';
+import { closeDurableRunStoreConnections } from './packages/daemon/src/runs/store.js';
 
 const GLOBAL_KEY = '__PERSONAL_AGENT_VITEST_STATE_ROOT__' as const;
 
@@ -20,3 +24,9 @@ if (!globalForTestStateRoot[GLOBAL_KEY]) {
 if (!process.env.PERSONAL_AGENT_STATE_ROOT) {
   process.env.PERSONAL_AGENT_STATE_ROOT = globalForTestStateRoot[GLOBAL_KEY]!;
 }
+
+afterEach(() => {
+  closeActivityDbs();
+  closeAutomationDbs();
+  closeDurableRunStoreConnections();
+});

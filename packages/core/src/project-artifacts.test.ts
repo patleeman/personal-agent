@@ -172,7 +172,7 @@ status: created
     expect(readFileSync(path, 'utf-8')).toContain('status: active');
     expect(readFileSync(path, 'utf-8')).toContain('plan:');
     expect(readFileSync(path, 'utf-8')).toContain('requirements:');
-    expect(readFileSync(join(dir, 'INDEX.md'), 'utf-8')).toContain('kind: project');
+    expect(readFileSync(join(dir, 'project.md'), 'utf-8')).toContain('kind: project');
     expect(readProject(path)).toMatchObject({
       id: 'artifact-model',
       summary: 'Create a durable artifact model.',

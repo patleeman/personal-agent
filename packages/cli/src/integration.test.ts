@@ -86,6 +86,8 @@ describe('CLI main flow integration', () => {
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
     expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
@@ -113,6 +115,8 @@ describe('CLI main flow integration', () => {
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
+    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
     await runCli(['profile', 'use', 'shared']);

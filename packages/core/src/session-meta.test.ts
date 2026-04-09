@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, utimesSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -118,5 +118,85 @@ describe('listStoredSessions', () => {
       file: join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
       title: 'Loaded from synced root',
     }));
+  });
+
+  it('falls back to slug-derived cwd, file mtimes, and string user content', () => {
+    const sessionsDir = createTempDir('personal-agent-session-meta-');
+    const filePath = join(sessionsDir, '--Users-patrick-project--', '2026-03-12T12-10-00-000Z_fallback.jsonl');
+
+    writeFile(
+      filePath,
+      [
+        'not json',
+        JSON.stringify({ type: 'session', id: 'conv-fallback', timestamp: 'not-a-date' }),
+        JSON.stringify({ type: 'model_change' }),
+        JSON.stringify({ type: 'message', timestamp: 'still-not-a-date', message: { role: 'user', content: 'Fallback\nstring title' } }),
+      ].join('\n') + '\n',
+    );
+
+    const fallbackTimestamp = new Date('2026-03-12T12:10:30.000Z');
+    utimesSync(filePath, fallbackTimestamp, fallbackTimestamp);
+
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
+      id: 'conv-fallback',
+      cwd: 'Users/patrick/project',
+      cwdSlug: '--Users-patrick-project--',
+      model: 'unknown',
+      title: 'Fallback string title',
+      timestamp: fallbackTimestamp.toISOString(),
+      lastActivityAt: fallbackTimestamp.toISOString(),
+    }));
+  });
+
+  it('falls back to image attachment titles when the stored session name is blank', () => {
+    const sessionsDir = createTempDir('personal-agent-session-meta-');
+
+    writeFile(
+      join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-11-00-000Z_images.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'conv-images', timestamp: '2026-03-12T12:11:00.000Z', cwd: '/Users/patrick/project' }),
+        JSON.stringify({
+          type: 'message',
+          timestamp: '2026-03-12T12:11:01.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'image' }, { type: 'image' }],
+          },
+        }),
+        JSON.stringify({ type: 'session_info', name: '   ' }),
+      ].join('\n') + '\n',
+    );
+
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
+      id: 'conv-images',
+      title: '(2 image attachments)',
+    }));
+  });
+
+  it('sorts root-level session files by id when last activity ties and skips files without a session record', () => {
+    const sessionsDir = createTempDir('personal-agent-session-meta-');
+
+    writeFile(
+      join(sessionsDir, '2026-03-12T12-12-00-000Z_a.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'conv-a', timestamp: '2026-03-12T12:12:00.000Z', cwd: '/Users/patrick/project-a' }),
+        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Alpha' }] } }),
+      ].join('\n') + '\n',
+    );
+
+    writeFile(
+      join(sessionsDir, '2026-03-12T12-12-00-000Z_b.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'conv-b', timestamp: '2026-03-12T12:12:00.000Z', cwd: '/Users/patrick/project-b' }),
+        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Beta' }] } }),
+      ].join('\n') + '\n',
+    );
+
+    writeFile(
+      join(sessionsDir, '2026-03-12T12-12-00-000Z_ignored.jsonl'),
+      [JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:15:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Ignored' }] } })].join('\n') + '\n',
+    );
+
+    expect(listStoredSessions({ sessionsDir }).map((session) => session.id)).toEqual(['conv-b', 'conv-a']);
   });
 });

@@ -26,7 +26,10 @@ function createTestRepo(): { repo: string; stateRoot: string; profilesRoot: stri
   if (!stateRoot) {
     throw new Error('PERSONAL_AGENT_STATE_ROOT must be set in test setup');
   }
-  const profilesRoot = join(stateRoot, 'sync', 'profiles');
+  const profilesRoot = join(stateRoot, 'sync', '_profiles');
+
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
 
   writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
   writeFile(

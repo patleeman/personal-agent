@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import BetterSqlite3 from 'better-sqlite3';
+import { openSqliteDatabase } from '@personal-agent/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   appendDurableRunEvent,
@@ -266,7 +266,7 @@ describe('durable run store', () => {
 
   it('marks invalid sqlite rows during recovery scan', () => {
     const runsRoot = createTempDir('durable-runs-store-invalid-');
-    const db = new BetterSqlite3(join(runsRoot, 'runtime.db'));
+    const db = openSqliteDatabase(join(runsRoot, 'runtime.db'));
     db.exec(`
       CREATE TABLE IF NOT EXISTS runs (
         run_id TEXT PRIMARY KEY,

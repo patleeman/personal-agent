@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
-import BetterSqlite3 from 'better-sqlite3';
+import { openSqliteDatabase, type SqliteDatabase } from '@personal-agent/core';
 
 export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell' | 'background-run';
 export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
@@ -79,8 +79,6 @@ export interface ScannedDurableRunsSummary {
   recoveryActions: Record<DurableRunRecoveryAction, number>;
   statuses: Partial<Record<DurableRunStatus, number>>;
 }
-
-type SqliteDatabase = InstanceType<typeof BetterSqlite3>;
 
 type StoredRunRow = {
   run_id: string;
@@ -356,7 +354,7 @@ function openRuntimeDb(dbPath: string): SqliteDatabase {
   }
 
   mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
-  const db = new BetterSqlite3(dbPath);
+  const db = openSqliteDatabase(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');

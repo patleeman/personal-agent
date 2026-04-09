@@ -9,7 +9,7 @@ describe('systemLogTail', () => {
   });
 
   it('keeps unrelated lines, including durable-state paths that still contain /sync/', () => {
-    const kept = '[info] wrote ~/.local/state/personal-agent/sync/_tasks/example.task.md';
+    const kept = '[info] wrote ~/.local/state/personal-agent/sync/tasks/example.task.md';
 
     expect(isRemovedSyncLogLine(kept)).toBe(false);
     expect(filterSystemLogTailLines([

@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { normalizeSavedModelPreferences, readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 
 const tempDirs: string[] = [];
 
@@ -37,6 +37,80 @@ describe('readSavedModelPreferences', () => {
     writeFileSync(file, '{not json');
 
     expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
+  });
+});
+
+describe('normalizeSavedModelPreferences', () => {
+  it('splits provider/model strings and rewrites the settings file', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ defaultModel: 'anthropic/claude-sonnet-4-6' }));
+
+    expect(normalizeSavedModelPreferences(file, [
+      { id: 'claude-sonnet-4-6', provider: 'anthropic' },
+    ])).toEqual({
+      currentModel: 'claude-sonnet-4-6',
+      currentThinkingLevel: '',
+      currentPresetId: '',
+    });
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      defaultProvider: 'anthropic',
+      defaultModel: 'claude-sonnet-4-6',
+    });
+  });
+
+  it('infers the provider when a single exact model match exists', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4' }));
+
+    expect(normalizeSavedModelPreferences(file, [
+      { id: 'gpt-5.4', provider: 'openai-codex' },
+    ])).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: '',
+      currentPresetId: '',
+    });
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+    });
+  });
+
+  it('does not rewrite ambiguous or already-matching provider settings', () => {
+    const ambiguousDir = createTempDir();
+    const ambiguousFile = join(ambiguousDir, 'settings.json');
+    writeFileSync(ambiguousFile, JSON.stringify({ defaultModel: 'gpt-5.4' }));
+
+    expect(normalizeSavedModelPreferences(ambiguousFile, [
+      { id: 'gpt-5.4', provider: 'openai-codex' },
+      { id: 'gpt-5.4', provider: 'openrouter' },
+    ])).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: '',
+      currentPresetId: '',
+    });
+    expect(JSON.parse(readFileSync(ambiguousFile, 'utf-8'))).toEqual({ defaultModel: 'gpt-5.4' });
+
+    const matchingDir = createTempDir();
+    const matchingFile = join(matchingDir, 'settings.json');
+    writeFileSync(matchingFile, JSON.stringify({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+    }));
+
+    expect(normalizeSavedModelPreferences(matchingFile, [
+      { id: 'gpt-5.4', provider: 'openai-codex' },
+      { id: 'gpt-5.4', provider: 'openrouter' },
+    ])).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: '',
+      currentPresetId: '',
+    });
+    expect(JSON.parse(readFileSync(matchingFile, 'utf-8'))).toEqual({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+    });
   });
 });
 
@@ -98,6 +172,25 @@ describe('writeSavedModelPreferences', () => {
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openrouter',
       defaultModel: 'openrouter/free',
+    });
+  });
+
+  it('clears only thinking level when model is left untouched', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+      defaultThinkingLevel: 'high',
+    }));
+
+    writeSavedModelPreferences({ thinkingLevel: null }, file, [
+      { id: 'gpt-5.4', provider: 'openai-codex' },
+    ]);
+
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
     });
   });
 });

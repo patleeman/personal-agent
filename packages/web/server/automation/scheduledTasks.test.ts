@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildScheduledTaskMarkdown,
+  getScheduledTaskStateFilePath,
   inferTaskProfileFromFilePath,
+  listScheduledTaskDefinitionFiles,
+  loadScheduledTaskRuntimeState,
   loadScheduledTasksForProfile,
   readScheduledTaskFileMetadata,
   resolveScheduledTaskForProfile,
@@ -59,6 +62,28 @@ describe('scheduledTasks', () => {
     });
   });
 
+  it('reads one-off scheduled-task metadata with explicit title and thinking level', () => {
+    const dir = createTempDir();
+    const filePath = join(dir, 'one-off.task.md');
+
+    writeFileSync(filePath, `---\ntitle: "Nightly cleanup"\nat: "2026-04-10T01:00:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nRun cleanup.\n`);
+
+    expect(readScheduledTaskFileMetadata(filePath)).toEqual({
+      id: 'one-off',
+      title: 'Nightly cleanup',
+      enabled: true,
+      scheduleType: 'at',
+      cron: undefined,
+      at: '2026-04-10T01:00:00.000Z',
+      profile: 'assistant',
+      model: undefined,
+      cwd: undefined,
+      timeoutSeconds: 1800,
+      prompt: 'Run cleanup.',
+      promptBody: 'Run cleanup.',
+    });
+  });
+
   it('builds canonical task markdown for recurring tasks', () => {
     expect(buildScheduledTaskMarkdown({
       taskId: 'daily-status',
@@ -70,6 +95,90 @@ describe('scheduledTasks', () => {
       timeoutSeconds: 900,
       prompt: 'Run maintenance.',
     })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\n---\nRun maintenance.\n`);
+  });
+
+  it('builds one-off task markdown and rejects invalid schedule or prompt input', () => {
+    expect(buildScheduledTaskMarkdown({
+      taskId: 'one-off-status',
+      profile: 'assistant',
+      title: '  One-off status  ',
+      enabled: false,
+      at: '2026-04-10T09:30:00.000Z',
+      thinkingLevel: 'medium',
+      prompt: '  Send one update.  ',
+    })).toBe(`---\nid: "one-off-status"\ntitle: "One-off status"\nenabled: false\nat: "2026-04-10T09:30:00.000Z"\nprofile: "assistant"\nthinking: "medium"\n---\nSend one update.\n`);
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'missing-schedule',
+      profile: 'assistant',
+      enabled: true,
+      prompt: 'Run maintenance.',
+    })).toThrow('Provide exactly one of cron or at.');
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'duplicate-schedule',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      at: '2026-04-10T09:30:00.000Z',
+      prompt: 'Run maintenance.',
+    })).toThrow('Provide exactly one of cron or at.');
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'blank-prompt',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: '   ',
+    })).toThrow('prompt is required.');
+  });
+
+  it('lists nested task definition files and exposes runtime state from the automation database', () => {
+    const dir = createTempDir();
+    const nestedDir = join(dir, 'nested');
+    mkdirSync(nestedDir, { recursive: true });
+
+    const nestedFilePath = join(nestedDir, 'nested.task.md');
+    const rootFilePath = join(dir, 'root.task.md');
+    writeFileSync(rootFilePath, '# root task\n');
+    writeFileSync(nestedFilePath, '# nested task\n');
+    writeFileSync(join(dir, 'ignore.md'), '# not a task\n');
+
+    expect(listScheduledTaskDefinitionFiles(join(dir, 'missing'))).toEqual([]);
+    expect(listScheduledTaskDefinitionFiles(dir)).toEqual([nestedFilePath, rootFilePath]);
+
+    const tasksDir = taskDirForProfile('assistant');
+    mkdirSync(tasksDir, { recursive: true });
+
+    const runtimeFilePath = join(tasksDir, 'runtime.task.md');
+    writeFileSync(runtimeFilePath, `---\ncron: "0 9 * * *"\nprofile: "assistant"\n---\nRuntime task\n`);
+
+    const daemonDir = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'daemon');
+    mkdirSync(daemonDir, { recursive: true });
+    writeFileSync(join(daemonDir, 'task-state.json'), JSON.stringify({
+      tasks: {
+        [runtimeFilePath]: {
+          id: 'runtime',
+          filePath: runtimeFilePath,
+          running: true,
+          lastStatus: 'success',
+          lastAttemptCount: 3,
+        },
+      },
+    }));
+
+    loadScheduledTasksForProfile('assistant');
+
+    expect(getScheduledTaskStateFilePath()).toMatch(/\/daemon\/runtime\.db$/);
+    expect(loadScheduledTaskRuntimeState()).toEqual({
+      runtime: expect.objectContaining({
+        id: 'runtime',
+        filePath: runtimeFilePath,
+        running: false,
+        lastStatus: 'success',
+        lastAttemptCount: 3,
+      }),
+    });
   });
 
   it('loads parsed tasks and runtime state for a profile', () => {
@@ -141,5 +250,20 @@ describe('scheduledTasks', () => {
 
     expect(taskBelongsToProfile({ filePath }, 'assistant')).toBe(true);
     expect(taskBelongsToProfile({ filePath }, 'datadog')).toBe(false);
+  });
+
+  it('returns false for missing or invalid standalone task files', () => {
+    const dir = createTempDir();
+    const missingPath = join(dir, 'missing.task.md');
+    const invalidPath = join(dir, 'invalid.task.md');
+
+    writeFileSync(invalidPath, `---\ncron: "0 9 * *"\n---\nBroken task\n`);
+
+    expect(taskBelongsToProfile({ filePath: missingPath }, 'assistant')).toBe(false);
+    expect(taskBelongsToProfile({ filePath: invalidPath }, 'assistant')).toBe(false);
+  });
+
+  it('throws when resolving a missing scheduled task', () => {
+    expect(() => resolveScheduledTaskForProfile('assistant', 'missing-task')).toThrow('Task not found: missing-task');
   });
 });

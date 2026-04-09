@@ -225,7 +225,7 @@ describe('CompanionConversationsPage', () => {
 
     expect(html).toContain('Chats');
     expect(html).toContain('Open chats');
-    expect(html).toContain('Open docs');
+    expect(html).toContain('Open tasks');
     expect(html).toContain('1 open · 1 live elsewhere · 1 need review · 1 archived');
     expect(html).toContain('Open in workspace');
     expect(html).toContain('Live elsewhere');
@@ -239,6 +239,5 @@ describe('CompanionConversationsPage', () => {
     expect(html).not.toContain('Load more');
     expect(html).not.toContain('Signed in on Test companion');
     expect(html).not.toContain('--Users-patrick-workingdir-personal-agent--');
-
   });
 });

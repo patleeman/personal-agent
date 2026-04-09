@@ -96,4 +96,79 @@ describe('activity agent extension', () => {
     readState = loadProfileActivityReadState({ stateRoot, profile: 'datadog' });
     expect(readState.has('daily-review')).toBe(false);
   });
+
+  it('gets detailed activity entries and deletes bulk selections', async () => {
+    const stateRoot = createTempDir('pa-web-activity-tool-');
+    const activityTool = registerActivityTool(stateRoot);
+
+    await activityTool.execute('tool-1', {
+      action: 'create',
+      activityId: 'daemon-follow-up',
+      summary: 'Check the daemon logs later',
+      details: 'Tail the log after the deploy finishes.',
+      kind: 'reminder',
+      relatedProjectIds: ['web-ui'],
+      relatedConversationIds: ['conv-123'],
+      notificationState: 'queued',
+    });
+    await activityTool.execute('tool-2', {
+      action: 'create',
+      activityId: 'daily-review',
+      summary: 'Review today\'s inbox.',
+    });
+    await activityTool.execute('tool-3', {
+      action: 'mark_read',
+      activityId: 'daemon-follow-up',
+    });
+
+    const fetched = await activityTool.execute('tool-4', {
+      action: 'get',
+      activityId: 'daemon-follow-up',
+    });
+    expect(fetched.isError).not.toBe(true);
+    expect(fetched.content[0]?.text).toContain('@daemon-follow-up');
+    expect(fetched.content[0]?.text).toContain('read: yes');
+    expect(fetched.content[0]?.text).toContain('details: Tail the log after the deploy finishes.');
+    expect(fetched.content[0]?.text).toContain('projects: web-ui');
+    expect(fetched.content[0]?.text).toContain('conversations: conv-123');
+    expect(fetched.content[0]?.text).toContain('notification: queued');
+
+    const deleted = await activityTool.execute('tool-5', {
+      action: 'delete',
+      activityId: 'daemon-follow-up',
+      activityIds: ['daily-review', 'daemon-follow-up'],
+    });
+    expect(deleted.isError).not.toBe(true);
+    expect(deleted.content[0]?.text).toBe('Deleted activity items: @daemon-follow-up, @daily-review');
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
+    expect(getActivityConversationLink({ stateRoot, profile: 'datadog', activityId: 'daemon-follow-up' })).toBeNull();
+    expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' }).size).toBe(0);
+  });
+
+  it('allocates unique activity ids and surfaces validation failures as tool errors', async () => {
+    const stateRoot = createTempDir('pa-web-activity-tool-');
+    const activityTool = registerActivityTool(stateRoot);
+
+    const created = await activityTool.execute('tool-1', {
+      action: 'create',
+      activityId: 'daily-review',
+      summary: 'Review the daily summary',
+    });
+    expect(created.content[0]?.text).toBe('Created activity @daily-review.');
+
+    const createdAgain = await activityTool.execute('tool-2', {
+      action: 'create',
+      activityId: 'daily-review',
+      summary: 'Review the daily summary again',
+    });
+    expect(createdAgain.isError).not.toBe(true);
+    expect(createdAgain.content[0]?.text).toBe('Created activity @daily-review-2.');
+
+    const failed = await activityTool.execute('tool-3', {
+      action: 'mark_read',
+      activityIds: ['   '],
+    });
+    expect(failed.isError).toBe(true);
+    expect(failed.content[0]?.text).toBe('activityId or activityIds is required.');
+  });
 });

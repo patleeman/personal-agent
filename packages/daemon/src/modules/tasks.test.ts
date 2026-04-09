@@ -6,12 +6,19 @@ import { listProfileActivityEntries, loadDeferredResumeState, setTaskCallbackBin
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import {
+  closeAutomationDbs,
+  loadAutomationRuntimeStateMap,
+  loadAutomationSchedulerState,
+  saveAutomationSchedulerState,
+} from '../automation-store.js';
+import {
   createDurableRunManifest,
   createInitialDurableRunStatus,
   loadDurableRunManifest,
   loadDurableRunStatus,
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
+  resolveRuntimeDbPath,
   saveDurableRunManifest,
   saveDurableRunStatus,
 } from '../runs/store.js';
@@ -41,7 +48,7 @@ function createTimerEvent(): DaemonEvent {
   };
 }
 
-function createRequestedTaskRunEvent(filePath: string, runId?: string): DaemonEvent {
+function createRequestedTaskRunEvent(taskId: string, runId?: string): DaemonEvent {
   return {
     id: `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     version: 1,
@@ -49,7 +56,7 @@ function createRequestedTaskRunEvent(filePath: string, runId?: string): DaemonEv
     source: 'test',
     timestamp: new Date().toISOString(),
     payload: {
-      filePath,
+      taskId,
       ...(runId ? { runId } : {}),
     },
   };
@@ -151,6 +158,7 @@ function createRunResult(
 
 describe('tasks module scheduling', () => {
   afterEach(async () => {
+    closeAutomationDbs();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
@@ -323,7 +331,7 @@ describe('tasks module scheduling', () => {
     const { context } = createContext(taskDir, stateRoot);
 
     await module.start(context);
-    await module.handleEvent(createRequestedTaskRunEvent(taskPath, requestedRunId), context);
+    await module.handleEvent(createRequestedTaskRunEvent('run-now', requestedRunId), context);
 
     await waitForCondition(() => {
       const status = module.getStatus?.() as { totalRuns?: number };
@@ -386,10 +394,10 @@ describe('tasks module scheduling', () => {
     const { context } = createContext(taskDir, stateRoot);
 
     await module.start(context);
-    await module.handleEvent(createRequestedTaskRunEvent(taskPath, firstRunId), context);
+    await module.handleEvent(createRequestedTaskRunEvent('run-now', firstRunId), context);
     await waitForCondition(() => runTask.mock.calls.length === 1);
 
-    await module.handleEvent(createRequestedTaskRunEvent(taskPath, secondRunId), context);
+    await module.handleEvent(createRequestedTaskRunEvent('run-now', secondRunId), context);
     await new Promise((resolve) => setTimeout(resolve, 25));
 
     expect(runTask).toHaveBeenCalledTimes(1);
@@ -673,10 +681,8 @@ Recover me after restart
         return false;
       }
 
-      const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
-        tasks: Record<string, { activeRunId?: string; lastRunId?: string; oneTimeResolvedStatus?: string }>;
-      };
-      const taskState = persistedState.tasks[taskPath];
+      const persistedState = loadAutomationRuntimeStateMap({ dbPath: resolveRuntimeDbPath(stateRoot) });
+      const taskState = persistedState['recover-me'];
       return taskState?.activeRunId === undefined
         && taskState.lastRunId !== priorRunId
         && taskState.oneTimeResolvedStatus === 'success';
@@ -684,12 +690,11 @@ Recover me after restart
 
     expect(runTask).toHaveBeenCalledTimes(1);
 
-    const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
-      tasks: Record<string, { activeRunId?: string; lastRunId?: string; oneTimeResolvedStatus?: string }>;
-    };
-    expect(persistedState.tasks[taskPath]?.activeRunId).toBeUndefined();
-    expect(persistedState.tasks[taskPath]?.lastRunId).not.toBe(priorRunId);
-    expect(persistedState.tasks[taskPath]?.oneTimeResolvedStatus).toBe('success');
+    const persistedState = loadAutomationRuntimeStateMap({ dbPath: resolveRuntimeDbPath(stateRoot) });
+    expect(persistedState['recover-me']?.filePath).toBe(taskPath);
+    expect(persistedState['recover-me']?.activeRunId).toBeUndefined();
+    expect(persistedState['recover-me']?.lastRunId).not.toBe(priorRunId);
+    expect(persistedState['recover-me']?.oneTimeResolvedStatus).toBe('success');
 
     await module.stop?.(context);
   });
@@ -758,11 +763,10 @@ profile: datadog
 Run hourly task
 `);
 
-    writeFileSync(join(stateRoot, 'task-state.json'), JSON.stringify({
-      version: 1,
-      lastEvaluatedAt: '2026-03-02T09:59:30.000Z',
-      tasks: {},
-    }, null, 2));
+    saveAutomationSchedulerState(
+      { lastEvaluatedAt: '2026-03-02T09:59:30.000Z' },
+      { dbPath: resolveRuntimeDbPath(stateRoot) },
+    );
 
     let currentTime = new Date('2026-03-02T11:05:00.000Z');
     const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
@@ -799,9 +803,7 @@ Run hourly task
     await module.handleEvent(createTimerEvent(), context);
 
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(1);
-    const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
-      lastEvaluatedAt?: string;
-    };
+    const persistedState = loadAutomationSchedulerState({ dbPath: resolveRuntimeDbPath(stateRoot) });
     expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
 
     await module.stop?.(context);
@@ -978,14 +980,8 @@ Run hourly task
 
     expect(existsSync(taskPath)).toBe(false);
 
-    const persistedStatePath = join(stateRoot, 'task-state.json');
-    expect(existsSync(persistedStatePath)).toBe(true);
-
-    const persistedState = JSON.parse(readFileSync(persistedStatePath, 'utf-8')) as {
-      tasks: Record<string, unknown>;
-    };
-
-    expect(Object.keys(persistedState.tasks).length).toBe(0);
+    const persistedState = loadAutomationRuntimeStateMap({ dbPath: resolveRuntimeDbPath(stateRoot) });
+    expect(Object.keys(persistedState).length).toBe(0);
 
     await module.stop?.(context);
   });
@@ -1028,14 +1024,8 @@ Run hourly task
 
     expect(existsSync(taskPath)).toBe(false);
 
-    const persistedStatePath = join(stateRoot, 'task-state.json');
-    expect(existsSync(persistedStatePath)).toBe(true);
-
-    const persistedState = JSON.parse(readFileSync(persistedStatePath, 'utf-8')) as {
-      tasks: Record<string, unknown>;
-    };
-
-    expect(Object.keys(persistedState.tasks).length).toBe(0);
+    const persistedState = loadAutomationRuntimeStateMap({ dbPath: resolveRuntimeDbPath(stateRoot) });
+    expect(Object.keys(persistedState).length).toBe(0);
 
     await module.stop?.(context);
   });
