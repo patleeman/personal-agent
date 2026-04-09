@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { getStateRoot } from '@personal-agent/core';
 import { app, nativeImage } from 'electron';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
@@ -16,6 +18,21 @@ app.setName('Personal Agent');
 function createSvgImage(filePath: string) {
   const source = readFileSync(filePath, 'utf-8');
   return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`);
+}
+
+function logBootstrapError(error: unknown): void {
+  const rendered = error instanceof Error
+    ? error.stack ?? error.message
+    : String(error);
+
+  try {
+    const mainLogPath = resolve(getStateRoot(), 'desktop', 'logs', 'main.log');
+    appendFileSync(mainLogPath, `[${new Date().toISOString()}] [error] ${rendered}\n`, 'utf-8');
+  } catch {
+    // Fall back to stderr only when the desktop log path is unavailable.
+  }
+
+  console.error(rendered);
 }
 
 async function bootstrapDesktopApp(): Promise<void> {
@@ -95,6 +112,6 @@ app.whenReady()
     await bootstrapDesktopApp();
   })
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
+    logBootstrapError(error);
     app.exit(1);
   });
