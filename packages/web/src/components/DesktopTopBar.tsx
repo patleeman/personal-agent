@@ -1,4 +1,5 @@
 import { type CSSProperties, useEffect, useState } from 'react';
+import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
@@ -69,6 +70,7 @@ export function DesktopTopBar({
     canGoBack: false,
     canGoForward: false,
   });
+  const [showConnectionsModal, setShowConnectionsModal] = useState(false);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -134,45 +136,48 @@ export function DesktopTopBar({
     : 'ui-desktop-top-bar';
 
   return (
-    <div className={topBarClassName}>
-      <div className="ui-desktop-top-bar__drag-region" />
-      <div className="ui-desktop-top-bar__leading">
-        <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
-        <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
-            ←
-          </ToolbarButton>
-          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
-            →
-          </ToolbarButton>
-          <ToolbarButton
-            className="ui-desktop-top-bar__icon-button"
-            onClick={onToggleSidebar}
-            aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          >
-            <LeftSidebarToggleIcon open={sidebarOpen} />
-          </ToolbarButton>
+    <>
+      <div className={topBarClassName}>
+        <div className="ui-desktop-top-bar__drag-region" />
+        <div className="ui-desktop-top-bar__leading">
+          <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
+          <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
+            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
+              ←
+            </ToolbarButton>
+            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
+              →
+            </ToolbarButton>
+            <ToolbarButton
+              className="ui-desktop-top-bar__icon-button"
+              onClick={onToggleSidebar}
+              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              <LeftSidebarToggleIcon open={sidebarOpen} />
+            </ToolbarButton>
+          </div>
+        </div>
+        <div className="ui-desktop-top-bar__center" />
+        <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+          {showRailToggle ? (
+            <ToolbarButton
+              className="ui-desktop-top-bar__icon-button"
+              onClick={onToggleRail}
+              aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+              title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+            >
+              <RightRailToggleIcon open={railOpen} />
+            </ToolbarButton>
+          ) : null}
+          {bridge ? (
+            <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => setShowConnectionsModal(true)}>
+              Connect
+            </ToolbarButton>
+          ) : null}
         </div>
       </div>
-      <div className="ui-desktop-top-bar__center" />
-      <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
-        {showRailToggle ? (
-          <ToolbarButton
-            className="ui-desktop-top-bar__icon-button"
-            onClick={onToggleRail}
-            aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-            title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-          >
-            <RightRailToggleIcon open={railOpen} />
-          </ToolbarButton>
-        ) : null}
-        {bridge ? (
-          <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => { void bridge.showConnectionsWindow(); }}>
-            Connections
-          </ToolbarButton>
-        ) : null}
-      </div>
-    </div>
+      {showConnectionsModal ? <DesktopConnectionsModal onClose={() => setShowConnectionsModal(false)} /> : null}
+    </>
   );
 }

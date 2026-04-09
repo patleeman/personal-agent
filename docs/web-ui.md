@@ -312,7 +312,7 @@ Settings is now one stacked page instead of separate preference and system subpa
 
 It keeps defaults, appearance, providers, interface reset tools, workspace info, desktop connections, and runtime service panels together in a single scrolling page with in-page quick links and Codex-style split section headers instead of a separate settings subnav.
 
-When the app is running inside the Electron desktop shell, Settings also exposes a **Desktop → Connections** section for local and remote host management. That surface is machine-local: it controls which host the desktop app window is connected to, lets you save web/Tailscale and SSH hosts, can switch the active desktop host, and can open a saved remote host in its own dedicated Electron window without introducing a separate top-level page.
+When the app is running inside the Electron desktop shell, the top bar exposes a **Connect** action that opens a modal for remote host connection and saved-host management. Settings still exposes a **Desktop → Connections** section for the same machine-local host records: it controls which host the desktop app window is connected to, lets you save web/Tailscale and SSH hosts, can switch the active desktop host, and can open a saved remote host in its own dedicated Electron window without introducing a separate top-level page.
 
 The Instructions page follows the same pattern: a stacked source picker and a full-width editor in the center, while the right rail carries source metadata and rendered instruction preview.
 
