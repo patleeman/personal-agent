@@ -84,6 +84,17 @@ describe('HostManager', () => {
     expect(mocks.saveDesktopConfig).not.toHaveBeenCalled();
   });
 
+  it('can resolve environment and conversation URLs for a non-active host', async () => {
+    const manager = new HostManager();
+
+    await expect(manager.openNewConversationForHost('local')).resolves.toBe('http://local.example.test/conversations/new');
+    await expect(manager.getDesktopEnvironmentForHost('local')).resolves.toMatchObject({
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+    });
+  });
+
   it('persists default-on-launch when saving an auto-connect host', async () => {
     const manager = new HostManager();
 

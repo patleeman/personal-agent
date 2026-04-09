@@ -129,9 +129,12 @@ export function DesktopTopBar({
   }
 
   const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
+  const topBarClassName = environment?.activeHostKind && environment.activeHostKind !== 'local'
+    ? 'ui-desktop-top-bar ui-desktop-top-bar--remote'
+    : 'ui-desktop-top-bar';
 
   return (
-    <div className="ui-desktop-top-bar">
+    <div className={topBarClassName}>
       <div className="ui-desktop-top-bar__drag-region" />
       <div className="ui-desktop-top-bar__leading">
         <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />

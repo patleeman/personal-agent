@@ -9,12 +9,18 @@ export function registerDesktopIpc(options: {
   windowController: DesktopWindowController;
   onHostStateChanged?: () => void;
 }): void {
-  ipcMain.handle(`${CHANNEL_PREFIX}:get-environment`, async () => {
-    return options.hostManager.getDesktopEnvironment();
+  ipcMain.handle(`${CHANNEL_PREFIX}:get-environment`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    return options.hostManager.getDesktopEnvironmentForHost(hostId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:get-connections`, async () => {
     return options.hostManager.getConnectionsState();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:get-navigation-state`, async (event) => {
+    return options.windowController.getNavigationStateForWebContents(event.sender.id);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:switch-host`, async (_event, hostId: string) => {
@@ -36,17 +42,33 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getConnectionsState();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async () => {
-    const url = await options.hostManager.openNewConversation();
-    await options.windowController.openAbsoluteUrl(url);
+  ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const url = await options.hostManager.openNewConversationForHost(hostId);
+    await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {
     await options.windowController.openMainWindow('/settings#desktop-connections');
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:restart-active-host`, async () => {
-    await options.hostManager.restartActiveHost();
+  ipcMain.handle(`${CHANNEL_PREFIX}:open-host-window`, async (_event, hostId: string) => {
+    await options.windowController.openHostWindow(hostId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:go-back`, async (event) => {
+    return options.windowController.goBackForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:go-forward`, async (event) => {
+    return options.windowController.goForwardForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:restart-active-host`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    await options.hostManager.restartHost(hostId);
     options.onHostStateChanged?.();
   });
 }

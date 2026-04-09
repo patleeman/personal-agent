@@ -417,7 +417,7 @@ function DesktopConnectionsSettingsPanel() {
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'save' | 'delete' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -509,6 +509,29 @@ function DesktopConnectionsSettingsPanel() {
       await bridge.switchHost(hostId);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
+      setAction(null);
+    }
+  }
+
+  async function handleOpenWindow(hostId: string) {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      return;
+    }
+
+    setAction('open');
+    setError(null);
+    setNotice(null);
+
+    try {
+      await bridge.openHostWindow(hostId);
+      const host = connections?.hosts.find((entry) => entry.id === hostId);
+      if (host && host.kind !== 'local') {
+        setNotice(`Opened ${host.label} in a dedicated remote window.`);
+      }
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
       setAction(null);
     }
   }
@@ -667,6 +690,14 @@ function DesktopConnectionsSettingsPanel() {
                       ) : null}
                       {host.kind !== 'local' ? (
                         <>
+                          <button
+                            type="button"
+                            onClick={() => { void handleOpenWindow(host.id); }}
+                            disabled={action !== null}
+                            className={ACTION_BUTTON_CLASS}
+                          >
+                            Open window
+                          </button>
                           <button
                             type="button"
                             onClick={() => { selectHost(host); }}

@@ -8,6 +8,7 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  openHostWindow(hostId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;

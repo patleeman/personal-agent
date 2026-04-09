@@ -24,21 +24,40 @@ export class HostManager {
     return this.config;
   }
 
+  getActiveHostId(): string {
+    return this.activeHostId;
+  }
+
   async ensureActiveHostRunning(): Promise<void> {
-    const controller = this.getActiveHostController();
-    await controller.ensureRunning();
+    await this.ensureHostRunning(this.activeHostId);
+  }
+
+  async ensureHostRunning(hostId: string): Promise<void> {
+    await this.getController(this.getHostRecordById(hostId)).ensureRunning();
   }
 
   async getActiveHostBaseUrl(): Promise<string> {
-    return this.getActiveHostController().getBaseUrl();
+    return this.getHostBaseUrl(this.activeHostId);
+  }
+
+  async getHostBaseUrl(hostId: string): Promise<string> {
+    return this.getController(this.getHostRecordById(hostId)).getBaseUrl();
   }
 
   async openNewConversation(): Promise<string> {
-    return this.getActiveHostController().openNewConversation();
+    return this.openNewConversationForHost(this.activeHostId);
+  }
+
+  async openNewConversationForHost(hostId: string): Promise<string> {
+    return this.getController(this.getHostRecordById(hostId)).openNewConversation();
   }
 
   async restartActiveHost(): Promise<void> {
-    await this.getActiveHostController().restart();
+    await this.restartHost(this.activeHostId);
+  }
+
+  async restartHost(hostId: string): Promise<void> {
+    await this.getController(this.getHostRecordById(hostId)).restart();
   }
 
   async switchHost(hostId: string): Promise<void> {
@@ -132,8 +151,16 @@ export class HostManager {
     return this.getHostRecordById(this.activeHostId);
   }
 
+  getHostRecord(hostId: string): DesktopHostRecord {
+    return this.getHostRecordById(hostId);
+  }
+
   getActiveHostController(): HostController {
     return this.getController(this.getActiveHostRecord());
+  }
+
+  getHostController(hostId: string): HostController {
+    return this.getController(this.getHostRecordById(hostId));
   }
 
   getConnectionsState(): DesktopConnectionsState {
@@ -145,7 +172,11 @@ export class HostManager {
   }
 
   async getDesktopEnvironment(): Promise<DesktopEnvironmentState> {
-    const controller = this.getActiveHostController();
+    return this.getDesktopEnvironmentForHost(this.activeHostId);
+  }
+
+  async getDesktopEnvironmentForHost(hostId: string): Promise<DesktopEnvironmentState> {
+    const controller = this.getHostController(hostId);
     const status = await controller.getStatus();
     return {
       isElectron: true,

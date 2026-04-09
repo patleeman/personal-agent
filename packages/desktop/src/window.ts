@@ -6,6 +6,7 @@ import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { HostManager } from './hosts/host-manager.js';
+import type { DesktopHostRecord } from './hosts/types.js';
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -17,16 +18,33 @@ export interface DesktopNavigationState {
   canGoForward: boolean;
 }
 
+type ManagedWindowRole = 'main' | 'remote';
+
 function toDesktopShellUrl(url: string): string {
   const parsed = new URL(url);
   parsed.searchParams.set('desktop-shell', '1');
   return parsed.toString();
 }
 
+function buildWindowTitle(host: DesktopHostRecord): string {
+  if (host.kind === 'local') {
+    return 'Personal Agent';
+  }
+
+  const kindLabel = host.kind === 'web' ? 'Web remote' : 'SSH remote';
+  return `Personal Agent — ${host.label} (${kindLabel})`;
+}
+
 export class DesktopWindowController {
   private mainWindow?: BrowserWindow;
   private currentPartition?: string;
   private quitting = false;
+  private remoteWindows = new Map<string, BrowserWindow>();
+  private trackedWindows = new Map<number, {
+    hostId: string;
+    role: ManagedWindowRole;
+    window: BrowserWindow;
+  }>();
 
   constructor(private readonly hostManager: HostManager) {}
 
@@ -35,80 +53,102 @@ export class DesktopWindowController {
   }
 
   async openMainWindow(pathname = '/'): Promise<void> {
-    const host = this.hostManager.getActiveHostRecord();
-    const partition = getHostBrowserPartition(host.id);
-    const baseUrl = await this.hostManager.getActiveHostBaseUrl();
-    const targetUrl = toDesktopShellUrl(new URL(pathname, baseUrl).toString());
+    await this.openWindowForHost(this.hostManager.getActiveHostId(), pathname, 'main');
+  }
 
-    const window = this.ensureWindow(partition);
-    await window.webContents.session.clearCache();
-    if (window.webContents.getURL() !== targetUrl) {
-      await window.loadURL(targetUrl);
-    }
-
-    if (!window.isVisible()) {
-      window.show();
-    }
-
-    if (window.isMinimized()) {
-      window.restore();
-    }
-
-    window.focus();
+  async openHostWindow(hostId: string, pathname = '/'): Promise<void> {
+    const role: ManagedWindowRole = hostId === this.hostManager.getActiveHostId() ? 'main' : 'remote';
+    await this.openWindowForHost(hostId, pathname, role);
   }
 
   async openAbsoluteUrl(url: string): Promise<void> {
-    const host = this.hostManager.getActiveHostRecord();
-    const partition = getHostBrowserPartition(host.id);
-    const targetUrl = toDesktopShellUrl(url);
-    const window = this.ensureWindow(partition);
-    await window.webContents.session.clearCache();
-    if (window.webContents.getURL() !== targetUrl) {
-      await window.loadURL(targetUrl);
+    await this.openHostAbsoluteUrl(this.hostManager.getActiveHostId(), url);
+  }
+
+  async openHostAbsoluteUrl(hostId: string, url: string): Promise<void> {
+    const role: ManagedWindowRole = hostId === this.hostManager.getActiveHostId() ? 'main' : 'remote';
+    await this.openWindowToUrl(hostId, url, role);
+  }
+
+  async openAbsoluteUrlInWindow(webContentsId: number, url: string): Promise<void> {
+    const existing = this.trackedWindows.get(webContentsId);
+    if (!existing || existing.window.isDestroyed()) {
+      await this.openAbsoluteUrl(url);
+      return;
     }
 
-    if (!window.isVisible()) {
-      window.show();
-    }
-
-    if (window.isMinimized()) {
-      window.restore();
-    }
-
-    window.focus();
+    await this.loadWindowUrl(existing.window, url);
   }
 
   hideMainWindow(): void {
     this.mainWindow?.hide();
   }
 
-  getNavigationState(): DesktopNavigationState {
+  getHostIdForWebContentsId(webContentsId: number): string | null {
+    return this.trackedWindows.get(webContentsId)?.hostId ?? null;
+  }
+
+  getNavigationStateForWebContents(webContentsId: number): DesktopNavigationState {
+    return this.getNavigationState(this.trackedWindows.get(webContentsId)?.window);
+  }
+
+  async goBackForWebContents(webContentsId: number): Promise<DesktopNavigationState> {
+    return this.goBack(this.trackedWindows.get(webContentsId)?.window);
+  }
+
+  async goForwardForWebContents(webContentsId: number): Promise<DesktopNavigationState> {
+    return this.goForward(this.trackedWindows.get(webContentsId)?.window);
+  }
+
+  private async openWindowForHost(hostId: string, pathname: string, role: ManagedWindowRole): Promise<void> {
+    const baseUrl = await this.hostManager.getHostBaseUrl(hostId);
+    const targetUrl = new URL(pathname, baseUrl).toString();
+    await this.openWindowToUrl(hostId, targetUrl, role);
+  }
+
+  private async openWindowToUrl(hostId: string, url: string, role: ManagedWindowRole): Promise<void> {
+    const host = this.hostManager.getHostRecord(hostId);
+    const partition = getHostBrowserPartition(host.id);
+    const window = this.ensureWindow(host, partition, role);
+    await this.loadWindowUrl(window, url);
+  }
+
+  private getNavigationState(window = this.mainWindow): DesktopNavigationState {
     return {
-      canGoBack: this.mainWindow?.webContents.canGoBack() ?? false,
-      canGoForward: this.mainWindow?.webContents.canGoForward() ?? false,
+      canGoBack: window?.webContents.canGoBack() ?? false,
+      canGoForward: window?.webContents.canGoForward() ?? false,
     };
   }
 
-  async goBack(): Promise<DesktopNavigationState> {
-    if (this.mainWindow?.webContents.canGoBack()) {
-      this.mainWindow.webContents.goBack();
+  private async goBack(window = this.mainWindow): Promise<DesktopNavigationState> {
+    if (window?.webContents.canGoBack()) {
+      window.webContents.goBack();
       await delay(120);
     }
 
-    return this.getNavigationState();
+    return this.getNavigationState(window);
   }
 
-  async goForward(): Promise<DesktopNavigationState> {
-    if (this.mainWindow?.webContents.canGoForward()) {
-      this.mainWindow.webContents.goForward();
+  private async goForward(window = this.mainWindow): Promise<DesktopNavigationState> {
+    if (window?.webContents.canGoForward()) {
+      window.webContents.goForward();
       await delay(120);
     }
 
-    return this.getNavigationState();
+    return this.getNavigationState(window);
   }
 
-  private ensureWindow(partition: string): BrowserWindow {
+  private ensureWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {
+    return role === 'main'
+      ? this.ensureMainWindow(host, partition)
+      : this.ensureRemoteWindow(host, partition);
+  }
+
+  private ensureMainWindow(host: DesktopHostRecord, partition: string): BrowserWindow {
     if (this.mainWindow && !this.mainWindow.isDestroyed() && this.currentPartition === partition) {
+      if (this.mainWindow.getTitle() !== buildWindowTitle(host)) {
+        this.mainWindow.setTitle(buildWindowTitle(host));
+      }
       return this.mainWindow;
     }
 
@@ -116,21 +156,47 @@ export class DesktopWindowController {
       this.mainWindow.destroy();
     }
 
+    const window = this.createWindow(host, partition, 'main');
+    this.mainWindow = window;
+    this.currentPartition = partition;
+    this.registerWindow(window, host.id, 'main');
+    return window;
+  }
+
+  private ensureRemoteWindow(host: DesktopHostRecord, partition: string): BrowserWindow {
+    const existing = this.remoteWindows.get(host.id);
+    if (existing && !existing.isDestroyed()) {
+      if (existing.getTitle() !== buildWindowTitle(host)) {
+        existing.setTitle(buildWindowTitle(host));
+      }
+      return existing;
+    }
+
+    const window = this.createWindow(host, partition, 'remote');
+    this.remoteWindows.set(host.id, window);
+    this.registerWindow(window, host.id, 'remote');
+    return window;
+  }
+
+  private createWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {
     const config = loadDesktopConfig();
     const savedWindowState = config.windowState ?? { width: 1440, height: 960 };
     const runtime = resolveDesktopRuntimePaths();
+    const remoteOffset = role === 'remote'
+      ? (this.remoteWindows.size + 1) * 28
+      : 0;
 
-    this.currentPartition = partition;
-    this.mainWindow = new BrowserWindow({
+    const window = new BrowserWindow({
       show: false,
       width: savedWindowState.width,
       height: savedWindowState.height,
-      ...(typeof savedWindowState.x === 'number' ? { x: savedWindowState.x } : {}),
-      ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y } : {}),
-      title: 'Personal Agent',
+      ...(typeof savedWindowState.x === 'number' ? { x: savedWindowState.x + remoteOffset } : {}),
+      ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y + remoteOffset } : {}),
+      title: buildWindowTitle(host),
       icon: runtime.colorIconFile,
       autoHideMenuBar: true,
       titleBarStyle: 'hidden',
+      backgroundColor: host.kind === 'local' ? undefined : '#1f1a12',
       trafficLightPosition: process.platform === 'darwin' ? { x: 14, y: 8 } : undefined,
       webPreferences: {
         preload: resolvePreloadPath(),
@@ -140,36 +206,76 @@ export class DesktopWindowController {
       },
     });
 
-    this.mainWindow.on('close', (event) => {
-      if (this.quitting) {
-        return;
-      }
+    if (role === 'main') {
+      window.on('close', (event) => {
+        if (this.quitting) {
+          return;
+        }
 
-      event.preventDefault();
-      this.mainWindow?.hide();
+        event.preventDefault();
+        window.hide();
+      });
+
+      window.on('moved', () => {
+        this.persistWindowBounds(window);
+      });
+
+      window.on('resized', () => {
+        this.persistWindowBounds(window);
+      });
+    }
+
+    window.once('ready-to-show', () => {
+      window.show();
     });
 
-    this.mainWindow.on('moved', () => {
-      this.persistWindowBounds();
-    });
-
-    this.mainWindow.on('resized', () => {
-      this.persistWindowBounds();
-    });
-
-    this.mainWindow.once('ready-to-show', () => {
-      this.mainWindow?.show();
-    });
-
-    return this.mainWindow;
+    return window;
   }
 
-  private persistWindowBounds(): void {
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+  private registerWindow(window: BrowserWindow, hostId: string, role: ManagedWindowRole): void {
+    const webContentsId = window.webContents.id;
+    this.trackedWindows.set(webContentsId, { hostId, role, window });
+
+    window.on('closed', () => {
+      this.trackedWindows.delete(webContentsId);
+      if (role === 'main' && this.mainWindow === window) {
+        this.mainWindow = undefined;
+        this.currentPartition = undefined;
+      }
+      if (role === 'remote' && this.remoteWindows.get(hostId) === window) {
+        this.remoteWindows.delete(hostId);
+      }
+    });
+  }
+
+  private async loadWindowUrl(window: BrowserWindow, url: string): Promise<void> {
+    const targetUrl = toDesktopShellUrl(url);
+    await window.webContents.session.clearCache();
+    if (window.webContents.getURL() !== targetUrl) {
+      await window.loadURL(targetUrl);
+    }
+
+    this.focusWindow(window);
+  }
+
+  private focusWindow(window: BrowserWindow): void {
+    if (!window.isVisible()) {
+      window.show();
+    }
+
+    if (window.isMinimized()) {
+      window.restore();
+    }
+
+    window.focus();
+  }
+
+  private persistWindowBounds(window: BrowserWindow): void {
+    if (window.isDestroyed()) {
       return;
     }
 
-    const bounds = this.mainWindow.getBounds();
+    const bounds = window.getBounds();
     updateDesktopWindowState({
       x: bounds.x,
       y: bounds.y,

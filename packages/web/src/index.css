@@ -16,6 +16,10 @@
     -webkit-app-region: drag;
   }
 
+  .ui-desktop-top-bar--remote {
+    @apply border-warning/25 bg-warning/10;
+  }
+
   .ui-desktop-top-bar__drag-region {
     @apply absolute inset-0;
     -webkit-app-region: drag;

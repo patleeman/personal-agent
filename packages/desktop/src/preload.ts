@@ -21,6 +21,7 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  openHostWindow: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-host-window`, hostId),
   showConnectionsWindow: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-connections`),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
