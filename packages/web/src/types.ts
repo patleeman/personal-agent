@@ -675,6 +675,44 @@ export interface DesktopAuthSessionState {
   session: CompanionAuthSessionSummary | null;
 }
 
+export type DesktopHostRecord =
+  | {
+      id: string;
+      label: string;
+      kind: 'local';
+    }
+  | {
+      id: string;
+      label: string;
+      kind: 'ssh';
+      sshTarget: string;
+      remoteRepoRoot?: string;
+      remotePort?: number;
+      autoConnect?: boolean;
+    }
+  | {
+      id: string;
+      label: string;
+      kind: 'web';
+      baseUrl: string;
+      autoConnect?: boolean;
+    };
+
+export interface DesktopEnvironmentState {
+  isElectron: true;
+  activeHostId: string;
+  activeHostLabel: string;
+  activeHostKind: DesktopHostRecord['kind'];
+  activeHostSummary: string;
+  canManageConnections: true;
+}
+
+export interface DesktopConnectionsState {
+  activeHostId: string;
+  defaultHostId: string;
+  hosts: DesktopHostRecord[];
+}
+
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
 
 export interface LiveSessionPresence {

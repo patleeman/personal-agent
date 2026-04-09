@@ -4,10 +4,12 @@ import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
-import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
-import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
+import { DesktopHostIndicator } from './DesktopHostIndicator';
+import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
+import { readDesktopEnvironment } from '../desktopBridge';
+import type { DesktopEnvironmentState } from '../types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -369,6 +371,7 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
 
 export function Layout() {
   const location = useLocation();
+  const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
@@ -394,24 +397,33 @@ export function Layout() {
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
-  const isConversationArtifactOpen = location.pathname.startsWith('/conversations/')
-    && getConversationArtifactIdFromSearch(location.search) !== null;
-  const artifactRailTargetWidth = isConversationArtifactOpen
-    ? clampPanelWidth(
-        getArtifactRailTargetWidth({ viewportWidth, sidebarWidth: sidebar.width }),
-        railMinWidth,
-        railMaxWidth,
-      )
-    : null;
-  const railWidth = artifactRailTargetWidth === null
-    ? rail.width
-    : Math.max(rail.width, artifactRailTargetWidth);
+  const railWidth = rail.width;
   const showContextRail = !(
     location.pathname.startsWith('/conversations')
     || location.pathname.startsWith('/nodes')
     || location.pathname.startsWith('/settings')
     || location.pathname.startsWith('/system')
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    readDesktopEnvironment()
+      .then((environment) => {
+        if (!cancelled) {
+          setDesktopEnvironment(environment);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDesktopEnvironment(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.pathname]);
 
   return (
     <>
@@ -424,6 +436,7 @@ export function Layout() {
 
         <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
           <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+            <DesktopHostIndicator environment={desktopEnvironment} />
             <Outlet />
           </main>
 

@@ -11,6 +11,14 @@ function createTrayIcon() {
 
 export class DesktopTrayController {
   private tray: Tray;
+  private readonly options: {
+    hostManager: HostManager;
+    onOpen: () => void;
+    onNewConversation: () => void;
+    onConnections: () => void;
+    onRestartBackend: () => void;
+    onQuit: () => void;
+  };
 
   constructor(options: {
     hostManager: HostManager;
@@ -20,11 +28,22 @@ export class DesktopTrayController {
     onRestartBackend: () => void;
     onQuit: () => void;
   }) {
+    this.options = options;
     this.tray = new Tray(createTrayIcon());
     this.tray.setToolTip('personal-agent');
-    this.tray.on('click', options.onOpen);
+    this.tray.on('click', () => {
+      this.refresh();
+      this.options.onOpen();
+    });
+    this.tray.on('right-click', () => {
+      this.refresh();
+      this.tray.popUpContextMenu();
+    });
+    this.refresh();
+  }
 
-    const activeHost = options.hostManager.getActiveHostRecord();
+  refresh(): void {
+    const activeHost = this.options.hostManager.getActiveHostRecord();
     const menu = Menu.buildFromTemplate([
       {
         label: `Host: ${activeHost.label}`,
@@ -33,24 +52,24 @@ export class DesktopTrayController {
       { type: 'separator' },
       {
         label: 'Open personal-agent',
-        click: options.onOpen,
+        click: this.options.onOpen,
       },
       {
         label: 'New conversation',
-        click: options.onNewConversation,
+        click: this.options.onNewConversation,
       },
       {
         label: 'Connections…',
-        click: options.onConnections,
+        click: this.options.onConnections,
       },
       {
         label: 'Restart backend',
-        click: options.onRestartBackend,
+        click: this.options.onRestartBackend,
       },
       { type: 'separator' },
       {
         label: 'Quit',
-        click: options.onQuit,
+        click: this.options.onQuit,
       },
     ]);
 

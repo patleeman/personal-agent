@@ -13,11 +13,6 @@ async function bootstrapDesktopApp(): Promise<void> {
   hostManager = new HostManager();
   windowController = new DesktopWindowController(hostManager);
 
-  registerDesktopIpc({
-    hostManager,
-    windowController,
-  });
-
   await hostManager.ensureActiveHostRunning();
 
   trayController = new DesktopTrayController({
@@ -36,6 +31,14 @@ async function bootstrapDesktopApp(): Promise<void> {
     },
     onQuit: () => {
       void shutdownAndQuit();
+    },
+  });
+
+  registerDesktopIpc({
+    hostManager,
+    windowController,
+    onHostStateChanged: () => {
+      trayController?.refresh();
     },
   });
 

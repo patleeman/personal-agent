@@ -50,11 +50,59 @@ export class HostManager {
       return;
     }
 
+    const nextController = this.getController(this.getHostRecordById(hostId));
+    await nextController.ensureRunning();
     await this.getActiveHostController().dispose();
     this.activeHostId = hostId;
     this.config = {
       ...this.config,
       defaultHostId: hostId,
+    };
+    saveDesktopConfig(this.config);
+  }
+
+  async saveHost(record: DesktopHostRecord): Promise<void> {
+    if (record.kind === 'local') {
+      throw new Error('The local desktop host is managed automatically and cannot be edited here.');
+    }
+
+    const existing = this.config.hosts.find((host) => host.id === record.id);
+    this.config = {
+      ...this.config,
+      defaultHostId: record.autoConnect ? record.id : this.config.defaultHostId,
+      hosts: existing
+        ? this.config.hosts.map((host) => (host.id === record.id ? record : host))
+        : [...this.config.hosts, record],
+    };
+
+    if (existing) {
+      await this.disposeController(record.id);
+    }
+
+    saveDesktopConfig(this.config);
+  }
+
+  async deleteHost(hostId: string): Promise<void> {
+    if (hostId === 'local') {
+      throw new Error('The local desktop host cannot be deleted.');
+    }
+
+    const existing = this.config.hosts.find((host) => host.id === hostId);
+    if (!existing) {
+      return;
+    }
+
+    if (this.activeHostId === hostId) {
+      await this.getActiveHostController().dispose();
+      this.activeHostId = 'local';
+    } else {
+      await this.disposeController(hostId);
+    }
+
+    this.config = {
+      ...this.config,
+      defaultHostId: this.activeHostId,
+      hosts: this.config.hosts.filter((host) => host.id !== hostId),
     };
     saveDesktopConfig(this.config);
   }
@@ -70,12 +118,8 @@ export class HostManager {
   getConnectionsState(): DesktopConnectionsState {
     return {
       activeHostId: this.activeHostId,
-      hosts: this.config.hosts.map((host) => ({
-        id: host.id,
-        label: host.label,
-        kind: host.kind,
-        active: host.id === this.activeHostId,
-      })),
+      defaultHostId: this.config.defaultHostId,
+      hosts: this.config.hosts,
     };
   }
 
@@ -103,6 +147,16 @@ export class HostManager {
     }
 
     return record;
+  }
+
+  private async disposeController(hostId: string): Promise<void> {
+    const controller = this.controllers.get(hostId);
+    if (!controller) {
+      return;
+    }
+
+    await controller.dispose();
+    this.controllers.delete(hostId);
   }
 
   private getController(record: DesktopHostRecord): HostController {

@@ -66,14 +66,8 @@ export interface DesktopEnvironmentState {
   canManageConnections: true;
 }
 
-export interface DesktopHostSummary {
-  id: string;
-  label: string;
-  kind: DesktopHostRecord['kind'];
-  active: boolean;
-}
-
 export interface DesktopConnectionsState {
   activeHostId: string;
-  hosts: DesktopHostSummary[];
+  defaultHostId: string;
+  hosts: DesktopHostRecord[];
 }
