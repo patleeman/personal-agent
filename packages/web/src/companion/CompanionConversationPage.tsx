@@ -1513,7 +1513,7 @@ export function CompanionConversationPage() {
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
                   </div>
-                {(stream.isStreaming || composerHasContent) && (
+                  {(stream.isStreaming || composerHasContent) && (
                   <div className="flex shrink-0 items-center justify-end gap-1.5 px-1 pb-1">
                     {stream.isStreaming ? (
                       <button
