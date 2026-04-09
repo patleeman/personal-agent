@@ -191,6 +191,41 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders transcript images as inspectable buttons', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'image',
+        ts: '2026-03-11T18:00:00.000Z',
+        alt: 'Build screenshot',
+        caption: 'Latest desktop build',
+        src: 'data:image/png;base64,abc123',
+      }],
+    }));
+
+    expect(html).toContain('Inspect image');
+    expect(html).toContain('aria-label="Inspect image: Latest desktop build"');
+    expect(html).toContain('cursor-zoom-in');
+  });
+
+  it('renders user attachment images as inspectable buttons', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'user',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: '',
+        images: [{
+          alt: 'Shared screenshot',
+          caption: 'Before refactor',
+          src: 'data:image/png;base64,xyz789',
+        }],
+      }],
+    }));
+
+    expect(html).toContain('Inspect image');
+    expect(html).toContain('aria-label="Inspect image: Before refactor"');
+    expect(html).toContain('cursor-zoom-in');
+  });
+
   it('renders linked runs as left-aligned action rows instead of inline inspect ids', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

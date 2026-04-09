@@ -1620,6 +1620,62 @@ function TraceClusterBlock({
 
 // ── ImageBlock ────────────────────────────────────────────────────────────────
 
+type InspectableImage = {
+  alt: string;
+  src: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+};
+
+function ImageInspectModal({
+  image,
+  onClose,
+}: {
+  image: InspectableImage;
+  onClose: () => void;
+}) {
+  const label = image.caption?.trim() || image.alt.trim() || 'Conversation image';
+
+  return (
+    <div
+      className="ui-overlay-backdrop"
+      style={{ background: 'rgb(0 0 0 / 0.72)', backdropFilter: 'blur(2px)', paddingTop: '1rem' }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className="ui-dialog-shell"
+        style={{ width: 'min(96vw, 1440px)', height: 'min(94vh, 1040px)', maxHeight: 'calc(100vh - 2rem)' }}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3">
+          <div className="min-w-0">
+            <p className="ui-section-label">Image</p>
+            <p className="mt-1 break-all text-[13px] text-primary">{label}</p>
+            {image.width && image.height ? (
+              <p className="mt-1 text-[11px] text-dim">{image.width}×{image.height}</p>
+            ) : null}
+          </div>
+          <button type="button" onClick={onClose} className="ui-toolbar-button shrink-0">close</button>
+        </div>
+        <div className="min-h-0 flex-1 bg-black/30 px-4 py-4 sm:px-6 sm:py-6">
+          <img
+            src={image.src}
+            alt={image.alt}
+            className="h-full w-full object-contain"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ImagePreview({
   alt,
   src,
@@ -1630,6 +1686,7 @@ function ImagePreview({
   deferred = false,
   loading = false,
   onLoad,
+  onInspect,
 }: {
   alt: string;
   src?: string;
@@ -1640,16 +1697,35 @@ function ImagePreview({
   deferred?: boolean;
   loading?: boolean;
   onLoad?: () => Promise<void> | void;
+  onInspect?: (image: InspectableImage) => void;
 }) {
+  const inspectableImage = src
+    ? {
+        alt,
+        src,
+        caption,
+        width,
+        height,
+      }
+    : null;
+
   return (
     <SurfacePanel muted className="overflow-hidden">
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          className="block w-full object-contain bg-elevated"
-          style={{ maxHeight }}
-        />
+      {inspectableImage ? (
+        <button
+          type="button"
+          onClick={() => onInspect?.(inspectableImage)}
+          className="block w-full cursor-zoom-in bg-elevated text-left transition-opacity hover:opacity-95"
+          aria-label={`Inspect image: ${caption ?? alt}`}
+          title="Inspect image"
+        >
+          <img
+            src={inspectableImage.src}
+            alt={alt}
+            className="block w-full object-contain bg-elevated"
+            style={{ maxHeight }}
+          />
+        </button>
       ) : (
         <div
           className="w-full bg-elevated flex flex-col items-center justify-center gap-2 px-4 py-5 text-dim"
@@ -1683,10 +1759,12 @@ function ImageBlock({
   block,
   onHydrateMessage,
   hydratingMessageBlockIds,
+  onInspectImage,
 }: {
   block: Extract<MessageBlock, { type: 'image' }>;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
+  onInspectImage?: (image: InspectableImage) => void;
 }) {
   const blockId = block.id?.trim();
   const canHydrate = Boolean(block.deferred && blockId && onHydrateMessage);
@@ -1703,6 +1781,7 @@ function ImageBlock({
       deferred={block.deferred}
       loading={loading}
       onLoad={canHydrate ? () => onHydrateMessage?.(blockId as string) : undefined}
+      onInspect={onInspectImage}
     />
   );
 }
@@ -1999,6 +2078,7 @@ function UserMessage({
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenFilePath,
+  onInspectImage,
   layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
@@ -2006,6 +2086,7 @@ function UserMessage({
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenFilePath?: (path: string) => void;
+  onInspectImage?: (image: InspectableImage) => void;
   layout?: ChatViewLayout;
 }) {
   const hasText = block.text.trim().length > 0;
@@ -2035,6 +2116,7 @@ function UserMessage({
                     deferred={image.deferred}
                     loading={loading}
                     onLoad={canHydrate ? () => onHydrateMessage?.(blockId as string) : undefined}
+                    onInspect={onInspectImage}
                   />
                 );
               })}
@@ -2513,9 +2595,31 @@ export const ChatView = memo(function ChatView({
   const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
   const [replySelection, setReplySelection] = useState<ReplySelectionState | null>(null);
+  const [selectedImage, setSelectedImage] = useState<InspectableImage | null>(null);
   const replySelectionSyncFrameRef = useRef<number | null>(null);
   const replySelectionSyncTimeoutRefs = useRef<number[]>([]);
   const replySelectionClearTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!selectedImage || typeof document === 'undefined') {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectedImage(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedImage]);
 
   useEffect(() => {
     if (!shouldWindowTranscript) {
@@ -2916,6 +3020,7 @@ export const ChatView = memo(function ChatView({
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
               onOpenFilePath={onOpenFilePath}
+              onInspectImage={setSelectedImage}
               layout={layout}
             />
           );
@@ -2960,7 +3065,7 @@ export const ChatView = memo(function ChatView({
         case 'subagent':
           return <SubagentBlock block={block} />;
         case 'image':
-          return <ImageBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
+          return <ImageBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} onInspectImage={setSelectedImage} />;
         case 'error':
           return (
             <ErrorBlock
@@ -3093,6 +3198,7 @@ export const ChatView = memo(function ChatView({
           </div>
         )}
       </div>
+      {selectedImage && <ImageInspectModal image={selectedImage} onClose={() => setSelectedImage(null)} />}
     </>
   );
 });
