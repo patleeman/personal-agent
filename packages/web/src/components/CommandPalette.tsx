@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
+  COMMAND_PALETTE_SCOPE_SECTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
   searchCommandPaletteItems,
   type CommandPaletteItem,
@@ -14,12 +15,12 @@ import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
 import type { ScheduledTaskSummary, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
-import { IconButton, Keycap, Pill, cx } from './ui';
+import { cx } from './ui';
 
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'setScope'; scope: CommandPaletteSection };
+  | { kind: 'setScope'; scope: CommandPaletteScope };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -145,13 +146,13 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/instructions' },
     },
     {
-      id: 'nav:archived',
+      id: 'nav:threads',
       section: 'nav',
-      title: 'Archived conversations',
-      subtitle: 'Fuzzy search archived user and assistant messages',
-      keywords: ['archive', 'restore', 'history', 'messages', 'fuzzy'],
+      title: 'Threads',
+      subtitle: 'Search archived conversations',
+      keywords: ['archive', 'restore', 'history', 'messages', 'threads', 'fuzzy'],
       order: 12,
-      action: { kind: 'setScope', scope: 'archived' },
+      action: { kind: 'setScope', scope: 'threads' },
     },
     {
       id: 'nav:system',
@@ -295,26 +296,18 @@ function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<Comma
 function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
   if (query.trim().length > 0) {
     switch (scope) {
-      case 'nav':
-        return `No navigation items match “${query}”.`;
-      case 'open':
-        return `No open conversations match “${query}”.`;
-      case 'archived':
-        return `No archived conversations match “${query}”.`;
-      case 'tasks':
-        return `No automations match “${query}”.`;
+      case 'threads':
+        return `No threads match “${query}”.`;
+      case 'commands':
       default:
-        return `No results match “${query}”.`;
+        return `No commands match “${query}”.`;
     }
   }
 
   switch (scope) {
-    case 'open':
-      return 'No open conversations yet.';
-    case 'archived':
+    case 'threads':
       return 'No archived conversations yet.';
-    case 'tasks':
-      return 'No automations yet.';
+    case 'commands':
     default:
       return 'Nothing to show yet.';
   }
@@ -335,7 +328,7 @@ export function CommandPalette() {
     loading: sessionsLoading,
   } = useConversations();
   const [open, setOpen] = useState(false);
-  const [scope, setScope] = useState<CommandPaletteScope>('all');
+  const [scope, setScope] = useState<CommandPaletteScope>('threads');
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
@@ -382,7 +375,7 @@ export function CommandPalette() {
 
   const openPalette = useCallback((options: OpenCommandPaletteDetail = {}) => {
     setQuery(options.query ?? '');
-    setScope(options.scope ?? 'all');
+    setScope(options.scope ?? 'threads');
     setCursor(0);
     setBusyItemId(null);
     setActionError(null);
@@ -476,7 +469,7 @@ export function CommandPalette() {
   );
   const shouldIndexArchivedSearch = open
     && query.trim().length > 0
-    && (scope === 'all' || scope === 'archived');
+    && scope === 'threads';
 
   useEffect(() => {
     if (!open) {
@@ -639,19 +632,25 @@ export function CommandPalette() {
   const visibleCount = visibleItems.length;
   const loadingSections = useMemo(() => {
     const sections = new Set<CommandPaletteSection>();
-    if (scope === 'all' || scope === 'open' || scope === 'archived') {
-      if (sessionsLoading) {
-        sections.add(scope === 'archived' ? 'archived' : 'open');
+    if (sessionsLoading) {
+      for (const section of COMMAND_PALETTE_SCOPE_SECTIONS[scope]) {
+        if (section === 'open' || section === 'archived') {
+          sections.add(section);
+        }
       }
     }
-    if ((scope === 'all' || scope === 'archived') && archivedSearchLoading) {
+    if (scope === 'threads' && archivedSearchLoading) {
       sections.add('archived');
     }
-    if ((scope === 'all' || scope === 'tasks') && tasks === null) {
+    if (scope === 'commands' && tasks === null) {
       sections.add('tasks');
     }
     return [...sections];
   }, [archivedSearchLoading, scope, sessionsLoading, tasks]);
+  const showSectionHeaders = scope === 'commands' && groups.length > 1;
+  const searchPlaceholder = scope === 'threads'
+    ? 'Search threads…'
+    : 'Search commands, tabs, and automations…';
 
   if (!open) {
     return null;
@@ -675,34 +674,47 @@ export function CommandPalette() {
         aria-modal="true"
         aria-label="Command palette"
         className="ui-dialog-shell"
-        style={{ maxWidth: '900px', maxHeight: 'calc(100vh - 5rem)', overscrollBehavior: 'contain' }}
+        style={{
+          maxWidth: '720px',
+          maxHeight: 'min(560px, calc(100vh - 4rem))',
+          overscrollBehavior: 'contain',
+        }}
       >
-        <div className="px-4 pt-3 pb-0 border-b border-border-subtle">
-          <div className="flex items-center justify-between gap-3 mb-2.5">
-            <div>
-              <p className="ui-section-label text-[11px]">Command palette</p>
-              <p className="text-[12px] text-secondary mt-1">
-                Unified search for navigation, chats, archived history, and automations.
-              </p>
+        <div className="border-b border-border-subtle px-3.5 pt-3 pb-2.5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-1 rounded-lg bg-elevated p-1">
+              {COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setScope(option.value);
+                    setCursor(0);
+                    setActionError(null);
+                    window.requestAnimationFrame(() => inputRef.current?.focus());
+                  }}
+                  className={cx(
+                    'rounded-md px-2.5 py-1 text-[11px] transition-colors',
+                    scope === option.value
+                      ? 'bg-surface text-primary'
+                      : 'text-dim hover:bg-surface/60 hover:text-secondary',
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
+
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
-              <Keycap>↑↓</Keycap>
-              <span>move</span>
-              <Keycap>↵</Keycap>
-              <span>open</span>
-              <Keycap>⇥</Keycap>
-              <span>scope</span>
-              <Keycap>esc</Keycap>
-              <span>close</span>
-              <Pill tone="muted" mono className="tabular-nums">{visibleCount}</Pill>
-              <IconButton onClick={closePalette} title="Close command palette" aria-label="Close command palette" compact>
-                ✕
-              </IconButton>
+              <span>{visibleCount > 0 ? `${cursor + 1}/${visibleCount}` : '0/0'}</span>
+              <span>tab switches</span>
+              <span>↵ open</span>
+              <span>esc close</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-elevated border border-border-subtle min-w-0 mb-2.5">
-            <span className="text-dim text-[12px]">⌕</span>
+          <div className="flex items-center gap-2 rounded-lg border border-border-subtle bg-elevated px-3 py-2 min-w-0">
+            <span className="text-[12px] text-dim">⌕</span>
             <input
               ref={inputRef}
               value={query}
@@ -711,52 +723,32 @@ export function CommandPalette() {
                 setCursor(0);
                 setActionError(null);
               }}
-              placeholder="Search everything… (tab / shift+tab changes scope)"
+              placeholder={searchPlaceholder}
               aria-label="Search command palette"
-              className="flex-1 bg-transparent text-[13px] text-primary placeholder:text-dim outline-none font-mono min-w-0"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-primary placeholder:text-dim outline-none"
             />
-            <span className="text-[10px] text-dim/70 font-mono shrink-0">{macPlatform ? '⌘K' : 'Ctrl+K'}</span>
+            <span className="shrink-0 text-[10px] text-dim/70 font-mono">{macPlatform ? '⌘K' : 'Ctrl+K'}</span>
           </div>
 
-          <div className="flex flex-wrap gap-1.5 pb-2">
-            {COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  setScope(option.value);
-                  setCursor(0);
-                  setActionError(null);
-                  window.requestAnimationFrame(() => inputRef.current?.focus());
-                }}
-                className={cx(
-                  'rounded-md px-2.5 py-1 text-[11px] transition-colors',
-                  scope === option.value
-                    ? 'bg-surface text-primary shadow-sm'
-                    : 'text-dim hover:text-secondary hover:bg-elevated/50',
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-
-          {actionError && <p className="pb-2 text-[11px] text-danger">{actionError}</p>}
+          {actionError && <p className="pt-2 text-[11px] text-danger">{actionError}</p>}
         </div>
 
-        <div ref={listRef} className="overflow-y-auto flex-1 py-1" style={{ overscrollBehavior: 'contain' }}>
+        <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2" style={{ overscrollBehavior: 'contain' }}>
           {groups.map((group) => (
-            <section key={group.section} className="py-1">
-              <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">{group.label}</p>
-                <span className="ui-section-count">{group.items.length}{group.total > group.items.length ? `/${group.total}` : ''}</span>
-              </div>
+            <section key={group.section} className="pb-2 last:pb-0">
+              {showSectionHeaders && (
+                <div className="px-2.5 pb-1 flex items-center gap-2">
+                  <p className="ui-section-label">{group.label}</p>
+                  <span className="ui-section-count">{group.items.length}{group.total > group.items.length ? `/${group.total}` : ''}</span>
+                </div>
+              )}
 
               {group.items.map((item) => {
                 runningIndex += 1;
                 const itemIndex = runningIndex;
                 const isSelected = itemIndex === cursor;
                 const isBusy = busyItemId === item.id;
+                const secondaryText = [item.subtitle, item.meta].filter(Boolean).join(' · ');
 
                 return (
                   <button
@@ -767,32 +759,29 @@ export function CommandPalette() {
                     onClick={() => { void activateItem(item); }}
                     disabled={item.disabled || isBusy}
                     className={cx(
-                      'group w-full flex items-start gap-3 px-5 py-2 text-left transition-colors disabled:cursor-not-allowed',
-                      isSelected ? 'bg-elevated' : 'hover:bg-elevated/40',
+                      'group flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed',
+                      isSelected ? 'bg-elevated' : 'hover:bg-elevated/50',
                       item.disabled && 'opacity-55',
                     )}
                     title={item.subtitle ?? item.title}
                   >
-                    <span className={cx(
-                      'text-[11px] shrink-0 w-2 mt-1',
-                      isSelected ? 'text-accent' : 'text-border-default/50',
-                    )}>
-                      {isSelected ? '▶' : '·'}
-                    </span>
+                    <span
+                      className={cx(
+                        'mt-0.5 h-4 w-px shrink-0 rounded-full transition-colors',
+                        isSelected ? 'bg-accent' : 'bg-border-subtle',
+                      )}
+                    />
 
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] text-primary leading-snug truncate">{item.title}</p>
-                      {item.subtitle && (
-                        <p className="mt-0.5 text-[11px] text-secondary truncate" title={item.subtitle}>{item.subtitle}</p>
-                      )}
-                      {item.meta && (
-                        <p className="mt-0.5 text-[11px] text-dim/70 truncate" title={item.meta}>{item.meta}</p>
+                      <p className="truncate text-[13px] leading-snug text-primary">{item.title}</p>
+                      {secondaryText && (
+                        <p className="mt-0.5 truncate text-[11px] text-secondary" title={secondaryText}>{secondaryText}</p>
                       )}
                     </div>
 
-                    <span className="shrink-0 mt-0.5 text-[10px] text-dim/60 font-mono">
-                      {isBusy ? '…' : group.label.replace(/\s+/g, ' ').toLowerCase()}
-                    </span>
+                    {isBusy && (
+                      <span className="mt-0.5 shrink-0 text-[10px] text-dim/60 font-mono">…</span>
+                    )}
                   </button>
                 );
               })}
@@ -800,34 +789,25 @@ export function CommandPalette() {
           ))}
 
           {loadingSections.map((section) => (
-            <section key={`loading:${section}`} className="py-1">
-              <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">{COMMAND_PALETTE_SECTION_LABELS[section]}</p>
-              </div>
-              <p className="px-5 py-3 text-[12px] text-dim font-mono">Loading {COMMAND_PALETTE_SECTION_LABELS[section].toLowerCase()}…</p>
+            <section key={`loading:${section}`} className="pb-2 last:pb-0">
+              {showSectionHeaders && (
+                <div className="px-2.5 pb-1 flex items-center gap-2">
+                  <p className="ui-section-label">{COMMAND_PALETTE_SECTION_LABELS[section]}</p>
+                </div>
+              )}
+              <p className="px-2.5 py-3 text-[12px] text-dim font-mono">Loading {COMMAND_PALETTE_SECTION_LABELS[section].toLowerCase()}…</p>
             </section>
           ))}
 
-          {archivedSearchError && (scope === 'all' || scope === 'archived') && (
-            <section className="py-1">
-              <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">Archived conversations</p>
-              </div>
-              <p className="px-5 py-3 text-[12px] text-danger">Failed to index archived messages: {archivedSearchError}</p>
+          {archivedSearchError && scope === 'threads' && (
+            <section className="pb-2 last:pb-0">
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to index archived messages: {archivedSearchError}</p>
             </section>
           )}
 
-          {visibleCount === 0 && loadingSections.length === 0
-            && !(archivedSearchError && (scope === 'all' || scope === 'archived')) && (
-            <p className="px-6 py-10 text-[12px] text-dim text-center font-mono">{emptyStateCopy(scope, query)}</p>
+          {visibleCount === 0 && loadingSections.length === 0 && !(archivedSearchError && scope === 'threads') && (
+            <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
           )}
-        </div>
-
-        <div className="px-5 py-2.5 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono gap-3">
-          <Pill tone="muted" mono>{visibleCount > 0 ? `${cursor + 1} / ${visibleCount}` : '0 / 0'}</Pill>
-          <span>
-            Enter opens the selected workspace tab · tab/shift+tab to change scope · esc to close
-          </span>
         </div>
       </div>
     </div>

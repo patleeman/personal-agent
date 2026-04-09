@@ -54,7 +54,7 @@ describe('command palette search', () => {
   });
 
   it('matches across multiple tokens and keywords', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly summarize', scope: 'all' });
+    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly summarize', scope: 'commands' });
 
     expect(results).toHaveLength(1);
     expect(results[0]?.section).toBe('tasks');
@@ -62,20 +62,19 @@ describe('command palette search', () => {
   });
 
   it('filters to the requested scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'open' });
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'threads' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('open');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['open:alpha']);
+    expect(results[0]?.section).toBe('archived');
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['archived:beta']);
   });
 
   it('keeps section order when query is empty', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'all' });
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'commands' });
 
     expect(results.map((group) => group.section)).toEqual([
       'nav',
       'open',
-      'archived',
       'tasks',
     ]);
   });

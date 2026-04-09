@@ -1,7 +1,7 @@
 import { fuzzyScore } from './slashMenu';
 
 export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'tasks';
-export type CommandPaletteScope = 'all' | CommandPaletteSection;
+export type CommandPaletteScope = 'commands' | 'threads';
 
 export interface CommandPaletteItem<TAction = unknown> {
   id: string;
@@ -33,19 +33,21 @@ export const COMMAND_PALETTE_SECTION_ORDER: CommandPaletteSection[] = [
   'tasks',
 ];
 
+export const COMMAND_PALETTE_SCOPE_SECTIONS: Record<CommandPaletteScope, CommandPaletteSection[]> = {
+  commands: ['nav', 'open', 'tasks'],
+  threads: ['archived'],
+};
+
 export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, string> = {
   nav: 'Navigation',
   open: 'Open conversations',
-  archived: 'Archived conversations',
+  archived: 'Threads',
   tasks: 'Automations',
 };
 
 export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
-  { value: 'all', label: 'All' },
-  { value: 'nav', label: 'Navigation' },
-  { value: 'open', label: 'Open' },
-  { value: 'archived', label: 'Archived' },
-  { value: 'tasks', label: 'Automations' },
+  { value: 'threads', label: 'Threads' },
+  { value: 'commands', label: 'Commands' },
 ];
 
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
@@ -143,9 +145,7 @@ export function searchCommandPaletteItems<TAction>(
 ): CommandPaletteSectionResult<TAction>[] {
   const query = options.query.trim();
   const emptyQuery = query.length === 0;
-  const visibleSections = options.scope === 'all'
-    ? COMMAND_PALETTE_SECTION_ORDER
-    : COMMAND_PALETTE_SECTION_ORDER.filter((section) => section === options.scope);
+  const visibleSections = COMMAND_PALETTE_SCOPE_SECTIONS[options.scope];
 
   return visibleSections.flatMap((section) => {
     const sectionItems = items.filter((item) => item.section === section);
@@ -164,7 +164,7 @@ export function searchCommandPaletteItems<TAction>(
       return [];
     }
 
-    const limited = emptyQuery && options.scope === 'all'
+    const limited = emptyQuery
       ? rankedItems.slice(0, EMPTY_QUERY_LIMITS[section])
       : rankedItems;
 
