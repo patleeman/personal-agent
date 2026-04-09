@@ -48,8 +48,9 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 
 `npm run desktop:dist` does the release build locally. It:
 
-- builds the desktop package and its dependencies
+- cleans `packages/desktop/dist/`, rebuilds the desktop package, and rebuilds its dependencies
 - packages the Electron desktop app with `electron-builder`
+- excludes stale nested app bundles and workspace package-local `node_modules/` directories from the shipped app
 - signs it with the local `Developer ID Application` certificate
 - notarizes the packaged app and staples it
 - notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper

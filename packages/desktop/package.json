@@ -7,7 +7,7 @@
   "main": "./dist/main.js",
   "scripts": {
     "build:deps": "npm --prefix ../core run build && npm --prefix ../daemon run build && npm --prefix ../resources run build && npm --prefix ../services run build && npm --prefix ../web run build",
-    "build": "npm run build:deps && tsc --build --force",
+    "build": "npm run clean && npm run build:deps && tsc --build --force",
     "launch": "node scripts/launch-dev-app.mjs",
     "start": "npm run build && npm run launch",
     "dev": "npm run build && npm run launch",
