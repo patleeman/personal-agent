@@ -26,7 +26,7 @@ describe('ConversationSavedHeader', () => {
     expect(html).toContain('>Fix the top bar<');
   });
 
-  it('shows cwd controls inline beside the title', () => {
+  it('shows cwd controls inline beside the title without a status badge', () => {
     const html = renderToString(
       <ConversationSavedHeader
         title="Fix the top bar"
@@ -45,6 +45,8 @@ describe('ConversationSavedHeader', () => {
     expect(html).toContain('/tmp/personal-agent');
     expect(html).toContain('Choose a new working directory for this conversation');
     expect(html).toContain('Enter the working directory manually');
+    expect(html).not.toContain('Running');
+    expect(html).not.toContain('Needs review');
   });
 
   it('renders the inline cwd editor when requested', () => {

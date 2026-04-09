@@ -13,7 +13,6 @@ import {
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
   resolveDisplayedConversationPendingStatusLabel,
-  resolveConversationSavedHeaderStatus,
   resolveConversationStreamTitleSync,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
@@ -166,42 +165,6 @@ describe('conversation live state helpers', () => {
       currentTailBlocks: 360,
       loadedTailBlocks: true,
     })).toBe(false);
-  });
-
-  it('surfaces saved-header status from live and review metadata before the transcript hydrates', () => {
-    expect(resolveConversationSavedHeaderStatus({
-      draft: false,
-      isLiveSession: false,
-      isStreaming: false,
-      conversationNeedsTakeover: false,
-      sessionMeta: { isRunning: true, isLive: true, needsAttention: false },
-    })).toEqual({
-      label: 'Running',
-      tone: 'accent',
-      spinning: true,
-    });
-
-    expect(resolveConversationSavedHeaderStatus({
-      draft: false,
-      isLiveSession: false,
-      isStreaming: false,
-      conversationNeedsTakeover: true,
-      sessionMeta: { isRunning: false, isLive: true, needsAttention: false },
-    })).toEqual({
-      label: 'Live elsewhere',
-      tone: 'muted',
-    });
-
-    expect(resolveConversationSavedHeaderStatus({
-      draft: false,
-      isLiveSession: false,
-      isStreaming: false,
-      conversationNeedsTakeover: false,
-      sessionMeta: { isRunning: false, isLive: false, needsAttention: true },
-    })).toEqual({
-      label: 'Needs review',
-      tone: 'warning',
-    });
   });
 
   it('shows a loading state while the next conversation bootstrap is still fetching', () => {

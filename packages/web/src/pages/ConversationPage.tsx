@@ -242,53 +242,6 @@ export function shouldShowConversationTakeoverBanner(input: {
   return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
 }
 
-export function resolveConversationSavedHeaderStatus(input: {
-  draft: boolean;
-  isLiveSession: boolean;
-  isStreaming: boolean;
-  conversationNeedsTakeover: boolean;
-  sessionMeta?: Pick<SessionMeta, 'isLive' | 'isRunning' | 'needsAttention'> | null;
-}): {
-  label: string;
-  tone: 'accent' | 'warning' | 'muted';
-  spinning?: boolean;
-} | null {
-  if (input.draft) {
-    return null;
-  }
-
-  if (input.isStreaming || input.sessionMeta?.isRunning === true) {
-    return {
-      label: input.conversationNeedsTakeover ? 'Running elsewhere' : 'Running',
-      tone: input.conversationNeedsTakeover ? 'muted' : 'accent',
-      spinning: true,
-    };
-  }
-
-  if (input.conversationNeedsTakeover) {
-    return {
-      label: 'Live elsewhere',
-      tone: 'muted',
-    };
-  }
-
-  if (input.isLiveSession || input.sessionMeta?.isLive === true) {
-    return {
-      label: 'Live',
-      tone: 'accent',
-    };
-  }
-
-  if (input.sessionMeta?.needsAttention === true) {
-    return {
-      label: 'Needs review',
-      tone: 'warning',
-    };
-  }
-
-  return null;
-}
-
 export function resolveConversationPageTitle(input: {
   draft: boolean;
   titleOverride?: string | null;
@@ -2088,13 +2041,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : (liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null),
     [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
   );
-  const conversationHeaderStatus = useMemo(() => resolveConversationSavedHeaderStatus({
-    draft,
-    isLiveSession,
-    isStreaming: stream.isStreaming,
-    conversationNeedsTakeover,
-    sessionMeta: currentSessionMeta,
-  }), [conversationNeedsTakeover, currentSessionMeta, draft, isLiveSession, stream.isStreaming]);
   const hasDraftCwd = draftCwdValue.length > 0;
   const branchLabel = liveSessionContext?.branch ?? null;
 
@@ -4774,9 +4720,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               cwdPickBusy={conversationCwdPickBusy}
               cwdSaveBusy={conversationCwdBusy}
               cwdActionDisabledReason={conversationCwdActionDisabledReason}
-              statusLabel={conversationHeaderStatus?.label ?? null}
-              statusTone={conversationHeaderStatus?.tone}
-              statusSpinning={conversationHeaderStatus?.spinning === true}
               onPickCwd={() => { void pickConversationCwd(); }}
               onStartEditingCwd={beginConversationCwdEdit}
               onCwdDraftChange={(value) => {
