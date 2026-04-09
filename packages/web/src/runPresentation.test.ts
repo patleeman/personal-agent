@@ -383,7 +383,7 @@ describe('runPresentation', () => {
         resumePolicy: 'manual',
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
-          shellCommand: 'env -u PA_WEB_DIST -u PERSONAL_AGENT_WEB_SLOT -u PERSONAL_AGENT_WEB_REVISION npm --prefix packages/web run dev',
+          shellCommand: 'env -u PA_WEB_DIST -u PERSONAL_AGENT_WEB_REVISION npm --prefix packages/web run dev',
         },
         source: {
           type: 'cli',

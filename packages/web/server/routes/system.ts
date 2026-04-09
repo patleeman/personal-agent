@@ -130,7 +130,6 @@ function handleStatus(_req: Request, res: Response): void {
       profile,
       repoRoot: getRepoRootFn(),
       activityCount: activities.length,
-      webUiSlot: process.env.PERSONAL_AGENT_WEB_SLOT,
       webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
     });
   } catch (err) {

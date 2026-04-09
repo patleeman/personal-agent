@@ -395,32 +395,16 @@ export interface DaemonState {
 }
 
 export interface WebUiReleaseSummary {
-  slot: 'blue' | 'green';
-  slotDir: string;
   distDir: string;
   serverDir: string;
   serverEntryFile: string;
   sourceRepoRoot: string;
-  builtAt: string;
   revision?: string;
-}
-
-export interface WebUiBadReleaseSummary {
-  sourceRepoRoot: string;
-  revision: string;
-  markedBadAt: string;
-  slot?: 'blue' | 'green';
-  reason?: string;
 }
 
 export interface WebUiDeploymentSummary {
   stablePort: number;
-  activeSlot?: 'blue' | 'green';
   activeRelease?: WebUiReleaseSummary;
-  inactiveRelease?: WebUiReleaseSummary;
-  activeReleaseBad?: WebUiBadReleaseSummary;
-  inactiveReleaseBad?: WebUiBadReleaseSummary;
-  badReleases: WebUiBadReleaseSummary[];
 }
 
 export interface WebUiServiceSummary {
@@ -713,6 +697,11 @@ export interface DesktopConnectionsState {
   hosts: DesktopHostRecord[];
 }
 
+export interface DesktopNavigationState {
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
 
 export interface LiveSessionPresence {
@@ -842,7 +831,6 @@ export interface AppStatus {
   repoRoot: string;
   activityCount: number;
   projectCount: number;
-  webUiSlot?: string;
   webUiRevision?: string;
 }
 

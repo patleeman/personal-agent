@@ -13,19 +13,14 @@ import {
   type WriteMachineWebUiConfigInput,
 } from '@personal-agent/core';
 import {
-  findBadWebUiRelease,
   getWebUiServiceStatus,
   installWebUiService,
-  listBadWebUiReleases,
-  markWebUiReleaseBad,
   resolveWebUiTailscaleUrl,
   restartWebUiService,
-  rollbackWebUiDeployment,
   startWebUiService,
   stopWebUiService,
   syncWebUiTailscaleServe,
   uninstallWebUiService,
-  type WebUiBadReleaseSummary,
   type WebUiDeploymentSummary,
 } from '@personal-agent/services';
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
@@ -36,13 +31,10 @@ interface LogTail {
 }
 
 interface WebUiReleaseSummary {
-  slot: 'blue' | 'green';
-  slotDir: string;
   distDir: string;
   serverDir: string;
   serverEntryFile: string;
   sourceRepoRoot: string;
-  builtAt: string;
   revision?: string;
 }
 
@@ -64,12 +56,7 @@ interface WebUiServiceSummary {
   resumeFallbackPrompt: string;
   deployment?: {
     stablePort: number;
-    activeSlot?: 'blue' | 'green';
     activeRelease?: WebUiReleaseSummary;
-    inactiveRelease?: WebUiReleaseSummary;
-    activeReleaseBad?: WebUiBadReleaseSummary;
-    inactiveReleaseBad?: WebUiBadReleaseSummary;
-    badReleases: WebUiBadReleaseSummary[];
   };
 }
 
@@ -141,12 +128,7 @@ function toDeploymentSummary(summary: WebUiDeploymentSummary | undefined): WebUi
 
   return {
     stablePort: summary.stablePort,
-    activeSlot: summary.activeSlot,
     activeRelease: summary.activeRelease,
-    inactiveRelease: summary.inactiveRelease,
-    activeReleaseBad: findBadWebUiRelease({ release: summary.activeRelease, stablePort: summary.stablePort }),
-    inactiveReleaseBad: findBadWebUiRelease({ release: summary.inactiveRelease, stablePort: summary.stablePort }),
-    badReleases: listBadWebUiReleases({ stablePort: summary.stablePort }),
   };
 }
 
@@ -205,18 +187,8 @@ export function readWebUiState(): WebUiStateSnapshot {
     warnings.push('Web UI service is not installed. Install it from this page or run `pa ui service install`.');
   }
 
-  if (service.installed && !service.deployment?.activeRelease) {
-    warnings.push('No active blue/green web UI release is staged yet. Reinstall the web UI service to materialize one.');
-  }
-
   if (service.tailscaleServe && !service.tailscaleUrl) {
     warnings.push('Tailscale Serve is enabled, but a Tailnet URL could not be resolved from `tailscale status --json`. Ensure Tailscale is running and authenticated on this machine.');
-  }
-
-  if (service.deployment?.activeReleaseBad) {
-    warnings.push(
-      `Active web UI release ${service.deployment.activeReleaseBad.revision} is marked bad.${service.deployment.activeReleaseBad.reason ? ` Reason: ${service.deployment.activeReleaseBad.reason}` : ''}`,
-    );
   }
 
   return {
@@ -241,30 +213,6 @@ export function startWebUiServiceAndReadState(): WebUiStateSnapshot {
 
 export function restartWebUiServiceAndReadState(): WebUiStateSnapshot {
   restartWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
-}
-
-export function rollbackWebUiServiceAndReadState(input: { reason?: string } = {}): WebUiStateSnapshot {
-  const service = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
-  if (!service.installed) {
-    throw new Error('Managed web UI service is not installed. Install it before rolling back.');
-  }
-
-  rollbackWebUiDeployment({
-    stablePort: service.port,
-    reason: input.reason,
-  });
-  installWebUiService({ repoRoot: WEB_REPO_ROOT, port: service.port });
-  return readWebUiState();
-}
-
-export function markBadWebUiReleaseAndReadState(input: { slot?: 'blue' | 'green'; reason?: string } = {}): WebUiStateSnapshot {
-  const service = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
-  markWebUiReleaseBad({
-    slot: input.slot,
-    stablePort: service.port,
-    reason: input.reason,
-  });
   return readWebUiState();
 }
 

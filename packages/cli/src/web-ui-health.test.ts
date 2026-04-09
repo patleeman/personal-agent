@@ -12,7 +12,7 @@ describe('validateWebUiRoutes', () => {
       const url = String(input);
 
       if (url.endsWith('/api/status')) {
-        return new Response(JSON.stringify({ webUiSlot: 'green', webUiRevision: 'rev-123' }), {
+        return new Response(JSON.stringify({ webUiRevision: 'rev-123' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -26,7 +26,7 @@ describe('validateWebUiRoutes', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(validateWebUiRoutes('http://127.0.0.1:3741', { slot: 'green', revision: 'rev-123' })).resolves.toBeUndefined();
+    await expect(validateWebUiRoutes('http://127.0.0.1:3741', { revision: 'rev-123' })).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -35,7 +35,7 @@ describe('validateWebUiRoutes', () => {
       const url = String(input);
 
       if (url.endsWith('/api/status')) {
-        return new Response(JSON.stringify({ webUiSlot: 'blue', webUiRevision: 'rev-old' }), {
+        return new Response(JSON.stringify({ webUiRevision: 'rev-old' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         });
@@ -49,8 +49,8 @@ describe('validateWebUiRoutes', () => {
 
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(validateWebUiRoutes('http://127.0.0.1:3741', { slot: 'green', revision: 'rev-123' })).rejects.toThrow(
-      'expected slot green but got blue',
+    await expect(validateWebUiRoutes('http://127.0.0.1:3741', { revision: 'rev-123' })).rejects.toThrow(
+      'expected revision rev-123 but got rev-old',
     );
   });
 });

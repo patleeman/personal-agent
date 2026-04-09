@@ -72,8 +72,6 @@ describe('ui command help', () => {
     expect(logs.some((line) => line.includes('Web UI service'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui service install'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui service restart'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service rollback'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service mark-bad'))).toBe(true);
     expect(logs.some((line) => line.includes('Options:'))).toBe(true);
     expect(logs.some((line) => line.includes('--port <port>'))).toBe(true);
 

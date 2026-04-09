@@ -52,18 +52,13 @@ function renderSystem(initialEntry: string, element: React.ReactElement) {
               resumeFallbackPrompt: 'Resume the conversation from the latest durable state.',
               deployment: {
                 stablePort: 3741,
-                activeSlot: 'green',
                 activeRelease: {
-                  slot: 'green',
-                  slotDir: '/tmp/web-ui/green',
-                  distDir: '/tmp/web-ui/green/dist',
-                  serverDir: '/tmp/web-ui/green/server',
-                  serverEntryFile: '/tmp/web-ui/green/server/index.js',
+                  distDir: '/repo/packages/web/dist',
+                  serverDir: '/repo/packages/web/dist-server',
+                  serverEntryFile: '/repo/packages/web/dist-server/index.js',
                   sourceRepoRoot: '/repo',
-                  builtAt: '2026-03-18T17:00:00.000Z',
                   revision: '123abc',
                 },
-                badReleases: [],
               },
             },
             log: {

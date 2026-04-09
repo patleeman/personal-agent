@@ -83,7 +83,7 @@ The web app uses the current active profile.
 
 The managed service is the recommended way to run the UI when you want it to be your main interface.
 It survives terminal closes, restarts automatically, and can be restarted by `pa update`.
-When installed, updates use blue/green staging: the next release is built into the inactive slot, health-checked on a candidate port, then swapped in.
+When installed, updates rebuild the repo and restart the managed service so it serves the fresh build.
 
 The UI has a dedicated **System** page for:
 
@@ -92,7 +92,7 @@ The UI has a dedicated **System** page for:
 - `pa restart --rebuild` and `pa update` controls for the full managed application
 - recent log tails for each subsystem
 
-It also keeps an advanced **Web UI** page for service-specific controls like tailscale, blue/green release history, rollback, and mark-bad actions.
+It also keeps an advanced **Web UI** page for service-specific controls like tailscale and managed-service inspection.
 
 ## Logs
 
@@ -269,7 +269,7 @@ It gives you one place to:
 The advanced pages still exist for subsystem-specific setup and controls:
 
 - **Daemon** — managed daemon service controls, runtime status, and daemon logs
-- **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
+- **Web UI** — tailscale and advanced web UI service controls
 
 See [Daemon and Background Automation](./daemon.md).
 

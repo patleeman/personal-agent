@@ -1,10 +1,8 @@
 export interface ExpectedWebUiReleaseIdentity {
-  slot?: string;
   revision?: string;
 }
 
 interface WebUiStatusPayload {
-  webUiSlot?: unknown;
   webUiRevision?: unknown;
 }
 
@@ -13,7 +11,7 @@ function normalizeBaseUrl(baseUrl: string): string {
 }
 
 function formatExpectedRelease(expected: ExpectedWebUiReleaseIdentity): string {
-  return [expected.slot, expected.revision].filter(Boolean).join(' · ');
+  return [expected.revision].filter(Boolean).join(' · ');
 }
 
 function assertExpectedWebUiStatus(
@@ -22,10 +20,6 @@ function assertExpectedWebUiStatus(
 ): void {
   if (!expected) {
     return;
-  }
-
-  if (expected.slot && payload.webUiSlot !== expected.slot) {
-    throw new Error(`expected slot ${expected.slot} but got ${String(payload.webUiSlot ?? 'unknown')}`);
   }
 
   if (expected.revision && payload.webUiRevision !== expected.revision) {

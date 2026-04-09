@@ -35,8 +35,7 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
   }
 
   const release = data.service.deployment?.activeRelease?.revision
-    ?? data.service.deployment?.activeSlot
-    ?? 'no active release';
+    ?? 'current build unavailable';
   const companion = buildWebUiCompanionAccessSummary(data.service);
   const warningCount = data.warnings.length;
   const summary = data.service.running
@@ -117,7 +116,7 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
   const [applicationMessage, setApplicationMessage] = useState<string | null>(null);
   const [applicationError, setApplicationError] = useState<string | null>(null);
   const actionTimeoutRef = useRef<number | null>(null);
-  const restartReconnectRef = useRef<{ sawDisconnect: boolean; baselineRevision: string | null; baselineSlot: string | null } | null>(null);
+  const restartReconnectRef = useRef<{ sawDisconnect: boolean; baselineRevision: string | null } | null>(null);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -161,7 +160,6 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
     restartReconnectRef.current = {
       sawDisconnect: sseStatus !== 'open',
       baselineRevision: webUi?.service.deployment?.activeRelease?.revision ?? null,
-      baselineSlot: webUi?.service.deployment?.activeSlot ?? null,
     };
     actionTimeoutRef.current = window.setTimeout(() => {
       actionTimeoutRef.current = null;
@@ -183,11 +181,9 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
     }
 
     const currentRevision = webUi?.service.deployment?.activeRelease?.revision ?? null;
-    const currentSlot = webUi?.service.deployment?.activeSlot ?? null;
     const revisionChanged = currentRevision !== null && currentRevision !== monitor.baselineRevision;
-    const slotChanged = currentSlot !== null && currentSlot !== monitor.baselineSlot;
 
-    if (!monitor.sawDisconnect && !revisionChanged && !slotChanged) {
+    if (!monitor.sawDisconnect && !revisionChanged) {
       return;
     }
 
@@ -206,8 +202,8 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
 
     const confirmed = window.confirm(
       action === 'update'
-        ? 'Run `pa update`? This pulls the latest changes, rebuilds packages, restarts background services, and redeploys the managed web UI.'
-        : 'Run `pa restart --rebuild`? This rebuilds packages, restarts background services, and redeploys the managed web UI.',
+        ? 'Run `pa update`? This pulls the latest changes, rebuilds packages, and restarts the managed services.'
+        : 'Run `pa restart --rebuild`? This rebuilds packages and restarts the managed services.',
     );
     if (!confirmed) {
       return;
@@ -221,7 +217,7 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
       const result = action === 'update'
         ? await api.updateApplication()
         : await api.restartApplication();
-      setApplicationMessage(`${result.message} This page will reload when the new release is live.`);
+      setApplicationMessage(`${result.message} This page will reload when the restart completes.`);
       startApplicationMonitor();
     } catch (error) {
       setApplicationAction(null);
@@ -252,8 +248,7 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
       ? 'Disabled services stay visible here so operational state is still easy to inspect.'
       : 'Web UI and daemon are both reporting healthy state.';
   const webUiRelease = webUi?.service.deployment?.activeRelease?.revision
-    ?? webUi?.service.deployment?.activeSlot
-    ?? 'No active release';
+    ?? 'Current build unavailable';
   const daemonOverview = daemon
     ? daemon.runtime.running
       ? `${daemon.runtime.moduleCount} modules · queue ${daemon.runtime.queueDepth ?? 0}/${daemon.runtime.maxQueueDepth ?? 0}`

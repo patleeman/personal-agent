@@ -165,7 +165,7 @@ pa inbox read conversation:conv-123
 
 See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
 
-### `pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help]`
+### `pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|uninstall|help]`
 
 Inspect or manage the local web UI.
 
@@ -174,7 +174,7 @@ Important behavior:
 - `pa ui` with no subcommand shows status
 - `pa ui open` opens the existing UI in a browser
 - `pa ui foreground --open` starts a foreground server and opens it
-- `pa ui install|start|stop|restart|rollback|mark-bad|uninstall` manage the installed service
+- `pa ui install|start|stop|restart|uninstall` manage the installed service
 - `pa ui pairing-code` creates a short-lived pairing code for remote desktop or companion access
 
 Examples:
@@ -268,12 +268,12 @@ See [Runs](../internal-skills/runs/INDEX.md).
 ### `pa restart [--rebuild]`
 
 Restart the daemon and managed web UI service.
-Use `--rebuild` to rebuild repo packages first and blue/green redeploy the managed web UI, similar to the restart phase of `pa update` without pulling git changes.
+Use `--rebuild` to rebuild repo packages first, then restart the managed web UI so it serves the fresh build.
 
 ### `pa update [--repo-only]`
 
 Pull latest changes, refresh dependencies, rebuild packages, and restart background services.
-If the managed web UI service is installed, `pa update` stages the next web UI release into the inactive blue/green slot, health-checks it on a candidate port, then swaps the service to the new slot.
+If the managed web UI service is installed, `pa update` restarts it after the rebuild so it serves the fresh build.
 
 ## Common workflows
 

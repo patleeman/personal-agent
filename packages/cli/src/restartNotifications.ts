@@ -41,28 +41,6 @@ export interface UpdateFailureInboxEntryInput {
   error: string;
 }
 
-export interface WebUiRollbackInboxEntryInput {
-  profile: string;
-  repoRoot?: string;
-  stateRoot?: string;
-  rolledBackFromSlot: 'blue' | 'green';
-  rolledBackFromRevision?: string;
-  restoredSlot: 'blue' | 'green';
-  restoredRevision?: string;
-  reason?: string;
-  markedBadRevision?: string;
-  markedBadReason?: string;
-}
-
-export interface WebUiMarkedBadInboxEntryInput {
-  profile: string;
-  repoRoot?: string;
-  stateRoot?: string;
-  slot?: 'blue' | 'green';
-  revision: string;
-  reason?: string;
-}
-
 function sanitizeActivityIdSegment(value: string): string {
   const normalized = value
     .toLowerCase()
@@ -92,7 +70,6 @@ function resolveEffectiveActivityStateRoot(stateRoot?: string): string | undefin
 }
 
 function readWebUiContext(repoRoot: string): {
-  activeSlot?: 'blue' | 'green';
   activeRevision?: string;
   serviceUrl?: string;
   serviceInspectionError?: string;
@@ -100,7 +77,6 @@ function readWebUiContext(repoRoot: string): {
   try {
     const serviceStatus = getWebUiServiceStatus({ repoRoot });
     return {
-      activeSlot: serviceStatus.deployment?.activeSlot,
       activeRevision: serviceStatus.deployment?.activeRelease?.revision,
       serviceUrl: serviceStatus.url,
     };
@@ -136,12 +112,8 @@ function writeDeploymentInboxEntry(input: {
   });
 }
 
-function buildApplicationSummary(prefix: string, activeSlot?: 'blue' | 'green', revision?: string): string {
+function buildApplicationSummary(prefix: string, revision?: string): string {
   const parts = [prefix];
-
-  if (activeSlot) {
-    parts.push(`${activeSlot} live`);
-  }
 
   if (revision && revision.trim().length > 0) {
     parts.push(revision.trim());
@@ -156,7 +128,6 @@ function buildApplicationCompletionDetails(input: {
   intro: string;
   daemonStatus: string;
   webUiStatus: string;
-  activeSlot?: 'blue' | 'green';
   activeRevision?: string;
   serviceUrl?: string;
   serviceInspectionError?: string;
@@ -168,7 +139,6 @@ function buildApplicationCompletionDetails(input: {
     `- Completed: ${input.completedAt}`,
     `- Web UI: ${input.webUiStatus}`,
     `- Daemon: ${input.daemonStatus}`,
-    input.activeSlot ? `- Active slot: ${input.activeSlot}` : undefined,
     input.activeRevision ? `- Active release: ${input.activeRevision}` : undefined,
     input.serviceUrl ? `- URL: ${input.serviceUrl}` : undefined,
     input.serviceInspectionError ? `- Service inspection: failed (${input.serviceInspectionError})` : undefined,
@@ -181,7 +151,6 @@ function buildApplicationFailureDetails(input: {
   intro: string;
   phase?: string;
   error: string;
-  activeSlot?: 'blue' | 'green';
   activeRevision?: string;
   serviceUrl?: string;
   serviceInspectionError?: string;
@@ -193,8 +162,7 @@ function buildApplicationFailureDetails(input: {
     `- Failed: ${input.failedAt}`,
     input.phase ? `- Phase: ${input.phase}` : undefined,
     `- Error: ${input.error}`,
-    input.activeSlot ? `- Last active slot: ${input.activeSlot}` : undefined,
-    input.activeRevision ? `- Last active release: ${input.activeRevision}` : undefined,
+    input.activeRevision ? `- Active release: ${input.activeRevision}` : undefined,
     input.serviceUrl ? `- URL: ${input.serviceUrl}` : undefined,
     input.serviceInspectionError ? `- Service inspection: failed (${input.serviceInspectionError})` : undefined,
   ].filter((line): line is string => typeof line === 'string');
@@ -212,14 +180,13 @@ export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEn
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'application-restart',
-    summary: buildApplicationSummary('Application restart complete', serviceContext.activeSlot, serviceContext.activeRevision),
+    summary: buildApplicationSummary('Application restart complete', serviceContext.activeRevision),
     details: buildApplicationCompletionDetails({
       requestedAt: input.requestedAt,
       completedAt,
-      intro: 'Managed web UI blue/green cutover is complete.',
+      intro: 'Managed web UI restart is complete.',
       daemonStatus: input.daemonStatus,
       webUiStatus: input.webUiStatus,
-      activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,
       serviceInspectionError: serviceContext.serviceInspectionError,
@@ -246,7 +213,6 @@ export function writeRestartFailureInboxEntry(input: RestartFailureInboxEntryInp
       intro: 'Managed application restart did not complete.',
       phase: input.phase,
       error: input.error,
-      activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,
       serviceInspectionError: serviceContext.serviceInspectionError,
@@ -266,14 +232,13 @@ export function writeUpdateCompletionInboxEntry(input: UpdateCompletionInboxEntr
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'application-update',
-    summary: buildApplicationSummary('Application update complete', serviceContext.activeSlot, serviceContext.activeRevision),
+    summary: buildApplicationSummary('Application update complete', serviceContext.activeRevision),
     details: buildApplicationCompletionDetails({
       requestedAt: input.requestedAt,
       completedAt,
-      intro: 'Managed application update and web UI blue/green cutover are complete.',
+      intro: 'Managed application update is complete.',
       daemonStatus: input.daemonStatus,
       webUiStatus: input.webUiStatus,
-      activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,
       serviceInspectionError: serviceContext.serviceInspectionError,
@@ -300,81 +265,9 @@ export function writeUpdateFailureInboxEntry(input: UpdateFailureInboxEntryInput
       intro: 'Managed application update did not complete.',
       phase: input.phase,
       error: input.error,
-      activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,
       serviceInspectionError: serviceContext.serviceInspectionError,
     }),
-  });
-}
-
-export function writeWebUiRollbackInboxEntry(input: WebUiRollbackInboxEntryInput): string {
-  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
-  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
-  const completedAt = new Date().toISOString();
-  const serviceContext = readWebUiContext(repoRoot);
-
-  const details = [
-    'Managed web UI rollback completed.',
-    '',
-    `- Completed: ${completedAt}`,
-    `- Rolled back from: ${input.rolledBackFromSlot}${input.rolledBackFromRevision ? ` · ${input.rolledBackFromRevision}` : ''}`,
-    `- Restored release: ${input.restoredSlot}${input.restoredRevision ? ` · ${input.restoredRevision}` : ''}`,
-    input.reason ? `- Reason: ${input.reason}` : undefined,
-    input.markedBadRevision ? `- Marked bad: ${input.markedBadRevision}${input.markedBadReason ? ` · ${input.markedBadReason}` : ''}` : undefined,
-    serviceContext.serviceUrl ? `- URL: ${serviceContext.serviceUrl}` : undefined,
-    serviceContext.activeSlot ? `- Active slot: ${serviceContext.activeSlot}` : undefined,
-    serviceContext.activeRevision ? `- Active release: ${serviceContext.activeRevision}` : undefined,
-    serviceContext.serviceInspectionError ? `- Service inspection: failed (${serviceContext.serviceInspectionError})` : undefined,
-  ].filter((line): line is string => typeof line === 'string');
-
-  const summaryParts = ['Web UI rollback complete', `${input.restoredSlot} live`];
-  if (input.restoredRevision) {
-    summaryParts.push(input.restoredRevision);
-  }
-
-  return writeDeploymentInboxEntry({
-    repoRoot,
-    stateRoot,
-    profile: input.profile,
-    createdAt: completedAt,
-    idPrefix: 'web-ui-rollback',
-    summary: summaryParts.join(' · '),
-    details,
-  });
-}
-
-export function writeWebUiMarkedBadInboxEntry(input: WebUiMarkedBadInboxEntryInput): string {
-  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
-  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
-  const completedAt = new Date().toISOString();
-  const serviceContext = readWebUiContext(repoRoot);
-
-  const details = [
-    'The active managed web UI release was marked bad.',
-    '',
-    `- Completed: ${completedAt}`,
-    input.slot ? `- Slot: ${input.slot}` : undefined,
-    `- Revision: ${input.revision}`,
-    input.reason ? `- Reason: ${input.reason}` : undefined,
-    serviceContext.serviceUrl ? `- URL: ${serviceContext.serviceUrl}` : undefined,
-    serviceContext.activeSlot ? `- Active slot: ${serviceContext.activeSlot}` : undefined,
-    serviceContext.activeRevision ? `- Active release: ${serviceContext.activeRevision}` : undefined,
-    serviceContext.serviceInspectionError ? `- Service inspection: failed (${serviceContext.serviceInspectionError})` : undefined,
-  ].filter((line): line is string => typeof line === 'string');
-
-  const summaryParts = ['Web UI release marked bad', input.revision];
-  if (input.slot) {
-    summaryParts.push(input.slot);
-  }
-
-  return writeDeploymentInboxEntry({
-    repoRoot,
-    stateRoot,
-    profile: input.profile,
-    createdAt: completedAt,
-    idPrefix: 'web-ui-mark-bad',
-    summary: summaryParts.join(' · '),
-    details,
   });
 }

@@ -154,13 +154,12 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
 
 function buildWebUiServiceEnvironment(
   options: Required<WebUiServiceOptions>,
-  release: { distDir: string; slot: string; revision?: string },
+  release: { distDir: string; revision?: string },
 ): Record<string, string> {
   const environment: Record<string, string> = {
     PERSONAL_AGENT_REPO_ROOT: resolve(options.repoRoot),
     PA_WEB_PORT: String(options.port),
     PA_WEB_DIST: release.distDir,
-    PERSONAL_AGENT_WEB_SLOT: release.slot,
   };
 
   if (release.revision) {
@@ -281,10 +280,11 @@ function getLaunchdPlistPath(label: string): string {
 }
 
 function normalizeWebUiServiceOptions(options: WebUiServiceOptions = {}): Required<WebUiServiceOptions> {
-  const deployment = getWebUiDeploymentSummary({ stablePort: options.port });
+  const repoRoot = resolve(options.repoRoot ?? process.cwd());
+  const deployment = getWebUiDeploymentSummary({ repoRoot, stablePort: options.port });
 
   return {
-    repoRoot: resolve(options.repoRoot ?? process.cwd()),
+    repoRoot,
     port: options.port ?? deployment.stablePort,
   };
 }
@@ -365,7 +365,7 @@ function uninstallLaunchdDaemonService(): ManagedDaemonServiceInfo {
 
 function installLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
   const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const deployment = getWebUiDeploymentSummary({ stablePort: normalizedOptions.port });
+  const deployment = getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port });
   const release = deployment.activeRelease ?? ensureActiveWebUiRelease({
     repoRoot: normalizedOptions.repoRoot,
     stablePort: normalizedOptions.port,
@@ -405,7 +405,7 @@ function installLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiSer
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
   };
 }
 
@@ -425,7 +425,7 @@ function getLaunchdWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiS
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
     installed: existsSync(manifestPath),
     running: isLaunchdServiceRunning(status),
   };
@@ -451,7 +451,7 @@ function uninstallLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiS
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
   };
 }
 
@@ -596,7 +596,7 @@ function uninstallSystemdDaemonService(): ManagedDaemonServiceInfo {
 
 function installSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
   const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const deployment = getWebUiDeploymentSummary({ stablePort: normalizedOptions.port });
+  const deployment = getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port });
   const release = deployment.activeRelease ?? ensureActiveWebUiRelease({
     repoRoot: normalizedOptions.repoRoot,
     stablePort: normalizedOptions.port,
@@ -627,7 +627,7 @@ function installSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiSer
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
   };
 }
 
@@ -645,7 +645,7 @@ function getSystemdWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiS
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
     installed: existsSync(manifestPath),
     running: (status.status ?? 1) === 0 && activeState === 'active',
   };
@@ -671,7 +671,7 @@ function uninstallSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiS
     repoRoot: normalizedOptions.repoRoot,
     port: normalizedOptions.port,
     url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
+    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
   };
 }
 

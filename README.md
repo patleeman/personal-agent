@@ -109,7 +109,7 @@ pa update --repo-only       # Pull git changes + skip dependency refresh + rebui
 ```
 
 > `pa update` runs `npm install`, updates `@mariozechner/pi-coding-agent@latest` in the repo root, verifies repo-local Pi, and runs `npm run build`.
-> If the managed web UI service is installed, `pa update` also stages and health-checks the inactive blue/green web UI slot before swapping the service to it.
+> If the managed web UI service is installed, `pa update` restarts it after the rebuild so it serves the fresh build output.
 
 ### Profile management
 

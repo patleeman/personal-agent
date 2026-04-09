@@ -25,20 +25,8 @@ export {
   type SyncWebUiTailscaleServeInput,
 } from './tailscale-serve.js';
 export {
-  activateWebUiSlot,
   ensureActiveWebUiRelease,
-  ensureWebUiReleaseNotMarkedBad,
-  findBadWebUiRelease,
-  getInactiveWebUiSlot,
   getWebUiDeploymentSummary,
-  getWebUiSlotHealthPort,
-  listBadWebUiReleases,
-  markWebUiReleaseBad,
-  rollbackWebUiDeployment,
-  stageWebUiRelease,
-  type RollbackWebUiDeploymentResult,
-  type WebUiBadReleaseSummary,
   type WebUiDeploymentSummary,
   type WebUiReleaseSummary,
-  type WebUiSlotName,
 } from './web-ui-deploy.js';

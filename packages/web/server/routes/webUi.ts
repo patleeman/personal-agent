@@ -1,10 +1,9 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
-import { readWebUiState, installWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
-import { writeInternalAttentionEntry } from '../shared/internalAttention.js';
+import { readWebUiState, installWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
-import { logError, logWarn } from '../middleware/index.js';
+import { logError } from '../middleware/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';
@@ -35,10 +34,6 @@ let getWebUiSettingsFileFn: () => string = () => {
   throw new Error('getWebUiSettingsFile not initialized for web-ui routes');
 };
 
-let getStateRootFn: () => string = () => {
-  throw new Error('getStateRoot not initialized for web-ui routes');
-};
-
 let buildLiveSessionResourceOptionsFn: () => LiveSessionResourceOptions = () => {
   throw new Error('buildLiveSessionResourceOptions not initialized for web-ui routes');
 };
@@ -48,12 +43,11 @@ let buildLiveSessionExtensionFactoriesFn: () => LiveSessionExtensionFactories = 
 };
 
 function initializeWebUiRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
   getWebUiSettingsFileFn = context.getSettingsFile;
-  getStateRootFn = context.getStateRoot;
   getDefaultWebCwdFn = context.getDefaultWebCwd;
   buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
   buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
@@ -218,79 +212,6 @@ function handleWebUiServiceRestart(_req: Request, res: Response): void {
   }
 }
 
-function handleWebUiServiceRollback(req: Request, res: Response): void {
-  try {
-    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
-    const snapshot = rollbackWebUiServiceAndReadState({ reason });
-    invalidateAppTopics('webUi');
-    try {
-      writeInternalAttentionEntry({
-        repoRoot: getRepoRootFn(),
-        stateRoot: getStateRootFn(),
-        profile: getCurrentProfileFn(),
-        kind: 'deployment',
-        summary: 'Web UI rollback complete.',
-        details: [
-          `Completed: ${new Date().toISOString()}`,
-          snapshot.service.deployment?.activeSlot ? `Active slot: ${snapshot.service.deployment.activeSlot}` : undefined,
-          snapshot.service.deployment?.activeRelease?.revision ? `Active release: ${snapshot.service.deployment.activeRelease.revision}` : undefined,
-          reason ? `Reason: ${reason}` : undefined,
-        ].filter((line): line is string => typeof line === 'string').join('\n'),
-        idPrefix: 'web-ui-rollback',
-      });
-    } catch (activityError) {
-      logWarn('failed to write web ui rollback activity', {
-        message: activityError instanceof Error ? activityError.message : String(activityError),
-      });
-    }
-    res.json(snapshot);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-function handleWebUiServiceMarkBad(req: Request, res: Response): void {
-  try {
-    const slot = req.body?.slot === 'blue' || req.body?.slot === 'green'
-      ? req.body.slot
-      : undefined;
-    const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
-    const snapshot = markBadWebUiReleaseAndReadState({ slot, reason });
-    invalidateAppTopics('webUi');
-    try {
-      writeInternalAttentionEntry({
-        repoRoot: getRepoRootFn(),
-        stateRoot: getStateRootFn(),
-        profile: getCurrentProfileFn(),
-        kind: 'deployment',
-        summary: 'Web UI release marked bad.',
-        details: [
-          `Completed: ${new Date().toISOString()}`,
-          slot ? `Slot: ${slot}` : undefined,
-          snapshot.service.deployment?.activeRelease?.revision ? `Active release: ${snapshot.service.deployment.activeRelease.revision}` : undefined,
-          reason ? `Reason: ${reason}` : undefined,
-        ].filter((line): line is string => typeof line === 'string').join('\n'),
-        idPrefix: 'web-ui-mark-bad',
-      });
-    } catch (activityError) {
-      logWarn('failed to write web ui mark-bad activity', {
-        message: activityError instanceof Error ? activityError.message : String(activityError),
-      });
-    }
-    res.json(snapshot);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
 function handleWebUiServiceStop(_req: Request, res: Response): void {
   try {
     const state = stopWebUiServiceAndReadState();
@@ -437,15 +358,13 @@ async function handleActivityStart(req: Request, res: Response): Promise<void> {
 
 export function registerWebUiRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
 ): void {
   initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);
   router.post('/api/web-ui/service/install', handleWebUiServiceInstall);
   router.post('/api/web-ui/service/start', handleWebUiServiceStart);
   router.post('/api/web-ui/service/restart', handleWebUiServiceRestart);
-  router.post('/api/web-ui/service/rollback', handleWebUiServiceRollback);
-  router.post('/api/web-ui/service/mark-bad', handleWebUiServiceMarkBad);
   router.post('/api/web-ui/service/stop', handleWebUiServiceStop);
   router.post('/api/web-ui/service/uninstall', handleWebUiServiceUninstall);
   router.post('/api/web-ui/config', handleWebUiConfigPatch);
@@ -456,7 +375,7 @@ export function registerWebUiRoutes(
 
 export function registerCompanionWebUiRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getStateRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
 ): void {
   initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);

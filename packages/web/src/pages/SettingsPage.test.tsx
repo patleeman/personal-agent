@@ -108,18 +108,13 @@ describe('SettingsPage', () => {
           resumeFallbackPrompt: 'Continue where you left off.',
           deployment: {
             stablePort: 3000,
-            activeSlot: 'blue',
             activeRelease: {
-              slot: 'blue',
-              slotDir: '/tmp/releases/blue',
-              distDir: '/tmp/releases/blue/dist',
-              serverDir: '/tmp/releases/blue/server',
-              serverEntryFile: '/tmp/releases/blue/server/index.js',
+              distDir: '/Users/patrick/workingdir/personal-agent/packages/web/dist',
+              serverDir: '/Users/patrick/workingdir/personal-agent/packages/web/dist-server',
+              serverEntryFile: '/Users/patrick/workingdir/personal-agent/packages/web/dist-server/index.js',
               sourceRepoRoot: '/Users/patrick/workingdir/personal-agent',
-              builtAt: '2026-03-28T00:00:00.000Z',
               revision: 'abc123',
             },
-            badReleases: [],
           },
         },
         log: {
@@ -223,7 +218,6 @@ describe('SettingsPage', () => {
           repoRoot: '/Users/patrick/workingdir/personal-agent',
           activityCount: 3,
           projectCount: 5,
-          webUiSlot: 'blue',
           webUiRevision: 'abc123',
         });
       }

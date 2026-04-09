@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,8 +18,6 @@ import {
   writeRestartFailureInboxEntry,
   writeUpdateCompletionInboxEntry,
   writeUpdateFailureInboxEntry,
-  writeWebUiMarkedBadInboxEntry,
-  writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
 
 const tempDirs: string[] = [];
@@ -43,7 +41,7 @@ afterEach(async () => {
 });
 
 describe('restart notification inbox entries', () => {
-  it('writes a deployment inbox item with blue/green cutover details', () => {
+  it('writes a deployment inbox item with restart details', () => {
     const stateRoot = createTempDir('pa-restart-notify-state-');
     const repoRoot = createTempDir('pa-restart-notify-repo-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -51,22 +49,19 @@ describe('restart notification inbox entries', () => {
     getWebUiServiceStatusMock.mockReturnValue({
       url: 'http://127.0.0.1:3741',
       deployment: {
-        activeSlot: 'green',
         activeRelease: {
           revision: 'rev-123',
         },
       },
     });
 
-    const path = writeRestartCompletionInboxEntry({
+    writeRestartCompletionInboxEntry({
       profile: 'datadog',
       repoRoot,
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: managed service mock-daemon)',
-      webUiStatus: 'blue/green swapped blue → green (rev-123)',
+      webUiStatus: 'restarted (mock-web-ui @ http://127.0.0.1:3741)',
     });
-
-    expect(existsSync(path)).toBe(true);
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
     expect(entries).toHaveLength(1);
@@ -74,10 +69,9 @@ describe('restart notification inbox entries', () => {
       profile: 'datadog',
       kind: 'deployment',
       notificationState: 'none',
-      summary: 'Application restart complete · green live · rev-123',
+      summary: 'Application restart complete · rev-123',
     });
-    expect(entries[0]?.entry.details).toContain('Managed web UI blue/green cutover is complete.');
-    expect(entries[0]?.entry.details).toContain('- Active slot: green');
+    expect(entries[0]?.entry.details).toContain('Managed web UI restart is complete.');
     expect(entries[0]?.entry.details).toContain('- Active release: rev-123');
     expect(entries[0]?.entry.details).toContain('- URL: http://127.0.0.1:3741');
   });
@@ -90,7 +84,6 @@ describe('restart notification inbox entries', () => {
     getWebUiServiceStatusMock.mockReturnValue({
       url: 'http://127.0.0.1:3741',
       deployment: {
-        activeSlot: 'blue',
         activeRelease: {
           revision: 'rev-old',
         },
@@ -110,11 +103,10 @@ describe('restart notification inbox entries', () => {
     expect(entries[0]?.entry.summary).toBe('Application restart failed');
     expect(entries[0]?.entry.details).toContain('- Phase: rebuild packages');
     expect(entries[0]?.entry.details).toContain('- Error: npm run build failed');
-    expect(entries[0]?.entry.details).toContain('- Last active slot: blue');
-    expect(entries[0]?.entry.details).toContain('- Last active release: rev-old');
+    expect(entries[0]?.entry.details).toContain('- Active release: rev-old');
   });
 
-  it('writes an update completion inbox item with blue/green cutover details', () => {
+  it('writes an update completion inbox item with restart details', () => {
     const stateRoot = createTempDir('pa-update-notify-state-');
     const repoRoot = createTempDir('pa-update-notify-repo-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -122,7 +114,6 @@ describe('restart notification inbox entries', () => {
     getWebUiServiceStatusMock.mockReturnValue({
       url: 'http://127.0.0.1:3741',
       deployment: {
-        activeSlot: 'blue',
         activeRelease: {
           revision: 'rev-777',
         },
@@ -134,14 +125,13 @@ describe('restart notification inbox entries', () => {
       repoRoot,
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: managed service mock-daemon)',
-      webUiStatus: 'blue/green swapped green → blue (rev-777)',
+      webUiStatus: 'restarted (mock-web-ui @ http://127.0.0.1:3741)',
     });
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry.summary).toBe('Application update complete · blue live · rev-777');
-    expect(entries[0]?.entry.details).toContain('Managed application update and web UI blue/green cutover are complete.');
-    expect(entries[0]?.entry.details).toContain('- Active slot: blue');
+    expect(entries[0]?.entry.summary).toBe('Application update complete · rev-777');
+    expect(entries[0]?.entry.details).toContain('Managed application update is complete.');
     expect(entries[0]?.entry.details).toContain('- Active release: rev-777');
   });
 
@@ -153,7 +143,6 @@ describe('restart notification inbox entries', () => {
     getWebUiServiceStatusMock.mockReturnValue({
       url: 'http://127.0.0.1:3741',
       deployment: {
-        activeSlot: 'green',
         activeRelease: {
           revision: 'rev-before-update',
         },
@@ -173,74 +162,7 @@ describe('restart notification inbox entries', () => {
     expect(entries[0]?.entry.summary).toBe('Application update failed');
     expect(entries[0]?.entry.details).toContain('- Phase: pull latest changes from git');
     expect(entries[0]?.entry.details).toContain('- Error: git pull failed');
-    expect(entries[0]?.entry.details).toContain('- Last active slot: green');
-    expect(entries[0]?.entry.details).toContain('- Last active release: rev-before-update');
-  });
-
-  it('writes a rollback inbox item with restored release details', () => {
-    const stateRoot = createTempDir('pa-restart-notify-state-');
-    const repoRoot = createTempDir('pa-restart-notify-repo-');
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-
-    getWebUiServiceStatusMock.mockReturnValue({
-      url: 'http://127.0.0.1:3741',
-      deployment: {
-        activeSlot: 'blue',
-        activeRelease: {
-          revision: 'rev-101',
-        },
-      },
-    });
-
-    writeWebUiRollbackInboxEntry({
-      profile: 'datadog',
-      repoRoot,
-      rolledBackFromSlot: 'green',
-      rolledBackFromRevision: 'rev-202',
-      restoredSlot: 'blue',
-      restoredRevision: 'rev-101',
-      reason: 'candidate checks regressed',
-      markedBadRevision: 'rev-202',
-      markedBadReason: 'candidate checks regressed',
-    });
-
-    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry.summary).toBe('Web UI rollback complete · blue live · rev-101');
-    expect(entries[0]?.entry.details).toContain('- Rolled back from: green · rev-202');
-    expect(entries[0]?.entry.details).toContain('- Restored release: blue · rev-101');
-    expect(entries[0]?.entry.details).toContain('- Marked bad: rev-202 · candidate checks regressed');
-  });
-
-  it('writes a mark-bad inbox item for the active release', () => {
-    const stateRoot = createTempDir('pa-restart-notify-state-');
-    const repoRoot = createTempDir('pa-restart-notify-repo-');
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-
-    getWebUiServiceStatusMock.mockReturnValue({
-      url: 'http://127.0.0.1:3741',
-      deployment: {
-        activeSlot: 'green',
-        activeRelease: {
-          revision: 'rev-404',
-        },
-      },
-    });
-
-    writeWebUiMarkedBadInboxEntry({
-      profile: 'datadog',
-      repoRoot,
-      slot: 'green',
-      revision: 'rev-404',
-      reason: 'manual rollback requested',
-    });
-
-    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry.summary).toBe('Web UI release marked bad · rev-404 · green');
-    expect(entries[0]?.entry.details).toContain('- Revision: rev-404');
-    expect(entries[0]?.entry.details).toContain('- Reason: manual rollback requested');
-    expect(entries[0]?.entry.details).toContain('- Active slot: green');
+    expect(entries[0]?.entry.details).toContain('- Active release: rev-before-update');
   });
 
   it('still writes a restart completion inbox item when post-restart service inspection fails', () => {
@@ -255,7 +177,7 @@ describe('restart notification inbox entries', () => {
       profile: 'datadog',
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: detached)',
-      webUiStatus: 'blue/green swapped blue → green',
+      webUiStatus: 'restarted (mock-web-ui @ http://127.0.0.1:3741)',
     });
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });

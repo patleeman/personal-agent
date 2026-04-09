@@ -46,13 +46,12 @@ function buildPanel(selected: SystemPanelData) {
       const { data } = selected;
       const running = data.service.running;
       const release = data.service.deployment?.activeRelease?.revision
-        ?? data.service.deployment?.activeSlot
-        ?? 'No active release';
+        ?? 'Current build unavailable';
       const companion = buildWebUiCompanionAccessSummary(data.service);
 
       return {
         title: 'Web UI',
-        description: 'Managed frontend service and current release slot.',
+        description: 'Managed frontend service and current build metadata.',
         tone: systemTone(running, data.warnings.length, data.service.error),
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
