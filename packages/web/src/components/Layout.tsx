@@ -17,6 +17,18 @@ import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached 
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../liveSessionWarmth';
 
+const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+
+type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail';
+
+function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
+  return value === 'toggle-sidebar' || value === 'toggle-right-rail';
+}
+
+function hasBlockingOverlayOpen(): boolean {
+  return document.querySelector('.ui-overlay-backdrop') !== null;
+}
+
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
 interface ResizeOptions {
@@ -438,6 +450,29 @@ export function Layout() {
         toggleRail: () => setRailOpen((current) => !current),
       }
     : null);
+
+  useEffect(() => {
+    function handleDesktopShortcut(event: Event) {
+      if (hasBlockingOverlayOpen()) {
+        return;
+      }
+
+      const action = (event as CustomEvent<{ action?: unknown }>).detail?.action;
+      if (!isDesktopLayoutShortcutAction(action)) {
+        return;
+      }
+
+      if (action === 'toggle-sidebar') {
+        setSidebarOpen((current) => !current);
+        return;
+      }
+
+      activeRightRailControl?.toggleRail();
+    }
+
+    window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
+    return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
+  }, [activeRightRailControl]);
 
   return (
     <>

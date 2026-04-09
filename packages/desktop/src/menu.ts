@@ -6,6 +6,9 @@ export interface DesktopApplicationMenuActions {
   onCloseConversation: () => void;
   onPreviousConversation: () => void;
   onNextConversation: () => void;
+  onToggleConversationPin: () => void;
+  onToggleSidebar: () => void;
+  onToggleRightRail: () => void;
   onHideWindow: () => void;
   onConnections: () => void;
   onCheckForUpdates: () => void;
@@ -53,6 +56,11 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Next Conversation',
         accelerator: 'CommandOrControl+]',
         click: actions.onNextConversation,
+      },
+      {
+        label: 'Toggle Pinned',
+        accelerator: 'CommandOrControl+Alt+P',
+        click: actions.onToggleConversationPin,
       },
       ...(isMac
         ? [
@@ -118,6 +126,17 @@ export function buildDesktopApplicationMenuTemplate(
       { role: 'resetZoom' },
       { role: 'zoomIn' },
       { role: 'zoomOut' },
+      { type: 'separator' },
+      {
+        label: 'Toggle Sidebar',
+        accelerator: 'CommandOrControl+\\',
+        click: actions.onToggleSidebar,
+      },
+      {
+        label: 'Toggle Right Rail',
+        accelerator: 'CommandOrControl+Shift+\\',
+        click: actions.onToggleRightRail,
+      },
       { type: 'separator' },
       { role: 'togglefullscreen' },
     ],

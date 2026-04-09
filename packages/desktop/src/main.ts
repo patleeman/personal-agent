@@ -62,6 +62,15 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNextConversation: () => {
       windowController?.sendShortcutToFocusedWindow('next-conversation');
     },
+    onToggleConversationPin: () => {
+      windowController?.sendShortcutToFocusedWindow('toggle-conversation-pin');
+    },
+    onToggleSidebar: () => {
+      windowController?.sendShortcutToFocusedWindow('toggle-sidebar');
+    },
+    onToggleRightRail: () => {
+      windowController?.sendShortcutToFocusedWindow('toggle-right-rail');
+    },
     onHideWindow: () => {
       windowController?.hideFocusedWindow();
     },

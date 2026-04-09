@@ -18,7 +18,13 @@ export interface DesktopNavigationState {
   canGoForward: boolean;
 }
 
-export type DesktopRendererShortcutAction = 'close-conversation' | 'previous-conversation' | 'next-conversation';
+export type DesktopRendererShortcutAction =
+  | 'close-conversation'
+  | 'previous-conversation'
+  | 'next-conversation'
+  | 'toggle-sidebar'
+  | 'toggle-right-rail'
+  | 'toggle-conversation-pin';
 
 type ManagedWindowRole = 'main' | 'remote';
 

@@ -64,7 +64,11 @@ const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/automations', '/scheduled', '/tools', '/instructions'] as const;
 
-type DesktopConversationShortcutAction = 'close-conversation' | 'previous-conversation' | 'next-conversation';
+type DesktopConversationShortcutAction =
+  | 'close-conversation'
+  | 'previous-conversation'
+  | 'next-conversation'
+  | 'toggle-conversation-pin';
 
 type PointerPosition = { x: number; y: number };
 
@@ -227,7 +231,10 @@ function getNewConversationHotkeyLabel(): string {
 }
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
-  return value === 'close-conversation' || value === 'previous-conversation' || value === 'next-conversation';
+  return value === 'close-conversation'
+    || value === 'previous-conversation'
+    || value === 'next-conversation'
+    || value === 'toggle-conversation-pin';
 }
 
 function TopNavItem({
@@ -889,6 +896,22 @@ export function Sidebar() {
     }
   }
 
+  function handleTogglePinnedActiveConversation() {
+    if (location.pathname === DRAFT_CONVERSATION_ROUTE || !activeConversationId) {
+      return;
+    }
+
+    if (pinnedSessions.some((session) => session.id === activeConversationId)) {
+      handleUnpinConversation(activeConversationId);
+      return;
+    }
+
+    pinSession(activeConversationId);
+    if (draggingSessionId === activeConversationId) {
+      clearDragState();
+    }
+  }
+
   useEffect(() => {
     if (getDesktopBridge() === null) {
       return;
@@ -909,6 +932,11 @@ export function Sidebar() {
         return;
       }
 
+      if (action === 'toggle-conversation-pin') {
+        handleTogglePinnedActiveConversation();
+        return;
+      }
+
       if (action === 'previous-conversation') {
         navigateConversation(-1);
         return;
@@ -919,7 +947,7 @@ export function Sidebar() {
 
     window.addEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [handleCloseActiveConversation, navigateConversation]);
+  }, [handleCloseActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
 
   function handlePinConversation(sessionId: string) {
     pinSession(sessionId);

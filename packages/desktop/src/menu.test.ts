@@ -8,6 +8,9 @@ function createActions() {
     onCloseConversation: vi.fn(),
     onPreviousConversation: vi.fn(),
     onNextConversation: vi.fn(),
+    onToggleConversationPin: vi.fn(),
+    onToggleSidebar: vi.fn(),
+    onToggleRightRail: vi.fn(),
     onHideWindow: vi.fn(),
     onConnections: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -44,10 +47,17 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
+      expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
     ]));
     expect(fileMenu?.submenu).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Connections…' }),
       expect.objectContaining({ role: 'close' }),
+    ]));
+
+    const viewMenu = template[3];
+    expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
+      expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
     ]));
 
     const windowMenu = template[4];
@@ -76,10 +86,17 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
+      expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
       expect.objectContaining({ label: 'Connections…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Backend' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'Alt+F4' }),
+    ]));
+
+    const viewMenu = template[2];
+    expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
+      expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
     ]));
 
     const windowMenu = template[3];
