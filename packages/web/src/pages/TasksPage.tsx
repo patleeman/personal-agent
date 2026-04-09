@@ -397,23 +397,21 @@ function AutomationsOverview({
 
   return (
     <div className="h-full overflow-y-auto px-8 py-8">
-      <div className="mx-auto max-w-6xl space-y-10">
+      <div className="mx-auto max-w-6xl space-y-8">
         <div className="flex items-start justify-between gap-6">
-          <div className="max-w-3xl space-y-3">
-            <h1 className="text-[48px] font-semibold tracking-[-0.045em] text-primary">Automations</h1>
-            <p className="text-[17px] leading-7 text-secondary">
-              Automate recurring work with scheduled prompts. Keep lightweight status checks, reports, and repo maintenance in one place.
+          <div className="max-w-2xl space-y-2">
+            <h1 className="text-[40px] font-semibold tracking-[-0.04em] text-primary">Automations</h1>
+            <p className="text-[15px] leading-6 text-secondary">
+              Scheduled prompts for recurring work.
             </p>
           </div>
           <ToolbarButton className="rounded-full px-4 py-2 text-[13px] text-primary" onClick={onCreate}>+ New automation</ToolbarButton>
         </div>
 
         {tasks.length === 0 ? (
-          <div className="max-w-2xl space-y-4 py-10">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-dim">No automations yet</p>
-            <h2 className="text-[32px] font-semibold tracking-tight text-primary">Create the first scheduled workflow.</h2>
-            <p className="text-[15px] leading-7 text-secondary">Start with a title, a prompt, a working directory, and a schedule. You can run it now or let it fire on its own.</p>
-            <ToolbarButton onClick={onCreate}>Create automation</ToolbarButton>
+          <div className="max-w-xl space-y-2 py-6">
+            <h2 className="text-[22px] font-semibold tracking-tight text-primary">No automations yet.</h2>
+            <p className="text-[14px] leading-6 text-secondary">Use New automation to create one.</p>
           </div>
         ) : (
           <div className="overflow-x-auto rounded-[22px] border border-border-subtle bg-surface/35">

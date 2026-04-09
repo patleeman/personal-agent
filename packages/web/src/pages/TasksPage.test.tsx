@@ -73,6 +73,39 @@ describe('TasksPage', () => {
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
   });
 
+  it('renders a leaner empty state copy', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            activity: null,
+            alerts: null,
+            projects: null,
+            sessions: null,
+            runs: null,
+            tasks: [],
+            setActivity: vi.fn(),
+            setAlerts: vi.fn(),
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Scheduled prompts for recurring work.');
+    expect(html).toContain('No automations yet.');
+    expect(html).toContain('Use New automation to create one.');
+    expect(html).not.toContain('Create the first scheduled workflow.');
+    expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');
+  });
+
   it('renders the create automation form in a modal when requested', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations?new=1']}>
@@ -102,6 +135,6 @@ describe('TasksPage', () => {
     expect(html).toContain('aria-label="Create automation"');
     expect(html).toContain('New automation');
     expect(html).toContain('Choose…');
-    expect(html).not.toContain('No automations yet.');
+    expect(html).toContain('No automations yet.');
   });
 });
