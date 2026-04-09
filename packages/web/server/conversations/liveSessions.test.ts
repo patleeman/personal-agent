@@ -17,6 +17,7 @@ import {
   refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
   renameSession,
+  resolveLastCompletedConversationEntryId,
   resolvePersistentSessionDir,
   resolveStableSessionTitle,
   restoreQueuedMessage,
@@ -68,6 +69,60 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('resolveLastCompletedConversationEntryId', () => {
+  it('returns the latest completed assistant entry when the transcript ends on an assistant turn', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-last-assistant.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-last-assistant', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    expect(resolveLastCompletedConversationEntryId(sessionFile)).toBe('assistant-1');
+  });
+
+  it('falls back to the latest completed user turn when the active assistant turn only has tool results persisted so far', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-last-user.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-last-user', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Find the issue' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    expect(resolveLastCompletedConversationEntryId(sessionFile)).toBe('user-1');
+  });
 });
 
 describe('requestConversationWorkingDirectoryChange', () => {

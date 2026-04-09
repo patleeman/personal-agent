@@ -3,7 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { appendFileSync, existsSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -2457,8 +2457,9 @@ export async function branchSession(
 ): Promise<{ newSessionId: string; sessionFile: string }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  if (entry.session.isStreaming) throw new Error('Cannot branch while a response is running. Use stop first.');
 
+  // Safe while streaming: Pi only persists completed messages on message_end, so the
+  // session file is already a stable snapshot of the conversation before the active turn.
   const sourceSessionFile = entry.session.sessionFile;
   if (!sourceSessionFile) {
     throw new Error('Cannot branch a live session without a session file.');
@@ -2485,8 +2486,12 @@ export async function forkSession(
 ): Promise<{ newSessionId: string; sessionFile: string }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  if (entry.session.isStreaming) throw new Error('Cannot fork while a response is running. Use stop first.');
+  if (entry.session.isStreaming && !options.preserveSource) {
+    throw new Error('Cannot replace a running conversation while forking. Keep the source conversation open instead.');
+  }
 
+  // Safe while streaming: Pi only persists completed messages on message_end, so the
+  // session file is already a stable snapshot of the conversation before the active turn.
   const sourceSessionFile = entry.session.sessionFile;
   if (!sourceSessionFile) {
     throw new Error('Cannot fork a live session without a session file.');
@@ -2511,6 +2516,39 @@ export async function forkSession(
   return { newSessionId: resumed.id, sessionFile: forkedSessionFile };
 }
 
+export function resolveLastCompletedConversationEntryId(sessionFile: string): string | null {
+  const lines = readFileSync(sessionFile, 'utf-8').split(/\r?\n/);
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const rawLine = lines[index]?.trim();
+    if (!rawLine) {
+      continue;
+    }
+
+    try {
+      const entry = JSON.parse(rawLine) as {
+        type?: string;
+        id?: string;
+        message?: { role?: string };
+      };
+      if (entry.type !== 'message') {
+        continue;
+      }
+      if (entry.message?.role !== 'user' && entry.message?.role !== 'assistant') {
+        continue;
+      }
+      const entryId = entry.id?.trim();
+      if (entryId) {
+        return entryId;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
 export async function summarizeAndForkSession(
   sessionId: string,
   options: LiveSessionLoaderOptions = {},
@@ -2520,16 +2558,28 @@ export async function summarizeAndForkSession(
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  if (entry.session.isStreaming) {
-    throw new Error('Cannot summarize and fork while a response is running. Use stop first.');
-  }
-
   const sourceSessionFile = entry.session.sessionFile;
   if (!sourceSessionFile) {
     throw new Error('Cannot summarize and fork a live session without a session file.');
   }
 
-  const duplicated = await createSessionFromExisting(sourceSessionFile, entry.cwd, options);
+  const duplicated = entry.session.isStreaming
+    ? await (async () => {
+      const lastCompletedEntryId = resolveLastCompletedConversationEntryId(sourceSessionFile);
+      if (!lastCompletedEntryId) {
+        throw new Error('No completed conversation turn is ready to summarize and fork yet.');
+      }
+
+      const sourceManager = SessionManager.open(sourceSessionFile);
+      const forkedSessionFile = sourceManager.createBranchedSession(lastCompletedEntryId);
+      if (!forkedSessionFile) {
+        throw new Error('Unable to create a summary fork from the latest completed turn.');
+      }
+
+      const resumed = await resumeSession(forkedSessionFile, options);
+      return { id: resumed.id, sessionFile: forkedSessionFile };
+    })()
+    : await createSessionFromExisting(sourceSessionFile, entry.cwd, options);
 
   try {
     await compactSession(duplicated.id);

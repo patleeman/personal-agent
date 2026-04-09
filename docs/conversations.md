@@ -110,7 +110,7 @@ Examples include:
 
 These commands operate on the conversation surface. They do not change the underlying durable-state model.
 
-`/summarize-fork` duplicates the current thread, compacts the duplicate, and opens that summarized copy as a new conversation.
+`/summarize-fork` duplicates the current thread, compacts the duplicate, and opens that summarized copy as a new conversation. If the agent is still running, the fork uses the latest completed persisted turn and leaves the active response alone.
 
 If you queue follow-up work while the agent is still running, the composer shows queued prompt previews in a capped shelf above the input. Long queued prompt text is intentionally truncated there so a large slash command or injected context block does not take over the whole conversation view. Those previews show image counts explicitly, and restoring a queued prompt puts both its text and any attached images back into the composer. Restore actions stay disabled until the queue item is actually confirmed by the live session.
 
