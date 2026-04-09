@@ -49,6 +49,7 @@ When the UI is running inside Electron, the desktop shell adds a few conversatio
 - `Cmd/Ctrl+Alt+[` / `Cmd/Ctrl+Alt+]` — move the current conversation left / right inside its shelf
 - `Cmd/Ctrl+Alt+,` / `Cmd/Ctrl+Alt+.` — previous / next host
 - `Cmd/Ctrl+Alt+P` — pin or unpin the current conversation
+- `Cmd/Ctrl+Alt+A` — archive or restore the current conversation
 - `Cmd/Ctrl+Alt+R` — rename the current conversation
 - `Cmd/Ctrl+L` — focus the composer
 - `Cmd/Ctrl+Shift+L` — edit the working directory
@@ -58,7 +59,7 @@ When the UI is running inside Electron, the desktop shell adds a few conversatio
 - `Cmd/Ctrl+,` — open desktop connections
 - `Cmd/Ctrl+K` — open the command palette
 
-That gives us distinct shortcuts for closing a conversation, moving around the conversation workspace, switching hosts, changing conversation metadata, jumping back into typing, and hiding or reshaping the Electron window.
+That gives us distinct shortcuts for closing a conversation, moving around the conversation workspace, switching hosts, managing conversation state, jumping back into typing, and hiding or reshaping the Electron window.
 
 ## Host modes
 

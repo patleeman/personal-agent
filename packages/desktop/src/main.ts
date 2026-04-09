@@ -79,6 +79,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onToggleConversationPin: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-conversation-pin');
     },
+    onToggleConversationArchive: () => {
+      windowController?.sendShortcutToFocusedWindow('toggle-conversation-archive');
+    },
     onRenameConversation: () => {
       windowController?.sendShortcutToFocusedWindow('rename-conversation');
     },

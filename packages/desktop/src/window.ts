@@ -25,6 +25,7 @@ export type DesktopRendererShortcutAction =
   | 'toggle-sidebar'
   | 'toggle-right-rail'
   | 'toggle-conversation-pin'
+  | 'toggle-conversation-archive'
   | 'focus-composer'
   | 'edit-working-directory'
   | 'rename-conversation';

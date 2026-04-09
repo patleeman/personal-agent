@@ -68,7 +68,8 @@ type DesktopConversationShortcutAction =
   | 'close-conversation'
   | 'previous-conversation'
   | 'next-conversation'
-  | 'toggle-conversation-pin';
+  | 'toggle-conversation-pin'
+  | 'toggle-conversation-archive';
 
 type PointerPosition = { x: number; y: number };
 
@@ -234,7 +235,8 @@ function isDesktopConversationShortcutAction(value: unknown): value is DesktopCo
   return value === 'close-conversation'
     || value === 'previous-conversation'
     || value === 'next-conversation'
-    || value === 'toggle-conversation-pin';
+    || value === 'toggle-conversation-pin'
+    || value === 'toggle-conversation-archive';
 }
 
 function TopNavItem({
@@ -514,6 +516,8 @@ export function Sidebar() {
     closeSession,
     pinSession,
     unpinSession,
+    archiveSession,
+    restoreSession,
     moveSession,
     shiftSession,
     loading,
@@ -912,6 +916,29 @@ export function Sidebar() {
     }
   }
 
+  function handleToggleArchivedActiveConversation() {
+    if (location.pathname === DRAFT_CONVERSATION_ROUTE || !activeConversationId) {
+      return;
+    }
+
+    const activeConversationPinned = pinnedSessions.some((session) => session.id === activeConversationId);
+    const activeConversationOpen = tabs.some((session) => session.id === activeConversationId);
+
+    if (draggingSessionId === activeConversationId) {
+      clearDragState();
+    }
+
+    if (activeConversationPinned || activeConversationOpen) {
+      navigate(resolveCloseRedirectPath(activeConversationId));
+      window.setTimeout(() => {
+        archiveSession(activeConversationId);
+      }, 0);
+      return;
+    }
+
+    restoreSession(activeConversationId);
+  }
+
   useEffect(() => {
     if (getDesktopBridge() === null) {
       return;
@@ -937,6 +964,11 @@ export function Sidebar() {
         return;
       }
 
+      if (action === 'toggle-conversation-archive') {
+        handleToggleArchivedActiveConversation();
+        return;
+      }
+
       if (action === 'previous-conversation') {
         navigateConversation(-1);
         return;
@@ -947,7 +979,7 @@ export function Sidebar() {
 
     window.addEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [handleCloseActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
+  }, [handleCloseActiveConversation, handleToggleArchivedActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
 
   function handlePinConversation(sessionId: string) {
     pinSession(sessionId);

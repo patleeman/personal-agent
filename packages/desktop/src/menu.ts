@@ -9,6 +9,7 @@ export interface DesktopApplicationMenuActions {
   onPreviousHost: () => void;
   onNextHost: () => void;
   onToggleConversationPin: () => void;
+  onToggleConversationArchive: () => void;
   onRenameConversation: () => void;
   onFocusComposer: () => void;
   onEditWorkingDirectory: () => void;
@@ -76,6 +77,11 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Toggle Pinned',
         accelerator: 'CommandOrControl+Alt+P',
         click: actions.onToggleConversationPin,
+      },
+      {
+        label: 'Archive / Restore Conversation',
+        accelerator: 'CommandOrControl+Alt+A',
+        click: actions.onToggleConversationArchive,
       },
       {
         label: 'Rename Conversation',
