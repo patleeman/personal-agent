@@ -62,6 +62,8 @@ Add:
 }
 ```
 
+On macOS, `desktop:dev` and `desktop:start` should launch through a renamed app wrapper (`Personal Agent.app`) rather than the raw `Electron.app` bundle so the system menu bar and app switcher use the product name instead of `Electron`.
+
 ### Root `tsconfig.json`
 
 Add a project reference for `packages/desktop` once the package exists.

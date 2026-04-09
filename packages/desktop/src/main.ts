@@ -11,6 +11,8 @@ let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let quitting = false;
 
+app.setName('Personal Agent');
+
 function createSvgImage(filePath: string) {
   const source = readFileSync(filePath, 'utf-8');
   return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`);
@@ -85,7 +87,6 @@ app.on('activate', () => {
 
 app.whenReady()
   .then(async () => {
-    app.setName('Personal Agent');
     const { colorIconFile } = resolveDesktopRuntimePaths();
     const colorIcon = createSvgImage(colorIconFile);
     if (process.platform === 'darwin') {
