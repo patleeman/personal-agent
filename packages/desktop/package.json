@@ -1,0 +1,24 @@
+{
+  "name": "@personal-agent/desktop",
+  "version": "0.1.0",
+  "description": "personal-agent Electron desktop shell",
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build:deps": "npm --prefix ../core run build && npm --prefix ../daemon run build && npm --prefix ../resources run build && npm --prefix ../services run build && npm --prefix ../web run build",
+    "build": "npm run build:deps && tsc --build --force",
+    "start": "electron dist/main.js",
+    "dev": "npm run build && electron dist/main.js",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@personal-agent/core": "*",
+    "@personal-agent/daemon": "*",
+    "@personal-agent/resources": "*",
+    "@personal-agent/services": "*",
+    "electron": "^31.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

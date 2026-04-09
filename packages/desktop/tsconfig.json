@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "paths": {
+      "@personal-agent/core": ["../core/src"],
+      "@personal-agent/daemon": ["../daemon/src"],
+      "@personal-agent/resources": ["../resources/src"],
+      "@personal-agent/services": ["../services/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["dist", "node_modules"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../daemon" },
+    { "path": "../resources" },
+    { "path": "../services" }
+  ]
+}

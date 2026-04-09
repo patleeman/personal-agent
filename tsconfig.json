@@ -25,7 +25,8 @@
     { "path": "./packages/daemon" },
     { "path": "./packages/cli" },
     { "path": "./packages/resources" },
-    { "path": "./packages/services" }
+    { "path": "./packages/services" },
+    { "path": "./packages/desktop" }
   ],
   "files": [],
   "exclude": ["node_modules", "dist"]
