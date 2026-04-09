@@ -237,17 +237,17 @@ For broader durable page work, use the vault files directly and the conceptual d
 
 The Automations page is the UI for daemon-managed scheduled prompts.
 
-It is a dedicated top-level page in the main nav rather than a Settings subpage, so the task list can use the full center pane while the detail rail stays on the right.
+It is a dedicated top-level page in the main nav rather than a Settings subpage. The desktop web UI now uses a full-width automations workspace instead of the generic right-hand context rail for this route.
 
 Automations are still passive by default. If an automation is explicitly bound back to a conversation, the result can also surface later as an inbox notification and conversation wakeup.
 
 You can:
 
-- see discovered automations
-- see current status and recent runs
-- create a new automation from the page header / detail rail flow
+- browse automations in grouped overview sections from the main page
+- open a dedicated automation detail view with prompt content and status/details side column
+- create a new automation from the page header modal
 - enable or disable an automation
-- edit automation settings and prompt from the detail rail
+- edit automation settings and prompt from the in-page edit modal
 - use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
 - run an automation immediately
 

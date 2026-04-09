@@ -372,6 +372,17 @@ function TaskEditorForm({
           />
         </div>
 
+        <div className="space-y-1.5">
+          <label className="ui-card-meta">Prompt</label>
+          <MentionTextarea
+            value={value.prompt}
+            onValueChange={(prompt) => onChange({ prompt })}
+            className={TEXTAREA_CLASS}
+          />
+        </div>
+      </div>
+
+      <div className="border-t border-border-subtle pt-4 space-y-4">
         <div className="space-y-2">
           <p className="ui-card-meta">Schedule</p>
           <div className="flex flex-wrap gap-2">
@@ -408,9 +419,7 @@ function TaskEditorForm({
             />
           </div>
         )}
-      </div>
 
-      <div className="border-t border-border-subtle pt-4 space-y-4">
         <div className="space-y-1.5">
           <label className="ui-card-meta">Working directory</label>
           <input
@@ -420,15 +429,6 @@ function TaskEditorForm({
             placeholder="Optional"
           />
         </div>
-      </div>
-
-      <div className="border-t border-border-subtle pt-4 space-y-1.5">
-        <label className="ui-card-meta">Prompt</label>
-        <MentionTextarea
-          value={value.prompt}
-          onValueChange={(prompt) => onChange({ prompt })}
-          className={TEXTAREA_CLASS}
-        />
       </div>
 
       {(validationError || error) && (
@@ -531,7 +531,15 @@ export function ScheduledTaskCreatePanel({ onCancel }: { onCancel?: () => void }
   );
 }
 
-export function ScheduledTaskPanel({ id }: { id: string }) {
+export function ScheduledTaskPanel({
+  id,
+  initialMode = 'view',
+  onClose,
+}: {
+  id: string;
+  initialMode?: 'view' | 'edit';
+  onClose?: () => void;
+}) {
   const { setTasks } = useAppData();
   const { data: task, loading, error, refetch } = useApi(async () => {
     const detail = await api.taskDetail(id);
@@ -550,6 +558,16 @@ export function ScheduledTaskPanel({ id }: { id: string }) {
     setDraft(null);
     setSaveError(null);
   }, [id]);
+
+  useEffect(() => {
+    if (initialMode !== 'edit' || !task || editing || draft) {
+      return;
+    }
+
+    setDraft(createTaskFormState(task));
+    setSaveError(null);
+    setEditing(true);
+  }, [draft, editing, initialMode, task]);
 
   if (loading && !task) {
     return <LoadingState label="Loading task…" className="px-4 py-4" />;
@@ -578,6 +596,7 @@ export function ScheduledTaskPanel({ id }: { id: string }) {
       ]);
       setEditing(false);
       setDraft(null);
+      onClose?.();
     } catch (nextError) {
       setSaveError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -597,6 +616,9 @@ export function ScheduledTaskPanel({ id }: { id: string }) {
           setEditing(false);
           setDraft(null);
           setSaveError(null);
+          if (initialMode === 'edit') {
+            onClose?.();
+          }
         }}
         onSubmit={() => { void handleSave(); }}
       />

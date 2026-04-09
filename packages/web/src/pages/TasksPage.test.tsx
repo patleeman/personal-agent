@@ -26,9 +26,9 @@ describe('TasksPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders automations without the shared settings navigation rail', () => {
+  it('renders the automation overview without the shared settings navigation rail', () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={['/automations/daily-report']}>
+      <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
             activity: null,
@@ -56,9 +56,7 @@ describe('TasksPage', () => {
             setRuns: vi.fn(),
           }}>
             <Routes>
-              <Route path="/automations">
-                <Route path=":id" element={<TasksPage />} />
-              </Route>
+              <Route path="/automations" element={<TasksPage />} />
             </Routes>
           </AppDataContext.Provider>
         </SseConnectionContext.Provider>
@@ -66,6 +64,7 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Automations');
+    expect(html).toContain('Current');
     expect(html).toContain('Daily report');
     expect(html).toContain('href="/automations/daily-report"');
     expect(html).not.toContain('href="/settings"');
