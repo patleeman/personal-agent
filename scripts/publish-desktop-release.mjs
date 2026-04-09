@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -208,12 +208,30 @@ function ensureGhAuth() {
   run('gh', ['auth', 'status']);
 }
 
-function collectReleaseFiles() {
+function getDefaultRemoteBranch() {
+  const value = capture('git', ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']);
+  return value.replace(/^refs\/remotes\/origin\//u, '');
+}
+
+function pushReleaseRef() {
+  const branch = tryCapture('git', ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+  if (branch.status === 0) {
+    run('git', ['push', '--follow-tags']);
+    return;
+  }
+
+  const defaultBranch = getDefaultRemoteBranch();
+  console.log(`Detached HEAD detected; pushing to origin/${defaultBranch} explicitly...`);
+  run('git', ['push', 'origin', `HEAD:${defaultBranch}`, '--follow-tags']);
+}
+
+function collectReleaseFiles(version) {
   if (!existsSync(releaseDir)) {
     fail(`Release output directory not found: ${releaseDir}`);
   }
 
   const files = readdirSync(releaseDir)
+    .filter((name) => name.includes(`-${version}-`))
     .filter((name) => name.endsWith('.dmg') || name.endsWith('.zip'))
     .sort()
     .map((name) => resolve(releaseDir, name));
@@ -264,6 +282,8 @@ const version = packageJson.version;
 const tag = `v${version}`;
 const env = loadReleaseEnv();
 
+rmSync(releaseDir, { recursive: true, force: true });
+
 ensureCleanRepo();
 ensureTagAtHead(tag);
 ensureSigningIdentity(env);
@@ -273,11 +293,11 @@ ensureGhAuth();
 console.log(`Building signed desktop artifacts for ${tag}...`);
 run('npm', ['run', 'desktop:dist'], { env });
 
-const files = collectReleaseFiles();
+const files = collectReleaseFiles(version);
 notarizeDistributionContainers(env, files);
 
 console.log(`Pushing ${tag} to GitHub...`);
-run('git', ['push', '--follow-tags']);
+pushReleaseRef();
 
 const releaseView = tryCapture('gh', ['release', 'view', tag, '--json', 'url']);
 if (releaseView.status === 0) {
