@@ -25,7 +25,11 @@ import { timeAgo } from '../utils';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
 import { getDesktopBridge } from '../desktopBridge';
-import { resolveConversationAdjacentPath, resolveConversationCloseRedirect } from '../conversationRoutes';
+import {
+  buildConversationSurfacePath,
+  resolveConversationAdjacentPath,
+  resolveConversationCloseRedirect,
+} from '../conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../localSettings';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -178,6 +182,24 @@ function matchesSettingsRoute(pathname: string): boolean {
 
 function normalizeHotkeyKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
+}
+
+function hasCommandOrControlHotkey(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey;
+}
+
+function resolveConversationNumberHotkey(event: KeyboardEvent): number {
+  if (event.shiftKey || event.altKey || !hasCommandOrControlHotkey(event)) {
+    return -1;
+  }
+
+  const match = event.code.match(/^Digit([1-9])$/);
+  if (match) {
+    return Number(match[1]) - 1;
+  }
+
+  const key = normalizeHotkeyKey(event.key);
+  return /^[1-9]$/.test(key) ? Number(key) - 1 : -1;
 }
 
 function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string): boolean {
@@ -486,6 +508,7 @@ export function Sidebar() {
     pinSession,
     unpinSession,
     moveSession,
+    shiftSession,
     loading,
   } = useConversations();
 
@@ -707,10 +730,53 @@ export function Sidebar() {
     }
   }, [activeConversationSurfaceId, navigate, workspaceConversationTabs]);
 
+  const jumpToConversation = useCallback((index: number) => {
+    if (index < 0 || index >= workspaceConversationTabs.length) {
+      return;
+    }
+
+    navigate(buildConversationSurfacePath(workspaceConversationTabs[index].id));
+  }, [navigate, workspaceConversationTabs]);
+
+  const shiftActiveConversation = useCallback((direction: -1 | 1) => {
+    if (!activeConversationId) {
+      return;
+    }
+
+    shiftSession(activeConversationId, direction);
+    if (draggingSessionId === activeConversationId) {
+      clearDragState();
+    }
+  }, [activeConversationId, draggingSessionId, shiftSession]);
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.repeat || hasOverlayOpen()) {
         return;
+      }
+
+      const desktopBridge = getDesktopBridge();
+      if (desktopBridge !== null) {
+        const conversationIndex = resolveConversationNumberHotkey(event);
+        if (conversationIndex !== -1) {
+          event.preventDefault();
+          jumpToConversation(conversationIndex);
+          return;
+        }
+
+        if (hasCommandOrControlHotkey(event) && event.altKey && !event.shiftKey) {
+          if (event.code === 'BracketLeft') {
+            event.preventDefault();
+            shiftActiveConversation(-1);
+            return;
+          }
+
+          if (event.code === 'BracketRight') {
+            event.preventDefault();
+            shiftActiveConversation(1);
+            return;
+          }
+        }
       }
 
       if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) {
@@ -738,7 +804,7 @@ export function Sidebar() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNewConversation, navigateConversation]);
+  }, [handleNewConversation, jumpToConversation, navigateConversation, shiftActiveConversation]);
 
   function handleCloseDraftTab() {
     const closeDraft = () => {

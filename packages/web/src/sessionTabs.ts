@@ -453,3 +453,44 @@ export function moveConversationTab(
 
   return writeConversationLayout(next);
 }
+
+export function shiftConversationTab(sessionId: string, direction: -1 | 1): ConversationLayout {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  if (!normalizedSessionId) {
+    return readConversationLayout();
+  }
+
+  const current = readConversationLayout();
+  const pinnedIndex = current.pinnedSessionIds.indexOf(normalizedSessionId);
+  if (pinnedIndex !== -1) {
+    const targetIndex = pinnedIndex + direction;
+    const targetSessionId = current.pinnedSessionIds[targetIndex];
+    if (!targetSessionId) {
+      return current;
+    }
+
+    return moveConversationTab(
+      normalizedSessionId,
+      'pinned',
+      targetSessionId,
+      direction < 0 ? 'before' : 'after',
+    );
+  }
+
+  const openIndex = current.sessionIds.indexOf(normalizedSessionId);
+  if (openIndex === -1) {
+    return current;
+  }
+
+  const targetSessionId = current.sessionIds[openIndex + direction];
+  if (!targetSessionId) {
+    return current;
+  }
+
+  return moveConversationTab(
+    normalizedSessionId,
+    'open',
+    targetSessionId,
+    direction < 0 ? 'before' : 'after',
+  );
+}

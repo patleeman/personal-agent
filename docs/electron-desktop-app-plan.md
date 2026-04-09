@@ -40,15 +40,18 @@ Behavior to expect:
 
 ## Desktop shortcuts
 
-When the UI is running inside Electron, the app menu owns a few desktop-specific conversation shortcuts:
+When the UI is running inside Electron, the desktop shell adds a few conversation and window shortcuts:
 
 - `Cmd/Ctrl+N` — new conversation
 - `Cmd/Ctrl+W` — close the current conversation surface
 - `Cmd/Ctrl+[` / `Cmd/Ctrl+]` — previous / next conversation
+- `Cmd/Ctrl+1…9` — jump to conversation slots in sidebar order
+- `Cmd/Ctrl+Alt+[` / `Cmd/Ctrl+Alt+]` — move the current conversation left / right inside its shelf
+- `Cmd/Ctrl+Shift+W` — hide the current window
 - `Cmd/Ctrl+,` — open desktop connections
 - `Cmd/Ctrl+K` — open the command palette
 
-Window hiding is still available from the native window controls and the tray; `Cmd/Ctrl+W` is reserved for closing conversation tabs instead.
+That gives us distinct shortcuts for closing a conversation, moving around the conversation workspace, and hiding the actual Electron window.
 
 ## Host modes
 

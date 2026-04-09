@@ -86,6 +86,15 @@ export class DesktopWindowController {
     this.mainWindow?.hide();
   }
 
+  hideFocusedWindow(): void {
+    const targetWindow = BrowserWindow.getFocusedWindow() ?? this.mainWindow;
+    if (!targetWindow || targetWindow.isDestroyed()) {
+      return;
+    }
+
+    targetWindow.hide();
+  }
+
   getHostIdForWebContentsId(webContentsId: number): string | null {
     return this.trackedWindows.get(webContentsId)?.hostId ?? null;
   }

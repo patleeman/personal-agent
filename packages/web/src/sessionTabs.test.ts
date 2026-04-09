@@ -19,6 +19,7 @@ import {
   replaceOpenConversationTabs,
   replacePinnedConversationTabs,
   setConversationArchivedState,
+  shiftConversationTab,
   syncConversationLayoutMerge,
   unpinConversationTab,
 } from './sessionTabs';
@@ -172,6 +173,58 @@ describe('sessionTabs', () => {
       pinnedSessionIds: ['session-3'],
       archivedSessionIds: ['session-4'],
     });
+  });
+
+  it('shifts an open conversation left or right within its shelf', () => {
+    replaceConversationLayout({ sessionIds: ['session-1', 'session-2', 'session-3'], pinnedSessionIds: [] });
+    dispatchEvent.mockReset();
+
+    expect(shiftConversationTab('session-2', -1)).toEqual({
+      sessionIds: ['session-2', 'session-1', 'session-3'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+
+    dispatchEvent.mockReset();
+    expect(shiftConversationTab('session-2', 1)).toEqual({
+      sessionIds: ['session-1', 'session-2', 'session-3'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('shifts a pinned conversation within the pinned shelf only', () => {
+    replaceConversationLayout({ sessionIds: ['session-3'], pinnedSessionIds: ['session-1', 'session-2'] });
+    dispatchEvent.mockReset();
+
+    expect(shiftConversationTab('session-2', -1)).toEqual({
+      sessionIds: ['session-3'],
+      pinnedSessionIds: ['session-2', 'session-1'],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+
+    dispatchEvent.mockReset();
+    expect(shiftConversationTab('session-2', -1)).toEqual({
+      sessionIds: ['session-3'],
+      pinnedSessionIds: ['session-2', 'session-1'],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).not.toHaveBeenCalled();
+  });
+
+  it('ignores shift requests that would move past a shelf edge', () => {
+    replaceConversationLayout({ sessionIds: ['session-1', 'session-2'], pinnedSessionIds: [] });
+    dispatchEvent.mockReset();
+
+    expect(shiftConversationTab('session-1', -1)).toEqual({
+      sessionIds: ['session-1', 'session-2'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
   it('pins a conversation by removing it from open tabs', () => {

@@ -6,6 +6,7 @@ export interface DesktopApplicationMenuActions {
   onCloseConversation: () => void;
   onPreviousConversation: () => void;
   onNextConversation: () => void;
+  onHideWindow: () => void;
   onConnections: () => void;
   onCheckForUpdates: () => void;
   onRestartBackend: () => void;
@@ -128,11 +129,21 @@ export function buildDesktopApplicationMenuTemplate(
       ? [
           { role: 'minimize' },
           { role: 'zoom' },
+          {
+            label: 'Hide Window',
+            accelerator: 'CommandOrControl+Shift+W',
+            click: actions.onHideWindow,
+          },
           { type: 'separator' },
           { role: 'front' },
         ]
       : [
           { role: 'minimize' },
+          {
+            label: 'Hide Window',
+            accelerator: 'CommandOrControl+Shift+W',
+            click: actions.onHideWindow,
+          },
           { role: 'close' },
         ],
   };

@@ -62,6 +62,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNextConversation: () => {
       windowController?.sendShortcutToFocusedWindow('next-conversation');
     },
+    onHideWindow: () => {
+      windowController?.hideFocusedWindow();
+    },
     onConnections: () => {
       void windowController?.openMainWindow('/settings#desktop-connections');
     },

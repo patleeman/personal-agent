@@ -8,6 +8,7 @@ function createActions() {
     onCloseConversation: vi.fn(),
     onPreviousConversation: vi.fn(),
     onNextConversation: vi.fn(),
+    onHideWindow: vi.fn(),
     onConnections: vi.fn(),
     onCheckForUpdates: vi.fn(),
     onRestartBackend: vi.fn(),
@@ -48,6 +49,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Connections…' }),
       expect.objectContaining({ role: 'close' }),
     ]));
+
+    const windowMenu = template[4];
+    expect(windowMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Hide Window', accelerator: 'CommandOrControl+Shift+W' }),
+    ]));
   });
 
   it('builds a non-mac file menu with connections and quit actions', () => {
@@ -74,6 +80,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Backend' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'Alt+F4' }),
+    ]));
+
+    const windowMenu = template[3];
+    expect(windowMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Hide Window', accelerator: 'CommandOrControl+Shift+W' }),
     ]));
   });
 });

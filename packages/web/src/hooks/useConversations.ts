@@ -26,6 +26,7 @@ import {
   readPinnedSessionIds,
   replaceConversationLayout,
   setConversationArchivedState,
+  shiftConversationTab,
   type ConversationLayout,
   type ConversationShelf,
   type OpenConversationDropPosition,
@@ -154,6 +155,11 @@ export function useConversations() {
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
+  const shiftSession = useCallback((sessionId: string, direction: -1 | 1) => {
+    const nextLayout = shiftConversationTab(sessionId, direction);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+  }, []);
+
   const withTitles = (sessions ?? []).map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
     const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
@@ -209,6 +215,7 @@ export function useConversations() {
     archiveSession,
     restoreSession,
     moveSession,
+    shiftSession,
     loading,
     refetch,
   };
