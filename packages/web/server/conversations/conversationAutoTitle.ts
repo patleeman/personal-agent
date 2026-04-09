@@ -318,8 +318,10 @@ export async function generateConversationTitle(options: {
             {
               type: 'text',
               text: [
-                'Write a short title for this conversation.',
-                'Keep it specific and under 80 characters.',
+                'Write a short, scan-friendly title for this conversation.',
+                `Keep it specific, topic-first, and under ${settings.maxTitleLength} characters.`,
+                'Prefer titles like "Area: change" over vague action-first phrasing when possible.',
+                'Focus on the main thread, not the latest micro-step or temporary status.',
                 'Return only the title.',
                 '',
                 transcript,

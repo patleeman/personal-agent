@@ -214,6 +214,8 @@ These defaults are used when a run does not explicitly override them.
 
 `webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.
 
+Auto-titles are generated from the early visible user/assistant exchange and bias toward short, scan-friendly, topic-first labels so thread lists are easier to skim.
+
 ### Web UI runtime config
 
 `pa ui` and the managed web UI service persist their machine-local settings under the `webUi` section in `~/.local/state/personal-agent/config/config.json`:

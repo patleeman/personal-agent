@@ -185,7 +185,7 @@ Saved conversations keep a minimal right-hand inspector focused on runs and deta
 
 The conversation header stays compact: it keeps the title and inline working-directory controls together, and both draft and saved conversations can change that cwd from the same header area without opening the right rail. Saved-conversation status stays out of the title bar; live/running and needs-review signals are handled elsewhere in the UI instead of next to the title. Saved conversations expose a summarize + fork icon button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. When a response is still running, the summary fork snapshots the latest completed persisted turn instead of waiting for the active turn to finish. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
-Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
+Conversation artifacts can appear as chat stubs and open in a modal viewer for rendered HTML, Mermaid, and LaTeX outputs.
 
 Live-conversation control is tracked per connected surface. The desktop web UI and the `/app` companion can mirror the same live session, but desktop SSE connections do not depend on companion auth state unless the request is actually coming through the companion `/app` API surface.
 
@@ -331,6 +331,8 @@ Settings lets you change:
 - conversation auto-title behavior and title model
 - knowledge vault root
 - saved UI state
+
+Auto-titles are tuned for fast scanning in the Threads list: they should prefer topic-first labels over action-first or status-heavy phrasing.
 
 Settings is now one stacked page instead of separate preference and system subpages.
 

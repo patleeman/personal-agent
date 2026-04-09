@@ -175,7 +175,7 @@ describe('generateConversationTitle', () => {
     expect(completeSimpleMock).toHaveBeenCalledWith(
       model,
       expect.objectContaining({
-        systemPrompt: expect.stringContaining('concise, specific titles'),
+        systemPrompt: expect.stringContaining('scan-friendly titles'),
         messages: [
           expect.objectContaining({
             role: 'user',
@@ -183,7 +183,7 @@ describe('generateConversationTitle', () => {
             content: [
               expect.objectContaining({
                 type: 'text',
-                text: expect.stringContaining('User: Make conversation names easier to scan.\nAssistant: I can generate a better title after the first reply.'),
+                text: expect.stringMatching(/Keep it specific, topic-first, and under 80 characters\.[\s\S]*User: Make conversation names easier to scan\.\nAssistant: I can generate a better title after the first reply\./),
               }),
             ],
           }),
