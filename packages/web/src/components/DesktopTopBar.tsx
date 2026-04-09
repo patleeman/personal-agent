@@ -4,16 +4,14 @@ import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
 import { ToolbarButton } from './ui';
 
-function formatHostLabel(environment: DesktopEnvironmentState | null, hasDesktopBridge: boolean): string {
-  if (!environment) {
-    return hasDesktopBridge ? 'Desktop app' : 'Web app';
-  }
-
-  if (environment.activeHostKind === 'local') {
-    return environment.activeHostLabel;
-  }
-
-  return `${environment.activeHostLabel} · ${environment.activeHostKind === 'web' ? 'Web' : 'SSH'}`;
+function RightRailToggleIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
+      <path d="M9.25 2v10" />
+      {open ? <path d="M8 7H5.5" /> : <path d="M6.1 5.4 7.8 7l-1.7 1.6" />}
+    </svg>
+  );
 }
 
 function readBrowserNavigationState(): DesktopNavigationState {
@@ -43,8 +41,14 @@ function readBrowserNavigationState(): DesktopNavigationState {
 
 export function DesktopTopBar({
   environment,
+  showRailToggle,
+  railOpen,
+  onToggleRail,
 }: {
   environment: DesktopEnvironmentState | null;
+  showRailToggle: boolean;
+  railOpen: boolean;
+  onToggleRail: () => void;
 }) {
   const location = useLocation();
   const [navigation, setNavigation] = useState<DesktopNavigationState>({
@@ -126,12 +130,18 @@ export function DesktopTopBar({
           </ToolbarButton>
         </div>
       </div>
-      <div className="ui-desktop-top-bar__center">
-        <span className="ui-desktop-top-bar__title">Personal Agent</span>
-        <span className="ui-desktop-top-bar__separator" aria-hidden="true">—</span>
-        <span className="ui-desktop-top-bar__meta">{formatHostLabel(environment, Boolean(bridge))}</span>
-      </div>
+      <div className="ui-desktop-top-bar__center" />
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+        {showRailToggle ? (
+          <ToolbarButton
+            className="ui-desktop-top-bar__action-button"
+            onClick={onToggleRail}
+            aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+            title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+          >
+            <RightRailToggleIcon open={railOpen} />
+          </ToolbarButton>
+        ) : null}
         {bridge ? (
           <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => { void bridge.showConnectionsWindow(); }}>
             Connections

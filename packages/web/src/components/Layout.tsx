@@ -397,8 +397,9 @@ export function Layout() {
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
+  const [railOpen, setRailOpen] = useState(true);
   const railWidth = rail.width;
-  const showContextRail = !(
+  const canShowContextRail = !(
     location.pathname.startsWith('/conversations')
     || location.pathname.startsWith('/nodes')
     || location.pathname.startsWith('/settings')
@@ -426,10 +427,17 @@ export function Layout() {
     };
   }, [location.pathname]);
 
+  const showContextRail = canShowContextRail && railOpen;
+
   return (
     <>
       <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
-        <DesktopTopBar environment={desktopEnvironment} />
+        <DesktopTopBar
+          environment={desktopEnvironment}
+          showRailToggle={canShowContextRail}
+          railOpen={showContextRail}
+          onToggleRail={() => setRailOpen((current) => !current)}
+        />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
