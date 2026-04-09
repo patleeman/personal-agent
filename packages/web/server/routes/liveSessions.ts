@@ -22,7 +22,6 @@ import {
   restoreQueuedMessage,
   resumeSession as resumeLocalSession,
   branchSession,
-  ensureSessionSurfaceCanControl,
   abortSession as abortLocalSession,
   registry as liveRegistry,
   subscribe as subscribeLocal,
@@ -513,28 +512,13 @@ function readRequestSurfaceId(body: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-export function ensureRequestControlsLocalLiveConversation(conversationId: string, body: unknown): string | undefined {
-  const surfaceId = readRequestSurfaceId(body);
-  if (!isLocalLive(conversationId)) {
-    return surfaceId;
-  }
-
-  if (!surfaceId) {
-    throw new Error('surfaceId is required for local live conversation control.');
-  }
-
-  ensureSessionSurfaceCanControl(conversationId, surfaceId);
-  return surfaceId;
+export function ensureRequestControlsLocalLiveConversation(_conversationId: string, body: unknown): string | undefined {
+  return readRequestSurfaceId(body);
 }
 
 export function writeLiveConversationControlError(res: Response, error: unknown): boolean {
   if (error instanceof LiveSessionControlError) {
     res.status(409).json({ error: error.message });
-    return true;
-  }
-
-  if (error instanceof Error && error.message === 'surfaceId is required for local live conversation control.') {
-    res.status(400).json({ error: error.message });
     return true;
   }
 

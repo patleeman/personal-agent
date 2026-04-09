@@ -90,8 +90,8 @@ describe('conversation live state helpers', () => {
     expect(isConversationSessionNotLiveError(new Error('provider unavailable'))).toBe(false);
   });
 
-  it('shows the takeover call-to-action only while this surface is mirrored read-only', () => {
-    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(true);
+  it('never shows the removed takeover call-to-action', () => {
+    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: true, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: false, conversationNeedsTakeover: true })).toBe(false);

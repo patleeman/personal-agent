@@ -28,11 +28,9 @@ import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversat
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import type {
   LiveSessionPresenceState,
-  LiveSessionSurfaceType,
   MemoryData,
   MessageBlock,
   ModelInfo,
-
   PromptImageInput,
   ScheduledTaskSummary,
   SessionDetail,
@@ -61,24 +59,19 @@ export function resolveCompanionConversationLive({
 }
 
 export function resolveCompanionControlState({
-  isLiveSession,
+  isLiveSession: _isLiveSession,
   surfaceId,
   presence,
 }: CompanionControlStateInput) {
   const currentSurface = surfaceId
     ? presence.surfaces.find((surface) => surface.surfaceId === surfaceId) ?? null
     : null;
-  const controllingThisSurface = isLiveSession
-    && Boolean(surfaceId)
-    && presence.controllerSurfaceId === surfaceId;
   const presenceKnownForThisSurface = Boolean(currentSurface);
-  const needsTakeover = isLiveSession && presenceKnownForThisSurface && !controllingThisSurface;
 
   return {
     currentSurface,
-    controllingThisSurface,
     presenceKnownForThisSurface,
-    needsTakeover,
+    needsTakeover: false,
   };
 }
 
@@ -212,62 +205,25 @@ async function buildCompanionPromptImages(files: File[]): Promise<PromptImageInp
   }));
 }
 
-function formatSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | undefined): string {
-  if (surfaceType === 'mobile_web') {
-    return 'phone';
-  }
-
-  if (surfaceType === 'desktop_web') {
-    return 'desktop';
-  }
-
-  return 'another surface';
-}
-
 function buildBannerTitle(input: {
   isLiveSession: boolean;
-  controllingThisSurface: boolean;
-  presence: LiveSessionPresenceState;
 }): string {
-  if (!input.isLiveSession) {
-    return 'Saved transcript';
-  }
-
-  if (input.controllingThisSurface) {
-    return 'You are controlling this conversation.';
-  }
-
-  if (input.presence.controllerSurfaceId) {
-    return `Mirroring while ${formatSurfaceTypeLabel(input.presence.controllerSurfaceType)} controls.`;
-  }
-
-  return 'Connecting to live conversation…';
+  return input.isLiveSession ? 'Live conversation' : 'Saved transcript';
 }
 
 function buildBannerDetail(input: {
   isLiveSession: boolean;
-  controllingThisSurface: boolean;
-  needsTakeover: boolean;
   mirroredViewerCount: number;
-  presence: LiveSessionPresenceState;
 }): string {
   if (!input.isLiveSession) {
     return 'Resume this transcript to reply from this device, or start a new live conversation from the list.';
   }
 
-  if (input.controllingThisSurface) {
-    if (input.mirroredViewerCount > 0) {
-      return `${input.mirroredViewerCount} other ${input.mirroredViewerCount === 1 ? 'surface is' : 'surfaces are'} mirroring live.`;
-    }
-
-    return 'Other surfaces stay mirrored until they explicitly take over.';
+  if (input.mirroredViewerCount > 0) {
+    return `${input.mirroredViewerCount} other ${input.mirroredViewerCount === 1 ? 'surface is' : 'surfaces are'} viewing live.`;
   }
 
-  if (input.needsTakeover || input.presence.controllerSurfaceId) {
-    return 'Take over to reply or stop the current turn from this device.';
-  }
-
-  return 'Waiting for controller state…';
+  return 'Reply from this device. Other surfaces stay in sync.';
 }
 
 type CompanionConversationPanel = 'actions' | 'runtime' | 'artifacts';
@@ -495,7 +451,6 @@ export function CompanionConversationPage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [resumeBusy, setResumeBusy] = useState(false);
-  const [takeoverBusy, setTakeoverBusy] = useState(false);
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [runtimeModels, setRuntimeModels] = useState<ModelInfo[]>([]);
@@ -707,9 +662,7 @@ export function CompanionConversationPage() {
   );
   const showStatusIndicators = orderedDeferredResumes.length > 0 || Boolean(scheduledTaskSummary.indicatorText);
   const canResumeConversation = !isLiveSession && Boolean(savedConversationSessionFile);
-  const runtimeReadOnlyReason = controlState.needsTakeover
-    ? 'Take over to change this conversation runtime from this device.'
-    : null;
+  const runtimeReadOnlyReason = null;
   const runtimeSummaryText = currentModel
     ? `${currentModel} · ${formatThinkingLevelLabel(currentThinkingLevel)} thinking`
     : runtimeLoading
@@ -762,17 +715,10 @@ export function CompanionConversationPage() {
     && !sessionLoading
     && !fetchedSessionDetail
     && !sessionSnapshot;
-  const bannerTitle = buildBannerTitle({
-    isLiveSession,
-    controllingThisSurface: controlState.controllingThisSurface,
-    presence: stream.presence,
-  });
+  const bannerTitle = buildBannerTitle({ isLiveSession });
   const bannerDetail = buildBannerDetail({
     isLiveSession,
-    controllingThisSurface: controlState.controllingThisSurface,
-    needsTakeover: controlState.needsTakeover,
     mirroredViewerCount,
-    presence: stream.presence,
   });
   const showStatusBanner = shouldShowCompanionConversationStatusBanner({ isLiveSession });
   const keyboardOpen = keyboardInset > 120;
@@ -997,30 +943,6 @@ export function CompanionConversationPage() {
       setConversationAdminBusy(false);
     }
   }, [conversationAdminBusy, id, replaceOpenTabs]);
-
-  const handleTakeover = useCallback(async () => {
-    if (!id || takeoverBusy) {
-      return;
-    }
-
-    const confirmed = typeof window === 'undefined'
-      ? true
-      : window.confirm('Take over this conversation? This device will become the active controller while other surfaces keep mirroring live.');
-    if (!confirmed) {
-      return;
-    }
-
-    setTakeoverBusy(true);
-    setActionError(null);
-
-    try {
-      await stream.takeover();
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setTakeoverBusy(false);
-    }
-  }, [id, stream, takeoverBusy]);
 
   const handleStop = useCallback(async () => {
     if (!isLiveSession || !stream.isStreaming || controlState.needsTakeover || submitting) {
@@ -1502,23 +1424,7 @@ export function CompanionConversationPage() {
                     event.target.value = '';
                   }}
                 />
-                {controlState.needsTakeover ? (
-                  <div className="px-3 py-3">
-                    <button
-                      type="button"
-                      onClick={() => { void handleTakeover(); }}
-                      disabled={takeoverBusy}
-                      className="ui-pill ui-pill-solid-accent flex w-full items-center justify-center gap-2 px-4 py-3 text-[13px] disabled:cursor-default disabled:opacity-60"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M3 8h10" />
-                        <path d="m9 4 4 4-4 4" />
-                      </svg>
-                      {takeoverBusy ? 'Taking over…' : 'Take over to reply'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2.5">
+                <div className="flex items-center gap-2 px-3 py-2.5">
                     <button
                       type="button"
                       onClick={openFilePicker}
@@ -1607,7 +1513,6 @@ export function CompanionConversationPage() {
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
                   </div>
-                )}
                 {(stream.isStreaming || composerHasContent) && (
                   <div className="flex shrink-0 items-center justify-end gap-1.5 px-1 pb-1">
                     {stream.isStreaming ? (

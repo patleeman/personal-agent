@@ -187,7 +187,7 @@ The conversation header stays compact: it keeps the title and inline working-dir
 
 Conversation artifacts can appear as chat stubs and open in a modal viewer for rendered HTML, Mermaid, and LaTeX outputs.
 
-Live-conversation control is tracked per connected surface. The desktop web UI and the `/app` companion can mirror the same live session, but desktop SSE connections do not depend on companion auth state unless the request is actually coming through the companion `/app` API surface.
+Live conversations can stay open on multiple surfaces at once. The desktop web UI and the `/app` companion can both watch and reply to the same session without an explicit takeover step, and desktop SSE connections still do not depend on companion auth state unless the request is actually coming through the companion `/app` API surface.
 
 When browser notifications are already enabled, reminder/callback notifications can still interrupt while the tab is hidden.
 

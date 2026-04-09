@@ -6,7 +6,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -233,12 +233,12 @@ export function shouldShowMissingConversationState(input: {
     && !input.hasPendingInitialPrompt;
 }
 
-export function shouldShowConversationTakeoverBanner(input: {
+export function shouldShowConversationTakeoverBanner(_input: {
   draft: boolean;
   isLiveSession: boolean;
   conversationNeedsTakeover: boolean;
 }): boolean {
-  return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
+  return false;
 }
 
 export function resolveConversationPageTitle(input: {
@@ -345,17 +345,6 @@ export function mergeConversationSessionMeta(
   }
 
   return detailMeta ?? sessionSnapshot ?? null;
-}
-
-function findConversationSurface(
-  presence: LiveSessionPresenceState,
-  surfaceId: string | null | undefined,
-) {
-  if (!surfaceId) {
-    return null;
-  }
-
-  return presence.surfaces.find((surface) => surface.surfaceId === surfaceId) ?? null;
 }
 
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
@@ -1111,12 +1100,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const conversationLiveDecision = visibleConversationBootstrap?.liveSession.live
     ?? sessionSnapshot?.isLive
     ?? confirmedLive;
-  const currentConversationSurface = findConversationSurface(stream.presence, currentSurfaceId);
-  const controllingThisSurface = isLiveSession
-    && Boolean(currentSurfaceId)
-    && stream.presence.controllerSurfaceId === currentSurfaceId;
-  const presenceKnownForThisSurface = Boolean(currentConversationSurface);
-  const conversationNeedsTakeover = isLiveSession && presenceKnownForThisSurface && !controllingThisSurface;
+  const conversationNeedsTakeover = false;
   const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
   const defaultComposerBehavior = stream.isStreaming
     ? 'steer'
@@ -1616,14 +1600,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
-  const ensureConversationCanControl = useCallback((action: string): boolean => {
-    if (!conversationNeedsTakeover) {
-      return true;
-    }
-
-    showNotice('danger', `Take over this conversation to ${action}.`, 4000);
-    return false;
-  }, [conversationNeedsTakeover, showNotice]);
+  const ensureConversationCanControl = useCallback((_action: string): boolean => {
+    return true;
+  }, []);
   const composerDraftStorageKey = draft
     ? buildDraftConversationComposerStorageKey()
     : id
@@ -2905,7 +2884,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (recovered.conversationId === id) {
       setConfirmedLive(true);
       streamReconnect();
-      await streamTakeover();
     }
 
     return recovered.conversationId;
@@ -4301,11 +4279,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || drawingsBusy
     || Boolean(drawingsError);
   const keyboardOpen = keyboardInset > 120;
-  const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
-    draft,
-    isLiveSession,
-    conversationNeedsTakeover,
-  });
   // Keep the rail off once transcripts are large enough to trigger windowing.
   // The rail continuously re-measures mounted message markers, which makes
   // composer-driven layout work scale with transcript size.
@@ -5024,30 +4997,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 }}
               />
 
-              {showConversationTakeoverBanner ? (
-                <div className="flex w-full items-center px-1 py-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void streamTakeover()
-                        .then(() => {
-                          showNotice('accent', 'This surface now controls the conversation.');
-                        })
-                        .catch((error) => {
-                          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-                        });
-                    }}
-                    className="ui-pill ui-pill-solid-accent flex w-full items-center justify-center gap-2 px-4 py-3"
-                  >
-                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 8h10" />
-                      <path d="m9 4 4 4-4 4" />
-                    </svg>
-                    Take over to reply
-                  </button>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-0">
+              <div className="flex flex-col gap-0">
                   <div className="px-3 pt-1">
                     <textarea
                       ref={textareaRef}
@@ -5209,7 +5159,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </div>
                   </div>
                 </div>
-              )}
             </div>
           </div>
 

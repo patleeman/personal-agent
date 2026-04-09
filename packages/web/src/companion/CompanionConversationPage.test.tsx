@@ -112,15 +112,16 @@ describe('companion conversation helpers', () => {
     expect(resolveCompanionConversationLive({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
   });
 
-  it('marks mirrored surfaces as needing takeover', () => {
+  it('keeps mirrored companion surfaces interactive without takeover', () => {
     const state = resolveCompanionControlState({
       isLiveSession: true,
       surfaceId: 'surface-1',
       presence: createPresence(),
     });
 
-    expect(state.controllingThisSurface).toBe(false);
-    expect(state.needsTakeover).toBe(true);
+    expect(state.currentSurface?.surfaceId).toBe('surface-1');
+    expect(state.presenceKnownForThisSurface).toBe(true);
+    expect(state.needsTakeover).toBe(false);
   });
 
   it('shows the status banner only for saved transcripts', () => {
@@ -227,7 +228,7 @@ describe('CompanionConversationPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders mirrored companion mode with takeover and a compact header action menu', () => {
+  it('renders mirrored companion mode without a takeover CTA and with a compact header action menu', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations/conv-123?artifact=artifact-7']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -253,7 +254,7 @@ describe('CompanionConversationPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Take over to reply');
+    expect(html).not.toContain('Take over to reply');
     expect(html).not.toContain('Open todo panel');
     expect(html).not.toContain('Open artifact panel');
     expect(html).not.toContain('Agent reminders');
