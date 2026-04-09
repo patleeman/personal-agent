@@ -1,11 +1,13 @@
 import { appendFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { app, dialog, shell } from 'electron';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { loadDesktopConfig, saveDesktopConfig } from '../state/desktop-config.js';
-import { fetchLatestReleaseCandidate } from './github-releases.js';
+import { downloadReleaseAssetWithGitHubCli, fetchLatestReleaseCandidate } from './github-releases.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
+const UPDATE_DOWNLOADS_DIR_NAME = 'Personal Agent Updates';
 
 function logUpdateMessage(message: string): void {
   try {
@@ -131,13 +133,18 @@ export class DesktopUpdateManager {
       return;
     }
 
-    const openLabel = candidate.downloadUrl
-      ? `Download ${candidate.downloadName ?? 'Update'}`
-      : 'Open Release Page';
+    const useGitHubCliDownload = candidate.source === 'github-cli' && candidate.downloadName !== null;
+    const openLabel = useGitHubCliDownload
+      ? 'Download Installer'
+      : candidate.downloadUrl
+        ? `Download ${candidate.downloadName ?? 'Update'}`
+        : 'Open Release Page';
     const destination = candidate.downloadUrl ?? candidate.releaseUrl;
-    const destinationLabel = candidate.downloadUrl
-      ? 'Open the signed installer in your browser and install it manually.'
-      : 'Open the GitHub release page in your browser and install it manually.';
+    const destinationLabel = useGitHubCliDownload
+      ? 'Download the signed installer with GitHub CLI and open it automatically.'
+      : candidate.downloadUrl
+        ? 'Open the signed installer in your browser and install it manually.'
+        : 'Open the GitHub release page in your browser and install it manually.';
 
     const response = await dialog.showMessageBox({
       type: 'info',
@@ -158,6 +165,23 @@ export class DesktopUpdateManager {
     }
 
     saveDismissedVersion(null);
+
+    if (useGitHubCliDownload && candidate.downloadName) {
+      const downloadsDir = resolve(app.getPath('downloads'), UPDATE_DOWNLOADS_DIR_NAME);
+      logUpdateMessage(`downloading release asset ${candidate.downloadName} for ${candidate.tagName} with GitHub CLI`);
+      const download = await downloadReleaseAssetWithGitHubCli({
+        tagName: candidate.tagName,
+        assetName: candidate.downloadName,
+        outputDir: downloadsDir,
+      });
+      logUpdateMessage(`downloaded ${candidate.downloadName} with ${download.command} to ${download.filePath}`);
+      const openError = await shell.openPath(download.filePath);
+      if (openError.trim().length > 0) {
+        throw new Error(`Downloaded ${candidate.downloadName} to ${download.filePath}, but could not open it: ${openError}`);
+      }
+      return;
+    }
+
     logUpdateMessage(`opening release download ${destination}`);
     await shell.openExternal(destination);
   }

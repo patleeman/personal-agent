@@ -64,7 +64,9 @@ The packaged desktop app checks GitHub Releases for newer versions:
 
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check
-- when a newer release exists, it opens the signed installer download or release page in the browser for manual install
+- for this private repo, it prefers the local GitHub CLI (`gh`) for authenticated release checks and installer downloads
+- when `gh` is available and authenticated, it downloads the signed installer locally and opens it automatically
+- if `gh` is unavailable, it falls back to the public GitHub Releases API, which only works for public repos
 - unpackaged development runs keep update checks disabled
 
 ## Packaged desktop runtime layout
