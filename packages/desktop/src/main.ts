@@ -7,10 +7,12 @@ import { HostManager } from './hosts/host-manager.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
+import { DesktopUpdateManager } from './updates/update-manager.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
+let updateManager: DesktopUpdateManager | undefined;
 let quitting = false;
 
 app.setName('Personal Agent');
@@ -41,6 +43,8 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   await hostManager.ensureActiveHostRunning();
 
+  updateManager = new DesktopUpdateManager();
+
   trayController = new DesktopTrayController({
     hostManager,
     onOpen: () => {
@@ -51,6 +55,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     },
     onConnections: () => {
       void windowController?.openMainWindow('/settings#desktop-connections');
+    },
+    onCheckForUpdates: () => {
+      void updateManager?.checkForUpdates({ userInitiated: true });
     },
     onRestartBackend: () => {
       void hostManager?.restartActiveHost().then(() => windowController?.openMainWindow('/'));
@@ -71,17 +78,24 @@ async function bootstrapDesktopApp(): Promise<void> {
   if (hostManager.getConfig().openWindowOnLaunch) {
     await windowController.openMainWindow('/');
   }
+
+  updateManager.start();
 }
 
-async function shutdownAndQuit(): Promise<void> {
+async function prepareForQuit(): Promise<void> {
   if (quitting) {
     return;
   }
 
   quitting = true;
   windowController?.setQuitting(true);
+  updateManager?.dispose();
   trayController?.destroy();
   await hostManager?.dispose();
+}
+
+async function shutdownAndQuit(): Promise<void> {
+  await prepareForQuit();
   app.quit();
 }
 

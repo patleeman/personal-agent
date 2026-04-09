@@ -22,6 +22,7 @@ export class DesktopTrayController {
     onOpen: () => void;
     onNewConversation: () => void;
     onConnections: () => void;
+    onCheckForUpdates: () => void;
     onRestartBackend: () => void;
     onQuit: () => void;
   };
@@ -31,6 +32,7 @@ export class DesktopTrayController {
     onOpen: () => void;
     onNewConversation: () => void;
     onConnections: () => void;
+    onCheckForUpdates: () => void;
     onRestartBackend: () => void;
     onQuit: () => void;
   }) {
@@ -67,6 +69,10 @@ export class DesktopTrayController {
       {
         label: 'Connections…',
         click: this.options.onConnections,
+      },
+      {
+        label: 'Check for Updates…',
+        click: this.options.onCheckForUpdates,
       },
       {
         label: 'Restart Backend',

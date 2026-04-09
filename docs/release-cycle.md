@@ -35,6 +35,16 @@ git push --follow-tags
 
 The GitHub workflow at `.github/workflows/release.yml` runs the same build on `macos-14` and attaches the resulting artifacts to the matching GitHub release.
 
+## Desktop update checks
+
+The packaged desktop app now checks GitHub Releases for newer macOS builds:
+
+- it performs an automatic check shortly after launch and periodically while the app stays open
+- the tray menu also exposes `Check for Updates…` for an on-demand check
+- when a newer release exists, the app opens the matching GitHub release asset (`.dmg` when available) in the browser for download
+
+Current scope: this is a GitHub-release download flow, not a fully in-place signed macOS auto-installer yet. Proper native auto-install on macOS still requires signing and notarization.
+
 ## Packaged desktop runtime layout
 
 The packaged app now carries the runtime data the desktop shell needs:

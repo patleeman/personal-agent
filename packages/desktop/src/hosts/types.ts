@@ -31,6 +31,9 @@ export interface DesktopConfig {
     width: number;
     height: number;
   };
+  updates?: {
+    dismissedVersion?: string;
+  };
   hosts: DesktopHostRecord[];
 }
 
