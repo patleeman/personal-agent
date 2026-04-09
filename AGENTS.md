@@ -21,6 +21,18 @@ This is personal software, built for Patrick by Patrick.
 - Ensure consistency across pages, don't design in isolation!
 - If you modify anything in the web ui, you MUST perform a visual check before signing off on the work! Make sure there is no jank and the output looks good.
 
+## Release flow
+
+If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the tag-driven release flow.
+
+1. From the repo root, bump the version with `npm run release:patch`, `npm run release:minor`, or `npm run release:major`.
+2. Push the commit and tag with `git push --follow-tags`.
+3. The `Release` GitHub Actions workflow runs on pushed `v*` tags, builds the macOS desktop app, and creates the GitHub release with the generated `.dmg` and `.zip` artifacts.
+
+Important: pushing commits to `master` does not create a GitHub release by itself. The release workflow only runs when the version tag is pushed.
+
+See `docs/release-cycle.md` for the fuller release notes.
+
 ## Docs are for agents
 
 The docs folder is for agents to use and understand how personal-assistant works. Make sure to update it.
