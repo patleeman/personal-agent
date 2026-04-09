@@ -74,7 +74,7 @@ It shows:
 - reminder and callback alerts
 - conversation attention items
 
-The UI also includes in-app toast delivery for active alerts.
+When browser notification permission is granted, the UI can deliver browser notifications for newly arriving disruptive alerts while the app is hidden.
 
 ## Automations
 

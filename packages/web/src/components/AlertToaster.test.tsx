@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { AlertToaster } from './AlertToaster';
+import { AlertToaster, collectFreshDisruptiveAlerts } from './AlertToaster';
 import { AppDataContext } from '../contexts';
 import type { AlertSnapshot } from '../types';
 
@@ -38,6 +38,58 @@ function createAlertsSnapshot(permission: NotificationPermission = 'default'): A
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('collectFreshDisruptiveAlerts', () => {
+  it('suppresses existing disruptive alerts on the initial snapshot', () => {
+    const { freshEntries, nextActiveAlertIds } = collectFreshDisruptiveAlerts(null, createAlertsSnapshot('granted').entries);
+
+    expect(freshEntries).toEqual([]);
+    expect([...nextActiveAlertIds]).toEqual(['alert-1']);
+  });
+
+  it('returns only newly active disruptive alerts after initialization', () => {
+    const entries = [
+      ...createAlertsSnapshot('granted').entries,
+      {
+        id: 'alert-2',
+        profile: 'shared',
+        kind: 'task-callback',
+        severity: 'disruptive' as const,
+        status: 'active' as const,
+        title: 'Background run finished',
+        body: 'The detached run completed.',
+        createdAt: '2026-03-26T15:00:00.000Z',
+        updatedAt: '2026-03-26T15:00:00.000Z',
+        conversationId: 'conv-456',
+        wakeupId: 'resume_456',
+        sourceKind: 'task-run',
+        sourceId: 'run-2',
+        requiresAck: false,
+      },
+      {
+        id: 'alert-3',
+        profile: 'shared',
+        kind: 'reminder',
+        severity: 'passive' as const,
+        status: 'active' as const,
+        title: 'Passive reminder',
+        body: 'This should stay out of browser notifications.',
+        createdAt: '2026-03-26T16:00:00.000Z',
+        updatedAt: '2026-03-26T16:00:00.000Z',
+        conversationId: 'conv-789',
+        wakeupId: 'resume_789',
+        sourceKind: 'reminder-tool',
+        sourceId: 'reminder-3',
+        requiresAck: false,
+      },
+    ];
+
+    const { freshEntries, nextActiveAlertIds } = collectFreshDisruptiveAlerts(new Set(['alert-1']), entries);
+
+    expect(freshEntries.map((entry) => entry.id)).toEqual(['alert-2']);
+    expect([...nextActiveAlertIds]).toEqual(['alert-1', 'alert-2']);
+  });
 });
 
 describe('AlertToaster', () => {
