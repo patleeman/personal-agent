@@ -7,7 +7,6 @@ export const CONVERSATION_MENU_SLASH_COMMANDS = [
   '/session',
   '/fork',
   '/summarize-fork',
-  '/tree',
   '/new',
   '/compact',
   '/reload',
@@ -38,8 +37,7 @@ export type ConversationSlashCommand =
   | { action: 'search'; query: string }
   | { action: 'session' }
   | { action: 'summarize' }
-  | { action: 'think'; topic?: string }
-  | { action: 'tree' };
+  | { action: 'think'; topic?: string };
 
 export type ConversationSlashParseResult =
   | { kind: 'command'; command: ConversationSlashCommand }
@@ -140,8 +138,6 @@ export function parseConversationSlashCommand(input: string): ConversationSlashP
           ...(argument ? { topic: argument } : {}),
         },
       };
-    case '/tree':
-      return parseNoArgCommand('tree', argument, 'Usage: /tree');
     default:
       return null;
   }

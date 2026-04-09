@@ -130,7 +130,6 @@ interface RawBranchSummary {
 
 type RawLine = RawSessionRecord | RawModelChange | RawThinkingLevelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 type RawDisplayLine = RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
-type PiSessionTreeNode = ReturnType<SessionManager['getTree']>[number];
 
 interface TailScanDisplayEntrySummary {
   kind: 'display';
@@ -195,23 +194,6 @@ export interface SessionDetailReadTelemetry {
   totalBlocks: number;
   blockOffset: number;
   contextUsageIncluded: boolean;
-}
-
-export interface ConversationTreeNode {
-  id: string;
-  kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'summary' | 'error' | 'custom';
-  label: string;
-  preview: string;
-  ts: string;
-  blockIndex: number | null;
-  active: boolean;
-  onActivePath: boolean;
-  children: ConversationTreeNode[];
-}
-
-export interface ConversationTreeSnapshot {
-  leafId: string | null;
-  roots: ConversationTreeNode[];
 }
 
 interface DisplayImage {
@@ -683,143 +665,6 @@ function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number):
   }
 
   return segments.join('\n');
-}
-
-function summarizeTreeText(text: string, maxLength = 120): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '';
-  }
-
-  return normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
-    : normalized;
-}
-
-function summarizeToolCallArguments(argumentsValue: Record<string, unknown> | undefined): string {
-  if (!argumentsValue) {
-    return '';
-  }
-
-  const command = typeof argumentsValue.command === 'string' ? argumentsValue.command.trim() : '';
-  if (command) {
-    return summarizeTreeText(command, 100);
-  }
-
-  const path = typeof argumentsValue.path === 'string' ? argumentsValue.path.trim() : '';
-  if (path) {
-    return summarizeTreeText(path, 100);
-  }
-
-  const url = typeof argumentsValue.url === 'string' ? argumentsValue.url.trim() : '';
-  if (url) {
-    return summarizeTreeText(url, 100);
-  }
-
-  return summarizeTreeText(JSON.stringify(argumentsValue), 100);
-}
-
-function describeConversationTreeMessage(entry: SessionEntry): Omit<ConversationTreeNode, 'blockIndex' | 'active' | 'onActivePath' | 'children'> | null {
-  if (entry.type === 'compaction') {
-    return {
-      id: entry.id,
-      kind: 'summary',
-      label: 'compact',
-      preview: summarizeTreeText(entry.summary, 110) || 'Compaction summary',
-      ts: normalizeTimestamp(entry.timestamp),
-    };
-  }
-
-  if (entry.type === 'branch_summary') {
-    return {
-      id: entry.id,
-      kind: 'summary',
-      label: 'branch',
-      preview: summarizeTreeText(entry.summary, 110) || 'Branch summary',
-      ts: normalizeTimestamp(entry.timestamp),
-    };
-  }
-
-  if (entry.type !== 'message') {
-    return null;
-  }
-
-  if (entry.message.role === 'user') {
-    const { text, images } = extractUserContent(entry.message.content);
-    const attachmentPreview = images.length > 0
-      ? images.length === 1
-        ? '1 image attachment'
-        : `${images.length} image attachments`
-      : '';
-    const preview = summarizeTreeText(text, 120);
-
-    return {
-      id: entry.id,
-      kind: 'user',
-      label: 'user',
-      preview: preview
-        ? attachmentPreview ? `${preview} · ${attachmentPreview}` : preview
-        : attachmentPreview || '(empty message)',
-      ts: normalizeTimestamp(entry.timestamp),
-    };
-  }
-
-  if (entry.message.role === 'assistant') {
-    const contentBlocks = normalizeContent(entry.message.content);
-    const textBlock = contentBlocks.find((block) => block.type === 'text' && block.text?.trim());
-    if (textBlock?.text) {
-      return {
-        id: entry.id,
-        kind: 'assistant',
-        label: 'asst',
-        preview: summarizeTreeText(textBlock.text, 120) || '(assistant message)',
-        ts: normalizeTimestamp(entry.timestamp),
-      };
-    }
-
-    const toolBlock = contentBlocks.find((block) => block.type === 'toolCall');
-    if (toolBlock) {
-      return {
-        id: entry.id,
-        kind: 'tool',
-        label: toolBlock.name?.trim() || 'tool',
-        preview: summarizeToolCallArguments(toolBlock.arguments) || '(tool call)',
-        ts: normalizeTimestamp(entry.timestamp),
-      };
-    }
-
-    const thinkingBlock = contentBlocks.find((block) => block.type === 'thinking' && block.thinking?.trim());
-    if (thinkingBlock?.thinking) {
-      return {
-        id: entry.id,
-        kind: 'thinking',
-        label: 'think',
-        preview: summarizeTreeText(thinkingBlock.thinking, 110) || '(thinking)',
-        ts: normalizeTimestamp(entry.timestamp),
-      };
-    }
-
-    const errorMessage = getAssistantErrorDisplayMessage(entry.message);
-    if (errorMessage) {
-      return {
-        id: entry.id,
-        kind: 'error',
-        label: 'error',
-        preview: summarizeTreeText(errorMessage, 110) || 'Assistant error',
-        ts: normalizeTimestamp(entry.timestamp),
-      };
-    }
-
-    return {
-      id: entry.id,
-      kind: 'assistant',
-      label: 'asst',
-      preview: '(assistant message)',
-      ts: normalizeTimestamp(entry.timestamp),
-    };
-  }
-
-  return null;
 }
 
 const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set([
@@ -1649,57 +1494,6 @@ export function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEnt
   return displayEntries;
 }
 
-function buildConversationTreeNodes(
-  nodes: PiSessionTreeNode[],
-  context: {
-    leafId: string | null;
-    activePathIds: Set<string>;
-    entryAnchorIndexById: Map<string, number>;
-  },
-): ConversationTreeNode[] {
-  const visibleNodes: ConversationTreeNode[] = [];
-
-  for (const node of nodes) {
-    const children = buildConversationTreeNodes(node.children, context);
-    const described = describeConversationTreeMessage(node.entry);
-
-    if (!described) {
-      visibleNodes.push(...children);
-      continue;
-    }
-
-    visibleNodes.push({
-      ...described,
-      blockIndex: context.activePathIds.has(node.entry.id)
-        ? context.entryAnchorIndexById.get(node.entry.id) ?? null
-        : null,
-      active: context.leafId === node.entry.id,
-      onActivePath: context.activePathIds.has(node.entry.id),
-      children,
-    });
-  }
-
-  return visibleNodes;
-}
-
-function buildConversationTreeSnapshotFromFile(filePath: string): ConversationTreeSnapshot {
-  const manager = SessionManager.open(filePath);
-  const branchEntries = manager.getBranch();
-  const leafId = manager.getLeafId();
-  const displayEntries = buildDisplayMessageEntriesFromSessionEntries(branchEntries);
-  const { entryAnchorIndexById } = buildDisplayBlocksWithEntryAnchors(displayEntries);
-  const activePathIds = new Set(branchEntries.map((entry) => entry.id));
-
-  return {
-    leafId,
-    roots: buildConversationTreeNodes(manager.getTree(), {
-      leafId,
-      activePathIds,
-      entryAnchorIndexById,
-    }),
-  };
-}
-
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 export function listSessions(): SessionMeta[] {
@@ -2069,16 +1863,3 @@ export function readSessionImageAsset(
   return null;
 }
 
-export function readSessionTreeByFile(filePath: string): ConversationTreeSnapshot | null {
-  const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
-  if (!meta) {
-    return null;
-  }
-
-  return buildConversationTreeSnapshotFromFile(meta.file);
-}
-
-export function readSessionTree(sessionId: string): ConversationTreeSnapshot | null {
-  const meta = resolveSessionMeta(sessionId);
-  return meta ? readSessionTreeByFile(meta.file) : null;
-}

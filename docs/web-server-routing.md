@@ -42,7 +42,7 @@ The companion SPA fallback also has to recognize both canonical `/app/*` URLs an
 
 | File | Responsibility | Notes |
 | --- | --- | --- |
-| `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads. The companion surface also mounts the read-only session detail/meta/tree/block routes so mobile conversation links can open transcripts directly. |
+| `routes/conversations.ts` | conversation list/detail, artifacts, attachments, attention toggles | Uses the shared route context plus `conversations/conversationService.ts` for common session reads. The companion surface also mounts the read-only session detail/meta/block routes so mobile conversation links can open transcripts directly. |
 | `routes/conversationState.ts` | conversation bootstrap, recover, title/cwd changes, model preferences | Keeps the conversation-state endpoints out of `index.ts` without bloating the main conversation list/detail routes |
 | `routes/liveSessions.ts` | live session CRUD, streaming updates, session stats | Owns the live-session session-state wiring and prompt submission flow |
 | `routes/runs.ts` / `routes/runsApp.ts` | durable run APIs for companion/app surfaces | App surface includes SSE/log/cancel; companion surface is read-focused |

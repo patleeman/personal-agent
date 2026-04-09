@@ -6,7 +6,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionPresenceState, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
@@ -91,7 +91,6 @@ import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs'
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
-const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
 const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
@@ -1370,46 +1369,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerQuestionSubmitting, setComposerQuestionSubmitting] = useState(false);
   const artifactAutoOpenSeededRef = useRef(false);
   const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
-  const [showTree, setShowTree] = useState(false);
-  const [treeSnapshot, setTreeSnapshot] = useState<ConversationTreeSnapshot | null>(null);
-  const [treeLoading, setTreeLoading] = useState(false);
-
-  useEffect(() => {
-    if (!showTree || !id) {
-      if (!showTree) {
-        setTreeLoading(false);
-      }
-      setTreeSnapshot(null);
-      return;
-    }
-
-    let cancelled = false;
-    setTreeSnapshot(null);
-    setTreeLoading(true);
-
-    api.sessionTree(id)
-      .then((snapshot) => {
-        if (cancelled) {
-          return;
-        }
-        setTreeSnapshot(snapshot);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
-        setTreeSnapshot(null);
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setTreeLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id, messageCount, showTree]);
   const processedArtifactAutoOpenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -2628,16 +2587,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [historicalHasOlderBlocks, historicalTailBlocks, historicalTotalBlocks, id, isLiveSession, loadOlderMessages, sessionLoading, stream.isStreaming]);
 
-  // Esc aborts an active run. Esc+Esc still opens the tree when idle.
+  // Esc aborts an active run.
   useEffect(() => {
-    let lastEsc = 0;
     function handler(e: KeyboardEvent) {
-      if (e.key !== 'Escape') {
+      if (e.key !== 'Escape' || e.defaultPrevented) {
         return;
-      }
-
-      if (e.defaultPrevented || showTree) {
-        return; // let focused controls / tree handle their own Escape
       }
 
       if (hasBlockingOverlayOpen()) {
@@ -2646,22 +2600,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       if (stream.isStreaming) {
         e.preventDefault();
-        lastEsc = 0;
         void streamAbort();
-        return;
-      }
-
-      const now = Date.now();
-      if (now - lastEsc < 500) {
-        setShowTree(true);
-        lastEsc = 0;
-      } else {
-        lastEsc = now;
       }
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [showTree, stream.isStreaming, streamAbort]);
+  }, [stream.isStreaming, streamAbort]);
 
   // Forked/new conversations with a queued initial prompt should stay pinned to
   // the bottom only until that queued user block lands and the assistant starts
@@ -3151,11 +3095,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     if (summaryForkBusy) {
-      return;
-    }
-
-    if (stream.isStreaming) {
-      showNotice('danger', 'Stop the current response before starting a summary fork.', 4000);
       return;
     }
 
@@ -3831,14 +3770,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             ? `Think step-by-step about: ${command.topic}`
             : 'Think step-by-step about our conversation so far and share your reasoning.',
         };
-      case 'tree':
-        setInput('');
-        if (!id || draft) {
-          showNotice('danger', 'Branch navigation is only available for existing conversations.', 4000);
-        } else {
-          setShowTree(true);
-        }
-        return { kind: 'handled' };
     }
   }
 
@@ -4355,11 +4286,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || conversationCwdEditorOpen
     || conversationCwdPickBusy
     || conversationCwdBusy;
-  const summarizeAndForkDisabled = summaryForkBusy || stream.isStreaming;
+  const summarizeAndForkDisabled = summaryForkBusy;
   const summarizeAndForkTitle = summaryForkBusy
     ? 'Creating a summary fork…'
     : stream.isStreaming
-      ? 'Stop the current response before starting a summary fork.'
+      ? 'Duplicate the conversation through the latest completed turn, compact the copy, and open it as a new conversation.'
       : 'Duplicate this thread, compact the copy, and open it as a new conversation.';
   const hasComposerShelfContent = draftMentionItems.length > 0
     || pendingQueue.length > 0
@@ -5329,21 +5260,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }}
             onAttach={(selection) => { void attachSavedDrawing(selection); }}
             onClose={() => setDrawingsPickerOpen(false)}
-          />
-        </Suspense>
-      )}
-
-      {/* Session tree overlay */}
-      {showTree && (
-        <Suspense fallback={null}>
-          <ConversationTree
-            tree={treeSnapshot?.roots ?? []}
-            loading={treeLoading}
-            onJump={jumpToMessage}
-            onClose={() => setShowTree(false)}
-            onFork={id && !stream.isStreaming && Boolean(realMessages) ? (blockIdx) => {
-              void forkConversationFromMessage(blockIdx);
-            } : undefined}
           />
         </Suspense>
       )}

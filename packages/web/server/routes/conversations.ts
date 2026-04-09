@@ -51,7 +51,6 @@ import {
   readSessionBlock,
   readSessionImageAsset,
   readSessionSearchText,
-  readSessionTree,
 } from '../conversations/sessions.js';
 import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import {
@@ -219,20 +218,6 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
       });
 
       res.json(sessionRead.detail);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.get('/api/sessions/:id/tree', (req, res) => {
-    try {
-      const result = readSessionTree(req.params.id);
-      if (!result) { res.status(404).json({ error: 'Session not found' }); return; }
-      res.json(result);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

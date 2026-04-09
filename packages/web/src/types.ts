@@ -538,23 +538,6 @@ export interface SessionDetailAppendOnlyResponse {
 
 export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse | SessionDetailAppendOnlyResponse;
 
-export interface ConversationTreeNode {
-  id: string;
-  kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'summary' | 'error' | 'custom';
-  label: string;
-  preview: string;
-  ts: string;
-  blockIndex: number | null;
-  active: boolean;
-  onActivePath: boolean;
-  children: ConversationTreeNode[];
-}
-
-export interface ConversationTreeSnapshot {
-  leafId: string | null;
-  roots: ConversationTreeNode[];
-}
-
 export type AppEventTopic =
   | 'activity'
   | 'alerts'

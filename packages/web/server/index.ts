@@ -4,7 +4,7 @@ import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
-import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, readSessionTree, renameStoredSession } from './conversations/sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionMeta, readSessionSearchText, renameStoredSession } from './conversations/sessions.js';
 import { invalidateAppTopics, publishAppEvent } from './shared/appEvents.js';
 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversations/conversationCwd.js';

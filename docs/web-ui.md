@@ -181,7 +181,7 @@ Conversation lists in the sidebar live under a dedicated **Threads** section and
 
 Saved conversations keep a minimal right-hand inspector focused on runs and details. That rail stays closed by default and opens on demand. In the runs section, conversation work, background work, and thread-mentioned work are grouped separately so the source of each item is clearer than a flat internal run list.
 
-The conversation header stays compact: it keeps the title and inline working-directory controls together, and both draft and saved conversations can change that cwd from the same header area without opening the right rail. Saved-conversation status stays out of the title bar; live/running and needs-review signals are handled elsewhere in the UI instead of next to the title. Saved conversations expose a summarize + fork icon button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
+The conversation header stays compact: it keeps the title and inline working-directory controls together, and both draft and saved conversations can change that cwd from the same header area without opening the right rail. Saved-conversation status stays out of the title bar; live/running and needs-review signals are handled elsewhere in the UI instead of next to the title. Saved conversations expose a summarize + fork icon button on the right side of the top bar beside the inspector toggle, separated from the title/cwd controls, so the branch action stays available without crowding the main header text. That action duplicates the thread, compacts the duplicate, and opens that summarized copy as a new conversation. When a response is still running, the summary fork snapshots the latest completed persisted turn instead of waiting for the active turn to finish. The transcript and composer stay within a centered max width for readability, while conversation-local runtime controls like model, thinking level, context usage, branch, and git line summaries live in or directly under the composer instead of the header.
 
 Conversation artifacts can appear as chat stubs and open in the right-hand artifact panel for rendered HTML, Mermaid, and LaTeX outputs.
 
@@ -423,7 +423,6 @@ Common ones include:
 - `/compact` — compact context
 - `/reload` — reload profile resources
 - `/new` — start a new session
-- `/tree` — open branch navigation
 
 There are also convenience commands such as `/run`, `/search`, `/summarize`, and `/think`.
 
