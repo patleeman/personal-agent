@@ -12,8 +12,7 @@
   }
 
   .ui-desktop-top-bar {
-    @apply sticky top-0 z-20 flex items-center gap-3 border-b border-border-subtle bg-base/95 px-4 py-3 backdrop-blur-sm;
-    min-height: 54px;
+    @apply relative z-30 flex h-10 shrink-0 items-center gap-3 border-b border-border-subtle bg-base/95 px-3 backdrop-blur-md;
     -webkit-app-region: drag;
   }
 
@@ -23,27 +22,45 @@
   }
 
   .ui-desktop-top-bar__leading {
-    @apply relative z-10 flex items-center pl-16;
+    @apply relative z-10 flex min-w-0 items-center gap-2;
+  }
+
+  .ui-desktop-top-bar__traffic-light-gap {
+    width: 72px;
+    height: 100%;
+    flex-shrink: 0;
   }
 
   .ui-desktop-top-bar__controls {
-    @apply flex items-center gap-1.5;
+    @apply flex items-center gap-1;
+  }
+
+  .ui-desktop-top-bar__nav-button {
+    @apply h-7 min-h-0 min-w-[28px] rounded-md border-0 bg-transparent px-2 text-[12px] shadow-none;
   }
 
   .ui-desktop-top-bar__center {
-    @apply relative z-10 min-w-0 flex-1 text-center;
+    @apply relative z-10 flex min-w-0 flex-1 items-center justify-center gap-2 text-center;
   }
 
   .ui-desktop-top-bar__title {
-    @apply truncate text-[13px] font-semibold text-primary;
+    @apply truncate text-[12px] font-semibold text-primary;
+  }
+
+  .ui-desktop-top-bar__separator {
+    @apply text-[11px] text-dim;
   }
 
   .ui-desktop-top-bar__meta {
-    @apply truncate pt-0.5 text-[11px] text-secondary;
+    @apply truncate text-[11px] text-secondary;
   }
 
   .ui-desktop-top-bar__trailing {
-    @apply relative z-10 flex items-center justify-end;
+    @apply relative z-10 flex min-w-[88px] items-center justify-end;
+  }
+
+  .ui-desktop-top-bar__action-button {
+    @apply h-7 min-h-0 rounded-md border-0 bg-transparent px-2 text-[11px] shadow-none;
   }
 
   .ui-page-meta {

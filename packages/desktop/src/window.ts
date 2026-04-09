@@ -130,8 +130,8 @@ export class DesktopWindowController {
       title: 'Personal Agent',
       icon: runtime.colorIconFile,
       autoHideMenuBar: true,
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-      trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 14 } : undefined,
+      titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'hidden',
+      trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 11 } : undefined,
       webPreferences: {
         preload: resolvePreloadPath(),
         partition,

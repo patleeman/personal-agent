@@ -1,6 +1,6 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getDesktopBridge } from '../desktopBridge';
+import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
 import { ToolbarButton } from './ui';
 
@@ -43,10 +43,8 @@ function readBrowserNavigationState(): DesktopNavigationState {
 
 export function DesktopTopBar({
   environment,
-  forceVisible = false,
 }: {
   environment: DesktopEnvironmentState | null;
-  forceVisible?: boolean;
 }) {
   const location = useLocation();
   const [navigation, setNavigation] = useState<DesktopNavigationState>({
@@ -80,8 +78,9 @@ export function DesktopTopBar({
   }, [location.key, location.pathname, location.search]);
 
   const bridge = getDesktopBridge();
+  const showDesktopChrome = bridge !== null || environment !== null || isDesktopShell();
 
-  if (!forceVisible && !bridge && !environment) {
+  if (!showDesktopChrome) {
     return null;
   }
 
@@ -117,22 +116,24 @@ export function DesktopTopBar({
     <div className="ui-desktop-top-bar">
       <div className="ui-desktop-top-bar__drag-region" />
       <div className="ui-desktop-top-bar__leading">
+        <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
         <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-          <ToolbarButton onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back">
+          <ToolbarButton className="ui-desktop-top-bar__nav-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back">
             ←
           </ToolbarButton>
-          <ToolbarButton onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward">
+          <ToolbarButton className="ui-desktop-top-bar__nav-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward">
             →
           </ToolbarButton>
         </div>
       </div>
       <div className="ui-desktop-top-bar__center">
-        <div className="ui-desktop-top-bar__title">Personal Agent</div>
-        <div className="ui-desktop-top-bar__meta">{formatHostLabel(environment, Boolean(bridge))}</div>
+        <span className="ui-desktop-top-bar__title">Personal Agent</span>
+        <span className="ui-desktop-top-bar__separator" aria-hidden="true">—</span>
+        <span className="ui-desktop-top-bar__meta">{formatHostLabel(environment, Boolean(bridge))}</span>
       </div>
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
         {bridge ? (
-          <ToolbarButton onClick={() => { void bridge.showConnectionsWindow(); }}>
+          <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => { void bridge.showConnectionsWindow(); }}>
             Connections
           </ToolbarButton>
         ) : null}

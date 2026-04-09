@@ -428,28 +428,31 @@ export function Layout() {
 
   return (
     <>
-      <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
-        <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
-          <Sidebar />
+      <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
+        <DesktopTopBar environment={desktopEnvironment} />
+
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
+            <Sidebar />
+          </div>
+
+          <ResizeHandle onMouseDown={sidebar.onMouseDown} />
+
+          <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
+            <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+              <Outlet />
+            </main>
+
+            {showContextRail ? (
+              <>
+                <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+                <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
+                  <ContextRail />
+                </div>
+              </>
+            ) : null}
+          </RouteContentBoundary>
         </div>
-
-        <ResizeHandle onMouseDown={sidebar.onMouseDown} />
-
-        <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
-          <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
-            <DesktopTopBar environment={desktopEnvironment} forceVisible />
-            <Outlet />
-          </main>
-
-          {showContextRail ? (
-            <>
-              <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-              <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
-                <ContextRail />
-              </div>
-            </>
-          ) : null}
-        </RouteContentBoundary>
       </div>
 
       {warmLiveConversationIds.map((conversationId) => (
