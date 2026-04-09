@@ -23,7 +23,7 @@ import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
-const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[18rem] resize-y`;
+const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[12rem] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors';
 
@@ -332,6 +332,62 @@ function CronBuilderEditor({
   );
 }
 
+function TaskFolderField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (cwd: string) => void;
+}) {
+  const [pickBusy, setPickBusy] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+
+  async function handlePickFolder() {
+    if (pickBusy) {
+      return;
+    }
+
+    setPickBusy(true);
+    setPickError(null);
+    try {
+      const result = await api.pickFolder(value.trim() || undefined);
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      onChange(result.path);
+    } catch (nextError) {
+      setPickError(nextError instanceof Error ? nextError.message : 'Could not choose a folder.');
+    } finally {
+      setPickBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <label className="ui-card-meta">Working directory</label>
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={(event) => {
+            if (pickError) {
+              setPickError(null);
+            }
+            onChange(event.target.value);
+          }}
+          className={`${INPUT_CLASS} font-mono`}
+          placeholder="Optional"
+          spellCheck={false}
+        />
+        <ToolbarButton type="button" onClick={() => { void handlePickFolder(); }} disabled={pickBusy} className="shrink-0 whitespace-nowrap text-accent">
+          {pickBusy ? 'Choosing…' : 'Choose…'}
+        </ToolbarButton>
+      </div>
+      {pickError && <p className="text-[12px] text-danger">{pickError}</p>}
+    </div>
+  );
+}
+
 function TaskEditorForm({
   mode,
   value,
@@ -352,8 +408,8 @@ function TaskEditorForm({
   const validationError = useMemo(() => validateTaskForm(value, mode), [mode, value]);
 
   return (
-    <div className="space-y-4 px-4 py-4 overflow-y-auto">
-      <div className="flex items-start justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-4">
         <div className="space-y-1 min-w-0">
           <p className="ui-card-title break-all">{mode === 'create' ? 'New automation' : value.title}</p>
           <p className="ui-card-meta">{mode === 'create' ? 'Create an automation' : 'Edit automation'}</p>
@@ -361,87 +417,87 @@ function TaskEditorForm({
         <button type="button" onClick={onCancel} className="ui-toolbar-button">Cancel</button>
       </div>
 
-      <div className="border-t border-border-subtle pt-4 space-y-4">
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Title</label>
-          <input
-            value={value.title}
-            onChange={(event) => onChange({ title: event.target.value })}
-            className={INPUT_CLASS}
-            placeholder="Daily bug scan"
-          />
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+          <div className="space-y-4">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(18rem,1.2fr)]">
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Title</label>
+                <input
+                  value={value.title}
+                  onChange={(event) => onChange({ title: event.target.value })}
+                  className={INPUT_CLASS}
+                  placeholder="Daily bug scan"
+                />
+              </div>
 
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Prompt</label>
-          <MentionTextarea
-            value={value.prompt}
-            onValueChange={(prompt) => onChange({ prompt })}
-            className={TEXTAREA_CLASS}
-          />
+              <TaskFolderField value={value.cwd} onChange={(cwd) => onChange({ cwd })} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="ui-card-meta">Prompt</label>
+              <MentionTextarea
+                value={value.prompt}
+                onValueChange={(prompt) => onChange({ prompt })}
+                className={TEXTAREA_CLASS}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4 border-t border-border-subtle pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+            <div className="space-y-2">
+              <p className="ui-card-meta">Schedule</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => onChange({ scheduleMode: 'cron' })}
+                  className={scheduleModeButtonClass(value.scheduleMode === 'cron')}
+                >
+                  recurring
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ scheduleMode: 'at' })}
+                  className={scheduleModeButtonClass(value.scheduleMode === 'at')}
+                >
+                  one time
+                </button>
+              </div>
+            </div>
+
+            {value.scheduleMode === 'cron' ? (
+              <CronBuilderEditor
+                value={value.cronEditor}
+                onChange={(cronEditor) => onChange({ cronEditor })}
+              />
+            ) : (
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Run at</label>
+                <input
+                  type="datetime-local"
+                  value={value.atValue}
+                  onChange={(event) => onChange({ atValue: event.target.value })}
+                  className={INPUT_CLASS}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-border-subtle pt-4 space-y-4">
-        <div className="space-y-2">
-          <p className="ui-card-meta">Schedule</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => onChange({ scheduleMode: 'cron' })}
-              className={scheduleModeButtonClass(value.scheduleMode === 'cron')}
-            >
-              recurring
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange({ scheduleMode: 'at' })}
-              className={scheduleModeButtonClass(value.scheduleMode === 'at')}
-            >
-              one time
-            </button>
-          </div>
-        </div>
-
-        {value.scheduleMode === 'cron' ? (
-          <CronBuilderEditor
-            value={value.cronEditor}
-            onChange={(cronEditor) => onChange({ cronEditor })}
-          />
-        ) : (
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Run at</label>
-            <input
-              type="datetime-local"
-              value={value.atValue}
-              onChange={(event) => onChange({ atValue: event.target.value })}
-              className={INPUT_CLASS}
-            />
-          </div>
+      <div className="border-t border-border-subtle px-5 py-3">
+        {(validationError || error) && (
+          <p className="mb-3 text-[12px] text-danger">{validationError ?? error}</p>
         )}
 
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Working directory</label>
-          <input
-            value={value.cwd}
-            onChange={(event) => onChange({ cwd: event.target.value })}
-            className={INPUT_CLASS}
-            placeholder="Optional"
-          />
+        <div className="flex items-center gap-3">
+          <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
+            {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create automation' : 'Save automation')}
+          </ToolbarButton>
+          <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
+            Cancel
+          </button>
         </div>
-      </div>
-
-      {(validationError || error) && (
-        <p className="text-[12px] text-danger">{validationError ?? error}</p>
-      )}
-
-      <div className="flex items-center gap-3 pb-2">
-        <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
-          {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create automation' : 'Save automation')}
-        </ToolbarButton>
-        <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
-          Cancel
-        </button>
       </div>
     </div>
   );

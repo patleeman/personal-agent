@@ -64,9 +64,11 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Automations');
-    expect(html).toContain('Current');
+    expect(html).toContain('Automation');
+    expect(html).toContain('Schedule');
     expect(html).toContain('Daily report');
     expect(html).toContain('href="/automations/daily-report"');
+    expect(html).not.toContain('Current');
     expect(html).not.toContain('href="/settings"');
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
   });
@@ -99,6 +101,7 @@ describe('TasksPage', () => {
 
     expect(html).toContain('aria-label="Create automation"');
     expect(html).toContain('New automation');
+    expect(html).toContain('Choose…');
     expect(html).not.toContain('No automations yet.');
   });
 });

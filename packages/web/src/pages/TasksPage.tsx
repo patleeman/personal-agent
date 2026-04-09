@@ -25,14 +25,6 @@ function statusText(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'la
   return { text: 'Scheduled', cls: 'text-secondary' };
 }
 
-function taskAccentIcon(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): string {
-  if (task.running) return '◔';
-  if (task.lastStatus === 'failure') return '⚠';
-  if (!task.enabled) return '○';
-  if (task.lastStatus === 'success') return '✦';
-  return '◌';
-}
-
 function summarizePrompt(value: string): string {
   return value
     .replace(/[`*_>#-]/g, ' ')
@@ -44,36 +36,28 @@ function formatTaskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>): strin
   return task.title?.trim() || task.id;
 }
 
-function formatTaskMeta(task: Pick<ScheduledTaskSummary, 'cron' | 'at' | 'model' | 'lastRunAt'>): string[] {
-  const parts: string[] = [];
-  if (task.cron || task.at) {
-    parts.push(formatTaskSchedule(task));
-  }
-  if (task.model) {
-    parts.push(task.model.split('/').pop() ?? task.model);
-  }
-  if (task.lastRunAt) {
-    parts.push(`Last run ${timeAgo(task.lastRunAt)}`);
-  }
-  return parts;
+function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
+  if (task.running) return 0;
+  if (task.lastStatus === 'failure') return 1;
+  if (task.enabled) return 2;
+  return 3;
 }
 
-interface AutomationSection {
-  id: string;
-  label: string;
-  items: ScheduledTaskSummary[];
-}
+function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
+  return [...tasks].sort((left, right) => {
+    const rankDiff = taskRowRank(left) - taskRowRank(right);
+    if (rankDiff !== 0) {
+      return rankDiff;
+    }
 
-function buildAutomationSections(tasks: ScheduledTaskSummary[]): AutomationSection[] {
-  const needsAttention = tasks.filter((task) => task.running || task.lastStatus === 'failure');
-  const disabled = tasks.filter((task) => !task.enabled);
-  const current = tasks.filter((task) => !needsAttention.includes(task) && !disabled.includes(task));
+    const leftLastRun = left.lastRunAt ? Date.parse(left.lastRunAt) : 0;
+    const rightLastRun = right.lastRunAt ? Date.parse(right.lastRunAt) : 0;
+    if (leftLastRun !== rightLastRun) {
+      return rightLastRun - leftLastRun;
+    }
 
-  return [
-    { id: 'current', label: 'Current', items: current },
-    { id: 'needs-attention', label: 'Needs attention', items: needsAttention },
-    { id: 'disabled', label: 'Disabled', items: disabled },
-  ].filter((section) => section.items.length > 0);
+    return formatTaskName(left).localeCompare(formatTaskName(right));
+  });
 }
 
 function CreateTaskModal({ onClose }: { onClose: () => void }) {
@@ -104,8 +88,8 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
         aria-label="Create automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '980px',
-          height: 'min(760px, calc(100vh - 4rem))',
+          maxWidth: '1120px',
+          height: 'min(700px, calc(100vh - 4.5rem))',
           background: 'rgb(var(--color-surface) / 0.96)',
           backdropFilter: 'blur(22px)',
           overscrollBehavior: 'contain',
@@ -145,8 +129,8 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
         aria-label="Edit automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '980px',
-          height: 'min(760px, calc(100vh - 4rem))',
+          maxWidth: '1120px',
+          height: 'min(700px, calc(100vh - 4.5rem))',
           background: 'rgb(var(--color-surface) / 0.96)',
           backdropFilter: 'blur(22px)',
           overscrollBehavior: 'contain',
@@ -158,39 +142,31 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-function AutomationCard({ task }: { task: ScheduledTaskSummary }) {
+function AutomationTableRow({ task }: { task: ScheduledTaskSummary }) {
   const { text, cls } = statusText(task);
-  const meta = formatTaskMeta(task);
+  const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
+  const modelLabel = task.model?.split('/').pop() ?? 'Default';
+  const lastRunLabel = task.lastRunAt ? timeAgo(task.lastRunAt) : '—';
   const summary = summarizePrompt(task.prompt) || 'No prompt yet.';
 
   return (
-    <Link
-      to={`/automations/${encodeURIComponent(task.id)}`}
-      className="group flex min-h-[172px] flex-col rounded-[26px] border border-border-subtle bg-surface/72 px-5 py-4 transition-colors hover:border-border-default hover:bg-surface"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-elevated text-[16px] text-primary">
-          <span aria-hidden="true">{taskAccentIcon(task)}</span>
-        </div>
-        <div className="flex items-center gap-2 text-[11px]">
-          <span className={`inline-flex items-center gap-2 ${cls}`}>
-            <span className={`h-2 w-2 rounded-full ${statusDotClass(task)}`} />
-            {text}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-5 space-y-2">
-        <h3 className="text-[19px] font-semibold tracking-tight text-primary">{formatTaskName(task)}</h3>
-        <p className="line-clamp-4 max-w-[34rem] text-[14px] leading-6 text-secondary">{summary}</p>
-      </div>
-
-      {meta.length > 0 && (
-        <div className="mt-auto pt-6 text-[12px] text-dim">
-          {meta.join(' · ')}
-        </div>
-      )}
-    </Link>
+    <tr className="border-t border-border-subtle/80 transition-colors hover:bg-surface/80">
+      <td className="px-4 py-3 align-top">
+        <Link to={`/automations/${encodeURIComponent(task.id)}`} className="block min-w-0">
+          <p className="text-[14px] font-medium text-primary">{formatTaskName(task)}</p>
+          <p className="mt-1 line-clamp-1 text-[12px] text-secondary">{summary}</p>
+        </Link>
+      </td>
+      <td className="px-4 py-3 align-top text-[12px] text-secondary">{scheduleLabel}</td>
+      <td className="px-4 py-3 align-top text-[12px] text-secondary">{lastRunLabel}</td>
+      <td className="px-4 py-3 align-top text-[12px] text-secondary">{modelLabel}</td>
+      <td className="px-4 py-3 align-top">
+        <span className={`inline-flex items-center gap-2 text-[12px] ${cls}`}>
+          <span className={`h-2 w-2 rounded-full ${statusDotClass(task)}`} />
+          {text}
+        </span>
+      </td>
+    </tr>
   );
 }
 
@@ -417,11 +393,7 @@ function AutomationsOverview({
   tasks: ScheduledTaskSummary[];
   onCreate: () => void;
 }) {
-  const sections = useMemo(() => buildAutomationSections(tasks), [tasks]);
-
-  function jumpToSection(sectionId: string) {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
 
   return (
     <div className="h-full overflow-y-auto px-8 py-8">
@@ -444,36 +416,23 @@ function AutomationsOverview({
             <ToolbarButton onClick={onCreate}>Create automation</ToolbarButton>
           </div>
         ) : (
-          <div className="grid gap-10 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-            <nav className="space-y-3 lg:sticky lg:top-8">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => jumpToSection(section.id)}
-                  className="flex w-full items-center justify-between gap-3 rounded-2xl px-3 py-2 text-left text-[14px] text-secondary transition-colors hover:bg-surface hover:text-primary"
-                >
-                  <span>{section.label}</span>
-                  <span className="text-[12px] text-dim">{section.items.length}</span>
-                </button>
-              ))}
-            </nav>
-
-            <div className="space-y-12">
-              {sections.map((section) => (
-                <section key={section.id} id={section.id} className="space-y-4 scroll-mt-8">
-                  <div className="flex items-end justify-between gap-4 border-b border-border-subtle pb-3">
-                    <h2 className="text-[24px] font-semibold tracking-tight text-primary">{section.label}</h2>
-                    <p className="text-[12px] text-dim">{section.items.length} automation{section.items.length === 1 ? '' : 's'}</p>
-                  </div>
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {section.items.map((task) => (
-                      <AutomationCard key={task.id} task={task} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
+          <div className="overflow-x-auto rounded-[22px] border border-border-subtle bg-surface/35">
+            <table className="min-w-[760px] w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border-subtle bg-surface/35 text-left">
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Automation</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Schedule</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Last run</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Model</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((task) => (
+                  <AutomationTableRow key={task.id} task={task} />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

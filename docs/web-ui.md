@@ -243,11 +243,12 @@ Automations are still passive by default. If an automation is explicitly bound b
 
 You can:
 
-- browse automations in grouped overview sections from the main page
+- browse automations in a flat table from the main page
 - open a dedicated automation detail view with prompt content and status/details side column
 - create a new automation from the page header modal
 - enable or disable an automation
 - edit automation settings and prompt from the in-page edit modal
+- choose the automation working directory with the folder picker from the modal
 - use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
 - run an automation immediately
 
