@@ -4507,38 +4507,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   return (
     <ConversationWorkspaceShell contextRailEnabled={!draft}>
-      {({ railOpen, toggleRail }) => (
+      {() => (
         <div className="flex h-full flex-col overflow-hidden">
           <PageHeader
             className="min-h-[44px] gap-2 py-2"
-            actions={!draft ? (
+            actions={!draft && id ? (
               <div className="flex shrink-0 items-center gap-2">
-                {id && (
-                  <div className="flex items-center border-l border-border-subtle pl-3">
-                    <button
-                      type="button"
-                      onClick={() => { void summarizeAndForkConversation(); }}
-                      disabled={summarizeAndForkDisabled}
-                      title={summaryForkBusy ? 'Summarizing and forking this conversation' : summarizeAndForkTitle}
-                      aria-label={summaryForkBusy ? 'Summarizing and forking this conversation' : 'Summarize and fork this conversation'}
-                      className="ui-toolbar-button shrink-0 rounded-xl px-2.5 py-2 text-accent"
-                    >
-                      <SummarizeForkIcon className={cx('h-3.5 w-3.5 shrink-0', summaryForkBusy && 'animate-pulse')} />
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={toggleRail}
-                  className="inline-flex items-center justify-center rounded-md p-1 text-dim transition-colors hover:bg-surface hover:text-primary"
-                  title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-                  aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="16" rx="2" />
-                    <path d="M15 4v16" />
-                  </svg>
-                </button>
+                <div className="flex items-center border-l border-border-subtle pl-3">
+                  <button
+                    type="button"
+                    onClick={() => { void summarizeAndForkConversation(); }}
+                    disabled={summarizeAndForkDisabled}
+                    title={summaryForkBusy ? 'Summarizing and forking this conversation' : summarizeAndForkTitle}
+                    aria-label={summaryForkBusy ? 'Summarizing and forking this conversation' : 'Summarize and fork this conversation'}
+                    className="ui-toolbar-button shrink-0 rounded-xl px-2.5 py-2 text-accent"
+                  >
+                    <SummarizeForkIcon className={cx('h-3.5 w-3.5 shrink-0', summaryForkBusy && 'animate-pulse')} />
+                  </button>
+                </div>
               </div>
             ) : undefined}
           >

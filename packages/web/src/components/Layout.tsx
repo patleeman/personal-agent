@@ -6,6 +6,7 @@ import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { DesktopTopBar } from './DesktopTopBar';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
+import { DesktopChromeContext, type DesktopRightRailControl } from '../desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { readDesktopEnvironment } from '../desktopBridge';
@@ -399,6 +400,7 @@ export function Layout() {
     side: 'right',
   });
   const [railOpen, setRailOpen] = useState(true);
+  const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
   const canShowContextRail = !(
     location.pathname.startsWith('/conversations')
@@ -429,20 +431,27 @@ export function Layout() {
   }, [location.pathname]);
 
   const showContextRail = canShowContextRail && railOpen;
+  const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
+    ? {
+        railOpen: showContextRail,
+        toggleRail: () => setRailOpen((current) => !current),
+      }
+    : null);
 
   return (
     <>
-      <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
-        <DesktopTopBar
-          environment={desktopEnvironment}
-          sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((current) => !current)}
-          showRailToggle={canShowContextRail}
-          railOpen={showContextRail}
-          onToggleRail={() => setRailOpen((current) => !current)}
-        />
+      <DesktopChromeContext.Provider value={{ setRightRailControl: setRegisteredRightRailControl }}>
+        <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
+          <DesktopTopBar
+            environment={desktopEnvironment}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((current) => !current)}
+            showRailToggle={activeRightRailControl !== null}
+            railOpen={activeRightRailControl?.railOpen ?? false}
+            onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
+          />
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
           {sidebarOpen ? (
             <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
               <Sidebar />
@@ -465,8 +474,9 @@ export function Layout() {
               </>
             ) : null}
           </RouteContentBoundary>
+          </div>
         </div>
-      </div>
+      </DesktopChromeContext.Provider>
 
       {warmLiveConversationIds.map((conversationId) => (
         <WarmLiveConversationSubscription key={conversationId} sessionId={conversationId} />

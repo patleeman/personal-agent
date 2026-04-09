@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
+import { useDesktopChrome } from '../desktopChromeContext';
 import { ContextRail } from './ContextRail';
 
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;
@@ -133,6 +134,7 @@ export function ConversationWorkspaceShell({
   contextRailEnabled?: boolean;
 }) {
   const location = useLocation();
+  const { setRightRailControl } = useDesktopChrome();
   const railPrefs = getRailLayoutPrefs(location.pathname);
   const rail = useResize({
     initial: railPrefs.initialWidth ?? 380,
@@ -148,15 +150,33 @@ export function ConversationWorkspaceShell({
   }, [location.pathname]);
 
 
+  const toggleRail = useCallback(() => {
+    if (contextRailEnabled) {
+      setRailOpen((current) => !current);
+    }
+  }, [contextRailEnabled]);
+
   const effectiveRailOpen = contextRailEnabled && railOpen;
   const controls = useMemo<ConversationWorkspaceShellControls>(() => ({
     railOpen: effectiveRailOpen,
-    toggleRail: () => {
-      if (contextRailEnabled) {
-        setRailOpen((current) => !current);
-      }
-    },
-  }), [contextRailEnabled, effectiveRailOpen]);
+    toggleRail,
+  }), [effectiveRailOpen, toggleRail]);
+
+  useEffect(() => {
+    if (!contextRailEnabled) {
+      setRightRailControl(null);
+      return;
+    }
+
+    setRightRailControl({
+      railOpen: effectiveRailOpen,
+      toggleRail,
+    });
+
+    return () => {
+      setRightRailControl(null);
+    };
+  }, [contextRailEnabled, effectiveRailOpen, setRightRailControl, toggleRail]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">
