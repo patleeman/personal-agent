@@ -23,14 +23,14 @@ This is personal software, built for Patrick by Patrick.
 
 ## Release flow
 
-If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the tag-driven release flow.
+If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the local signed release flow.
 
-1. From the repo root, bump the version with `npm run release:patch`, `npm run release:minor`, or `npm run release:major`.
-2. Push the commit and tag with `git push --follow-tags`.
-3. The `Release` GitHub Actions workflow runs on pushed `v*` tags, builds the macOS desktop app, and creates the GitHub release with the generated `.dmg` and `.zip` artifacts.
-4. Current packaging uses ad-hoc signing for macOS arm64 so releases open as unsigned apps instead of failing with the unbypassable “app is damaged” dialog. Full Apple signing/notarization is still not configured.
+1. From the repo root, run `npm run release:desktop:patch`, `npm run release:desktop:minor`, or `npm run release:desktop:major`.
+2. That flow bumps the version, uses the local `Developer ID Application` certificate from Keychain, notarizes with local Apple credentials, pushes the commit and tag, and creates or updates the GitHub release with the generated `.dmg` and `.zip` artifacts.
+3. `npm run release:publish` is the standalone publish step if the version bump already happened and you just need to rebuild/retry the signed release.
+4. The publish script auto-loads Apple credentials from `~/workingdir/familiar/.env` when present and maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for notarization.
 
-Important: pushing commits to `master` does not create a GitHub release by itself. The release workflow only runs when the version tag is pushed.
+Important: pushing commits or tags to `master` does not create a GitHub release by itself anymore. Release artifacts are now built and uploaded locally so they can use Patrick's Keychain signing identity.
 
 See `docs/release-cycle.md` for the fuller release notes.
 

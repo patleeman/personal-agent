@@ -1,29 +1,48 @@
 # Release cycle
 
-`personal-agent` now has a tag-driven desktop release flow.
+`personal-agent` now publishes macOS releases from Patrick's local machine instead of having GitHub Actions build the shipped artifacts.
 
 The release path is intentionally simple:
 
 1. bump the repo version with `npm version` at the repo root
 2. let the version hook sync every `packages/*/package.json` version and refresh `package-lock.json`
-3. push the commit and tag to GitHub
-4. GitHub Actions builds the macOS arm64 desktop app and creates a GitHub release with the generated `.dmg` and `.zip`
+3. build and notarize the macOS desktop app locally with Patrick's Keychain signing identity
+4. push the commit and tag to GitHub and create or update the GitHub release with the generated `.dmg` and `.zip`
 
 ## Local commands
 
-Use one of these from the repo root:
+Fast path from the repo root:
 
-- `npm run release:patch`
-- `npm run release:minor`
-- `npm run release:major`
+- `npm run release:desktop:patch`
+- `npm run release:desktop:minor`
+- `npm run release:desktop:major`
 
-That creates a commit and a `v<version>` tag through `npm version`.
+Those commands:
 
-Then publish it with:
+- create the version bump commit and `v<version>` tag through `npm version`
+- build signed desktop artifacts locally
+- push the commit and tag
+- create or update the matching GitHub release
+
+If the version bump already happened and you just need to retry the signed publish step, run:
 
 ```bash
-git push --follow-tags
+npm run release:publish
 ```
+
+## Local signing and notarization inputs
+
+`npm run release:publish` expects a local `Developer ID Application` certificate in Keychain.
+
+It also needs Apple notarization credentials. The script will use whichever is available first:
+
+- environment variables already exported in the shell
+- `~/workingdir/familiar/.env`
+- the file pointed to by `PERSONAL_AGENT_RELEASE_ENV`
+
+When loading from env, the script accepts standard `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD`. It also maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for compatibility with Patrick's existing local `.env`.
+
+If multiple `Developer ID Application` certificates are present, set `CSC_NAME` before running the publish step. Use the certificate name without the `Developer ID Application:` prefix.
 
 ## What gets built
 
@@ -31,9 +50,12 @@ git push --follow-tags
 
 - builds the desktop package and its dependencies
 - packages the Electron desktop app with `electron-builder`
+- signs it with the local `Developer ID Application` certificate
+- notarizes the packaged app and staples it
+- notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
 
-The GitHub workflow at `.github/workflows/release.yml` runs the same build on `macos-14` and attaches the resulting artifacts to the matching GitHub release.
+GitHub Actions no longer publishes shipped release artifacts automatically. `.github/workflows/release.yml` is now only a manual smoke-build workflow for unsigned CI packaging checks.
 
 ## Desktop update checks
 
@@ -43,7 +65,7 @@ The packaged desktop app now checks GitHub Releases for newer macOS builds:
 - the tray menu also exposes `Check for Updates…` for an on-demand check
 - when a newer release exists, the app opens the matching GitHub release asset (`.dmg` when available) in the browser for download
 
-Current scope: this is a GitHub-release download flow, not a fully in-place signed macOS auto-installer yet. Proper native auto-install on macOS still requires signing and notarization.
+Current scope: this is a GitHub-release download flow, not a fully in-place macOS auto-installer yet. Proper native auto-install still needs updater-specific app integration even though the release build can now be signed and notarized locally.
 
 ## Packaged desktop runtime layout
 
@@ -58,4 +80,4 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 This release flow currently targets macOS arm64 only.
 
-It now uses ad-hoc signing so downloaded builds do not hit the unbypassable “app is damaged” failure on Apple Silicon. It still does not perform Apple Developer ID signing or notarization yet, so macOS will continue to show the normal unverified-app warning for downloaded releases until that is added.
+Shipped GitHub release artifacts are expected to come from Patrick's locally signed and notarized build path. CI no longer acts as the source of truth for downloadable release binaries.
