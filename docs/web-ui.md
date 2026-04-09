@@ -310,7 +310,7 @@ Auto-titles are tuned for fast scanning in the Threads list: they should prefer 
 
 Settings is now one stacked page instead of separate preference and system subpages.
 
-It keeps defaults, appearance, providers, interface reset tools, workspace info, desktop connections, and runtime service panels together in a single column with simple dividers instead of nested boxes.
+It keeps defaults, appearance, providers, interface reset tools, workspace info, desktop connections, and runtime service panels together in a single scrolling page with in-page quick links and Codex-style split section headers instead of a separate settings subnav.
 
 When the app is running inside the Electron desktop shell, Settings also exposes a **Desktop → Connections** section for local and remote host management. That surface is machine-local: it controls which host the desktop app window is connected to, lets you save web/Tailscale and SSH hosts, and can switch the active desktop host without introducing a separate top-level page.
 

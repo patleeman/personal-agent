@@ -22,11 +22,20 @@ import type {
 } from '../types';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
 import { SystemSettingsContent } from '../components/SystemSettingsContent';
-import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
+import { PageHeader, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
-const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
+const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
+const SETTINGS_QUICK_LINKS = [
+  { id: 'settings-general', label: 'General' },
+  { id: 'settings-appearance', label: 'Appearance' },
+  { id: 'settings-providers', label: 'Providers' },
+  { id: 'settings-desktop', label: 'Desktop' },
+  { id: 'settings-interface', label: 'Interface' },
+  { id: 'settings-runtime-services', label: 'Runtime' },
+  { id: 'settings-workspace', label: 'Workspace' },
+] as const;
 
 type ModelOption = ModelState['models'][number];
 
@@ -287,6 +296,30 @@ function ThemeButton({
   );
 }
 
+function SettingsSection({
+  id,
+  label,
+  description,
+  children,
+  className,
+}: {
+  id: string;
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section id={id} className={cx('scroll-mt-24 space-y-5', className)}>
+      <div className="space-y-1.5 border-b border-border-subtle/70 pb-3">
+        <SectionLabel label={label} />
+        {description ? <p className="max-w-3xl text-[12px] leading-6 text-secondary">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function SettingsPanel({
   title,
   description,
@@ -301,13 +334,13 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('space-y-5 border-t border-border-subtle pt-6', className)}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 max-w-3xl space-y-1">
-          <h2 className="text-[15px] font-medium text-primary">{title}</h2>
-          {description ? <p className="ui-card-meta max-w-3xl">{description}</p> : null}
+    <section className={cx('grid gap-5 border-t border-border-subtle/70 pt-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-8', className)}>
+      <div className="min-w-0 space-y-2">
+        <div className="space-y-1">
+          <h2 className="text-[17px] font-medium tracking-tight text-primary">{title}</h2>
+          {description ? <p className="max-w-sm text-[12px] leading-6 text-secondary">{description}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2 pt-1">{actions}</div> : null}
       </div>
       <div className="min-w-0 space-y-4">{children}</div>
     </section>
@@ -573,9 +606,12 @@ function DesktopConnectionsSettingsPanel() {
   }
 
   return (
-    <section id="desktop-connections" className="space-y-5 scroll-mt-6">
-      <SectionLabel label="Desktop" />
-
+    <SettingsSection
+      id="settings-desktop"
+      label="Desktop"
+      description="Machine-local host management for the Electron desktop app. Add or switch local, web, and SSH-backed hosts without leaving Settings."
+      className="scroll-mt-24"
+    >
       <SettingsPanel
         title="Connections"
         description="Manage the desktop app's local and remote hosts. Web hosts work for direct Tailscale or HTTPS access, and SSH hosts connect through a desktop-managed tunnel."
@@ -817,7 +853,7 @@ function DesktopConnectionsSettingsPanel() {
         {notice ? <p className="text-[12px] text-success">{notice}</p> : null}
         {error ? <p className="text-[12px] text-danger">{error}</p> : null}
       </SettingsPanel>
-    </section>
+    </SettingsSection>
   );
 }
 
@@ -916,8 +952,8 @@ export function SettingsPage() {
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
+  const pageSummary = 'Theme, defaults, providers, desktop connections, workspace, and system controls.';
   const pageMeta = [
-    'Theme, defaults, providers, desktop connections, workspace, and runtime services.',
     `theme ${theme}`,
     profileState ? `profile ${profileState.currentProfile}` : null,
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,
@@ -1639,17 +1675,340 @@ export function SettingsPage() {
           oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
         ]);
       }}>↻ Refresh</ToolbarButton>}>
-        <PageHeading
-          title="Settings"
-          meta={pageMeta}
-        />
+        <div className="space-y-1">
+          <h1 className="ui-page-title text-[26px] leading-none tracking-tight">Settings</h1>
+          <p className="text-[13px] leading-6 text-secondary">{pageSummary}</p>
+          <p className="ui-page-meta">{pageMeta}</p>
+        </div>
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="max-w-6xl pb-6 space-y-10">
-          <section className="space-y-4">
-              <SectionLabel label="Appearance" />
+        <div className="mx-auto w-full max-w-[76rem] space-y-10 pb-8">
+          <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border-subtle/70 pb-3 text-[12px]">
+            {SETTINGS_QUICK_LINKS.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className="text-secondary transition-colors hover:text-primary"
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
 
+          <SettingsSection
+            id="settings-general"
+            label="General"
+            description="Profile, runtime defaults, knowledge paths, and title behavior for new conversations and runs."
+          >
+            <div className="space-y-4">
+              <SettingsPanel
+                title="Profile"
+                description="Changes the active profile for inbox, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
+              >
+                {profilesLoading && !profileState ? (
+                  <p className="ui-card-meta">Loading profiles…</p>
+                ) : profilesError && !profileState ? (
+                  <p className="text-[12px] text-danger">Failed to load profiles: {profilesError}</p>
+                ) : profileState ? (
+                  <>
+                    <label className="ui-card-meta" htmlFor="settings-profile">Active profile</label>
+                    <select
+                      id="settings-profile"
+                      value={profileState.currentProfile}
+                      onChange={(event) => { void handleProfileChange(event.target.value); }}
+                      disabled={switchingProfile || profileState.profiles.length === 0}
+                      className={INPUT_CLASS}
+                    >
+                      {profileState.profiles.map((profile) => (
+                        <option key={profile} value={profile}>{profile}</option>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {switchingProfile
+                        ? 'Switching profile and reloading…'
+                        : `${profileState.profiles.length} available ${profileState.profiles.length === 1 ? 'profile' : 'profiles'}.`}
+                    </p>
+                  </>
+                ) : null}
+
+                {profileError && <p className="text-[12px] text-danger">{profileError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Default model"
+                description={(
+                  <>
+                    Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
+                    Saving an explicit model here clears the active profile&apos;s default preset.
+                  </>
+                )}
+              >
+                {modelsLoading && !modelState ? (
+                  <p className="ui-card-meta">Loading models…</p>
+                ) : modelsError && !modelState ? (
+                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                ) : modelState ? (
+                  <>
+                    <label className="ui-card-meta" htmlFor="settings-model">Model</label>
+                    <select
+                      id="settings-model"
+                      value={modelState.currentModel}
+                      onChange={(event) => {
+                        void handleModelPreferenceChange({ model: event.target.value }, 'model');
+                      }}
+                      disabled={savingPreference !== null || modelState.models.length === 0}
+                      className={INPUT_CLASS}
+                    >
+                      {groupedModels.map(([provider, models]) => (
+                        <optgroup key={provider} label={provider}>
+                          {models.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.name} · {formatContextWindowLabel(model.context)} ctx
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {savingPreference === 'model'
+                        ? 'Saving default model...'
+                        : formatModelSummary(selectedModel, 'No model selected.')
+                      }
+                    </p>
+
+                    <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
+                    <select
+                      id="settings-thinking"
+                      value={modelState.currentThinkingLevel}
+                      onChange={(event) => {
+                        void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
+                      }}
+                      disabled={savingPreference !== null}
+                      className={INPUT_CLASS}
+                    >
+                      {THINKING_LEVEL_OPTIONS.map((option) => (
+                        <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {savingPreference === 'thinking'
+                        ? 'Saving thinking level…'
+                        : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
+                    </p>
+                  </>
+                ) : null}
+
+                {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Knowledge vault root"
+                description="Sets the canonical vault location for notes, skills, and profile files. The agent and supporting vault lookups use this path as the durable knowledge home."
+              >
+                {vaultRootLoading && !vaultRootState ? (
+                  <p className="ui-card-meta">Loading knowledge vault root…</p>
+                ) : vaultRootLoadError && !vaultRootState ? (
+                  <p className="text-[12px] text-danger">Failed to load knowledge vault root: {vaultRootLoadError}</p>
+                ) : vaultRootState ? (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleVaultRootSave();
+                    }}
+                  >
+                    <label className="ui-card-meta" htmlFor="settings-vault-root">Path</label>
+                    <input
+                      id="settings-vault-root"
+                      value={vaultRootDraft}
+                      onChange={(event) => {
+                        setVaultRootDraft(event.target.value);
+                        if (vaultRootSaveError) {
+                          setVaultRootSaveError(null);
+                        }
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      placeholder="~/Documents/personal-agent"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={savingVaultRoot}
+                    />
+                    <p className="ui-card-meta break-all">
+                      {savingVaultRoot
+                        ? 'Saving knowledge vault root…'
+                        : vaultRootState.source === 'env'
+                          ? `Environment override active. Effective root: ${vaultRootState.effectiveRoot}`
+                          : vaultRootState.currentRoot
+                            ? `Effective root: ${vaultRootState.effectiveRoot}`
+                            : `Using default root: ${vaultRootState.defaultRoot}`}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingVaultRoot || !vaultRootDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {savingVaultRoot ? 'Saving…' : 'Save vault root'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleVaultRootSave(''); }}
+                        disabled={savingVaultRoot || vaultRootState.currentRoot.length === 0}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        Use default root
+                      </button>
+                    </div>
+                    <p className="ui-card-meta">
+                      Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. Environment variable <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still overrides this setting when present.
+                    </p>
+                  </form>
+                ) : null}
+
+                {vaultRootSaveError && <p className="text-[12px] text-danger">{vaultRootSaveError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Default working directory"
+                description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-doc repo root still takes priority."
+              >
+                {defaultCwdLoading && !defaultCwdState ? (
+                  <p className="ui-card-meta">Loading default working directory…</p>
+                ) : defaultCwdLoadError && !defaultCwdState ? (
+                  <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
+                ) : defaultCwdState ? (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleDefaultCwdSave();
+                    }}
+                  >
+                    <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
+                    <input
+                      id="settings-default-cwd"
+                      value={defaultCwdDraft}
+                      onChange={(event) => {
+                        setDefaultCwdDraft(event.target.value);
+                        if (defaultCwdSaveError) {
+                          setDefaultCwdSaveError(null);
+                        }
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      placeholder="~/workingdir/repo"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={savingDefaultCwd}
+                    />
+                    <p className="ui-card-meta break-all">
+                      {savingDefaultCwd
+                        ? 'Saving default working directory…'
+                        : defaultCwdState.currentCwd
+                          ? `Effective default: ${defaultCwdState.effectiveCwd}`
+                          : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingDefaultCwd || !defaultCwdDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleDefaultCwdSave(''); }}
+                        disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        Use process cwd
+                      </button>
+                    </div>
+                    <p className="ui-card-meta">
+                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
+                    </p>
+                  </form>
+                ) : null}
+
+                {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Conversation titles"
+                description="Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model."
+              >
+                {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
+                  <p className="ui-card-meta">Loading conversation title settings…</p>
+                ) : (!conversationTitleState && conversationTitleError) ? (
+                  <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
+                ) : (!modelState && modelsError) ? (
+                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                ) : conversationTitleState && modelState ? (
+                  <>
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
+                      <input
+                        id="settings-conversation-titles-enabled"
+                        type="checkbox"
+                        checked={conversationTitleState.enabled}
+                        onChange={(event) => {
+                          void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
+                        }}
+                        disabled={savingConversationTitle !== null}
+                        className={CHECKBOX_CLASS}
+                      />
+                      <span>Generate titles automatically</span>
+                    </label>
+                    <p className="ui-card-meta">
+                      {savingConversationTitle === 'enabled'
+                        ? 'Saving auto-title setting…'
+                        : conversationTitleState.enabled
+                          ? 'Enabled after the first assistant reply.'
+                          : 'Disabled. New conversations keep the fallback title until renamed manually.'}
+                    </p>
+
+                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
+                    <select
+                      id="settings-conversation-title-model"
+                      value={conversationTitleState.currentModel}
+                      onChange={(event) => {
+                        void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
+                      }}
+                      disabled={savingConversationTitle !== null || modelState.models.length === 0}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
+                      {groupedModels.map(([provider, models]) => (
+                        <optgroup key={provider} label={provider}>
+                          {models.map((model) => (
+                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                              {model.name} · {formatContextWindowLabel(model.context)} ctx
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {savingConversationTitle === 'model'
+                        ? 'Saving title model…'
+                        : conversationTitleState.currentModel
+                          ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
+                          : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
+                    </p>
+                  </>
+                ) : null}
+
+                {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="settings-appearance"
+            label="Appearance"
+            description="Theme stays browser-local. Use Auto to follow the OS without reloading."
+          >
+            <div className="space-y-4">
               <SettingsPanel
                 title="Theme"
                 description="Theme is stored in this browser only. Choose Auto to follow the OS appearance without reloading."
@@ -1665,316 +2024,15 @@ export function SettingsPage() {
                   </span>
                 </div>
               </SettingsPanel>
-            </section>
+            </div>
+          </SettingsSection>
 
-          <section className="space-y-5">
-              <SectionLabel label="Agent defaults" />
-
-              <div className="space-y-4">
-                <SettingsPanel
-                  title="Profile"
-                  description="Changes the active profile for inbox, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
-                >
-                  {profilesLoading && !profileState ? (
-                    <p className="ui-card-meta">Loading profiles…</p>
-                  ) : profilesError && !profileState ? (
-                    <p className="text-[12px] text-danger">Failed to load profiles: {profilesError}</p>
-                  ) : profileState ? (
-                    <>
-                      <label className="ui-card-meta" htmlFor="settings-profile">Active profile</label>
-                      <select
-                        id="settings-profile"
-                        value={profileState.currentProfile}
-                        onChange={(event) => { void handleProfileChange(event.target.value); }}
-                        disabled={switchingProfile || profileState.profiles.length === 0}
-                        className={INPUT_CLASS}
-                      >
-                        {profileState.profiles.map((profile) => (
-                          <option key={profile} value={profile}>{profile}</option>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {switchingProfile
-                          ? 'Switching profile and reloading…'
-                          : `${profileState.profiles.length} available ${profileState.profiles.length === 1 ? 'profile' : 'profiles'}.`}
-                      </p>
-                    </>
-                  ) : null}
-
-                  {profileError && <p className="text-[12px] text-danger">{profileError}</p>}
-                </SettingsPanel>
-
-                <SettingsPanel
-                  title="Default model"
-                  description={(
-                    <>
-                      Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
-                      Saving an explicit model here clears the active profile&apos;s default preset.
-                    </>
-                  )}
-                >
-                  {modelsLoading && !modelState ? (
-                    <p className="ui-card-meta">Loading models…</p>
-                  ) : modelsError && !modelState ? (
-                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                  ) : modelState ? (
-                    <>
-                      <label className="ui-card-meta" htmlFor="settings-model">Model</label>
-                      <select
-                        id="settings-model"
-                        value={modelState.currentModel}
-                        onChange={(event) => {
-                          void handleModelPreferenceChange({ model: event.target.value }, 'model');
-                        }}
-                        disabled={savingPreference !== null || modelState.models.length === 0}
-                        className={INPUT_CLASS}
-                      >
-                        {groupedModels.map(([provider, models]) => (
-                          <optgroup key={provider} label={provider}>
-                            {models.map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {model.name} · {formatContextWindowLabel(model.context)} ctx
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingPreference === 'model'
-                          ? 'Saving default model...'
-                          : formatModelSummary(selectedModel, 'No model selected.')
-                        }
-                      </p>
-
-                      <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
-                      <select
-                        id="settings-thinking"
-                        value={modelState.currentThinkingLevel}
-                        onChange={(event) => {
-                          void handleModelPreferenceChange({ thinkingLevel: event.target.value }, 'thinking');
-                        }}
-                        disabled={savingPreference !== null}
-                        className={INPUT_CLASS}
-                      >
-                        {THINKING_LEVEL_OPTIONS.map((option) => (
-                          <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingPreference === 'thinking'
-                          ? 'Saving thinking level…'
-                          : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
-                      </p>
-                    </>
-                  ) : null}
-
-                  {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
-                </SettingsPanel>
-
-                <SettingsPanel
-                  title="Knowledge vault root"
-                  description="Sets the canonical vault location for notes, skills, and profile files. The agent and supporting vault lookups use this path as the durable knowledge home."
-                >
-                  {vaultRootLoading && !vaultRootState ? (
-                    <p className="ui-card-meta">Loading knowledge vault root…</p>
-                  ) : vaultRootLoadError && !vaultRootState ? (
-                    <p className="text-[12px] text-danger">Failed to load knowledge vault root: {vaultRootLoadError}</p>
-                  ) : vaultRootState ? (
-                    <form
-                      className="space-y-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleVaultRootSave();
-                      }}
-                    >
-                      <label className="ui-card-meta" htmlFor="settings-vault-root">Path</label>
-                      <input
-                        id="settings-vault-root"
-                        value={vaultRootDraft}
-                        onChange={(event) => {
-                          setVaultRootDraft(event.target.value);
-                          if (vaultRootSaveError) {
-                            setVaultRootSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} font-mono text-[13px]`}
-                        placeholder="~/Documents/personal-agent"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={savingVaultRoot}
-                      />
-                      <p className="ui-card-meta break-all">
-                        {savingVaultRoot
-                          ? 'Saving knowledge vault root…'
-                          : vaultRootState.source === 'env'
-                            ? `Environment override active. Effective root: ${vaultRootState.effectiveRoot}`
-                            : vaultRootState.currentRoot
-                              ? `Effective root: ${vaultRootState.effectiveRoot}`
-                              : `Using default root: ${vaultRootState.defaultRoot}`}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="submit"
-                          disabled={savingVaultRoot || !vaultRootDirty}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {savingVaultRoot ? 'Saving…' : 'Save vault root'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { void handleVaultRootSave(''); }}
-                          disabled={savingVaultRoot || vaultRootState.currentRoot.length === 0}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Use default root
-                        </button>
-                      </div>
-                      <p className="ui-card-meta">
-                        Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. Environment variable <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still overrides this setting when present.
-                      </p>
-                    </form>
-                  ) : null}
-
-                  {vaultRootSaveError && <p className="text-[12px] text-danger">{vaultRootSaveError}</p>}
-                </SettingsPanel>
-
-                <SettingsPanel
-                  title="Default working directory"
-                  description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-doc repo root still takes priority."
-                >
-                  {defaultCwdLoading && !defaultCwdState ? (
-                    <p className="ui-card-meta">Loading default working directory…</p>
-                  ) : defaultCwdLoadError && !defaultCwdState ? (
-                    <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
-                  ) : defaultCwdState ? (
-                    <form
-                      className="space-y-3"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void handleDefaultCwdSave();
-                      }}
-                    >
-                      <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
-                      <input
-                        id="settings-default-cwd"
-                        value={defaultCwdDraft}
-                        onChange={(event) => {
-                          setDefaultCwdDraft(event.target.value);
-                          if (defaultCwdSaveError) {
-                            setDefaultCwdSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} font-mono text-[13px]`}
-                        placeholder="~/workingdir/repo"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={savingDefaultCwd}
-                      />
-                      <p className="ui-card-meta break-all">
-                        {savingDefaultCwd
-                          ? 'Saving default working directory…'
-                          : defaultCwdState.currentCwd
-                            ? `Effective default: ${defaultCwdState.effectiveCwd}`
-                            : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="submit"
-                          disabled={savingDefaultCwd || !defaultCwdDirty}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { void handleDefaultCwdSave(''); }}
-                          disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
-                          className={ACTION_BUTTON_CLASS}
-                        >
-                          Use process cwd
-                        </button>
-                      </div>
-                      <p className="ui-card-meta">
-                        Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
-                      </p>
-                    </form>
-                  ) : null}
-
-                  {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
-                </SettingsPanel>
-
-                <SettingsPanel
-                  title="Conversation titles"
-                  description="Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model."
-                >
-                  {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
-                    <p className="ui-card-meta">Loading conversation title settings…</p>
-                  ) : (!conversationTitleState && conversationTitleError) ? (
-                    <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
-                  ) : (!modelState && modelsError) ? (
-                    <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                  ) : conversationTitleState && modelState ? (
-                    <>
-                      <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
-                        <input
-                          id="settings-conversation-titles-enabled"
-                          type="checkbox"
-                          checked={conversationTitleState.enabled}
-                          onChange={(event) => {
-                            void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
-                          }}
-                          disabled={savingConversationTitle !== null}
-                          className={CHECKBOX_CLASS}
-                        />
-                        <span>Generate titles automatically</span>
-                      </label>
-                      <p className="ui-card-meta">
-                        {savingConversationTitle === 'enabled'
-                          ? 'Saving auto-title setting…'
-                          : conversationTitleState.enabled
-                            ? 'Enabled after the first assistant reply.'
-                            : 'Disabled. New conversations keep the fallback title until renamed manually.'}
-                      </p>
-
-                      <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
-                      <select
-                        id="settings-conversation-title-model"
-                        value={conversationTitleState.currentModel}
-                        onChange={(event) => {
-                          void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
-                        }}
-                        disabled={savingConversationTitle !== null || modelState.models.length === 0}
-                        className={INPUT_CLASS}
-                      >
-                        <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
-                        {groupedModels.map(([provider, models]) => (
-                          <optgroup key={provider} label={provider}>
-                            {models.map((model) => (
-                              <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                                {model.name} · {formatContextWindowLabel(model.context)} ctx
-                              </option>
-                            ))}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <p className="ui-card-meta">
-                        {savingConversationTitle === 'model'
-                          ? 'Saving title model…'
-                          : conversationTitleState.currentModel
-                            ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
-                            : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
-                      </p>
-                    </>
-                  ) : null}
-
-                  {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
-                </SettingsPanel>
-              </div>
-            </section>
-
-          <section className="space-y-8">
-            <SectionLabel label="Providers & models" />
-
+          <SettingsSection
+            id="settings-providers"
+            label="Providers & models"
+            description="Manage profile-local model definitions, auth, and Codex plan usage in one place."
+            className="space-y-8"
+          >
             <div className="space-y-4">
               <SettingsPanel
                 title="Provider & model definitions"
@@ -2727,13 +2785,15 @@ export function SettingsPage() {
                 refreshing={codexPlanUsageRefreshing}
               />
             </div>
-          </section>
+          </SettingsSection>
 
           <DesktopConnectionsSettingsPanel />
 
-          <section className="space-y-5">
-            <SectionLabel label="Interface state" />
-
+          <SettingsSection
+            id="settings-interface"
+            label="Interface"
+            description="Machine-local reset tools for stored layout and conversation UI state."
+          >
             <SettingsPanel
               title="Reset saved UI preferences"
               description="These actions clear saved UI state. They do not delete conversations, docs, or agent data."
@@ -2772,15 +2832,17 @@ export function SettingsPage() {
                 </div>
               </div>
             </SettingsPanel>
-          </section>
+          </SettingsSection>
 
-          <section className="space-y-5">
+          <section id="settings-runtime-services" className="scroll-mt-24 space-y-5">
             <SystemSettingsContent />
           </section>
 
-          <section className="space-y-4">
-            <SectionLabel label="Workspace" />
-
+          <SettingsSection
+            id="settings-workspace"
+            label="Workspace"
+            description="Current repo root and other workspace-scoped runtime context used by the web app."
+          >
             <SettingsPanel
               title="Repo root"
               description="The repository root currently used by the web app for docs, tasks, and profile resources."
@@ -2790,7 +2852,7 @@ export function SettingsPage() {
               </p>
               {statusError && <p className="text-[12px] text-danger">Failed to load workspace details: {statusError}</p>}
             </SettingsPanel>
-          </section>
+          </SettingsSection>
         </div>
       </div>
     </div>

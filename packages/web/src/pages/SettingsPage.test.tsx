@@ -285,7 +285,9 @@ describe('SettingsPage', () => {
   it('renders the condensed single-page settings view', () => {
     const html = renderPage('/settings');
 
-    expect(html).toContain('ui-page-title">Settings</h1>');
+    expect(html).toContain('ui-page-title');
+    expect(html).toContain('>Settings<');
+    expect(html).toContain('href="#settings-general"');
     expect(html).toContain('Theme');
     expect(html).toContain('Profile');
     expect(html).toContain('Default model');
@@ -300,7 +302,8 @@ describe('SettingsPage', () => {
   it('renders the same consolidated settings page for legacy query routes', () => {
     const html = renderPage('/settings?page=system-daemon');
 
-    expect(html).toContain('ui-page-title">Settings</h1>');
+    expect(html).toContain('ui-page-title');
+    expect(html).toContain('>Settings<');
     expect(html).toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).toContain('Restart daemon');
