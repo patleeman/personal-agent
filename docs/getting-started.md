@@ -138,24 +138,19 @@ pa tui -p "Summarize my current profile"
 
 ```bash
 pa inbox list
-pa note list
 pa tasks list
+pa runs list
 ```
 
 ### Open a conversation in the web UI
 
-- run `pa ui --open`
+- run `pa ui open`
 - start a new conversation
-- mention a project with `@project-id` or create one from the Projects page
+- mention a vault file directly with `@path/to/file` when you want durable context in the thread
 
-### Create a note
+### Create a durable note
 
-```bash
-pa note new quick-note \
-  --title "Quick note" \
-  --summary "What this note is for" \
-  --type reference
-```
+Create `notes/<id>.md` under your vault root (default `~/Documents/personal-agent`) with frontmatter plus a markdown body, or use the desktop Instructions page when you specifically want to edit layered `AGENTS.md` files.
 
 ### Validate scheduled tasks
 
@@ -170,12 +165,11 @@ After this page:
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
 3. [Knowledge Management System](./knowledge-system.md)
-4. [Agent Tool Map](./agent-tool-map.md)
 5. [Conversations](./conversations.md)
 6. [Web UI Guide](./web-ui.md)
 7. [Tracked Pages](./projects.md)
 8. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-9. [Scheduled Tasks](./scheduled-tasks.md)
+9. [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 
 ## If something fails
 

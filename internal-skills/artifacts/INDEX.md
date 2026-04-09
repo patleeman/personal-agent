@@ -1,3 +1,12 @@
+---
+id: artifacts
+kind: internal-skill
+title: Artifacts and Rendered Outputs
+summary: Built-in guidance for conversation artifacts, project artifacts, and rendered output behavior.
+tools:
+  - artifact
+---
+
 # Artifacts and Rendered Outputs
 
 `personal-agent` uses the word **artifact** for rendered outputs or saved deliverables that should remain inspectable after they are created.
@@ -9,7 +18,7 @@ There are two different artifact surfaces:
 
 ## Conversation artifacts
 
-Conversation artifacts are rendered outputs saved for one conversation and shown in the artifact panel.
+Conversation artifacts are rendered outputs saved for one conversation and shown from the conversation transcript in an artifact viewer modal.
 
 Use them when you want:
 
@@ -74,7 +83,7 @@ Use them for:
 
 Project artifacts are different from conversation artifacts:
 
-- they are durable project files, not artifact-panel records
+- they are durable project files, not conversation-viewer records
 - they travel with the project node
 - they are the right fit when the output belongs to the project as a deliverable
 
@@ -106,19 +115,38 @@ Important usage rules:
 
 - reuse the same `artifactId` when iterating on an existing artifact
 - keep HTML self-contained unless the user explicitly wants external dependencies
-- use project artifacts separately when the output should live with project files rather than the conversation panel
+- use project artifacts separately when the output should live with project files rather than the conversation viewer
+
+### Report-style HTML guidance
+
+For report-style HTML artifacts, prefer a calm single-column reading layout.
+
+Good defaults:
+
+- self-contained HTML
+- memo/report typography over app chrome
+- restrained spacing and color
+- one strong title, a short summary, and readable body sections
+
+Avoid dashboard treatments, marketing landing-page chrome, and unnecessary interaction unless the user asked for them.
+
+### Reference template
+
+For a white-paper or technical-memo style artifact, read and adapt [`references/white-paper.md`](./references/white-paper.md).
+
+That reference includes a full self-contained HTML template and placeholder guidance for report-style artifact output.
 
 ## Web UI behavior
 
 In the web UI, conversation artifacts can:
 
 - appear as chat stubs in the conversation stream
-- open in the right-hand artifact panel
+- open in a modal artifact viewer from the chat transcript
 - be listed for the conversation
 - be copied as raw source
 - show or hide source beside the rendered output when the kind supports it
 
-The artifact panel is for inspection and iteration inside the conversation, not for replacing the project file system.
+The artifact viewer is for inspection and iteration inside the conversation, not for replacing the project file system.
 
 ## Practical rule of thumb
 
@@ -131,8 +159,7 @@ Then choose the right home:
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Agent Tool Map](./agent-tool-map.md)
-- [Tracked Pages](./projects.md)
-- [Conversations](./conversations.md)
-- [Web UI Guide](./web-ui.md)
+- [Decision Guide](../../docs/decision-guide.md)
+- [Tracked Pages](../../docs/projects.md)
+- [Conversations](../../docs/conversations.md)
+- [Web UI Guide](../../docs/web-ui.md)

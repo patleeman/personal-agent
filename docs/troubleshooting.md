@@ -172,13 +172,9 @@ pa inbox list --unread
 
 If you expected a task result, verify the task actually ran.
 
-## Note nodes fail to parse
+## Durable page files fail to parse
 
-Run:
-
-```bash
-pa note lint
-```
+Inspect the relevant vault file directly and check its frontmatter and body.
 
 Common problems:
 
@@ -212,7 +208,7 @@ pa doctor --json
 pa daemon status --json
 pa tasks list --json
 pa inbox list --json
-pa note list --json
+pa runs list --json
 ```
 
 Useful log locations:

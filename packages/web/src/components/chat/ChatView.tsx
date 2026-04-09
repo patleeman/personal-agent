@@ -526,7 +526,7 @@ function ArtifactToolBlock({
   const isRunning = block.status === 'running' || !!block.running;
   const isError = block.status === 'error' || !!block.error;
   const isActive = activeArtifactId === artifact.artifactId;
-  const actionLabel = isActive ? 'opened' : 'open artifact';
+  const actionLabel = isActive ? 'opened' : 'open';
 
   return (
     <SurfacePanel
@@ -1207,7 +1207,7 @@ function ToolBlock({
   activeArtifactId,
   onOpenRun,
   activeRunId,
-  onOpenFilePath,
+  onOpenFilePath: _onOpenFilePath,
   onHydrateMessage,
   hydratingMessageBlockIds,
   messages,
@@ -1764,7 +1764,7 @@ function ErrorBlock({
   resumeBusy,
   resumeTitle,
   resumeLabel,
-  onOpenFilePath,
+  onOpenFilePath: _onOpenFilePath,
   onSelectionGesture,
   replySelectionActions,
 }: {

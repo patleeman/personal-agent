@@ -19,6 +19,7 @@ Use these other places for adjacent concerns:
 
 - active profile `AGENTS.md` — Patrick-specific preferences, durable behavior, standing instructions
 - repo `AGENTS.md` — repo-specific development rules
+- `../internal-skills/` — agent-facing internal skills for built-in personal-agent features and tool behavior
 - skill pages under `sync/_skills/<skill>/SKILL.md` — reusable workflows and procedures
 - tool schemas / runtime prompt material — exact tool arguments and live agent capabilities
 - `nodes.md`, `configuration.md`, and task docs — on-disk format and config details
@@ -32,22 +33,33 @@ Then start here for the operating model:
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
 3. [Knowledge Management System](./knowledge-system.md)
-4. [Agent Tool Map](./agent-tool-map.md)
 
-Those four pages should answer most agent questions quickly.
+Those three pages should answer most agent questions quickly.
 
 ## Core concepts
 
 - [Conversations](./conversations.md)
-- [Async Attention and Wakeups](./async-attention.md)
-- [Artifacts and Rendered Outputs](./artifacts.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Knowledge Management System](./knowledge-system.md)
 - [Tracked Pages](./projects.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
 - [Pages](./pages.md)
 - [Nodes](./nodes.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Runs](./runs.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Runs](../internal-skills/runs/INDEX.md)
+
+## Built-in internal skills
+
+These pages moved out of `docs/` and into `../internal-skills/` so built-in runtime feature guidance has a clearer home:
+
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Runs](../internal-skills/runs/INDEX.md)
+- [Notification Center and Activity](../internal-skills/inbox/INDEX.md)
+- [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
+- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
 
 ## Interfaces
 
@@ -61,13 +73,13 @@ Those four pages should answer most agent questions quickly.
 ## Integrations and system surfaces
 
 - [MCP](./mcp.md)
-- [Reminders and Notification Delivery](./alerts.md)
-- [Notification Center and Activity](./inbox.md)
+- [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
+- [Notification Center and Activity](../internal-skills/inbox/INDEX.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Web Server Route Modules](./web-server-routing.md)
 - [Configuration](./configuration.md)
 - [Troubleshooting](./troubleshooting.md)
-- [Skills and Runtime Capabilities](./skills-and-capabilities.md)
+- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
 
 ## One place to go by question
 
@@ -76,14 +88,14 @@ Those four pages should answer most agent questions quickly.
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
 | What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Pages](./pages.md), [Configuration](./configuration.md) |
 | How does the knowledge-management system fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md), [Pages](./pages.md), [Tracked Pages](./projects.md) |
-| How do unified durable pages work? | [Pages](./pages.md) | [Command-Line Guide (`pa`)](./command-line.md), [Knowledge Management System](./knowledge-system.md) |
+| How do unified durable pages work? | [Pages](./pages.md) | [Knowledge Management System](./knowledge-system.md), [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md) |
 | Where should ongoing work live? | [Tracked Pages](./projects.md) | [Conversations](./conversations.md) |
 | Where should durable knowledge or preferences live? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md), [Pages](./pages.md) |
-| How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](./async-attention.md) | [Notification Center and Activity](./inbox.md), [Reminders and Notification Delivery](./alerts.md) |
+| How do async outcomes, reminders, and wakeups differ? | [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md) | [Notification Center and Activity](../internal-skills/inbox/INDEX.md), [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How should I handle local repo files now? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
-| How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](./artifacts.md) | [Tracked Pages](./projects.md), [Web UI Guide](./web-ui.md) |
-| Which agent tool should I use? | [Agent Tool Map](./agent-tool-map.md) | runtime tool schema |
+| How do rendered outputs and artifacts work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Pages](./projects.md), [Web UI Guide](./web-ui.md) |
+| Which agent tool should I use? | tool schema + matching internal skill below | runtime tool schema |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 
 ## Durable surfaces at a glance

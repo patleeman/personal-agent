@@ -121,10 +121,10 @@ function LatexArtifactViewer({ artifact }: { artifact: ConversationArtifactRecor
         <p className="ui-section-label">LaTeX source</p>
         <p className="mt-1 text-[12px] leading-relaxed text-secondary">
           {isFullDocument
-            ? 'Full LaTeX documents are shown as raw source in the artifact panel so the entire file remains visible and copyable.'
+            ? 'Full LaTeX documents are shown as raw source in the artifact viewer so the entire file remains visible and copyable.'
             : mathPreviewHtml
               ? 'This snippet includes a math preview above, with the raw LaTeX source shown below.'
-              : 'Raw LaTeX source is shown directly in the artifact panel.'}
+              : 'Raw LaTeX source is shown directly in the artifact viewer.'}
         </p>
       </div>
 

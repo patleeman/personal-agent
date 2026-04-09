@@ -4,9 +4,9 @@ Pages are the universal durable unit in `personal-agent`.
 
 A page is a place for information. It can contain content, link to other pages, sit under a parent page, carry tags, and include supporting files when needed.
 
-This is the user-facing model.
+This is the conceptual product model.
 
-The product model is **pages first**, and the durable storage now follows that vault layout directly.
+The current desktop UI and public CLI are narrower than this page: they do **not** currently expose a full `/pages` browser or `pa page` workflow. Use the vault files directly for broad page work, and treat this doc as the durable model the rest of the system is organized around.
 
 ## Core model
 
@@ -20,11 +20,11 @@ A page is durable markdown plus optional supporting files:
 
 ## Durable root
 
-The canonical durable store is now the vault root under:
+The canonical durable store is the shared vault root under:
 
-- `~/.local/state/personal-agent/sync/{notes,projects,_skills}/`
+- `~/Documents/personal-agent/{notes,projects,_skills}/`
 
-Machine-local runtime paths such as `~/.local/state/personal-agent/pi-agent-runtime/notes` are not a supported durable note store. If legacy runtime notes are found, the runtime migrates them into `sync/notes/` and then treats the vault copy as canonical.
+Machine-local runtime paths such as `~/.local/state/personal-agent/pi-agent-runtime/notes` are not a supported durable note store. If legacy runtime notes are found there, the runtime migrates them into the vault `notes/` directory and then treats the vault copy as canonical.
 
 That path is an implementation detail. The user model is:
 
@@ -201,7 +201,7 @@ The parent does not store children explicitly.
 
 ## Search
 
-`pa page` and the current unified page tool support tag + full-text queries with Lucene-style operators:
+The durable model supports tag + full-text queries with Lucene-style operators:
 
 ```text
 type:project AND status:active
@@ -219,30 +219,25 @@ Search matches against:
 
 ## UI model
 
-The shared browser at `/pages` is the page workspace.
+The old `/pages` browser described here is not the current desktop product surface.
 
-From there you can:
+Today, broad page work mainly happens in the vault files themselves. The web UI exposes narrower durable surfaces such as:
 
-- browse notes, projects, and skills together
-- create a new page and shape it toward a note, project, or skill
-- open shared page metadata on the right
-- edit parent, status, and structured tags
-- open any page into a role-aware page workspace when needed
+- conversations
+- instructions (`/instructions`)
+- automations
+- runs
+- inbox and system state
 
-Those role-aware workspaces are converging on the same page-editing primitives:
-
-- shared workspace chrome
-- shared page metadata and relationship rails
-- shared markdown document editor surface for note bodies, skill definitions/references, and project documents
+Use those pages when they fit, and use your editor or file manager for general note/project/skill authoring.
 
 ## Migration and compatibility
 
 Current compatibility rules:
 
-- `pa page` is the preferred CLI surface
-- `pa node` remains as a compatibility alias
-- `/pages` is the browser URL for durable page work
-- note, project, and skill workspaces are all addressed inside that one surface
+- page remains the preferred product term
+- some older docs and internal code still say `node`
+- older `/pages`, `pa page`, and `pa node` references should be treated as legacy documentation, not the current public workflow
 - the old `sync/nodes/` mirror is legacy debt and should not be used as a source of truth
 
 ## Related docs

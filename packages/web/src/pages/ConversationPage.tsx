@@ -91,6 +91,7 @@ import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs'
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
+const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
 const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
@@ -5184,6 +5185,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ) : null}
         </div>
       </div>
+      )}
+
+      {selectedArtifactId && id && (
+        <Suspense fallback={null}>
+          <ConversationArtifactModal conversationId={id} artifactId={selectedArtifactId} />
+        </Suspense>
       )}
 
       {editingDrawingLocalId && (

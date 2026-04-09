@@ -371,6 +371,32 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('Open workspace browser');
   });
 
+  it('keeps the saved-conversation rail focused on conversation details even when an artifact is selected', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/conv-123?artifact=test-artifact']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Runs');
+    expect(html).toContain('Details');
+    expect(html).not.toContain('Loading artifact…');
+    expect(html).not.toContain('copy source');
+  });
+
   it('renders the conversations workspace in the rail on the conversations index page', () => {
     vi.mocked(useConversations).mockReturnValue({
       pinnedSessions: [createSession({ id: 'pinned-1', title: 'Pinned session' })],

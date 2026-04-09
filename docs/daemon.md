@@ -45,7 +45,7 @@ Discovers and runs `*.task.md` files.
 
 This module is what powers scheduled task runs, retries, and logs.
 
-See [Scheduled Tasks](./scheduled-tasks.md).
+See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ### Deferred resume
 
@@ -153,7 +153,7 @@ Think of the daemon as the system's background engine:
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
-- [Runs](./runs.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Inbox and Activity](./inbox.md)
+- [Runs](../internal-skills/runs/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
 - [Configuration](./configuration.md)

@@ -1,3 +1,12 @@
+---
+id: inbox
+kind: internal-skill
+title: Notification Center and Activity
+summary: Built-in guidance for inbox behavior, activity records, and conversation attention surfacing.
+tools:
+  - activity
+---
+
 # Notification Center and Activity
 
 The inbox/notification center is personal-agent's **local in-app attention surface** for asynchronous things.
@@ -374,7 +383,7 @@ In practice, that means:
 
 ## Related docs
 
-- [Async Attention and Wakeups](./async-attention.md)
-- [Reminders and Notification Delivery](./alerts.md)
-- [Conversations](./conversations.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
+- [Async Attention and Wakeups](../async-attention/INDEX.md)
+- [Reminders and Notification Delivery](../alerts/INDEX.md)
+- [Conversations](../../docs/conversations.md)
+- [Scheduled Tasks](../scheduled-tasks/INDEX.md)

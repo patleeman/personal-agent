@@ -10,8 +10,8 @@ A personal application layer over Pi that keeps:
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
 - **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
-- **Daemon** - Background processing for maintenance + scheduled tasks
-- **Web UI** - Browser-based conversations, projects, and system controls
+- **Daemon** - Background processing for maintenance, wakeups, and scheduled automations
+- **Web UI** - Browser-based conversations, automations, runs, and system controls
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
 ## Packages
@@ -31,16 +31,14 @@ Start here:
 - `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
 - `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
-- `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
-- `docs/automation.md` - automation surfaces and tradeoffs
+- `internal-skills/scheduled-tasks/INDEX.md` - scheduled automations and legacy task-file import
+- `internal-skills/runs/INDEX.md` - durable background runs
 - `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
-- `docs/artifacts.md` - conversation artifacts and project artifacts
+- `internal-skills/artifacts/INDEX.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
 - `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
-- `docs/scheduled-tasks.md` - scheduled tasks and daemon automation
-- `docs/runs.md` - durable background runs
 - `docs/troubleshooting.md` - common failures and fixes
 
 ## Installation (from source)
@@ -163,7 +161,7 @@ pa runs cancel <id>
 `personal-agentd` runs background modules behind a local event bus:
 
 - **maintenance** - Periodic cleanup and retention
-- **tasks** - Scheduled `*.task.md` runs with retries and logs
+- **tasks** - Scheduled automations with retries, runtime state, and legacy `*.task.md` import
 - **deferred-resume** - Wake conversations back up when deferred work becomes due
 
 CLI surface:
@@ -193,7 +191,7 @@ Built-in extensions in this repo:
 - `web-tools` - Web search/integration
 - `daemon-run-orchestration-prompt` - System-prompt policy for daemon-backed background orchestration and status reporting
 
-See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
+See `internal-skills/skills-and-capabilities/INDEX.md` for a user-facing overview of skills and runtime capabilities.
 
 ## Runtime notes
 
@@ -230,16 +228,14 @@ See docs:
 - `docs/decision-guide.md` - which durable surface or feature to use
 - `docs/how-it-works.md` - mental model and durable surfaces
 - `docs/knowledge-system.md` - notes, skills, projects, and AGENTS as one memory system
-- `docs/agent-tool-map.md` - product concepts mapped to live agent tools
 - `docs/conversations.md` - conversation model, wakeups, and references
-- `docs/automation.md` - automation surfaces and tradeoffs
+- `internal-skills/scheduled-tasks/INDEX.md` - scheduled automations and legacy task-file import
+- `internal-skills/runs/INDEX.md` - durable background runs
 - `docs/workspace.md` - notes on the removed in-app workspace browser and what to use instead
-- `docs/artifacts.md` - conversation artifacts and project artifacts
+- `internal-skills/artifacts/INDEX.md` - conversation artifacts and project artifacts
 - `docs/web-ui.md` - web UI guide
 - `docs/projects.md` - durable project tracking
 - `docs/profiles-memory-skills.md` - profiles, AGENTS, notes, and skills
-- `docs/skills-and-capabilities.md` - skills and runtime capabilities
+- `internal-skills/skills-and-capabilities/INDEX.md` - skills and runtime capabilities
 - `docs/daemon.md` - daemon and background automation
-- `docs/scheduled-tasks.md` - scheduled tasks
-- `docs/runs.md` - durable background runs
 - `docs/troubleshooting.md` - debugging and recovery

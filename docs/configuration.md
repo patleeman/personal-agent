@@ -250,5 +250,5 @@ For most setups:
 - [Decision Guide](./decision-guide.md)
 - [Getting Started](./getting-started.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Troubleshooting](./troubleshooting.md)

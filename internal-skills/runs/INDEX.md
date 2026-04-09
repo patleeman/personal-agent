@@ -1,3 +1,12 @@
+---
+id: runs
+kind: internal-skill
+title: Runs
+summary: Built-in guidance for detached durable background runs, inspection, and follow-up behavior.
+tools:
+  - run
+---
+
 # Runs
 
 Runs are durable daemon-backed background jobs started on demand.
@@ -15,7 +24,7 @@ Good fits:
 - looping agents that schedule their own next iteration
 
 Do not use runs for:
-- task-file-based automation — use [Scheduled Tasks](./scheduled-tasks.md)
+- task-file-based automation — use [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - direct human reminders — use reminders/alerts
 - pure "continue this conversation later" wakeups with no background job — use `deferred_resume`
 
@@ -150,7 +159,7 @@ For "persistent automation from a file," use `scheduled_task`.
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Daemon and Background Automation](./daemon.md)
-- [Command-Line Guide (`pa`)](./command-line.md)
+- [Decision Guide](../../docs/decision-guide.md)
+- [Scheduled Tasks](../scheduled-tasks/INDEX.md)
+- [Daemon and Background Automation](../../docs/daemon.md)
+- [Command-Line Guide (`pa`)](../../docs/command-line.md)

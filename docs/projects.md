@@ -76,7 +76,7 @@ Use these for work-specific files you want to keep with the page:
 - sample data
 - generated deliverables
 
-These are durable tracked-page files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](./artifacts.md).
+These are durable tracked-page files, not conversation artifact-panel records. See [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md).
 
 ### `documents/`
 
@@ -155,14 +155,14 @@ Scheduled tasks are daemon automation definitions under:
 
 - `~/.local/state/personal-agent/sync/_tasks/*.task.md`
 
-See [Scheduled Tasks](./scheduled-tasks.md).
+See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
 - [Conversations](./conversations.md)
-- [Artifacts and Rendered Outputs](./artifacts.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [How personal-agent works](./how-it-works.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

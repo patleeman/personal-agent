@@ -10,7 +10,7 @@ The core idea is simple:
 
 This page is the main mental model for both users and agents.
 
-If you need a faster routing layer first, read [Decision Guide](./decision-guide.md). If you need the live-tool mapping, read [Agent Tool Map](./agent-tool-map.md).
+If you need a faster routing layer first, read [Decision Guide](./decision-guide.md). If you need the live-tool mapping, use the runtime tool schema.
 
 ## The two kinds of state
 
@@ -86,7 +86,7 @@ Use it for:
 
 Do not use it as a second transcript.
 
-See [Inbox and Activity](./inbox.md).
+See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
 
 ### Project
 
@@ -137,7 +137,7 @@ Examples:
 - background prompts that create inbox activity
 - scheduled callbacks that later wake a conversation back up
 
-See [Scheduled Tasks](./scheduled-tasks.md).
+See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ### Daemon
 
@@ -215,15 +215,14 @@ That is the intended shape of the product.
 
 - [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Agent Tool Map](./agent-tool-map.md)
 - [Getting Started](./getting-started.md)
 - [Conversations](./conversations.md)
-- [Async Attention and Wakeups](./async-attention.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
 - [Workspace](./workspace.md)
-- [Artifacts and Rendered Outputs](./artifacts.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Web UI Guide](./web-ui.md)
-- [Inbox and Activity](./inbox.md)
+- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
 - [Tracked Pages](./projects.md)
 - [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Runs](./runs.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Runs](../internal-skills/runs/INDEX.md)

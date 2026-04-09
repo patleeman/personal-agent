@@ -1,3 +1,10 @@
+---
+id: skills-and-capabilities
+kind: internal-skill
+title: Skills and Runtime Capabilities
+summary: Built-in guidance for distinguishing workflow skills from runtime features and extensions.
+---
+
 # Skills and Runtime Capabilities
 
 This page explains the user-facing difference between **skill pages** and **extensions**.
@@ -7,7 +14,7 @@ Most users and agents should think about them this way:
 - **skill pages** are reusable workflows
 - **extensions** are runtime behaviors that change what the agent can do
 
-See [Pages](./pages.md) for the product model and [Nodes](./nodes.md) for the storage compatibility term.
+See [Pages](../../docs/pages.md) for the product model and [Nodes](../../docs/nodes.md) for the storage compatibility term.
 
 ## Skills vs extensions
 
@@ -92,11 +99,10 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Knowledge Management System](./knowledge-system.md)
-- [Agent Tool Map](./agent-tool-map.md)
-- [Pages](./pages.md)
-- [Nodes](./nodes.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [How personal-agent works](./how-it-works.md)
-- [Web UI Guide](./web-ui.md)
+- [Decision Guide](../../docs/decision-guide.md)
+- [Knowledge Management System](../../docs/knowledge-system.md)
+- [Pages](../../docs/pages.md)
+- [Nodes](../../docs/nodes.md)
+- [Profiles, AGENTS, Pages, and Skills](../../docs/profiles-memory-skills.md)
+- [How personal-agent works](../../docs/how-it-works.md)
+- [Web UI Guide](../../docs/web-ui.md)

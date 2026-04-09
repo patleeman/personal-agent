@@ -254,13 +254,13 @@ When an agent needs context, the intended retrieval pattern is:
 
 This is why the docs should describe these as one knowledge system rather than separate product features.
 
-## `pa note` is only one slice of the system
+## Shared note files are only one slice of the system
 
 The old naming can be confusing.
 
-`pa note` operates on the shared **note subset**. The canonical shared store is now `sync/notes/`, and `pa page` is the preferred unified surface.
+Shared note pages are only one subset of the durable system. They live in the vault `notes/` directory, while the broader model also includes `AGENTS.md`, skill pages, and tracked pages.
 
-`~/.local/state/personal-agent/pi-agent-runtime/notes` is not a second supported durable store. It is only a legacy migration source; if runtime note files are found there, the loader moves them into `sync/notes/` and treats the vault copy as canonical.
+`~/.local/state/personal-agent/pi-agent-runtime/notes` is not a second supported durable store. It is only a legacy migration source; if runtime note files are found there, the loader moves them into the vault `notes/` directory and treats the vault copy as canonical.
 
 That does **not** mean the whole durable memory system is only one narrow page subset.
 
@@ -270,8 +270,6 @@ The broader memory system is:
 - pages
 - skill pages
 - tracked pages
-
-`pa note` is just the CLI surface for one part of it.
 
 ## Writing style across the system
 

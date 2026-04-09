@@ -146,6 +146,6 @@ Then, if needed:
 - [Decision Guide](./decision-guide.md)
 - [Web UI Guide](./web-ui.md)
 - [Workspace](./workspace.md)
-- [Artifacts and Rendered Outputs](./artifacts.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Tracked Pages](./projects.md)
-- [Async Attention and Wakeups](./async-attention.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

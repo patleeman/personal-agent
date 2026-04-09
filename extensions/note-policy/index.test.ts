@@ -69,6 +69,16 @@ describe('note policy extension', () => {
 
     mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
     mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
+    mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
+    writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
+id: artifacts
+kind: internal-skill
+title: Artifacts
+summary: How built-in rendered outputs behave.
+---
+
+# Artifacts
+`);
     writeNoteNode(join(stateRoot, 'vault', 'notes'), 'runpod', 'Provisioning notes for short-lived GPU pods.');
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'shared-skill', 'Shared skill available to every profile.', ['shared']);
     writeSkillNode(join(stateRoot, 'vault', '_skills'), 'datadog-skill', 'Datadog-only skill available in the datadog profile.', ['datadog']);
@@ -98,6 +108,11 @@ describe('note policy extension', () => {
     expect(prompt).toContain('- vault_root: vault');
     expect(prompt).toContain('- Shared notes dir: vault/notes');
     expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
+    expect(prompt).toContain(`- Internal skills folder: ${join(repoRoot, 'internal-skills')}`);
+    expect(prompt).toContain('These are built-in runtime guides for personal-agent features.');
+    expect(prompt).toContain('<available_internal_skills>');
+    expect(prompt).toContain('<internal_skill id="artifacts"');
+    expect(prompt).toContain('internal-skills/artifacts/INDEX.md');
     expect(prompt).toContain('<available_skills>');
     expect(prompt).toContain('<skill id="shared-skill"');
     expect(prompt).toContain('<skill id="datadog-skill"');
@@ -117,6 +132,16 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
     mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
+    mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
+    writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
+id: artifacts
+kind: internal-skill
+title: Artifacts
+summary: How built-in rendered outputs behave.
+---
+
+# Artifacts
+`);
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -137,6 +162,8 @@ describe('note policy extension', () => {
 
     const prompt = result?.systemPrompt ?? '';
     expect(prompt).toContain('- active_profile: shared');
+    expect(prompt).toContain('- Internal skills folder: internal-skills');
+    expect(prompt).toContain('## Internal personal-agent feature skills');
     expect(prompt).toContain(`- vault_root: ${join(stateRoot, 'vault')}`);
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');

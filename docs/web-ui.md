@@ -6,36 +6,37 @@ It gives you one place to see:
 
 - inbox attention
 - conversations
-- docs, projects, and skills
-- scheduled tasks
-- daemon state
-- profile and model settings
+- scheduled automations and background runs
+- daemon and web UI state
+- instruction sources, tools, and settings
 
 ## Start the UI
 
 Foreground mode:
 
 ```bash
-pa ui
-pa ui --open
-pa ui --port 4000
-pa ui --tailscale-serve
+pa ui foreground
+pa ui foreground --open
+pa ui foreground --port 4000
+pa ui foreground --tailscale-serve
 ```
 
 Managed service mode for day-to-day use:
 
 ```bash
-pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]
-pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]
-pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui install [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui status [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 ```
+
+The older `pa ui service <action>` form still works, but the direct `pa ui <action>` form is the current CLI surface.
 
 Default address (local interface):
 
 - `http://localhost:3741`
 
-If the managed web UI service is already installed, running, and listening on the requested port, `pa ui` reuses it instead of trying to start a second foreground server on the same port.
-That avoids duplicate-launch failures like `EADDRINUSE` and makes `pa ui --open` a safe way to jump back into the UI.
+If the managed web UI service is already installed, running, and listening on the requested port, foreground launch reuses it instead of trying to start a second foreground server on the same port.
+That avoids duplicate-launch failures like `EADDRINUSE` and makes `pa ui foreground --open` a safe way to jump back into the UI.
 
 ## Expose with Tailscale Serve
 
@@ -74,8 +75,7 @@ For app-level access control on remote devices:
 - the desktop web UI is the admin surface for pairing and revocation; the companion surface only exchanges codes into sessions
 - active paired browsers and devices refresh their session while in use; idle pairings expire after 30 days unless you revoke them sooner
 - the companion chats view mirrors desktop workspace-open conversations separately from live-but-not-open and needs-review conversations, so mobile archive/open actions track the same shared layout
-- the companion docs browser uses the same row shell as inbox and chats, and supports the same Lucene-style durable-doc querying model as the desktop docs browser in a mobile-first layout
-- companion setup/recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
+- companion setup and recovery actions such as install, notification enablement, and manual refresh are surfaced directly in the chats view for quicker mobile recovery
 
 Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
 
@@ -113,9 +113,9 @@ Use the UI when you want:
 
 - a persistent inbox
 - easy conversation browsing and branching
-- project management backed by `state.yaml`
+- scheduled automation and background-run visibility
+- instruction-source inspection and editing
 - visibility into daemon and web UI state
-- a visual notes browser
 - live updates without polling
 
 ## Main sections
@@ -140,7 +140,7 @@ Typical examples:
 
 Reminder and callback notifications stay in the main inbox list and can expose per-row actions such as open, mark read, dismiss, and snooze.
 
-See [Reminders and Notification Delivery](./alerts.md).
+See [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md).
 
 In the desktop UI, Notifications lives near the bottom of the left sidebar above Settings.
 
@@ -151,7 +151,7 @@ You can:
 - clear surfaced notifications (deletes standalone activity and marks archived attention conversations read)
 - open individual items or conversations
 
-See [Inbox and Activity](./inbox.md).
+See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
 
 ### Conversations
 
@@ -215,46 +215,23 @@ You can:
 
 
 
-### Docs (`/pages`)
+### Instructions (`/instructions`)
 
-The Docs page is the shared browser for notes, projects, and skills.
+The Instructions page is the current durable editing surface in the desktop UI.
 
-It is meant to make the durable layer feel like one surface with a normal table-first browse flow instead of three unrelated product areas.
+It focuses on the instruction sources that shape agent behavior, especially layered `AGENTS.md` files from shared defaults, the active profile, and local overlays.
 
-From the Docs page you can:
+From the Instructions page you can:
 
-- browse notes, projects, and skills together in one table
-- use a Lucene-style query bar for tag and text search, with inline field insertion and field-name suggestions while typing
-- sort by updated/created/title/status and keep one shared table while grouping inline by kind or tag-derived dimensions
-- filter by date range without leaving the page
-- switch the browser between built-in views (all / notes / projects / skills) or saved server-backed views from one selector
-- save reusable browser views on the server so they follow the active profile instead of the current browser tab
-- keep the table in either a roomier or denser row layout
-- start from one unified new-doc screen that can create notes, projects, or skills
-- use compact per-row icon actions to open a doc in the shared workspace or delete supported doc types directly from the table
-- open any row into one shared doc workspace with the main content in the center and metadata on the right
-- let that workspace adapt to the doc role instead of switching to unrelated top-level product areas
-- edit shared doc metadata there, including title/summary/description where appropriate, status, parent, and structured `key:value` tags with separate key/value inputs
-- keep recently opened docs and skills together in the sidebar’s unified Open Docs shelf
-- keep doc bodies, skill definition/reference files, and tracked project documents on the same shared markdown editor surface instead of three unrelated editors
-- use `/pages` as the canonical browser URL for durable doc and skill workspaces
+- browse loaded instruction sources
+- inspect the exact file path and source layer for each one
+- edit the current instruction file in place
+- reload the saved file back into the editor
+- keep the matching detail rail open while navigating the rest of the app
 
-### Tracked page workspaces
+This is intentionally narrower than the older `/pages` concept. The current desktop UI does **not** expose a full notes/projects/skills browser or tracked-page workspace.
 
-Tracked pages are durable cross-conversation work hubs, and in the UI they open directly inside `/pages`.
-
-From a tracked page workspace you can:
-
-- inspect current status, blockers, optional milestones, and tasks
-- edit the raw tracked-page source (`project.md` frontmatter + markdown body)
-- edit or regenerate the tracked-page document when present
-- create child pages under the current page
-- upload attachments and page artifacts
-- see linked conversations for the page
-- start a new conversation directly from the page
-- view a combined page timeline
-
-See [Tracked Pages](./projects.md) and [Artifacts and Rendered Outputs](./artifacts.md).
+For broader durable page work, use the vault files directly and the conceptual docs under [Pages](./pages.md), [Tracked Pages](./projects.md), and [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
 ### Automations
 
@@ -274,7 +251,7 @@ You can:
 - use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
 - run an automation immediately
 
-See [Scheduled Tasks](./scheduled-tasks.md).
+See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ### System
 
@@ -295,13 +272,11 @@ The advanced pages still exist for subsystem-specific setup and controls:
 
 See [Daemon and Background Automation](./daemon.md).
 
-### Doc workspaces
+### Durable pages today
 
-Docs also open inside `/pages`.
+Durable notes, skills, and tracked pages still exist in the product model, but they are not currently first-class desktop routes.
 
-Use a doc workspace when you want doc editing or durable page work that is still running or needs attention.
-
-Use `/pages` for durable doc work. Old note/project browser URLs are no longer part of the intended product surface.
+Use your editor or file manager for vault-backed page work, and use the web UI for conversations, automations, inbox, runs, instructions, tools, and system state.
 
 See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
@@ -471,12 +446,12 @@ So, for example:
 
 - [Decision Guide](./decision-guide.md)
 - [Conversations](./conversations.md)
-- [Async Attention and Wakeups](./async-attention.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
 - [Workspace](./workspace.md)
-- [Artifacts and Rendered Outputs](./artifacts.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [How personal-agent works](./how-it-works.md)
 - [Tracked Pages](./projects.md)
 - [MCP](./mcp.md)
-- [Inbox and Activity](./inbox.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
+- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Daemon and Background Automation](./daemon.md)

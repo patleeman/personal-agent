@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import {
   collectConversationRunMentions,
   createConversationLiveRunId,
@@ -42,7 +42,6 @@ import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 
-const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
 
@@ -1630,7 +1629,6 @@ export function ContextRail() {
   const parts = location.pathname.split('/').filter(Boolean);
   const section = parts[0];
   const id = parts[1];
-  const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
   const selectedPlanId = new URLSearchParams(location.search).get('plan')?.trim() || null;
@@ -1652,14 +1650,6 @@ export function ContextRail() {
   );
 
   // Conversations
-  if (section === 'conversations' && id && selectedArtifactId) return (
-    <div className="flex-1 min-h-0 overflow-hidden">
-      {suspendRailPanel(
-        <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />,
-        'Loading artifact…',
-      )}
-    </div>
-  );
   if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
     <ConversationInspectorShell>
       <DraftConversationContextPanel />

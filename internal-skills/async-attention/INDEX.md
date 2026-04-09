@@ -1,3 +1,15 @@
+---
+id: async-attention
+kind: internal-skill
+title: Async Attention and Wakeups
+summary: Built-in routing guide for deferred resume, reminders, inbox activity, and later attention surfaces.
+tools:
+  - deferred_resume
+  - reminder
+  - activity
+  - scheduled_task
+---
+
 # Async Attention and Wakeups
 
 This page explains how `personal-agent` surfaces work that matters later.
@@ -65,7 +77,7 @@ Good fits:
 
 If the event belongs to a known conversation, keep the durable result with that conversation and surface the conversation in the inbox instead of creating a duplicate visible row by default.
 
-See [Inbox and Activity](./inbox.md).
+See [Inbox and Activity](../inbox/INDEX.md).
 
 ## Reminders and notification delivery
 
@@ -80,7 +92,7 @@ Good fits:
 
 These notifications no longer get a separate in-app surface. They show up as normal inbox rows, and can additionally trigger browser/companion notifications when enabled.
 
-See [Reminders and Notification Delivery](./alerts.md).
+See [Reminders and Notification Delivery](../alerts/INDEX.md).
 
 ## Deferred resume
 
@@ -142,8 +154,8 @@ Do not:
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Inbox and Activity](./inbox.md)
-- [Reminders and Notification Delivery](./alerts.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Conversations](./conversations.md)
+- [Decision Guide](../../docs/decision-guide.md)
+- [Inbox and Activity](../inbox/INDEX.md)
+- [Reminders and Notification Delivery](../alerts/INDEX.md)
+- [Scheduled Tasks](../scheduled-tasks/INDEX.md)
+- [Conversations](../../docs/conversations.md)

@@ -32,6 +32,7 @@ pa tui -p "summarize this repo"
 
 These commands are handled by `personal-agent` itself:
 
+- `pa status`
 - `pa install ...`
 - `pa profile ...`
 - `pa doctor`
@@ -39,9 +40,6 @@ These commands are handled by `personal-agent` itself:
 - `pa tasks ...`
 - `pa inbox ...`
 - `pa ui ...`
-- `pa note ...`
-- `pa page ...`
-- `pa node ...` (compatibility alias)
 - `pa mcp ...`
 - `pa runs ...`
 - `pa restart`
@@ -62,13 +60,13 @@ pa daemon status
 ### Daily use
 
 ```bash
-pa ui --open
+pa ui open
 pa tui
 pa tui -p "hello"
 pa inbox list
-pa page list
-pa mcp list
 pa tasks list
+pa runs list
+pa mcp list
 ```
 
 ### Background automation
@@ -115,6 +113,10 @@ pa profile show
 pa profile use assistant
 ```
 
+### `pa status`
+
+Show a compact top-level status view for the local setup.
+
 ### `pa doctor [--json]`
 
 Run setup checks.
@@ -144,7 +146,7 @@ pa tasks validate --all
 pa tasks logs <id> --tail 120
 ```
 
-See [Scheduled Tasks](./scheduled-tasks.md).
+See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
 ### `pa inbox [list|show|create|read|unread|delete]`
 
@@ -161,73 +163,39 @@ pa inbox create "Nightly review finished" --kind note
 pa inbox read conversation:conv-123
 ```
 
-See [Inbox and Activity](./inbox.md).
+See [Inbox and Activity](../internal-skills/inbox/INDEX.md).
 
-### `pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]`
+### `pa ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|rollback|mark-bad|uninstall|help]`
 
-Start the web UI in the foreground.
+Inspect or manage the local web UI.
+
+Important behavior:
+
+- `pa ui` with no subcommand shows status
+- `pa ui open` opens the existing UI in a browser
+- `pa ui foreground --open` starts a foreground server and opens it
+- `pa ui install|start|stop|restart|rollback|mark-bad|uninstall` manage the installed service
+- `pa ui pairing-code` creates a short-lived pairing code for remote desktop or companion access
 
 Examples:
 
 ```bash
 pa ui
-pa ui --open
-pa ui --port 4000
-pa ui --tailscale-serve
+pa ui open
+pa ui foreground --open
+pa ui foreground --port 4000 --tailscale-serve
+pa ui logs --tail 120
+pa ui install --port 3741 --tailscale-serve
+pa ui restart
 ```
 
-`--tailscale-serve` enables Tailscale Serve for the foreground session immediately via the `tailscale` CLI.
-`--no-tailscale-serve` updates the saved preference first, then makes a best-effort attempt to remove the existing Serve mappings without blocking the local foreground launch when `tailscale` is unavailable.
+`--tailscale-serve` enables Tailscale Serve for the foreground session or managed-service action immediately via the `tailscale` CLI.
+`--no-tailscale-serve` updates the saved preference first, then makes a best-effort attempt to remove the existing Serve mappings without blocking foreground launch when `tailscale` is unavailable.
 If the configured companion port is already busy, foreground launch picks a temporary free companion port for that session.
 
-Useful related commands:
-
-```bash
-pa ui logs --tail 120
-pa ui service install --port 3741 [--tailscale-serve|--no-tailscale-serve]
-pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]
-pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
-```
+The older `pa ui service <action>` form still works as a compatibility path for managed-service actions.
 
 See [Web UI Guide](./web-ui.md).
-
-### `pa page [list|find|show|get|new|update|delete|tag|lint|migrate]`
-
-Work with the unified durable page store backed by the vault layout under `notes`, `projects`, and `_skills` at the active vault root (default: `~/Documents/personal-agent`).
-
-Examples:
-
-```bash
-pa page list
-pa page find "type:skill AND profile:assistant"
-pa page show agent-browser
-pa page new quick-note --title "Quick note" --summary "Captured thought." --tag type:note
-pa page tag quick-note --add area:notes
-pa page migrate
-pa page lint
-```
-
-`pa node` remains available as a compatibility alias.
-
-See [Pages](./pages.md) and [Nodes](./nodes.md).
-
-### `pa note [list|find|show|new|lint]`
-
-Compatibility surface for the shared note subset. Use `pa page` for new work.
-
-`pa note` reads and writes the durable vault notes directory only. Simple notes use `notes/<id>.md`; note packages use `notes/<id>/INDEX.md`. Legacy files under `~/.local/state/personal-agent/pi-agent-runtime/notes` are treated as migration input and moved into the vault `notes/` directory when note pages are loaded.
-
-Examples:
-
-```bash
-pa note list
-pa note find --type reference --area personal-agent
-pa note show quick-note
-pa note new note-index --title "Note index" --summary "Top-level note table of contents" --type reference --area notes
-pa note lint
-```
-
-See [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md).
 
 ### `pa mcp [list|info|grep|call|auth|logout]`
 
@@ -295,7 +263,7 @@ pa runs cancel <id>
 
 Use this as the main control surface for detached local background work.
 
-See [Runs](./runs.md).
+See [Runs](../internal-skills/runs/INDEX.md).
 
 ### `pa restart [--rebuild]`
 
@@ -325,16 +293,15 @@ pa runs list
 pa inbox list --unread
 ```
 
-### Create and validate a note node
-
-This creates a durable note entry file at `notes/<id>.md` under the active vault root.
+### Inspect the local runtime surfaces
 
 ```bash
-pa note new repo-notes \
-  --title "Repo Notes" \
-  --summary "Useful notes about this repo" \
-  --type reference
-pa note lint
+pa status
+pa daemon status
+pa ui
+pa tasks list
+pa runs list
+pa inbox list --unread
 ```
 
 ### Debug a scheduled task
@@ -356,7 +323,6 @@ pa doctor --json
 pa daemon status --json
 pa tasks list --json
 pa tasks show <id> --json
-pa note list --json
 pa inbox list --json
 pa runs list --json
 ```
@@ -377,11 +343,10 @@ Or set:
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
-- [Agent Tool Map](./agent-tool-map.md)
 - [Getting Started](./getting-started.md)
 - [How personal-agent works](./how-it-works.md)
 - [Conversations](./conversations.md)
-- [Runs](./runs.md)
+- [Runs](../internal-skills/runs/INDEX.md)
 - [MCP](./mcp.md)
 - [Web UI Guide](./web-ui.md)
 - [Configuration](./configuration.md)

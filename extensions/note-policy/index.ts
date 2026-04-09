@@ -1,5 +1,5 @@
 import { join, relative } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   getDurableNotesDir,
@@ -37,6 +37,7 @@ export interface NoteProfileContext {
 
 interface ResourceDefinition {
   name: string;
+  title?: string;
   description: string;
   path: string;
 }
@@ -103,6 +104,47 @@ function listAvailableSkills(activeProfile: string, nodes: LoadedNode[]): Resour
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function parseFrontmatterValue(contents: string, key: string): string | undefined {
+  const match = contents.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
+  return match?.[1]?.trim();
+}
+
+function listAvailableInternalSkills(repoRoot: string): ResourceDefinition[] {
+  const featureDocsDir = join(repoRoot, 'internal-skills');
+  if (!existsSync(featureDocsDir)) {
+    return [];
+  }
+
+  return readdirSync(featureDocsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const path = join(featureDocsDir, entry.name, 'INDEX.md');
+      if (!existsSync(path)) {
+        return null;
+      }
+
+      const contents = readFileSync(path, 'utf-8');
+      const title = parseFrontmatterValue(contents, 'title')
+        ?? contents.match(/^#\s+(.+)$/m)?.[1]?.trim()
+        ?? entry.name;
+      const description = parseFrontmatterValue(contents, 'summary')
+        ?? contents
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => line.length > 0 && !line.startsWith('#') && !line.startsWith('---') && !line.includes(': '))
+        ?? '';
+
+      return {
+        name: parseFrontmatterValue(contents, 'id') ?? entry.name,
+        title,
+        description,
+        path,
+      };
+    })
+    .filter((entry): entry is ResourceDefinition => entry !== null)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
 export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
   const repoRoot = resolveRepoRoot();
   const profilesRoot = resolveProfilesRoot();
@@ -150,6 +192,12 @@ function buildNoteTemplateVariables(cwd: string, context: ReturnType<typeof reso
     notes_dir: notesDir ? toDisplayPath(cwd, notesDir) : 'unavailable',
     docs_dir: toDisplayPath(cwd, join(context.repoRoot, 'docs')),
     docs_index: toDisplayPath(cwd, join(context.repoRoot, 'docs', 'README.md')),
+    feature_docs_dir: toDisplayPath(cwd, join(context.repoRoot, 'internal-skills')),
+    feature_docs_index: toDisplayPath(cwd, join(context.repoRoot, 'internal-skills', 'README.md')),
+    available_internal_skills: listAvailableInternalSkills(context.repoRoot).map((doc) => ({
+      ...doc,
+      path: toDisplayPath(cwd, doc.path),
+    })),
     available_skills: listAvailableSkills(context.activeProfile, nodes).map((skill) => ({
       ...skill,
       path: toDisplayPath(cwd, skill.path),

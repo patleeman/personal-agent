@@ -1,4 +1,3 @@
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
@@ -13,19 +12,13 @@ import { invalidateAppTopics } from '../shared/appEvents.js';
 
 const ARTIFACT_ACTION_VALUES = ['save', 'get', 'list', 'delete'] as const;
 const ARTIFACT_KIND_VALUES = ['html', 'mermaid', 'latex'] as const;
-const WHITE_PAPER_REFERENCE_PATH = join(
-  homedir(),
-  '.local',
-  'state',
-  'personal-agent',
-  'profiles',
-  'shared',
-  'agent',
-  'skills',
-  'artifact-output',
-  'references',
-  'white-paper.md',
-);
+function resolveArtifactInternalSkillPath(repoRoot: string): string {
+  return join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md');
+}
+
+function resolveArtifactWhitePaperReferencePath(repoRoot: string): string {
+  return join(repoRoot, 'internal-skills', 'artifacts', 'references', 'white-paper.md');
+}
 
 type ArtifactAction = (typeof ARTIFACT_ACTION_VALUES)[number];
 
@@ -81,6 +74,7 @@ function formatArtifact(record: NonNullable<ReturnType<typeof getConversationArt
 
 export function createArtifactAgentExtension(options: {
   stateRoot?: string;
+  repoRoot: string;
   getCurrentProfile: () => string;
 }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -88,13 +82,13 @@ export function createArtifactAgentExtension(options: {
       name: 'artifact',
       label: 'Artifact',
       description: 'Create, update, inspect, and delete rendered conversation artifacts for the web UI.',
-      promptSnippet: 'Create or update rendered HTML, Mermaid, and LaTeX artifacts for the artifact panel.',
+      promptSnippet: 'Create or update rendered HTML, Mermaid, and LaTeX artifacts for the artifact viewer.',
       promptGuidelines: [
         'Use this tool when the user asks for a rendered artifact in the web UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
         'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
-        `For report-style HTML artifacts, read and adapt the shared artifact-output white-paper reference at ${WHITE_PAPER_REFERENCE_PATH}.`,
-        'Default white-paper/report HTML to a self-contained LaTeX.css-style single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',
-        'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact panel stay linked.',
+        `For report-style HTML artifacts, read the built-in artifacts internal skill at ${resolveArtifactInternalSkillPath(options.repoRoot)} and adapt the white-paper reference at ${resolveArtifactWhitePaperReferencePath(options.repoRoot)}.`,
+        'Default white-paper/report HTML to a self-contained single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',
+        'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact viewer stay linked.',
         'Keep HTML self-contained; do not rely on external network resources unless the user explicitly asks for that tradeoff.',
       ],
       parameters: ArtifactToolParams,

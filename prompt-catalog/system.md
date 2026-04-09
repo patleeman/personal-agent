@@ -73,8 +73,25 @@ Use the active-profile `AGENTS.md`, skills, and shared note nodes as the durable
 
 ## Documentation
 - Docs folder: {{ docs_dir }}
-- Index: {{ docs_index }}
+- Docs index: {{ docs_index }}
+- Internal skills folder: {{ feature_docs_dir }}
+- Internal skills index: {{ feature_docs_index }}
 - Follow markdown cross-references before implementing.
+- When the task is about a built-in personal-agent feature or tool behavior, check the matching internal skill first.
+
+{% if available_internal_skills %}
+## Internal personal-agent feature skills
+These are built-in runtime guides for personal-agent features. They are not user-authored workflow skills. Use them when a task depends on how a built-in personal-agent feature should behave, when to use it, or how to produce output that fits that feature well. Prefer these before general docs when the task is about artifacts, runs, tasks, reminders, inbox activity, or other built-in personal-agent capabilities.
+
+<available_internal_skills>
+{% for skill in available_internal_skills %}
+  <internal_skill id="{{ skill.name }}" title="{{ skill.title or skill.name }}" location="{{ skill.path }}">
+    {{ skill.description }}
+  </internal_skill>
+{% endfor %}
+</available_internal_skills>
+Read the matching internal skill when the task concerns a built-in personal-agent feature such as artifacts, runs, tasks, inbox activity, reminders, or runtime capabilities.
+{% endif %}
 
 {% if available_skills %}
 ## Available Skills

@@ -19,4 +19,17 @@ describe('ConversationWorkspaceShell', () => {
     expect(html).toContain('closed');
     expect(html).not.toContain('aria-label="Conversation context"');
   });
+
+  it('does not auto-open the right rail when an artifact is selected', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/conv-123?artifact=test-artifact']}>
+        <ConversationWorkspaceShell>
+          {({ railOpen }) => <div>{railOpen ? 'open' : 'closed'}</div>}
+        </ConversationWorkspaceShell>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('closed');
+    expect(html).not.toContain('aria-label="Conversation context"');
+  });
 });

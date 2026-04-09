@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
 import { ContextRail } from './ContextRail';
 
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;
 const CONVERSATION_WORKSPACE_RAIL_MAX_WIDTH = 520;
-const CONVERSATION_ARTIFACT_RAIL_TARGET_WIDTH = 460;
 
 export interface ConversationWorkspaceShellControls {
   railOpen: boolean;
@@ -144,24 +142,11 @@ export function ConversationWorkspaceShell({
     side: 'right',
   });
   const [railOpen, setRailOpen] = useState(false);
-  const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
-  const railWidth = selectedArtifactId
-    ? clampPanelWidth(
-        Math.max(rail.width, CONVERSATION_ARTIFACT_RAIL_TARGET_WIDTH),
-        CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH,
-        CONVERSATION_WORKSPACE_RAIL_MAX_WIDTH,
-      )
-    : rail.width;
 
   useEffect(() => {
     setRailOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    if (selectedArtifactId) {
-      setRailOpen(true);
-    }
-  }, [selectedArtifactId]);
 
   const effectiveRailOpen = contextRailEnabled && railOpen;
   const controls = useMemo<ConversationWorkspaceShellControls>(() => ({
@@ -179,7 +164,7 @@ export function ConversationWorkspaceShell({
       {effectiveRailOpen ? <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} /> : null}
       {effectiveRailOpen ? (
         <aside
-          style={{ width: railWidth }}
+          style={{ width: rail.width }}
           className="min-h-0 flex-shrink-0 overflow-hidden bg-transparent"
           aria-label="Conversation context"
         >

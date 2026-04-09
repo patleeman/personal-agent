@@ -1,3 +1,12 @@
+---
+id: alerts
+kind: internal-skill
+title: Reminders and Notification Delivery
+summary: Built-in guidance for reminder-backed notification delivery, callbacks, and stronger async attention.
+tools:
+  - reminder
+---
+
 # Reminders and Notification Delivery
 
 This page covers the reminder/callback notification path that still uses internal alert records under the hood.
@@ -83,7 +92,7 @@ Use:
 
 ## Related docs
 
-- [Async Attention and Wakeups](./async-attention.md)
-- [Inbox and Activity](./inbox.md)
-- [Conversations](./conversations.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
+- [Async Attention and Wakeups](../async-attention/INDEX.md)
+- [Inbox and Activity](../inbox/INDEX.md)
+- [Conversations](../../docs/conversations.md)
+- [Scheduled Tasks](../scheduled-tasks/INDEX.md)

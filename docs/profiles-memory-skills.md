@@ -250,20 +250,16 @@ pa profile show
 pa profile use <name>
 ```
 
-### Note-node commands
+### Shared note files
 
-```bash
-pa note list
-pa note find --type reference
-pa note show <id>
-pa note new <id> --title "..." --summary "..." --type reference
-pa note lint
-```
+Shared note pages live under the vault `notes/` directory.
 
-Use `pa note` to operate on shared pages under `sync/notes/`.
+Create or edit them directly as markdown files, usually either:
 
-`pa note new` scaffolds `notes/<note-id>.md`.
-If legacy files still exist under `~/.local/state/personal-agent/pi-agent-runtime/notes`, note loads migrate them into `sync/notes/` and the vault copy becomes canonical.
+- `notes/<note-id>.md`
+- `notes/<note-id>/INDEX.md`
+
+If legacy files still exist under `~/.local/state/personal-agent/pi-agent-runtime/notes`, loaders migrate them into the vault `notes/` directory and the vault copy becomes canonical.
 
 ## Local overlay
 
@@ -298,11 +294,10 @@ Conversation-local bindings belong in local runtime state.
 
 - [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
-- [Agent Tool Map](./agent-tool-map.md)
 - [Nodes](./nodes.md)
 - [How personal-agent works](./how-it-works.md)
 - [Tracked Pages](./projects.md)
 - [Conversations](./conversations.md)
-- [Scheduled Tasks](./scheduled-tasks.md)
-- [Inbox and Activity](./inbox.md)
-- [Skills and Runtime Capabilities](./skills-and-capabilities.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Inbox and Activity](../internal-skills/inbox/INDEX.md)
+- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)

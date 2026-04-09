@@ -18,7 +18,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function registerArtifactTool(stateRoot: string) {
+function registerArtifactTool(repoRoot: string, stateRoot: string) {
   let registeredTool:
     | {
       execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
@@ -28,6 +28,7 @@ function registerArtifactTool(stateRoot: string) {
 
   createArtifactAgentExtension({
     stateRoot,
+    repoRoot,
     getCurrentProfile: () => 'datadog',
   })({
     registerTool: (tool: unknown) => {
@@ -66,22 +67,22 @@ function createToolContext(conversationId = 'conv-123') {
 }
 
 describe('artifact agent extension', () => {
-  it('advertises the shared white-paper report template for html artifacts', () => {
+  it('advertises the built-in artifacts internal skill and white-paper reference for html artifacts', () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
-    const artifactTool = registerArtifactTool(stateRoot);
+    const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const guidelines = artifactTool.promptGuidelines?.join('\n') ?? '';
 
-    expect(guidelines).toContain('artifact-output white-paper reference');
-    expect(guidelines).toContain('artifact-output');
-    expect(guidelines).toContain('white-paper.md');
-    expect(guidelines).toContain('LaTeX.css-style single-column');
+    expect(guidelines).toContain('built-in artifacts internal skill');
+    expect(guidelines).toContain('internal-skills/artifacts/INDEX.md');
+    expect(guidelines).toContain('internal-skills/artifacts/references/white-paper.md');
+    expect(guidelines).toContain('single-column reading layout');
   });
 
   it('saves and updates conversation artifacts', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
-    const artifactTool = registerArtifactTool(stateRoot);
+    const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const ctx = createToolContext();
 
     const created = await artifactTool.execute(
@@ -144,7 +145,7 @@ describe('artifact agent extension', () => {
   it('lists, reads, and deletes artifacts', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
-    const artifactTool = registerArtifactTool(stateRoot);
+    const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const ctx = createToolContext();
 
     await artifactTool.execute('tool-1', {
@@ -170,7 +171,7 @@ describe('artifact agent extension', () => {
   it('preserves full latex documents as raw artifact source', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
-    const artifactTool = registerArtifactTool(stateRoot);
+    const artifactTool = registerArtifactTool(repoRoot, stateRoot);
     const ctx = createToolContext();
     const latexDocument = String.raw`\documentclass{article}
 \begin{document}

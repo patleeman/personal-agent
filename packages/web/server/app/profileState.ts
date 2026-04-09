@@ -120,6 +120,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       }),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
+        repoRoot,
         getCurrentProfile,
       }),
       createDeferredResumeAgentExtension(),

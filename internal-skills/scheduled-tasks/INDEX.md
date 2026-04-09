@@ -1,3 +1,12 @@
+---
+id: scheduled-tasks
+kind: internal-skill
+title: Scheduled Tasks
+summary: Built-in guidance for daemon-backed scheduled automations and conversation callbacks.
+tools:
+  - scheduled_task
+---
+
 # Scheduled Tasks
 
 Scheduled tasks let `personal-agent` run prompts automatically through the daemon.
@@ -55,7 +64,7 @@ The Markdown body is the prompt sent to Pi.
 
 New automations created from the web UI are stored directly in SQLite instead of writing `*.task.md` files.
 
-See the full example at [docs/examples/scheduled-task.task.md](./examples/scheduled-task.task.md).
+See the full example at [docs/examples/scheduled-task.task.md](../../docs/examples/scheduled-task.task.md).
 
 ## Required schedule fields
 
@@ -160,7 +169,7 @@ The Automations page lets you:
 - run an automation immediately
 - inspect automation status visually
 
-See [Web UI Guide](./web-ui.md).
+See [Web UI Guide](../../docs/web-ui.md).
 
 ## Managing tasks from the CLI
 
@@ -240,9 +249,9 @@ pa tasks validate --all
 
 ## Related docs
 
-- [Decision Guide](./decision-guide.md)
-- [Async Attention and Wakeups](./async-attention.md)
-- [Daemon and Background Automation](./daemon.md)
-- [Inbox and Activity](./inbox.md)
-- [Tracked Pages](./projects.md)
-- [Runs](./runs.md)
+- [Decision Guide](../../docs/decision-guide.md)
+- [Async Attention and Wakeups](../async-attention/INDEX.md)
+- [Daemon and Background Automation](../../docs/daemon.md)
+- [Inbox and Activity](../inbox/INDEX.md)
+- [Tracked Pages](../../docs/projects.md)
+- [Runs](../runs/INDEX.md)

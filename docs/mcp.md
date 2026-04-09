@@ -77,4 +77,4 @@ Use local agent tools when the runtime already exposes a direct capability.
 
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Web UI Guide](./web-ui.md)
-- [Skills and Runtime Capabilities](./skills-and-capabilities.md)
+- [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)

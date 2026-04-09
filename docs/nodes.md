@@ -11,11 +11,11 @@ The product model is now:
 - **page** = the universal durable unit
 - **note / project / skill** = page roles or workflows
 
-The implementation still uses `node` in some API names and compatibility surfaces, so you will still see `node` in:
+The implementation still uses `node` in some API names and historical compatibility surfaces, so you will still see `node` in:
 
-- older CLI compatibility (`pa node`)
 - some internal APIs and code paths
 - older docs, links, or scripts that have not been updated yet
+- historical references to older CLI or UI surfaces
 
 That does **not** mean users or agents should lead with `node` as the mental model.
 
@@ -31,17 +31,13 @@ For the actual product model, read [Pages](./pages.md).
 
 ## Compatibility surfaces
 
-These are still valid for now:
+These are the places you may still encounter node terminology:
 
-- `pa node ...`
 - older `/nodes` links and API clients
 - legacy scripts that still use node terminology
+- stale docs that have not yet been refreshed
 
-The preferred user-facing surfaces are now:
-
-- `/pages`
-- `pa page ...`
-- page language in docs and UI copy
+The preferred user-facing language is now just **page**.
 
 ## Related docs
 
