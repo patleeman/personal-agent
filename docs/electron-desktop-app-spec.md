@@ -67,7 +67,7 @@ The renderer is still the normal web UI.
 The desktop shell adds:
 
 - a hidden-titlebar BrowserWindow
-- a tray-driven lifecycle
+- a tray/menubar-driven lifecycle with a standard application menu
 - separate browser partitions per host
 - host-aware window titles
 - optional dedicated remote windows
@@ -104,7 +104,7 @@ The packaged desktop app resolves repo-like resources from app resources instead
 
 ## Packaging
 
-`electron-builder` packages the desktop app from `packages/desktop` and includes extra resources such as:
+`electron-builder` packages the desktop app from `packages/desktop`, includes the branded macOS app icon, and bundles extra resources such as:
 
 - `defaults/`
 - `extensions/`

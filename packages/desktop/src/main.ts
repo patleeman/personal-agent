@@ -7,6 +7,7 @@ import { HostManager } from './hosts/host-manager.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
+import { installDesktopApplicationMenu } from './menu.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 
 let hostManager: HostManager | undefined;
@@ -45,8 +46,7 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   updateManager = new DesktopUpdateManager();
 
-  trayController = new DesktopTrayController({
-    hostManager,
+  const shellActions = {
     onOpen: () => {
       void windowController?.openMainWindow('/');
     },
@@ -65,7 +65,13 @@ async function bootstrapDesktopApp(): Promise<void> {
     onQuit: () => {
       void shutdownAndQuit();
     },
+  };
+
+  trayController = new DesktopTrayController({
+    hostManager,
+    ...shellActions,
   });
+  installDesktopApplicationMenu(shellActions);
 
   registerDesktopIpc({
     hostManager,

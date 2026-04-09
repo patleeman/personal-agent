@@ -18,6 +18,7 @@
     useMultipleRangeRequest: false,
   },
   electronUpdaterCompatibility: '>=2.16',
+  icon: 'packages/desktop/assets/icon.png',
   extraResources: [
     {
       from: 'defaults',
@@ -42,6 +43,7 @@
   ],
   mac: {
     category: 'public.app-category.developer-tools',
+    icon: 'packages/desktop/assets/icon.icns',
     hardenedRuntime: true,
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',

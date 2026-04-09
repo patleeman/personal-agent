@@ -8,6 +8,7 @@ The desktop app is a tray/menubar-style wrapper around the existing web UI. It o
 
 ## What the desktop app does today
 
+- ships as a normal macOS app with a branded app icon and an always-available menubar icon
 - keeps a tray app alive after the main window closes
 - opens the existing web UI in Electron windows
 - owns a local daemon + web UI child-process pair for the local host
@@ -33,7 +34,8 @@ npm run desktop:dist
 Behavior to expect:
 
 - closing the main window hides it instead of quitting the app
-- quitting from the tray shuts down the desktop-owned local backend
+- the app keeps a standard application menu in the macOS menu bar alongside the menubar status item
+- quitting from the tray or app menu shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 
 ## Host modes
