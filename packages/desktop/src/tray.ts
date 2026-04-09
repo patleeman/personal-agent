@@ -1,10 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { Menu, Tray, nativeImage } from 'electron';
+import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { HostManager } from './hosts/host-manager.js';
 
+function createSvgImage(filePath: string) {
+  const source = readFileSync(filePath, 'utf-8');
+  return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`);
+}
+
 function createTrayIcon() {
-  const image = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAOCAYAAAAfSC3RAAAAHElEQVR4AWP4//8/AzWAiSTVgA0YNYBNGJ0NAAD5Rw/xl3pNGQAAAABJRU5ErkJggg==',
-  );
+  const { trayTemplateIconFile } = resolveDesktopRuntimePaths();
+  const image = createSvgImage(trayTemplateIconFile).resize({ width: 18, height: 18 });
   image.setTemplateImage(true);
   return image;
 }
@@ -30,7 +36,7 @@ export class DesktopTrayController {
   }) {
     this.options = options;
     this.tray = new Tray(createTrayIcon());
-    this.tray.setToolTip('personal-agent');
+    this.tray.setToolTip('Personal Agent');
     this.tray.on('click', () => {
       this.refresh();
       this.options.onOpen();
@@ -46,16 +52,16 @@ export class DesktopTrayController {
     const activeHost = this.options.hostManager.getActiveHostRecord();
     const menu = Menu.buildFromTemplate([
       {
-        label: `Host: ${activeHost.label}`,
+        label: `Connected to: ${activeHost.label}`,
         enabled: false,
       },
       { type: 'separator' },
       {
-        label: 'Open personal-agent',
+        label: 'Open Personal Agent',
         click: this.options.onOpen,
       },
       {
-        label: 'New conversation',
+        label: 'New Conversation',
         click: this.options.onNewConversation,
       },
       {
@@ -63,12 +69,12 @@ export class DesktopTrayController {
         click: this.options.onConnections,
       },
       {
-        label: 'Restart backend',
+        label: 'Restart Backend',
         click: this.options.onRestartBackend,
       },
       { type: 'separator' },
       {
-        label: 'Quit',
+        label: 'Quit Personal Agent',
         click: this.options.onQuit,
       },
     ]);

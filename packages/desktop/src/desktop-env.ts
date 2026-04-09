@@ -11,6 +11,8 @@ export interface DesktopRuntimePaths {
   desktopStateDir: string;
   desktopLogsDir: string;
   desktopConfigFile: string;
+  trayTemplateIconFile: string;
+  colorIconFile: string;
 }
 
 function resolveRepoRoot(): string {
@@ -60,6 +62,12 @@ export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
   const webDistDir = resolveExistingFile('web UI dist directory', [
     resolve(repoRoot, 'packages', 'web', 'dist'),
   ]);
+  const trayTemplateIconFile = resolveExistingFile('desktop tray icon', [
+    resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon-template.svg'),
+  ]);
+  const colorIconFile = resolveExistingFile('desktop color icon', [
+    resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon-color.svg'),
+  ]);
 
   return {
     repoRoot,
@@ -69,5 +77,7 @@ export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
     desktopStateDir,
     desktopLogsDir,
     desktopConfigFile,
+    trayTemplateIconFile,
+    colorIconFile,
   };
 }

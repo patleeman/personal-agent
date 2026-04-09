@@ -1,4 +1,6 @@
-import { app } from 'electron';
+import { readFileSync } from 'node:fs';
+import { app, nativeImage } from 'electron';
+import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
@@ -8,6 +10,11 @@ let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let quitting = false;
+
+function createSvgImage(filePath: string) {
+  const source = readFileSync(filePath, 'utf-8');
+  return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`);
+}
 
 async function bootstrapDesktopApp(): Promise<void> {
   hostManager = new HostManager();
@@ -78,6 +85,12 @@ app.on('activate', () => {
 
 app.whenReady()
   .then(async () => {
+    app.setName('Personal Agent');
+    const { colorIconFile } = resolveDesktopRuntimePaths();
+    const colorIcon = createSvgImage(colorIconFile);
+    if (process.platform === 'darwin') {
+      app.dock?.setIcon(colorIcon);
+    }
     await bootstrapDesktopApp();
   })
   .catch((error) => {

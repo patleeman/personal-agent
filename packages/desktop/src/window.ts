@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { HostManager } from './hosts/host-manager.js';
@@ -77,6 +78,7 @@ export class DesktopWindowController {
 
     const config = loadDesktopConfig();
     const savedWindowState = config.windowState ?? { width: 1440, height: 960 };
+    const runtime = resolveDesktopRuntimePaths();
 
     this.currentPartition = partition;
     this.mainWindow = new BrowserWindow({
@@ -85,7 +87,8 @@ export class DesktopWindowController {
       height: savedWindowState.height,
       ...(typeof savedWindowState.x === 'number' ? { x: savedWindowState.x } : {}),
       ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y } : {}),
-      title: 'personal-agent',
+      title: 'Personal Agent',
+      icon: runtime.colorIconFile,
       webPreferences: {
         preload: resolvePreloadPath(),
         partition,
