@@ -18,7 +18,7 @@
     "release:patch": "npm version patch",
     "release:minor": "npm version minor",
     "release:major": "npm version major",
-    "version": "node scripts/sync-workspace-versions.mjs && npm install --package-lock-only --ignore-scripts",
+    "version": "node scripts/sync-workspace-versions.mjs && npm install --package-lock-only --ignore-scripts && git add package-lock.json packages/*/package.json",
     "lint": "eslint packages extensions --ext .ts,.tsx",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
