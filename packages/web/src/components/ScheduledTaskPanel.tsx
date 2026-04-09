@@ -26,6 +26,10 @@ import { MentionTextarea } from './MentionTextarea';
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors';
+const COMPOSER_INSET_STYLE = {
+  background: 'rgb(var(--color-base) / 0.78)',
+  boxShadow: 'inset 0 1px 1px rgb(255 255 255 / 0.18), inset 0 0 0 1px rgb(0 0 0 / 0.035)',
+} as const;
 
 interface TaskFormState {
   title: string;
@@ -446,17 +450,17 @@ function TaskEditorForm({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        <div className="space-y-4">
-          <div className="rounded-[24px] border border-border-subtle bg-base/45 px-5 py-4">
+        <div className="space-y-3">
+          <div className="rounded-[24px] px-5 py-4" style={COMPOSER_INSET_STYLE}>
             <input
               value={value.title}
               onChange={(event) => onChange({ title: event.target.value })}
-              className="w-full bg-transparent text-[28px] font-semibold tracking-[-0.03em] text-primary outline-none placeholder:text-dim"
+              className="w-full bg-transparent text-[30px] font-semibold tracking-[-0.035em] text-primary outline-none placeholder:text-dim"
               placeholder="Automation title"
             />
           </div>
 
-          <div className="rounded-[24px] border border-border-subtle bg-base/45 px-5 py-4">
+          <div className="rounded-[24px] px-5 py-4" style={COMPOSER_INSET_STYLE}>
             <MentionTextarea
               value={value.prompt}
               onValueChange={(prompt) => onChange({ prompt })}
