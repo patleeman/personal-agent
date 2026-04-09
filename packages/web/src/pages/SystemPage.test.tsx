@@ -98,22 +98,23 @@ describe('System settings integration', () => {
   it('renders the consolidated system section inline', () => {
     const html = renderSystem('/settings', <SystemSettingsContent />);
 
-    expect(html).toContain('Operational overview');
-    expect(html).toContain('Open runs');
-    expect(html).toContain('Update + restart');
-    expect(html).toContain('Restart everything');
-    expect(html).toContain('Web UI and daemon controls now stay on this page');
+    expect(html).toContain('Runtime services');
+    expect(html).toContain('Web UI and daemon status, restart controls, logs, and companion transport settings stay inline here.');
     expect(html).toContain('Restart daemon');
     expect(html).toContain('Restart web UI');
-    expect(html).toContain('4 modules · queue 0/1000');
-    expect(html).toContain('Connected via SSE');
+    expect(html).toContain('Queue');
+    expect(html).toContain('Modules');
+    expect(html).not.toContain('Operational overview');
+    expect(html).not.toContain('Update + restart');
+    expect(html).not.toContain('Restart everything');
     expect(html).not.toContain('Related Views');
   });
 
   it('ignores legacy system subpage selection and still renders both services', () => {
     const html = renderSystem('/settings?page=system-daemon', <SystemSettingsContent componentId="daemon" />);
 
-    expect(html).toContain('Operational overview');
+    expect(html).toContain('Runtime services');
+    expect(html).not.toContain('Operational overview');
     expect(html).toContain('Restart daemon');
     expect(html).toContain('Restart web UI');
     expect(html).toContain('daemon ready');

@@ -21,7 +21,7 @@ const SETTINGS_NAV_ITEMS = [
   {
     href: '/settings',
     label: 'Settings',
-    summary: 'Profile, model, theme, providers, default cwd, and system controls on one page.',
+    summary: 'Profile, model, theme, providers, desktop connections, and runtime services on one page.',
   },
   {
     href: '/runs',

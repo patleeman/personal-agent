@@ -917,7 +917,7 @@ export function SettingsPage() {
   const [resetError, setResetError] = useState<string | null>(null);
 
   const pageMeta = [
-    'Theme, defaults, providers, workspace, and system controls.',
+    'Theme, defaults, providers, desktop connections, workspace, and runtime services.',
     `theme ${theme}`,
     profileState ? `profile ${profileState.currentProfile}` : null,
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,

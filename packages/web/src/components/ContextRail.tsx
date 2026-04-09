@@ -1605,7 +1605,7 @@ function SettingsOverviewContext() {
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Settings</p>
-        <p className="ui-card-meta">This page controls runtime defaults, profiles, layout preferences, and integration settings for the web UI.</p>
+        <p className="ui-card-meta">This page controls runtime defaults, profiles, layout preferences, desktop connections, and integration settings.</p>
       </div>
 
       <div className="space-y-2">
@@ -1616,7 +1616,7 @@ function SettingsOverviewContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">What lives here</p>
-        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, and the integrated System overview. Use Runs for durable background work and recovery review.</p>
+        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, desktop connections, and inline runtime service panels. Use Runs for durable background work and recovery review.</p>
       </div>
     </div>
   );

@@ -290,7 +290,8 @@ describe('SettingsPage', () => {
     expect(html).toContain('Profile');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');
-    expect(html).toContain('Operational overview');
+    expect(html).toContain('Runtime services');
+    expect(html).not.toContain('Operational overview');
     expect(html).toContain('Web UI');
     expect(html).toContain('Daemon');
     expect(html).toContain('Repo root');
@@ -300,7 +301,8 @@ describe('SettingsPage', () => {
     const html = renderPage('/settings?page=system-daemon');
 
     expect(html).toContain('ui-page-title">Settings</h1>');
-    expect(html).toContain('Operational overview');
+    expect(html).toContain('Runtime services');
+    expect(html).not.toContain('Operational overview');
     expect(html).toContain('Restart daemon');
     expect(html).toContain('Provider credentials');
     expect(html).not.toContain('Related Views');

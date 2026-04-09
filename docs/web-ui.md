@@ -255,22 +255,18 @@ You can:
 
 See [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md).
 
-### System
+### Runtime services
 
-The System page consolidates the status surfaces for the daemon and managed web UI.
+Settings now carries the runtime service panels for the daemon and managed web UI.
 
 It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
-- run per-subsystem actions directly from the page (restart Web UI or daemon)
-- jump into the advanced Daemon or Web UI pages when you need deeper controls
-- run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
+- restart the Web UI or daemon directly from the page
+- manage companion pairing and Tailnet transport from the Web UI panel
 
-The advanced pages still exist for subsystem-specific setup and controls:
-
-- **Daemon** — managed daemon service controls, runtime status, and daemon logs
-- **Web UI** — tailscale and advanced web UI service controls
+Legacy `/system` routes redirect back to Settings instead of opening a separate operations workspace.
 
 See [Daemon and Background Automation](./daemon.md).
 
@@ -314,7 +310,7 @@ Auto-titles are tuned for fast scanning in the Threads list: they should prefer 
 
 Settings is now one stacked page instead of separate preference and system subpages.
 
-It keeps defaults, appearance, providers, interface reset tools, workspace info, and system controls together in a single column with simple dividers instead of nested boxes.
+It keeps defaults, appearance, providers, interface reset tools, workspace info, desktop connections, and runtime service panels together in a single column with simple dividers instead of nested boxes.
 
 When the app is running inside the Electron desktop shell, Settings also exposes a **Desktop → Connections** section for local and remote host management. That surface is machine-local: it controls which host the desktop app window is connected to, lets you save web/Tailscale and SSH hosts, and can switch the active desktop host without introducing a separate top-level page.
 
