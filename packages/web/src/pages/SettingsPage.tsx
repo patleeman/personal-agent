@@ -534,7 +534,7 @@ function DesktopConnectionsSettingsPanel() {
       setSelectedHostId(host.id);
       setDraft(createDesktopHostDraft(host));
       setNotice(draft.kind === 'ssh'
-        ? 'SSH host saved. SSH connection support is not wired yet.'
+        ? 'SSH host saved.'
         : 'Remote web host saved.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -578,7 +578,7 @@ function DesktopConnectionsSettingsPanel() {
 
       <SettingsPanel
         title="Connections"
-        description="Manage the desktop app's local and remote hosts. Web hosts work now for direct Tailscale or HTTPS access. SSH hosts can be saved now and wired fully next."
+        description="Manage the desktop app's local and remote hosts. Web hosts work for direct Tailscale or HTTPS access, and SSH hosts connect through a desktop-managed tunnel."
         actions={(
           <button
             type="button"
@@ -605,7 +605,7 @@ function DesktopConnectionsSettingsPanel() {
             <div className="space-y-px">
               {connections.hosts.map((host) => {
                 const active = host.id === connections.activeHostId;
-                const connectDisabled = action !== null || host.kind === 'ssh';
+                const connectDisabled = action !== null;
                 return (
                   <div key={host.id} className={cx('ui-list-row px-3 py-3', active && 'ui-list-row-selected')}>
                     <div className="min-w-0 flex-1">
@@ -623,9 +623,8 @@ function DesktopConnectionsSettingsPanel() {
                           onClick={() => { void handleConnect(host.id); }}
                           disabled={connectDisabled}
                           className={ACTION_BUTTON_CLASS}
-                          title={host.kind === 'ssh' ? 'SSH connection support is not wired yet.' : undefined}
                         >
-                          {host.kind === 'ssh' ? 'SSH soon' : 'Connect'}
+                          Connect
                         </button>
                       ) : null}
                       {host.kind !== 'local' ? (
