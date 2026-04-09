@@ -75,6 +75,18 @@ export class HostManager {
     this.activeHostId = hostId;
   }
 
+  async switchRelativeHost(direction: -1 | 1): Promise<DesktopHostRecord> {
+    const hostIds = this.config.hosts.map((host) => host.id);
+    const currentIndex = hostIds.indexOf(this.activeHostId);
+    if (currentIndex === -1 || hostIds.length === 0) {
+      throw new Error(`Unknown desktop host: ${this.activeHostId}`);
+    }
+
+    const nextIndex = (currentIndex + direction + hostIds.length) % hostIds.length;
+    await this.switchHost(hostIds[nextIndex]);
+    return this.getActiveHostRecord();
+  }
+
   async saveHost(record: DesktopHostRecord): Promise<void> {
     if (record.kind === 'local') {
       throw new Error('The local desktop host is managed automatically and cannot be edited here.');

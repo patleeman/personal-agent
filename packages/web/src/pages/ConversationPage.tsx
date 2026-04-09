@@ -102,10 +102,10 @@ const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 
-type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory';
+type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
-  return value === 'focus-composer' || value === 'edit-working-directory';
+  return value === 'focus-composer' || value === 'edit-working-directory' || value === 'rename-conversation';
 }
 
 export function truncateConversationShelfText(
@@ -3597,6 +3597,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
+      if (action === 'rename-conversation') {
+        beginTitleEdit();
+        return;
+      }
+
       if (draft) {
         if (draftCwdPickBusy) {
           return;
@@ -3613,7 +3618,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [beginConversationCwdEdit, draft, draftCwdPickBusy, draftCwdValue]);
+  }, [beginConversationCwdEdit, beginTitleEdit, draft, draftCwdPickBusy, draftCwdValue]);
 
   function showSessionSummary() {
     const cwd = draft

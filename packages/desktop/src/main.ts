@@ -62,8 +62,25 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNextConversation: () => {
       windowController?.sendShortcutToFocusedWindow('next-conversation');
     },
+    onPreviousHost: () => {
+      const route = windowController?.getMainWindowRoute() ?? '/';
+      void hostManager?.switchRelativeHost(-1).then(() => {
+        trayController?.refresh();
+        return windowController?.openMainWindow(route);
+      });
+    },
+    onNextHost: () => {
+      const route = windowController?.getMainWindowRoute() ?? '/';
+      void hostManager?.switchRelativeHost(1).then(() => {
+        trayController?.refresh();
+        return windowController?.openMainWindow(route);
+      });
+    },
     onToggleConversationPin: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-conversation-pin');
+    },
+    onRenameConversation: () => {
+      windowController?.sendShortcutToFocusedWindow('rename-conversation');
     },
     onFocusComposer: () => {
       windowController?.sendShortcutToFocusedWindow('focus-composer');

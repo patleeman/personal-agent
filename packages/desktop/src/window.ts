@@ -26,7 +26,8 @@ export type DesktopRendererShortcutAction =
   | 'toggle-right-rail'
   | 'toggle-conversation-pin'
   | 'focus-composer'
-  | 'edit-working-directory';
+  | 'edit-working-directory'
+  | 'rename-conversation';
 
 type ManagedWindowRole = 'main' | 'remote';
 
@@ -101,6 +102,22 @@ export class DesktopWindowController {
     }
 
     targetWindow.hide();
+  }
+
+  getMainWindowRoute(): string {
+    const currentUrl = this.mainWindow?.webContents.getURL();
+    if (!currentUrl) {
+      return '/';
+    }
+
+    try {
+      const parsed = new URL(currentUrl);
+      parsed.searchParams.delete('desktop-shell');
+      const route = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      return route || '/';
+    } catch {
+      return '/';
+    }
   }
 
   getHostIdForWebContentsId(webContentsId: number): string | null {

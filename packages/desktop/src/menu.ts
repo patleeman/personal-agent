@@ -6,7 +6,10 @@ export interface DesktopApplicationMenuActions {
   onCloseConversation: () => void;
   onPreviousConversation: () => void;
   onNextConversation: () => void;
+  onPreviousHost: () => void;
+  onNextHost: () => void;
   onToggleConversationPin: () => void;
+  onRenameConversation: () => void;
   onFocusComposer: () => void;
   onEditWorkingDirectory: () => void;
   onToggleSidebar: () => void;
@@ -60,9 +63,24 @@ export function buildDesktopApplicationMenuTemplate(
         click: actions.onNextConversation,
       },
       {
+        label: 'Previous Host',
+        accelerator: 'CommandOrControl+Alt+,',
+        click: actions.onPreviousHost,
+      },
+      {
+        label: 'Next Host',
+        accelerator: 'CommandOrControl+Alt+.',
+        click: actions.onNextHost,
+      },
+      {
         label: 'Toggle Pinned',
         accelerator: 'CommandOrControl+Alt+P',
         click: actions.onToggleConversationPin,
+      },
+      {
+        label: 'Rename Conversation',
+        accelerator: 'CommandOrControl+Alt+R',
+        click: actions.onRenameConversation,
       },
       {
         label: 'Focus Composer',

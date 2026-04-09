@@ -57,6 +57,7 @@ describe('HostManager', () => {
       hosts: [
         { id: 'local', label: 'Local', kind: 'local' },
         { id: 'web-1', label: 'Tailnet', kind: 'web', baseUrl: 'https://tailnet.example.ts.net', autoConnect: true },
+        { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' },
       ],
     });
 
@@ -82,6 +83,19 @@ describe('HostManager', () => {
     expect(manager.getConnectionsState().activeHostId).toBe('local');
     expect(manager.getConnectionsState().defaultHostId).toBe('web-1');
     expect(mocks.saveDesktopConfig).not.toHaveBeenCalled();
+  });
+
+  it('cycles through hosts in config order when switching relative to the active host', async () => {
+    const manager = new HostManager();
+
+    await expect(manager.switchRelativeHost(1)).resolves.toMatchObject({ id: 'ssh-1' });
+    expect(manager.getConnectionsState().activeHostId).toBe('ssh-1');
+
+    await expect(manager.switchRelativeHost(1)).resolves.toMatchObject({ id: 'local' });
+    expect(manager.getConnectionsState().activeHostId).toBe('local');
+
+    await expect(manager.switchRelativeHost(-1)).resolves.toMatchObject({ id: 'ssh-1' });
+    expect(manager.getConnectionsState().activeHostId).toBe('ssh-1');
   });
 
   it('can resolve environment and conversation URLs for a non-active host', async () => {
