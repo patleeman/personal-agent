@@ -257,10 +257,10 @@ describe('companion operational pages', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the companion inbox with reminder notifications, attention conversations, and standalone activity', () => {
+  it('renders the companion inbox with conversation attention and standalone activity, without surfacing alerts', () => {
     const html = renderWithProviders(<CompanionInboxPage />);
 
-    expect(html).toContain('Approve the lunch order');
+    expect(html).not.toContain('Approve the lunch order');
     expect(html).toContain('Investigate daemon warnings');
     expect(html).toContain('Morning brief task failed');
     expect(html).toContain('Start conversation');

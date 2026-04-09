@@ -16,8 +16,8 @@ This page explains how `personal-agent` surfaces work that matters later.
 
 The core distinction is:
 
-- **in-app attention** → inbox/activity plus reminder/callback notifications shown inline there
-- **stronger delivery** → browser/companion notifications and reminder-specific actions such as snooze
+- **in-app attention** → inbox/activity plus conversations that need attention
+- **stronger delivery** → currently suppressed in the desktop/web UI; do not rely on popup/browser notifications
 - **conversation continuation** → wakeups such as deferred resume
 
 ## The three layers
@@ -43,7 +43,7 @@ The attention surface answers:
 
 > what should I notice now or later?
 
-That is where inbox/activity live, including reminder and callback notifications rendered inline in the inbox.
+That is where inbox/activity live, alongside surfaced conversations that need attention.
 
 ### 3. Wakeup behavior
 
@@ -59,10 +59,10 @@ Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
 | --- | --- | --- | --- |
 | Passive async summary with no conversation | activity / inbox | passive | standalone activity item |
 | Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + linked activity/logs |
-| Human reminder that should interrupt | reminder | inbox notification + optional browser/companion delivery | wakeup + notification state + activity/state |
+| Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer activity or surfaced conversation attention when visibility matters | wakeup + notification state + activity/state |
 | Agent should continue this conversation later | deferred resume | usually passive unless paired with notification delivery | wakeup + conversation |
 | Scheduled automation completes later | task activity, optionally callback into a conversation | passive by default | task log + activity + optional conversation wakeup |
-| High-signal blocked or failed background work | reminder/callback notification, often with activity too | inbox notification + optional browser/companion delivery | conversation or activity plus logs |
+| High-signal blocked or failed background work | activity or surfaced conversation attention, optionally with reminder state under the hood | visible in inbox/conversation attention | conversation or activity plus logs |
 
 ## Inbox / activity
 
@@ -90,7 +90,7 @@ Good fits:
 - blocked or failed background work that needs immediate attention
 - scheduled-task callbacks that should be hard to miss
 
-These notifications no longer get a separate in-app surface. They show up as normal inbox rows, and can additionally trigger browser/companion notifications when enabled.
+The current desktop/web UI does not render these notifications as inbox rows and does not trigger popup/browser delivery.
 
 See [Reminders and Notification Delivery](../alerts/INDEX.md).
 
@@ -123,8 +123,8 @@ They:
 When explicitly bound back to a conversation, they can also create:
 
 - a conversation wakeup
-- a stronger inbox notification
 - linked activity
+- surfaced conversation attention when appropriate
 
 That is the right fit for things like:
 
@@ -138,7 +138,7 @@ Use these defaults:
 - **foreground work** stays in the conversation
 - **standalone async work** becomes activity
 - **async work tied to a dormant conversation** surfaces the conversation
-- **user-requested tell-me-later behavior** becomes a reminder with notification delivery
+- **user-requested tell-me-later behavior** should usually become activity or surfaced conversation attention unless hidden reminder state is specifically needed
 - **agent-initiated continue-later behavior** becomes deferred resume
 
 
@@ -147,7 +147,7 @@ Use these defaults:
 Do not:
 
 - turn every reply into inbox activity
-- use reminder/callback notification delivery for ordinary passive async summaries
+- rely on hidden reminder/callback notification delivery for ordinary passive async summaries
 - store the durable record only in the notification layer
 - use reminders when a scheduled task or deferred resume is the real need
 - copy conversation ids into portable durable files

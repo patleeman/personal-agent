@@ -68,7 +68,7 @@ describe('InboxPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders reminder notifications inline with other inbox items', () => {
+  it('renders activity and conversation attention without surfacing alerts', () => {
     const activity: ActivitySnapshot = {
       entries: [
         {
@@ -129,12 +129,12 @@ describe('InboxPage', () => {
     );
 
     expect(html).toContain('Verification failed for web UI deploy');
-    expect(html).toContain('Follow up now');
+    expect(html).not.toContain('Follow up now');
     expect(html).not.toContain('Active alerts');
     expect(html).toContain('Clear notifications');
     expect(html).toContain('Notifications');
     expect(html).toContain('title="Start a new conversation from this inbox item"');
-    expect(html).toContain('title="Mark this notification read"');
+    expect(html).not.toContain('title="Mark this notification read"');
     expect(html).toContain('Open the runbook review');
     expect(html).toContain('title="Open the conversation that needs attention"');
   });

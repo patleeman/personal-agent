@@ -104,14 +104,10 @@ function alertMeta(entry: AlertEntry): { label: string; color: string; dot: stri
   };
 }
 
-function sortAlerts(entries: AlertEntry[]): AlertEntry[] {
-  return [...entries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-}
-
 export function InboxPage() {
   const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
-  const { activity, alerts, setActivity, setAlerts = () => {} } = useAppData();
+  const { activity, setActivity, setAlerts = () => {} } = useAppData();
   const { status: sseStatus } = useSseConnection();
   const { tabs, archivedSessions, archivedConversationIds = [], openSession, loading: conversationsLoading, refetch: refetchSessions } = useConversations();
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
@@ -122,10 +118,7 @@ export function InboxPage() {
   const [startingActivityId, setStartingActivityId] = useState<string | null>(null);
   const [busyAlertId, setBusyAlertId] = useState<string | null>(null);
 
-  const activeAlerts = useMemo(
-    () => sortAlerts((alerts?.entries ?? []).filter((entry) => entry.status === 'active')),
-    [alerts?.entries],
-  );
+  const activeAlerts = useMemo<AlertEntry[]>(() => [], []);
   const activeAlertConversationIds = useMemo(
     () => new Set(activeAlerts
       .map((entry) => entry.conversationId)
@@ -411,7 +404,7 @@ export function InboxPage() {
       {!isLoading && !visibleError && allItems.length === 0 && (
         <EmptyState
           title="No notifications yet."
-          body="Standalone activity, reminders, callbacks, and conversations that need attention appear here."
+          body="Standalone activity and conversations that need attention appear here."
         />
       )}
 

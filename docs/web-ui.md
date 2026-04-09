@@ -71,10 +71,9 @@ The Inbox route is where async attention lands.
 It shows:
 
 - activity items
-- reminder and callback alerts
 - conversation attention items
 
-When browser notification permission is granted, the UI can deliver browser notifications for newly arriving disruptive alerts while the app is hidden.
+The current UI does not surface alert rows or popup/browser notifications.
 
 ## Automations
 

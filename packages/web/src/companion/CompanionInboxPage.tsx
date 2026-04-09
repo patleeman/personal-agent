@@ -94,10 +94,6 @@ function alertMeta(entry: AlertEntry): { label: string; accentClass: string } {
   };
 }
 
-function sortActiveAlerts(entries: AlertEntry[]): AlertEntry[] {
-  return [...entries].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || right.id.localeCompare(left.id));
-}
-
 function collectConversationIds(result: CompanionConversationListResult | null): Set<string> {
   if (!result) {
     return new Set<string>();
@@ -133,7 +129,7 @@ function buildConversationMeta(session: SessionMeta): string {
 
 export function CompanionInboxPage() {
   const navigate = useNavigate();
-  const { activity, alerts, setActivity, setAlerts = () => {} } = useAppData();
+  const { activity, setActivity, setAlerts = () => {} } = useAppData();
   const { versions } = useAppEvents();
   const { status: sseStatus } = useSseConnection();
   const [filter, setFilter] = useState<'unread' | 'all'>('unread');
@@ -156,10 +152,7 @@ export function CompanionInboxPage() {
     `companion-inbox:${versions.sessions}:${versions.activity}`,
   );
 
-  const activeAlerts = useMemo(
-    () => sortActiveAlerts((alerts?.entries ?? []).filter((entry) => entry.status === 'active')),
-    [alerts?.entries],
-  );
+  const activeAlerts = useMemo<AlertEntry[]>(() => [], []);
   const activeAlertConversationIds = useMemo(
     () => new Set(activeAlerts
       .map((entry) => entry.conversationId)
@@ -473,7 +466,7 @@ export function CompanionInboxPage() {
             <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">No notifications right now.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                Activity, reminders, callbacks, and conversations that need attention will surface here.
+                Activity and conversations that need attention will surface here.
               </p>
             </div>
           ) : null}

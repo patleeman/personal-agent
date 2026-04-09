@@ -5,7 +5,6 @@ import { ErrorState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSystemStatus } from '../contexts';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
-import { useCompanionNotifications } from './useCompanionNotifications';
 import {
   canPromptCompanionInstall,
   COMPANION_SCOPE_PATH,
@@ -244,7 +243,6 @@ export function CompanionLayout() {
   const {
     activity,
     alerts,
-    sessions,
     tasks,
     runs,
     setActivity,
@@ -426,12 +424,6 @@ export function CompanionLayout() {
     }
   }, [logoutBusy]);
 
-  useCompanionNotifications({
-    alerts: alerts ?? null,
-    sessions,
-    enabled: companionSession !== null && secureContext && notificationPermission === 'granted',
-  });
-
   const contextValue = useMemo<CompanionLayoutContextValue>(() => ({
     secureContext,
     standalone,
@@ -442,7 +434,7 @@ export function CompanionLayout() {
     }),
     installBusy,
     promptInstall,
-    notificationsSupported: typeof Notification !== 'undefined',
+    notificationsSupported: false,
     notificationPermission,
     requestNotificationPermission,
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
@@ -492,13 +484,10 @@ export function CompanionLayout() {
       </header>
     );
   }
-  const inboxBadgeCount = useMemo(() => {
-    const activeAlertActivityIds = new Set((alerts?.entries ?? [])
-      .filter((entry) => entry.status === 'active' && typeof entry.activityId === 'string' && entry.activityId.trim().length > 0)
-      .map((entry) => entry.activityId as string));
-    const unreadActivityCount = (activity?.entries ?? []).filter((entry) => !entry.read && !activeAlertActivityIds.has(entry.id)).length;
-    return unreadActivityCount + (alerts?.activeCount ?? 0);
-  }, [activity?.entries, alerts?.activeCount, alerts?.entries]);
+  const inboxBadgeCount = useMemo(
+    () => (activity?.entries ?? []).filter((entry) => !entry.read).length,
+    [activity?.entries],
+  );
   const inboxActive = location.pathname.startsWith(COMPANION_INBOX_PATH);
   const chatsActive = location.pathname.startsWith(COMPANION_CONVERSATIONS_PATH);
   const navItems = [

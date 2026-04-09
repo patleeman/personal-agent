@@ -11,7 +11,7 @@ tools:
 
 The inbox/notification center is personal-agent's **local in-app attention surface** for asynchronous things.
 
-It is not a second transcript and it is not a copy of every assistant reply. Reminders and callbacks also surface here instead of going to a separate in-app alert rail.
+It is not a second transcript and it is not a copy of every assistant reply. The current web UI focuses on standalone activity and conversations that need attention.
 
 The inbox exists to answer:
 
@@ -49,11 +49,9 @@ The inbox is therefore an attention queue, not a storage system of its own.
 
 ### Notification delivery
 
-Some inbox items can also trigger browser or companion notifications, or keep reminder-specific actions such as snooze and dismiss.
-
-There is no separate in-app alert surface anymore. Reminder and callback notifications appear inline in the inbox with everything else.
-
 Notifications are not the durable record. The durable record is the conversation, activity item, wakeup state, project, artifact, or log.
+
+Current desktop/web surfaces intentionally avoid popup/browser notification delivery and do not render alert rows.
 
 ---
 
@@ -154,7 +152,6 @@ The web notification center combines:
 
 1. **standalone unread/read activity items** that are not tied to a known conversation
 2. **archived conversations needing attention**
-3. **active reminder/callback notifications** rendered inline with the same list
 
 Open conversations already have a visible place in the sidebar, so they are shown there with attention dots instead of being duplicated in the inbox list.
 
@@ -173,13 +170,9 @@ Standalone activity stays in the notification center until it is marked read or 
 
 ### Reminder and callback notifications in the web UI
 
-Reminder and callback notifications show up as normal inbox rows.
+Current web surfaces do not render reminder/callback alert rows.
 
-They can still expose reminder-specific actions such as:
-
-- mark read / acknowledge
-- dismiss
-- snooze when backed by a wakeup
+If something should remain visible, create activity or surface the conversation instead.
 
 ### Linked activity behavior
 

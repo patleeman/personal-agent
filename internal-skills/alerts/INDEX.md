@@ -14,8 +14,8 @@ This page covers the reminder/callback notification path that still uses interna
 The important product change is simple:
 
 - there is **no separate in-app alerts surface** anymore
-- reminder and callback notifications appear **inline in the inbox**
-- stronger delivery now mainly means **browser/companion notifications** and reminder-specific inbox actions such as snooze or dismiss
+- current desktop/web surfaces do **not** render alert rows
+- current desktop/web surfaces do **not** deliver popup/browser notifications for alerts
 
 ## What this path is for
 
@@ -33,9 +33,9 @@ If something does not need stronger delivery, keep it as ordinary inbox/activity
 ### Inbox/activity
 
 - **Inbox** = the in-app attention queue
-- **Notification delivery** = stronger delivery layered on top of an inbox item or conversation wakeup
+- **Alert records** may still exist under the hood for wakeup state
 
-An inbox notification may still have a matching activity record for history/audit.
+If something should stay visible to the user, prefer inbox activity or conversation attention.
 
 ### Deferred resume
 
@@ -52,9 +52,8 @@ Scheduled tasks stay passive by default.
 When a task is explicitly bound back to a conversation, its completion/failure can create:
 
 - a conversation wakeup
-- an inbox notification row
 - a linked activity record
-- browser/companion notifications when enabled and warranted
+- conversation attention when appropriate
 
 ## Lifecycle
 
@@ -64,7 +63,7 @@ Internally, reminder/callback notifications still move through these states:
 - `acknowledged`
 - `dismissed`
 
-Active items appear in the inbox.
+Active items remain internal alert state unless they are separately surfaced through activity or conversation attention.
 
 Wakeup-backed notifications can also be **snoozed**, which acknowledges the current notification and reschedules the underlying wakeup for later.
 
@@ -72,23 +71,22 @@ Acknowledging or dismissing a notification does **not** delete the durable histo
 
 ## Web UI
 
-The web UI exposes reminder/callback notifications through:
+The current web and companion UI do not surface reminder/callback alerts directly.
 
-- the **Inbox** page's unified notification list
-- per-row actions such as open, mark read, dismiss, and snooze when available
-- browser/companion notifications when explicit notification records arrive and permission has already been granted
+If async work should remain visible, route it through:
 
-The desktop web UI can still deliver browser notifications for active reminder/callback notifications when browser notification permission has already been granted.
+- a standalone inbox activity item, or
+- conversation attention on the relevant thread
 
 ## Practical rule of thumb
 
 Use:
 
-- **reminder** when the user wants "tell me later"
+- **reminder** only when you specifically need wakeup/alert state semantics under the hood
 - **deferred resume** when the agent should continue later without the user having to remember
 - **scheduled task** when unattended automation should run later
 - **inbox/activity** for passive async outcomes
-- **notification delivery** when something should be harder to miss, not when it needs a second in-app surface
+- **inbox/activity** or **conversation attention** when something should remain visible in the current UI
 
 ## Related docs
 

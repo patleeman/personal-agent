@@ -507,7 +507,7 @@ function OpenConversationRow({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, alerts } = useAppData();
+  const { activity } = useAppData();
   const {
     pinnedSessions,
     tabs,
@@ -581,19 +581,9 @@ export function Sidebar() {
     [collapsedConversationGroupKeys],
   );
 
-  const activeAlertCount = alerts?.activeCount ?? 0;
-  const activeAlertActivityIds = useMemo(
-    () => new Set((alerts?.entries ?? [])
-      .filter((entry) => entry.status === 'active' && typeof entry.activityId === 'string' && entry.activityId.trim().length > 0)
-      .map((entry) => entry.activityId as string)),
-    [alerts?.entries],
-  );
-  const activeAlertConversationIds = useMemo(
-    () => new Set((alerts?.entries ?? [])
-      .filter((entry) => entry.status === 'active' && typeof entry.conversationId === 'string' && entry.conversationId.trim().length > 0)
-      .map((entry) => entry.conversationId as string)),
-    [alerts?.entries],
-  );
+  const activeAlertCount = 0;
+  const activeAlertActivityIds = useMemo(() => new Set<string>(), []);
+  const activeAlertConversationIds = useMemo(() => new Set<string>(), []);
   const standaloneUnreadCount = useMemo(() => {
     const knownConversationIds = new Set([...pinnedSessions, ...tabs, ...archivedSessions].map((session) => session.id));
     return (activity?.entries ?? []).filter((entry) => {
