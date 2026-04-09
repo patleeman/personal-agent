@@ -65,11 +65,15 @@ export class LocalBackendProcesses {
     await assertTcpPortAvailable(this.webPort);
 
     const runtime = resolveDesktopRuntimePaths();
+    const childBaseEnv = runtime.useElectronRunAsNode
+      ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+      : process.env;
+
     this.daemonProcess = spawnLoggedChild({
       command: runtime.nodeCommand,
       args: [runtime.daemonEntryFile, '--foreground'],
       cwd: runtime.repoRoot,
-      env: process.env,
+      env: childBaseEnv,
       logPath: `${runtime.desktopLogsDir}/daemon.log`,
     });
     this.attachExitLogging(this.daemonProcess.child, 'daemon');
@@ -80,7 +84,7 @@ export class LocalBackendProcesses {
       args: [runtime.webServerEntryFile],
       cwd: runtime.repoRoot,
       env: {
-        ...process.env,
+        ...childBaseEnv,
         PA_WEB_PORT: String(this.webPort),
         PA_WEB_DIST: runtime.webDistDir,
         PA_WEB_DISABLE_COMPANION: '1',

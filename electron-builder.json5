@@ -1,0 +1,48 @@
+{
+  appId: 'nyc.patricklee.personal-agent',
+  productName: 'Personal Agent',
+  directories: {
+    app: 'packages/desktop',
+    output: 'dist/release',
+  },
+  files: [
+    'dist/**/*',
+    'assets/**/*',
+  ],
+  extraMetadata: {
+    main: './dist/main.js',
+  },
+  extraResources: [
+    {
+      from: 'defaults',
+      to: 'defaults',
+    },
+    {
+      from: 'extensions',
+      to: 'extensions',
+    },
+    {
+      from: 'internal-skills',
+      to: 'internal-skills',
+    },
+    {
+      from: 'prompt-catalog',
+      to: 'prompt-catalog',
+    },
+  ],
+  mac: {
+    category: 'public.app-category.developer-tools',
+    identity: null,
+    target: [
+      {
+        target: 'dmg',
+        arch: ['arm64'],
+      },
+      {
+        target: 'zip',
+        arch: ['arm64'],
+      },
+    ],
+    artifactName: '${productName}-${version}-mac-${arch}.${ext}',
+  },
+}

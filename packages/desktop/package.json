@@ -18,9 +18,10 @@
     "@personal-agent/daemon": "*",
     "@personal-agent/resources": "*",
     "@personal-agent/services": "*",
-    "electron": "^31.0.2"
+    "@personal-agent/web": "*"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "electron": "^31.0.2"
   }
 }

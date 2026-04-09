@@ -66,6 +66,7 @@ These pages moved out of `docs/` and into `../internal-skills/` so built-in runt
 - [Web UI Guide](./web-ui.md)
 - [Electron desktop app plan](./electron-desktop-app-plan.md)
 - [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
+- [Release cycle](./release-cycle.md)
 - [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Native UI Automation](./native-ui-automation.md)

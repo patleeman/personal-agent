@@ -13,6 +13,12 @@
     "desktop:build": "npm --prefix packages/desktop run build",
     "desktop:dev": "npm --prefix packages/desktop run dev",
     "desktop:start": "npm --prefix packages/desktop run start",
+    "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.json5 --publish never",
+    "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.json5 --dir",
+    "release:patch": "npm version patch",
+    "release:minor": "npm version minor",
+    "release:major": "npm version major",
+    "version": "node scripts/sync-workspace-versions.mjs && npm install --package-lock-only --ignore-scripts",
     "lint": "eslint packages extensions --ext .ts,.tsx",
     "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
@@ -27,6 +33,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "^4.0.18",
+    "electron-builder": "^26.8.1",
     "eslint": "^8.57.0",
     "typescript": "^5.3.0",
     "vite-tsconfig-paths": "^6.1.1",
@@ -48,5 +55,5 @@
       "tough-cookie": "^4.1.4"
     }
   },
-  "packageManager": "pnpm@10.30.0+sha512.2b5753de015d480eeb88f5b5b61e0051f05b4301808a82ec8b840c9d2adf7748eb352c83f5c1593ca703ff1017295bc3fdd3119abb9686efc96b9fcb18200937"
+  "packageManager": "npm@11.6.2"
 }
