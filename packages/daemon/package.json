@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/daemon",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "personal-agent background daemon",
   "type": "module",
   "exports": {
