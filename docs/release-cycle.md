@@ -54,18 +54,20 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 - notarizes the packaged app and staples it
 - notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
+- can then be followed by `npm run downloads:upload:desktop-release` when the signed build should power the protected Cloudflare updater feed
 
 GitHub Actions no longer publishes shipped release artifacts automatically. `.github/workflows/release.yml` is now only a manual smoke-build workflow for unsigned CI packaging checks.
 
 ## Desktop update checks
 
-The packaged desktop app now checks GitHub Releases for newer macOS builds:
+The packaged desktop app now uses Electron's native macOS updater against the protected Cloudflare Worker feed:
 
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check
-- when a newer release exists, the app opens the matching GitHub release asset (`.dmg` when available) in the browser for download
+- when a newer release exists, the app downloads the signed `.zip` from the protected `updates/stable` feed and prompts to install and relaunch in place
+- the updater feed expects `latest-mac.yml`, the matching `.zip`, and the `.zip.blockmap` to be uploaded to `updates/stable/`
 
-Current scope: this is a GitHub-release download flow, not a fully in-place macOS auto-installer yet. Proper native auto-install still needs updater-specific app integration even though the release build can now be signed and notarized locally.
+The packaged app reads its protected updater credentials from `auto-update-config.json`, which `npm run desktop:dist` generates from Patrick's local download token before packaging.
 
 ## Packaged desktop runtime layout
 

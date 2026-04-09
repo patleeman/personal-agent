@@ -41,8 +41,9 @@ If the goal is light-gated binary distribution instead of public GitHub release 
 From the repo root:
 
 1. `npm run downloads:deploy` deploys the token-gated Worker defined in `tools/cloudflare-download-gate/`.
-2. `npm run downloads:upload -- --prefix releases/v<version>/ <files...>` uploads signed artifacts into the private `personal-agent-downloads` bucket.
-3. Share the Worker URL and the bearer token instead of publishing the binaries publicly.
+2. `npm run downloads:upload:desktop-release` uploads the signed `.dmg`, `.zip`, `latest-mac.yml`, and `.blockmap` files into the private `personal-agent-downloads` bucket using the expected archive and updater prefixes.
+3. The desktop app now uses that protected `updates/stable` feed for in-app macOS auto-update when the build includes the local download token.
+4. Share the versioned Worker URL and the bearer token instead of publishing the binaries publicly.
 
 ## Docs are for agents
 

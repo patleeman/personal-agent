@@ -8,6 +8,7 @@ profiles/**/node_modules/
 
 # Build output
 dist/
+build/generated/
 *.tsbuildinfo
 packages/*/dist/
 packages/*/dist-server/
