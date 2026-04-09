@@ -42,7 +42,7 @@ export function registerDesktopIpc(options: {
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {
-    await options.windowController.openMainWindow('/settings');
+    await options.windowController.openMainWindow('/settings#desktop-connections');
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:restart-active-host`, async () => {

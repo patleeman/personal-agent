@@ -54,11 +54,6 @@ export class HostManager {
     await nextController.ensureRunning();
     await this.getActiveHostController().dispose();
     this.activeHostId = hostId;
-    this.config = {
-      ...this.config,
-      defaultHostId: hostId,
-    };
-    saveDesktopConfig(this.config);
   }
 
   async saveHost(record: DesktopHostRecord): Promise<void> {
@@ -67,12 +62,38 @@ export class HostManager {
     }
 
     const existing = this.config.hosts.find((host) => host.id === record.id);
+    const nextDefaultHostId = record.autoConnect
+      ? record.id
+      : this.config.defaultHostId === record.id
+        ? 'local'
+        : this.config.defaultHostId;
+    const nextHosts = existing
+      ? this.config.hosts.map((host) => {
+          if (host.id === record.id) {
+            return record;
+          }
+
+          if (host.kind === 'local') {
+            return host;
+          }
+
+          return {
+            ...host,
+            autoConnect: record.autoConnect ? false : host.autoConnect,
+          };
+        })
+      : [
+          ...this.config.hosts.map((host) => host.kind === 'local' ? host : {
+            ...host,
+            autoConnect: record.autoConnect ? false : host.autoConnect,
+          }),
+          record,
+        ];
+
     this.config = {
       ...this.config,
-      defaultHostId: record.autoConnect ? record.id : this.config.defaultHostId,
-      hosts: existing
-        ? this.config.hosts.map((host) => (host.id === record.id ? record : host))
-        : [...this.config.hosts, record],
+      defaultHostId: nextDefaultHostId,
+      hosts: nextHosts,
     };
 
     if (existing) {

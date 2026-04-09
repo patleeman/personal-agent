@@ -573,7 +573,7 @@ function DesktopConnectionsSettingsPanel() {
   }
 
   return (
-    <section className="space-y-5">
+    <section id="desktop-connections" className="space-y-5 scroll-mt-6">
       <SectionLabel label="Desktop" />
 
       <SettingsPanel
@@ -605,6 +605,7 @@ function DesktopConnectionsSettingsPanel() {
             <div className="space-y-px">
               {connections.hosts.map((host) => {
                 const active = host.id === connections.activeHostId;
+                const isDefault = host.id === connections.defaultHostId;
                 const connectDisabled = action !== null;
                 return (
                   <div key={host.id} className={cx('ui-list-row px-3 py-3', active && 'ui-list-row-selected')}>
@@ -613,6 +614,7 @@ function DesktopConnectionsSettingsPanel() {
                         <span className="text-[13px] font-medium text-primary">{host.label}</span>
                         <span className="ui-card-meta">{host.kind === 'local' ? 'local' : host.kind === 'web' ? 'web' : 'ssh'}</span>
                         {active ? <span className="ui-card-meta">active</span> : null}
+                        {isDefault ? <span className="ui-card-meta">default on launch</span> : null}
                       </div>
                       <p className="ui-card-meta mt-1 break-all">{formatDesktopHostDetails(host)}</p>
                     </div>
@@ -769,6 +771,10 @@ function DesktopConnectionsSettingsPanel() {
                 />
                 <span>Use as default host on launch</span>
               </label>
+
+              <p className="ui-card-meta">
+                The active host controls this window right now. The default host controls which host opens the next time the desktop app launches.
+              </p>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button

@@ -1,4 +1,4 @@
-export { createDefaultDesktopConfig, loadDesktopConfig, saveDesktopConfig } from './state/desktop-config.js';
+export { createDefaultDesktopConfig, loadDesktopConfig, saveDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 export type {
   DesktopConfig,
   DesktopConnectionsState,

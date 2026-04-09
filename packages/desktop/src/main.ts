@@ -24,7 +24,7 @@ async function bootstrapDesktopApp(): Promise<void> {
       void hostManager?.openNewConversation().then((url) => windowController?.openAbsoluteUrl(url));
     },
     onConnections: () => {
-      void windowController?.openMainWindow('/settings');
+      void windowController?.openMainWindow('/settings#desktop-connections');
     },
     onRestartBackend: () => {
       void hostManager?.restartActiveHost().then(() => windowController?.openMainWindow('/'));

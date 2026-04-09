@@ -87,3 +87,13 @@ export function saveDesktopConfig(config: DesktopConfig): void {
   mkdirSync(desktopStateDir, { recursive: true, mode: 0o700 });
   writeFileSync(desktopConfigFile, `${JSON.stringify(normalizeDesktopConfig(config), null, 2)}\n`, 'utf-8');
 }
+
+export function updateDesktopWindowState(windowState: NonNullable<DesktopConfig['windowState']>): DesktopConfig {
+  const current = loadDesktopConfig();
+  const next: DesktopConfig = {
+    ...current,
+    windowState,
+  };
+  saveDesktopConfig(next);
+  return next;
+}

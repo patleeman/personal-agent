@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { HostManager } from './hosts/host-manager.js';
 
@@ -74,11 +75,16 @@ export class DesktopWindowController {
       this.mainWindow.destroy();
     }
 
+    const config = loadDesktopConfig();
+    const savedWindowState = config.windowState ?? { width: 1440, height: 960 };
+
     this.currentPartition = partition;
     this.mainWindow = new BrowserWindow({
       show: false,
-      width: 1440,
-      height: 960,
+      width: savedWindowState.width,
+      height: savedWindowState.height,
+      ...(typeof savedWindowState.x === 'number' ? { x: savedWindowState.x } : {}),
+      ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y } : {}),
       title: 'personal-agent',
       webPreferences: {
         preload: resolvePreloadPath(),
@@ -97,10 +103,32 @@ export class DesktopWindowController {
       this.mainWindow?.hide();
     });
 
+    this.mainWindow.on('moved', () => {
+      this.persistWindowBounds();
+    });
+
+    this.mainWindow.on('resized', () => {
+      this.persistWindowBounds();
+    });
+
     this.mainWindow.once('ready-to-show', () => {
       this.mainWindow?.show();
     });
 
     return this.mainWindow;
+  }
+
+  private persistWindowBounds(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return;
+    }
+
+    const bounds = this.mainWindow.getBounds();
+    updateDesktopWindowState({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
   }
 }
