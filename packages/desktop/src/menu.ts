@@ -7,6 +7,8 @@ export interface DesktopApplicationMenuActions {
   onPreviousConversation: () => void;
   onNextConversation: () => void;
   onToggleConversationPin: () => void;
+  onFocusComposer: () => void;
+  onEditWorkingDirectory: () => void;
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
   onHideWindow: () => void;
@@ -61,6 +63,16 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Toggle Pinned',
         accelerator: 'CommandOrControl+Alt+P',
         click: actions.onToggleConversationPin,
+      },
+      {
+        label: 'Focus Composer',
+        accelerator: 'CommandOrControl+L',
+        click: actions.onFocusComposer,
+      },
+      {
+        label: 'Edit Working Directory',
+        accelerator: 'CommandOrControl+Shift+L',
+        click: actions.onEditWorkingDirectory,
       },
       ...(isMac
         ? [

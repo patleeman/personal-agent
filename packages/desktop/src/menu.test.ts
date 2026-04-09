@@ -9,6 +9,8 @@ function createActions() {
     onPreviousConversation: vi.fn(),
     onNextConversation: vi.fn(),
     onToggleConversationPin: vi.fn(),
+    onFocusComposer: vi.fn(),
+    onEditWorkingDirectory: vi.fn(),
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
     onHideWindow: vi.fn(),
@@ -48,6 +50,8 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
+      expect.objectContaining({ label: 'Focus Composer', accelerator: 'CommandOrControl+L' }),
+      expect.objectContaining({ label: 'Edit Working Directory', accelerator: 'CommandOrControl+Shift+L' }),
     ]));
     expect(fileMenu?.submenu).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Connections…' }),
@@ -87,6 +91,8 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
+      expect.objectContaining({ label: 'Focus Composer', accelerator: 'CommandOrControl+L' }),
+      expect.objectContaining({ label: 'Edit Working Directory', accelerator: 'CommandOrControl+Shift+L' }),
       expect.objectContaining({ label: 'Connections…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Backend' }),

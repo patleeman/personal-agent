@@ -24,7 +24,9 @@ export type DesktopRendererShortcutAction =
   | 'next-conversation'
   | 'toggle-sidebar'
   | 'toggle-right-rail'
-  | 'toggle-conversation-pin';
+  | 'toggle-conversation-pin'
+  | 'focus-composer'
+  | 'edit-working-directory';
 
 type ManagedWindowRole = 'main' | 'remote';
 

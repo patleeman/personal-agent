@@ -100,6 +100,13 @@ const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
+const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+
+type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory';
+
+function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
+  return value === 'focus-composer' || value === 'edit-working-directory';
+}
 
 export function truncateConversationShelfText(
   text: string,
@@ -3565,6 +3572,48 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDraftCwdEditorOpen(false);
     setDraftCwdError(null);
   }, []);
+
+  useEffect(() => {
+    function handleDesktopShortcut(event: Event) {
+      if (document.querySelector('.ui-overlay-backdrop') !== null) {
+        return;
+      }
+
+      const action = (event as CustomEvent<{ action?: unknown }>).detail?.action;
+      if (!isDesktopConversationShortcutAction(action)) {
+        return;
+      }
+
+      if (action === 'focus-composer') {
+        const composer = textareaRef.current;
+        if (!composer) {
+          return;
+        }
+
+        composer.focus();
+        const end = composer.value.length;
+        composer.selectionStart = end;
+        composer.selectionEnd = end;
+        return;
+      }
+
+      if (draft) {
+        if (draftCwdPickBusy) {
+          return;
+        }
+
+        setDraftCwdDraft(draftCwdValue);
+        setDraftCwdError(null);
+        setDraftCwdEditorOpen(true);
+        return;
+      }
+
+      beginConversationCwdEdit();
+    }
+
+    window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
+    return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
+  }, [beginConversationCwdEdit, draft, draftCwdPickBusy, draftCwdValue]);
 
   function showSessionSummary() {
     const cwd = draft
