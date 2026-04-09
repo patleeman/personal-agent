@@ -302,7 +302,8 @@ describe('Sidebar', () => {
     const html = renderSidebar('/inbox');
 
     expect(html).toContain('draggable="true"');
-    expect(html).toContain('Drag to reorder or move between pinned and open conversations');
+    expect(html).toContain('Drag to reorder conversations');
+    expect(html).not.toContain('move between pinned and open conversations');
   });
 
   it('indents subagent conversations under their parent conversation', () => {

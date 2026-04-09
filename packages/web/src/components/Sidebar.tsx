@@ -319,7 +319,7 @@ function OpenConversationRow({
   const showTrailingControls = hovered || pinned;
   const rowTitle = [
     depth > 0 && nestedUnderTitle ? `Nested under ${nestedUnderTitle}` : undefined,
-    canDrag ? 'Drag to reorder or move between pinned and open conversations' : undefined,
+    canDrag ? 'Drag to reorder conversations' : undefined,
   ].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
 
   return (
@@ -454,31 +454,6 @@ function OpenConversationRow({
           </div>
         ) : null}
       </Link>
-    </div>
-  );
-}
-
-function ShelfDropZone({
-  label,
-  active = false,
-  onDragOver,
-  onDrop,
-}: {
-  label: string;
-  active?: boolean;
-  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
-  onDrop: (event: DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={[
-        'mx-3 rounded-lg border border-dashed px-3 py-2 text-[11px] transition-colors',
-        active ? 'border-accent/60 bg-accent/8 text-accent' : 'border-border-subtle bg-elevated/35 text-dim',
-      ].join(' ')}
-    >
-      {label}
     </div>
   );
 }
@@ -663,14 +638,14 @@ export function Sidebar() {
 
   function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
-    if (!draggedId) {
+    if (!draggedId || !draggingSection || draggingSection !== section) {
       return;
     }
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
 
-    if (draggedId === sessionId && draggingSection === section) {
+    if (draggedId === sessionId) {
       setDropTarget(null);
       return;
     }
@@ -683,28 +658,13 @@ export function Sidebar() {
     ));
   }
 
-  function handleEmptyShelfDragOver(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
-    const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
-    if (!draggedId) {
-      return;
-    }
-
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTarget((current) => (
-      current?.section === section && current.sessionId === null
-        ? current
-        : { section, sessionId: null, position: 'after' }
-    ));
-  }
-
   function handleConversationDrop(targetSection: ConversationShelf, targetSessionId: string | null, position: OpenConversationDropPosition) {
-    if (!draggingSessionId) {
+    if (!draggingSessionId || !draggingSection || draggingSection !== targetSection) {
       clearDragState();
       return;
     }
 
-    if (targetSessionId === draggingSessionId && draggingSection === targetSection) {
+    if (targetSessionId === draggingSessionId) {
       clearDragState();
       return;
     }
@@ -716,11 +676,6 @@ export function Sidebar() {
   function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     handleConversationDrop(section, sessionId, getDropPosition(event));
-  }
-
-  function handleEmptyShelfDrop(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    handleConversationDrop(section, null, 'after');
   }
 
   useEffect(() => {
@@ -868,9 +823,6 @@ export function Sidebar() {
     }
   }
 
-  const pinnedDropTargetActive = dropTarget?.section === 'pinned' && dropTarget.sessionId === null;
-  const openDropTargetActive = dropTarget?.section === 'open' && dropTarget.sessionId === null;
-
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
       <div className="pt-3 pb-2 space-y-0.5">
@@ -898,24 +850,6 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
         <div className="py-1 space-y-0.5">
-          {!loading && pinnedSessions.length === 0 && draggingSection === 'open' ? (
-            <ShelfDropZone
-              label="Drop here to pin this conversation."
-              active={pinnedDropTargetActive}
-              onDragOver={(event) => handleEmptyShelfDragOver('pinned', event)}
-              onDrop={(event) => handleEmptyShelfDrop('pinned', event)}
-            />
-          ) : null}
-
-          {!loading && tabs.length === 0 && draggingSection === 'pinned' ? (
-            <ShelfDropZone
-              label="Drop here to move back into open conversations."
-              active={openDropTargetActive}
-              onDragOver={(event) => handleEmptyShelfDragOver('open', event)}
-              onDrop={(event) => handleEmptyShelfDrop('open', event)}
-            />
-          ) : null}
-
           {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 ? (
             <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
           ) : null}
