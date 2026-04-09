@@ -213,7 +213,7 @@ function getDefaultRemoteBranch() {
   return value.replace(/^refs\/remotes\/origin\//u, '');
 }
 
-function pushReleaseRef() {
+function pushReleaseRef(tag) {
   const branch = tryCapture('git', ['symbolic-ref', '--quiet', '--short', 'HEAD']);
   if (branch.status === 0) {
     run('git', ['push', '--follow-tags']);
@@ -222,7 +222,8 @@ function pushReleaseRef() {
 
   const defaultBranch = getDefaultRemoteBranch();
   console.log(`Detached HEAD detected; pushing to origin/${defaultBranch} explicitly...`);
-  run('git', ['push', 'origin', `HEAD:${defaultBranch}`, '--follow-tags']);
+  run('git', ['push', 'origin', `HEAD:${defaultBranch}`]);
+  run('git', ['push', 'origin', tag]);
 }
 
 function collectReleaseFiles(version) {
@@ -297,7 +298,7 @@ const files = collectReleaseFiles(version);
 notarizeDistributionContainers(env, files);
 
 console.log(`Pushing ${tag} to GitHub...`);
-pushReleaseRef();
+pushReleaseRef(tag);
 
 const releaseView = tryCapture('gh', ['release', 'view', tag, '--json', 'url']);
 if (releaseView.status === 0) {
