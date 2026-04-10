@@ -29,6 +29,10 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopAppStatus: vi.fn(),
     readDesktopDaemonState: vi.fn(),
     readDesktopWebUiState: vi.fn(),
+    updateDesktopWebUiConfig: vi.fn(),
+    readDesktopCompanionAuthState: vi.fn(),
+    createDesktopCompanionPairingCode: vi.fn(),
+    revokeDesktopCompanionSession: vi.fn(),
     readDesktopProfiles: vi.fn(),
     setDesktopCurrentProfile: vi.fn(),
     readDesktopModels: vi.fn(),
@@ -178,6 +182,112 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
+  it('routes desktop system admin settings through the local API module without loopback proxying', async () => {
+    const updateDesktopWebUiConfig = vi.fn().mockResolvedValue({
+      warnings: [],
+      service: {
+        running: true,
+        platform: 'desktop',
+        identifier: 'web-ui',
+        companionPort: 4832,
+        companionUrl: 'http://127.0.0.1:4832',
+        tailscaleServe: false,
+        resumeFallbackPrompt: 'Resume the task.',
+      },
+      log: { lines: [] },
+    });
+    const readDesktopCompanionAuthState = vi.fn().mockResolvedValue({
+      pendingPairings: [],
+      sessions: [{ id: 'session-1', label: 'iPhone' }],
+    });
+    const createDesktopCompanionPairingCode = vi.fn().mockResolvedValue({
+      id: 'pairing-1',
+      code: '123456',
+      createdAt: '2026-04-15T10:00:00.000Z',
+      expiresAt: '2026-04-15T10:10:00.000Z',
+    });
+    const revokeDesktopCompanionSession = vi.fn().mockResolvedValue({
+      ok: true,
+      state: { pendingPairings: [], sessions: [] },
+    });
+    const readDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
+      sessionIds: ['conversation-1'],
+      pinnedSessionIds: ['conversation-2'],
+      archivedSessionIds: ['conversation-3'],
+    });
+    const updateDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
+      ok: true,
+      sessionIds: ['conversation-4'],
+      pinnedSessionIds: ['conversation-5'],
+      archivedSessionIds: ['conversation-6'],
+    });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      updateDesktopWebUiConfig,
+      readDesktopCompanionAuthState,
+      createDesktopCompanionPairingCode,
+      revokeDesktopCompanionSession,
+      readDesktopOpenConversationTabs,
+      updateDesktopOpenConversationTabs,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.updateWebUiConfig?.({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' })).resolves.toEqual({
+      warnings: [],
+      service: {
+        running: true,
+        platform: 'desktop',
+        identifier: 'web-ui',
+        companionPort: 4832,
+        companionUrl: 'http://127.0.0.1:4832',
+        tailscaleServe: false,
+        resumeFallbackPrompt: 'Resume the task.',
+      },
+      log: { lines: [] },
+    });
+    await expect(controller.readCompanionAuthState?.()).resolves.toEqual({
+      pendingPairings: [],
+      sessions: [{ id: 'session-1', label: 'iPhone' }],
+    });
+    await expect(controller.createCompanionPairingCode?.()).resolves.toEqual({
+      id: 'pairing-1',
+      code: '123456',
+      createdAt: '2026-04-15T10:00:00.000Z',
+      expiresAt: '2026-04-15T10:10:00.000Z',
+    });
+    await expect(controller.revokeCompanionSession?.('session-1')).resolves.toEqual({
+      ok: true,
+      state: { pendingPairings: [], sessions: [] },
+    });
+    await expect(controller.readOpenConversationTabs?.()).resolves.toEqual({
+      sessionIds: ['conversation-1'],
+      pinnedSessionIds: ['conversation-2'],
+      archivedSessionIds: ['conversation-3'],
+    });
+    await expect(controller.updateOpenConversationTabs?.({ sessionIds: ['conversation-4'], pinnedSessionIds: ['conversation-5'], archivedSessionIds: ['conversation-6'] })).resolves.toEqual({
+      ok: true,
+      sessionIds: ['conversation-4'],
+      pinnedSessionIds: ['conversation-5'],
+      archivedSessionIds: ['conversation-6'],
+    });
+
+    expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' });
+    expect(readDesktopCompanionAuthState).toHaveBeenCalledTimes(1);
+    expect(createDesktopCompanionPairingCode).toHaveBeenCalledTimes(1);
+    expect(revokeDesktopCompanionSession).toHaveBeenCalledWith('session-1');
+    expect(readDesktopOpenConversationTabs).toHaveBeenCalledTimes(1);
+    expect(updateDesktopOpenConversationTabs).toHaveBeenCalledWith({
+      sessionIds: ['conversation-4'],
+      pinnedSessionIds: ['conversation-5'],
+      archivedSessionIds: ['conversation-6'],
+    });
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
   it('routes desktop operator settings through the local API module without loopback proxying', async () => {
     const readDesktopProfiles = vi.fn().mockResolvedValue({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
     const setDesktopCurrentProfile = vi.fn().mockResolvedValue({ ok: true, currentProfile: 'shared' });
@@ -284,10 +394,12 @@ describe('LocalHostController', () => {
 
   it('routes desktop live-session workspace reads through the local API module without loopback proxying', async () => {
     const readDesktopLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo' }]);
+    const readDesktopLiveSessionStats = vi.fn().mockResolvedValue({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
     const renameDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, name: 'Renamed live session' });
     const readDesktopLiveSessionContextUsage = vi.fn().mockResolvedValue({ recentFiles: [], promptTokens: 123 });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopLiveSessions,
+      readDesktopLiveSessionStats,
       renameDesktopLiveSession,
       readDesktopLiveSessionContextUsage,
     }));
@@ -299,10 +411,12 @@ describe('LocalHostController', () => {
     );
 
     await expect(controller.readLiveSessions?.()).resolves.toEqual([{ id: 'live-1', cwd: '/repo' }]);
+    await expect(controller.readLiveSessionStats?.('live-1')).resolves.toEqual({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
     await expect(controller.renameLiveSession?.({ conversationId: 'live-1', name: 'Renamed live session' })).resolves.toEqual({ ok: true, name: 'Renamed live session' });
     await expect(controller.readLiveSessionContextUsage?.('live-1')).resolves.toEqual({ recentFiles: [], promptTokens: 123 });
 
     expect(readDesktopLiveSessions).toHaveBeenCalledTimes(1);
+    expect(readDesktopLiveSessionStats).toHaveBeenCalledWith('live-1');
     expect(renameDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed live session' });
     expect(readDesktopLiveSessionContextUsage).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();

@@ -234,6 +234,10 @@ export interface HostController {
   readAppStatus?(): Promise<unknown>;
   readDaemonState?(): Promise<unknown>;
   readWebUiState?(): Promise<unknown>;
+  updateWebUiConfig?(input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<unknown>;
+  readCompanionAuthState?(): Promise<unknown>;
+  createCompanionPairingCode?(): Promise<unknown>;
+  revokeCompanionSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readProfiles?(): Promise<unknown>;
   setCurrentProfile?(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels?(): Promise<unknown>;
@@ -249,6 +253,8 @@ export interface HostController {
   readConversationPlanLibrary?(): Promise<unknown>;
   updateConversationPlanLibrary?(input: DesktopConversationPlanLibraryUpdateRequest): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;
+  readOpenConversationTabs?(): Promise<unknown>;
+  updateOpenConversationTabs?(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<unknown>;
   readModelProviders?(): Promise<unknown>;
   saveModelProvider?(input: {
     provider: string;
@@ -318,8 +324,12 @@ export interface HostController {
   readConversationModelPreferences?(input: DesktopConversationModelPreferencesRequest): Promise<unknown>;
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
+  readLiveSessions?(): Promise<unknown>;
+  readLiveSessionStats?(conversationId: string): Promise<unknown>;
+  renameLiveSession?(input: DesktopConversationRenameRequest): Promise<{ ok: true; name: string }>;
   readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;
+  readLiveSessionContextUsage?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;
   readSessionBlock?(input: DesktopSessionBlockRequest): Promise<unknown>;
   createLiveSession?(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string }>;

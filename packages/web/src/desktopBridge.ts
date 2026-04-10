@@ -2,7 +2,10 @@ import type {
   ActivityEntry,
   AlertEntry,
   AlertSnapshot,
+  AppStatus,
   CodexPlanUsageState,
+  CompanionAuthAdminState,
+  CompanionPairingCodeResult,
   ConversationAutomationPreferencesState,
   ConversationAutomationWorkflowPresetLibraryState,
   ConversationAutomationWorkspaceState,
@@ -31,9 +34,11 @@ import type {
   LiveSessionForkEntry,
   LiveSessionMeta,
   LiveSessionPresenceState,
+  LiveSessionStats,
   DeferredResumeSummary,
   PromptAttachmentRefInput,
   PromptImageInput,
+  SessionContextUsage,
   SessionDetailResult,
 } from './types';
 
@@ -52,6 +57,10 @@ export interface PersonalAgentDesktopBridge {
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;
+  updateWebUiConfig(input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<WebUiState>;
+  readCompanionAuthState(): Promise<CompanionAuthAdminState>;
+  createCompanionPairingCode(): Promise<CompanionPairingCodeResult>;
+  revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: CompanionAuthAdminState }>;
   readProfiles(): Promise<ProfileState>;
   setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels(): Promise<ModelState>;
@@ -67,6 +76,13 @@ export interface PersonalAgentDesktopBridge {
   readConversationPlanLibrary(): Promise<ConversationAutomationWorkflowPresetLibraryState>;
   updateConversationPlanLibrary(input: ConversationAutomationWorkflowPresetLibraryState): Promise<ConversationAutomationWorkflowPresetLibraryState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
+  readOpenConversationTabs(): Promise<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>;
+  updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<{
+    ok: true;
+    sessionIds: string[];
+    pinnedSessionIds: string[];
+    archivedSessionIds: string[];
+  }>;
   readModelProviders(): Promise<ModelProviderState>;
   saveModelProvider(input: {
     provider: string;
@@ -159,9 +175,13 @@ export interface PersonalAgentDesktopBridge {
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
   readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
+  readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
+  readLiveSessionStats(conversationId: string): Promise<LiveSessionStats>;
+  renameLiveSession(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; name: string }>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
+  readLiveSessionContextUsage(conversationId: string): Promise<SessionContextUsage>;
   readSessionDetail(input: {
     sessionId: string;
     tailBlocks?: number;

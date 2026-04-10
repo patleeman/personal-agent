@@ -36,6 +36,11 @@ const desktopBridge = {
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
+  updateWebUiConfig: (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-web-ui-config`, input),
+  readCompanionAuthState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-companion-auth-state`),
+  createCompanionPairingCode: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-companion-pairing-code`),
+  revokeCompanionSession: (sessionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:revoke-companion-session`, sessionId),
   readProfiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-profiles`),
   setCurrentProfile: (profile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-current-profile`, profile),
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
@@ -55,6 +60,9 @@ const desktopBridge = {
   updateConversationPlanLibrary: (input: { presets?: unknown; defaultPresetIds?: unknown }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-plan-library`, input),
   readConversationPlansWorkspace: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`),
+  readOpenConversationTabs: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-open-conversation-tabs`),
+  updateOpenConversationTabs: (input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-open-conversation-tabs`, input),
   readModelProviders: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-model-providers`),
   saveModelProvider: (input: {
     provider: string;
@@ -154,6 +162,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
   readLiveSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-sessions`),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
+  readLiveSessionStats: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-stats`, conversationId),
   renameLiveSession: (input: { conversationId: string; name: string; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:rename-live-session`, input),
   readLiveSessionForkEntries: (conversationId: string) =>

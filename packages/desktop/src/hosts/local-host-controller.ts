@@ -86,6 +86,30 @@ export class LocalHostController implements HostController {
     return module.readDesktopWebUiState();
   }
 
+  async updateWebUiConfig(input: {
+    companionPort?: number;
+    useTailscaleServe?: boolean;
+    resumeFallbackPrompt?: string;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopWebUiConfig(input);
+  }
+
+  async readCompanionAuthState(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopCompanionAuthState();
+  }
+
+  async createCompanionPairingCode(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.createDesktopCompanionPairingCode();
+  }
+
+  async revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: unknown }> {
+    const module = await this.loadLocalApi();
+    return module.revokeDesktopCompanionSession(sessionId);
+  }
+
   async readProfiles(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopProfiles();
@@ -159,6 +183,16 @@ export class LocalHostController implements HostController {
   async readConversationPlansWorkspace(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationPlansWorkspace();
+  }
+
+  async readOpenConversationTabs(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopOpenConversationTabs();
+  }
+
+  async updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopOpenConversationTabs(input);
   }
 
   async readModelProviders(): Promise<unknown> {
@@ -422,6 +456,11 @@ export class LocalHostController implements HostController {
   async readLiveSession(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSession(conversationId);
+  }
+
+  async readLiveSessionStats(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopLiveSessionStats(conversationId);
   }
 
   async renameLiveSession(input: DesktopConversationRenameRequest): Promise<{ ok: true; name: string }> {

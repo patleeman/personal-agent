@@ -32,6 +32,14 @@ export interface LocalApiModule {
   readDesktopAppStatus(): Promise<unknown>;
   readDesktopDaemonState(): Promise<unknown>;
   readDesktopWebUiState(): Promise<unknown>;
+  updateDesktopWebUiConfig(input: {
+    companionPort?: number;
+    useTailscaleServe?: boolean;
+    resumeFallbackPrompt?: string;
+  }): Promise<unknown>;
+  readDesktopCompanionAuthState(): Promise<unknown>;
+  createDesktopCompanionPairingCode(): Promise<unknown>;
+  revokeDesktopCompanionSession(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readDesktopProfiles(): Promise<unknown>;
   setDesktopCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readDesktopModels(): Promise<unknown>;
@@ -50,6 +58,12 @@ export interface LocalApiModule {
   readDesktopConversationPlanLibrary(): Promise<unknown>;
   updateDesktopConversationPlanLibrary(input: { presets?: unknown; defaultPresetIds?: unknown }): Promise<unknown>;
   readDesktopConversationPlansWorkspace(): Promise<unknown>;
+  readDesktopOpenConversationTabs(): Promise<unknown>;
+  updateDesktopOpenConversationTabs(input: {
+    sessionIds?: string[];
+    pinnedSessionIds?: string[];
+    archivedSessionIds?: string[];
+  }): Promise<unknown>;
   readDesktopModelProviders(): Promise<unknown>;
   saveDesktopModelProvider(input: {
     provider: string;
@@ -164,6 +178,7 @@ export interface LocalApiModule {
   }): Promise<unknown>;
   readDesktopLiveSessions(): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
+  readDesktopLiveSessionStats(conversationId: string): Promise<unknown>;
   renameDesktopLiveSession(input: {
     conversationId: string;
     name: string;

@@ -152,6 +152,50 @@ export function registerDesktopIpc(options: {
     return controller.readWebUiState();
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-web-ui-config`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateWebUiConfig) {
+      throw new Error('Dedicated desktop web-ui config writes are only available for the local host.');
+    }
+
+    return controller.updateWebUiConfig(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-companion-auth-state`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readCompanionAuthState) {
+      throw new Error('Dedicated desktop companion-auth reads are only available for the local host.');
+    }
+
+    return controller.readCompanionAuthState();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:create-companion-pairing-code`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.createCompanionPairingCode) {
+      throw new Error('Dedicated desktop companion-auth writes are only available for the local host.');
+    }
+
+    return controller.createCompanionPairingCode();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:revoke-companion-session`, async (event, sessionId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.revokeCompanionSession) {
+      throw new Error('Dedicated desktop companion session revokes are only available for the local host.');
+    }
+
+    return controller.revokeCompanionSession(sessionId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-profiles`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -315,6 +359,28 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readConversationPlansWorkspace();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-open-conversation-tabs`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readOpenConversationTabs) {
+      throw new Error('Dedicated desktop open-conversation reads are only available for the local host.');
+    }
+
+    return controller.readOpenConversationTabs();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-open-conversation-tabs`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateOpenConversationTabs) {
+      throw new Error('Dedicated desktop open-conversation writes are only available for the local host.');
+    }
+
+    return controller.updateOpenConversationTabs(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-model-providers`, async (event) => {
@@ -771,6 +837,17 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readLiveSession(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-stats`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readLiveSessionStats) {
+      throw new Error('Dedicated desktop live-session stats reads are only available for the local host.');
+    }
+
+    return controller.readLiveSessionStats(conversationId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:rename-live-session`, async (event, input) => {

@@ -48,6 +48,7 @@ import {
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
   getSessionContextUsage,
+  getSessionStats,
   isLive as isLiveSession,
   registry as liveRegistry,
   renameSession,
@@ -99,7 +100,7 @@ import {
 import { readModelState } from '../models/modelState.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
-import { subscribeAppEvents } from '../shared/appEvents.js';
+import { invalidateAppTopics, subscribeAppEvents } from '../shared/appEvents.js';
 import {
   getProfileConfigFilePath,
 } from '../ui/profilePreferences.js';
@@ -119,8 +120,8 @@ import {
   writeSavedDefaultCwdPreference,
 } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
-import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
-import { readWebUiState } from '../ui/webUi.js';
+import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readWebUiState, syncConfiguredWebUiTailscaleServe, writeWebUiConfig } from '../ui/webUi.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
@@ -147,6 +148,11 @@ import {
   applyConversationModelPreferencesToSessionManager,
 } from '../conversations/conversationModelPreferences.js';
 import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
+import {
+  createCompanionPairingCode,
+  readCompanionAuthAdminState,
+  revokeCompanionSession,
+} from '../ui/companionAuth.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -1163,6 +1169,70 @@ export async function readDesktopWebUiState() {
   return readWebUiState();
 }
 
+export async function updateDesktopWebUiConfig(input: {
+  companionPort?: number;
+  useTailscaleServe?: boolean;
+  resumeFallbackPrompt?: string;
+}) {
+  const { companionPort, useTailscaleServe, resumeFallbackPrompt } = input;
+
+  if (companionPort === undefined && useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
+    throw new Error('Provide companionPort, useTailscaleServe, and/or resumeFallbackPrompt.');
+  }
+
+  if (companionPort !== undefined && (!Number.isInteger(companionPort) || Number(companionPort) <= 0 || Number(companionPort) > 65535)) {
+    throw new Error('companionPort must be a valid port when provided.');
+  }
+
+  if (useTailscaleServe !== undefined && typeof useTailscaleServe !== 'boolean') {
+    throw new Error('useTailscaleServe must be a boolean when provided.');
+  }
+
+  if (resumeFallbackPrompt !== undefined && typeof resumeFallbackPrompt !== 'string') {
+    throw new Error('resumeFallbackPrompt must be a string when provided.');
+  }
+
+  const savedConfig = writeWebUiConfig({
+    ...(companionPort !== undefined ? { companionPort: Number(companionPort) } : {}),
+    ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
+    ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
+  });
+
+  if (useTailscaleServe !== undefined || companionPort !== undefined) {
+    syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
+  }
+
+  const state = readWebUiState();
+  invalidateAppTopics('webUi');
+
+  return {
+    ...state,
+    service: {
+      ...state.service,
+      companionPort: savedConfig.companionPort,
+      companionUrl: `http://127.0.0.1:${savedConfig.companionPort}`,
+      tailscaleServe: savedConfig.useTailscaleServe,
+      resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
+    },
+  };
+}
+
+export async function readDesktopCompanionAuthState() {
+  return readCompanionAuthAdminState();
+}
+
+export async function createDesktopCompanionPairingCode() {
+  return createCompanionPairingCode();
+}
+
+export async function revokeDesktopCompanionSession(sessionId: string) {
+  revokeCompanionSession(sessionId);
+  return {
+    ok: true as const,
+    state: readCompanionAuthAdminState(),
+  };
+}
+
 export async function readDesktopProfiles() {
   const context = await getLocalServerRouteContext();
   return {
@@ -1344,6 +1414,58 @@ export async function updateDesktopConversationPlanLibrary(input: {
 
 export async function readDesktopConversationPlansWorkspace() {
   return readConversationPlansWorkspace(DEFAULT_RUNTIME_SETTINGS_FILE);
+}
+
+export async function readDesktopOpenConversationTabs() {
+  const context = await getLocalServerRouteContext();
+  const saved = readSavedWebUiPreferences(context.getSettingsFile());
+  return {
+    sessionIds: saved.openConversationIds,
+    pinnedSessionIds: saved.pinnedConversationIds,
+    archivedSessionIds: saved.archivedConversationIds,
+  };
+}
+
+export async function updateDesktopOpenConversationTabs(input: {
+  sessionIds?: string[];
+  pinnedSessionIds?: string[];
+  archivedSessionIds?: string[];
+}) {
+  const { sessionIds, pinnedSessionIds, archivedSessionIds } = input;
+
+  if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
+    throw new Error('sessionIds must be an array when provided');
+  }
+
+  if (pinnedSessionIds !== undefined && !Array.isArray(pinnedSessionIds)) {
+    throw new Error('pinnedSessionIds must be an array when provided');
+  }
+
+  if (archivedSessionIds !== undefined && !Array.isArray(archivedSessionIds)) {
+    throw new Error('archivedSessionIds must be an array when provided');
+  }
+
+  if (sessionIds === undefined && pinnedSessionIds === undefined && archivedSessionIds === undefined) {
+    throw new Error('sessionIds, pinnedSessionIds, or archivedSessionIds required');
+  }
+
+  const context = await getLocalServerRouteContext();
+  const saved = persistSettingsWrite(
+    (settingsFile) => writeSavedWebUiPreferences({
+      openConversationIds: sessionIds,
+      pinnedConversationIds: pinnedSessionIds,
+      archivedConversationIds: archivedSessionIds,
+    }, settingsFile),
+    { runtimeSettingsFile: context.getSettingsFile() },
+  );
+
+  invalidateAppTopics('sessions');
+  return {
+    ok: true as const,
+    sessionIds: saved.openConversationIds,
+    pinnedSessionIds: saved.pinnedConversationIds,
+    archivedSessionIds: saved.archivedConversationIds,
+  };
 }
 
 export async function readDesktopModelProviders() {
@@ -1854,6 +1976,17 @@ export async function readDesktopLiveSession(conversationId: string) {
   }
 
   return { live: true as const, ...entry };
+}
+
+export async function readDesktopLiveSessionStats(conversationId: string) {
+  await getLocalRoutes();
+
+  const stats = getSessionStats(conversationId.trim());
+  if (!stats) {
+    throw new Error('404 Not Found');
+  }
+
+  return stats;
 }
 
 export async function renameDesktopLiveSession(input: {

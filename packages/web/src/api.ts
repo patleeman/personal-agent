@@ -191,11 +191,38 @@ export const api = {
   restartWebUiService: () => post<ApplicationRestartRequestResult>('/web-ui/service/restart'),
   stopWebUiService: () => post<WebUiState>('/web-ui/service/stop'),
   uninstallWebUiService: () => post<WebUiState>('/web-ui/service/uninstall'),
-  setWebUiConfig: (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => patch<WebUiState>('/web-ui/config', input),
-  companionAuthState: () => get<CompanionAuthAdminState>('/companion-auth'),
-  createCompanionPairingCode: () => post<CompanionPairingCodeResult>('/companion-auth/pairing-code'),
-  revokeCompanionSession: (sessionId: string) =>
-    del<{ ok: boolean; state: CompanionAuthAdminState }>(`/companion-auth/sessions/${encodeURIComponent(sessionId)}`),
+  setWebUiConfig: async (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateWebUiConfig(input);
+    }
+
+    return patch<WebUiState>('/web-ui/config', input);
+  },
+  companionAuthState: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readCompanionAuthState();
+    }
+
+    return get<CompanionAuthAdminState>('/companion-auth');
+  },
+  createCompanionPairingCode: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.createCompanionPairingCode();
+    }
+
+    return post<CompanionPairingCodeResult>('/companion-auth/pairing-code');
+  },
+  revokeCompanionSession: async (sessionId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.revokeCompanionSession(sessionId);
+    }
+
+    return del<{ ok: boolean; state: CompanionAuthAdminState }>(`/companion-auth/sessions/${encodeURIComponent(sessionId)}`);
+  },
   desktopAuthSession: () => get<DesktopAuthSessionState>('/desktop-auth/session'),
   exchangeDesktopPairingCode: (code: string, deviceLabel?: string) =>
     post<DesktopAuthSessionState>('/desktop-auth/exchange', { code, deviceLabel }),
@@ -812,6 +839,14 @@ export const api = {
     }
 
     return get<LiveSessionContext>(`/live-sessions/${id}/context`);
+  },
+  liveSessionStats: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readLiveSessionStats(id);
+    }
+
+    return get<{ tokens: { input: number; output: number; total: number }; cost: number }>(`/live-sessions/${id}/stats`);
   },
   conversationBootstrap: async (id: string, options?: {
     tailBlocks?: number;
