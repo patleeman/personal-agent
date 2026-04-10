@@ -5,6 +5,7 @@ import {
   readSync,
   statSync,
 } from 'node:fs';
+import { join } from 'node:path';
 import {
   getDaemonStatus,
   loadDaemonConfig,
@@ -12,6 +13,7 @@ import {
   resolveDaemonPaths,
 } from '@personal-agent/daemon';
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
+import { getStateRoot } from '@personal-agent/core';
 import {
   getManagedDaemonServiceStatus,
   installManagedDaemonService,
@@ -25,6 +27,9 @@ interface LogTail {
   path?: string;
   lines: string[];
 }
+
+const DESKTOP_RUNTIME = process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+const DESKTOP_DAEMON_LOG_FILE = process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE?.trim() || undefined;
 
 interface DaemonServiceSummary {
   platform: string;
@@ -100,6 +105,17 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
 }
 
 function readDaemonServiceSummary(defaultLogFile: string): DaemonServiceSummary {
+  if (DESKTOP_RUNTIME) {
+    return {
+      platform: 'desktop',
+      identifier: 'desktop-local-daemon',
+      manifestPath: 'desktop menubar runtime',
+      installed: true,
+      running: true,
+      logFile: DESKTOP_DAEMON_LOG_FILE ?? join(getStateRoot(), 'desktop', 'logs', 'daemon.log'),
+    };
+  }
+
   try {
     const status = getManagedDaemonServiceStatus();
     return {
@@ -155,9 +171,9 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
 
   if (service.error) {
     warnings.push(`Could not inspect daemon service status: ${service.error}`);
-  } else if (service.installed && !service.running) {
+  } else if (!DESKTOP_RUNTIME && service.installed && !service.running) {
     warnings.push('Daemon service is installed but not running.');
-  } else if (!service.installed && !runtime.running) {
+  } else if (!DESKTOP_RUNTIME && !service.installed && !runtime.running) {
     warnings.push('Daemon service is not installed. Install it from this page or run `pa daemon service install`.');
   }
 

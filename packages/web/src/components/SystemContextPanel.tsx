@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
+import { getDesktopBridge } from '../desktopBridge';
 import { useSystemStatus } from '../contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
 import type { DaemonState, WebUiState } from '../types';
@@ -44,6 +45,7 @@ function buildPanel(selected: SystemPanelData) {
   switch (selected.kind) {
     case 'web-ui': {
       const { data } = selected;
+      const desktopOwned = data.service.platform === 'desktop';
       const running = data.service.running;
       const release = data.service.deployment?.activeRelease?.revision
         ?? 'Current build unavailable';
@@ -51,20 +53,24 @@ function buildPanel(selected: SystemPanelData) {
 
       return {
         title: 'Web UI',
-        description: 'Managed frontend service and current build metadata.',
+        description: desktopOwned
+          ? 'Desktop-owned frontend runtime and current build metadata.'
+          : 'Managed frontend service and current build metadata.',
         tone: systemTone(running, data.warnings.length, data.service.error),
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
         log: data.log,
-        actionLabel: 'Restart web UI',
-        actionDisabled: !data.service.installed || !data.service.running,
-        actionDisabledReason: !data.service.installed
-          ? 'Install the managed web UI service before restarting it.'
-          : !data.service.running
-            ? 'Start the managed web UI service before restarting it.'
-            : null,
+        actionLabel: desktopOwned ? 'Restart local runtime' : 'Restart web UI',
+        actionDisabled: desktopOwned ? false : !data.service.installed || !data.service.running,
+        actionDisabledReason: desktopOwned
+          ? null
+          : !data.service.installed
+            ? 'Install the managed web UI service before restarting it.'
+            : !data.service.running
+              ? 'Start the managed web UI service before restarting it.'
+              : null,
         details: [
-          { label: 'Service', value: running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
+          { label: 'Service', value: desktopOwned ? 'desktop-owned' : running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
           { label: 'Desktop URL', value: data.service.url },
           { label: 'Companion service', value: `${companion.statusLabel} · ${companion.localUrl}` },
           { label: 'Companion port', value: String(data.service.companionPort) },
@@ -77,24 +83,29 @@ function buildPanel(selected: SystemPanelData) {
     }
     case 'daemon': {
       const { data } = selected;
+      const desktopOwned = data.service.platform === 'desktop';
       const running = data.runtime.running;
 
       return {
         title: 'Daemon',
-        description: 'Background runtime for scheduled work, runs, and automation.',
+        description: desktopOwned
+          ? 'Desktop-owned background runtime for scheduled work, runs, and automation.'
+          : 'Background runtime for scheduled work, runs, and automation.',
         tone: systemTone(running, data.warnings.length, data.service.error),
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
         log: data.log,
-        actionLabel: 'Restart daemon',
-        actionDisabled: !data.service.installed || !data.service.running,
-        actionDisabledReason: !data.service.installed
-          ? 'Install the daemon service before restarting it.'
-          : !data.service.running
-            ? 'Start the daemon service before restarting it.'
-            : null,
+        actionLabel: desktopOwned ? 'Restart local runtime' : 'Restart daemon',
+        actionDisabled: desktopOwned ? false : !data.service.installed || !data.service.running,
+        actionDisabledReason: desktopOwned
+          ? null
+          : !data.service.installed
+            ? 'Install the daemon service before restarting it.'
+            : !data.service.running
+              ? 'Start the daemon service before restarting it.'
+              : null,
         details: [
-          { label: 'Service', value: data.service.running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
+          { label: 'Service', value: desktopOwned ? 'desktop-owned' : data.service.running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
           { label: 'Runtime', value: running ? 'connected' : 'offline' },
           { label: 'Queue', value: `${data.runtime.queueDepth ?? 0}/${data.runtime.maxQueueDepth ?? 0}` },
           { label: 'Modules', value: String(data.runtime.moduleCount) },
@@ -285,6 +296,17 @@ export function SystemServiceSection({
     setError(null);
 
     try {
+      const desktopBridge = getDesktopBridge();
+      const desktopOwned = selected.kind === 'web-ui'
+        ? selected.data.service.platform === 'desktop'
+        : selected.data.service.platform === 'desktop';
+
+      if (desktopOwned && desktopBridge) {
+        await desktopBridge.restartActiveHost();
+        setMessage('Restarting the local runtime. This window will reconnect when it is ready.');
+        return;
+      }
+
       switch (selected.kind) {
         case 'web-ui': {
           const result = await api.restartWebUiService();

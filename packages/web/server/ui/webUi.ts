@@ -5,14 +5,17 @@ import {
   readSync,
   statSync,
 } from 'node:fs';
+import { join } from 'node:path';
 import {
   DEFAULT_WEB_UI_PORT,
+  getStateRoot,
   readMachineWebUiConfig,
   writeMachineWebUiConfig,
   type MachineWebUiConfigState,
   type WriteMachineWebUiConfigInput,
 } from '@personal-agent/core';
 import {
+  getWebUiDeploymentSummary,
   getWebUiServiceStatus,
   installWebUiService,
   resolveWebUiTailscaleUrl,
@@ -67,6 +70,8 @@ export interface WebUiStateSnapshot {
 }
 
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
+const DESKTOP_RUNTIME = process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+const DESKTOP_WEB_LOG_FILE = process.env.PERSONAL_AGENT_DESKTOP_WEB_LOG_FILE?.trim() || undefined;
 
 export type WebUiConfigState = MachineWebUiConfigState;
 
@@ -132,9 +137,36 @@ function toDeploymentSummary(summary: WebUiDeploymentSummary | undefined): WebUi
   };
 }
 
+function readDesktopWebUiServiceSummary(config: WebUiConfigState, tailscaleUrl?: string): WebUiServiceSummary {
+  const port = Number.parseInt(process.env.PA_WEB_PORT ?? String(DEFAULT_WEB_UI_PORT), 10);
+  const normalizedPort = Number.isInteger(port) && port > 0 ? port : DEFAULT_WEB_UI_PORT;
+
+  return {
+    platform: 'desktop',
+    identifier: 'desktop-local-web-ui',
+    manifestPath: 'desktop menubar runtime',
+    installed: true,
+    running: true,
+    logFile: DESKTOP_WEB_LOG_FILE ?? join(getStateRoot(), 'desktop', 'logs', 'web-ui.log'),
+    repoRoot: WEB_REPO_ROOT,
+    port: normalizedPort,
+    url: `http://127.0.0.1:${normalizedPort}`,
+    companionPort: config.companionPort,
+    companionUrl: `http://127.0.0.1:${config.companionPort}`,
+    tailscaleServe: config.useTailscaleServe,
+    tailscaleUrl,
+    resumeFallbackPrompt: config.resumeFallbackPrompt,
+    deployment: toDeploymentSummary(getWebUiDeploymentSummary({ repoRoot: WEB_REPO_ROOT, stablePort: normalizedPort })),
+  };
+}
+
 function readWebUiServiceSummary(): WebUiServiceSummary {
   const config = readWebUiConfig();
   const tailscaleUrl = config.useTailscaleServe ? resolveWebUiTailscaleUrl() : undefined;
+
+  if (DESKTOP_RUNTIME) {
+    return readDesktopWebUiServiceSummary(config, tailscaleUrl);
+  }
 
   try {
     const status = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
@@ -181,9 +213,9 @@ export function readWebUiState(): WebUiStateSnapshot {
 
   if (service.error) {
     warnings.push(`Could not inspect web UI service status: ${service.error}`);
-  } else if (service.installed && !service.running) {
+  } else if (!DESKTOP_RUNTIME && service.installed && !service.running) {
     warnings.push('Web UI service is installed but not running.');
-  } else if (!service.installed) {
+  } else if (!DESKTOP_RUNTIME && !service.installed) {
     warnings.push('Web UI service is not installed. Install it from this page or run `pa ui service install`.');
   }
 
