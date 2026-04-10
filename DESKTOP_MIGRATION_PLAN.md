@@ -256,3 +256,4 @@ Just completed:
 - the packaged `personal-agent://app` renderer now receives the real desktop preload bridge again, which fixes local desktop IPC transport, main-process stream bridging, and top-bar navigation controls in the packaged shell
 - local desktop app bootstrap and hot app-state updates now use a dedicated desktop bridge capability instead of routing the packaged renderer through `/api/events` snapshot plumbing
 - local desktop app invalidation/activity/session/task/daemon/web-ui updates can now bypass `/api/events` entirely and stream over a dedicated desktop app-events bridge from the main process
+- desktop Settings no longer hides runtime/service diagnostics just because the shell is Electron; local desktop hosts show app-owned runtime messaging while remote hosts still expose their runtime panels

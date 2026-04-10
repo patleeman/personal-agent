@@ -122,7 +122,7 @@ It includes sections for:
 - runtime services and health
 - workspace / vault information
 
-When the web UI is running inside the Electron shell, the runtime section is framed as the app-owned local runtime rather than as separately managed OS services.
+When the web UI is running inside the Electron shell on the local desktop host, the runtime section is framed as the app-owned local runtime rather than as separately managed OS services. When a remote host is active inside Electron, the runtime section still shows that remote host’s daemon and web UI state.
 
 ## Companion surface
 

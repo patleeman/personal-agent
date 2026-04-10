@@ -308,6 +308,32 @@ describe('web UI config', () => {
     }));
   });
 
+  it('rejects managed web ui lifecycle commands in desktop runtime mode', () => {
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+
+    expect(() => installWebUiServiceAndReadState()).toThrow(
+      'Managed web UI service lifecycle is unavailable in desktop runtime.',
+    );
+    expect(() => startWebUiServiceAndReadState()).toThrow(
+      'Managed web UI service lifecycle is unavailable in desktop runtime.',
+    );
+    expect(() => restartWebUiServiceAndReadState()).toThrow(
+      'Managed web UI service lifecycle is unavailable in desktop runtime.',
+    );
+    expect(() => stopWebUiServiceAndReadState()).toThrow(
+      'Managed web UI service lifecycle is unavailable in desktop runtime.',
+    );
+    expect(() => uninstallWebUiServiceAndReadState()).toThrow(
+      'Managed web UI service lifecycle is unavailable in desktop runtime.',
+    );
+
+    expect(installWebUiServiceMock).not.toHaveBeenCalled();
+    expect(startWebUiServiceMock).not.toHaveBeenCalled();
+    expect(restartWebUiServiceMock).not.toHaveBeenCalled();
+    expect(stopWebUiServiceMock).not.toHaveBeenCalled();
+    expect(uninstallWebUiServiceMock).not.toHaveBeenCalled();
+  });
+
   it('syncs configured tailscale settings and wraps service lifecycle operations', () => {
     configureTempWebUiConfig();
     writeWebUiConfig({ port: 4200, companionPort: 4950 });

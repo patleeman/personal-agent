@@ -1,12 +1,20 @@
-import { isDesktopShell } from '../desktopBridge';
+import { isDesktopShell, isLocalDesktopHostShell } from '../desktopBridge';
 import type { SystemComponentId } from '../systemSelection';
+import type { DesktopEnvironmentState } from '../types';
 import { SystemServiceSection } from './SystemContextPanel';
 import { SectionLabel } from './ui';
 
-export function SystemSettingsContent({ componentId: _componentId }: { componentId?: SystemComponentId }) {
-  const desktopShell = isDesktopShell();
+export function SystemSettingsContent({
+  componentId: _componentId,
+  desktopEnvironment,
+}: {
+  componentId?: SystemComponentId;
+  desktopEnvironment?: DesktopEnvironmentState | null;
+}) {
+  const desktopShell = isDesktopShell() || desktopEnvironment?.isElectron === true;
+  const localDesktopHost = isLocalDesktopHostShell() || desktopEnvironment?.activeHostKind === 'local';
 
-  if (desktopShell) {
+  if (localDesktopHost) {
     return (
       <div className="space-y-6">
         <div className="space-y-1">
@@ -34,9 +42,11 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <SectionLabel label="Runtime services" />
+        <SectionLabel label={desktopShell ? 'Active host runtime' : 'Runtime services'} />
         <p className="ui-card-meta max-w-3xl">
-          Web UI and daemon status, logs, and companion transport settings stay inline here.
+          {desktopShell && desktopEnvironment?.activeHostKind && desktopEnvironment.activeHostKind !== 'local'
+            ? 'Daemon and web UI status for the current remote host stay inline here.'
+            : 'Web UI and daemon status, logs, and companion transport settings stay inline here.'}
         </p>
       </div>
 

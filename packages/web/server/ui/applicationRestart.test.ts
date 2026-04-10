@@ -204,6 +204,20 @@ describe('application maintenance requests', () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
+  it('rejects managed web ui restart requests in desktop runtime mode', () => {
+    const stateRoot = createTempDir('pa-web-restart-state-');
+    const repoRoot = createTempDir('pa-web-restart-repo-');
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+
+    expect(() => requestWebUiServiceRestart({ repoRoot })).toThrow(
+      'Managed web UI restart is unavailable in desktop runtime.',
+    );
+    expect(getWebUiServiceStatusMock).not.toHaveBeenCalled();
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
   it('prevents concurrent requests while a lock pid is still running', () => {
     const stateRoot = createTempDir('pa-web-restart-state-');
     const repoRoot = createTempDir('pa-web-restart-repo-');

@@ -71,9 +71,16 @@ export interface WebUiStateSnapshot {
 
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 const DESKTOP_SHELL_URL = 'personal-agent://app/';
+const DESKTOP_WEB_UI_SERVICE_MESSAGE = 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
 
 function isDesktopRuntime(): boolean {
   return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+}
+
+function assertManagedWebUiServiceLifecycleAvailable(): void {
+  if (isDesktopRuntime()) {
+    throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+  }
 }
 
 export type WebUiConfigState = MachineWebUiConfigState;
@@ -236,26 +243,31 @@ export function readWebUiState(): WebUiStateSnapshot {
 }
 
 export function installWebUiServiceAndReadState(): WebUiStateSnapshot {
+  assertManagedWebUiServiceLifecycleAvailable();
   installWebUiService({ repoRoot: WEB_REPO_ROOT });
   return readWebUiState();
 }
 
 export function startWebUiServiceAndReadState(): WebUiStateSnapshot {
+  assertManagedWebUiServiceLifecycleAvailable();
   startWebUiService({ repoRoot: WEB_REPO_ROOT });
   return readWebUiState();
 }
 
 export function restartWebUiServiceAndReadState(): WebUiStateSnapshot {
+  assertManagedWebUiServiceLifecycleAvailable();
   restartWebUiService({ repoRoot: WEB_REPO_ROOT });
   return readWebUiState();
 }
 
 export function stopWebUiServiceAndReadState(): WebUiStateSnapshot {
+  assertManagedWebUiServiceLifecycleAvailable();
   stopWebUiService({ repoRoot: WEB_REPO_ROOT });
   return readWebUiState();
 }
 
 export function uninstallWebUiServiceAndReadState(): WebUiStateSnapshot {
+  assertManagedWebUiServiceLifecycleAvailable();
   uninstallWebUiService({ repoRoot: WEB_REPO_ROOT });
   return readWebUiState();
 }

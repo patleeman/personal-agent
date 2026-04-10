@@ -296,6 +296,7 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Operational overview');
     expect(html).toContain('Web UI');
     expect(html).toContain('Daemon');
+    expect(html).toContain('Leave it blank to fall back to the active runtime process cwd.');
     expect(html).toContain('Repo root');
   });
 

@@ -286,6 +286,42 @@ describe('web UI routes', () => {
     expect(uninstallRes.json).toHaveBeenCalledWith({ service: { status: 'uninstalled' } });
   });
 
+  it('maps desktop-runtime lifecycle rejections to bad requests', () => {
+    const { postHandler } = createDesktopHarness();
+    installWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
+      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
+    });
+    startWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
+      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
+    });
+    stopWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
+      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
+    });
+    uninstallWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
+      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
+    });
+
+    const installRes = createResponse();
+    postHandler('/api/web-ui/service/install')({}, installRes);
+    expect(installRes.status).toHaveBeenCalledWith(400);
+    expect(installRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
+
+    const startRes = createResponse();
+    postHandler('/api/web-ui/service/start')({}, startRes);
+    expect(startRes.status).toHaveBeenCalledWith(400);
+    expect(startRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
+
+    const stopRes = createResponse();
+    postHandler('/api/web-ui/service/stop')({}, stopRes);
+    expect(stopRes.status).toHaveBeenCalledWith(400);
+    expect(stopRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
+
+    const uninstallRes = createResponse();
+    postHandler('/api/web-ui/service/uninstall')({}, uninstallRes);
+    expect(uninstallRes.status).toHaveBeenCalledWith(400);
+    expect(uninstallRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
+  });
+
   it('maps restart responses for desktop and companion routes', () => {
     const desktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
 
@@ -312,6 +348,15 @@ describe('web UI routes', () => {
     failingDesktop.postHandler('/api/web-ui/service/restart')({}, missingServiceRes);
     expect(missingServiceRes.status).toHaveBeenCalledWith(400);
     expect(missingServiceRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service is not installed' });
+
+    const unavailableDesktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
+    requestWebUiServiceRestartMock.mockImplementationOnce(() => {
+      throw new Error('Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
+    });
+    const unavailableRes = createResponse();
+    unavailableDesktop.postHandler('/api/web-ui/service/restart')({}, unavailableRes);
+    expect(unavailableRes.status).toHaveBeenCalledWith(400);
+    expect(unavailableRes.json).toHaveBeenCalledWith({ error: 'Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
 
     const failingDesktopAgain = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
     requestWebUiServiceRestartMock.mockImplementationOnce(() => {

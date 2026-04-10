@@ -13,6 +13,7 @@ import { getStateRoot } from '@personal-agent/core';
 import { getWebUiServiceStatus } from '@personal-agent/services';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
+const DESKTOP_WEB_UI_RESTART_MESSAGE = 'Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
 
 type ApplicationCommand = 'restart' | 'update' | 'web-ui-service-restart';
 
@@ -36,6 +37,10 @@ export interface ApplicationCommandRequestResult {
 
 export type ApplicationRestartRequestResult = ApplicationCommandRequestResult;
 export type WebUiServiceRestartRequestResult = ApplicationCommandRequestResult;
+
+function isDesktopRuntime(): boolean {
+  return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+}
 
 function resolveApplicationCommandLockFile(): string {
   return join(getStateRoot(), 'web', 'app-restart.lock.json');
@@ -182,6 +187,9 @@ function requestApplicationCommand(input: {
 }): ApplicationCommandRequestResult {
   const repoRoot = resolve(input.repoRoot);
   const profile = input.profile?.trim() ?? '';
+  if (input.action === 'web-ui-service-restart' && isDesktopRuntime()) {
+    throw new Error(DESKTOP_WEB_UI_RESTART_MESSAGE);
+  }
   if (input.action !== 'web-ui-service-restart' && profile.length === 0) {
     throw new Error(`Application ${commandLabel(input.action)} requires a profile.`);
   }

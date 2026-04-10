@@ -981,6 +981,7 @@ export function SettingsPage() {
   const [oauthInputValue, setOauthInputValue] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
   const oauthTerminalStateKeyRef = useRef<string | null>(null);
+  const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
@@ -990,6 +991,26 @@ export function SettingsPage() {
     profileState ? `profile ${profileState.currentProfile}` : null,
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,
   ].filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    readDesktopEnvironment()
+      .then((environment) => {
+        if (!cancelled) {
+          setDesktopEnvironment(environment);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDesktopEnvironment(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const groupedModels = useMemo(
     () => groupModelsByProvider(modelState?.models ?? []),
@@ -1958,7 +1979,7 @@ export function SettingsPage() {
                       </button>
                     </div>
                     <p className="ui-card-meta">
-                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
+                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the active runtime process cwd.
                     </p>
                   </form>
                 ) : null}
@@ -2867,7 +2888,7 @@ export function SettingsPage() {
           </SettingsSection>
 
           <section id="settings-runtime-services" className="scroll-mt-24 space-y-5">
-            <SystemSettingsContent />
+            <SystemSettingsContent desktopEnvironment={desktopEnvironment} />
           </section>
 
           <SettingsSection

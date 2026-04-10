@@ -15,7 +15,58 @@ vi.mock('../hooks', () => ({
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-function renderWithProviders(node: React.ReactNode) {
+function renderWithProviders(
+  node: React.ReactNode,
+  options?: {
+    daemon?: Record<string, unknown> | null;
+    webUi?: Record<string, unknown> | null;
+  },
+) {
+  const daemon = options?.daemon === null
+    ? null
+    : {
+        warnings: [],
+        service: {
+          platform: 'launchd',
+          identifier: 'pi-daemon',
+          manifestPath: '/tmp/daemon.plist',
+          installed: true,
+          running: true,
+        },
+        runtime: {
+          running: true,
+          socketPath: '/tmp/daemon.sock',
+          moduleCount: 4,
+          queueDepth: 1,
+          maxQueueDepth: 8,
+          startedAt: '2026-03-25T09:00:00.000Z',
+        },
+        log: { path: '/tmp/daemon.log', lines: ['daemon started', 'queue idle'] },
+        ...options?.daemon,
+      };
+  const webUi = options?.webUi === null
+    ? null
+    : {
+        warnings: [],
+        service: {
+          platform: 'launchd',
+          identifier: 'pi-web',
+          manifestPath: '/tmp/web.plist',
+          installed: true,
+          running: true,
+          repoRoot: '/repo',
+          port: 3741,
+          url: 'http://127.0.0.1:3741',
+          companionPort: 3742,
+          companionUrl: 'http://127.0.0.1:3742',
+          tailscaleServe: true,
+          tailscaleUrl: 'https://agent.tail.ts.net',
+          resumeFallbackPrompt: 'Resume work.',
+        },
+        log: { path: '/tmp/web.log', lines: ['web ui started'] },
+        ...options?.webUi,
+      };
+
   return renderToString(
     <MemoryRouter>
       <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -116,44 +167,8 @@ function renderWithProviders(node: React.ReactNode) {
             setRuns: vi.fn(),
           }}>
             <SystemStatusContext.Provider value={{
-              daemon: {
-                warnings: [],
-                service: {
-                  platform: 'launchd',
-                  identifier: 'pi-daemon',
-                  manifestPath: '/tmp/daemon.plist',
-                  installed: true,
-                  running: true,
-                },
-                runtime: {
-                  running: true,
-                  socketPath: '/tmp/daemon.sock',
-                  moduleCount: 4,
-                  queueDepth: 1,
-                  maxQueueDepth: 8,
-                  startedAt: '2026-03-25T09:00:00.000Z',
-                },
-                log: { path: '/tmp/daemon.log', lines: ['daemon started', 'queue idle'] },
-              },
-              webUi: {
-                warnings: [],
-                service: {
-                  platform: 'launchd',
-                  identifier: 'pi-web',
-                  manifestPath: '/tmp/web.plist',
-                  installed: true,
-                  running: true,
-                  repoRoot: '/repo',
-                  port: 3741,
-                  url: 'http://127.0.0.1:3741',
-                  companionPort: 3742,
-                  companionUrl: 'http://127.0.0.1:3742',
-                  tailscaleServe: true,
-                  tailscaleUrl: 'https://agent.tail.ts.net',
-                  resumeFallbackPrompt: 'Resume work.',
-                },
-                log: { path: '/tmp/web.log', lines: ['web ui started'] },
-              },
+              daemon,
+              webUi,
               setDaemon: vi.fn(),
               setWebUi: vi.fn(),
             }}>
@@ -317,5 +332,26 @@ describe('companion operational pages', () => {
     expect(html).toContain('Background runs');
     expect(html).toContain('Restart app');
     expect(html).toContain('Update app');
+  });
+
+  it('treats the packaged local shell as a desktop-owned surface instead of a restartable web service', () => {
+    const html = renderWithProviders(<CompanionSystemPage />, {
+      webUi: {
+        service: {
+          platform: 'desktop',
+          url: 'personal-agent://app/',
+          companionUrl: 'personal-agent://app/',
+          tailscaleServe: false,
+          tailscaleUrl: undefined,
+        },
+      },
+    });
+
+    expect(html).toContain('Desktop shell');
+    expect(html).not.toContain('Web UI');
+    expect(html).toContain('desktop-only');
+    expect(html).toContain('Not exposed in desktop mode.');
+    expect(html).toContain('personal-agent://app/');
+    expect(html).not.toContain('Restarting…');
   });
 });

@@ -115,6 +115,7 @@ function WebUiSection({
     );
   }
 
+  const desktopOwned = webUi.service.platform === 'desktop';
   const running = webUi.service.running;
   const tone = webUi.warnings.length > 0 ? 'warning' : running ? 'success' : 'danger';
   const companion = buildWebUiCompanionAccessSummary(webUi.service);
@@ -122,8 +123,8 @@ function WebUiSection({
 
   return (
     <Section
-      title="Web UI"
-      action={(
+      title={desktopOwned ? 'Desktop shell' : 'Web UI'}
+      action={desktopOwned ? undefined : (
         <button
           type="button"
           onClick={onRestart}
@@ -140,7 +141,7 @@ function WebUiSection({
           <span className="break-words text-[12px] text-secondary">{webUi.service.url}</span>
         </div>
         <p className="mt-2 text-[12px] leading-relaxed text-dim">{companion.detail}</p>
-        <p className="mt-2 break-words text-[12px] text-dim">Companion {companion.statusLabel} · {companion.localUrl}</p>
+        <p className="mt-2 break-words text-[12px] text-dim">{desktopOwned ? 'Surface' : 'Companion'} {companion.statusLabel} · {companion.localUrl}</p>
         {issueSummary(webUi.warnings) ? <p className="mt-2 text-[12px] leading-relaxed text-warning">{issueSummary(webUi.warnings)}</p> : null}
       </div>
       {logLines.length > 0 ? <pre className="overflow-auto whitespace-pre-wrap break-words rounded-xl bg-base/65 px-3 py-3 font-mono text-[11px] leading-relaxed text-secondary">{logLines.join('\n')}</pre> : null}

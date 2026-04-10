@@ -682,7 +682,7 @@ export function ToolsPage() {
                 </div>
 
                 {!hasMcpMetadata ? (
-                  <p className="text-[12px] text-danger">Restart the web server to load MCP inspection metadata.</p>
+                  <p className="text-[12px] text-danger">Restart the active runtime to load MCP inspection metadata.</p>
                 ) : !mcp.configExists ? (
                   <p className="ui-card-meta">No mcp_servers.json found for this workspace.</p>
                 ) : mcp.servers.length === 0 ? (

@@ -156,6 +156,14 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
   }
 }
 
+function mapWebUiServiceLifecycleErrorStatus(message: string): number {
+  if (message.startsWith('Managed web UI service lifecycle is unavailable in desktop runtime')) {
+    return 400;
+  }
+
+  return 500;
+}
+
 function handleWebUiStateRequest(_req: Request, res: Response): void {
   try {
     res.json(readWebUiState());
@@ -174,11 +182,12 @@ function handleWebUiServiceInstall(_req: Request, res: Response): void {
     invalidateAppTopics('webUi');
     res.json(state);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
   }
 }
 
@@ -188,11 +197,12 @@ function handleWebUiServiceStart(_req: Request, res: Response): void {
     invalidateAppTopics('webUi');
     res.json(state);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
   }
 }
 
@@ -206,6 +216,7 @@ function handleWebUiServiceRestart(_req: Request, res: Response): void {
       || message.startsWith('Application update already in progress')
       ? 409
       : message.startsWith('Managed web UI service is not installed')
+        || message.startsWith('Managed web UI restart is unavailable in desktop runtime')
         ? 400
         : 500;
     res.status(status).json({ error: message });
@@ -218,11 +229,12 @@ function handleWebUiServiceStop(_req: Request, res: Response): void {
     invalidateAppTopics('webUi');
     res.json(state);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
   }
 }
 
@@ -232,11 +244,12 @@ function handleWebUiServiceUninstall(_req: Request, res: Response): void {
     invalidateAppTopics('webUi');
     res.json(state);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
   }
 }
 

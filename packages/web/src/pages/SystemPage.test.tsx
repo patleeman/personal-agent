@@ -120,4 +120,44 @@ describe('System settings integration', () => {
     expect(html).toContain('daemon ready');
     expect(html).not.toContain('Related Views');
   });
+
+  it('keeps runtime services visible for remote hosts inside the desktop shell', () => {
+    const html = renderSystem('/settings', (
+      <SystemSettingsContent
+        desktopEnvironment={{
+          isElectron: true,
+          activeHostId: 'tailnet',
+          activeHostKind: 'web',
+          activeHostLabel: 'Tailnet',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }}
+      />
+    ));
+
+    expect(html).toContain('Active host runtime');
+    expect(html).toContain('Daemon and web UI status for the current remote host stay inline here.');
+    expect(html).toContain('daemon ready');
+    expect(html).toContain('listening');
+  });
+
+  it('hides separate runtime panels for the local desktop host', () => {
+    const html = renderSystem('/settings', (
+      <SystemSettingsContent
+        desktopEnvironment={{
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostKind: 'local',
+          activeHostLabel: 'Local',
+          activeHostSummary: 'Local runtime is healthy.',
+          canManageConnections: true,
+        }}
+      />
+    ));
+
+    expect(html).toContain('Local runtime');
+    expect(html).toContain('Desktop-owned background runtime');
+    expect(html).not.toContain('Runtime services');
+    expect(html).not.toContain('daemon ready');
+  });
 });
