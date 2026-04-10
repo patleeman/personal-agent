@@ -148,6 +148,7 @@ const desktopBridge = {
   readDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run`, runId),
   readDurableRunLog: (input: { runId: string; tail?: number }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run-log`, input),
   cancelDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-durable-run`, runId),
+  markDurableRunAttention: (input: { runId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-durable-run-attention`, input),
   readConversationBootstrap: (input: {
     conversationId: string;
     tailBlocks?: number;

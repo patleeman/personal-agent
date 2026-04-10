@@ -40,6 +40,7 @@ import {
 import {
   cancelDurableRunCapability,
   listDurableRunsCapability,
+  markDurableRunAttentionCapability,
   readDurableRunCapability,
   readDurableRunLogCapability,
 } from '../automation/durableRunCapability.js';
@@ -1857,6 +1858,10 @@ export async function readDesktopDurableRunLog(input: {
 
 export async function cancelDesktopDurableRun(runId: string) {
   return cancelDurableRunCapability(runId);
+}
+
+export async function markDesktopDurableRunAttention(input: { runId: string; read?: boolean }) {
+  return markDurableRunAttentionCapability(input);
 }
 
 export async function readDesktopConversationBootstrap(input: {

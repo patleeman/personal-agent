@@ -1,9 +1,16 @@
 import {
+  markDurableRunAttentionRead,
+  markDurableRunAttentionUnread,
+} from '@personal-agent/core';
+import {
   cancelDurableRun,
+  clearDurableRunsListCache,
   getDurableRun,
   getDurableRunLog,
   listDurableRuns,
 } from './durableRuns.js';
+import { getDurableRunAttentionSignature } from './durableRunAttention.js';
+import { invalidateAppTopics } from '../shared/appEvents.js';
 
 export class DurableRunCapabilityInputError extends Error {}
 
@@ -52,4 +59,30 @@ export async function cancelDurableRunCapability(runId: string) {
   }
 
   return cancelDurableRun(normalizedRunId);
+}
+
+export async function markDurableRunAttentionCapability(input: {
+  runId: string;
+  read?: boolean;
+}) {
+  const normalizedRunId = input.runId.trim();
+  if (!normalizedRunId) {
+    throw new DurableRunCapabilityInputError('runId required');
+  }
+
+  const result = await getDurableRun(normalizedRunId);
+  if (!result) {
+    throw new Error('Run not found');
+  }
+
+  const attentionSignature = getDurableRunAttentionSignature(result.run);
+  if (input.read === false) {
+    markDurableRunAttentionUnread({ runId: normalizedRunId });
+  } else if (attentionSignature) {
+    markDurableRunAttentionRead({ runId: normalizedRunId, attentionSignature });
+  }
+
+  clearDurableRunsListCache();
+  invalidateAppTopics('runs');
+  return { ok: true as const };
 }

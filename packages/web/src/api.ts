@@ -746,8 +746,14 @@ export const api = {
 
     return get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`);
   },
-  markDurableRunAttentionRead: (id: string, read = true) =>
-    patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
+  markDurableRunAttentionRead: async (id: string, read = true) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.markDurableRunAttention({ runId: id, read });
+    }
+
+    return patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read });
+  },
   cancelDurableRun: async (id: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

@@ -161,6 +161,11 @@ export interface DesktopDurableRunLogRequest {
   tail?: number;
 }
 
+export interface DesktopDurableRunAttentionRequest {
+  runId: string;
+  read?: boolean;
+}
+
 export interface DesktopShellRunRequest {
   command: string;
   cwd?: string | null;
@@ -339,6 +344,7 @@ export interface HostController {
   readDurableRun?(runId: string): Promise<unknown>;
   readDurableRunLog?(input: DesktopDurableRunLogRequest): Promise<{ path: string; log: string }>;
   cancelDurableRun?(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
+  markDurableRunAttention?(input: DesktopDurableRunAttentionRequest): Promise<{ ok: true }>;
   readConversationBootstrap?(input: DesktopConversationBootstrapRequest): Promise<unknown>;
   renameConversation?(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }>;
   changeConversationCwd?(input: DesktopConversationCwdChangeRequest): Promise<unknown>;

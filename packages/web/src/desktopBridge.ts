@@ -176,6 +176,7 @@ export interface PersonalAgentDesktopBridge {
   readDurableRun(runId: string): Promise<DurableRunDetailResult>;
   readDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;
   cancelDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
+  markDurableRunAttention(input: { runId: string; read?: boolean }): Promise<{ ok: true }>;
   readConversationBootstrap(input: {
     conversationId: string;
     tailBlocks?: number;

@@ -156,6 +156,7 @@ export interface LocalApiModule {
   readDesktopDurableRun(runId: string): Promise<unknown>;
   readDesktopDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;
   cancelDesktopDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
+  markDesktopDurableRunAttention(input: { runId: string; read?: boolean }): Promise<{ ok: true }>;
   readDesktopConversationBootstrap(input: {
     conversationId: string;
     tailBlocks?: number;

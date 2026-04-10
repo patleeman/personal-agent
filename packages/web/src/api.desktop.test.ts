@@ -89,6 +89,7 @@ describe('api desktop transport', () => {
     const readDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
     const readDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
     const cancelDurableRun = vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' });
+    const markDurableRunAttention = vi.fn().mockResolvedValue({ ok: true });
     const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
     const renameConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
     const changeConversationCwd = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/next-repo', changed: true });
@@ -182,6 +183,7 @@ describe('api desktop transport', () => {
         readDurableRun,
         readDurableRunLog,
         cancelDurableRun,
+        markDurableRunAttention,
         readConversationBootstrap,
         renameConversation,
         changeConversationCwd,
@@ -256,6 +258,7 @@ describe('api desktop transport', () => {
     const runs = await api.runs();
     const durableRun = await api.durableRun('run-1');
     const durableRunLog = await api.durableRunLog('run-1', 25);
+    const durableRunAttention = await api.markDurableRunAttentionRead('run-1', false);
     const cancelledRun = await api.cancelDurableRun('run-1');
     const bootstrap = await api.conversationBootstrap('conversation-1', {
       knownSessionSignature: 'sig-1',
@@ -333,6 +336,7 @@ describe('api desktop transport', () => {
     expect(readDurableRuns).toHaveBeenCalledTimes(1);
     expect(readDurableRun).toHaveBeenCalledWith('run-1');
     expect(readDurableRunLog).toHaveBeenCalledWith({ runId: 'run-1', tail: 25 });
+    expect(markDurableRunAttention).toHaveBeenCalledWith({ runId: 'run-1', read: false });
     expect(cancelDurableRun).toHaveBeenCalledWith('run-1');
     expect(readConversationBootstrap).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
@@ -447,6 +451,7 @@ describe('api desktop transport', () => {
     expect(runs).toMatchObject({ runsRoot: '/runs' });
     expect(durableRun).toMatchObject({ runsRoot: '/runs' });
     expect(durableRunLog).toEqual({ path: '/runs/run-1.log', log: 'tail' });
+    expect(durableRunAttention).toEqual({ ok: true });
     expect(cancelledRun).toEqual({ cancelled: true, runId: 'run-1' });
     expect(bootstrap).toEqual(createBootstrapState());
     expect(renamed).toEqual({ ok: true, title: 'Renamed conversation' });
@@ -1605,6 +1610,37 @@ describe('api desktop transport', () => {
     expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', activityCount: 1, webUiRevision: 'rev-2' });
     expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
     expect(webUiState).toEqual({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } });
+  });
+
+  it('falls back to HTTP for desktop durable-run attention on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const markDurableRunAttention = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        markDurableRunAttention,
+      },
+    });
+
+    const { api } = await import('./api');
+    const result = await api.markDurableRunAttentionRead('run-1', false);
+
+    expect(markDurableRunAttention).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/runs/run-1/attention', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ read: false }),
+    });
+    expect(result).toEqual({ ok: true });
   });
 
   it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {

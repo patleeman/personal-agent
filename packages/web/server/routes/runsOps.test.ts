@@ -1,39 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  clearDurableRunsListCacheMock,
-  getDurableRunMock,
-  getDurableRunAttentionSignatureMock,
-  markDurableRunAttentionReadMock,
-  markDurableRunAttentionUnreadMock,
-  invalidateAppTopicsMock,
+  markDurableRunAttentionCapabilityMock,
+  DurableRunCapabilityInputErrorMock,
   logErrorMock,
 } = vi.hoisted(() => ({
-  clearDurableRunsListCacheMock: vi.fn(),
-  getDurableRunMock: vi.fn(),
-  getDurableRunAttentionSignatureMock: vi.fn(),
-  markDurableRunAttentionReadMock: vi.fn(),
-  markDurableRunAttentionUnreadMock: vi.fn(),
-  invalidateAppTopicsMock: vi.fn(),
+  markDurableRunAttentionCapabilityMock: vi.fn(),
+  DurableRunCapabilityInputErrorMock: class DurableRunCapabilityInputError extends Error {},
   logErrorMock: vi.fn(),
 }));
 
-vi.mock('../automation/durableRuns.js', () => ({
-  clearDurableRunsListCache: clearDurableRunsListCacheMock,
-  getDurableRun: getDurableRunMock,
-}));
-
-vi.mock('../automation/durableRunAttention.js', () => ({
-  getDurableRunAttentionSignature: getDurableRunAttentionSignatureMock,
-}));
-
-vi.mock('@personal-agent/core', () => ({
-  markDurableRunAttentionRead: markDurableRunAttentionReadMock,
-  markDurableRunAttentionUnread: markDurableRunAttentionUnreadMock,
+vi.mock('../automation/durableRunCapability.js', () => ({
+  markDurableRunAttentionCapability: markDurableRunAttentionCapabilityMock,
+  DurableRunCapabilityInputError: DurableRunCapabilityInputErrorMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
-  invalidateAppTopics: invalidateAppTopicsMock,
   logError: logErrorMock,
 }));
 
@@ -41,17 +23,12 @@ import { registerRunsOpsRoutes } from './runsOps.js';
 
 describe('registerRunsOpsRoutes', () => {
   beforeEach(() => {
-    clearDurableRunsListCacheMock.mockReset();
-    getDurableRunMock.mockReset();
-    getDurableRunAttentionSignatureMock.mockReset();
-    markDurableRunAttentionReadMock.mockReset();
-    markDurableRunAttentionUnreadMock.mockReset();
-    invalidateAppTopicsMock.mockReset();
+    markDurableRunAttentionCapabilityMock.mockReset();
     logErrorMock.mockReset();
   });
 
   function createHarness() {
-    let handler: ((req: any, res: any) => Promise<void>) | undefined;
+    let handler: ((req: { params: { id: string }; body?: { read?: boolean } }, res: ReturnType<typeof createResponse>) => Promise<void>) | undefined;
     const router = {
       get: vi.fn(),
       post: vi.fn(),
@@ -78,37 +55,31 @@ describe('registerRunsOpsRoutes', () => {
     return res;
   }
 
-  it('marks attention unread when read=false is requested', async () => {
+  it('passes the run attention request through to the shared capability', async () => {
     const { handler } = createHarness();
-    getDurableRunMock.mockResolvedValue({ run: { runId: 'run-123' } });
-    getDurableRunAttentionSignatureMock.mockReturnValue('sig-123');
+    markDurableRunAttentionCapabilityMock.mockResolvedValue({ ok: true });
     const res = createResponse();
 
     await handler({ params: { id: 'run-123' }, body: { read: false } }, res);
 
-    expect(markDurableRunAttentionUnreadMock).toHaveBeenCalledWith({ runId: 'run-123' });
-    expect(markDurableRunAttentionReadMock).not.toHaveBeenCalled();
-    expect(clearDurableRunsListCacheMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
+    expect(markDurableRunAttentionCapabilityMock).toHaveBeenCalledWith({ runId: 'run-123', read: false });
     expect(res.json).toHaveBeenCalledWith({ ok: true });
   });
 
-  it('marks attention read when a signature is available', async () => {
+  it('returns 400 for capability input errors', async () => {
     const { handler } = createHarness();
-    getDurableRunMock.mockResolvedValue({ run: { runId: 'run-123' } });
-    getDurableRunAttentionSignatureMock.mockReturnValue('sig-123');
+    markDurableRunAttentionCapabilityMock.mockRejectedValue(new DurableRunCapabilityInputErrorMock('runId required'));
     const res = createResponse();
 
-    await handler({ params: { id: 'run-123' }, body: { read: true } }, res);
+    await handler({ params: { id: '   ' }, body: {} }, res);
 
-    expect(markDurableRunAttentionReadMock).toHaveBeenCalledWith({ runId: 'run-123', attentionSignature: 'sig-123' });
-    expect(markDurableRunAttentionUnreadMock).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ ok: true });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'runId required' });
   });
 
-  it('returns 404 when the run is missing', async () => {
+  it('returns 404 when the capability reports a missing run', async () => {
     const { handler } = createHarness();
-    getDurableRunMock.mockResolvedValue(undefined);
+    markDurableRunAttentionCapabilityMock.mockRejectedValue(new Error('Run not found'));
     const res = createResponse();
 
     await handler({ params: { id: 'missing' }, body: {} }, res);
@@ -117,9 +88,9 @@ describe('registerRunsOpsRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Run not found' });
   });
 
-  it('logs and returns 500 on handler errors', async () => {
+  it('logs and returns 500 on unexpected handler errors', async () => {
     const { handler } = createHarness();
-    getDurableRunMock.mockRejectedValue(new Error('boom'));
+    markDurableRunAttentionCapabilityMock.mockRejectedValue(new Error('boom'));
     const res = createResponse();
 
     await handler({ params: { id: 'run-123' }, body: {} }, res);

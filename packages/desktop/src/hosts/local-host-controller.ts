@@ -8,6 +8,7 @@ import type {
   DesktopConversationCwdChangeRequest,
   DesktopConversationDeferredResumeMutationRequest,
   DesktopConversationDeferredResumeScheduleRequest,
+  DesktopDurableRunAttentionRequest,
   DesktopConversationModelPreferencesRequest,
   DesktopConversationModelPreferencesUpdateRequest,
   DesktopConversationRenameRequest,
@@ -448,6 +449,11 @@ export class LocalHostController implements HostController {
   async cancelDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }> {
     const module = await this.loadLocalApi();
     return module.cancelDesktopDurableRun(runId);
+  }
+
+  async markDurableRunAttention(input: DesktopDurableRunAttentionRequest): Promise<{ ok: true }> {
+    const module = await this.loadLocalApi();
+    return module.markDesktopDurableRunAttention(input);
   }
 
   async readConversationBootstrap(input: DesktopConversationBootstrapRequest): Promise<unknown> {

@@ -817,6 +817,17 @@ export function registerDesktopIpc(options: {
     return controller.cancelDurableRun(runId);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:mark-durable-run-attention`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.markDurableRunAttention) {
+      throw new Error('Dedicated desktop durable run attention updates are only available for the local host.');
+    }
+
+    return controller.markDurableRunAttention(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

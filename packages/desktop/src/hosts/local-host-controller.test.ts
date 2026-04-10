@@ -89,6 +89,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopDurableRun: vi.fn(),
     readDesktopDurableRunLog: vi.fn(),
     cancelDesktopDurableRun: vi.fn(),
+    markDesktopDurableRunAttention: vi.fn(),
     readDesktopConversationBootstrap: vi.fn(),
     renameDesktopConversation: vi.fn(),
     changeDesktopConversationCwd: vi.fn(),
@@ -958,6 +959,7 @@ describe('LocalHostController', () => {
     const readDesktopDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
     const readDesktopDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
     const cancelDesktopDurableRun = vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' });
+    const markDesktopDurableRunAttention = vi.fn().mockResolvedValue({ ok: true });
     const readDesktopConversationBootstrap = vi.fn().mockResolvedValue({
       conversationId: 'live-1',
       sessionDetail: null,
@@ -1021,6 +1023,7 @@ describe('LocalHostController', () => {
       readDesktopDurableRun,
       readDesktopDurableRunLog,
       cancelDesktopDurableRun,
+      markDesktopDurableRunAttention,
       readDesktopConversationBootstrap,
       renameDesktopConversation,
       readDesktopConversationDeferredResumes,
@@ -1059,6 +1062,7 @@ describe('LocalHostController', () => {
     await expect(controller.readDurableRun?.('run-1')).resolves.toMatchObject({ runsRoot: '/runs' });
     await expect(controller.readDurableRunLog?.({ runId: 'run-1', tail: 25 })).resolves.toEqual({ path: '/runs/run-1.log', log: 'tail' });
     await expect(controller.cancelDurableRun?.('run-1')).resolves.toEqual({ cancelled: true, runId: 'run-1' });
+    await expect(controller.markDurableRunAttention?.({ runId: 'run-1', read: false })).resolves.toEqual({ ok: true });
     await expect(controller.readConversationBootstrap?.({ conversationId: 'live-1', tailBlocks: 12 })).resolves.toEqual({
       conversationId: 'live-1',
       sessionDetail: null,
@@ -1136,6 +1140,7 @@ describe('LocalHostController', () => {
     expect(readDesktopDurableRun).toHaveBeenCalledWith('run-1');
     expect(readDesktopDurableRunLog).toHaveBeenCalledWith({ runId: 'run-1', tail: 25 });
     expect(cancelDesktopDurableRun).toHaveBeenCalledWith('run-1');
+    expect(markDesktopDurableRunAttention).toHaveBeenCalledWith({ runId: 'run-1', read: false });
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
     expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
     expect(readDesktopConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
