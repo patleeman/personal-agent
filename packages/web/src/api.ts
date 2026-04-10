@@ -236,7 +236,14 @@ export const api = {
 
     return del<{ ok: boolean; state: CompanionAuthAdminState }>(`/companion-auth/sessions/${encodeURIComponent(sessionId)}`);
   },
-  desktopAuthSession: () => get<DesktopAuthSessionState>('/desktop-auth/session'),
+  desktopAuthSession: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return { required: false, session: null } satisfies DesktopAuthSessionState;
+    }
+
+    return get<DesktopAuthSessionState>('/desktop-auth/session');
+  },
   exchangeDesktopPairingCode: (code: string, deviceLabel?: string) =>
     post<DesktopAuthSessionState>('/desktop-auth/exchange', { code, deviceLabel }),
   logoutDesktopSession: () => post<{ ok: boolean }>('/desktop-auth/logout'),

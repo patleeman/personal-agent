@@ -489,6 +489,32 @@ describe('api desktop transport', () => {
     expect(destroyed).toEqual({ ok: true });
   });
 
+  it('skips the desktop auth probe for the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const invokeLocalApi = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        invokeLocalApi,
+      },
+    });
+
+    const { api } = await import('./api');
+    const authState = await api.desktopAuthSession();
+
+    expect(invokeLocalApi).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(authState).toEqual({ required: false, session: null });
+  });
+
   it('uses dedicated desktop conversation artifact and attachment bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -1211,6 +1237,33 @@ describe('api desktop transport', () => {
       alert: { id: 'alert-1', status: 'acknowledged' },
       resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' },
     });
+  });
+
+  it('falls back to HTTP for desktop auth session checks on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ required: true, session: null }));
+    vi.stubGlobal('fetch', fetchMock);
+    const invokeLocalApi = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        invokeLocalApi,
+      },
+    });
+
+    const { api } = await import('./api');
+    const authState = await api.desktopAuthSession();
+
+    expect(invokeLocalApi).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/desktop-auth/session', { method: 'GET', cache: 'no-store' });
+    expect(authState).toEqual({ required: true, session: null });
   });
 
   it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
