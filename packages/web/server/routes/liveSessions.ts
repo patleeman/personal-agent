@@ -1,9 +1,7 @@
-import { existsSync } from 'node:fs';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
-  createSession as createLocalSession,
   prewarmLiveSessionLoader,
   destroySession,
   exportSessionHtml,
@@ -17,48 +15,32 @@ import {
   LiveSessionControlError,
   compactSession,
   reloadSessionResources,
-  submitPromptSession as submitLocalPromptSession,
-  queuePromptContext,
   renameSession,
   restoreQueuedMessage,
-  resumeSession as resumeLocalSession,
   branchSession,
-  abortSession as abortLocalSession,
-  registry as liveRegistry,
   subscribe as subscribeLocal,
   takeOverSessionControl,
+  registry as liveRegistry,
 } from '../conversations/liveSessions.js';
-import { readCompanionSession } from '../ui/companionAuth.js';
 import {
-  resolveConversationAttachmentPromptFiles,
-} from '@personal-agent/core';
+  abortLiveSessionCapability,
+  createLiveSessionCapability,
+  LiveSessionCapabilityInputError,
+  resumeLiveSessionCapability,
+  submitLiveSessionPromptCapability,
+  type LiveSessionCapabilityContext,
+} from '../conversations/liveSessionCapability.js';
+import { readCompanionSession } from '../ui/companionAuth.js';
 import {
   logError,
   logSlowConversationPerf,
   setServerTimingHeaders,
-  invalidateAppTopics,
   logWarn,
 } from '../middleware/index.js';
 import { parseTailBlocksQuery } from '../conversations/conversationService.js';
-import { readSessionBlocks, readSessionMeta } from '../conversations/sessions.js';
+import { readSessionMeta } from '../conversations/sessions.js';
 import { resolveConversationCwd } from '../conversations/conversationCwd.js';
-import {
-  buildReferencedMemoryDocsContext,
-  buildReferencedTasksContext,
-  expandPromptReferencesWithNodeGraph,
-  pickPromptReferencesInOrder,
-  resolvePromptReferences,
-} from '../knowledge/promptReferences.js';
-import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
-import { syncWebLiveConversationRun } from '../conversations/conversationRuns.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
-import {
-  listPendingBackgroundRunResults,
-  markBackgroundRunResultsDelivered,
-  loadDaemonConfig,
-  resolveDaemonPaths,
-  resolveDurableRunsRoot,
-} from '@personal-agent/daemon';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('live session routes not initialized');
@@ -201,306 +183,45 @@ function queueDefaultLiveSessionLoaderPrewarm(): void {
   }
 }
 
-function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): string {
-  if (entries.length === 0) {
-    return '';
-  }
-
-  const lines = [
-    'Background run completions became available since the previous explicit user turn.',
-    'Use this as hidden context only. Do not treat it as a standalone follow-up instruction.',
-    'If the only sensible next step is to wait and inspect again later, schedule deferred_resume yourself instead of asking the user to remind you.',
-  ];
-
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index]!;
-    lines.push(
-      '',
-      entries.length === 1 ? 'Completion:' : `Completion ${index + 1}:`,
-      entry.prompt,
-    );
-  }
-
-  return lines.join('\n');
-}
-
-function resolveDaemonRoot(): string {
-  return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
-}
-
-interface PromptAttachmentRefInput {
-  attachmentId: string;
-  revision?: number;
-}
-
-function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const refs: PromptAttachmentRefInput[] = [];
-  const seen = new Set<string>();
-
-  for (const candidate of value) {
-    if (!candidate || typeof candidate !== 'object') {
-      continue;
-    }
-
-    const attachmentId = typeof (candidate as { attachmentId?: unknown }).attachmentId === 'string'
-      ? (candidate as { attachmentId: string }).attachmentId.trim()
-      : '';
-    if (!attachmentId) {
-      continue;
-    }
-
-    const revisionCandidate = (candidate as { revision?: unknown }).revision;
-    const revision = Number.isInteger(revisionCandidate) && (revisionCandidate as number) > 0
-      ? revisionCandidate as number
-      : undefined;
-
-    const dedupeKey = `${attachmentId}:${String(revision ?? 'latest')}`;
-    if (seen.has(dedupeKey)) {
-      continue;
-    }
-
-    seen.add(dedupeKey);
-    refs.push({
-      attachmentId,
-      ...(revision ? { revision } : {}),
-    });
-  }
-
-  return refs;
-}
-
-function buildConversationAttachmentsContext(
-  attachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>,
-): string {
-  if (attachments.length === 0) {
-    return '';
-  }
-
-  const lines = attachments.map((attachment) => {
-    const lineParts = [
-      `- ${attachment.attachmentId} [${attachment.kind}] ${attachment.title} (rev ${attachment.revision})`,
-      `  sourcePath: ${attachment.sourcePath}`,
-      `  previewPath: ${attachment.previewPath}`,
-      `  sourceMimeType: ${attachment.sourceMimeType}`,
-      `  previewMimeType: ${attachment.previewMimeType}`,
-    ];
-
-    return lineParts.join('\n');
-  });
-
-  return [
-    'Referenced conversation attachments:',
-    ...lines,
-    'Use these local files with tools when needed. The sourcePath points at editable .excalidraw data, and previewPath points at the rendered PNG preview.',
-  ].join('\n');
-}
-
-async function ensureConversationPromptTargetLive(conversationId: string): Promise<string> {
-  if (isLocalLive(conversationId)) {
-    return conversationId;
-  }
-
-  const sessionFile = readSessionBlocks(conversationId)?.meta.file;
-  if (!sessionFile || !existsSync(sessionFile)) {
-    throw new Error(`Session ${conversationId} is not live`);
-  }
-
-  const resumed = await resumeLocalSession(sessionFile, {
-    ...buildLiveSessionResourceOptionsFn(getCurrentProfileFn()),
-    extensionFactories: buildLiveSessionExtensionFactoriesFn(),
-  });
-  await flushLiveDeferredResumesFn();
-  return resumed.id;
+function getLiveSessionCapabilityContext(): LiveSessionCapabilityContext {
+  return {
+    getCurrentProfile: getCurrentProfileFn,
+    getRepoRoot: getRepoRootFn,
+    getDefaultWebCwd: getDefaultWebCwdFn,
+    buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
+    buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
+    flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+    listTasksForCurrentProfile: listTasksForCurrentProfileFn,
+    listMemoryDocs: listMemoryDocsFn,
+  };
 }
 
 export async function handleLiveSessionPrompt(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
-    const { text = '', behavior, images, attachmentRefs } = req.body as {
-      text?: string;
-      behavior?: 'steer' | 'followUp';
-      images?: Array<{ type?: 'image'; data: string; mimeType: string; name?: string }>;
-      attachmentRefs?: unknown;
-      surfaceId?: string;
-    };
-    const normalizedAttachmentRefs = normalizePromptAttachmentRefs(attachmentRefs);
-    if (!text && (!images || images.length === 0) && normalizedAttachmentRefs.length === 0) {
-      res.status(400).json({ error: 'text, images, or attachmentRefs required' });
-      return;
-    }
-
-    const surfaceId = readRequestSurfaceId(req.body);
-
-    const currentProfile = getCurrentProfileFn();
-    const tasks = listTasksForCurrentProfileFn();
-    const memoryDocs = listMemoryDocsFn().map((doc) => ({
-      ...doc,
-      summary: doc.summary ?? '',
-      description: doc.description ?? '',
-    }));
-    const promptReferences = resolvePromptReferences({
-      text,
-      availableProjectIds: [],
-      tasks,
-      memoryDocs,
-      skills: [],
-      profiles: [],
-    });
-    const expandedNodeReferences = expandPromptReferencesWithNodeGraph({
-      projectIds: [],
-      memoryDocIds: promptReferences.memoryDocIds,
-      skillNames: [],
-    });
-    const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
-    const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
-    const referencedVaultFiles = resolveMentionedVaultFiles(text);
-    let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
-    if (normalizedAttachmentRefs.length > 0) {
-      try {
-        referencedAttachments = resolveConversationAttachmentPromptFiles({
-          profile: currentProfile,
-          conversationId: id,
-          refs: normalizedAttachmentRefs,
-        });
-      } catch (error) {
-        res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
-        return;
-      }
-    }
-
-    const liveEntry = liveRegistry.get(id);
-    const sessionFile = liveEntry?.session.sessionFile;
-    const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
-    const backgroundRunContextEntries = sessionFile
-      ? listPendingBackgroundRunResults({
-          runsRoot: daemonRunsRoot,
-          sessionFile,
-        })
-      : [];
-    const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
-
-    const queuedContextBlocks = [
-      referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
-      referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, getRepoRootFn()) : '',
-      referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, getRepoRootFn()) : '',
-      referencedVaultFiles.length > 0 ? buildReferencedVaultFilesContext(referencedVaultFiles) : '',
-      backgroundRunHiddenContext,
-    ].filter(Boolean);
-
-    const hiddenContext = queuedContextBlocks.join('\n\n');
-
-    const liveConversationId = await ensureConversationPromptTargetLive(id);
-    const recoveredLiveEntry = liveRegistry.get(liveConversationId);
-
-    if (queuedContextBlocks.length > 0) {
-      await queuePromptContext(liveConversationId, 'referenced_context', hiddenContext);
-    }
-
-    if (recoveredLiveEntry?.session.sessionFile) {
-      await syncWebLiveConversationRun({
-        conversationId: liveConversationId,
-        sessionFile: recoveredLiveEntry.session.sessionFile,
-        cwd: recoveredLiveEntry.cwd,
-        title: recoveredLiveEntry.title,
-        profile: currentProfile,
-        state: 'running',
-        pendingOperation: {
-          type: 'prompt',
-          text,
-          ...(behavior ? { behavior } : {}),
-          ...(images && images.length > 0
-            ? {
-              images: images.map((image) => ({
-                type: 'image' as const,
-                data: image.data,
-                mimeType: image.mimeType,
-                ...(image.name ? { name: image.name } : {}),
-              })),
-            }
-            : {}),
-          ...(queuedContextBlocks.length > 0
-            ? {
-              contextMessages: [{
-                customType: 'referenced_context',
-                content: hiddenContext,
-              }],
-            }
-            : {}),
-          enqueuedAt: new Date().toISOString(),
-        },
-      });
-    }
-
-    const promptImages = images?.map((image) => ({
-      type: 'image' as const,
-      data: image.data,
-      mimeType: image.mimeType,
-      ...(image.name ? { name: image.name } : {}),
-    }));
-    const submittedPrompt = await submitLocalPromptSession(liveConversationId, text, behavior, promptImages, surfaceId) as {
-      acceptedAs: 'queued' | 'started';
-      completion: Promise<void>;
-    };
-    const promptPromise = submittedPrompt.completion;
-
-    void promptPromise.then(async () => {
-      if (!sessionFile || backgroundRunContextEntries.length === 0) {
-        return;
-      }
-
-      try {
-        const deliveredIds = markBackgroundRunResultsDelivered({
-          runsRoot: daemonRunsRoot,
-          sessionFile,
-          resultIds: backgroundRunContextEntries.map((entry) => entry.id),
-        });
-        if (deliveredIds.length > 0) {
-          invalidateAppTopics('runs');
-        }
-      } catch (error) {
-        logWarn('background run context completion error', {
-          sessionId: id,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      }
-    }).catch(async (err: unknown) => {
-      if (recoveredLiveEntry?.session.sessionFile) {
-        await syncWebLiveConversationRun({
-          conversationId: liveConversationId,
-          sessionFile: recoveredLiveEntry.session.sessionFile,
-          cwd: recoveredLiveEntry.cwd,
-          title: recoveredLiveEntry.title,
-          profile: currentProfile,
-          state: 'failed',
-          lastError: err instanceof Error ? err.message : String(err),
-        });
-      }
-
-      logError('live prompt error', {
-        sessionId: liveConversationId,
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-    });
-    res.json({
-      ok: true,
-      accepted: true,
-      delivery: submittedPrompt.acceptedAs,
-      referencedTaskIds: promptReferences.taskIds,
-      referencedMemoryDocIds: promptReferences.memoryDocIds,
-      referencedVaultFileIds: referencedVaultFiles.map((file) => file.id),
-      referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
-    });
+    const result = await submitLiveSessionPromptCapability({
+      conversationId: req.params.id,
+      text: typeof req.body?.text === 'string' ? req.body.text : '',
+      behavior: req.body?.behavior,
+      images: Array.isArray(req.body?.images)
+        ? req.body.images.map((image: { data: string; mimeType: string; name?: string }) => ({
+            data: image.data,
+            mimeType: image.mimeType,
+            ...(image.name ? { name: image.name } : {}),
+          }))
+        : undefined,
+      attachmentRefs: req.body?.attachmentRefs,
+      surfaceId: readRequestSurfaceId(req.body),
+    }, getLiveSessionCapabilityContext());
+    res.json(result);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (err instanceof LiveSessionCapabilityInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
     if (writeLiveConversationControlError(res, err)) {
       return;
     }
@@ -552,10 +273,6 @@ export function writeLiveConversationControlError(res: Response, error: unknown)
   return false;
 }
 
-async function abortLiveSession(sessionId: string): Promise<void> {
-  await abortLocalSession(sessionId);
-}
-
 export function registerLiveSessionRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
@@ -588,23 +305,21 @@ export function registerLiveSessionRoutes(
         model?: string | null;
         thinkingLevel?: string | null;
       };
-      const profile = getCurrentProfileFn();
-      const cwd = resolveConversationCwd({
-        repoRoot: getRepoRootFn(),
-        profile,
-        explicitCwd: body.cwd,
-        defaultCwd: getDefaultWebCwdFn(),
-      });
-      const result = await createLocalSession(cwd, buildLiveSessionResourceOptions({
-        ...(body.model !== undefined ? { initialModel: body.model } : {}),
-        ...(body.thinkingLevel !== undefined ? { initialThinkingLevel: body.thinkingLevel } : {}),
-      }));
+      const result = await createLiveSessionCapability({
+        cwd: body.cwd,
+        ...(body.model !== undefined ? { model: body.model } : {}),
+        ...(body.thinkingLevel !== undefined ? { thinkingLevel: body.thinkingLevel } : {}),
+      }, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -612,17 +327,19 @@ export function registerLiveSessionRoutes(
   /** Resume an existing session file into a live session */
   router.post('/api/live-sessions/resume', async (req, res) => {
     try {
-      const { sessionFile } = req.body as { sessionFile: string };
-      if (!sessionFile) { res.status(400).json({ error: 'sessionFile required' }); return; }
-
-      const result = await resumeLocalSession(sessionFile, buildLiveSessionResourceOptions());
-      await flushLiveDeferredResumesFn();
+      const result = await resumeLiveSessionCapability({
+        sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
+      }, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -822,13 +539,16 @@ export function registerLiveSessionRoutes(
   router.post('/api/live-sessions/:id/abort', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      await abortLiveSession(req.params.id);
-      res.json({ ok: true });
+      res.json(await abortLiveSessionCapability({ conversationId: req.params.id }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       if (writeLiveConversationControlError(res, err)) {
         return;
       }
@@ -979,41 +699,36 @@ export function registerCompanionLiveSessionRoutes(
 
   router.post('/api/live-sessions', async (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const cwd = resolveConversationCwd({
-        repoRoot: getRepoRootFn(),
-        profile,
-        explicitCwd: undefined,
-        defaultCwd: getDefaultWebCwdFn(),
-      });
-
-      const result = await createLocalSession(cwd, buildLiveSessionResourceOptions());
+      const result = await createLiveSessionCapability({}, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.post('/api/live-sessions/resume', async (req, res) => {
     try {
-      const { sessionFile } = req.body as { sessionFile: string };
-      if (!sessionFile) {
-        res.status(400).json({ error: 'sessionFile required' });
-        return;
-      }
-
-      const result = await resumeLocalSession(sessionFile, buildLiveSessionResourceOptions());
-      await flushLiveDeferredResumesFn();
+      const result = await resumeLiveSessionCapability({
+        sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
+      }, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -1105,13 +820,16 @@ export function registerCompanionLiveSessionRoutes(
   router.post('/api/live-sessions/:id/abort', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      await abortLiveSession(req.params.id);
-      res.json({ ok: true });
+      res.json(await abortLiveSessionCapability({ conversationId: req.params.id }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (err instanceof LiveSessionCapabilityInputError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       if (writeLiveConversationControlError(res, err)) {
         return;
       }

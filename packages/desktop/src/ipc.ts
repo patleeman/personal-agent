@@ -117,6 +117,72 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationBootstrap) {
+      throw new Error('Dedicated desktop conversation bootstrap is only available for the local host.');
+    }
+
+    return controller.readConversationBootstrap(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:create-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.createLiveSession) {
+      throw new Error('Dedicated desktop live-session creation is only available for the local host.');
+    }
+
+    return controller.createLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:resume-live-session`, async (event, sessionFile: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.resumeLiveSession) {
+      throw new Error('Dedicated desktop live-session resume is only available for the local host.');
+    }
+
+    return controller.resumeLiveSession(sessionFile);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:take-over-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.takeOverLiveSession) {
+      throw new Error('Dedicated desktop live-session takeover is only available for the local host.');
+    }
+
+    return controller.takeOverLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:submit-live-session-prompt`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.submitLiveSessionPrompt) {
+      throw new Error('Dedicated desktop live-session prompt delivery is only available for the local host.');
+    }
+
+    return controller.submitLiveSessionPrompt(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:abort-live-session`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.abortLiveSession) {
+      throw new Error('Dedicated desktop live-session abort is only available for the local host.');
+    }
+
+    return controller.abortLiveSession(conversationId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-api-stream`, async (event, path: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

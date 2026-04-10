@@ -38,8 +38,18 @@ describe('api desktop transport', () => {
         activityCount: 0,
         projectCount: 0,
       })
-      .mockResolvedValueOnce(createBootstrapState())
       .mockResolvedValueOnce({ ok: true });
+    const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
+    const createLiveSession = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
+    const resumeLiveSession = vi.fn().mockResolvedValue({ id: 'live-1' });
+    const takeOverLiveSession = vi.fn().mockResolvedValue({
+      surfaces: [],
+      controllerSurfaceId: 'surface-1',
+      controllerSurfaceType: 'desktop_web',
+      controllerAcquiredAt: '2026-04-04T00:00:00.000Z',
+    });
+    const submitLiveSessionPrompt = vi.fn().mockResolvedValue({ ok: true, accepted: true, delivery: 'started' });
+    const abortLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const getEnvironment = vi.fn().mockResolvedValue({
       isElectron: true,
       activeHostId: 'local',
@@ -52,6 +62,12 @@ describe('api desktop transport', () => {
       personalAgentDesktop: {
         getEnvironment,
         invokeLocalApi,
+        readConversationBootstrap,
+        createLiveSession,
+        resumeLiveSession,
+        takeOverLiveSession,
+        submitLiveSessionPrompt,
+        abortLiveSession,
       },
     });
 
@@ -61,15 +77,41 @@ describe('api desktop transport', () => {
       knownSessionSignature: 'sig-1',
       tailBlocks: 12,
     });
+    const created = await api.createLiveSession('/repo', undefined, { model: 'gpt-5.4' });
+    const resumed = await api.resumeSession('/tmp/live-1.jsonl');
+    const takeover = await api.takeoverLiveSession('live-1', 'surface-1');
+    const prompted = await api.promptSession('live-1', 'hello', 'followUp', [], [], 'surface-1');
+    const aborted = await api.abortSession('live-1', 'surface-1');
     const destroyed = await api.destroySession('conversation-1', 'surface-1');
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
     expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
-    expect(invokeLocalApi).toHaveBeenNthCalledWith(2, 'GET', '/api/conversations/conversation-1/bootstrap?tailBlocks=12&knownSessionSignature=sig-1', undefined);
-    expect(invokeLocalApi).toHaveBeenNthCalledWith(3, 'DELETE', '/api/live-sessions/conversation-1', { surfaceId: 'surface-1' });
+    expect(readConversationBootstrap).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      tailBlocks: 12,
+      knownSessionSignature: 'sig-1',
+    });
+    expect(createLiveSession).toHaveBeenCalledWith({ cwd: '/repo', model: 'gpt-5.4' });
+    expect(resumeLiveSession).toHaveBeenCalledWith('/tmp/live-1.jsonl');
+    expect(takeOverLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', surfaceId: 'surface-1' });
+    expect(submitLiveSessionPrompt).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      text: 'hello',
+      behavior: 'followUp',
+      surfaceId: 'surface-1',
+      images: [],
+      attachmentRefs: [],
+    });
+    expect(abortLiveSession).toHaveBeenCalledWith('live-1');
+    expect(invokeLocalApi).toHaveBeenNthCalledWith(2, 'DELETE', '/api/live-sessions/conversation-1', { surfaceId: 'surface-1' });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toMatchObject({ profile: 'assistant' });
     expect(bootstrap).toEqual(createBootstrapState());
+    expect(created).toEqual({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
+    expect(resumed).toEqual({ id: 'live-1' });
+    expect(takeover).toMatchObject({ controllerSurfaceId: 'surface-1' });
+    expect(prompted).toEqual({ ok: true, accepted: true, delivery: 'started' });
+    expect(aborted).toEqual({ ok: true });
     expect(destroyed).toEqual({ ok: true });
   });
 

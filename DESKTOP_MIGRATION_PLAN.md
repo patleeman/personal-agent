@@ -84,7 +84,7 @@ Completed in this phase:
 Initial capabilities to migrate:
 
 - [x] conversation bootstrap
-- [ ] live session creation
+- [x] live session creation
 - [ ] live session prompt send / abort / queue control
 - [ ] session detail windowing and block hydrate
 - [ ] conversation event stream / invalidation stream
@@ -257,3 +257,4 @@ Just completed:
 - local desktop app bootstrap and hot app-state updates now use a dedicated desktop bridge capability instead of routing the packaged renderer through `/api/events` snapshot plumbing
 - local desktop app invalidation/activity/session/task/daemon/web-ui updates can now bypass `/api/events` entirely and stream over a dedicated desktop app-events bridge from the main process
 - desktop Settings no longer hides runtime/service diagnostics just because the shell is Electron; local desktop hosts show app-owned runtime messaging while remote hosts still expose their runtime panels
+- local desktop live-session creation, resume, prompt send, and abort now run through dedicated desktop bridge methods instead of the generic local API path

@@ -4,7 +4,12 @@ import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-modu
 import type {
   DesktopApiStreamEvent,
   DesktopAppBridgeEvent,
+  DesktopConversationBootstrapRequest,
   DesktopHostRecord,
+  DesktopLiveSessionCreateRequest,
+  DesktopLiveSessionPromptRequest,
+  DesktopLiveSessionPromptResult,
+  DesktopLiveSessionTakeoverRequest,
   HostController,
   HostStatus,
 } from './types.js';
@@ -51,6 +56,36 @@ export class LocalHostController implements HostController {
   async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.invokeDesktopLocalApi({ method, path, body });
+  }
+
+  async readConversationBootstrap(input: DesktopConversationBootstrapRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationBootstrap(input);
+  }
+
+  async createLiveSession(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string }> {
+    const module = await this.loadLocalApi();
+    return module.createDesktopLiveSession(input);
+  }
+
+  async resumeLiveSession(sessionFile: string): Promise<{ id: string }> {
+    const module = await this.loadLocalApi();
+    return module.resumeDesktopLiveSession(sessionFile);
+  }
+
+  async takeOverLiveSession(input: DesktopLiveSessionTakeoverRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.takeOverDesktopLiveSession(input);
+  }
+
+  async submitLiveSessionPrompt(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult> {
+    const module = await this.loadLocalApi();
+    return module.submitDesktopLiveSessionPrompt(input);
+  }
+
+  async abortLiveSession(conversationId: string): Promise<{ ok: true }> {
+    const module = await this.loadLocalApi();
+    return module.abortDesktopLiveSession(conversationId);
   }
 
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {

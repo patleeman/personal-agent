@@ -27,6 +27,41 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopConversationBootstrap(input: {
+    conversationId: string;
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }): Promise<unknown>;
+  createDesktopLiveSession(input: {
+    cwd?: string;
+    model?: string | null;
+    thinkingLevel?: string | null;
+  }): Promise<{ id: string; sessionFile: string }>;
+  resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }>;
+  submitDesktopLiveSessionPrompt(input: {
+    conversationId: string;
+    text?: string;
+    behavior?: 'steer' | 'followUp';
+    images?: Array<{ data: string; mimeType: string; name?: string }>;
+    attachmentRefs?: unknown;
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    accepted: true;
+    delivery: 'started' | 'queued';
+    referencedTaskIds: string[];
+    referencedMemoryDocIds: string[];
+    referencedVaultFileIds: string[];
+    referencedAttachmentIds: string[];
+  }>;
+  takeOverDesktopLiveSession(input: {
+    conversationId: string;
+    surfaceId: string;
+  }): Promise<unknown>;
+  abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
   subscribeDesktopLocalApiStream(
     path: string,
     onEvent: (event: DesktopApiStreamEvent) => void,

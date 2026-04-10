@@ -31,6 +31,28 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  readConversationBootstrap: (input: {
+    conversationId: string;
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, input),
+  createLiveSession: (input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-live-session`, input),
+  resumeLiveSession: (sessionFile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:resume-live-session`, sessionFile),
+  takeOverLiveSession: (input: { conversationId: string; surfaceId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:take-over-live-session`, input),
+  submitLiveSessionPrompt: (input: {
+    conversationId: string;
+    text?: string;
+    behavior?: 'steer' | 'followUp';
+    images?: Array<{ data: string; mimeType: string; name?: string }>;
+    attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
+    surfaceId?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
+  abortLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:abort-live-session`, conversationId),
   invokeLocalApi: (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:invoke-local-api`, method, path, body),
   subscribeApiStream: (path: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-api-stream`, path),

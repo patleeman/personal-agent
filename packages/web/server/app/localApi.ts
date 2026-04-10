@@ -9,7 +9,14 @@ import {
 } from '@personal-agent/core';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
-import { subscribe as subscribeLiveSession } from '../conversations/liveSessions.js';
+import {
+  subscribe as subscribeLiveSession,
+  takeOverSessionControl,
+} from '../conversations/liveSessions.js';
+import {
+  isMissingConversationBootstrapState,
+  readConversationBootstrapState,
+} from '../conversations/conversationBootstrap.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
 import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
@@ -19,6 +26,13 @@ import { subscribeAppEvents } from '../shared/appEvents.js';
 import { getProfileConfigFilePath } from '../ui/profilePreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import {
+  abortLiveSessionCapability,
+  createLiveSessionCapability,
+  resumeLiveSessionCapability,
+  submitLiveSessionPromptCapability,
+  type LiveSessionCapabilityContext,
+} from '../conversations/liveSessionCapability.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -166,6 +180,7 @@ class LocalApiResponse {
 }
 
 let localRoutesPromise: Promise<RegisteredRoute[]> | null = null;
+let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
 
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
@@ -350,6 +365,17 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   });
 
+  localLiveSessionCapabilityContext = {
+    getCurrentProfile: context.getCurrentProfile,
+    getRepoRoot: context.getRepoRoot,
+    getDefaultWebCwd: context.getDefaultWebCwd,
+    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+    flushLiveDeferredResumes: context.flushLiveDeferredResumes,
+    listTasksForCurrentProfile: context.listTasksForCurrentProfile,
+    listMemoryDocs: context.listMemoryDocs,
+  };
+
   const routes: RegisteredRoute[] = [];
   const appRouter = createRouteCollector(routes);
   const companionRouter = createRouteCollector([]);
@@ -368,6 +394,15 @@ async function getLocalRoutes(): Promise<RegisteredRoute[]> {
   }
 
   return localRoutesPromise;
+}
+
+async function getLocalLiveSessionCapabilityContext(): Promise<LiveSessionCapabilityContext> {
+  await getLocalRoutes();
+  if (!localLiveSessionCapabilityContext) {
+    throw new Error('Local live-session capability context is not initialized.');
+  }
+
+  return localLiveSessionCapabilityContext;
 }
 
 function renderStatusText(statusCode: number): string {
@@ -927,4 +962,78 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
   }
 
   return bodyText as T;
+}
+
+export async function readDesktopConversationBootstrap(input: {
+  conversationId: string;
+  tailBlocks?: number;
+  knownSessionSignature?: string;
+  knownBlockOffset?: number;
+  knownTotalBlocks?: number;
+  knownLastBlockId?: string;
+}) {
+  const context = await getLocalLiveSessionCapabilityContext();
+  const bootstrap = await readConversationBootstrapState({
+    ...input,
+    profile: context.getCurrentProfile(),
+  });
+  if (isMissingConversationBootstrapState(bootstrap.state)) {
+    throw new Error('Conversation not found');
+  }
+
+  return bootstrap.state;
+}
+
+export async function createDesktopLiveSession(input: {
+  cwd?: string;
+  model?: string | null;
+  thinkingLevel?: string | null;
+}): Promise<{ id: string; sessionFile: string }> {
+  return createLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }> {
+  return resumeLiveSessionCapability({ sessionFile }, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function submitDesktopLiveSessionPrompt(input: {
+  conversationId: string;
+  text?: string;
+  behavior?: 'steer' | 'followUp';
+  images?: Array<{ data: string; mimeType: string; name?: string }>;
+  attachmentRefs?: unknown;
+  surfaceId?: string;
+}): Promise<{
+  ok: true;
+  accepted: true;
+  delivery: 'started' | 'queued';
+  referencedTaskIds: string[];
+  referencedMemoryDocIds: string[];
+  referencedVaultFileIds: string[];
+  referencedAttachmentIds: string[];
+}> {
+  return submitLiveSessionPromptCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function takeOverDesktopLiveSession(input: {
+  conversationId: string;
+  surfaceId: string;
+}) {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const surfaceId = input.surfaceId.trim();
+  if (!surfaceId) {
+    throw new Error('surfaceId required');
+  }
+
+  return takeOverSessionControl(conversationId, surfaceId);
+}
+
+export async function abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }> {
+  return abortLiveSessionCapability({ conversationId });
 }

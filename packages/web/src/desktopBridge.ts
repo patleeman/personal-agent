@@ -1,8 +1,12 @@
 import type {
+  ConversationBootstrapState,
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopNavigationState,
+  LiveSessionPresenceState,
+  PromptAttachmentRefInput,
+  PromptImageInput,
 } from './types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
@@ -16,6 +20,34 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readConversationBootstrap(input: {
+    conversationId: string;
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }): Promise<ConversationBootstrapState>;
+  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }): Promise<{ id: string; sessionFile: string }>;
+  resumeLiveSession(sessionFile: string): Promise<{ id: string }>;
+  takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
+  submitLiveSessionPrompt(input: {
+    conversationId: string;
+    text?: string;
+    behavior?: 'steer' | 'followUp';
+    images?: PromptImageInput[];
+    attachmentRefs?: PromptAttachmentRefInput[];
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    accepted: true;
+    delivery: 'started' | 'queued';
+    referencedTaskIds: string[];
+    referencedMemoryDocIds: string[];
+    referencedVaultFileIds: string[];
+    referencedAttachmentIds: string[];
+  }>;
+  abortLiveSession(conversationId: string): Promise<{ ok: true }>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   subscribeApiStream(path: string): Promise<{ subscriptionId: string }>;
   unsubscribeApiStream(subscriptionId: string): Promise<void>;

@@ -137,6 +137,15 @@ async function shouldUseDesktopLocalApi(_method: 'GET' | 'POST' | 'PATCH' | 'DEL
   return environment?.activeHostKind === 'local';
 }
 
+async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
+  if (!getDesktopBridge()) {
+    return false;
+  }
+
+  const environment = await readCachedDesktopEnvironment();
+  return environment?.activeHostKind === 'local';
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
@@ -358,13 +367,35 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
-  conversationBootstrap: (id: string, options?: {
+  conversationBootstrap: async (id: string, options?: {
     tailBlocks?: number;
     knownSessionSignature?: string;
     knownBlockOffset?: number;
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationBootstrap({
+        conversationId: id,
+        ...(typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0
+          ? { tailBlocks: options.tailBlocks }
+          : {}),
+        ...(typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0
+          ? { knownSessionSignature: options.knownSessionSignature.trim() }
+          : {}),
+        ...(typeof options?.knownBlockOffset === 'number' && Number.isInteger(options.knownBlockOffset) && options.knownBlockOffset >= 0
+          ? { knownBlockOffset: options.knownBlockOffset }
+          : {}),
+        ...(typeof options?.knownTotalBlocks === 'number' && Number.isInteger(options.knownTotalBlocks) && options.knownTotalBlocks >= 0
+          ? { knownTotalBlocks: options.knownTotalBlocks }
+          : {}),
+        ...(typeof options?.knownLastBlockId === 'string' && options.knownLastBlockId.trim().length > 0
+          ? { knownLastBlockId: options.knownLastBlockId.trim() }
+          : {}),
+      });
+    }
+
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
@@ -469,30 +500,58 @@ export const api = {
       usedFallbackPrompt: boolean;
     }>(`/conversations/${encodeURIComponent(id)}/recover`),
 
-  createLiveSession: (
+  createLiveSession: async (
     cwd?: string,
     text?: string,
     options?: { model?: string | null; thinkingLevel?: string | null },
-  ) =>
-    post<{ id: string; sessionFile: string }>('/live-sessions', {
+  ) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.createLiveSession({
+        cwd,
+        ...(options?.model !== undefined ? { model: options.model } : {}),
+        ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+      });
+    }
+
+    return post<{ id: string; sessionFile: string }>('/live-sessions', {
       cwd,
       text,
       ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
-    }),
+    });
+  },
 
-  resumeSession: (sessionFile: string) =>
-    post<{ id: string }>('/live-sessions/resume', { sessionFile }),
+  resumeSession: async (sessionFile: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.resumeLiveSession(sessionFile);
+    }
 
-  promptSession: (
+    return post<{ id: string }>('/live-sessions/resume', { sessionFile });
+  },
+
+  promptSession: async (
     id: string,
     text: string,
     behavior?: 'steer' | 'followUp',
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     surfaceId?: string,
-  ) =>
-    post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued' }>(`/live-sessions/${id}/prompt`, {
+  ) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.submitLiveSessionPrompt({
+        conversationId: id,
+        text,
+        behavior,
+        ...(surfaceId ? { surfaceId } : {}),
+        images,
+        attachmentRefs,
+      });
+    }
+
+    return post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued' }>(`/live-sessions/${id}/prompt`, {
       text,
       behavior,
       ...(surfaceId ? { surfaceId } : {}),
@@ -506,7 +565,8 @@ export const api = {
         attachmentId: attachmentRef.attachmentId,
         ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
       })),
-    }),
+    });
+  },
   restoreQueuedMessage: (
     id: string,
     input: { behavior: 'steer' | 'followUp'; index: number; previewId?: string },
@@ -516,8 +576,14 @@ export const api = {
       ...input,
       ...(surfaceId ? { surfaceId } : {}),
     }),
-  takeoverLiveSession: (id: string, surfaceId: string) =>
-    post<LiveSessionPresenceState>(`/live-sessions/${id}/takeover`, { surfaceId }),
+  takeoverLiveSession: async (id: string, surfaceId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.takeOverLiveSession({ conversationId: id, surfaceId });
+    }
+
+    return post<LiveSessionPresenceState>(`/live-sessions/${id}/takeover`, { surfaceId });
+  },
   compactSession: (id: string, customInstructions?: string, surfaceId?: string) =>
     post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions, ...(surfaceId ? { surfaceId } : {}) }),
   summarizeAndForkSession: (id: string, surfaceId?: string) =>
@@ -529,8 +595,14 @@ export const api = {
   renameSession: (id: string, name: string) =>
     patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name }),
 
-  abortSession: (id: string, surfaceId?: string) =>
-    post<{ ok: boolean }>(`/live-sessions/${id}/abort`, surfaceId ? { surfaceId } : {}),
+  abortSession: async (id: string, surfaceId?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.abortLiveSession(id);
+    }
+
+    return post<{ ok: boolean }>(`/live-sessions/${id}/abort`, surfaceId ? { surfaceId } : {});
+  },
 
   destroySession: (id: string, surfaceId?: string) =>
     requestJson<{ ok: boolean }>('DELETE', `/live-sessions/${encodeURIComponent(id)}`, surfaceId ? { surfaceId } : {}),
