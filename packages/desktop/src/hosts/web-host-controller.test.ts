@@ -24,7 +24,7 @@ describe('WebHostController', () => {
     expect(status.mode).toBe('web-remote');
   });
 
-  it('treats desktop-auth protected remotes as reachable', async () => {
+  it('treats auth-protected remotes as reachable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
 
     const controller = new WebHostController({

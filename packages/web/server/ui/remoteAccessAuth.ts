@@ -15,12 +15,9 @@ interface StoredPairingCode {
   expiresAt: string;
 }
 
-export type RemoteAccessSurface = 'legacy' | 'desktop';
-
 interface StoredSession {
   id: string;
   deviceLabel: string;
-  surface: RemoteAccessSurface;
   tokenHash: string;
   createdAt: string;
   lastUsedAt: string;
@@ -43,7 +40,6 @@ export interface RemoteAccessPairingCode {
 export interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
-  surface: RemoteAccessSurface;
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
@@ -155,7 +151,6 @@ function normalizeStore(value: unknown, now: Date): RemoteAccessStore {
       return [{
         id: candidate.id,
         deviceLabel: candidate.deviceLabel,
-        surface: candidate.surface === 'desktop' ? 'desktop' : 'legacy',
         tokenHash: candidate.tokenHash,
         createdAt: candidate.createdAt,
         lastUsedAt: candidate.lastUsedAt,
@@ -175,14 +170,8 @@ function resolveRemoteAccessStateFile(): string {
   return join(getStateRoot(), 'web', 'remote-access-auth.json');
 }
 
-function resolveLegacyRemoteAccessStateFile(): string {
-  return join(getStateRoot(), 'web', 'companion-auth.json');
-}
-
 function readStore(now: Date): RemoteAccessStore {
-  const stateFile = existsSync(resolveRemoteAccessStateFile())
-    ? resolveRemoteAccessStateFile()
-    : resolveLegacyRemoteAccessStateFile();
+  const stateFile = resolveRemoteAccessStateFile();
   if (!existsSync(stateFile)) {
     return { pairingCodes: [], sessions: [] };
   }
@@ -215,7 +204,6 @@ function toSessionSummary(session: StoredSession): RemoteAccessSessionSummary {
   return {
     id: session.id,
     deviceLabel: session.deviceLabel,
-    surface: session.surface,
     createdAt: session.createdAt,
     lastUsedAt: session.lastUsedAt,
     expiresAt: session.expiresAt,
@@ -264,7 +252,7 @@ export function createRemoteAccessPairingCode(options?: { now?: Date }): RemoteA
 
 export function exchangeRemoteAccessPairingCode(
   codeInput: string,
-  options?: { deviceLabel?: string; surface?: RemoteAccessSurface; now?: Date },
+  options?: { deviceLabel?: string; now?: Date },
 ): { sessionToken: string; session: RemoteAccessSessionSummary } {
   return updateStore((store, now) => {
     const normalizedCode = normalizePairingCodeInput(codeInput);
@@ -286,7 +274,6 @@ export function exchangeRemoteAccessPairingCode(
     const session: StoredSession = {
       id: generateId('session'),
       deviceLabel: normalizeDeviceLabel(options?.deviceLabel),
-      surface: options?.surface === 'legacy' ? 'legacy' : 'desktop',
       tokenHash: hashSecret(sessionToken),
       createdAt,
       lastUsedAt: createdAt,
@@ -303,7 +290,7 @@ export function exchangeRemoteAccessPairingCode(
 
 export function readRemoteAccessSession(
   tokenInput: string,
-  options?: { now?: Date; touch?: boolean; surface?: RemoteAccessSurface },
+  options?: { now?: Date; touch?: boolean },
 ): RemoteAccessSessionSummary | null {
   const normalizedToken = tokenInput.trim();
   if (!normalizedToken) {
@@ -312,7 +299,7 @@ export function readRemoteAccessSession(
 
   return updateStore((store, now) => {
     const tokenHash = hashSecret(normalizedToken);
-    const session = store.sessions.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt && (!options?.surface || entry.surface === options.surface));
+    const session = store.sessions.find((entry) => entry.tokenHash === tokenHash && !entry.revokedAt);
     if (!session) {
       return null;
     }

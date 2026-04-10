@@ -489,7 +489,7 @@ describe('api desktop transport', () => {
     expect(destroyed).toEqual({ ok: true });
   });
 
-  it('skips the desktop auth probe for the local Electron host', async () => {
+  it('skips the remote access session probe for the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const invokeLocalApi = vi.fn();
@@ -508,7 +508,7 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const authState = await api.desktopAuthSession();
+    const authState = await api.remoteAccessSession();
 
     expect(invokeLocalApi).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -1235,7 +1235,7 @@ describe('api desktop transport', () => {
     });
   });
 
-  it('falls back to HTTP for desktop auth session checks on non-local hosts', async () => {
+  it('falls back to HTTP for remote access session checks on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ required: true, session: null }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1255,10 +1255,10 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const authState = await api.desktopAuthSession();
+    const authState = await api.remoteAccessSession();
 
     expect(invokeLocalApi).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/desktop-auth/session', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/remote-access/session', { method: 'GET', cache: 'no-store' });
     expect(authState).toEqual({ required: true, session: null });
   });
 

@@ -44,14 +44,13 @@ describe('remote access auth', () => {
     });
 
     expect(exchanged.session.deviceLabel).toBe('Patrick iPhone');
-    expect(exchanged.session.surface).toBe('desktop');
-    expect(readRemoteAccessSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z'), surface: 'desktop' }))
-      .toEqual(expect.objectContaining({ id: exchanged.session.id, deviceLabel: 'Patrick iPhone', surface: 'desktop' }));
+    expect(readRemoteAccessSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z') }))
+      .toEqual(expect.objectContaining({ id: exchanged.session.id, deviceLabel: 'Patrick iPhone' }));
 
     const adminState = readRemoteAccessAdminState({ now: new Date('2026-03-25T12:02:00.000Z') });
     expect(adminState.pendingPairings).toHaveLength(0);
     expect(adminState.sessions).toEqual([
-      expect.objectContaining({ id: exchanged.session.id, deviceLabel: 'Patrick iPhone', surface: 'desktop' }),
+      expect.objectContaining({ id: exchanged.session.id, deviceLabel: 'Patrick iPhone' }),
     ]);
   });
 
@@ -66,21 +65,21 @@ describe('remote access auth', () => {
     })).toThrow('Pairing code is invalid or expired.');
   });
 
-  it('supports surface-specific desktop sessions without reusing the code after exchange', () => {
+  it('exchanges pairing codes only once', () => {
     const stateRoot = createTempDir('pa-remote-access-auth-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
     const created = createRemoteAccessPairingCode({ now: new Date('2026-03-25T12:00:00.000Z') });
     const exchanged = exchangeRemoteAccessPairingCode(created.code, {
       deviceLabel: 'Office desktop',
-      surface: 'desktop',
       now: new Date('2026-03-25T12:01:00.000Z'),
     });
 
-    expect(exchanged.session.surface).toBe('desktop');
-    expect(readRemoteAccessSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z'), surface: 'desktop' }))
-      .toEqual(expect.objectContaining({ id: exchanged.session.id, surface: 'desktop' }));
-    expect(readRemoteAccessSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z'), surface: 'legacy' })).toBeNull();
+    expect(readRemoteAccessSession(exchanged.sessionToken, { now: new Date('2026-03-25T12:02:00.000Z') }))
+      .toEqual(expect.objectContaining({ id: exchanged.session.id, deviceLabel: 'Office desktop' }));
+    expect(() => exchangeRemoteAccessPairingCode(created.code, {
+      now: new Date('2026-03-25T12:02:00.000Z'),
+    })).toThrow('Pairing code is invalid or expired.');
   });
 
   it('extends active session expiry when the paired device is used again', () => {
@@ -97,7 +96,6 @@ describe('remote access auth', () => {
 
     const refreshed = readRemoteAccessSession(exchanged.sessionToken, {
       now: new Date('2026-04-23T12:10:00.000Z'),
-      surface: 'desktop',
     });
     expect(refreshed).toEqual(expect.objectContaining({
       id: exchanged.session.id,
@@ -107,7 +105,6 @@ describe('remote access auth', () => {
 
     expect(readRemoteAccessSession(exchanged.sessionToken, {
       now: new Date('2026-04-24T12:02:00.000Z'),
-      surface: 'desktop',
     })).toEqual(expect.objectContaining({ id: exchanged.session.id }));
   });
 

@@ -131,9 +131,9 @@ describe('auth routes', () => {
     revokeRemoteAccessSessionMock.mockReset();
   });
 
-  it('handles desktop session lookups for public requests, expired tailnet sessions, and valid desktop sessions', () => {
+  it('handles remote access session lookups for public requests, expired tailnet sessions, and valid sessions', () => {
     const harness = createHarness();
-    const [sessionHandler] = harness.getHandler('/api/desktop-auth/session');
+    const [sessionHandler] = harness.getHandler('/api/remote-access/session');
 
     const publicRes = createResponse();
     sessionHandler(createRequest({ headers: { host: 'localhost:3000' } }), publicRes);
@@ -150,7 +150,7 @@ describe('auth routes', () => {
         'x-forwarded-proto': 'https',
       },
     }), expiredRes);
-    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
+    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token');
     expect(expiredRes.clearCookie).toHaveBeenCalledWith('pa_web', expect.objectContaining({ secure: true, path: '/' }));
     expect(expiredRes.json).toHaveBeenCalledWith({ required: true, session: null });
 
@@ -174,10 +174,10 @@ describe('auth routes', () => {
     expect(validRes.json).toHaveBeenCalledWith({ required: true, session });
   });
 
-  it('handles desktop auth exchange, logout, and remote access admin routes', () => {
+  it('handles remote access exchange, logout, and admin routes', () => {
     const harness = createHarness();
-    const desktopExchangeHandlers = harness.postHandler('/api/desktop-auth/exchange');
-    const desktopLogoutHandlers = harness.postHandler('/api/desktop-auth/logout');
+    const desktopExchangeHandlers = harness.postHandler('/api/remote-access/exchange');
+    const desktopLogoutHandlers = harness.postHandler('/api/remote-access/logout');
     const [adminStateHandler] = harness.getHandler('/api/remote-access');
     const [pairingCodeHandler] = harness.postHandler('/api/remote-access/pairing-code');
     const [revokeSessionHandler] = harness.deleteHandler('/api/remote-access/sessions/:sessionId');
@@ -198,7 +198,7 @@ describe('auth routes', () => {
       headers: { host: 'device.ts.net' },
       protocol: 'https',
     }), successRes);
-    expect(exchangeRemoteAccessPairingCodeMock).toHaveBeenCalledWith('PAIR-1234', { deviceLabel: 'Mac mini', surface: 'desktop' });
+    expect(exchangeRemoteAccessPairingCodeMock).toHaveBeenCalledWith('PAIR-1234', { deviceLabel: 'Mac mini' });
     expect(successRes.cookie).toHaveBeenCalledWith('pa_web', 'desktop=token', expect.objectContaining({ secure: true }));
     expect(successRes.status).toHaveBeenCalledWith(201);
     expect(successRes.json).toHaveBeenCalledWith({ required: true, session });
@@ -269,12 +269,12 @@ describe('auth routes', () => {
     expect(failingRevokeRes.json).toHaveBeenCalledWith({ error: 'Error: revoke failed' });
   });
 
-  it('applies the desktop auth gate for auth endpoints, public requests, blocked tailnet requests, and valid desktop sessions', () => {
+  it('applies the remote access gate for auth endpoints, public requests, blocked tailnet requests, and valid sessions', () => {
     const harness = createHarness();
     const [desktopGate] = harness.useHandler('/api');
 
     const authPathNext = vi.fn();
-    desktopGate(createRequest({ path: '/desktop-auth/session' }), createResponse(), authPathNext);
+    desktopGate(createRequest({ path: '/remote-access/session' }), createResponse(), authPathNext);
     expect(authPathNext).toHaveBeenCalledTimes(1);
 
     const publicNext = vi.fn();
@@ -292,9 +292,9 @@ describe('auth routes', () => {
         'tailscale-user-login': 'patrick',
       },
     }), blockedRes, blockedNext);
-    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
+    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token');
     expect(blockedRes.status).toHaveBeenCalledWith(401);
-    expect(blockedRes.json).toHaveBeenCalledWith({ error: 'Desktop sign-in required.' });
+    expect(blockedRes.json).toHaveBeenCalledWith({ error: 'Remote access sign-in required.' });
     expect(blockedRes.clearCookie).toHaveBeenCalledWith('pa_web', expect.objectContaining({ secure: false, path: '/' }));
     expect(blockedNext).not.toHaveBeenCalled();
 

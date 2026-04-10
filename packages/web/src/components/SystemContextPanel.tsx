@@ -183,7 +183,7 @@ function RemotePairingSection({ data }: { data: WebUiState }) {
               <div key={session.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-primary">{session.deviceLabel}</p>
-                  <p className="mt-1 text-[11px] text-secondary">{session.surface === 'desktop' ? 'Remote browser' : 'Legacy paired app'} · Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
+                  <p className="mt-1 text-[11px] text-secondary">Remote browser · Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
                 </div>
                 <button
                   type="button"

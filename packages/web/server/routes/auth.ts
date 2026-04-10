@@ -9,7 +9,7 @@ import {
 } from '../ui/remoteAccessAuth.js';
 import { createInMemoryRateLimit, resolveRequestOrigin } from '../middleware/index.js';
 
-const DESKTOP_SESSION_COOKIE = 'pa_web';
+const REMOTE_ACCESS_SESSION_COOKIE = 'pa_web';
 
 const remoteAccessExchangeRateLimit = createInMemoryRateLimit({
   windowMs: 60_000,
@@ -57,7 +57,7 @@ function normalizeAuthHost(value: string | null | undefined): string {
   return token.replace(/^\[/, '').replace(/\]$/, '').replace(/:\d+$/, '');
 }
 
-function isTailnetDesktopRequest(req: Request): boolean {
+function isTailnetRemoteAccessRequest(req: Request): boolean {
   const host = normalizeAuthHost(req.get('x-forwarded-host') ?? req.get('host') ?? null);
   if (host.endsWith('.ts.net')) {
     return true;
@@ -67,8 +67,8 @@ function isTailnetDesktopRequest(req: Request): boolean {
     .some((headerName) => typeof req.get(headerName) === 'string' && req.get(headerName)!.trim().length > 0);
 }
 
-function setDesktopSessionCookie(req: Request, res: Response, token: string): void {
-  res.cookie(DESKTOP_SESSION_COOKIE, token, {
+function setRemoteAccessSessionCookie(req: Request, res: Response, token: string): void {
+  res.cookie(REMOTE_ACCESS_SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'strict',
     secure: shouldUseSecureAuthCookie(req),
@@ -77,8 +77,8 @@ function setDesktopSessionCookie(req: Request, res: Response, token: string): vo
   });
 }
 
-function clearDesktopSessionCookie(req: Request, res: Response): void {
-  res.clearCookie(DESKTOP_SESSION_COOKIE, {
+function clearRemoteAccessSessionCookie(req: Request, res: Response): void {
+  res.clearCookie(REMOTE_ACCESS_SESSION_COOKIE, {
     httpOnly: true,
     sameSite: 'strict',
     secure: shouldUseSecureAuthCookie(req),
@@ -86,44 +86,44 @@ function clearDesktopSessionCookie(req: Request, res: Response): void {
   });
 }
 
-function readDesktopSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
-  const sessionToken = readCookieValue(req, DESKTOP_SESSION_COOKIE);
-  const session = readRemoteAccessSession(sessionToken, { surface: 'desktop' });
+function readCurrentRemoteAccessSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
+  const sessionToken = readCookieValue(req, REMOTE_ACCESS_SESSION_COOKIE);
+  const session = readRemoteAccessSession(sessionToken);
   if (!session) {
-    clearDesktopSessionCookie(req, res);
+    clearRemoteAccessSessionCookie(req, res);
     return null;
   }
 
-  setDesktopSessionCookie(req, res, sessionToken);
+  setRemoteAccessSessionCookie(req, res, sessionToken);
   return session;
 }
 
-function ensureDesktopSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
-  const session = readDesktopSession(req, res);
+function ensureRemoteAccessSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
+  const session = readCurrentRemoteAccessSession(req, res);
   if (!session) {
-    res.status(401).json({ error: 'Desktop sign-in required.' });
+    res.status(401).json({ error: 'Remote access sign-in required.' });
     return null;
   }
 
   return session;
 }
 
-function shouldRequireDesktopSession(req: Request): boolean {
-  return isTailnetDesktopRequest(req);
+function shouldRequireRemoteAccessSession(req: Request): boolean {
+  return isTailnetRemoteAccessRequest(req);
 }
 
-function handleDesktopAuthSessionRequest(req: Request, res: Response): void {
-  const required = shouldRequireDesktopSession(req);
+function handleRemoteAccessSessionRequest(req: Request, res: Response): void {
+  const required = shouldRequireRemoteAccessSession(req);
   if (!required) {
     res.json({ required: false, session: null });
     return;
   }
 
-  const session = readDesktopSession(req, res);
+  const session = readCurrentRemoteAccessSession(req, res);
   res.json({ required: true, session });
 }
 
-function handleDesktopAuthExchangeRequest(req: Request, res: Response): void {
+function handleRemoteAccessExchangeRequest(req: Request, res: Response): void {
   try {
     const { code, deviceLabel } = req.body as { code?: unknown; deviceLabel?: unknown };
     if (typeof code !== 'string' || code.trim().length === 0) {
@@ -133,9 +133,8 @@ function handleDesktopAuthExchangeRequest(req: Request, res: Response): void {
 
     const exchanged = exchangeRemoteAccessPairingCode(code, {
       ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
-      surface: 'desktop',
     });
-    setDesktopSessionCookie(req, res, exchanged.sessionToken);
+    setRemoteAccessSessionCookie(req, res, exchanged.sessionToken);
     res.status(201).json({ required: true, session: exchanged.session });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -143,9 +142,9 @@ function handleDesktopAuthExchangeRequest(req: Request, res: Response): void {
   }
 }
 
-function handleDesktopAuthLogoutRequest(req: Request, res: Response): void {
-  revokeRemoteAccessSessionByToken(readCookieValue(req, DESKTOP_SESSION_COOKIE));
-  clearDesktopSessionCookie(req, res);
+function handleRemoteAccessLogoutRequest(req: Request, res: Response): void {
+  revokeRemoteAccessSessionByToken(readCookieValue(req, REMOTE_ACCESS_SESSION_COOKIE));
+  clearRemoteAccessSessionCookie(req, res);
   res.json({ ok: true });
 }
 
@@ -174,18 +173,18 @@ function handleRemoteAccessRevokeSessionRequest(req: Request, res: Response): vo
   }
 }
 
-function handleDesktopAuthGate(req: Request, res: Response, next: NextFunction): void {
-  if (req.path === '/desktop-auth/session' || req.path === '/desktop-auth/exchange' || req.path === '/desktop-auth/logout') {
+function handleRemoteAccessGate(req: Request, res: Response, next: NextFunction): void {
+  if (req.path === '/remote-access/session' || req.path === '/remote-access/exchange' || req.path === '/remote-access/logout') {
     next();
     return;
   }
 
-  if (!shouldRequireDesktopSession(req)) {
+  if (!shouldRequireRemoteAccessSession(req)) {
     next();
     return;
   }
 
-  if (!ensureDesktopSession(req, res)) {
+  if (!ensureRemoteAccessSession(req, res)) {
     return;
   }
 
@@ -199,12 +198,12 @@ function registerRemoteAccessAdminRoutes(app: Express): void {
 }
 
 export function registerAuthRoutes(app: Express): void {
-  app.get('/api/desktop-auth/session', handleDesktopAuthSessionRequest);
-  app.post('/api/desktop-auth/exchange', remoteAccessExchangeRateLimit, handleDesktopAuthExchangeRequest);
-  app.post('/api/desktop-auth/logout', handleDesktopAuthLogoutRequest);
+  app.get('/api/remote-access/session', handleRemoteAccessSessionRequest);
+  app.post('/api/remote-access/exchange', remoteAccessExchangeRateLimit, handleRemoteAccessExchangeRequest);
+  app.post('/api/remote-access/logout', handleRemoteAccessLogoutRequest);
 
   app.use('/api', (req, res, next) => {
-    handleDesktopAuthGate(req, res, next);
+    handleRemoteAccessGate(req, res, next);
   });
 
   registerRemoteAccessAdminRoutes(app);

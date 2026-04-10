@@ -42,8 +42,8 @@ import type {
   AppEventTopic,
   DaemonState,
   DesktopAppEvent,
-  DesktopAuthSessionState,
   DurableRunListResult,
+  RemoteAccessSessionState,
   ScheduledTaskSummary,
   SessionMeta,
   WebUiState,
@@ -95,7 +95,7 @@ function suspendRoute(element: React.ReactNode) {
   );
 }
 
-function defaultDesktopDeviceLabel(): string {
+function defaultRemoteAccessDeviceLabel(): string {
   if (typeof navigator === 'undefined') {
     return 'Remote desktop';
   }
@@ -105,9 +105,9 @@ function defaultDesktopDeviceLabel(): string {
   return platform.trim().length > 0 ? `${platform} desktop` : 'Remote desktop';
 }
 
-function DesktopPairingScreen() {
+function RemoteAccessPairingScreen() {
   const [pairingCode, setPairingCode] = useState('');
-  const [deviceLabel, setDeviceLabel] = useState(() => defaultDesktopDeviceLabel());
+  const [deviceLabel, setDeviceLabel] = useState(() => defaultRemoteAccessDeviceLabel());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +119,7 @@ function DesktopPairingScreen() {
     setBusy(true);
     setError(null);
     try {
-      await api.exchangeDesktopPairingCode(pairingCode, deviceLabel);
+      await api.exchangeRemoteAccessPairingCode(pairingCode, deviceLabel);
       window.location.reload();
     } catch (pairError) {
       setError(pairError instanceof Error ? pairError.message : String(pairError));
@@ -131,7 +131,7 @@ function DesktopPairingScreen() {
     <ThemeProvider>
       <div className="flex min-h-screen items-center justify-center bg-base px-5 py-8 text-primary">
         <div className="w-full max-w-md rounded-[28px] border border-border-subtle bg-surface/80 px-5 py-6 shadow-[0_18px_80px_rgba(15,23,42,0.18)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Desktop</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Remote access</p>
           <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this browser</h1>
           <p className="mt-2 text-[13px] leading-relaxed text-secondary">
             Enter a short-lived pairing code from the machine hosting Pi to unlock the full desktop web UI over your tailnet.
@@ -179,7 +179,7 @@ function DesktopPairingScreen() {
 }
 
 export function App() {
-  const [desktopAuth, setDesktopAuth] = useState<DesktopAuthSessionState | null>(null);
+  const [remoteAccessSession, setRemoteAccessSession] = useState<RemoteAccessSessionState | null>(null);
   const [titleMap, setTitleMap] = useState<Map<string, string>>(new Map());
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
   const [conversationVersions, setConversationVersions] = useState(INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS);
@@ -376,15 +376,15 @@ export function App() {
   useEffect(() => {
     let cancelled = false;
 
-    api.desktopAuthSession()
+    api.remoteAccessSession()
       .then((state) => {
         if (!cancelled) {
-          setDesktopAuth(state);
+          setRemoteAccessSession(state);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setDesktopAuth({ required: false, session: null });
+          setRemoteAccessSession({ required: false, session: null });
         }
       });
 
@@ -393,10 +393,11 @@ export function App() {
     };
   }, []);
 
-  const desktopAccessGranted = desktopAuth !== null && (!desktopAuth.required || desktopAuth.session !== null);
+  const remoteAccessGranted = remoteAccessSession !== null
+    && (!remoteAccessSession.required || remoteAccessSession.session !== null);
 
   useEffect(() => {
-    if (!desktopAccessGranted) {
+    if (!remoteAccessGranted) {
       return;
     }
 
@@ -495,9 +496,9 @@ export function App() {
       cleanup();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, handleDesktopAppEvent, setRuns]);
+  }, [bootstrapSnapshots, handleDesktopAppEvent, remoteAccessGranted, setRuns]);
 
-  if (desktopAuth === null) {
+  if (remoteAccessSession === null) {
     return (
       <ThemeProvider>
         <div className="flex min-h-screen items-center justify-center bg-base px-6 text-[12px] text-dim">Checking desktop access…</div>
@@ -505,8 +506,8 @@ export function App() {
     );
   }
 
-  if (desktopAuth.required && !desktopAuth.session) {
-    return <DesktopPairingScreen />;
+  if (remoteAccessSession.required && !remoteAccessSession.session) {
+    return <RemoteAccessPairingScreen />;
   }
 
   return (

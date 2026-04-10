@@ -651,7 +651,6 @@ export interface LiveSessionExportResult {
 export interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
-  surface: 'legacy' | 'desktop';
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
@@ -674,7 +673,7 @@ export interface RemoteAccessPairingCodeResult {
   expiresAt: string;
 }
 
-export interface DesktopAuthSessionState {
+export interface RemoteAccessSessionState {
   required: boolean;
   session: RemoteAccessSessionSummary | null;
 }
