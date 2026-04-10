@@ -162,9 +162,16 @@ export interface LocalApiModule {
     thinkingLevel?: string | null;
     surfaceId?: string;
   }): Promise<unknown>;
+  readDesktopLiveSessions(): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
+  renameDesktopLiveSession(input: {
+    conversationId: string;
+    name: string;
+    surfaceId?: string;
+  }): Promise<{ ok: true; name: string }>;
   readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readDesktopLiveSessionContext(conversationId: string): Promise<unknown>;
+  readDesktopLiveSessionContextUsage(conversationId: string): Promise<unknown>;
   readDesktopSessionDetail(input: {
     sessionId: string;
     tailBlocks?: number;

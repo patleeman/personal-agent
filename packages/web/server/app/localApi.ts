@@ -47,6 +47,7 @@ import {
   exportSessionHtml,
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
+  getSessionContextUsage,
   isLive as isLiveSession,
   registry as liveRegistry,
   renameSession,
@@ -1834,6 +1835,11 @@ export async function updateDesktopConversationModelPreferences(input: {
   return state;
 }
 
+export async function readDesktopLiveSessions() {
+  await getLocalRoutes();
+  return getLocalLiveSessions();
+}
+
 export async function readDesktopLiveSession(conversationId: string) {
   await getLocalRoutes();
 
@@ -1848,6 +1854,27 @@ export async function readDesktopLiveSession(conversationId: string) {
   }
 
   return { live: true as const, ...entry };
+}
+
+export async function renameDesktopLiveSession(input: {
+  conversationId: string;
+  name: string;
+  surfaceId?: string;
+}): Promise<{ ok: true; name: string }> {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId || !isLiveSession(conversationId)) {
+    throw new Error('404 Not Found');
+  }
+
+  const nextName = input.name.trim();
+  if (!nextName) {
+    throw new Error('name required');
+  }
+
+  renameSession(conversationId, nextName);
+  return { ok: true, name: nextName };
 }
 
 export async function readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
@@ -1897,6 +1924,17 @@ export async function readDesktopLiveSessionContext(conversationId: string) {
         }
       : null,
   };
+}
+
+export async function readDesktopLiveSessionContextUsage(conversationId: string) {
+  await getLocalRoutes();
+
+  const usage = getSessionContextUsage(conversationId.trim());
+  if (!usage) {
+    throw new Error('404 Not Found');
+  }
+
+  return usage;
 }
 
 export async function readDesktopSessionDetail(input: {

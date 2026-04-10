@@ -85,9 +85,12 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     recoverDesktopConversation: vi.fn(),
     readDesktopConversationModelPreferences: vi.fn(),
     updateDesktopConversationModelPreferences: vi.fn(),
+    readDesktopLiveSessions: vi.fn(),
     readDesktopLiveSession: vi.fn(),
+    renameDesktopLiveSession: vi.fn(),
     readDesktopLiveSessionForkEntries: vi.fn(),
     readDesktopLiveSessionContext: vi.fn(),
+    readDesktopLiveSessionContextUsage: vi.fn(),
     readDesktopSessionDetail: vi.fn(),
     readDesktopSessionBlock: vi.fn(),
     createDesktopLiveSession: vi.fn(),
@@ -279,6 +282,32 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
+  it('routes desktop live-session workspace reads through the local API module without loopback proxying', async () => {
+    const readDesktopLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo' }]);
+    const renameDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, name: 'Renamed live session' });
+    const readDesktopLiveSessionContextUsage = vi.fn().mockResolvedValue({ recentFiles: [], promptTokens: 123 });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopLiveSessions,
+      renameDesktopLiveSession,
+      readDesktopLiveSessionContextUsage,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.readLiveSessions?.()).resolves.toEqual([{ id: 'live-1', cwd: '/repo' }]);
+    await expect(controller.renameLiveSession?.({ conversationId: 'live-1', name: 'Renamed live session' })).resolves.toEqual({ ok: true, name: 'Renamed live session' });
+    await expect(controller.readLiveSessionContextUsage?.('live-1')).resolves.toEqual({ recentFiles: [], promptTokens: 123 });
+
+    expect(readDesktopLiveSessions).toHaveBeenCalledTimes(1);
+    expect(renameDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed live session' });
+    expect(readDesktopLiveSessionContextUsage).toHaveBeenCalledWith('live-1');
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
   it('routes dedicated model and provider capabilities through the local API module without loopback proxying', async () => {
     const unsubscribeProviderOAuth = vi.fn();
     const readDesktopModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
@@ -356,6 +385,74 @@ describe('LocalHostController', () => {
     expect(submitDesktopProviderOAuthLoginInput).toHaveBeenCalledWith({ loginId: 'login-1', value: '123456' });
     expect(cancelDesktopProviderOAuthLogin).toHaveBeenCalledWith('login-1');
     expect(subscribeDesktopProviderOAuthLogin).toHaveBeenCalledWith('login-1', onState);
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop workspace, tools, and memory capabilities through the local API module without loopback proxying', async () => {
+    const readDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
+      sessionIds: ['conversation-1'],
+      pinnedSessionIds: ['pinned-1'],
+      archivedSessionIds: ['archived-1'],
+    });
+    const updateDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
+      ok: true,
+      sessionIds: ['conversation-2'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    const readDesktopTools = vi.fn().mockResolvedValue({ tools: [{ name: 'bash' }], dependentCliTools: [], mcp: { servers: [] } });
+    const installDesktopPackageSource = vi.fn().mockResolvedValue({ installed: true, source: './pkg', target: 'local' });
+    const readDesktopMcpServer = vi.fn().mockResolvedValue({ server: 'server-1', tools: [] });
+    const readDesktopMcpTool = vi.fn().mockResolvedValue({ server: 'server-1', tool: 'tool-1' });
+    const readDesktopMemory = vi.fn().mockResolvedValue({ profile: 'assistant', agentsMd: [], skills: [], memoryDocs: [] });
+    const readDesktopMemoryFile = vi.fn().mockResolvedValue({ path: '/memory/Note.md', content: '# Note' });
+    const saveDesktopMemoryFile = vi.fn().mockResolvedValue({ ok: true });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopOpenConversationTabs,
+      updateDesktopOpenConversationTabs,
+      readDesktopTools,
+      installDesktopPackageSource,
+      readDesktopMcpServer,
+      readDesktopMcpTool,
+      readDesktopMemory,
+      readDesktopMemoryFile,
+      saveDesktopMemoryFile,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.readOpenConversationTabs?.()).resolves.toEqual({
+      sessionIds: ['conversation-1'],
+      pinnedSessionIds: ['pinned-1'],
+      archivedSessionIds: ['archived-1'],
+    });
+    await expect(controller.updateOpenConversationTabs?.({ sessionIds: ['conversation-2'] })).resolves.toEqual({
+      ok: true,
+      sessionIds: ['conversation-2'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    await expect(controller.readTools?.({ profile: 'assistant' })).resolves.toEqual({ tools: [{ name: 'bash' }], dependentCliTools: [], mcp: { servers: [] } });
+    await expect(controller.installPackageSource?.({ source: './pkg', target: 'local' })).resolves.toEqual({ installed: true, source: './pkg', target: 'local' });
+    await expect(controller.readMcpServer?.('server-1')).resolves.toEqual({ server: 'server-1', tools: [] });
+    await expect(controller.readMcpTool?.({ server: 'server-1', tool: 'tool-1' })).resolves.toEqual({ server: 'server-1', tool: 'tool-1' });
+    await expect(controller.readMemory?.({ profile: 'assistant' })).resolves.toEqual({ profile: 'assistant', agentsMd: [], skills: [], memoryDocs: [] });
+    await expect(controller.readMemoryFile?.('/memory/Note.md')).resolves.toEqual({ path: '/memory/Note.md', content: '# Note' });
+    await expect(controller.saveMemoryFile?.({ path: '/memory/Note.md', content: '# Updated' })).resolves.toEqual({ ok: true });
+
+    expect(readDesktopOpenConversationTabs).toHaveBeenCalledTimes(1);
+    expect(updateDesktopOpenConversationTabs).toHaveBeenCalledWith({ sessionIds: ['conversation-2'] });
+    expect(readDesktopTools).toHaveBeenCalledWith({ profile: 'assistant' });
+    expect(installDesktopPackageSource).toHaveBeenCalledWith({ source: './pkg', target: 'local' });
+    expect(readDesktopMcpServer).toHaveBeenCalledWith('server-1');
+    expect(readDesktopMcpTool).toHaveBeenCalledWith({ server: 'server-1', tool: 'tool-1' });
+    expect(readDesktopMemory).toHaveBeenCalledWith({ profile: 'assistant' });
+    expect(readDesktopMemoryFile).toHaveBeenCalledWith('/memory/Note.md');
+    expect(saveDesktopMemoryFile).toHaveBeenCalledWith({ path: '/memory/Note.md', content: '# Updated' });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

@@ -113,7 +113,14 @@ async function getMemoryData(options?: { profile?: string }): Promise<MemoryData
     return pending;
   }
 
-  const request = get<MemoryData>(withViewProfile('/memory', options?.profile)).finally(() => {
+  const request = (async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readMemory(options);
+    }
+
+    return get<MemoryData>(withViewProfile('/memory', options?.profile));
+  })().finally(() => {
     pendingMemoryRequests.delete(cacheKey);
   });
   pendingMemoryRequests.set(cacheKey, request);
@@ -393,11 +400,38 @@ export const api = {
     return get<VaultRootState>('/vault-root');
   },
   vaultFiles: () => get<VaultFileListResult>('/vault-files'),
-  tools: (options?: { profile?: string }) => get<ToolsState>(withViewProfile('/tools', options?.profile)),
-  installPackageSource: (input: { source: string; target: 'profile' | 'local'; profileName?: string }) =>
-    post<PackageInstallResult>('/tools/packages/install', input),
-  mcpServer: (server: string) => get<McpServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
-  mcpTool: (server: string, tool: string) => get<McpToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`),
+  tools: async (options?: { profile?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readTools(options);
+    }
+
+    return get<ToolsState>(withViewProfile('/tools', options?.profile));
+  },
+  installPackageSource: async (input: { source: string; target: 'profile' | 'local'; profileName?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.installPackageSource(input);
+    }
+
+    return post<PackageInstallResult>('/tools/packages/install', input);
+  },
+  mcpServer: async (server: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readMcpServer(server);
+    }
+
+    return get<McpServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`);
+  },
+  mcpTool: async (server: string, tool: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readMcpTool({ server, tool });
+    }
+
+    return get<McpToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`);
+  },
   setModel: async (model: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -526,9 +560,22 @@ export const api = {
 
     return patch<ConversationAutomationPreferencesState>('/conversation-plans/defaults', input);
   },
-  openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations'),
-  setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = [], archivedSessionIds: string[] = []) =>
-    patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds, archivedSessionIds }),
+  openConversationTabs: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readOpenConversationTabs();
+    }
+
+    return get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations');
+  },
+  setOpenConversationTabs: async (sessionIds: string[], pinnedSessionIds: string[] = [], archivedSessionIds: string[] = []) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateOpenConversationTabs({ sessionIds, pinnedSessionIds, archivedSessionIds });
+    }
+
+    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds, archivedSessionIds });
+  },
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: async () => {
@@ -650,8 +697,22 @@ export const api = {
 
   // ── Memory browser ────────────────────────────────────────────────────────
   memory:         (options?: { profile?: string }) => getMemoryData(options),
-  memoryFile:     (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
-  memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
+  memoryFile:     async (path: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readMemoryFile(path);
+    }
+
+    return get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`);
+  },
+  memoryFileSave: async (path: string, content: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.saveMemoryFile({ path, content });
+    }
+
+    return post<{ ok: boolean }>('/memory/file', { path, content });
+  },
 
   // ── Alerts + activity ─────────────────────────────────────────────────────
   alerts: async () => {
@@ -728,7 +789,14 @@ export const api = {
   },
 
   // ── Live sessions ─────────────────────────────────────────────────────────
-  liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
+  liveSessions: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readLiveSessions();
+    }
+
+    return get<LiveSessionMeta[]>('/live-sessions');
+  },
   liveSession: async (id: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -827,7 +895,14 @@ export const api = {
 
     return patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library', input);
   },
-  liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
+  liveSessionContextUsage: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readLiveSessionContextUsage(id);
+    }
+
+    return get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`);
+  },
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
   deleteConversationArtifact: (id: string, artifactId: string) =>
@@ -1062,8 +1137,14 @@ export const api = {
 
     return post<LiveSessionExportResult>(`/live-sessions/${id}/export`, { outputPath });
   },
-  renameSession: (id: string, name: string) =>
-    patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name }),
+  renameSession: async (id: string, name: string, surfaceId?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.renameLiveSession({ conversationId: id, name, ...(surfaceId ? { surfaceId } : {}) });
+    }
+
+    return patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name, ...(surfaceId ? { surfaceId } : {}) });
+  },
 
   abortSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
