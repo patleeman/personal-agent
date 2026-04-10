@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <defs>
-    <linearGradient id="bg" x1="68" y1="52" x2="444" y2="460" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#08101F"/>
-      <stop offset="1" stop-color="#121D39"/>
+    <linearGradient id="bg" x1="64" y1="52" x2="448" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08111F"/>
+      <stop offset="1" stop-color="#16233C"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(214 186) rotate(51.2) scale(255.598)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#20356C" stop-opacity="0.88"/>
-      <stop offset="1" stop-color="#20356C" stop-opacity="0"/>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(184 152) rotate(44) scale(250)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B6666" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#1B6666" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect width="512" height="512" rx="120" fill="url(#bg)"/>
   <rect width="512" height="512" rx="120" fill="url(#glow)"/>
-  <text x="146" y="326" fill="#F3F6FF" font-family="Avenir Next, SF Pro Display, Helvetica Neue, sans-serif" font-size="196" font-weight="780" letter-spacing="-20">P</text>
-  <text x="255" y="326" fill="#7AA2FF" font-family="Avenir Next, SF Pro Display, Helvetica Neue, sans-serif" font-size="196" font-weight="780" letter-spacing="-24">A</text>
+  <path fill="#F5F7FB" fill-rule="evenodd" d="M124 124c0-17.673 14.327-32 32-32h80c54.124 0 98 43.876 98 98s-43.876 98-98 98h-46v100c0 17.673-14.327 32-32 32h-34V124Zm66 34v164h46c17.673 0 32-14.327 32-32s-14.327-32-32-32h-46v-34h46c17.673 0 32-14.327 32-32s-14.327-32-32-32h-46Z" clip-rule="evenodd"/>
+  <path fill="#67D6C7" fill-rule="evenodd" d="M322.681 118.89c3.757-15.537 17.664-26.423 33.649-26.423h13.34c15.964 0 29.857 10.86 33.631 26.371l70.758 290.666c4.798 19.702-10.129 38.496-30.406 38.496h-24.593c-15.207 0-28.361-10.674-31.479-25.558L380.748 390h-35.496l-6.834 32.442C335.3 437.326 322.146 448 306.939 448h-24.593c-20.277 0-35.204-18.794-30.406-38.496l70.741-290.614ZM351.791 302h22.418L363 248.792 351.791 302Z" clip-rule="evenodd"/>
 </svg>

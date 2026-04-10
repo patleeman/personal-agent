@@ -19,8 +19,8 @@ async function showCompanionNotification(candidate: CompanionNotificationCandida
       conversationId: candidate.conversationId,
       url: candidate.path,
     },
-    icon: '/app/icon-192.png?v=pa-brand-20260326',
-    badge: '/app/icon-192.png?v=pa-brand-20260326',
+    icon: '/app/icon-192.png?v=pa-brand-20260410',
+    badge: '/app/icon-192.png?v=pa-brand-20260410',
   };
 
   try {

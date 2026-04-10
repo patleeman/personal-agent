@@ -1,4 +1,4 @@
-const BRAND_ASSET_VERSION = 'pa-brand-20260326';
+const BRAND_ASSET_VERSION = 'pa-brand-20260410';
 const SHELL_CACHE = 'pi-companion-shell-v3';
 const STATIC_CACHE = 'pi-companion-static-v3';
 const PRECACHE_URLS = [
