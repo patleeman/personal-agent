@@ -148,7 +148,11 @@ The most useful overrides are:
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — force Tailscale Serve on/off for the web UI
 - `PA_WEB_COMPANION_PORT` — override the companion port
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` — Pi execution timeout
+- `PI_OPENAI_NATIVE_COMPACTION=0` — disable the built-in OpenAI/Codex native compaction replay extension
+- `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` — show UI notices when native compaction replay activates or falls back
 - `PERSONAL_AGENT_OP_BIN` and `OP_SERVICE_ACCOUNT_TOKEN` — 1Password CLI secret resolution
+
+The OpenAI native compaction extension only applies to direct OpenAI Responses and ChatGPT/Codex responses models; other providers keep Pi's default compaction behavior.
 
 Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL_AGENT_WEB_CONFIG_FILE` are still honored for compatibility.
 
