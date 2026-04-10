@@ -8,7 +8,7 @@ import { InlineMarkdownCode } from './MarkdownInlineCode.js';
 describe('InlineMarkdownCode', () => {
   it('uses wrap-friendly inline code styling for long tokens', () => {
     const html = renderToString(
-      <InlineMarkdownCode>packages/web/src/companion/CompanionProjectDetailPage.tsx</InlineMarkdownCode>,
+      <InlineMarkdownCode>packages/web/src/pages/ConversationPage.tsx</InlineMarkdownCode>,
     );
 
     expect(html).toContain('break-words');

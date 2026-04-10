@@ -2095,7 +2095,7 @@ function UserMessage({
   return (
     <div className="group flex flex-col items-end gap-1.5">
       <MsgActions isUser onRewind={onRewind} />
-      <div className={layout === 'companion' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
+      <div className={layout === 'compact' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
             <div className="space-y-2">
@@ -2167,7 +2167,7 @@ function AssistantMessage({
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
   return (
-    <div className={cx('group flex items-start', layout === 'companion' ? 'gap-2.5' : 'gap-3')}>
+    <div className={cx('group flex items-start', layout === 'compact' ? 'gap-2.5' : 'gap-3')}>
       <div className="ui-chat-avatar mt-0.5">
         <span className="ui-chat-avatar-mark">pa</span>
       </div>
@@ -2354,7 +2354,7 @@ function StreamingIndicator({ label }: { label: string }) {
 }
 
 type ChatViewPerformanceMode = 'default' | 'aggressive';
-type ChatViewLayout = 'default' | 'companion';
+type ChatViewLayout = 'default' | 'compact';
 
 const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
   contentVisibilityThreshold: number;
@@ -3186,7 +3186,7 @@ export const ChatView = memo(function ChatView({
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className={layout === 'companion' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}>
+      <div className={layout === 'compact' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}>
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}

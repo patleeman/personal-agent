@@ -431,10 +431,6 @@
     @apply max-w-none px-0 pt-0 pb-0;
   }
 
-  .ui-companion-quick-note-doc {
-    @apply min-h-full pt-3;
-  }
-
   .ui-node-title-input {
     @apply w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[32px] font-semibold leading-none tracking-tight text-primary transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 focus:outline-none;
   }
@@ -689,26 +685,6 @@
 
   .ui-note-rich-editor .ProseMirror {
     @apply min-h-[14rem] pt-0 pb-3;
-  }
-
-  .ui-companion-quick-note-doc .ui-note-rich-editor {
-    @apply rounded-none border-0 bg-transparent;
-  }
-
-  .ui-companion-quick-note-doc .ui-note-rich-editor .ui-rich-editor-toolbar {
-    @apply px-0 pt-0 pb-2 border-b-0 opacity-100 pointer-events-auto;
-  }
-
-  .ui-companion-quick-note-doc .ui-note-rich-editor .ui-rich-editor-surface {
-    @apply min-h-0;
-  }
-
-  .ui-companion-quick-note-doc .ui-note-rich-editor .ProseMirror {
-    @apply min-h-[calc(100dvh-12rem)] px-0 py-0 text-[16px] leading-7;
-  }
-
-  .ui-companion-quick-note-doc .ui-note-rich-editor .ProseMirror::before {
-    @apply text-dim/60;
   }
 
   .ui-note-rich-editor .ProseMirror > *:first-child {

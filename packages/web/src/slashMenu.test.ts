@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCompanionSkillMenuItems, buildSlashMenuItems, parseSlashInput } from './slashMenu';
+import { buildSlashMenuItems, parseSlashInput } from './slashMenu';
 import type { MemorySkillItem } from './types';
 
 const SKILLS: MemorySkillItem[] = [
@@ -60,8 +60,8 @@ describe('buildSlashMenuItems', () => {
     expect(items.some((item) => item.displayCmd === '/model')).toBe(true);
   });
 
-  it('shows the full skill list in the companion menu when only / is typed', () => {
-    const items = buildCompanionSkillMenuItems('/', SKILLS);
+  it('shows the full skill list when the slash query targets skills directly', () => {
+    const items = buildSlashMenuItems('/skills', SKILLS);
     expect(items.map((item) => item.displayCmd)).toEqual([
       '/skill:frontend-design',
       '/skill:react',

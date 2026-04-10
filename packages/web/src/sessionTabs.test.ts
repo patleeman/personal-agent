@@ -377,17 +377,17 @@ describe('sessionTabs', () => {
         archivedSessionIds: [],
       });
 
-      // Intended: open companion-tab-1, pinned [], archived []
-      const result = await commitConversationLayoutMerge({ sessionIds: ['companion-tab-1'], pinnedSessionIds: [], archivedSessionIds: [] });
+      // Intended: open local-tab-1, pinned [], archived []
+      const result = await commitConversationLayoutMerge({ sessionIds: ['local-tab-1'], pinnedSessionIds: [], archivedSessionIds: [] });
 
-      // Union: companion tab + server tabs
-      expect(result.sessionIds).toEqual(['companion-tab-1', 'server-1']);
+      // Union: local tab + server tabs
+      expect(result.sessionIds).toEqual(['local-tab-1', 'server-1']);
       expect(result.pinnedSessionIds).toEqual(['server-pinned']);
       expect(result.archivedSessionIds).toEqual([]);
 
       // Written to server only (localStorage is cache, not source of truth)
       expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(
-        ['companion-tab-1', 'server-1'],
+        ['local-tab-1', 'server-1'],
         ['server-pinned'],
         [],
       );

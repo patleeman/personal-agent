@@ -199,7 +199,3 @@ export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): S
   return [...commandItems, ...skillItems];
 }
 
-export function buildCompanionSkillMenuItems(query: string, skills: MemorySkillItem[]): SlashMenuItem[] {
-  const normalizedQuery = query === '/' ? '/skills' : query;
-  return buildSlashMenuItems(normalizedQuery, skills).filter((item) => item.kind === 'skill');
-}
