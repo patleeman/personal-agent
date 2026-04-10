@@ -353,6 +353,7 @@ export interface HostController {
     note?: string;
   }): Promise<unknown>;
   deleteConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
+  readConversationAttachmentAsset?(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessions?(): Promise<unknown>;
   readLiveSessionStats?(conversationId: string): Promise<unknown>;

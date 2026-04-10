@@ -512,6 +512,11 @@ describe('api desktop transport', () => {
       attachmentId: 'attachment-1',
       attachments: [],
     });
+    const readConversationAttachmentAsset = vi.fn().mockResolvedValue({
+      dataUrl: 'data:image/png;base64,cHJldmlldw==',
+      mimeType: 'image/png',
+      fileName: 'preview.png',
+    });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -530,6 +535,7 @@ describe('api desktop transport', () => {
         createConversationAttachment,
         updateConversationAttachment,
         deleteConversationAttachment,
+        readConversationAttachmentAsset,
       },
     });
 
@@ -542,6 +548,7 @@ describe('api desktop transport', () => {
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
     const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
     const deletedAttachment = await api.deleteConversationAttachment('conversation-1', 'attachment-1');
+    const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).toHaveBeenCalledWith('conversation-1');
     expect(readConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
@@ -551,6 +558,7 @@ describe('api desktop transport', () => {
     expect(createConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
     expect(updateConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
     expect(deleteConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
+    expect(readConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
     expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
@@ -568,6 +576,11 @@ describe('api desktop transport', () => {
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
     expect(deletedAttachment).toEqual({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] });
+    expect(attachmentAsset).toEqual({
+      dataUrl: 'data:image/png;base64,cHJldmlldw==',
+      mimeType: 'image/png',
+      fileName: 'preview.png',
+    });
   });
 
   it('uses dedicated desktop operator settings bridges on the local Electron host', async () => {
@@ -1486,7 +1499,14 @@ describe('api desktop transport', () => {
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] }));
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] }))
+      .mockResolvedValueOnce(new Response('preview-bytes', {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Disposition': 'inline; filename="preview.png"',
+        },
+      }));
     vi.stubGlobal('fetch', fetchMock);
     const readConversationArtifacts = vi.fn();
     const readConversationArtifact = vi.fn();
@@ -1496,6 +1516,7 @@ describe('api desktop transport', () => {
     const createConversationAttachment = vi.fn();
     const updateConversationAttachment = vi.fn();
     const deleteConversationAttachment = vi.fn();
+    const readConversationAttachmentAsset = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -1514,6 +1535,7 @@ describe('api desktop transport', () => {
         createConversationAttachment,
         updateConversationAttachment,
         deleteConversationAttachment,
+        readConversationAttachmentAsset,
       },
     });
 
@@ -1526,6 +1548,7 @@ describe('api desktop transport', () => {
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
     const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
     const deletedAttachment = await api.deleteConversationAttachment('conversation-1', 'attachment-1');
+    const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).not.toHaveBeenCalled();
     expect(readConversationArtifact).not.toHaveBeenCalled();
@@ -1535,6 +1558,7 @@ describe('api desktop transport', () => {
     expect(createConversationAttachment).not.toHaveBeenCalled();
     expect(updateConversationAttachment).not.toHaveBeenCalled();
     expect(deleteConversationAttachment).not.toHaveBeenCalled();
+    expect(readConversationAttachmentAsset).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/artifacts', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/artifacts/artifact-1', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/artifacts/artifact-1', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: undefined });
@@ -1555,6 +1579,10 @@ describe('api desktop transport', () => {
       headers: { 'Content-Type': 'application/json' },
       body: undefined,
     });
+    expect(fetchMock).toHaveBeenNthCalledWith(9, '/api/conversations/conversation-1/attachments/attachment-1/download/preview?revision=2', {
+      method: 'GET',
+      cache: 'no-store',
+    });
     expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
     expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
     expect(deletedArtifact).toEqual({ conversationId: 'conversation-1', deleted: true, artifactId: 'artifact-1', artifacts: [] });
@@ -1563,6 +1591,11 @@ describe('api desktop transport', () => {
     expect(createdAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
     expect(updatedAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
     expect(deletedAttachment).toEqual({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] });
+    expect(attachmentAsset).toEqual({
+      dataUrl: 'data:image/png;base64,cHJldmlldy1ieXRlcw==',
+      mimeType: 'image/png',
+      fileName: 'preview.png',
+    });
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {

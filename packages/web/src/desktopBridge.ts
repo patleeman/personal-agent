@@ -8,6 +8,7 @@ import type {
   CompanionPairingCodeResult,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
+  ConversationAttachmentAssetData,
   ConversationAttachmentRecord,
   ConversationAttachmentSummary,
   ConversationAutomationPreferencesState,
@@ -209,6 +210,7 @@ export interface PersonalAgentDesktopBridge {
     note?: string;
   }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
   deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; deleted: boolean; attachmentId: string; attachments: ConversationAttachmentSummary[] }>;
+  readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<ConversationAttachmentAssetData>;
   readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionStats(conversationId: string): Promise<LiveSessionStats>;

@@ -206,6 +206,12 @@ export interface LocalApiModule {
     note?: string;
   }): Promise<unknown>;
   deleteDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
+  readDesktopConversationAttachmentAsset(input: {
+    conversationId: string;
+    attachmentId: string;
+    asset: 'source' | 'preview';
+    revision?: number;
+  }): Promise<unknown>;
   readDesktopLiveSessions(): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
   readDesktopLiveSessionStats(conversationId: string): Promise<unknown>;

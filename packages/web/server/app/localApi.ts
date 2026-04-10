@@ -155,6 +155,7 @@ import {
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
+  readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
@@ -1963,6 +1964,23 @@ export async function deleteDesktopConversationAttachment(input: {
 }) {
   const context = await getLocalServerRouteContext();
   return deleteConversationAttachmentCapability(context.getCurrentProfile(), input);
+}
+
+export async function readDesktopConversationAttachmentAsset(input: {
+  conversationId: string;
+  attachmentId: string;
+  asset: 'source' | 'preview';
+  revision?: number;
+}) {
+  const context = await getLocalServerRouteContext();
+  const download = readConversationAttachmentDownloadCapability(context.getCurrentProfile(), input);
+  const data = readFileSync(download.filePath).toString('base64');
+
+  return {
+    dataUrl: `data:${download.mimeType};base64,${data}`,
+    mimeType: download.mimeType,
+    fileName: download.fileName,
+  };
 }
 
 export async function recoverDesktopConversation(conversationId: string) {

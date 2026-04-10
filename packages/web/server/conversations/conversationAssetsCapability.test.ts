@@ -7,6 +7,7 @@ const {
   getConversationAttachmentMock,
   listConversationArtifactsMock,
   listConversationAttachmentsMock,
+  readConversationAttachmentDownloadMock,
   saveConversationAttachmentMock,
   invalidateAppTopicsMock,
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   getConversationAttachmentMock: vi.fn(),
   listConversationArtifactsMock: vi.fn(),
   listConversationAttachmentsMock: vi.fn(),
+  readConversationAttachmentDownloadMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
 }));
@@ -27,6 +29,7 @@ vi.mock('@personal-agent/core', () => ({
   getConversationAttachment: getConversationAttachmentMock,
   listConversationArtifacts: listConversationArtifactsMock,
   listConversationAttachments: listConversationAttachmentsMock,
+  readConversationAttachmentDownload: readConversationAttachmentDownloadMock,
   saveConversationAttachment: saveConversationAttachmentMock,
 }));
 
@@ -43,6 +46,7 @@ import {
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
+  readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
   updateConversationAttachmentCapability,
 } from './conversationAssetsCapability.js';
@@ -54,6 +58,7 @@ beforeEach(() => {
   getConversationAttachmentMock.mockReset();
   listConversationArtifactsMock.mockReset();
   listConversationAttachmentsMock.mockReset();
+  readConversationAttachmentDownloadMock.mockReset();
   saveConversationAttachmentMock.mockReset();
   invalidateAppTopicsMock.mockReset();
 
@@ -61,6 +66,13 @@ beforeEach(() => {
   listConversationAttachmentsMock.mockReturnValue([{ id: 'attachment-1', kind: 'excalidraw' }]);
   getConversationArtifactMock.mockReturnValue({ id: 'artifact-1', title: 'Artifact 1' });
   getConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } });
+  readConversationAttachmentDownloadMock.mockReturnValue({
+    attachment: { id: 'attachment-1', kind: 'excalidraw' },
+    revision: { revision: 2 },
+    filePath: '/tmp/attachment-preview.png',
+    fileName: 'preview.png',
+    mimeType: 'image/png',
+  });
   saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } });
   deleteConversationArtifactMock.mockReturnValue(true);
   deleteConversationAttachmentMock.mockReturnValue(true);
@@ -186,6 +198,45 @@ describe('conversationAssetsCapability', () => {
       attachmentId: 'attachment-1',
     });
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('attachments');
+  });
+
+  it('reads attachment downloads and validates download input', () => {
+    expect(readConversationAttachmentDownloadCapability('assistant', {
+      conversationId: 'session-1',
+      attachmentId: 'attachment-1',
+      asset: 'preview',
+      revision: 2,
+    })).toEqual({
+      attachment: { id: 'attachment-1', kind: 'excalidraw' },
+      revision: { revision: 2 },
+      filePath: '/tmp/attachment-preview.png',
+      fileName: 'preview.png',
+      mimeType: 'image/png',
+    });
+
+    expect(readConversationAttachmentDownloadMock).toHaveBeenCalledWith({
+      profile: 'assistant',
+      conversationId: 'session-1',
+      attachmentId: 'attachment-1',
+      asset: 'preview',
+      revision: 2,
+    });
+
+    expect(() => readConversationAttachmentDownloadCapability('assistant', {
+      conversationId: 'session-1',
+      attachmentId: 'attachment-1',
+      asset: 'source',
+      revision: 0,
+    })).toThrowError(new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.'));
+
+    readConversationAttachmentDownloadMock.mockImplementationOnce(() => {
+      throw new Error('Attachment file not found: preview revision 2');
+    });
+    expect(() => readConversationAttachmentDownloadCapability('assistant', {
+      conversationId: 'session-1',
+      attachmentId: 'attachment-1',
+      asset: 'preview',
+    })).toThrowError(new ConversationAssetCapabilityNotFoundError('Attachment file not found: preview revision 2'));
   });
 
   it('validates attachment payload requirements', () => {

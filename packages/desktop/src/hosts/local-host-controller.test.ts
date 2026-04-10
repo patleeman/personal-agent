@@ -97,6 +97,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     createDesktopConversationAttachment: vi.fn(),
     updateDesktopConversationAttachment: vi.fn(),
     deleteDesktopConversationAttachment: vi.fn(),
+    readDesktopConversationAttachmentAsset: vi.fn(),
     readDesktopLiveSessions: vi.fn(),
     readDesktopLiveSession: vi.fn(),
     renameDesktopLiveSession: vi.fn(),
@@ -469,6 +470,11 @@ describe('LocalHostController', () => {
       attachmentId: 'attachment-1',
       attachments: [],
     });
+    const readDesktopConversationAttachmentAsset = vi.fn().mockResolvedValue({
+      dataUrl: 'data:image/png;base64,cHJldmlldw==',
+      mimeType: 'image/png',
+      fileName: 'preview.png',
+    });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopConversationArtifacts,
       readDesktopConversationArtifact,
@@ -478,6 +484,7 @@ describe('LocalHostController', () => {
       createDesktopConversationAttachment,
       updateDesktopConversationAttachment,
       deleteDesktopConversationAttachment,
+      readDesktopConversationAttachmentAsset,
     }));
     const backend = createBackendMock();
     const controller = new LocalHostController(
@@ -524,6 +531,11 @@ describe('LocalHostController', () => {
       attachmentId: 'attachment-1',
       attachments: [],
     });
+    await expect(controller.readConversationAttachmentAsset?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 })).resolves.toEqual({
+      dataUrl: 'data:image/png;base64,cHJldmlldw==',
+      mimeType: 'image/png',
+      fileName: 'preview.png',
+    });
 
     expect(readDesktopConversationArtifacts).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
@@ -533,6 +545,7 @@ describe('LocalHostController', () => {
     expect(createDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
     expect(updateDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
     expect(deleteDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
+    expect(readDesktopConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

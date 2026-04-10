@@ -901,22 +901,6 @@ async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawing
   };
 }
 
-async function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob as data URL.'));
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        reject(new Error('Failed to read blob as data URL.'));
-        return;
-      }
-
-      resolve(reader.result);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
 function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
   const target = resume.status === 'ready'
     ? resume.readyAt ?? resume.dueAt
@@ -3220,15 +3204,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     showNotice('accent', 'Drawing saved to composer.');
   }
 
-  async function fetchAttachmentDataUrl(downloadPath: string): Promise<string> {
-    const response = await fetch(downloadPath);
-    if (!response.ok) {
-      throw new Error(`Failed to download attachment asset (${response.status} ${response.statusText}).`);
-    }
-
-    return blobToDataUrl(await response.blob());
-  }
-
   async function attachSavedDrawing(selection: { attachment: ConversationAttachmentSummary; revision: number }) {
     if (!id) {
       showNotice('danger', 'Saved drawing picker requires an existing conversation.', 4000);
@@ -3243,10 +3218,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const revision = record.revisions.find((entry) => entry.revision === selection.revision)
         ?? record.latestRevision;
 
-      const sourceDataUrl = await fetchAttachmentDataUrl(revision.sourceDownloadPath);
+      const sourceDataUrl = (await api.conversationAttachmentAsset(id, record.id, 'source', revision.revision)).dataUrl;
       const sourceCommaIndex = sourceDataUrl.indexOf(',');
       const sourceData = sourceCommaIndex >= 0 ? sourceDataUrl.slice(sourceCommaIndex + 1) : sourceDataUrl;
-      const previewDataUrl = await fetchAttachmentDataUrl(revision.previewDownloadPath);
+      const previewDataUrl = (await api.conversationAttachmentAsset(id, record.id, 'preview', revision.revision)).dataUrl;
       const previewCommaIndex = previewDataUrl.indexOf(',');
       const previewData = previewCommaIndex >= 0 ? previewDataUrl.slice(previewCommaIndex + 1) : previewDataUrl;
       const scene = parseExcalidrawSceneFromSourceData(sourceData);

@@ -14,9 +14,6 @@ import {
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
 import {
-  readConversationAttachmentDownload,
-} from '@personal-agent/core';
-import {
   cancelDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
@@ -61,6 +58,7 @@ import {
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
+  readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
@@ -617,28 +615,18 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/attachments/:attachmentId/download/:asset', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const asset = req.params.asset === 'source' ? 'source' : req.params.asset === 'preview' ? 'preview' : null;
-      if (!asset) {
-        res.status(400).json({ error: 'asset must be "source" or "preview"' });
-        return;
-      }
-
       const revisionQuery = typeof req.query.revision === 'string'
         ? Number.parseInt(req.query.revision, 10)
         : undefined;
+      const asset = req.params.asset === 'source' || req.params.asset === 'preview'
+        ? req.params.asset
+        : 'invalid';
 
-      if (req.query.revision !== undefined && (!Number.isInteger(revisionQuery) || (revisionQuery as number) <= 0)) {
-        res.status(400).json({ error: 'revision must be a positive integer when provided.' });
-        return;
-      }
-
-      const download = readConversationAttachmentDownload({
-        profile,
+      const download = readConversationAttachmentDownloadCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         attachmentId: req.params.attachmentId,
         asset,
-        ...(revisionQuery ? { revision: revisionQuery } : {}),
+        ...(req.query.revision !== undefined ? { revision: revisionQuery } : {}),
       });
 
       res.setHeader('Content-Type', download.mimeType);
@@ -652,13 +640,10 @@ export function registerConversationRoutes(
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
-
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.toLowerCase().includes('not found')) {
-        res.status(404).json({ error: message });
+      if (writeConversationAssetCapabilityError(res, err)) {
         return;
       }
-
+      const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
     }
   });

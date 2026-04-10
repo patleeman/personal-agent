@@ -510,6 +510,11 @@ export class LocalHostController implements HostController {
     return module.deleteDesktopConversationAttachment(input);
   }
 
+  async readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationAttachmentAsset(input);
+  }
+
   async readLiveSessions(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSessions();

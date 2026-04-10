@@ -905,6 +905,17 @@ export function registerDesktopIpc(options: {
     return controller.deleteConversationAttachment(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-attachment-asset`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationAttachmentAsset) {
+      throw new Error('Dedicated desktop conversation attachment asset reads are only available for the local host.');
+    }
+
+    return controller.readConversationAttachmentAsset(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-sessions`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

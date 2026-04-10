@@ -5,6 +5,7 @@ import {
   getConversationAttachment,
   listConversationArtifacts,
   listConversationAttachments,
+  readConversationAttachmentDownload,
   saveConversationAttachment,
 } from '@personal-agent/core';
 import { invalidateAppTopics } from '../shared/appEvents.js';
@@ -34,6 +35,11 @@ interface ConversationAttachmentSaveInput {
   previewName?: string;
   previewMimeType?: string;
   note?: string;
+}
+
+interface ConversationAttachmentDownloadInput extends ConversationAttachmentMutationInput {
+  asset: string;
+  revision?: number;
 }
 
 function normalizeRequiredId(value: string, field: string): string {
@@ -74,6 +80,33 @@ function normalizeAttachmentSaveInput(input: ConversationAttachmentSaveInput) {
     previewName: input.previewName,
     previewMimeType: input.previewMimeType,
     note: input.note,
+  };
+}
+
+function normalizeAttachmentDownloadInput(input: ConversationAttachmentDownloadInput): {
+  conversationId: string;
+  attachmentId: string;
+  asset: 'source' | 'preview';
+  revision?: number;
+} {
+  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
+  const attachmentId = normalizeRequiredId(input.attachmentId, 'attachmentId');
+  const asset: 'source' | 'preview' | null = input.asset === 'source' || input.asset === 'preview'
+    ? input.asset
+    : null;
+  if (!asset) {
+    throw new ConversationAssetCapabilityInputError('asset must be "source" or "preview"');
+  }
+
+  if (input.revision !== undefined && (!Number.isInteger(input.revision) || input.revision <= 0)) {
+    throw new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.');
+  }
+
+  return {
+    conversationId,
+    attachmentId,
+    asset,
+    ...(input.revision ? { revision: input.revision } : {}),
   };
 }
 
@@ -202,4 +235,23 @@ export function deleteConversationAttachmentCapability(
     attachmentId,
     attachments: buildAttachmentListResult(profile, conversationId).attachments,
   };
+}
+
+export function readConversationAttachmentDownloadCapability(
+  profile: string,
+  input: ConversationAttachmentDownloadInput,
+) {
+  try {
+    return readConversationAttachmentDownload({
+      profile,
+      ...normalizeAttachmentDownloadInput(input),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.toLowerCase().includes('not found')) {
+      throw new ConversationAssetCapabilityNotFoundError(message);
+    }
+
+    throw error;
+  }
 }

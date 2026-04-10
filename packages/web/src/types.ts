@@ -79,6 +79,12 @@ export interface ConversationAttachmentRecord extends ConversationAttachmentSumm
   revisions: ConversationAttachmentRevision[];
 }
 
+export interface ConversationAttachmentAssetData {
+  dataUrl: string;
+  mimeType: string;
+  fileName: string;
+}
+
 export type MessageBlock =
   | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
