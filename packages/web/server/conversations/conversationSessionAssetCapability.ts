@@ -1,8 +1,13 @@
-import type { DisplayBlock } from './sessions.js';
+import type { ReadConversationBootstrapStateResult } from './conversationBootstrap.js';
+import type { DisplayBlock, SessionDetail, SessionDetailAppendOnlyResponse } from './sessions.js';
 import { readSessionBlock, readSessionImageAsset } from './sessions.js';
 
 function toDataUrl(mimeType: string, data: Buffer): string {
   return `data:${mimeType};base64,${data.toString('base64')}`;
+}
+
+function shouldInlineSessionAssetSrc(src: string | undefined): boolean {
+  return typeof src === 'string' && src.startsWith('/api/sessions/');
 }
 
 function inlineSessionUserBlockImages(sessionId: string, block: Extract<DisplayBlock, { type: 'user' }>): DisplayBlock {
@@ -12,7 +17,7 @@ function inlineSessionUserBlockImages(sessionId: string, block: Extract<DisplayB
 
   let changed = false;
   const images = block.images.map((image, imageIndex) => {
-    if (!image.src) {
+    if (!shouldInlineSessionAssetSrc(image.src)) {
       return image;
     }
 
@@ -33,7 +38,7 @@ function inlineSessionUserBlockImages(sessionId: string, block: Extract<DisplayB
 }
 
 function inlineSessionImageBlock(sessionId: string, block: Extract<DisplayBlock, { type: 'image' }>): DisplayBlock {
-  if (!block.id || !block.src) {
+  if (!block.id || !shouldInlineSessionAssetSrc(block.src)) {
     return block;
   }
 
@@ -58,6 +63,56 @@ export function inlineConversationSessionBlockAssetsCapability(sessionId: string
     default:
       return block;
   }
+}
+
+export function inlineConversationSessionBlocksAssetsCapability(sessionId: string, blocks: DisplayBlock[]): DisplayBlock[] {
+  let changed = false;
+  const nextBlocks = blocks.map((block) => {
+    const nextBlock = inlineConversationSessionBlockAssetsCapability(sessionId, block);
+    if (nextBlock !== block) {
+      changed = true;
+    }
+    return nextBlock;
+  });
+
+  return changed ? nextBlocks : blocks;
+}
+
+export function inlineConversationSessionDetailAssetsCapability(sessionId: string, detail: SessionDetail): SessionDetail {
+  const blocks = inlineConversationSessionBlocksAssetsCapability(sessionId, detail.blocks);
+  return blocks === detail.blocks ? detail : { ...detail, blocks };
+}
+
+export function inlineConversationSessionDetailAppendOnlyAssetsCapability(
+  sessionId: string,
+  detail: SessionDetailAppendOnlyResponse,
+): SessionDetailAppendOnlyResponse {
+  const blocks = inlineConversationSessionBlocksAssetsCapability(sessionId, detail.blocks);
+  return blocks === detail.blocks ? detail : { ...detail, blocks };
+}
+
+export function inlineConversationBootstrapAssetsCapability(
+  state: ReadConversationBootstrapStateResult['state'],
+): ReadConversationBootstrapStateResult['state'] {
+  const sessionId = state.conversationId.trim();
+  if (!sessionId) {
+    return state;
+  }
+
+  const sessionDetail = state.sessionDetail
+    ? inlineConversationSessionDetailAssetsCapability(sessionId, state.sessionDetail)
+    : state.sessionDetail;
+  const sessionDetailAppendOnly = state.sessionDetailAppendOnly
+    ? inlineConversationSessionDetailAppendOnlyAssetsCapability(sessionId, state.sessionDetailAppendOnly)
+    : state.sessionDetailAppendOnly;
+
+  return sessionDetail === state.sessionDetail && sessionDetailAppendOnly === state.sessionDetailAppendOnly
+    ? state
+    : {
+        ...state,
+        sessionDetail,
+        sessionDetailAppendOnly,
+      };
 }
 
 export function readConversationSessionBlockWithInlineAssetsCapability(sessionId: string, blockId: string): DisplayBlock | null {

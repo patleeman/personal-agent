@@ -14,7 +14,11 @@ vi.mock('./sessions.js', () => ({
 }));
 
 import {
+  inlineConversationBootstrapAssetsCapability,
   inlineConversationSessionBlockAssetsCapability,
+  inlineConversationSessionBlocksAssetsCapability,
+  inlineConversationSessionDetailAppendOnlyAssetsCapability,
+  inlineConversationSessionDetailAssetsCapability,
   readConversationSessionBlockWithInlineAssetsCapability,
 } from './conversationSessionAssetCapability.js';
 
@@ -77,6 +81,19 @@ describe('conversationSessionAssetCapability', () => {
     expect(readSessionImageAssetMock).toHaveBeenCalledWith('conversation-1', 'tool-block-1-i0');
   });
 
+  it('leaves session-image blocks alone when they are already inlined', () => {
+    const block = {
+      id: 'tool-block-1-i0',
+      type: 'image' as const,
+      alt: 'Tool image result',
+      src: 'data:image/png;base64,abcd',
+      ts: '2026-04-10T12:00:00.000Z',
+    };
+
+    expect(inlineConversationSessionBlockAssetsCapability('conversation-1', block)).toEqual(block);
+    expect(readSessionImageAssetMock).not.toHaveBeenCalled();
+  });
+
   it('falls back to the original block when an image asset cannot be read', () => {
     readSessionImageAssetMock.mockReturnValueOnce(null);
 
@@ -89,6 +106,107 @@ describe('conversationSessionAssetCapability', () => {
     };
 
     expect(inlineConversationSessionBlockAssetsCapability('conversation-1', block)).toEqual(block);
+  });
+
+  it('inlines assets across a session-detail block list', () => {
+    readSessionImageAssetMock
+      .mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('first-image') })
+      .mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('tool-image') });
+
+    const blocks = [
+      {
+        id: 'user-block-1',
+        type: 'user' as const,
+        text: 'with images',
+        ts: '2026-04-10T12:00:00.000Z',
+        images: [{ alt: 'First', src: '/api/sessions/conversation-1/blocks/user-block-1/images/0' }],
+      },
+      {
+        id: 'tool-block-1-i0',
+        type: 'image' as const,
+        alt: 'Tool image result',
+        src: '/api/sessions/conversation-1/blocks/tool-block-1-i0/image',
+        ts: '2026-04-10T12:00:00.000Z',
+      },
+    ];
+
+    expect(inlineConversationSessionBlocksAssetsCapability('conversation-1', blocks)).toEqual([
+      {
+        id: 'user-block-1',
+        type: 'user',
+        text: 'with images',
+        ts: '2026-04-10T12:00:00.000Z',
+        images: [{ alt: 'First', src: 'data:image/png;base64,Zmlyc3QtaW1hZ2U=', mimeType: 'image/png' }],
+      },
+      {
+        id: 'tool-block-1-i0',
+        type: 'image',
+        alt: 'Tool image result',
+        src: 'data:image/png;base64,dG9vbC1pbWFnZQ==',
+        mimeType: 'image/png',
+        ts: '2026-04-10T12:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('inlines assets across session-detail, append-only, and bootstrap payloads', () => {
+    readSessionImageAssetMock
+      .mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('detail-image') })
+      .mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('append-image') });
+
+    const detail = inlineConversationSessionDetailAssetsCapability('conversation-1', {
+      meta: { id: 'conversation-1' },
+      blocks: [{
+        id: 'user-block-1',
+        type: 'user',
+        text: 'detail image',
+        ts: '2026-04-10T12:00:00.000Z',
+        images: [{ alt: 'Detail', src: '/api/sessions/conversation-1/blocks/user-block-1/images/0' }],
+      }],
+      blockOffset: 0,
+      totalBlocks: 1,
+      contextUsage: null,
+    } as never);
+    const appendOnly = inlineConversationSessionDetailAppendOnlyAssetsCapability('conversation-1', {
+      appendOnly: true,
+      meta: { id: 'conversation-1' },
+      blocks: [{
+        id: 'tool-block-1-i0',
+        type: 'image',
+        alt: 'Append image',
+        src: '/api/sessions/conversation-1/blocks/tool-block-1-i0/image',
+        ts: '2026-04-10T12:00:00.000Z',
+      }],
+      blockOffset: 1,
+      totalBlocks: 2,
+      contextUsage: null,
+      signature: 'sig-2',
+    });
+    const bootstrap = inlineConversationBootstrapAssetsCapability({
+      conversationId: 'conversation-1',
+      sessionDetail: detail,
+      sessionDetailAppendOnly: appendOnly,
+      liveSession: { live: false },
+      sessionDetailSignature: 'sig-2',
+    });
+
+    expect(detail.blocks[0]).toEqual({
+      id: 'user-block-1',
+      type: 'user',
+      text: 'detail image',
+      ts: '2026-04-10T12:00:00.000Z',
+      images: [{ alt: 'Detail', src: 'data:image/png;base64,ZGV0YWlsLWltYWdl', mimeType: 'image/png' }],
+    });
+    expect(appendOnly.blocks[0]).toEqual({
+      id: 'tool-block-1-i0',
+      type: 'image',
+      alt: 'Append image',
+      src: 'data:image/png;base64,YXBwZW5kLWltYWdl',
+      mimeType: 'image/png',
+      ts: '2026-04-10T12:00:00.000Z',
+    });
+    expect(bootstrap.sessionDetail?.blocks[0]).toEqual(detail.blocks[0]);
+    expect(bootstrap.sessionDetailAppendOnly?.blocks[0]).toEqual(appendOnly.blocks[0]);
   });
 
   it('reads session blocks and inlines their assets for local desktop hydration', () => {

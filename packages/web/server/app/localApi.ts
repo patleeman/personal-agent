@@ -63,7 +63,12 @@ import {
   readConversationSessionSearchIndexCapability,
   readConversationSessionsCapability,
 } from '../conversations/conversationSessionCapability.js';
-import { readConversationSessionBlockWithInlineAssetsCapability } from '../conversations/conversationSessionAssetCapability.js';
+import {
+  inlineConversationBootstrapAssetsCapability,
+  inlineConversationSessionDetailAssetsCapability,
+  inlineConversationSessionDetailAppendOnlyAssetsCapability,
+  readConversationSessionBlockWithInlineAssetsCapability,
+} from '../conversations/conversationSessionAssetCapability.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   publishConversationSessionMetaChanged,
@@ -1845,7 +1850,7 @@ export async function readDesktopConversationBootstrap(input: {
     throw new Error('Conversation not found');
   }
 
-  return bootstrap.state;
+  return inlineConversationBootstrapAssetsCapability(bootstrap.state);
 }
 
 export async function renameDesktopConversation(input: {
@@ -2248,7 +2253,11 @@ export async function readDesktopSessionDetail(input: {
       })
     : null;
 
-  return appendOnly ?? sessionRead.detail;
+  if (appendOnly) {
+    return inlineConversationSessionDetailAppendOnlyAssetsCapability(sessionId, appendOnly);
+  }
+
+  return inlineConversationSessionDetailAssetsCapability(sessionId, sessionRead.detail);
 }
 
 export async function readDesktopSessionBlock(input: {
