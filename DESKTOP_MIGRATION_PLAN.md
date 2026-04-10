@@ -114,7 +114,7 @@ Goal: the menu bar app and main process own local background behavior.
 - [x] alerts/activity/inbox state
 - [ ] reminders/deferred resumes/wakeups
 - [ ] system/runtime status used by the desktop UI
-- [ ] provider auth and model preferences needed in the app
+- [x] provider auth and model preferences needed in the app
 
 Success bar:
 
@@ -263,6 +263,7 @@ Just completed:
 - local desktop durable run list/detail/log/cancel now use dedicated desktop bridge methods instead of the generic local API path
 - local desktop scheduled task list/detail/log/create/update/run now use dedicated desktop bridge methods instead of the generic local API path
 - local desktop alerts/activity/inbox reads and mutations now use dedicated desktop bridge methods instead of the generic local API path
+- local desktop provider/model operator flows now use dedicated desktop bridge methods for models, model providers, provider auth, Codex usage, and provider OAuth state/actions instead of the generic local API path
 - local desktop conversation recovery and live-session fork-entry reads now use dedicated desktop bridge methods instead of the generic local API path, so forking older local conversations can stay on typed IPC while remote hosts keep the existing HTTP fallback
 - packaged desktop local-api module loading now resolves the bundled `@personal-agent/web/dist-server/app/localApi.js` path in packaged builds instead of assuming a dev-worktree-relative module path
-- validation for this slice: targeted Vitest coverage for desktop bridge routing, local host controller routing, inbox capability routing, scheduled-task capability routing, conversation recovery, and packaged local-api module resolution, plus `npm --prefix packages/web run build`, `npm --prefix packages/desktop run build`, and agent-browser smoke checks against the built Electron app covering live-session creation, conversation model-preference reads/updates, conversation cwd changes, durable run bridge reads, task create/detail/edit flows, and inbox bridge reads in local desktop mode
+- validation for this slice: targeted Vitest coverage for desktop bridge routing, local host controller routing, provider OAuth desktop subscriptions, models routes, inbox capability routing, scheduled-task capability routing, conversation recovery, and packaged local-api module resolution, plus `npm --prefix packages/web run build`, `npm --prefix packages/desktop run build`, and agent-browser smoke checks against the built Electron app covering live-session creation, conversation model-preference reads/updates, conversation cwd changes, durable run bridge reads, task create/detail/edit flows, inbox bridge reads, and provider/model bridge reads in local desktop mode

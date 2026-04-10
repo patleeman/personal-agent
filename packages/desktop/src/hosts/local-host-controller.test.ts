@@ -26,6 +26,30 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
   return {
     invokeDesktopLocalApi: vi.fn(),
     dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopProfiles: vi.fn(),
+    setDesktopCurrentProfile: vi.fn(),
+    readDesktopModels: vi.fn(),
+    updateDesktopModelPreferences: vi.fn(),
+    readDesktopDefaultCwd: vi.fn(),
+    updateDesktopDefaultCwd: vi.fn(),
+    readDesktopVaultRoot: vi.fn(),
+    updateDesktopVaultRoot: vi.fn(),
+    readDesktopConversationTitleSettings: vi.fn(),
+    updateDesktopConversationTitleSettings: vi.fn(),
+    readDesktopModelProviders: vi.fn(),
+    saveDesktopModelProvider: vi.fn(),
+    deleteDesktopModelProvider: vi.fn(),
+    saveDesktopModelProviderModel: vi.fn(),
+    deleteDesktopModelProviderModel: vi.fn(),
+    readDesktopProviderAuth: vi.fn(),
+    readDesktopCodexPlanUsage: vi.fn(),
+    setDesktopProviderApiKey: vi.fn(),
+    removeDesktopProviderCredential: vi.fn(),
+    startDesktopProviderOAuthLogin: vi.fn(),
+    readDesktopProviderOAuthLogin: vi.fn(),
+    submitDesktopProviderOAuthLoginInput: vi.fn(),
+    cancelDesktopProviderOAuthLogin: vi.fn(),
+    subscribeDesktopProviderOAuthLogin: vi.fn(),
     readDesktopActivity: vi.fn(),
     readDesktopActivityById: vi.fn(),
     markDesktopActivityRead: vi.fn(),
@@ -114,6 +138,132 @@ describe('LocalHostController', () => {
         surfaceId: 'surface-1',
       },
     });
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop operator settings through the local API module without loopback proxying', async () => {
+    const readDesktopProfiles = vi.fn().mockResolvedValue({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
+    const setDesktopCurrentProfile = vi.fn().mockResolvedValue({ ok: true, currentProfile: 'shared' });
+    const readDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
+    const updateDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
+    const readDesktopVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    const updateDesktopVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    const readDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
+    const updateDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopProfiles,
+      setDesktopCurrentProfile,
+      readDesktopDefaultCwd,
+      updateDesktopDefaultCwd,
+      readDesktopVaultRoot,
+      updateDesktopVaultRoot,
+      readDesktopConversationTitleSettings,
+      updateDesktopConversationTitleSettings,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.readProfiles?.()).resolves.toEqual({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
+    await expect(controller.setCurrentProfile?.('shared')).resolves.toEqual({ ok: true, currentProfile: 'shared' });
+    await expect(controller.readDefaultCwd?.()).resolves.toEqual({ currentCwd: '', effectiveCwd: '/repo' });
+    await expect(controller.updateDefaultCwd?.('./repo')).resolves.toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
+    await expect(controller.readVaultRoot?.()).resolves.toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    await expect(controller.updateVaultRoot?.('~/vault')).resolves.toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    await expect(controller.readConversationTitleSettings?.()).resolves.toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
+    await expect(controller.updateConversationTitleSettings?.({ enabled: false, model: 'anthropic/claude-sonnet-4-6' })).resolves.toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+
+    expect(readDesktopProfiles).toHaveBeenCalledTimes(1);
+    expect(setDesktopCurrentProfile).toHaveBeenCalledWith('shared');
+    expect(readDesktopDefaultCwd).toHaveBeenCalledTimes(1);
+    expect(updateDesktopDefaultCwd).toHaveBeenCalledWith('./repo');
+    expect(readDesktopVaultRoot).toHaveBeenCalledTimes(1);
+    expect(updateDesktopVaultRoot).toHaveBeenCalledWith('~/vault');
+    expect(readDesktopConversationTitleSettings).toHaveBeenCalledTimes(1);
+    expect(updateDesktopConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes dedicated model and provider capabilities through the local API module without loopback proxying', async () => {
+    const unsubscribeProviderOAuth = vi.fn();
+    const readDesktopModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    const updateDesktopModelPreferences = vi.fn().mockResolvedValue({ ok: true });
+    const readDesktopModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const saveDesktopModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const deleteDesktopModelProvider = vi.fn().mockResolvedValue({ providers: [] });
+    const saveDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
+    const deleteDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const readDesktopProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    const readDesktopCodexPlanUsage = vi.fn().mockResolvedValue({ available: true, planType: 'plus' });
+    const setDesktopProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    const removeDesktopProviderCredential = vi.fn().mockResolvedValue({ providers: [] });
+    const startDesktopProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    const readDesktopProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    const submitDesktopProviderOAuthLoginInput = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    const cancelDesktopProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'cancelled' });
+    const subscribeDesktopProviderOAuthLogin = vi.fn().mockResolvedValue(unsubscribeProviderOAuth);
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopModels,
+      updateDesktopModelPreferences,
+      readDesktopModelProviders,
+      saveDesktopModelProvider,
+      deleteDesktopModelProvider,
+      saveDesktopModelProviderModel,
+      deleteDesktopModelProviderModel,
+      readDesktopProviderAuth,
+      readDesktopCodexPlanUsage,
+      setDesktopProviderApiKey,
+      removeDesktopProviderCredential,
+      startDesktopProviderOAuthLogin,
+      readDesktopProviderOAuthLogin,
+      submitDesktopProviderOAuthLoginInput,
+      cancelDesktopProviderOAuthLogin,
+      subscribeDesktopProviderOAuthLogin,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+    const onState = vi.fn();
+
+    await expect(controller.readModels?.()).resolves.toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    await expect(controller.updateModelPreferences?.({ model: 'gpt-5.4', thinkingLevel: 'medium' })).resolves.toEqual({ ok: true });
+    await expect(controller.readModelProviders?.()).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    await expect(controller.saveModelProvider?.({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    await expect(controller.deleteModelProvider?.('openrouter')).resolves.toEqual({ providers: [] });
+    await expect(controller.saveModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
+    await expect(controller.deleteModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    await expect(controller.readProviderAuth?.()).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    await expect(controller.readCodexPlanUsage?.()).resolves.toEqual({ available: true, planType: 'plus' });
+    await expect(controller.setProviderApiKey?.({ provider: 'openai', apiKey: 'sk-test' })).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    await expect(controller.removeProviderCredential?.('openai')).resolves.toEqual({ providers: [] });
+    await expect(controller.startProviderOAuthLogin?.('openrouter')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    await expect(controller.readProviderOAuthLogin?.('login-1')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    await expect(controller.submitProviderOAuthLoginInput?.({ loginId: 'login-1', value: '123456' })).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
+    await expect(controller.cancelProviderOAuthLogin?.('login-1')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'cancelled' });
+    await expect(controller.subscribeProviderOAuthLogin?.('login-1', onState)).resolves.toBe(unsubscribeProviderOAuth);
+
+    expect(readDesktopModels).toHaveBeenCalledTimes(1);
+    expect(updateDesktopModelPreferences).toHaveBeenCalledWith({ model: 'gpt-5.4', thinkingLevel: 'medium' });
+    expect(readDesktopModelProviders).toHaveBeenCalledTimes(1);
+    expect(saveDesktopModelProvider).toHaveBeenCalledWith({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' });
+    expect(deleteDesktopModelProvider).toHaveBeenCalledWith('openrouter');
+    expect(saveDesktopModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
+    expect(deleteDesktopModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
+    expect(readDesktopProviderAuth).toHaveBeenCalledTimes(1);
+    expect(readDesktopCodexPlanUsage).toHaveBeenCalledTimes(1);
+    expect(setDesktopProviderApiKey).toHaveBeenCalledWith({ provider: 'openai', apiKey: 'sk-test' });
+    expect(removeDesktopProviderCredential).toHaveBeenCalledWith('openai');
+    expect(startDesktopProviderOAuthLogin).toHaveBeenCalledWith('openrouter');
+    expect(readDesktopProviderOAuthLogin).toHaveBeenCalledWith('login-1');
+    expect(submitDesktopProviderOAuthLoginInput).toHaveBeenCalledWith({ loginId: 'login-1', value: '123456' });
+    expect(cancelDesktopProviderOAuthLogin).toHaveBeenCalledWith('login-1');
+    expect(subscribeDesktopProviderOAuthLogin).toHaveBeenCalledWith('login-1', onState);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

@@ -7,6 +7,7 @@ import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '..
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
 import { createDesktopAwareEventSource } from '../desktopEventSource';
+import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
   CodexPlanUsageState,
   DesktopConnectionsState,
@@ -1140,24 +1141,51 @@ export function SettingsPage() {
     }
 
     const loginId = oauthLoginState.id;
-    const stream = createDesktopAwareEventSource(`/api/provider-auth/oauth/${encodeURIComponent(loginId)}/events`);
-    stream.onmessage = (event) => {
-      let payload: ProviderOAuthLoginStreamEvent;
-      try {
-        payload = JSON.parse(event.data) as ProviderOAuthLoginStreamEvent;
-      } catch {
-        return;
+    let cancelled = false;
+    let cleanup: (() => void) | null = null;
+
+    void (async () => {
+      const desktopBridge = getDesktopBridge();
+      if (desktopBridge && desktopEnvironment?.activeHostKind === 'local') {
+        try {
+          cleanup = await subscribeDesktopProviderOAuthLogin(loginId, setOauthLoginState);
+          if (cancelled) {
+            cleanup();
+          }
+          return;
+        } catch {
+          // Fall through to the desktop-aware EventSource bridge.
+        }
       }
 
-      if (payload.type === 'snapshot') {
-        setOauthLoginState(payload.data);
+      const stream = createDesktopAwareEventSource(`/api/provider-auth/oauth/${encodeURIComponent(loginId)}/events`);
+      stream.onmessage = (event) => {
+        let payload: ProviderOAuthLoginStreamEvent;
+        try {
+          payload = JSON.parse(event.data) as ProviderOAuthLoginStreamEvent;
+        } catch {
+          return;
+        }
+
+        if (payload.type === 'snapshot') {
+          setOauthLoginState(payload.data);
+        }
+      };
+      cleanup = () => {
+        stream.close();
+      };
+      if (cancelled) {
+        cleanup();
       }
-    };
+    })().catch(() => {
+      // Ignore best-effort OAuth bridge setup failures here.
+    });
 
     return () => {
-      stream.close();
+      cancelled = true;
+      cleanup?.();
     };
-  }, [oauthLoginState?.id, oauthLoginState?.status]);
+  }, [desktopEnvironment?.activeHostKind, oauthLoginState?.id, oauthLoginState?.status]);
 
   useEffect(() => {
     if (!oauthLoginState?.id) {

@@ -3,8 +3,12 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  getDefaultVaultRoot,
   getPiAgentRuntimeDir,
   getStateRoot,
+  getVaultRoot,
+  readMachineConfig,
+  updateMachineConfig,
 } from '@personal-agent/core';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
@@ -69,14 +73,45 @@ import {
 } from '../conversations/sessions.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
-import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
+import type { ServerRouteContext } from '../routes/context.js';
+import {
+  getProviderOAuthLoginState,
+  subscribeProviderOAuthLogin,
+} from '../models/providerAuth.js';
+import {
+  cancelProviderOAuthLoginCapability,
+  deleteModelProviderCapability,
+  deleteModelProviderModelCapability,
+  readCodexPlanUsageCapability,
+  readModelProvidersCapability,
+  readProviderAuthCapability,
+  readProviderOAuthLoginCapability,
+  removeProviderCredentialCapability,
+  saveModelProviderCapability,
+  saveModelProviderModelCapability,
+  setProviderApiKeyCapability,
+  startProviderOAuthLoginCapability,
+  submitProviderOAuthLoginInputCapability,
+  type ProviderDesktopCapabilityContext,
+} from '../models/providerDesktopCapability.js';
+import { readModelState } from '../models/modelState.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { subscribeAppEvents } from '../shared/appEvents.js';
-import { getProfileConfigFilePath } from '../ui/profilePreferences.js';
-import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
+import {
+  getProfileConfigFilePath,
+} from '../ui/profilePreferences.js';
+import {
+  readSavedConversationTitlePreferences,
+  writeSavedConversationTitlePreferences,
+} from '../ui/conversationTitlePreferences.js';
+import {
+  readSavedDefaultCwdPreferences,
+  writeSavedDefaultCwdPreference,
+} from '../ui/defaultCwdPreferences.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
-import { readSavedModelPreferences } from '../models/modelPreferences.js';
+import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
   branchLiveSessionCapability,
@@ -249,7 +284,9 @@ class LocalApiResponse {
 }
 
 let localRoutesPromise: Promise<RegisteredRoute[]> | null = null;
+let localServerRouteContext: ServerRouteContext | null = null;
 let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
+let localProviderDesktopCapabilityContext: ProviderDesktopCapabilityContext | null = null;
 let localInboxCapabilityContext: {
   getCurrentProfile: () => string;
   getRepoRoot: () => string;
@@ -436,6 +473,8 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getDurableRunSnapshot: async (runId: string, tail: number) => (await getDurableRunSnapshot(runId, tail)) ?? null,
   });
 
+  localServerRouteContext = context;
+
   localLiveSessionCapabilityContext = {
     getCurrentProfile: context.getCurrentProfile,
     getRepoRoot: context.getRepoRoot,
@@ -445,6 +484,12 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     flushLiveDeferredResumes: context.flushLiveDeferredResumes,
     listTasksForCurrentProfile: context.listTasksForCurrentProfile,
     listMemoryDocs: context.listMemoryDocs,
+  };
+
+  localProviderDesktopCapabilityContext = {
+    getCurrentProfile: context.getCurrentProfile,
+    materializeWebProfile: context.materializeWebProfile,
+    getAuthFile: context.getAuthFile,
   };
 
   localInboxCapabilityContext = {
@@ -476,6 +521,15 @@ async function getLocalRoutes(): Promise<RegisteredRoute[]> {
   return localRoutesPromise;
 }
 
+async function getLocalServerRouteContext(): Promise<ServerRouteContext> {
+  await getLocalRoutes();
+  if (!localServerRouteContext) {
+    throw new Error('Local server route context is not initialized.');
+  }
+
+  return localServerRouteContext;
+}
+
 async function getLocalLiveSessionCapabilityContext(): Promise<LiveSessionCapabilityContext> {
   await getLocalRoutes();
   if (!localLiveSessionCapabilityContext) {
@@ -485,6 +539,15 @@ async function getLocalLiveSessionCapabilityContext(): Promise<LiveSessionCapabi
   return localLiveSessionCapabilityContext;
 }
 
+async function getLocalProviderDesktopCapabilityContext(): Promise<ProviderDesktopCapabilityContext> {
+  await getLocalRoutes();
+  if (!localProviderDesktopCapabilityContext) {
+    throw new Error('Local provider/model capability context is not initialized.');
+  }
+
+  return localProviderDesktopCapabilityContext;
+}
+
 async function getLocalInboxCapabilityContext() {
   await getLocalRoutes();
   if (!localInboxCapabilityContext) {
@@ -492,6 +555,24 @@ async function getLocalInboxCapabilityContext() {
   }
 
   return localInboxCapabilityContext;
+}
+
+function expandHomePath(value: string): string {
+  if (value === '~') {
+    return process.env.HOME ?? value;
+  }
+
+  if (value.startsWith('~/')) {
+    const home = process.env.HOME;
+    return home ? join(home, value.slice(2)) : value;
+  }
+
+  return value;
+}
+
+function readConfiguredVaultRoot(): string {
+  const config = readMachineConfig() as { vaultRoot?: unknown };
+  return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
 }
 
 function renderStatusText(statusCode: number): string {
@@ -1051,6 +1132,281 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
   }
 
   return bodyText as T;
+}
+
+export async function readDesktopProfiles() {
+  const context = await getLocalServerRouteContext();
+  return {
+    currentProfile: context.getCurrentProfile(),
+    profiles: context.listAvailableProfiles(),
+  };
+}
+
+export async function setDesktopCurrentProfile(profileInput: string) {
+  const context = await getLocalServerRouteContext();
+  const profile = profileInput.trim();
+  if (!profile) {
+    throw new Error('profile required');
+  }
+
+  return {
+    ok: true as const,
+    currentProfile: await context.setCurrentProfile(profile),
+  };
+}
+
+export async function readDesktopModels() {
+  return readModelState(DEFAULT_RUNTIME_SETTINGS_FILE);
+}
+
+export async function updateDesktopModelPreferences(input: {
+  model?: string | null;
+  thinkingLevel?: string | null;
+}) {
+  if (typeof input.model !== 'string' && typeof input.thinkingLevel !== 'string') {
+    throw new Error('model or thinkingLevel required');
+  }
+
+  const context = await getLocalServerRouteContext();
+  const models = readModelState(DEFAULT_RUNTIME_SETTINGS_FILE).models;
+  persistSettingsWrite((settingsFile) => {
+    writeSavedModelPreferences({
+      model: input.model,
+      thinkingLevel: input.thinkingLevel,
+    }, settingsFile, models);
+  }, {
+    localSettingsFile: context.getCurrentProfileSettingsFile(),
+    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+  });
+
+  context.materializeWebProfile(context.getCurrentProfile());
+  return { ok: true as const };
+}
+
+export async function readDesktopDefaultCwd() {
+  return readSavedDefaultCwdPreferences(DEFAULT_RUNTIME_SETTINGS_FILE, process.cwd());
+}
+
+export async function updateDesktopDefaultCwd(cwd: string | null) {
+  const context = await getLocalServerRouteContext();
+  const state = persistSettingsWrite((settingsFile) => writeSavedDefaultCwdPreference(
+    { cwd },
+    settingsFile,
+    { baseDir: process.cwd(), validate: true },
+  ), {
+    localSettingsFile: context.getCurrentProfileSettingsFile(),
+    runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+  });
+
+  context.materializeWebProfile(context.getCurrentProfile());
+  return state;
+}
+
+export async function readDesktopVaultRoot() {
+  const currentRoot = readConfiguredVaultRoot();
+  const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
+    ? 'env'
+    : currentRoot.length > 0
+      ? 'config'
+      : 'default';
+
+  return {
+    currentRoot,
+    effectiveRoot: getVaultRoot(),
+    defaultRoot: getDefaultVaultRoot(),
+    source,
+  };
+}
+
+export async function updateDesktopVaultRoot(root: string | null) {
+  if (root !== undefined && root !== null && typeof root !== 'string') {
+    throw new Error('root must be a string or null');
+  }
+
+  const normalizedRoot = typeof root === 'string' ? root.trim() : '';
+  if (normalizedRoot.length > 0) {
+    const resolvedRoot = expandHomePath(normalizedRoot);
+    if (!existsSync(resolvedRoot)) {
+      throw new Error(`Directory does not exist: ${resolvedRoot}`);
+    }
+    if (!statSync(resolvedRoot).isDirectory()) {
+      throw new Error(`Not a directory: ${resolvedRoot}`);
+    }
+  }
+
+  updateMachineConfig((current) => {
+    const next = { ...(current as Record<string, unknown>) };
+    if (normalizedRoot.length > 0) {
+      next.vaultRoot = normalizedRoot;
+    } else {
+      delete next.vaultRoot;
+    }
+    return next as typeof current;
+  });
+
+  const context = await getLocalServerRouteContext();
+  context.materializeWebProfile(context.getCurrentProfile());
+  return readDesktopVaultRoot();
+}
+
+export async function readDesktopConversationTitleSettings() {
+  return readSavedConversationTitlePreferences(DEFAULT_RUNTIME_SETTINGS_FILE);
+}
+
+export async function updateDesktopConversationTitleSettings(input: {
+  enabled?: boolean;
+  model?: string | null;
+}) {
+  const { enabled, model } = input;
+  if (typeof enabled !== 'boolean' && typeof model !== 'string' && model !== null) {
+    throw new Error('enabled or model required');
+  }
+
+  return persistSettingsWrite(
+    (settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile),
+    { runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE },
+  );
+}
+
+export async function readDesktopModelProviders() {
+  return readModelProvidersCapability(await getLocalProviderDesktopCapabilityContext());
+}
+
+export async function readDesktopProviderAuth() {
+  return readProviderAuthCapability(await getLocalProviderDesktopCapabilityContext());
+}
+
+export async function readDesktopCodexPlanUsage() {
+  try {
+    return await readCodexPlanUsageCapability(await getLocalProviderDesktopCapabilityContext());
+  } catch (error) {
+    return {
+      available: true,
+      planType: null,
+      fiveHour: null,
+      weekly: null,
+      credits: null,
+      updatedAt: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function saveDesktopModelProvider(input: {
+  provider: string;
+  baseUrl?: string;
+  api?: string;
+  apiKey?: string;
+  authHeader?: boolean;
+  headers?: Record<string, string>;
+  compat?: Record<string, unknown>;
+  modelOverrides?: Record<string, unknown>;
+}) {
+  return saveModelProviderCapability(await getLocalProviderDesktopCapabilityContext(), input);
+}
+
+export async function deleteDesktopModelProvider(provider: string) {
+  return deleteModelProviderCapability(await getLocalProviderDesktopCapabilityContext(), provider);
+}
+
+export async function saveDesktopModelProviderModel(input: {
+  provider: string;
+  modelId: string;
+  name?: string;
+  api?: string;
+  baseUrl?: string;
+  reasoning?: boolean;
+  input?: Array<'text' | 'image'>;
+  contextWindow?: number;
+  maxTokens?: number;
+  headers?: Record<string, string>;
+  cost?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  };
+  compat?: Record<string, unknown>;
+}) {
+  return saveModelProviderModelCapability(await getLocalProviderDesktopCapabilityContext(), input);
+}
+
+export async function deleteDesktopModelProviderModel(input: {
+  provider: string;
+  modelId: string;
+}) {
+  return deleteModelProviderModelCapability(
+    await getLocalProviderDesktopCapabilityContext(),
+    input.provider,
+    input.modelId,
+  );
+}
+
+export async function setDesktopProviderApiKey(input: { provider: string; apiKey: string }) {
+  return setProviderApiKeyCapability(await getLocalProviderDesktopCapabilityContext(), input.provider, input.apiKey);
+}
+
+export async function removeDesktopProviderCredential(provider: string) {
+  return removeProviderCredentialCapability(await getLocalProviderDesktopCapabilityContext(), provider);
+}
+
+export async function startDesktopProviderOAuthLogin(provider: string) {
+  return startProviderOAuthLoginCapability(await getLocalProviderDesktopCapabilityContext(), provider);
+}
+
+export async function readDesktopProviderOAuthLogin(loginId: string) {
+  return readProviderOAuthLoginCapability(loginId);
+}
+
+export async function submitDesktopProviderOAuthLoginInput(input: { loginId: string; value: string }) {
+  return submitProviderOAuthLoginInputCapability(input.loginId, input.value);
+}
+
+export async function cancelDesktopProviderOAuthLogin(loginId: string) {
+  return cancelProviderOAuthLoginCapability(loginId);
+}
+
+export async function subscribeDesktopProviderOAuthLogin(
+  loginId: string,
+  onState: (state: unknown) => void,
+): Promise<() => void> {
+  await getLocalRoutes();
+  const normalizedLoginId = loginId.trim();
+  if (!normalizedLoginId) {
+    throw new Error('loginId required');
+  }
+
+  let closed = false;
+  let unsubscribe = () => {};
+  const handleState = (state: unknown) => {
+    if (closed) {
+      return;
+    }
+
+    onState(state);
+    if (state && typeof state === 'object' && 'status' in state) {
+      const status = typeof state.status === 'string' ? state.status : '';
+      if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+        closed = true;
+        unsubscribe();
+      }
+    }
+  };
+
+  unsubscribe = subscribeProviderOAuthLogin(normalizedLoginId, handleState);
+  const current = getProviderOAuthLoginState(normalizedLoginId);
+  if (current) {
+    handleState(current);
+  }
+
+  return () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    unsubscribe();
+  };
 }
 
 export async function readDesktopScheduledTasks() {

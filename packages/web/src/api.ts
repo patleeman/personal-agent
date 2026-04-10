@@ -264,13 +264,41 @@ export const api = {
     return get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`);
   },
   sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
-  profiles:     () => get<ProfileState>('/profiles'),
-  setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
+  profiles: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readProfiles();
+    }
+
+    return get<ProfileState>('/profiles');
+  },
+  setCurrentProfile: async (profile: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.setCurrentProfile(profile);
+    }
+
+    return patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile });
+  },
 
   // ── Models ────────────────────────────────────────────────────────────────
-  models: () => get<ModelState>('/models'),
-  modelProviders: () => get<ModelProviderState>('/model-providers'),
-  saveModelProvider: (provider: string, input: {
+  models: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readModels();
+    }
+
+    return get<ModelState>('/models');
+  },
+  modelProviders: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readModelProviders();
+    }
+
+    return get<ModelProviderState>('/model-providers');
+  },
+  saveModelProvider: async (provider: string, input: {
     baseUrl?: string;
     api?: string;
     apiKey?: string;
@@ -278,10 +306,23 @@ export const api = {
     headers?: Record<string, string>;
     compat?: Record<string, unknown>;
     modelOverrides?: Record<string, unknown>;
-  }) => post<ModelProviderState>('/model-providers/providers', { provider, ...input }),
-  deleteModelProvider: (provider: string) =>
-    del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}`),
-  saveModelProviderModel: (provider: string, input: {
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.saveModelProvider({ provider, ...input });
+    }
+
+    return post<ModelProviderState>('/model-providers/providers', { provider, ...input });
+  },
+  deleteModelProvider: async (provider: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.deleteModelProvider(provider);
+    }
+
+    return del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}`);
+  },
+  saveModelProviderModel: async (provider: string, input: {
     modelId: string;
     name?: string;
     api?: string;
@@ -298,41 +339,156 @@ export const api = {
       cacheWrite?: number;
     };
     compat?: Record<string, unknown>;
-  }) => post<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}/models`, input),
-  deleteModelProviderModel: (provider: string, modelId: string) =>
-    del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}`),
-  defaultCwd: () => get<DefaultCwdState>('/default-cwd'),
-  vaultRoot: () => get<VaultRootState>('/vault-root'),
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.saveModelProviderModel({ provider, ...input });
+    }
+
+    return post<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}/models`, input);
+  },
+  deleteModelProviderModel: async (provider: string, modelId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.deleteModelProviderModel({ provider, modelId });
+    }
+
+    return del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}`);
+  },
+  defaultCwd: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readDefaultCwd();
+    }
+
+    return get<DefaultCwdState>('/default-cwd');
+  },
+  vaultRoot: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readVaultRoot();
+    }
+
+    return get<VaultRootState>('/vault-root');
+  },
   vaultFiles: () => get<VaultFileListResult>('/vault-files'),
   tools: (options?: { profile?: string }) => get<ToolsState>(withViewProfile('/tools', options?.profile)),
   installPackageSource: (input: { source: string; target: 'profile' | 'local'; profileName?: string }) =>
     post<PackageInstallResult>('/tools/packages/install', input),
   mcpServer: (server: string) => get<McpServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
   mcpTool: (server: string, tool: string) => get<McpToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`),
-  setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
-  updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
-    patch<{ ok: boolean }>('/models/current', input),
-  updateDefaultCwd: (cwd: string | null) =>
-    patch<DefaultCwdState>('/default-cwd', { cwd }),
-  updateVaultRoot: (root: string | null) =>
-    patch<VaultRootState>('/vault-root', { root }),
-  providerAuth: () => get<ProviderAuthState>('/provider-auth'),
-  codexPlanUsage: () => get<CodexPlanUsageState>('/provider-auth/openai-codex/usage'),
-  setProviderApiKey: (provider: string, apiKey: string) =>
-    patch<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}/api-key`, { apiKey }),
-  removeProviderCredential: (provider: string) =>
-    del<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}`),
-  startProviderOAuthLogin: (provider: string) =>
-    post<ProviderOAuthLoginState>(`/provider-auth/${encodeURIComponent(provider)}/oauth/start`),
-  providerOAuthLogin: (loginId: string) =>
-    get<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}`),
-  submitProviderOAuthLoginInput: (loginId: string, value: string) =>
-    post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/input`, { value }),
-  cancelProviderOAuthLogin: (loginId: string) =>
-    post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/cancel`),
-  conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
-  updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
-    patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),
+  setModel: async (model: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateModelPreferences({ model });
+    }
+
+    return patch<{ ok: boolean }>('/models/current', { model });
+  },
+  updateModelPreferences: async (input: { model?: string; thinkingLevel?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateModelPreferences(input);
+    }
+
+    return patch<{ ok: boolean }>('/models/current', input);
+  },
+  updateDefaultCwd: async (cwd: string | null) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateDefaultCwd(cwd);
+    }
+
+    return patch<DefaultCwdState>('/default-cwd', { cwd });
+  },
+  updateVaultRoot: async (root: string | null) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateVaultRoot(root);
+    }
+
+    return patch<VaultRootState>('/vault-root', { root });
+  },
+  providerAuth: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readProviderAuth();
+    }
+
+    return get<ProviderAuthState>('/provider-auth');
+  },
+  codexPlanUsage: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readCodexPlanUsage();
+    }
+
+    return get<CodexPlanUsageState>('/provider-auth/openai-codex/usage');
+  },
+  setProviderApiKey: async (provider: string, apiKey: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.setProviderApiKey({ provider, apiKey });
+    }
+
+    return patch<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}/api-key`, { apiKey });
+  },
+  removeProviderCredential: async (provider: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.removeProviderCredential(provider);
+    }
+
+    return del<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}`);
+  },
+  startProviderOAuthLogin: async (provider: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.startProviderOAuthLogin(provider);
+    }
+
+    return post<ProviderOAuthLoginState>(`/provider-auth/${encodeURIComponent(provider)}/oauth/start`);
+  },
+  providerOAuthLogin: async (loginId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readProviderOAuthLogin(loginId);
+    }
+
+    return get<ProviderOAuthLoginState | null>(`/provider-auth/oauth/${encodeURIComponent(loginId)}`);
+  },
+  submitProviderOAuthLoginInput: async (loginId: string, value: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.submitProviderOAuthLoginInput({ loginId, value });
+    }
+
+    return post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/input`, { input: value });
+  },
+  cancelProviderOAuthLogin: async (loginId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.cancelProviderOAuthLogin(loginId);
+    }
+
+    return post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/cancel`);
+  },
+  conversationTitleSettings: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationTitleSettings();
+    }
+
+    return get<ConversationTitleSettingsState>('/conversation-titles/settings');
+  },
+  updateConversationTitleSettings: async (input: { enabled?: boolean; model?: string | null }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateConversationTitleSettings(input);
+    }
+
+    return patch<ConversationTitleSettingsState>('/conversation-titles/settings', input);
+  },
   conversationPlanDefaults: () => get<ConversationAutomationPreferencesState>('/conversation-plans/defaults'),
   updateConversationPlanDefaults: (input: { defaultEnabled: boolean }) =>
     patch<ConversationAutomationPreferencesState>('/conversation-plans/defaults', input),

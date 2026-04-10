@@ -39,6 +39,21 @@ describe('api desktop transport', () => {
         projectCount: 0,
       })
       .mockResolvedValueOnce({ ok: true });
+    const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    const updateModelPreferences = vi.fn().mockResolvedValue({ ok: true });
+    const readModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const saveModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const deleteModelProvider = vi.fn().mockResolvedValue({ providers: [] });
+    const saveModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
+    const deleteModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
+    const readProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    const readCodexPlanUsage = vi.fn().mockResolvedValue({ available: true, planType: 'plus' });
+    const setProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    const removeProviderCredential = vi.fn().mockResolvedValue({ providers: [] });
+    const startProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    const readProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    const submitProviderOAuthLoginInput = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    const cancelProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
     const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
     const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
     const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
@@ -107,6 +122,21 @@ describe('api desktop transport', () => {
       personalAgentDesktop: {
         getEnvironment,
         invokeLocalApi,
+        readModels,
+        updateModelPreferences,
+        readModelProviders,
+        saveModelProvider,
+        deleteModelProvider,
+        saveModelProviderModel,
+        deleteModelProviderModel,
+        readProviderAuth,
+        readCodexPlanUsage,
+        setProviderApiKey,
+        removeProviderCredential,
+        startProviderOAuthLogin,
+        readProviderOAuthLogin,
+        submitProviderOAuthLoginInput,
+        cancelProviderOAuthLogin,
         readActivity,
         readActivityById,
         markActivityRead,
@@ -157,6 +187,21 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const status = await api.status();
+    const models = await api.models();
+    const modelPreferenceUpdate = await api.updateModelPreferences({ thinkingLevel: 'medium' });
+    const modelProviders = await api.modelProviders();
+    const savedModelProvider = await api.saveModelProvider('openrouter', { baseUrl: 'https://openrouter.ai/api' });
+    const removedModelProvider = await api.deleteModelProvider('openrouter');
+    const savedModelProviderModel = await api.saveModelProviderModel('openrouter', { modelId: 'model-a' });
+    const removedModelProviderModel = await api.deleteModelProviderModel('openrouter', 'model-a');
+    const providerAuth = await api.providerAuth();
+    const codexPlanUsage = await api.codexPlanUsage();
+    const providerApiKey = await api.setProviderApiKey('openai', 'sk-test');
+    const removedProviderCredential = await api.removeProviderCredential('openai');
+    const startedProviderOAuthLogin = await api.startProviderOAuthLogin('openrouter');
+    const providerOAuthLogin = await api.providerOAuthLogin('login-1');
+    const submittedProviderOAuthLoginInput = await api.submitProviderOAuthLoginInput('login-1', '123456');
+    const cancelledProviderOAuthLogin = await api.cancelProviderOAuthLogin('login-1');
     const activity = await api.activity();
     const activityById = await api.activityById('activity-1');
     const activityCount = await api.activityCount();
@@ -209,6 +254,21 @@ describe('api desktop transport', () => {
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
     expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
+    expect(readModels).toHaveBeenCalledTimes(1);
+    expect(updateModelPreferences).toHaveBeenCalledWith({ thinkingLevel: 'medium' });
+    expect(readModelProviders).toHaveBeenCalledTimes(1);
+    expect(saveModelProvider).toHaveBeenCalledWith({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' });
+    expect(deleteModelProvider).toHaveBeenCalledWith('openrouter');
+    expect(saveModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
+    expect(deleteModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
+    expect(readProviderAuth).toHaveBeenCalledTimes(1);
+    expect(readCodexPlanUsage).toHaveBeenCalledTimes(1);
+    expect(setProviderApiKey).toHaveBeenCalledWith({ provider: 'openai', apiKey: 'sk-test' });
+    expect(removeProviderCredential).toHaveBeenCalledWith('openai');
+    expect(startProviderOAuthLogin).toHaveBeenCalledWith('openrouter');
+    expect(readProviderOAuthLogin).toHaveBeenCalledWith('login-1');
+    expect(submitProviderOAuthLoginInput).toHaveBeenCalledWith({ loginId: 'login-1', value: '123456' });
+    expect(cancelProviderOAuthLogin).toHaveBeenCalledWith('login-1');
     expect(readActivity).toHaveBeenCalledTimes(1);
     expect(readActivityById).toHaveBeenCalledWith('activity-1');
     expect(readActivityCount).toHaveBeenCalledTimes(1);
@@ -285,6 +345,21 @@ describe('api desktop transport', () => {
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toMatchObject({ profile: 'assistant' });
+    expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    expect(modelPreferenceUpdate).toEqual({ ok: true });
+    expect(modelProviders).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    expect(savedModelProvider).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    expect(removedModelProvider).toEqual({ providers: [] });
+    expect(savedModelProviderModel).toEqual({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
+    expect(removedModelProviderModel).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
+    expect(providerAuth).toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    expect(codexPlanUsage).toEqual({ available: true, planType: 'plus' });
+    expect(providerApiKey).toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
+    expect(removedProviderCredential).toEqual({ providers: [] });
+    expect(startedProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    expect(providerOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    expect(submittedProviderOAuthLoginInput).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
+    expect(cancelledProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
     expect(activity).toEqual([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
     expect(activityById).toEqual({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
     expect(activityCount).toEqual({ count: 1 });
@@ -337,6 +412,67 @@ describe('api desktop transport', () => {
     expect(summaryFork).toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     expect(aborted).toEqual({ ok: true });
     expect(destroyed).toEqual({ ok: true });
+  });
+
+  it('uses dedicated desktop operator settings bridges on the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const readProfiles = vi.fn().mockResolvedValue({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
+    const setCurrentProfile = vi.fn().mockResolvedValue({ ok: true, currentProfile: 'shared' });
+    const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
+    const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
+    const readVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    const updateVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    const readConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
+    const updateConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        readProfiles,
+        setCurrentProfile,
+        readDefaultCwd,
+        updateDefaultCwd,
+        readVaultRoot,
+        updateVaultRoot,
+        readConversationTitleSettings,
+        updateConversationTitleSettings,
+      },
+    });
+
+    const { api } = await import('./api');
+    const profiles = await api.profiles();
+    const switchedProfile = await api.setCurrentProfile('shared');
+    const defaultCwd = await api.defaultCwd();
+    const savedDefaultCwd = await api.updateDefaultCwd('./repo');
+    const vaultRoot = await api.vaultRoot();
+    const savedVaultRoot = await api.updateVaultRoot('~/vault');
+    const conversationTitleSettings = await api.conversationTitleSettings();
+    const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+
+    expect(readProfiles).toHaveBeenCalledTimes(1);
+    expect(setCurrentProfile).toHaveBeenCalledWith('shared');
+    expect(readDefaultCwd).toHaveBeenCalledTimes(1);
+    expect(updateDefaultCwd).toHaveBeenCalledWith('./repo');
+    expect(readVaultRoot).toHaveBeenCalledTimes(1);
+    expect(updateVaultRoot).toHaveBeenCalledWith('~/vault');
+    expect(readConversationTitleSettings).toHaveBeenCalledTimes(1);
+    expect(updateConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(profiles).toEqual({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
+    expect(switchedProfile).toEqual({ ok: true, currentProfile: 'shared' });
+    expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
+    expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
+    expect(vaultRoot).toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
+    expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
   });
 
   it('uses dedicated desktop inbox and alert bridges on the local Electron host', async () => {
@@ -563,6 +699,143 @@ describe('api desktop transport', () => {
       alert: { id: 'alert-1', status: 'acknowledged' },
       resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' },
     });
+  });
+
+  it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ currentProfile: 'shared', profiles: ['assistant', 'shared'] }))
+      .mockResolvedValueOnce(createJsonResponse({ ok: true, currentProfile: 'assistant' }))
+      .mockResolvedValueOnce(createJsonResponse({ currentCwd: '', effectiveCwd: '/repo' }))
+      .mockResolvedValueOnce(createJsonResponse({ currentCwd: './repo', effectiveCwd: '/repo' }))
+      .mockResolvedValueOnce(createJsonResponse({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' }))
+      .mockResolvedValueOnce(createJsonResponse({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' }))
+      .mockResolvedValueOnce(createJsonResponse({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' }))
+      .mockResolvedValueOnce(createJsonResponse({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readProfiles = vi.fn();
+    const readDefaultCwd = vi.fn();
+    const readVaultRoot = vi.fn();
+    const readConversationTitleSettings = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readProfiles,
+        readDefaultCwd,
+        readVaultRoot,
+        readConversationTitleSettings,
+      },
+    });
+
+    const { api } = await import('./api');
+    const profiles = await api.profiles();
+    const switchedProfile = await api.setCurrentProfile('assistant');
+    const defaultCwd = await api.defaultCwd();
+    const savedDefaultCwd = await api.updateDefaultCwd('./repo');
+    const vaultRoot = await api.vaultRoot();
+    const savedVaultRoot = await api.updateVaultRoot('~/vault');
+    const conversationTitleSettings = await api.conversationTitleSettings();
+    const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+
+    expect(readProfiles).not.toHaveBeenCalled();
+    expect(readDefaultCwd).not.toHaveBeenCalled();
+    expect(readVaultRoot).not.toHaveBeenCalled();
+    expect(readConversationTitleSettings).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/profiles', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/profiles/current', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile: 'assistant' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/default-cwd', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/default-cwd', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: './repo' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/vault-root', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/vault-root', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: '~/vault' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/conversation-titles/settings', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/conversation-titles/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: false, model: 'anthropic/claude-sonnet-4-6' }),
+    });
+    expect(profiles).toEqual({ currentProfile: 'shared', profiles: ['assistant', 'shared'] });
+    expect(switchedProfile).toEqual({ ok: true, currentProfile: 'assistant' });
+    expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
+    expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
+    expect(vaultRoot).toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
+    expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+  });
+
+  it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', models: [] }))
+      .mockResolvedValueOnce(createJsonResponse({ ok: true }))
+      .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-provider', models: [] }] }))
+      .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-auth', authType: 'api_key' }] }))
+      .mockResolvedValueOnce(createJsonResponse({ id: 'login-1', provider: 'remote-auth', providerName: 'Remote Auth', status: 'running' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readModels = vi.fn();
+    const readModelProviders = vi.fn();
+    const readProviderAuth = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readModels,
+        readModelProviders,
+        readProviderAuth,
+      },
+    });
+
+    const { api } = await import('./api');
+    const models = await api.models();
+    const updated = await api.updateModelPreferences({ thinkingLevel: 'medium' });
+    const providers = await api.modelProviders();
+    const auth = await api.providerAuth();
+    const submitted = await api.submitProviderOAuthLoginInput('login-1', '123456');
+
+    expect(readModels).not.toHaveBeenCalled();
+    expect(readModelProviders).not.toHaveBeenCalled();
+    expect(readProviderAuth).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/models', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/models/current', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ thinkingLevel: 'medium' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/model-providers', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/provider-auth', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/provider-auth/oauth/login-1/input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: '123456' }),
+    });
+    expect(models).toEqual({ currentModel: 'remote-model', currentThinkingLevel: 'medium', models: [] });
+    expect(updated).toEqual({ ok: true });
+    expect(providers).toEqual({ providers: [{ id: 'remote-provider', models: [] }] });
+    expect(auth).toEqual({ providers: [{ id: 'remote-auth', authType: 'api_key' }] });
+    expect(submitted).toEqual({ id: 'login-1', provider: 'remote-auth', providerName: 'Remote Auth', status: 'running' });
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {

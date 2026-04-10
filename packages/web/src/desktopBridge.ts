@@ -2,6 +2,15 @@ import type {
   ActivityEntry,
   AlertEntry,
   AlertSnapshot,
+  CodexPlanUsageState,
+  ConversationTitleSettingsState,
+  DefaultCwdState,
+  ModelProviderState,
+  ModelState,
+  ProfileState,
+  ProviderAuthState,
+  ProviderOAuthLoginState,
+  VaultRootState,
   ConversationBootstrapState,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
@@ -27,6 +36,7 @@ import type {
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
+export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
@@ -36,6 +46,53 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readProfiles(): Promise<ProfileState>;
+  setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
+  readModels(): Promise<ModelState>;
+  updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null }): Promise<{ ok: true }>;
+  readDefaultCwd(): Promise<DefaultCwdState>;
+  updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
+  readVaultRoot(): Promise<VaultRootState>;
+  updateVaultRoot(root: string | null): Promise<VaultRootState>;
+  readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
+  updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
+  readModelProviders(): Promise<ModelProviderState>;
+  saveModelProvider(input: {
+    provider: string;
+    baseUrl?: string;
+    api?: string;
+    apiKey?: string;
+    authHeader?: boolean;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+    modelOverrides?: Record<string, unknown>;
+  }): Promise<ModelProviderState>;
+  deleteModelProvider(provider: string): Promise<ModelProviderState>;
+  saveModelProviderModel(input: {
+    provider: string;
+    modelId: string;
+    name?: string;
+    api?: string;
+    baseUrl?: string;
+    reasoning?: boolean;
+    input?: Array<'text' | 'image'>;
+    contextWindow?: number;
+    maxTokens?: number;
+    headers?: Record<string, string>;
+    cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+    compat?: Record<string, unknown>;
+  }): Promise<ModelProviderState>;
+  deleteModelProviderModel(input: { provider: string; modelId: string }): Promise<ModelProviderState>;
+  readProviderAuth(): Promise<ProviderAuthState>;
+  readCodexPlanUsage(): Promise<CodexPlanUsageState>;
+  setProviderApiKey(input: { provider: string; apiKey: string }): Promise<ProviderAuthState>;
+  removeProviderCredential(provider: string): Promise<ProviderAuthState>;
+  startProviderOAuthLogin(provider: string): Promise<ProviderOAuthLoginState>;
+  readProviderOAuthLogin(loginId: string): Promise<ProviderOAuthLoginState | null>;
+  submitProviderOAuthLoginInput(input: { loginId: string; value: string }): Promise<ProviderOAuthLoginState>;
+  cancelProviderOAuthLogin(loginId: string): Promise<ProviderOAuthLoginState>;
+  subscribeProviderOAuthLogin(loginId: string): Promise<{ subscriptionId: string }>;
+  unsubscribeProviderOAuthLogin(subscriptionId: string): Promise<void>;
   readActivity(): Promise<ActivityEntry[]>;
   readActivityById(activityId: string): Promise<ActivityEntry>;
   markActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;

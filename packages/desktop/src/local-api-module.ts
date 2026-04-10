@@ -29,6 +29,63 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopProfiles(): Promise<unknown>;
+  setDesktopCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
+  readDesktopModels(): Promise<unknown>;
+  updateDesktopModelPreferences(input: {
+    model?: string | null;
+    thinkingLevel?: string | null;
+  }): Promise<{ ok: true }>;
+  readDesktopDefaultCwd(): Promise<unknown>;
+  updateDesktopDefaultCwd(cwd: string | null): Promise<unknown>;
+  readDesktopVaultRoot(): Promise<unknown>;
+  updateDesktopVaultRoot(root: string | null): Promise<unknown>;
+  readDesktopConversationTitleSettings(): Promise<unknown>;
+  updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
+  readDesktopModelProviders(): Promise<unknown>;
+  saveDesktopModelProvider(input: {
+    provider: string;
+    baseUrl?: string;
+    api?: string;
+    apiKey?: string;
+    authHeader?: boolean;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+    modelOverrides?: Record<string, unknown>;
+  }): Promise<unknown>;
+  deleteDesktopModelProvider(provider: string): Promise<unknown>;
+  saveDesktopModelProviderModel(input: {
+    provider: string;
+    modelId: string;
+    name?: string;
+    api?: string;
+    baseUrl?: string;
+    reasoning?: boolean;
+    input?: Array<'text' | 'image'>;
+    contextWindow?: number;
+    maxTokens?: number;
+    headers?: Record<string, string>;
+    cost?: {
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheWrite?: number;
+    };
+    compat?: Record<string, unknown>;
+  }): Promise<unknown>;
+  deleteDesktopModelProviderModel(input: { provider: string; modelId: string }): Promise<unknown>;
+  readDesktopProviderAuth(): Promise<unknown>;
+  readDesktopCodexPlanUsage(): Promise<unknown>;
+  setDesktopProviderApiKey(input: { provider: string; apiKey: string }): Promise<unknown>;
+  removeDesktopProviderCredential(provider: string): Promise<unknown>;
+  startDesktopProviderOAuthLogin(provider: string): Promise<unknown>;
+  readDesktopProviderOAuthLogin(loginId: string): Promise<unknown>;
+  submitDesktopProviderOAuthLoginInput(input: { loginId: string; value: string }): Promise<unknown>;
+  cancelDesktopProviderOAuthLogin(loginId: string): Promise<unknown>;
+  subscribeDesktopProviderOAuthLogin(
+    loginId: string,
+    onState: (state: unknown) => void,
+  ): Promise<() => void>;
   readDesktopActivity(): Promise<unknown>;
   readDesktopActivityById(activityId: string): Promise<unknown>;
   markDesktopActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;

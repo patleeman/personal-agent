@@ -9,6 +9,8 @@ const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 const API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
 const APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
+const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
+const PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -31,6 +33,55 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  readProfiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-profiles`),
+  setCurrentProfile: (profile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-current-profile`, profile),
+  readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
+  updateModelPreferences: (input: { model?: string | null; thinkingLevel?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-model-preferences`, input),
+  readDefaultCwd: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-default-cwd`),
+  updateDefaultCwd: (cwd: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-default-cwd`, cwd),
+  readVaultRoot: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-vault-root`),
+  updateVaultRoot: (root: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-vault-root`, root),
+  readConversationTitleSettings: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-title-settings`),
+  updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
+  readModelProviders: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-model-providers`),
+  saveModelProvider: (input: {
+    provider: string;
+    baseUrl?: string;
+    api?: string;
+    apiKey?: string;
+    authHeader?: boolean;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+    modelOverrides?: Record<string, unknown>;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-model-provider`, input),
+  deleteModelProvider: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-model-provider`, provider),
+  saveModelProviderModel: (input: {
+    provider: string;
+    modelId: string;
+    name?: string;
+    api?: string;
+    baseUrl?: string;
+    reasoning?: boolean;
+    input?: Array<'text' | 'image'>;
+    contextWindow?: number;
+    maxTokens?: number;
+    headers?: Record<string, string>;
+    cost?: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number };
+    compat?: Record<string, unknown>;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-model-provider-model`, input),
+  deleteModelProviderModel: (input: { provider: string; modelId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-model-provider-model`, input),
+  readProviderAuth: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-provider-auth`),
+  readCodexPlanUsage: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-codex-plan-usage`),
+  setProviderApiKey: (input: { provider: string; apiKey: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-provider-api-key`, input),
+  removeProviderCredential: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:remove-provider-credential`, provider),
+  startProviderOAuthLogin: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:start-provider-oauth-login`, provider),
+  readProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-provider-oauth-login`, loginId),
+  submitProviderOAuthLoginInput: (input: { loginId: string; value: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-provider-oauth-login-input`, input),
+  cancelProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-provider-oauth-login`, loginId),
+  subscribeProviderOAuthLogin: (loginId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-provider-oauth-login`, loginId),
+  unsubscribeProviderOAuthLogin: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-provider-oauth-login`, subscriptionId),
   readActivity: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-activity`),
   readActivityById: (activityId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-activity-by-id`, activityId),
   markActivityRead: (input: { activityId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-activity-read`, input),
@@ -180,6 +231,10 @@ ipcRenderer.on(API_STREAM_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(APP_EVENTS_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(APP_EVENTS_EVENT, payload);
+});
+
+ipcRenderer.on(PROVIDER_OAUTH_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(PROVIDER_OAUTH_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

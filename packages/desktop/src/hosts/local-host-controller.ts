@@ -71,6 +71,153 @@ export class LocalHostController implements HostController {
     return module.invokeDesktopLocalApi({ method, path, body });
   }
 
+  async readProfiles(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopProfiles();
+  }
+
+  async setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }> {
+    const module = await this.loadLocalApi();
+    return module.setDesktopCurrentProfile(profile);
+  }
+
+  async readModels(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopModels();
+  }
+
+  async updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null }): Promise<{ ok: true }> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopModelPreferences(input);
+  }
+
+  async readDefaultCwd(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopDefaultCwd();
+  }
+
+  async updateDefaultCwd(cwd: string | null): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopDefaultCwd(cwd);
+  }
+
+  async readVaultRoot(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopVaultRoot();
+  }
+
+  async updateVaultRoot(root: string | null): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopVaultRoot(root);
+  }
+
+  async readConversationTitleSettings(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationTitleSettings();
+  }
+
+  async updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopConversationTitleSettings(input);
+  }
+
+  async readModelProviders(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopModelProviders();
+  }
+
+  async saveModelProvider(input: {
+    provider: string;
+    baseUrl?: string;
+    api?: string;
+    apiKey?: string;
+    authHeader?: boolean;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+    modelOverrides?: Record<string, unknown>;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.saveDesktopModelProvider(input);
+  }
+
+  async deleteModelProvider(provider: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.deleteDesktopModelProvider(provider);
+  }
+
+  async saveModelProviderModel(input: {
+    provider: string;
+    modelId: string;
+    name?: string;
+    api?: string;
+    baseUrl?: string;
+    reasoning?: boolean;
+    input?: Array<'text' | 'image'>;
+    contextWindow?: number;
+    maxTokens?: number;
+    headers?: Record<string, string>;
+    cost?: {
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheWrite?: number;
+    };
+    compat?: Record<string, unknown>;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.saveDesktopModelProviderModel(input);
+  }
+
+  async deleteModelProviderModel(input: { provider: string; modelId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.deleteDesktopModelProviderModel(input);
+  }
+
+  async readProviderAuth(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopProviderAuth();
+  }
+
+  async readCodexPlanUsage(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopCodexPlanUsage();
+  }
+
+  async setProviderApiKey(input: { provider: string; apiKey: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.setDesktopProviderApiKey(input);
+  }
+
+  async removeProviderCredential(provider: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.removeDesktopProviderCredential(provider);
+  }
+
+  async startProviderOAuthLogin(provider: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.startDesktopProviderOAuthLogin(provider);
+  }
+
+  async readProviderOAuthLogin(loginId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopProviderOAuthLogin(loginId);
+  }
+
+  async submitProviderOAuthLoginInput(input: { loginId: string; value: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.submitDesktopProviderOAuthLoginInput(input);
+  }
+
+  async cancelProviderOAuthLogin(loginId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.cancelDesktopProviderOAuthLogin(loginId);
+  }
+
+  async subscribeProviderOAuthLogin(loginId: string, onState: (state: unknown) => void): Promise<() => void> {
+    const module = await this.loadLocalApi();
+    return module.subscribeDesktopProviderOAuthLogin(loginId, onState);
+  }
+
   async readActivity(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopActivity();

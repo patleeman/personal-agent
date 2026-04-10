@@ -86,6 +86,7 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - read durable run lists/details/logs and cancel local runs without routing those hot paths through generic local API calls
 - read and manage local scheduled tasks without routing those operator flows through generic local API calls
 - read and manage local inbox activity and alerts without routing those operator flows through generic local API calls
+- read and manage local model/provider settings and provider auth flows without routing those operator flows through generic local API calls
 
 - get desktop environment
 - get saved connections

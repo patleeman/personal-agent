@@ -5,6 +5,7 @@ import type { DesktopWindowController } from './window.js';
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
+const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 
 export function registerDesktopIpc(options: {
   hostManager: HostManager;
@@ -13,6 +14,7 @@ export function registerDesktopIpc(options: {
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
   const appEventSubscriptions = new Map<string, () => void>();
+  const providerOAuthSubscriptions = new Map<string, () => void>();
 
   const sendBufferedSubscriptionEvent = <T>(input: {
     sender: WebContents;
@@ -115,6 +117,253 @@ export function registerDesktopIpc(options: {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-profiles`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readProfiles) {
+      throw new Error('Dedicated desktop profile reads are only available for the local host.');
+    }
+
+    return controller.readProfiles();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:set-current-profile`, async (event, profile: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.setCurrentProfile) {
+      throw new Error('Dedicated desktop profile writes are only available for the local host.');
+    }
+
+    return controller.setCurrentProfile(profile);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-models`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readModels) {
+      throw new Error('Dedicated desktop model reads are only available for the local host.');
+    }
+
+    return controller.readModels();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-model-preferences`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateModelPreferences) {
+      throw new Error('Dedicated desktop model preference writes are only available for the local host.');
+    }
+
+    return controller.updateModelPreferences(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-default-cwd`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDefaultCwd) {
+      throw new Error('Dedicated desktop default cwd reads are only available for the local host.');
+    }
+
+    return controller.readDefaultCwd();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-default-cwd`, async (event, cwd: string | null) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateDefaultCwd) {
+      throw new Error('Dedicated desktop default cwd writes are only available for the local host.');
+    }
+
+    return controller.updateDefaultCwd(cwd);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-vault-root`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readVaultRoot) {
+      throw new Error('Dedicated desktop vault-root reads are only available for the local host.');
+    }
+
+    return controller.readVaultRoot();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-vault-root`, async (event, root: string | null) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateVaultRoot) {
+      throw new Error('Dedicated desktop vault-root writes are only available for the local host.');
+    }
+
+    return controller.updateVaultRoot(root);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-title-settings`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationTitleSettings) {
+      throw new Error('Dedicated desktop conversation-title reads are only available for the local host.');
+    }
+
+    return controller.readConversationTitleSettings();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-title-settings`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateConversationTitleSettings) {
+      throw new Error('Dedicated desktop conversation-title writes are only available for the local host.');
+    }
+
+    return controller.updateConversationTitleSettings(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-model-providers`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readModelProviders) {
+      throw new Error('Dedicated desktop model provider reads are only available for the local host.');
+    }
+
+    return controller.readModelProviders();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:save-model-provider`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.saveModelProvider) {
+      throw new Error('Dedicated desktop model provider writes are only available for the local host.');
+    }
+
+    return controller.saveModelProvider(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:delete-model-provider`, async (event, provider: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.deleteModelProvider) {
+      throw new Error('Dedicated desktop model provider deletes are only available for the local host.');
+    }
+
+    return controller.deleteModelProvider(provider);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:save-model-provider-model`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.saveModelProviderModel) {
+      throw new Error('Dedicated desktop model variant writes are only available for the local host.');
+    }
+
+    return controller.saveModelProviderModel(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:delete-model-provider-model`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.deleteModelProviderModel) {
+      throw new Error('Dedicated desktop model variant deletes are only available for the local host.');
+    }
+
+    return controller.deleteModelProviderModel(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-provider-auth`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readProviderAuth) {
+      throw new Error('Dedicated desktop provider auth reads are only available for the local host.');
+    }
+
+    return controller.readProviderAuth();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-codex-plan-usage`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readCodexPlanUsage) {
+      throw new Error('Dedicated desktop Codex usage reads are only available for the local host.');
+    }
+
+    return controller.readCodexPlanUsage();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:set-provider-api-key`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.setProviderApiKey) {
+      throw new Error('Dedicated desktop provider auth writes are only available for the local host.');
+    }
+
+    return controller.setProviderApiKey(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:remove-provider-credential`, async (event, provider: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.removeProviderCredential) {
+      throw new Error('Dedicated desktop provider credential removal is only available for the local host.');
+    }
+
+    return controller.removeProviderCredential(provider);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:start-provider-oauth-login`, async (event, provider: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.startProviderOAuthLogin) {
+      throw new Error('Dedicated desktop provider OAuth start is only available for the local host.');
+    }
+
+    return controller.startProviderOAuthLogin(provider);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-provider-oauth-login`, async (_event, loginId: string) => {
+    const controller = options.hostManager.getHostController(options.hostManager.getActiveHostId());
+    if (!controller.readProviderOAuthLogin) {
+      throw new Error('Dedicated desktop provider OAuth reads are only available for the local host.');
+    }
+
+    return controller.readProviderOAuthLogin(loginId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:submit-provider-oauth-login-input`, async (_event, input) => {
+    const controller = options.hostManager.getHostController(options.hostManager.getActiveHostId());
+    if (!controller.submitProviderOAuthLoginInput) {
+      throw new Error('Dedicated desktop provider OAuth input is only available for the local host.');
+    }
+
+    return controller.submitProviderOAuthLoginInput(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:cancel-provider-oauth-login`, async (_event, loginId: string) => {
+    const controller = options.hostManager.getHostController(options.hostManager.getActiveHostId());
+    if (!controller.cancelProviderOAuthLogin) {
+      throw new Error('Dedicated desktop provider OAuth cancel is only available for the local host.');
+    }
+
+    return controller.cancelProviderOAuthLogin(loginId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-activity`, async (event) => {
@@ -651,6 +900,29 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-app-events`, async (_event, subscriptionId: string) => {
     appEventSubscriptions.get(subscriptionId)?.();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-provider-oauth-login`, async (event, loginId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.subscribeProviderOAuthLogin) {
+      throw new Error('Dedicated desktop provider OAuth subscriptions are only available for the local host.');
+    }
+
+    const subscriptionId = `${event.sender.id}:provider-oauth:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    await sendBufferedSubscriptionEvent({
+      sender: event.sender,
+      channel: PROVIDER_OAUTH_CHANNEL,
+      subscriptionId,
+      store: providerOAuthSubscriptions,
+      subscribe: (emit) => controller.subscribeProviderOAuthLogin!(loginId, emit),
+    });
+    return { subscriptionId };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-provider-oauth-login`, async (_event, subscriptionId: string) => {
+    providerOAuthSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {

@@ -68,6 +68,21 @@ export interface DesktopConversationBootstrapRequest {
   knownLastBlockId?: string;
 }
 
+export interface DesktopProviderApiKeyRequest {
+  provider: string;
+  apiKey: string;
+}
+
+export interface DesktopProviderOAuthInputRequest {
+  loginId: string;
+  value: string;
+}
+
+export interface DesktopModelPreferencesUpdateRequest {
+  model?: string | null;
+  thinkingLevel?: string | null;
+}
+
 export interface DesktopConversationAttentionRequest {
   conversationId: string;
   read?: boolean;
@@ -207,6 +222,57 @@ export interface HostController {
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  readProfiles?(): Promise<unknown>;
+  setCurrentProfile?(profile: string): Promise<{ ok: true; currentProfile: string }>;
+  readModels?(): Promise<unknown>;
+  updateModelPreferences?(input: DesktopModelPreferencesUpdateRequest): Promise<{ ok: true }>;
+  readDefaultCwd?(): Promise<unknown>;
+  updateDefaultCwd?(cwd: string | null): Promise<unknown>;
+  readVaultRoot?(): Promise<unknown>;
+  updateVaultRoot?(root: string | null): Promise<unknown>;
+  readConversationTitleSettings?(): Promise<unknown>;
+  updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
+  readModelProviders?(): Promise<unknown>;
+  saveModelProvider?(input: {
+    provider: string;
+    baseUrl?: string;
+    api?: string;
+    apiKey?: string;
+    authHeader?: boolean;
+    headers?: Record<string, string>;
+    compat?: Record<string, unknown>;
+    modelOverrides?: Record<string, unknown>;
+  }): Promise<unknown>;
+  deleteModelProvider?(provider: string): Promise<unknown>;
+  saveModelProviderModel?(input: {
+    provider: string;
+    modelId: string;
+    name?: string;
+    api?: string;
+    baseUrl?: string;
+    reasoning?: boolean;
+    input?: Array<'text' | 'image'>;
+    contextWindow?: number;
+    maxTokens?: number;
+    headers?: Record<string, string>;
+    cost?: {
+      input?: number;
+      output?: number;
+      cacheRead?: number;
+      cacheWrite?: number;
+    };
+    compat?: Record<string, unknown>;
+  }): Promise<unknown>;
+  deleteModelProviderModel?(input: { provider: string; modelId: string }): Promise<unknown>;
+  readProviderAuth?(): Promise<unknown>;
+  readCodexPlanUsage?(): Promise<unknown>;
+  setProviderApiKey?(input: DesktopProviderApiKeyRequest): Promise<unknown>;
+  removeProviderCredential?(provider: string): Promise<unknown>;
+  startProviderOAuthLogin?(provider: string): Promise<unknown>;
+  readProviderOAuthLogin?(loginId: string): Promise<unknown>;
+  submitProviderOAuthLoginInput?(input: DesktopProviderOAuthInputRequest): Promise<unknown>;
+  cancelProviderOAuthLogin?(loginId: string): Promise<unknown>;
+  subscribeProviderOAuthLogin?(loginId: string, onState: (state: unknown) => void): Promise<() => void>;
   readActivity?(): Promise<unknown>;
   readActivityById?(activityId: string): Promise<unknown>;
   markActivityRead?(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
