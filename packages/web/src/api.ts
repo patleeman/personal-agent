@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -358,13 +358,40 @@ export const api = {
     get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
   runTaskNow: (id: string) =>
     post<{ ok: boolean; accepted: boolean; runId: string }>(`/tasks/${encodeURIComponent(id)}/run`),
-  runs: () => get<DurableRunListResult>('/runs'),
-  durableRun: (id: string) => get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`),
-  durableRunLog: (id: string, tail?: number) =>
-    get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
+  runs: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readDurableRuns();
+    }
+
+    return get<DurableRunListResult>('/runs');
+  },
+  durableRun: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readDurableRun(id);
+    }
+
+    return get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`);
+  },
+  durableRunLog: async (id: string, tail?: number) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readDurableRunLog({ runId: id, ...(tail ? { tail } : {}) });
+    }
+
+    return get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`);
+  },
   markDurableRunAttentionRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
-  cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
+  cancelDurableRun: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.cancelDurableRun(id);
+    }
+
+    return post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`);
+  },
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
@@ -570,14 +597,14 @@ export const api = {
 
     return patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
   },
-  recoverConversation: (id: string) =>
-    post<{
-      conversationId: string;
-      live: boolean;
-      recovered: boolean;
-      replayedPendingOperation: boolean;
-      usedFallbackPrompt: boolean;
-    }>(`/conversations/${encodeURIComponent(id)}/recover`),
+  recoverConversation: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.recoverConversation(id);
+    }
+
+    return post<ConversationRecoveryResult>(`/conversations/${encodeURIComponent(id)}/recover`);
+  },
 
   createLiveSession: async (
     cwd?: string,
@@ -696,8 +723,17 @@ export const api = {
 
     return post<{ ok: boolean }>(`/live-sessions/${id}/reload`, surfaceId ? { surfaceId } : {});
   },
-  exportSession: (id: string, outputPath?: string) =>
-    post<{ ok: boolean; path: string }>(`/live-sessions/${id}/export`, { outputPath }),
+  exportSession: async (id: string, outputPath?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.exportLiveSession({
+        conversationId: id,
+        ...(outputPath ? { outputPath } : {}),
+      });
+    }
+
+    return post<LiveSessionExportResult>(`/live-sessions/${id}/export`, { outputPath });
+  },
   renameSession: (id: string, name: string) =>
     patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name }),
 
@@ -719,8 +755,14 @@ export const api = {
     return requestJson<{ ok: boolean }>('DELETE', `/live-sessions/${encodeURIComponent(id)}`, surfaceId ? { surfaceId } : {});
   },
 
-  forkEntries: (id: string) =>
-    get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),
+  forkEntries: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readLiveSessionForkEntries(id);
+    }
+
+    return get<LiveSessionForkEntry[]>(`/live-sessions/${id}/fork-entries`);
+  },
   branchSession: async (id: string, entryId: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

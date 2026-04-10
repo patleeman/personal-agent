@@ -32,12 +32,18 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
   return {
     invokeDesktopLocalApi: vi.fn(),
     dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopDurableRuns: vi.fn(),
+    readDesktopDurableRun: vi.fn(),
+    readDesktopDurableRunLog: vi.fn(),
+    cancelDesktopDurableRun: vi.fn(),
     readDesktopConversationBootstrap: vi.fn(),
     renameDesktopConversation: vi.fn(),
     changeDesktopConversationCwd: vi.fn(),
+    recoverDesktopConversation: vi.fn(),
     readDesktopConversationModelPreferences: vi.fn(),
     updateDesktopConversationModelPreferences: vi.fn(),
     readDesktopLiveSession: vi.fn(),
+    readDesktopLiveSessionForkEntries: vi.fn(),
     readDesktopLiveSessionContext: vi.fn(),
     readDesktopSessionDetail: vi.fn(),
     readDesktopSessionBlock: vi.fn(),
@@ -56,7 +62,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     subscribeDesktopLocalApiStream: vi.fn(),
     subscribeDesktopAppEvents: vi.fn(),
     ...overrides,
-  };
+  } as LocalApiModule;
 }
 
 describe('createDesktopProtocolHandler', () => {

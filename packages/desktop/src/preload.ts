@@ -31,6 +31,10 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  readDurableRuns: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-runs`),
+  readDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run`, runId),
+  readDurableRunLog: (input: { runId: string; tail?: number }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run-log`, input),
+  cancelDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-durable-run`, runId),
   readConversationBootstrap: (input: {
     conversationId: string;
     tailBlocks?: number;
@@ -43,11 +47,15 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:rename-conversation`, input),
   changeConversationCwd: (input: { conversationId: string; cwd: string; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:change-conversation-cwd`, input),
+  recoverConversation: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:recover-conversation`, conversationId),
   readConversationModelPreferences: (input: { conversationId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, input),
   updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
+  readLiveSessionForkEntries: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, conversationId),
   readLiveSessionContext: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-context`, conversationId),
   readSessionDetail: (input: {
     sessionId: string;
@@ -72,6 +80,8 @@ const desktopBridge = {
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:restore-queued-live-session-message`, input),
   compactLiveSession: (input: { conversationId: string; customInstructions?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:compact-live-session`, input),
+  exportLiveSession: (input: { conversationId: string; outputPath?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:export-live-session`, input),
   reloadLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:reload-live-session`, conversationId),
   destroyLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:destroy-live-session`, conversationId),
   branchLiveSession: (input: { conversationId: string; entryId: string }) =>

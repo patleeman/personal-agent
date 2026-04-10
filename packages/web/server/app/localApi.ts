@@ -10,6 +10,14 @@ import {
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
+  cancelDurableRunCapability,
+  listDurableRunsCapability,
+  readDurableRunCapability,
+  readDurableRunLogCapability,
+} from '../automation/durableRunCapability.js';
+import {
+  exportSessionHtml,
+  getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
   isLive as isLiveSession,
   registry as liveRegistry,
@@ -70,6 +78,7 @@ import {
 import {
   applyConversationModelPreferencesToSessionManager,
 } from '../conversations/conversationModelPreferences.js';
+import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -1001,6 +1010,25 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
   return bodyText as T;
 }
 
+export async function readDesktopDurableRuns() {
+  return listDurableRunsCapability();
+}
+
+export async function readDesktopDurableRun(runId: string) {
+  return readDurableRunCapability(runId);
+}
+
+export async function readDesktopDurableRunLog(input: {
+  runId: string;
+  tail?: number;
+}) {
+  return readDurableRunLogCapability(input);
+}
+
+export async function cancelDesktopDurableRun(runId: string) {
+  return cancelDurableRunCapability(runId);
+}
+
 export async function readDesktopConversationBootstrap(input: {
   conversationId: string;
   tailBlocks?: number;
@@ -1104,6 +1132,16 @@ export async function changeDesktopConversationCwd(input: {
   return { id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true };
 }
 
+export async function recoverDesktopConversation(conversationId: string) {
+  const context = await getLocalLiveSessionCapabilityContext();
+  return recoverConversationCapability(conversationId, {
+    getCurrentProfile: context.getCurrentProfile,
+    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+    flushLiveDeferredResumes: context.flushLiveDeferredResumes,
+  });
+}
+
 export async function readDesktopConversationModelPreferences(conversationId: string) {
   await getLocalRoutes();
 
@@ -1184,6 +1222,22 @@ export async function readDesktopLiveSession(conversationId: string) {
   }
 
   return { live: true as const, ...entry };
+}
+
+export async function readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
+  await getLocalRoutes();
+
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    throw new Error('Session not live');
+  }
+
+  const entries = getLiveSessionForkEntries(normalizedConversationId);
+  if (!entries) {
+    throw new Error('Session not live');
+  }
+
+  return entries as Array<{ entryId: string; text: string }>;
 }
 
 export async function readDesktopLiveSessionContext(conversationId: string) {
@@ -1325,6 +1379,21 @@ export async function compactDesktopLiveSession(input: {
   customInstructions?: string;
 }) {
   return compactLiveSessionCapability(input);
+}
+
+export async function exportDesktopLiveSession(input: {
+  conversationId: string;
+  outputPath?: string;
+}): Promise<{ ok: true; path: string }> {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const path = await exportSessionHtml(conversationId, input.outputPath?.trim() || undefined);
+  return { ok: true, path };
 }
 
 export async function reloadDesktopLiveSession(input: {

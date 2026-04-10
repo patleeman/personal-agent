@@ -80,6 +80,11 @@ export interface DesktopConversationCwdChangeRequest {
   surfaceId?: string;
 }
 
+export interface DesktopLiveSessionExportRequest {
+  conversationId: string;
+  outputPath?: string;
+}
+
 export interface DesktopConversationModelPreferencesRequest {
   conversationId: string;
 }
@@ -103,6 +108,11 @@ export interface DesktopSessionDetailRequest {
 export interface DesktopSessionBlockRequest {
   sessionId: string;
   blockId: string;
+}
+
+export interface DesktopDurableRunLogRequest {
+  runId: string;
+  tail?: number;
 }
 
 export interface DesktopLiveSessionCreateRequest {
@@ -173,12 +183,18 @@ export interface HostController {
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  readDurableRuns?(): Promise<unknown>;
+  readDurableRun?(runId: string): Promise<unknown>;
+  readDurableRunLog?(input: DesktopDurableRunLogRequest): Promise<{ path: string; log: string }>;
+  cancelDurableRun?(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
   readConversationBootstrap?(input: DesktopConversationBootstrapRequest): Promise<unknown>;
   renameConversation?(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }>;
   changeConversationCwd?(input: DesktopConversationCwdChangeRequest): Promise<unknown>;
+  recoverConversation?(conversationId: string): Promise<unknown>;
   readConversationModelPreferences?(input: DesktopConversationModelPreferencesRequest): Promise<unknown>;
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
+  readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;
   readSessionBlock?(input: DesktopSessionBlockRequest): Promise<unknown>;
@@ -187,6 +203,7 @@ export interface HostController {
   takeOverLiveSession?(input: DesktopLiveSessionTakeoverRequest): Promise<unknown>;
   restoreQueuedLiveSessionMessage?(input: DesktopLiveSessionQueueRestoreRequest): Promise<DesktopLiveSessionQueueRestoreResult>;
   compactLiveSession?(input: DesktopLiveSessionCompactRequest): Promise<{ ok: true; result: unknown }>;
+  exportLiveSession?(input: DesktopLiveSessionExportRequest): Promise<{ ok: true; path: string }>;
   reloadLiveSession?(conversationId: string): Promise<{ ok: true }>;
   destroyLiveSession?(conversationId: string): Promise<{ ok: true }>;
   branchLiveSession?(input: DesktopLiveSessionBranchRequest): Promise<{ newSessionId: string; sessionFile: string }>;

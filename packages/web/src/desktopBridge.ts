@@ -1,12 +1,17 @@
 import type {
   ConversationBootstrapState,
   ConversationCwdChangeResult,
+  ConversationRecoveryResult,
   DesktopConnectionsState,
+  DurableRunDetailResult,
+  DurableRunListResult,
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopNavigationState,
   DisplayBlock,
   LiveSessionContext,
+  LiveSessionExportResult,
+  LiveSessionForkEntry,
   LiveSessionMeta,
   LiveSessionPresenceState,
   PromptAttachmentRefInput,
@@ -25,6 +30,10 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readDurableRuns(): Promise<DurableRunListResult>;
+  readDurableRun(runId: string): Promise<DurableRunDetailResult>;
+  readDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;
+  cancelDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
   readConversationBootstrap(input: {
     conversationId: string;
     tailBlocks?: number;
@@ -35,9 +44,11 @@ export interface PersonalAgentDesktopBridge {
   }): Promise<ConversationBootstrapState>;
   renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
   changeConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<ConversationCwdChangeResult>;
+  recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
   readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
+  readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
   readSessionDetail(input: {
     sessionId: string;
@@ -58,6 +69,7 @@ export interface PersonalAgentDesktopBridge {
     previewId?: string;
   }): Promise<{ ok: true; text: string; images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }> }>;
   compactLiveSession(input: { conversationId: string; customInstructions?: string }): Promise<{ ok: true; result: unknown }>;
+  exportLiveSession(input: { conversationId: string; outputPath?: string }): Promise<LiveSessionExportResult>;
   reloadLiveSession(conversationId: string): Promise<{ ok: true }>;
   destroyLiveSession(conversationId: string): Promise<{ ok: true }>;
   branchLiveSession(input: { conversationId: string; entryId: string }): Promise<{ newSessionId: string; sessionFile: string }>;

@@ -117,6 +117,50 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-durable-runs`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDurableRuns) {
+      throw new Error('Dedicated desktop durable run reads are only available for the local host.');
+    }
+
+    return controller.readDurableRuns();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-durable-run`, async (event, runId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDurableRun) {
+      throw new Error('Dedicated desktop durable run detail is only available for the local host.');
+    }
+
+    return controller.readDurableRun(runId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-durable-run-log`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDurableRunLog) {
+      throw new Error('Dedicated desktop durable run logs are only available for the local host.');
+    }
+
+    return controller.readDurableRunLog(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:cancel-durable-run`, async (event, runId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.cancelDurableRun) {
+      throw new Error('Dedicated desktop durable run cancellation is only available for the local host.');
+    }
+
+    return controller.cancelDurableRun(runId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -150,6 +194,17 @@ export function registerDesktopIpc(options: {
     return controller.changeConversationCwd(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:recover-conversation`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.recoverConversation) {
+      throw new Error('Dedicated desktop conversation recovery is only available for the local host.');
+    }
+
+    return controller.recoverConversation(conversationId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -181,6 +236,17 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readLiveSession(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readLiveSessionForkEntries) {
+      throw new Error('Dedicated desktop live-session fork entry reads are only available for the local host.');
+    }
+
+    return controller.readLiveSessionForkEntries(conversationId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-context`, async (event, conversationId: string) => {
@@ -269,6 +335,17 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.compactLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:export-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.exportLiveSession) {
+      throw new Error('Dedicated desktop live-session export is only available for the local host.');
+    }
+
+    return controller.exportLiveSession(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:reload-live-session`, async (event, conversationId: string) => {

@@ -29,6 +29,10 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopDurableRuns(): Promise<unknown>;
+  readDesktopDurableRun(runId: string): Promise<unknown>;
+  readDesktopDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;
+  cancelDesktopDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }>;
   readDesktopConversationBootstrap(input: {
     conversationId: string;
     tailBlocks?: number;
@@ -47,6 +51,7 @@ export interface LocalApiModule {
     cwd: string;
     surfaceId?: string;
   }): Promise<unknown>;
+  recoverDesktopConversation(conversationId: string): Promise<unknown>;
   readDesktopConversationModelPreferences(conversationId: string): Promise<unknown>;
   updateDesktopConversationModelPreferences(input: {
     conversationId: string;
@@ -55,6 +60,7 @@ export interface LocalApiModule {
     surfaceId?: string;
   }): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
+  readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readDesktopLiveSessionContext(conversationId: string): Promise<unknown>;
   readDesktopSessionDetail(input: {
     sessionId: string;
@@ -104,6 +110,10 @@ export interface LocalApiModule {
     conversationId: string;
     customInstructions?: string;
   }): Promise<{ ok: true; result: unknown }>;
+  exportDesktopLiveSession(input: {
+    conversationId: string;
+    outputPath?: string;
+  }): Promise<{ ok: true; path: string }>;
   reloadDesktopLiveSession(input: {
     conversationId: string;
   }): Promise<{ ok: true }>;

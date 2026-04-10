@@ -9,10 +9,12 @@ import type {
   DesktopConversationModelPreferencesRequest,
   DesktopConversationModelPreferencesUpdateRequest,
   DesktopConversationRenameRequest,
+  DesktopDurableRunLogRequest,
   DesktopHostRecord,
   DesktopLiveSessionBranchRequest,
   DesktopLiveSessionCompactRequest,
   DesktopLiveSessionCreateRequest,
+  DesktopLiveSessionExportRequest,
   DesktopLiveSessionForkRequest,
   DesktopLiveSessionPromptRequest,
   DesktopLiveSessionPromptResult,
@@ -69,6 +71,26 @@ export class LocalHostController implements HostController {
     return module.invokeDesktopLocalApi({ method, path, body });
   }
 
+  async readDurableRuns(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopDurableRuns();
+  }
+
+  async readDurableRun(runId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopDurableRun(runId);
+  }
+
+  async readDurableRunLog(input: DesktopDurableRunLogRequest): Promise<{ path: string; log: string }> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopDurableRunLog(input);
+  }
+
+  async cancelDurableRun(runId: string): Promise<{ cancelled: boolean; runId: string; reason?: string }> {
+    const module = await this.loadLocalApi();
+    return module.cancelDesktopDurableRun(runId);
+  }
+
   async readConversationBootstrap(input: DesktopConversationBootstrapRequest): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationBootstrap(input);
@@ -84,6 +106,11 @@ export class LocalHostController implements HostController {
     return module.changeDesktopConversationCwd(input);
   }
 
+  async recoverConversation(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.recoverDesktopConversation(conversationId);
+  }
+
   async readConversationModelPreferences(input: DesktopConversationModelPreferencesRequest): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationModelPreferences(input.conversationId);
@@ -97,6 +124,11 @@ export class LocalHostController implements HostController {
   async readLiveSession(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSession(conversationId);
+  }
+
+  async readLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopLiveSessionForkEntries(conversationId);
   }
 
   async readLiveSessionContext(conversationId: string): Promise<unknown> {
@@ -137,6 +169,11 @@ export class LocalHostController implements HostController {
   async compactLiveSession(input: DesktopLiveSessionCompactRequest): Promise<{ ok: true; result: unknown }> {
     const module = await this.loadLocalApi();
     return module.compactDesktopLiveSession(input);
+  }
+
+  async exportLiveSession(input: DesktopLiveSessionExportRequest): Promise<{ ok: true; path: string }> {
+    const module = await this.loadLocalApi();
+    return module.exportDesktopLiveSession(input);
   }
 
   async reloadLiveSession(conversationId: string): Promise<{ ok: true }> {

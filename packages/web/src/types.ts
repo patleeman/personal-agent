@@ -624,6 +624,14 @@ export interface ConversationCwdChangeResult {
   changed: boolean;
 }
 
+export interface ConversationRecoveryResult {
+  conversationId: string;
+  live: boolean;
+  recovered: boolean;
+  replayedPendingOperation: boolean;
+  usedFallbackPrompt: boolean;
+}
+
 export interface FolderPickerResult {
   path: string | null;
   cancelled: boolean;
@@ -636,6 +644,16 @@ export interface LiveSessionMeta {
   title?:               string;
   isStreaming:          boolean;
   hasPendingHiddenTurn?: boolean;
+}
+
+export interface LiveSessionForkEntry {
+  entryId: string;
+  text: string;
+}
+
+export interface LiveSessionExportResult {
+  ok: boolean;
+  path: string;
 }
 
 export interface CompanionAuthSessionSummary {

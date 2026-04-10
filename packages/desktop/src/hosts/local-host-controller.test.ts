@@ -26,12 +26,18 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
   return {
     invokeDesktopLocalApi: vi.fn(),
     dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopDurableRuns: vi.fn(),
+    readDesktopDurableRun: vi.fn(),
+    readDesktopDurableRunLog: vi.fn(),
+    cancelDesktopDurableRun: vi.fn(),
     readDesktopConversationBootstrap: vi.fn(),
     renameDesktopConversation: vi.fn(),
     changeDesktopConversationCwd: vi.fn(),
+    recoverDesktopConversation: vi.fn(),
     readDesktopConversationModelPreferences: vi.fn(),
     updateDesktopConversationModelPreferences: vi.fn(),
     readDesktopLiveSession: vi.fn(),
+    readDesktopLiveSessionForkEntries: vi.fn(),
     readDesktopLiveSessionContext: vi.fn(),
     readDesktopSessionDetail: vi.fn(),
     readDesktopSessionBlock: vi.fn(),
@@ -41,6 +47,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     takeOverDesktopLiveSession: vi.fn(),
     restoreDesktopQueuedLiveSessionMessage: vi.fn(),
     compactDesktopLiveSession: vi.fn(),
+    exportDesktopLiveSession: vi.fn(),
     reloadDesktopLiveSession: vi.fn(),
     destroyDesktopLiveSession: vi.fn(),
     branchDesktopLiveSession: vi.fn(),
@@ -50,7 +57,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     subscribeDesktopLocalApiStream: vi.fn(),
     subscribeDesktopAppEvents: vi.fn(),
     ...overrides,
-  };
+  } as LocalApiModule;
 }
 
 function createBackendMock(): LocalBackendProcesses {
@@ -116,13 +123,25 @@ describe('LocalHostController', () => {
   });
 
   it('routes dedicated conversation and live-session capabilities through the local API module without loopback proxying', async () => {
+    const readDesktopDurableRuns = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', summary: { total: 0, recoveryActions: {}, statuses: {} }, runs: [] });
+    const readDesktopDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
+    const readDesktopDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
+    const cancelDesktopDurableRun = vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' });
     const readDesktopConversationBootstrap = vi.fn().mockResolvedValue({
       conversationId: 'live-1',
       sessionDetail: null,
       liveSession: { live: true, id: 'live-1' },
     });
     const renameDesktopConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
+    const recoverDesktopConversation = vi.fn().mockResolvedValue({
+      conversationId: 'live-1',
+      live: true,
+      recovered: true,
+      replayedPendingOperation: false,
+      usedFallbackPrompt: true,
+    });
     const readDesktopLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
+    const readDesktopLiveSessionForkEntries = vi.fn().mockResolvedValue([{ entryId: 'entry-1', text: 'fork from here' }]);
     const readDesktopLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readDesktopSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
     const readDesktopSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
@@ -140,6 +159,7 @@ describe('LocalHostController', () => {
     const takeOverDesktopLiveSession = vi.fn().mockResolvedValue({ controllerSurfaceId: 'surface-1' });
     const restoreDesktopQueuedLiveSessionMessage = vi.fn().mockResolvedValue({ ok: true, text: 'queued hello', images: [] });
     const compactDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, result: { compacted: true } });
+    const exportDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, path: '/tmp/live-1.html' });
     const reloadDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const destroyDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const branchDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
@@ -147,9 +167,15 @@ describe('LocalHostController', () => {
     const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     const abortDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopDurableRuns,
+      readDesktopDurableRun,
+      readDesktopDurableRunLog,
+      cancelDesktopDurableRun,
       readDesktopConversationBootstrap,
       renameDesktopConversation,
+      recoverDesktopConversation,
       readDesktopLiveSession,
+      readDesktopLiveSessionForkEntries,
       readDesktopLiveSessionContext,
       readDesktopSessionDetail,
       readDesktopSessionBlock,
@@ -159,6 +185,7 @@ describe('LocalHostController', () => {
       takeOverDesktopLiveSession,
       restoreDesktopQueuedLiveSessionMessage,
       compactDesktopLiveSession,
+      exportDesktopLiveSession,
       reloadDesktopLiveSession,
       destroyDesktopLiveSession,
       branchDesktopLiveSession,
@@ -174,6 +201,10 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
+    await expect(controller.readDurableRuns?.()).resolves.toMatchObject({ runsRoot: '/runs' });
+    await expect(controller.readDurableRun?.('run-1')).resolves.toMatchObject({ runsRoot: '/runs' });
+    await expect(controller.readDurableRunLog?.({ runId: 'run-1', tail: 25 })).resolves.toEqual({ path: '/runs/run-1.log', log: 'tail' });
+    await expect(controller.cancelDurableRun?.('run-1')).resolves.toEqual({ cancelled: true, runId: 'run-1' });
     await expect(controller.readConversationBootstrap?.({ conversationId: 'live-1', tailBlocks: 12 })).resolves.toEqual({
       conversationId: 'live-1',
       sessionDetail: null,
@@ -183,7 +214,15 @@ describe('LocalHostController', () => {
       ok: true,
       title: 'Renamed conversation',
     });
+    await expect(controller.recoverConversation?.('conversation-1')).resolves.toEqual({
+      conversationId: 'live-1',
+      live: true,
+      recovered: true,
+      replayedPendingOperation: false,
+      usedFallbackPrompt: true,
+    });
     await expect(controller.readLiveSession?.('live-1')).resolves.toEqual({ live: true, id: 'live-1' });
+    await expect(controller.readLiveSessionForkEntries?.('live-1')).resolves.toEqual([{ entryId: 'entry-1', text: 'fork from here' }]);
     await expect(controller.readLiveSessionContext?.('live-1')).resolves.toEqual({ cwd: '/repo', branch: 'main', git: null });
     await expect(controller.readSessionDetail?.({ sessionId: 'live-1', tailBlocks: 24 })).resolves.toEqual({
       meta: { id: 'live-1' },
@@ -212,6 +251,7 @@ describe('LocalHostController', () => {
     })).resolves.toEqual(expect.objectContaining({ ok: true, delivery: 'started' }));
     await expect(controller.restoreQueuedLiveSessionMessage?.({ conversationId: 'live-1', behavior: 'followUp', index: 0 })).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
     await expect(controller.compactLiveSession?.({ conversationId: 'live-1', customInstructions: 'be shorter' })).resolves.toEqual({ ok: true, result: { compacted: true } });
+    await expect(controller.exportLiveSession?.({ conversationId: 'live-1', outputPath: '/tmp/live-1.html' })).resolves.toEqual({ ok: true, path: '/tmp/live-1.html' });
     await expect(controller.reloadLiveSession?.('live-1')).resolves.toEqual({ ok: true });
     await expect(controller.destroyLiveSession?.('live-1')).resolves.toEqual({ ok: true });
     await expect(controller.branchLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1' })).resolves.toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
@@ -219,9 +259,15 @@ describe('LocalHostController', () => {
     await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     await expect(controller.abortLiveSession?.('live-1')).resolves.toEqual({ ok: true });
 
+    expect(readDesktopDurableRuns).toHaveBeenCalledTimes(1);
+    expect(readDesktopDurableRun).toHaveBeenCalledWith('run-1');
+    expect(readDesktopDurableRunLog).toHaveBeenCalledWith({ runId: 'run-1', tail: 25 });
+    expect(cancelDesktopDurableRun).toHaveBeenCalledWith('run-1');
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
     expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
+    expect(recoverDesktopConversation).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopLiveSession).toHaveBeenCalledWith('live-1');
+    expect(readDesktopLiveSessionForkEntries).toHaveBeenCalledWith('live-1');
     expect(readDesktopLiveSessionContext).toHaveBeenCalledWith('live-1');
     expect(readDesktopSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
     expect(readDesktopSessionBlock).toHaveBeenCalledWith({ sessionId: 'live-1', blockId: 'block-1' });
@@ -235,6 +281,7 @@ describe('LocalHostController', () => {
     });
     expect(restoreDesktopQueuedLiveSessionMessage).toHaveBeenCalledWith({ conversationId: 'live-1', behavior: 'followUp', index: 0 });
     expect(compactDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', customInstructions: 'be shorter' });
+    expect(exportDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', outputPath: '/tmp/live-1.html' });
     expect(reloadDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
     expect(destroyDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(branchDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1' });
