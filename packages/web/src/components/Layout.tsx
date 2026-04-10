@@ -1,5 +1,5 @@
 import { Component, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
@@ -18,11 +18,26 @@ import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../liveSessionWarmth';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return value === 'toggle-sidebar' || value === 'toggle-right-rail';
+}
+
+function isDesktopNavigateDetail(value: unknown): value is { route: string; replace?: boolean } {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const route = (value as { route?: unknown }).route;
+  if (typeof route !== 'string' || !route.startsWith('/')) {
+    return false;
+  }
+
+  const replace = (value as { replace?: unknown }).replace;
+  return replace === undefined || typeof replace === 'boolean';
 }
 
 function hasBlockingOverlayOpen(): boolean {
@@ -385,6 +400,7 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
 
 export function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
@@ -470,9 +486,28 @@ export function Layout() {
       activeRightRailControl?.toggleRail();
     }
 
+    function handleDesktopNavigate(event: Event) {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!isDesktopNavigateDetail(detail)) {
+        return;
+      }
+
+      const nextRoute = detail.route.trim();
+      const currentRoute = `${location.pathname}${location.search}${location.hash}`;
+      if (!nextRoute || nextRoute === currentRoute) {
+        return;
+      }
+
+      navigate(nextRoute, { replace: detail.replace === true });
+    }
+
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-    return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [activeRightRailControl]);
+    window.addEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
+    return () => {
+      window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
+      window.removeEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
+    };
+  }, [activeRightRailControl, location.hash, location.pathname, location.search, navigate]);
 
   return (
     <>

@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const SHORTCUT_CHANNEL = `${CHANNEL_PREFIX}:shortcut`;
 const SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+const NAVIGATE_CHANNEL = `${CHANNEL_PREFIX}:navigate`;
+const NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -40,14 +42,20 @@ if (domGlobals.document?.body) {
   domGlobals.document.body.setAttribute('data-personal-agent-desktop', '1');
 }
 
-ipcRenderer.on(SHORTCUT_CHANNEL, (_event, action: unknown) => {
+function dispatchDesktopEvent<T>(type: string, detail: T): void {
   if (!domGlobals.dispatchEvent || typeof domGlobals.CustomEvent !== 'function') {
     return;
   }
 
-  domGlobals.dispatchEvent(new domGlobals.CustomEvent(SHORTCUT_EVENT, {
-    detail: { action },
-  }));
+  domGlobals.dispatchEvent(new domGlobals.CustomEvent(type, { detail }));
+}
+
+ipcRenderer.on(SHORTCUT_CHANNEL, (_event, action: unknown) => {
+  dispatchDesktopEvent(SHORTCUT_EVENT, { action });
+});
+
+ipcRenderer.on(NAVIGATE_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(NAVIGATE_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

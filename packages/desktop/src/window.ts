@@ -32,10 +32,33 @@ export type DesktopRendererShortcutAction =
 
 type ManagedWindowRole = 'main' | 'remote';
 
-function toDesktopShellUrl(url: string): string {
+const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
+
+export function toDesktopShellUrl(url: string): string {
   const parsed = new URL(url);
   parsed.searchParams.set('desktop-shell', '1');
   return parsed.toString();
+}
+
+export function toDesktopShellRoute(url: string): string {
+  const parsed = new URL(url);
+  parsed.searchParams.delete('desktop-shell');
+  const route = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  return route || '/';
+}
+
+export function canNavigateWindowInApp(currentUrl: string, targetUrl: string): boolean {
+  if (!currentUrl || !targetUrl) {
+    return false;
+  }
+
+  try {
+    const current = new URL(currentUrl);
+    const target = new URL(targetUrl);
+    return current.origin === target.origin;
+  } catch {
+    return false;
+  }
 }
 
 function buildWindowTitle(host: DesktopHostRecord): string {
@@ -299,8 +322,28 @@ export class DesktopWindowController {
 
   private async loadWindowUrl(window: BrowserWindow, url: string): Promise<void> {
     const targetUrl = toDesktopShellUrl(url);
-    await window.webContents.session.clearCache();
-    if (window.webContents.getURL() !== targetUrl) {
+    const currentUrl = window.webContents.getURL();
+
+    if (
+      currentUrl
+      && !window.webContents.isLoadingMainFrame()
+      && canNavigateWindowInApp(currentUrl, targetUrl)
+    ) {
+      const targetRoute = toDesktopShellRoute(targetUrl);
+      const currentRoute = toDesktopShellRoute(currentUrl);
+
+      if (targetRoute !== currentRoute) {
+        window.webContents.send(DESKTOP_NAVIGATE_CHANNEL, {
+          route: targetRoute,
+          replace: false,
+        });
+      }
+
+      this.focusWindow(window);
+      return;
+    }
+
+    if (currentUrl !== targetUrl) {
       await window.loadURL(targetUrl);
     }
 
