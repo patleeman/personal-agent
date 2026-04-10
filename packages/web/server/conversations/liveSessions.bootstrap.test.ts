@@ -107,12 +107,14 @@ vi.mock('../shared/logging.js', () => ({
 
 import {
   branchSession,
+  clearPrewarmedLiveSessionLoaders,
   createSession,
   createSessionFromExisting,
   forkSession,
   getAvailableModelObjects,
   getAvailableModels,
   inspectAvailableTools,
+  prewarmLiveSessionLoader,
   registry,
   requestConversationWorkingDirectoryChange,
   resumeSession,
@@ -257,6 +259,7 @@ describe('liveSessions bootstrap helpers', () => {
     readSessionBlocksByFileMock.mockReset();
     readSessionMetaByFileMock.mockReset();
     registry.clear();
+    clearPrewarmedLiveSessionLoaders();
     sessionManagerCreateMock.mockReset();
     sessionManagerForkFromMock.mockReset();
     sessionManagerInMemoryMock.mockReset();
@@ -347,6 +350,40 @@ describe('liveSessions bootstrap helpers', () => {
     });
     expect(defaultResourceLoaderReloadMock).toHaveBeenCalledTimes(1);
     expect(inspectionSession.session.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('consumes a prewarmed loader when creating a new live session', async () => {
+    const runtimeRegistry = {
+      getAvailable: vi.fn(() => []),
+    };
+    const manager = createMockManager({
+      sessionFile: '/tmp/durable-sessions/--tmp-workspace--/session-prewarmed.jsonl',
+    });
+    const createdSession = createMockSession({
+      sessionId: 'session-prewarmed',
+      cwd: '/tmp/workspace',
+      manager,
+      model: { id: 'gpt-5', provider: 'openai' },
+      sessionFile: '/tmp/durable-sessions/--tmp-workspace--/session-prewarmed.jsonl',
+      tools: [],
+    });
+
+    createRuntimeModelRegistryMock.mockReturnValue(runtimeRegistry);
+    sessionManagerCreateMock.mockReturnValue(manager);
+    createAgentSessionMock.mockResolvedValue({ session: createdSession.session });
+
+    await prewarmLiveSessionLoader('/tmp/workspace', {
+      additionalExtensionPaths: ['/tmp/extensions'],
+    });
+    expect(DefaultResourceLoaderMock).toHaveBeenCalledTimes(1);
+    expect(defaultResourceLoaderReloadMock).toHaveBeenCalledTimes(1);
+
+    await createSession('/tmp/workspace', {
+      additionalExtensionPaths: ['/tmp/extensions'],
+    });
+
+    expect(DefaultResourceLoaderMock).toHaveBeenCalledTimes(2);
+    expect(defaultResourceLoaderReloadMock).toHaveBeenCalledTimes(2);
   });
 
   it('creates a new live session, repairs provider mismatches, and applies initial model preferences', async () => {

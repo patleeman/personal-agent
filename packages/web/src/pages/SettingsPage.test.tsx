@@ -306,7 +306,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('>Settings<');
     expect(html).toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
-    expect(html).toContain('Restart daemon');
+    expect(html).not.toContain('Restart daemon');
     expect(html).toContain('Provider credentials');
     expect(html).not.toContain('Related Views');
   });

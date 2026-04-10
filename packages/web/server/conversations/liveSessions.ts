@@ -1802,8 +1802,37 @@ export interface LiveSessionLoaderOptions {
   initialThinkingLevel?: string | null;
 }
 
-async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
-  const loader = new DefaultResourceLoader({
+interface PrewarmedLiveSessionLoaderEntry {
+  loader: DefaultResourceLoader;
+  warmedAtMs: number;
+}
+
+const PREWARMED_LIVE_SESSION_LOADERS_MAX = 4;
+const PREWARMED_LIVE_SESSION_LOADERS_TTL_MS = 60_000;
+const prewarmedLiveSessionLoaders = new Map<string, PrewarmedLiveSessionLoaderEntry>();
+const inflightLiveSessionLoaderWarmups = new Map<string, Promise<DefaultResourceLoader>>();
+
+function normalizeLiveSessionLoaderPaths(paths: string[] | undefined): string[] {
+  return [...new Set((paths ?? [])
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function buildLiveSessionLoaderCacheKey(cwd: string, options: LiveSessionLoaderOptions = {}): string {
+  return JSON.stringify({
+    cwd,
+    agentDir: options.agentDir ?? AGENT_DIR,
+    extensionFactories: (options.extensionFactories ?? []).map((factory, index) => factory.name || `factory-${String(index)}`),
+    additionalExtensionPaths: normalizeLiveSessionLoaderPaths(options.additionalExtensionPaths),
+    additionalSkillPaths: normalizeLiveSessionLoaderPaths(options.additionalSkillPaths),
+    additionalPromptTemplatePaths: normalizeLiveSessionLoaderPaths(options.additionalPromptTemplatePaths),
+    additionalThemePaths: normalizeLiveSessionLoaderPaths(options.additionalThemePaths),
+  });
+}
+
+function createLiveSessionLoader(cwd: string, options: LiveSessionLoaderOptions = {}): DefaultResourceLoader {
+  return new DefaultResourceLoader({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
     extensionFactories: options.extensionFactories,
@@ -1812,8 +1841,100 @@ async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
     additionalPromptTemplatePaths: options.additionalPromptTemplatePaths,
     additionalThemePaths: options.additionalThemePaths,
   });
+}
+
+function trimPrewarmedLiveSessionLoaders(): void {
+  while (prewarmedLiveSessionLoaders.size > PREWARMED_LIVE_SESSION_LOADERS_MAX) {
+    const oldestKey = prewarmedLiveSessionLoaders.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+
+    prewarmedLiveSessionLoaders.delete(oldestKey);
+  }
+}
+
+function readPrewarmedLiveSessionLoader(cacheKey: string): DefaultResourceLoader | undefined {
+  const cached = prewarmedLiveSessionLoaders.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+
+  if ((Date.now() - cached.warmedAtMs) > PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
+    prewarmedLiveSessionLoaders.delete(cacheKey);
+    return undefined;
+  }
+
+  prewarmedLiveSessionLoaders.delete(cacheKey);
+  return cached.loader;
+}
+
+async function loadLiveSessionLoaderFresh(cwd: string, options: LiveSessionLoaderOptions = {}): Promise<DefaultResourceLoader> {
+  const loader = createLiveSessionLoader(cwd, options);
   await loader.reload();
   return loader;
+}
+
+export function clearPrewarmedLiveSessionLoaders(): void {
+  prewarmedLiveSessionLoaders.clear();
+  inflightLiveSessionLoaderWarmups.clear();
+}
+
+export async function prewarmLiveSessionLoader(cwd: string, options: LiveSessionLoaderOptions = {}): Promise<void> {
+  const cacheKey = buildLiveSessionLoaderCacheKey(cwd, options);
+  const cached = prewarmedLiveSessionLoaders.get(cacheKey);
+  if (cached && (Date.now() - cached.warmedAtMs) <= PREWARMED_LIVE_SESSION_LOADERS_TTL_MS) {
+    return;
+  }
+
+  const inflight = inflightLiveSessionLoaderWarmups.get(cacheKey);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+
+  const warmup = loadLiveSessionLoaderFresh(cwd, options)
+    .then((loader) => {
+      prewarmedLiveSessionLoaders.delete(cacheKey);
+      prewarmedLiveSessionLoaders.set(cacheKey, {
+        loader,
+        warmedAtMs: Date.now(),
+      });
+      trimPrewarmedLiveSessionLoaders();
+      return loader;
+    })
+    .finally(() => {
+      inflightLiveSessionLoaderWarmups.delete(cacheKey);
+    });
+
+  inflightLiveSessionLoaderWarmups.set(cacheKey, warmup);
+  await warmup;
+}
+
+function queuePrewarmLiveSessionLoader(cwd: string, options: LiveSessionLoaderOptions = {}): void {
+  void prewarmLiveSessionLoader(cwd, options).catch((error) => {
+    logWarn('live session loader prewarm failed', {
+      cwd,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  });
+}
+
+async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
+  const cacheKey = buildLiveSessionLoaderCacheKey(cwd, options);
+  const prewarmed = readPrewarmedLiveSessionLoader(cacheKey);
+  if (prewarmed) {
+    return prewarmed;
+  }
+
+  const inflight = inflightLiveSessionLoaderWarmups.get(cacheKey);
+  if (inflight) {
+    const warmed = await inflight;
+    return readPrewarmedLiveSessionLoader(cacheKey) ?? warmed;
+  }
+
+  return loadLiveSessionLoaderFresh(cwd, options);
 }
 
 async function repairSessionModelProvider(session: Pick<AgentSession, 'setModel' | 'sessionManager' | 'model'>, models: ReturnType<ModelRegistry['getAvailable']>): Promise<void> {
@@ -1880,6 +2001,7 @@ export async function createSession(
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
+  queuePrewarmLiveSessionLoader(cwd, options);
   return { id, sessionFile: session.sessionFile ?? '' };
 }
 
@@ -1909,6 +2031,7 @@ export async function createSessionFromExisting(
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
+  queuePrewarmLiveSessionLoader(cwd, options);
   return { id, sessionFile: session.sessionFile ?? '' };
 }
 
@@ -2046,6 +2169,7 @@ export async function resumeSession(
   wireSession(id, session, cwd, {
     autoTitleRequested: Boolean(session.sessionName?.trim()),
   });
+  queuePrewarmLiveSessionLoader(cwd, options);
   return { id };
 }
 

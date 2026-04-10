@@ -1535,6 +1535,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, draftCwdEditorOpen, draftCwdValue]);
 
+
   useEffect(() => {
     if (draft) {
       return;

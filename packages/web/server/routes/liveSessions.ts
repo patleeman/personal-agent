@@ -4,6 +4,7 @@ import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
   createSession as createLocalSession,
+  prewarmLiveSessionLoader,
   destroySession,
   exportSessionHtml,
   forkSession,
@@ -164,6 +165,7 @@ function initializeLiveSessionRoutesContext(
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
   listMemoryDocsFn = context.listMemoryDocs;
+  queueDefaultLiveSessionLoaderPrewarm();
 }
 
 function buildLiveSessionResourceOptions(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -172,6 +174,31 @@ function buildLiveSessionResourceOptions(overrides: Record<string, unknown> = {}
     extensionFactories: buildLiveSessionExtensionFactoriesFn(),
     ...overrides,
   };
+}
+
+function queueDefaultLiveSessionLoaderPrewarm(): void {
+  try {
+    const profile = getCurrentProfileFn();
+    const cwd = resolveConversationCwd({
+      repoRoot: getRepoRootFn(),
+      profile,
+      explicitCwd: undefined,
+      defaultCwd: getDefaultWebCwdFn(),
+    });
+
+    void prewarmLiveSessionLoader(cwd, buildLiveSessionResourceOptions()).catch((error) => {
+      logWarn('default live session loader prewarm failed', {
+        cwd,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  } catch (error) {
+    logWarn('default live session loader prewarm setup failed', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+  }
 }
 
 function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): string {

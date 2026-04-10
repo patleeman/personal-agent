@@ -712,8 +712,9 @@ export function Sidebar() {
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
   const handleNewConversation = useCallback((cwd?: string | null) => {
-    if (typeof cwd === 'string' && cwd.trim().length > 0) {
-      persistDraftConversationCwd(cwd);
+    const explicitCwd = typeof cwd === 'string' ? cwd.trim() : '';
+    if (explicitCwd) {
+      persistDraftConversationCwd(explicitCwd);
     }
 
     navigate('/conversations/new');

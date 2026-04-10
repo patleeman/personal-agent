@@ -122,6 +122,8 @@ It includes sections for:
 - runtime services and health
 - workspace / vault information
 
+When the web UI is running inside the Electron shell, the runtime section is framed as the app-owned local runtime rather than as separately managed OS services.
+
 ## Companion surface
 
 The companion/mobile UI lives under:

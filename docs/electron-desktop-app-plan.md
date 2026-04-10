@@ -102,9 +102,18 @@ Important files:
 - `config.json` — saved hosts, default host, window state
 - `logs/` — desktop, daemon-child, and web-child logs
 
+## Runtime controls in the app
+
+In the desktop shell, the local daemon and web server are treated as internal runtime components.
+
+That means:
+
+- the Settings page describes the local runtime instead of exposing launchd/systemd-style service controls
+- quitting the app is the expected way to stop the local Mac runtime
+- background behavior comes from the menubar app staying open, not from separately managed OS services
+
 ## Current limitations
 
-- restart control is only implemented for the local host
 - the desktop-owned local backend intentionally does not expose the companion surface
 - the desktop shell does not reuse an already-running external local daemon/web UI pair
 

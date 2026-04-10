@@ -99,9 +99,9 @@ describe('System settings integration', () => {
     const html = renderSystem('/settings', <SystemSettingsContent />);
 
     expect(html).toContain('Runtime services');
-    expect(html).toContain('Web UI and daemon status, restart controls, logs, and companion transport settings stay inline here.');
-    expect(html).toContain('Restart daemon');
-    expect(html).toContain('Restart web UI');
+    expect(html).toContain('Web UI and daemon status, logs, and companion transport settings stay inline here.');
+    expect(html).not.toContain('Restart daemon');
+    expect(html).not.toContain('Restart web UI');
     expect(html).toContain('Queue');
     expect(html).toContain('Modules');
     expect(html).not.toContain('Operational overview');
@@ -115,8 +115,8 @@ describe('System settings integration', () => {
 
     expect(html).toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
-    expect(html).toContain('Restart daemon');
-    expect(html).toContain('Restart web UI');
+    expect(html).not.toContain('Restart daemon');
+    expect(html).not.toContain('Restart web UI');
     expect(html).toContain('daemon ready');
     expect(html).not.toContain('Related Views');
   });

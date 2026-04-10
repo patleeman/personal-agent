@@ -6,6 +6,7 @@ const {
   branchSessionMock,
   compactSessionMock,
   createLocalSessionMock,
+  prewarmLiveSessionLoaderMock,
   destroySessionMock,
   existsSyncMock,
   exportSessionHtmlMock,
@@ -56,6 +57,7 @@ const {
   branchSessionMock: vi.fn(),
   compactSessionMock: vi.fn(),
   createLocalSessionMock: vi.fn(),
+  prewarmLiveSessionLoaderMock: vi.fn(),
   createSessionListenerUnsubscribeMock: vi.fn(),
   destroySessionMock: vi.fn(),
   existsSyncMock: vi.fn(),
@@ -124,6 +126,7 @@ vi.mock('../conversations/liveSessions.js', () => ({
   branchSession: branchSessionMock,
   compactSession: compactSessionMock,
   createSession: createLocalSessionMock,
+  prewarmLiveSessionLoader: prewarmLiveSessionLoaderMock,
   destroySession: destroySessionMock,
   exportSessionHtml: exportSessionHtmlMock,
   forkSession: forkSessionMock,
@@ -358,6 +361,7 @@ describe('live session routes', () => {
     branchSessionMock.mockReset();
     compactSessionMock.mockReset();
     createLocalSessionMock.mockReset();
+    prewarmLiveSessionLoaderMock.mockReset();
     createSessionListenerUnsubscribeMock.mockReset();
     destroySessionMock.mockReset();
     existsSyncMock.mockReset();
@@ -408,6 +412,7 @@ describe('live session routes', () => {
     branchSessionMock.mockResolvedValue({ id: 'branch-1' });
     compactSessionMock.mockResolvedValue('compacted');
     createLocalSessionMock.mockResolvedValue({ id: 'live-new' });
+    prewarmLiveSessionLoaderMock.mockResolvedValue(undefined);
     existsSyncMock.mockReturnValue(true);
     exportSessionHtmlMock.mockResolvedValue('/tmp/export.html');
     forkSessionMock.mockResolvedValue({ id: 'fork-1' });
@@ -608,6 +613,11 @@ describe('live session routes', () => {
       initialThinkingLevel: 'high',
     });
     expect(createRes.json).toHaveBeenCalledWith({ id: 'live-new' });
+
+    expect(prewarmLiveSessionLoaderMock).toHaveBeenCalledWith('/repo/worktree', {
+      additionalExtensionPaths: ['extensions'],
+      extensionFactories: ['factory'],
+    });
 
     const invalidResumeRes = createResponse();
     await postHandler('/api/live-sessions/resume')(createRequest({ body: {} }), invalidResumeRes);
@@ -851,6 +861,11 @@ describe('live session routes', () => {
       repoRoot: '/repo',
     });
     expect(createRes.json).toHaveBeenCalledWith({ id: 'live-new' });
+
+    expect(prewarmLiveSessionLoaderMock).toHaveBeenCalledWith('/repo/worktree', {
+      additionalExtensionPaths: ['extensions'],
+      extensionFactories: ['factory'],
+    });
 
     const badResumeRes = createResponse();
     await postHandler('/api/live-sessions/resume')(createRequest({ body: {} }), badResumeRes);

@@ -36,7 +36,7 @@ export function SystemSettingsContent({ componentId: _componentId }: { component
       <div className="space-y-1">
         <SectionLabel label="Runtime services" />
         <p className="ui-card-meta max-w-3xl">
-          Web UI and daemon status, restart controls, logs, and companion transport settings stay inline here.
+          Web UI and daemon status, logs, and companion transport settings stay inline here.
         </p>
       </div>
 

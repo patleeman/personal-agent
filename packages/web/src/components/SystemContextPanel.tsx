@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { getDesktopBridge } from '../desktopBridge';
 import { useSystemStatus } from '../contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
 import type { DaemonState, WebUiState } from '../types';
@@ -60,15 +59,6 @@ function buildPanel(selected: SystemPanelData) {
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
         log: data.log,
-        actionLabel: desktopOwned ? 'Restart local runtime' : 'Restart web UI',
-        actionDisabled: desktopOwned ? false : !data.service.installed || !data.service.running,
-        actionDisabledReason: desktopOwned
-          ? null
-          : !data.service.installed
-            ? 'Install the managed web UI service before restarting it.'
-            : !data.service.running
-              ? 'Start the managed web UI service before restarting it.'
-              : null,
         details: [
           { label: 'Service', value: desktopOwned ? 'desktop-owned' : running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
           { label: 'Desktop URL', value: data.service.url },
@@ -95,15 +85,6 @@ function buildPanel(selected: SystemPanelData) {
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
         log: data.log,
-        actionLabel: desktopOwned ? 'Restart local runtime' : 'Restart daemon',
-        actionDisabled: desktopOwned ? false : !data.service.installed || !data.service.running,
-        actionDisabledReason: desktopOwned
-          ? null
-          : !data.service.installed
-            ? 'Install the daemon service before restarting it.'
-            : !data.service.running
-              ? 'Start the daemon service before restarting it.'
-              : null,
         details: [
           { label: 'Service', value: desktopOwned ? 'desktop-owned' : data.service.running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
           { label: 'Runtime', value: running ? 'connected' : 'offline' },
@@ -286,46 +267,6 @@ export function SystemServiceSection({
     }
   }, [componentId, refreshing, setDaemon, setWebUi]);
 
-  const handleAction = useCallback(async () => {
-    if (actionBusy || !selected) {
-      return;
-    }
-
-    setActionBusy(true);
-    setMessage(null);
-    setError(null);
-
-    try {
-      const desktopBridge = getDesktopBridge();
-      const desktopOwned = selected.kind === 'web-ui'
-        ? selected.data.service.platform === 'desktop'
-        : selected.data.service.platform === 'desktop';
-
-      if (desktopOwned && desktopBridge) {
-        await desktopBridge.restartActiveHost();
-        setMessage('Restarting the local runtime. This window will reconnect when it is ready.');
-        return;
-      }
-
-      switch (selected.kind) {
-        case 'web-ui': {
-          const result = await api.restartWebUiService();
-          setMessage(`${result.message} Live updates will push the new state when the service comes back.`);
-          break;
-        }
-        case 'daemon': {
-          setDaemon(await api.restartDaemonService());
-          setMessage('Requested a daemon restart.');
-          break;
-        }
-      }
-    } catch (actionError) {
-      setError(actionError instanceof Error ? actionError.message : String(actionError));
-    } finally {
-      setActionBusy(false);
-    }
-  }, [actionBusy, selected, setDaemon]);
-
   const handleToggleWebUiTailscale = useCallback(async () => {
     if (actionBusy || !selected || selected.kind !== 'web-ui') {
       return;
@@ -381,15 +322,8 @@ export function SystemServiceSection({
                 <ToolbarButton onClick={() => { void refreshSelected(); }} disabled={refreshing || actionBusy}>
                   {refreshing ? 'Refreshing…' : '↻ Refresh'}
                 </ToolbarButton>
-                <ToolbarButton onClick={() => { void handleAction(); }} disabled={actionBusy || panel.actionDisabled}>
-                  {actionBusy ? 'Working…' : panel.actionLabel}
-                </ToolbarButton>
               </div>
             </div>
-
-            {panel.actionDisabledReason && (
-              <p className="ui-card-meta">{panel.actionDisabledReason}</p>
-            )}
             <div aria-live="polite" className="space-y-1">
               {message && <p className="text-[12px] text-secondary">{message}</p>}
               {error && <ErrorState message={error} />}
@@ -477,13 +411,8 @@ export function SystemServiceSection({
               <ToolbarButton onClick={() => { void refreshSelected(); }} disabled={refreshing || actionBusy}>
                 {refreshing ? 'Refreshing…' : '↻ Refresh'}
               </ToolbarButton>
-              <ToolbarButton onClick={() => { void handleAction(); }} disabled={actionBusy || panel.actionDisabled}>
-                {actionBusy ? 'Working…' : panel.actionLabel}
-              </ToolbarButton>
             </div>
           </div>
-
-          {panel.actionDisabledReason && <p className="ui-card-meta">{panel.actionDisabledReason}</p>}
           <div aria-live="polite" className="space-y-1">
             {message && <p className="text-[12px] text-secondary">{message}</p>}
             {error && <ErrorState message={error} />}
