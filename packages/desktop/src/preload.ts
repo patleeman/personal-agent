@@ -49,7 +49,9 @@ const desktopBridge = {
   readDefaultCwd: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-default-cwd`),
   updateDefaultCwd: (cwd: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-default-cwd`, cwd),
   readVaultRoot: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-vault-root`),
+  readVaultFiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-vault-files`),
   updateVaultRoot: (root: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-vault-root`, root),
+  pickFolder: (input?: { cwd?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:pick-folder`, input),
   readConversationTitleSettings: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-title-settings`),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),

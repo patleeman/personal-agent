@@ -50,7 +50,9 @@ export interface LocalApiModule {
   readDesktopDefaultCwd(): Promise<unknown>;
   updateDesktopDefaultCwd(cwd: string | null): Promise<unknown>;
   readDesktopVaultRoot(): Promise<unknown>;
+  readDesktopVaultFiles(): Promise<unknown>;
   updateDesktopVaultRoot(root: string | null): Promise<unknown>;
+  pickDesktopFolder(input?: { cwd?: string | null }): Promise<unknown>;
   readDesktopConversationTitleSettings(): Promise<unknown>;
   updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readDesktopConversationPlanDefaults(): Promise<unknown>;

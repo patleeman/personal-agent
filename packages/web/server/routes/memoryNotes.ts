@@ -5,7 +5,7 @@
 import type { Express, Request } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { getProfilesRoot, getVaultRoot } from '@personal-agent/core';
+import { getProfilesRoot } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
 import {
   buildRecentReadUsage,
@@ -15,8 +15,8 @@ import {
   listSkillsForProfile,
   normalizeMemoryPath,
 } from '../knowledge/memoryDocs.js';
-import { listVaultFiles } from '../knowledge/vaultFiles.js';
 import { logError } from '../middleware/index.js';
+import { readVaultFilesCapability } from '../workspace/workspaceDesktopCapability.js';
 
 let _getCurrentProfile: () => string = () => { throw new Error('not initialized'); };
 let _repoRoot = process.cwd();
@@ -111,10 +111,7 @@ export function registerMemoryNotesRoutes(
 
   router.get('/api/vault-files', (_req, res) => {
     try {
-      res.json({
-        root: getVaultRoot(),
-        files: listVaultFiles(),
-      });
+      res.json(readVaultFilesCapability());
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });

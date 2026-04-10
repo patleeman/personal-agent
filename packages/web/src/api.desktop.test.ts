@@ -591,7 +591,9 @@ describe('api desktop transport', () => {
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
+    const readVaultFiles = vi.fn().mockResolvedValue({ root: '/vault', files: [{ id: 'notes/a.md', path: '/vault/notes/a.md' }] });
     const updateVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
+    const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     const readConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     const updateConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -609,7 +611,9 @@ describe('api desktop transport', () => {
         readDefaultCwd,
         updateDefaultCwd,
         readVaultRoot,
+        readVaultFiles,
         updateVaultRoot,
+        pickFolder,
         readConversationTitleSettings,
         updateConversationTitleSettings,
       },
@@ -642,6 +646,43 @@ describe('api desktop transport', () => {
     expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+  });
+
+  it('uses dedicated desktop vault-file and folder-picker bridges on the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const readVaultFiles = vi.fn().mockResolvedValue({
+      root: '/vault',
+      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+    });
+    const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        readVaultFiles,
+        pickFolder,
+      },
+    });
+
+    const { api } = await import('./api');
+    const vaultFiles = await api.vaultFiles();
+    const pickedFolder = await api.pickFolder('/repo');
+
+    expect(readVaultFiles).toHaveBeenCalledTimes(1);
+    expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(vaultFiles).toEqual({
+      root: '/vault',
+      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+    });
+    expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
 
   it('uses dedicated desktop automation preset bridges on the local Electron host', async () => {
@@ -1131,6 +1172,50 @@ describe('api desktop transport', () => {
     expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+  });
+
+  it('falls back to HTTP for desktop vault-file and folder-picker bridges on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({
+        root: '/vault',
+        files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      }))
+      .mockResolvedValueOnce(createJsonResponse({ path: '/picked/repo', cancelled: false }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readVaultFiles = vi.fn();
+    const pickFolder = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readVaultFiles,
+        pickFolder,
+      },
+    });
+
+    const { api } = await import('./api');
+    const vaultFiles = await api.vaultFiles();
+    const pickedFolder = await api.pickFolder('/repo');
+
+    expect(readVaultFiles).not.toHaveBeenCalled();
+    expect(pickFolder).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vault-files', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/folder-picker', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: '/repo' }),
+    });
+    expect(vaultFiles).toEqual({
+      root: '/vault',
+      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+    });
+    expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
 
   it('falls back to HTTP for desktop automation preset bridges on non-local hosts', async () => {

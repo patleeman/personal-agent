@@ -4,10 +4,10 @@
 
 import type { Express } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { pickFolder } from '../workspace/folderPicker.js';
+import { pickFolderCapability } from '../workspace/workspaceDesktopCapability.js';
 
 let _getDefaultWebCwd: () => string = () => process.cwd();
-let _resolveRequestedCwd: (cwd: string | undefined, defaultCwd: string) => string | undefined = () => undefined;
+let _resolveRequestedCwd: (cwd: string | null | undefined, defaultCwd?: string) => string | undefined = () => undefined;
 
 function initializeFolderPickerRoutesContext(
   context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
@@ -22,12 +22,10 @@ export function registerFolderPickerRoutes(
 ): void {
   initializeFolderPickerRoutesContext(context);
   router.post('/api/folder-picker', (req, res) => {
-    const defaultWebCwd = _getDefaultWebCwd();
-    const { cwd } = req.body as { cwd?: string };
-    const result = pickFolder({
-      initialDirectory: _resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd,
-      prompt: 'Choose working directory',
-    });
-    res.json(result);
+    const { cwd } = req.body as { cwd?: string | null };
+    res.json(pickFolderCapability({ cwd }, {
+      getDefaultWebCwd: _getDefaultWebCwd,
+      resolveRequestedCwd: _resolveRequestedCwd,
+    }));
   });
 }

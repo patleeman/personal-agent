@@ -127,7 +127,8 @@ Goal: local file-heavy features use desktop-owned services directly.
 
 - [ ] artifacts list/read/write/delete
 - [ ] attachments list/read/write/delete/download
-- [ ] folder picker and file chooser flows
+- [x] folder picker flows
+- [ ] file chooser flows
 - [ ] workspace/vault inspection used by local UI
 - [ ] any remaining local image/block hydrate endpoints used by conversations
 
@@ -272,5 +273,6 @@ Just completed:
 - local desktop open-conversation tab persistence, tools page/rail reads, package installs, MCP detail reads, and instructions/memory reads+writes now also use dedicated desktop bridge methods instead of the generic local API path, while remote hosts keep the existing HTTP fallback
 - local desktop conversation artifact list/detail/delete and conversation attachment list/detail/create/update/delete now use dedicated desktop bridge methods instead of the generic local API path, with shared capability logic reused by both the HTTP routes and the desktop local-api module
 - local desktop conversation attachment asset reads now use a dedicated desktop bridge method instead of fetching local download URLs, so saved-drawing picker restores can stay on typed IPC while remote hosts keep the existing HTTP download fallback
-- validation for this slice: targeted Vitest coverage in `packages/web/server/conversations/conversationAssetsCapability.test.ts`, `packages/web/server/routes/conversations.test.ts`, `packages/web/src/api.desktop.test.ts`, and `packages/desktop/src/hosts/local-host-controller.test.ts`, plus eslint, `npm --prefix packages/web run build`, `npm --prefix packages/desktop run build`, and built Electron smoke checks confirming the packaged conversation shell still renders after the attachment-asset IPC wiring change
-- current focus after this slice: continue replacing the remaining generic local API usage in local desktop product surfaces, especially deeper vault/workspace inspection surfaces and any residual admin pages or download-style flows that still rely on generic local-api dispatch
+- local desktop vault-file inspection and folder picking now use dedicated desktop bridge methods backed by a shared workspace capability module instead of the generic local API path, so local workspace selectors can stay on typed IPC while remote hosts keep the existing HTTP fallback
+- validation for this slice: targeted Vitest coverage in `packages/web/server/workspace/workspaceDesktopCapability.test.ts`, `packages/web/server/routes/memoryNotes.test.ts`, `packages/web/server/routes/folderPicker.test.ts`, `packages/web/src/api.desktop.test.ts`, and `packages/desktop/src/hosts/local-host-controller.test.ts`, plus eslint, `npm --prefix packages/web run build`, `npm --prefix packages/desktop run build`, and built Electron smoke checks confirming packaged Settings and conversation shells still render after the workspace IPC wiring change
+- current focus after this slice: continue replacing the remaining generic local API usage in local desktop product surfaces, especially residual workspace/admin flows like shell run and any other download-style or file-inspection surfaces still leaning on generic local-api dispatch

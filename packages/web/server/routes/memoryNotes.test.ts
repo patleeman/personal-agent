@@ -73,7 +73,10 @@ vi.mock('../middleware/index.js', () => ({
 
 import { registerMemoryNotesRoutes } from './memoryNotes.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (
+  req: { query?: Record<string, unknown>; body?: Record<string, unknown> },
+  res: ReturnType<typeof createResponse>,
+) => Promise<void> | void;
 
 function createResponse() {
   return {

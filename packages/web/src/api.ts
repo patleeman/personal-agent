@@ -439,7 +439,14 @@ export const api = {
 
     return get<VaultRootState>('/vault-root');
   },
-  vaultFiles: () => get<VaultFileListResult>('/vault-files'),
+  vaultFiles: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readVaultFiles();
+    }
+
+    return get<VaultFileListResult>('/vault-files');
+  },
   tools: async (options?: { profile?: string }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -730,8 +737,14 @@ export const api = {
   },
 
   // ── Shell run ─────────────────────────────────────────────────────────────
-  pickFolder: (cwd?: string) =>
-    post<FolderPickerResult>('/folder-picker', { cwd }),
+  pickFolder: async (cwd?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.pickFolder({ ...(cwd !== undefined ? { cwd } : {}) });
+    }
+
+    return post<FolderPickerResult>('/folder-picker', { cwd });
+  },
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 

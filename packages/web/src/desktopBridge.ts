@@ -41,10 +41,12 @@ import type {
   LiveSessionPresenceState,
   LiveSessionStats,
   DeferredResumeSummary,
+  FolderPickerResult,
   PromptAttachmentRefInput,
   PromptImageInput,
   SessionContextUsage,
   SessionDetailResult,
+  VaultFileListResult,
 } from './types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
@@ -73,7 +75,9 @@ export interface PersonalAgentDesktopBridge {
   readDefaultCwd(): Promise<DefaultCwdState>;
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
   readVaultRoot(): Promise<VaultRootState>;
+  readVaultFiles(): Promise<VaultFileListResult>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
+  pickFolder(input?: { cwd?: string | null }): Promise<FolderPickerResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlanDefaults(): Promise<ConversationAutomationPreferencesState>;

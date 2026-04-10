@@ -76,6 +76,7 @@ import {
 } from '../conversations/sessions.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
+import { readVaultFilesCapability, pickFolderCapability } from '../workspace/workspaceDesktopCapability.js';
 import type { ServerRouteContext } from '../routes/context.js';
 import {
   getProviderOAuthLoginState,
@@ -1328,6 +1329,10 @@ export async function readDesktopVaultRoot() {
   };
 }
 
+export async function readDesktopVaultFiles() {
+  return readVaultFilesCapability();
+}
+
 export async function updateDesktopVaultRoot(root: string | null) {
   if (root !== undefined && root !== null && typeof root !== 'string') {
     throw new Error('root must be a string or null');
@@ -1357,6 +1362,14 @@ export async function updateDesktopVaultRoot(root: string | null) {
   const context = await getLocalServerRouteContext();
   context.materializeWebProfile(context.getCurrentProfile());
   return readDesktopVaultRoot();
+}
+
+export async function pickDesktopFolder(input: { cwd?: string | null } = {}) {
+  const context = await getLocalServerRouteContext();
+  return pickFolderCapability(input, {
+    getDefaultWebCwd: context.getDefaultWebCwd,
+    resolveRequestedCwd: context.resolveRequestedCwd,
+  });
 }
 
 export async function readDesktopConversationTitleSettings() {

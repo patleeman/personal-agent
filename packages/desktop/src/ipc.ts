@@ -273,6 +273,17 @@ export function registerDesktopIpc(options: {
     return controller.readVaultRoot();
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-vault-files`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readVaultFiles) {
+      throw new Error('Dedicated desktop vault-file reads are only available for the local host.');
+    }
+
+    return controller.readVaultFiles();
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:update-vault-root`, async (event, root: string | null) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -282,6 +293,17 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.updateVaultRoot(root);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:pick-folder`, async (event, input?: { cwd?: string | null }) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.pickFolder) {
+      throw new Error('Dedicated desktop folder picking is only available for the local host.');
+    }
+
+    return controller.pickFolder(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-title-settings`, async (event) => {

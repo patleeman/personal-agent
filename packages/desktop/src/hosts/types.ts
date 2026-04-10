@@ -245,7 +245,9 @@ export interface HostController {
   readDefaultCwd?(): Promise<unknown>;
   updateDefaultCwd?(cwd: string | null): Promise<unknown>;
   readVaultRoot?(): Promise<unknown>;
+  readVaultFiles?(): Promise<unknown>;
   updateVaultRoot?(root: string | null): Promise<unknown>;
+  pickFolder?(input?: { cwd?: string | null }): Promise<unknown>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlanDefaults?(): Promise<unknown>;
