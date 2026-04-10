@@ -40,6 +40,9 @@ export interface LocalApiModule {
   readDesktopCompanionAuthState(): Promise<unknown>;
   createDesktopCompanionPairingCode(): Promise<unknown>;
   revokeDesktopCompanionSession(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
+  readDesktopSessions(): Promise<unknown>;
+  readDesktopSessionMeta(sessionId: string): Promise<unknown>;
+  readDesktopSessionSearchIndex(sessionIds: string[]): Promise<unknown>;
   readDesktopProfiles(): Promise<unknown>;
   setDesktopCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readDesktopModels(): Promise<unknown>;

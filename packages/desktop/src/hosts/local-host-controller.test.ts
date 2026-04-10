@@ -33,6 +33,9 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopCompanionAuthState: vi.fn(),
     createDesktopCompanionPairingCode: vi.fn(),
     revokeDesktopCompanionSession: vi.fn(),
+    readDesktopSessions: vi.fn(),
+    readDesktopSessionMeta: vi.fn(),
+    readDesktopSessionSearchIndex: vi.fn(),
     readDesktopProfiles: vi.fn(),
     setDesktopCurrentProfile: vi.fn(),
     readDesktopModels: vi.fn(),
@@ -296,6 +299,32 @@ describe('LocalHostController', () => {
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
     });
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop session snapshot reads through the local API module without loopback proxying', async () => {
+    const readDesktopSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
+    const readDesktopSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
+    const readDesktopSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopSessions,
+      readDesktopSessionMeta,
+      readDesktopSessionSearchIndex,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.readSessions?.()).resolves.toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
+    await expect(controller.readSessionMeta?.('conversation-1')).resolves.toEqual({ id: 'conversation-1', title: 'Conversation 1' });
+    await expect(controller.readSessionSearchIndex?.(['conversation-1'])).resolves.toEqual({ index: { 'conversation-1': 'hello world' } });
+
+    expect(readDesktopSessions).toHaveBeenCalledTimes(1);
+    expect(readDesktopSessionMeta).toHaveBeenCalledWith('conversation-1');
+    expect(readDesktopSessionSearchIndex).toHaveBeenCalledWith(['conversation-1']);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

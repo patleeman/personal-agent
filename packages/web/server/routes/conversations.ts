@@ -3,13 +3,11 @@ import type { ServerRouteContext } from './context.js';
 import {
   setConversationServiceContext,
   handleCompanionConversationListRequest,
-  readConversationSessionMeta,
   readConversationSessionSignature,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
   publishConversationSessionMetaChanged,
   parseTailBlocksQuery,
-  listConversationSessionsSnapshot,
   toggleConversationAttention,
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
@@ -40,7 +38,6 @@ import {
   buildAppendOnlySessionDetailResponse,
   readSessionBlock,
   readSessionImageAsset,
-  readSessionSearchText,
 } from '../conversations/sessions.js';
 import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import {
@@ -62,6 +59,11 @@ import {
   readConversationAttachmentsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
+import {
+  readConversationSessionMetaCapability,
+  readConversationSessionSearchIndexCapability,
+  readConversationSessionsCapability,
+} from '../conversations/conversationSessionCapability.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
@@ -126,7 +128,7 @@ function writeConversationAssetCapabilityError(
 function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
   router.get('/api/sessions/:id/meta', (req, res) => {
     try {
-      const session = readConversationSessionMeta(req.params.id);
+      const session = readConversationSessionMetaCapability(req.params.id);
       if (!session) {
         res.status(404).json({ error: 'Session not found' });
         return;
@@ -309,7 +311,7 @@ export function registerConversationRoutes(
   initializeConversationRoutesContext(context);
   router.get('/api/sessions', (_req, res) => {
     try {
-      res.json(listConversationSessionsSnapshot());
+      res.json(readConversationSessionsCapability());
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -323,24 +325,7 @@ export function registerConversationRoutes(
 
   router.post('/api/sessions/search-index', (req, res) => {
     try {
-      const rawSessionIds: unknown[] = Array.isArray(req.body?.sessionIds) ? req.body.sessionIds as unknown[] : [];
-      const sessionIds = rawSessionIds
-        .filter((value: unknown): value is string => typeof value === 'string')
-        .map((value: string) => value.trim())
-        .filter((value: string) => value.length > 0);
-
-      if (sessionIds.length === 0) {
-        res.json({ index: {} as Record<string, string> });
-        return;
-      }
-
-      const index: Record<string, string> = {};
-      for (const sessionId of sessionIds) {
-        const searchText = readSessionSearchText(sessionId);
-        index[sessionId] = typeof searchText === 'string' ? searchText : '';
-      }
-
-      res.json({ index });
+      res.json(readConversationSessionSearchIndexCapability(req.body as { sessionIds?: unknown }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

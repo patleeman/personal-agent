@@ -46,6 +46,7 @@ import type {
   PromptImageInput,
   SessionContextUsage,
   SessionDetailResult,
+  SessionMeta,
   VaultFileListResult,
 } from './types';
 
@@ -68,6 +69,9 @@ export interface PersonalAgentDesktopBridge {
   readCompanionAuthState(): Promise<CompanionAuthAdminState>;
   createCompanionPairingCode(): Promise<CompanionPairingCodeResult>;
   revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: CompanionAuthAdminState }>;
+  readSessions(): Promise<SessionMeta[]>;
+  readSessionMeta(sessionId: string): Promise<SessionMeta>;
+  readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;
   readProfiles(): Promise<ProfileState>;
   setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels(): Promise<ModelState>;

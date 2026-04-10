@@ -50,6 +50,9 @@ describe('api desktop transport', () => {
       service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
       log: { lines: [] },
     });
+    const readSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
+    const readSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
+    const readSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
     const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
     const updateModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
@@ -140,6 +143,9 @@ describe('api desktop transport', () => {
         readAppStatus,
         readDaemonState,
         readWebUiState,
+        readSessions,
+        readSessionMeta,
+        readSessionSearchIndex,
         readModels,
         updateModelPreferences,
         readModelProviders,
@@ -211,6 +217,8 @@ describe('api desktop transport', () => {
     const status = await api.status();
     const daemon = await api.daemon();
     const webUiState = await api.webUiState();
+    const sessions = await api.sessions();
+    const sessionMeta = await api.sessionMeta('conversation-1');
     const sessionSearchIndex = await api.sessionSearchIndex(['conversation-1']);
     const models = await api.models();
     const modelPreferenceUpdate = await api.updateModelPreferences({ thinkingLevel: 'medium' });
@@ -285,7 +293,10 @@ describe('api desktop transport', () => {
     expect(readAppStatus).toHaveBeenCalledTimes(1);
     expect(readDaemonState).toHaveBeenCalledTimes(1);
     expect(readWebUiState).toHaveBeenCalledTimes(1);
-    expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'POST', '/api/sessions/search-index', { sessionIds: ['conversation-1'] });
+    expect(readSessions).toHaveBeenCalledTimes(1);
+    expect(readSessionMeta).toHaveBeenCalledWith('conversation-1');
+    expect(readSessionSearchIndex).toHaveBeenCalledWith(['conversation-1']);
+    expect(invokeLocalApi).not.toHaveBeenCalled();
     expect(readModels).toHaveBeenCalledTimes(1);
     expect(updateModelPreferences).toHaveBeenCalledWith({ thinkingLevel: 'medium' });
     expect(readModelProviders).toHaveBeenCalledTimes(1);
@@ -397,6 +408,8 @@ describe('api desktop transport', () => {
       service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
       log: { lines: [] },
     });
+    expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
+    expect(sessionMeta).toEqual({ id: 'conversation-1', title: 'Conversation 1' });
     expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
     expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
     expect(modelPreferenceUpdate).toEqual({ ok: true });
@@ -1681,6 +1694,54 @@ describe('api desktop transport', () => {
       mimeType: 'image/png',
       fileName: 'preview.png',
     });
+  });
+
+  it('falls back to HTTP for desktop session list, meta, and search-index reads on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse([{ id: 'conversation-1', title: 'Conversation 1' }]))
+      .mockResolvedValueOnce(createJsonResponse({ id: 'conversation-1', title: 'Conversation 1' }))
+      .mockResolvedValueOnce(createJsonResponse({ index: { 'conversation-1': 'hello world' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readSessions = vi.fn();
+    const readSessionMeta = vi.fn();
+    const readSessionSearchIndex = vi.fn();
+    const invokeLocalApi = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        invokeLocalApi,
+        readSessions,
+        readSessionMeta,
+        readSessionSearchIndex,
+      },
+    });
+
+    const { api } = await import('./api');
+    const sessions = await api.sessions();
+    const sessionMeta = await api.sessionMeta('conversation-1');
+    const sessionSearchIndex = await api.sessionSearchIndex(['conversation-1']);
+
+    expect(readSessions).not.toHaveBeenCalled();
+    expect(readSessionMeta).not.toHaveBeenCalled();
+    expect(readSessionSearchIndex).not.toHaveBeenCalled();
+    expect(invokeLocalApi).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/sessions', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/sessions/conversation-1/meta', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/sessions/search-index', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionIds: ['conversation-1'] }),
+    });
+    expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
+    expect(sessionMeta).toEqual({ id: 'conversation-1', title: 'Conversation 1' });
+    expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {

@@ -238,6 +238,9 @@ export interface HostController {
   readCompanionAuthState?(): Promise<unknown>;
   createCompanionPairingCode?(): Promise<unknown>;
   revokeCompanionSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
+  readSessions?(): Promise<unknown>;
+  readSessionMeta?(sessionId: string): Promise<unknown>;
+  readSessionSearchIndex?(sessionIds: string[]): Promise<unknown>;
   readProfiles?(): Promise<unknown>;
   setCurrentProfile?(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels?(): Promise<unknown>;

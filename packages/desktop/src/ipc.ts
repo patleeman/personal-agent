@@ -196,6 +196,39 @@ export function registerDesktopIpc(options: {
     return controller.revokeCompanionSession(sessionId);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-sessions`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readSessions) {
+      throw new Error('Dedicated desktop session-list reads are only available for the local host.');
+    }
+
+    return controller.readSessions();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-session-meta`, async (event, sessionId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readSessionMeta) {
+      throw new Error('Dedicated desktop session-meta reads are only available for the local host.');
+    }
+
+    return controller.readSessionMeta(sessionId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-session-search-index`, async (event, sessionIds: string[]) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readSessionSearchIndex) {
+      throw new Error('Dedicated desktop session-search-index reads are only available for the local host.');
+    }
+
+    return controller.readSessionSearchIndex(sessionIds);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-profiles`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

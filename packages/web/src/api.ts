@@ -260,8 +260,22 @@ export const api = {
 
     return get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`);
   },
-  sessions:     () => get<SessionMeta[]>('/sessions'),
-  sessionMeta:  (id: string) => get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`),
+  sessions:     async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readSessions();
+    }
+
+    return get<SessionMeta[]>('/sessions');
+  },
+  sessionMeta:  async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readSessionMeta(id);
+    }
+
+    return get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`);
+  },
   companionConversationList: (options?: { archivedOffset?: number; archivedLimit?: number }) => {
     const params = new URLSearchParams();
     if (typeof options?.archivedOffset === 'number' && Number.isInteger(options.archivedOffset) && options.archivedOffset >= 0) {
@@ -331,7 +345,14 @@ export const api = {
 
     return get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`);
   },
-  sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
+  sessionSearchIndex: async (sessionIds: string[]) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readSessionSearchIndex(sessionIds);
+    }
+
+    return post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds });
+  },
   profiles: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

@@ -58,6 +58,11 @@ import {
   isMissingConversationBootstrapState,
   readConversationBootstrapState,
 } from '../conversations/conversationBootstrap.js';
+import {
+  readConversationSessionMetaCapability,
+  readConversationSessionSearchIndexCapability,
+  readConversationSessionsCapability,
+} from '../conversations/conversationSessionCapability.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   publishConversationSessionMetaChanged,
@@ -1243,6 +1248,27 @@ export async function revokeDesktopCompanionSession(sessionId: string) {
     ok: true as const,
     state: readCompanionAuthAdminState(),
   };
+}
+
+export async function readDesktopSessions() {
+  await getLocalRoutes();
+  return readConversationSessionsCapability();
+}
+
+export async function readDesktopSessionMeta(sessionId: string) {
+  await getLocalRoutes();
+
+  const session = readConversationSessionMetaCapability(sessionId);
+  if (!session) {
+    throw new Error('Session not found');
+  }
+
+  return session;
+}
+
+export async function readDesktopSessionSearchIndex(sessionIds: string[]) {
+  await getLocalRoutes();
+  return readConversationSessionSearchIndexCapability({ sessionIds });
 }
 
 export async function readDesktopProfiles() {
