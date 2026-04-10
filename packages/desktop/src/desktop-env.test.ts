@@ -16,8 +16,8 @@ function seedDevRepo(repoRoot: string): void {
   writeFileSync(join(repoRoot, 'package.json'), '{"name":"personal-agent"}\n');
   writeFileSync(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
   writeFileSync(join(repoRoot, 'packages', 'web', 'dist-server', 'index.js'), 'console.log("web");\n');
-  writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon-template.svg'), '<svg />\n');
-  writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon-color.svg'), '<svg />\n');
+  writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'), 'png\n');
+  writeFileSync(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'), 'png\n');
 }
 
 function seedPackagedApp(appRoot: string, resourcesPath: string): void {
@@ -31,8 +31,8 @@ function seedPackagedApp(appRoot: string, resourcesPath: string): void {
   mkdirSync(join(resourcesPath, 'prompt-catalog'), { recursive: true });
   writeFileSync(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'), 'console.log("daemon");\n');
   writeFileSync(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server', 'index.js'), 'console.log("web");\n');
-  writeFileSync(join(appRoot, 'assets', 'icon-template.svg'), '<svg />\n');
-  writeFileSync(join(appRoot, 'assets', 'icon-color.svg'), '<svg />\n');
+  writeFileSync(join(appRoot, 'assets', 'iconTemplate.png'), 'png\n');
+  writeFileSync(join(appRoot, 'assets', 'icon.png'), 'png\n');
 }
 
 const originalStateRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
@@ -71,8 +71,8 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
     expect(result.webServerEntryFile).toBe(join(repoRoot, 'packages', 'web', 'dist-server', 'index.js'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
-    expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon-template.svg'));
-    expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon-color.svg'));
+    expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'));
+    expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'));
     expect(result.desktopConfigFile).toBe(join(stateRoot, 'desktop', 'config.json'));
     expect(existsSync(dirname(result.desktopLogsDir))).toBe(true);
   });
@@ -98,7 +98,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.daemonEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'));
     expect(result.webServerEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server', 'index.js'));
     expect(result.webDistDir).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist'));
-    expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'icon-template.svg'));
-    expect(result.colorIconFile).toBe(join(appRoot, 'assets', 'icon-color.svg'));
+    expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'iconTemplate.png'));
+    expect(result.colorIconFile).toBe(join(appRoot, 'assets', 'icon.png'));
   });
 });

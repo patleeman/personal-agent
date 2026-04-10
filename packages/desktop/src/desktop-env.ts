@@ -104,11 +104,11 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     ? [resolve(appRoot, 'node_modules', '@personal-agent', 'web', 'dist')]
     : [resolve(repoRoot, 'packages', 'web', 'dist')]);
   const trayTemplateIconFile = resolveExistingFile('desktop tray icon', isPackaged
-    ? [resolve(appRoot, 'assets', 'icon-template.svg')]
-    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon-template.svg')]);
+    ? [resolve(appRoot, 'assets', 'iconTemplate.png')]
+    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png')]);
   const colorIconFile = resolveExistingFile('desktop color icon', isPackaged
-    ? [resolve(appRoot, 'assets', 'icon-color.svg')]
-    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon-color.svg')]);
+    ? [resolve(appRoot, 'assets', 'icon.png')]
+    : [resolve(repoRoot, 'packages', 'desktop', 'assets', 'icon.png')]);
 
   return {
     repoRoot,

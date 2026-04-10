@@ -6,9 +6,11 @@
 
 The desktop app is a tray/menubar-style wrapper around the existing web UI. It owns a local backend while it is running and can also connect to saved remote hosts.
 
+On macOS, the desktop shell is the intended local product surface. Background behavior comes from the menubar app staying alive, not from separate launchd-managed daemon or web UI services.
+
 ## What the desktop app does today
 
-- ships as a normal macOS app with a branded app icon and an always-available menubar icon
+- ships as a macOS menu bar app with an always-available menubar icon and no dock icon
 - keeps a tray app alive after the main window closes
 - opens the existing web UI in Electron windows
 - owns a local daemon + web UI child-process pair for the local host
@@ -34,7 +36,7 @@ npm run desktop:dist
 Behavior to expect:
 
 - closing the main window hides it instead of quitting the app
-- the app keeps a standard application menu in the macOS menu bar alongside the menubar status item
+- the app keeps a standard application menu while its windows are focused, even though it runs as a menu bar app
 - quitting from the tray or app menu shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 
@@ -69,6 +71,7 @@ The local desktop host:
 
 - starts its own daemon in foreground child-process mode
 - starts its own web server on `http://127.0.0.1:3741`
+- keeps that local runtime warm for as long as the menubar app stays open
 - disables the companion surface for that desktop-owned local backend
 - refuses to start if another daemon is already running or the web port is already occupied
 

@@ -67,7 +67,8 @@ The renderer is still the normal web UI.
 The desktop shell adds:
 
 - a hidden-titlebar BrowserWindow
-- a tray/menubar-driven lifecycle with a standard application menu
+- a tray/menubar-driven lifecycle that runs as a macOS accessory/menu bar app without a dock icon
+- a standard application menu while desktop windows are focused
 - separate browser partitions per host
 - host-aware window titles
 - optional dedicated remote windows

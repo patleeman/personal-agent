@@ -1,7 +1,8 @@
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
-import { app, nativeImage } from 'electron';
+import { app, dialog, shell } from 'electron';
+import { applyDesktopShellAppMode } from './app-mode.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
 import { DesktopWindowController } from './window.js';
@@ -14,13 +15,17 @@ let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let updateManager: DesktopUpdateManager | undefined;
+let backendStartupPromise: Promise<boolean> | undefined;
 let quitting = false;
 
 app.setName('Personal Agent');
 
-function createSvgImage(filePath: string) {
-  const source = readFileSync(filePath, 'utf-8');
-  return nativeImage.createFromDataURL(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`);
+function renderDesktopErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+
+  return String(error);
 }
 
 function logBootstrapError(error: unknown): void {
@@ -38,20 +43,138 @@ function logBootstrapError(error: unknown): void {
   console.error(rendered);
 }
 
+function reportDesktopError(error: unknown): void {
+  logBootstrapError(error);
+
+  const message = renderDesktopErrorMessage(error);
+  trayController?.setStartupState({ kind: 'error', message });
+
+  try {
+    const { desktopLogsDir } = resolveDesktopRuntimePaths();
+    dialog.showErrorBox('Personal Agent error', `${message}\n\nSee desktop logs in:\n${desktopLogsDir}`);
+  } catch {
+    dialog.showErrorBox('Personal Agent error', message);
+  }
+}
+
+async function openDesktopLogs(): Promise<void> {
+  const { desktopLogsDir } = resolveDesktopRuntimePaths();
+  const errorMessage = await shell.openPath(desktopLogsDir);
+  if (errorMessage.trim().length > 0) {
+    dialog.showErrorBox('Could not open desktop logs', errorMessage);
+  }
+}
+
+async function ensureDesktopBackendAvailable(): Promise<boolean> {
+  if (!hostManager) {
+    return false;
+  }
+
+  if (backendStartupPromise) {
+    return backendStartupPromise;
+  }
+
+  backendStartupPromise = (async () => {
+    try {
+      const status = await hostManager.getActiveHostController().getStatus();
+      if (status.reachable) {
+        trayController?.setStartupState({ kind: 'ready' });
+        return true;
+      }
+
+      trayController?.setStartupState({ kind: 'starting' });
+      await hostManager.ensureActiveHostRunning();
+      trayController?.setStartupState({ kind: 'ready' });
+      trayController?.refresh();
+      return true;
+    } catch (error) {
+      reportDesktopError(error);
+      return false;
+    } finally {
+      backendStartupPromise = undefined;
+    }
+  })();
+
+  return backendStartupPromise;
+}
+
+async function withDesktopBackend(action: () => Promise<void>): Promise<void> {
+  if (!windowController || !hostManager) {
+    return;
+  }
+
+  if (!(await ensureDesktopBackendAvailable())) {
+    return;
+  }
+
+  try {
+    await action();
+    trayController?.setStartupState({ kind: 'ready' });
+  } catch (error) {
+    reportDesktopError(error);
+  }
+}
+
+async function openMainRoute(pathname = '/'): Promise<void> {
+  await withDesktopBackend(async () => {
+    await windowController!.openMainWindow(pathname);
+  });
+}
+
+async function openNewConversation(): Promise<void> {
+  await withDesktopBackend(async () => {
+    const url = await hostManager!.openNewConversation();
+    await windowController!.openAbsoluteUrl(url);
+  });
+}
+
+async function switchRelativeHost(delta: 1 | -1): Promise<void> {
+  if (!hostManager || !windowController) {
+    return;
+  }
+
+  const route = windowController.getMainWindowRoute() || '/';
+  trayController?.setStartupState({ kind: 'starting' });
+
+  try {
+    await hostManager.switchRelativeHost(delta);
+    trayController?.setStartupState({ kind: 'ready' });
+    trayController?.refresh();
+    await windowController.openMainWindow(route);
+  } catch (error) {
+    reportDesktopError(error);
+  }
+}
+
+async function restartActiveHost(): Promise<void> {
+  if (!hostManager || !windowController) {
+    return;
+  }
+
+  trayController?.setStartupState({ kind: 'starting' });
+
+  try {
+    backendStartupPromise = undefined;
+    await hostManager.restartActiveHost();
+    trayController?.setStartupState({ kind: 'ready' });
+    trayController?.refresh();
+    await windowController.openMainWindow('/');
+  } catch (error) {
+    reportDesktopError(error);
+  }
+}
+
 async function bootstrapDesktopApp(): Promise<void> {
   hostManager = new HostManager();
   windowController = new DesktopWindowController(hostManager);
-
-  await hostManager.ensureActiveHostRunning();
-
   updateManager = new DesktopUpdateManager();
 
   const shellActions = {
     onOpen: () => {
-      void windowController?.openMainWindow('/');
+      void openMainRoute('/');
     },
     onNewConversation: () => {
-      void hostManager?.openNewConversation().then((url) => windowController?.openAbsoluteUrl(url));
+      void openNewConversation();
     },
     onCloseConversation: () => {
       windowController?.sendShortcutToFocusedWindow('close-conversation');
@@ -63,18 +186,10 @@ async function bootstrapDesktopApp(): Promise<void> {
       windowController?.sendShortcutToFocusedWindow('next-conversation');
     },
     onPreviousHost: () => {
-      const route = windowController?.getMainWindowRoute() ?? '/';
-      void hostManager?.switchRelativeHost(-1).then(() => {
-        trayController?.refresh();
-        return windowController?.openMainWindow(route);
-      });
+      void switchRelativeHost(-1);
     },
     onNextHost: () => {
-      const route = windowController?.getMainWindowRoute() ?? '/';
-      void hostManager?.switchRelativeHost(1).then(() => {
-        trayController?.refresh();
-        return windowController?.openMainWindow(route);
-      });
+      void switchRelativeHost(1);
     },
     onToggleConversationPin: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-conversation-pin');
@@ -101,13 +216,16 @@ async function bootstrapDesktopApp(): Promise<void> {
       windowController?.hideFocusedWindow();
     },
     onConnections: () => {
-      void windowController?.openMainWindow('/settings#desktop-connections');
+      void openMainRoute('/settings#desktop-connections');
     },
     onCheckForUpdates: () => {
       void updateManager?.checkForUpdates({ userInitiated: true });
     },
     onRestartBackend: () => {
-      void hostManager?.restartActiveHost().then(() => windowController?.openMainWindow('/'));
+      void restartActiveHost();
+    },
+    onOpenLogs: () => {
+      void openDesktopLogs();
     },
     onQuit: () => {
       void shutdownAndQuit();
@@ -116,7 +234,13 @@ async function bootstrapDesktopApp(): Promise<void> {
 
   trayController = new DesktopTrayController({
     hostManager,
-    ...shellActions,
+    onOpen: shellActions.onOpen,
+    onNewConversation: shellActions.onNewConversation,
+    onConnections: shellActions.onConnections,
+    onCheckForUpdates: shellActions.onCheckForUpdates,
+    onRestartBackend: shellActions.onRestartBackend,
+    onOpenLogs: shellActions.onOpenLogs,
+    onQuit: shellActions.onQuit,
   });
   installDesktopApplicationMenu(shellActions);
 
@@ -128,11 +252,12 @@ async function bootstrapDesktopApp(): Promise<void> {
     },
   });
 
-  if (hostManager.getConfig().openWindowOnLaunch) {
-    await windowController.openMainWindow('/');
-  }
-
   updateManager.start();
+
+  const ready = await ensureDesktopBackendAvailable();
+  if (ready && hostManager.getConfig().openWindowOnLaunch) {
+    await openMainRoute('/');
+  }
 }
 
 async function prepareForQuit(): Promise<void> {
@@ -166,16 +291,12 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  void windowController?.openMainWindow('/');
+  void openMainRoute('/');
 });
 
 app.whenReady()
   .then(async () => {
-    const { colorIconFile } = resolveDesktopRuntimePaths();
-    const colorIcon = createSvgImage(colorIconFile);
-    if (process.platform === 'darwin') {
-      app.dock?.setIcon(colorIcon);
-    }
+    applyDesktopShellAppMode(process.platform, app);
     await bootstrapDesktopApp();
   })
   .catch((error) => {

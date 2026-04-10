@@ -136,12 +136,14 @@ The environment variable wins over machine config.
 
 ## Electron desktop shell will not launch
 
+The desktop shell is a menu bar app on macOS, so the first thing to look for is the status item in the menu bar, not a dock icon.
+
 The local desktop backend intentionally refuses to start if:
 
 - another daemon is already running outside the desktop app
 - port `3741` is already in use
 
-Stop the external daemon/web UI first, then launch the desktop app again.
+If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 
 Desktop logs live under:
 
