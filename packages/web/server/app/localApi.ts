@@ -63,6 +63,7 @@ import {
   readConversationSessionSearchIndexCapability,
   readConversationSessionsCapability,
 } from '../conversations/conversationSessionCapability.js';
+import { readConversationSessionBlockWithInlineAssetsCapability } from '../conversations/conversationSessionAssetCapability.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   publishConversationSessionMetaChanged,
@@ -74,7 +75,6 @@ import {
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import {
   buildAppendOnlySessionDetailResponse,
-  readSessionBlock,
   readSessionBlocks,
   readSessionMeta,
   renameStoredSession,
@@ -2257,7 +2257,7 @@ export async function readDesktopSessionBlock(input: {
 }) {
   await getLocalRoutes();
 
-  const result = readSessionBlock(input.sessionId.trim(), input.blockId.trim());
+  const result = readConversationSessionBlockWithInlineAssetsCapability(input.sessionId, input.blockId);
   if (!result) {
     throw new Error('Session block not found');
   }
