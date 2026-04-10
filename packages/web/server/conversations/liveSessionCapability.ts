@@ -15,6 +15,7 @@ import {
   buildReferencedMemoryDocsContext,
   buildReferencedTasksContext,
   expandPromptReferencesWithNodeGraph,
+  extractMentionIds,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
 } from '../knowledge/promptReferences.js';
@@ -316,28 +317,52 @@ export async function submitLiveSessionPromptCapability(
     : undefined;
 
   const currentProfile = context.getCurrentProfile();
-  const tasks = context.listTasksForCurrentProfile();
-  const memoryDocs = context.listMemoryDocs().map((doc) => ({
-    ...doc,
-    summary: doc.summary ?? '',
-    description: doc.description ?? '',
-  }));
-  const promptReferences = resolvePromptReferences({
-    text,
-    availableProjectIds: [],
-    tasks,
-    memoryDocs,
-    skills: [],
-    profiles: [],
-  });
-  const expandedNodeReferences = expandPromptReferencesWithNodeGraph({
-    projectIds: [],
-    memoryDocIds: promptReferences.memoryDocIds,
-    skillNames: [],
-  });
+  const mentionIds = extractMentionIds(text);
+  const hasPromptMentions = mentionIds.length > 0;
+  const tasks = hasPromptMentions
+    ? context.listTasksForCurrentProfile()
+    : [];
+  const memoryDocs = hasPromptMentions
+    ? context.listMemoryDocs().map((doc) => ({
+        ...doc,
+        summary: doc.summary ?? '',
+        description: doc.description ?? '',
+      }))
+    : [];
+  const promptReferences = hasPromptMentions
+    ? resolvePromptReferences({
+        text,
+        availableProjectIds: [],
+        tasks,
+        memoryDocs,
+        skills: [],
+        profiles: [],
+      })
+    : {
+        projectIds: [],
+        taskIds: [],
+        memoryDocIds: [],
+        skillNames: [],
+        profileIds: [],
+      };
+  const expandedNodeReferences = promptReferences.projectIds.length > 0
+    || promptReferences.memoryDocIds.length > 0
+    || promptReferences.skillNames.length > 0
+    ? expandPromptReferencesWithNodeGraph({
+        projectIds: promptReferences.projectIds,
+        memoryDocIds: promptReferences.memoryDocIds,
+        skillNames: promptReferences.skillNames,
+      })
+    : {
+        projectIds: promptReferences.projectIds,
+        memoryDocIds: promptReferences.memoryDocIds,
+        skillNames: promptReferences.skillNames,
+      };
   const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
   const referencedMemoryDocs = pickPromptReferencesInOrder(expandedNodeReferences.memoryDocIds, memoryDocs);
-  const referencedVaultFiles = resolveMentionedVaultFiles(text);
+  const referencedVaultFiles = hasPromptMentions
+    ? resolveMentionedVaultFiles(text)
+    : [];
 
   let referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles> = [];
   if (normalizedAttachmentRefs.length > 0) {

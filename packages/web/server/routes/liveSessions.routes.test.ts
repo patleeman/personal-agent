@@ -25,6 +25,7 @@ const {
   logWarnMock,
   markBackgroundRunResultsDeliveredMock,
   parseTailBlocksQueryMock,
+  extractMentionIdsMock,
   pickPromptReferencesInOrderMock,
   queuePromptContextMock,
   readGitStatusSummaryWithTelemetryMock,
@@ -76,6 +77,7 @@ const {
   logWarnMock: vi.fn(),
   markBackgroundRunResultsDeliveredMock: vi.fn(),
   parseTailBlocksQueryMock: vi.fn(),
+  extractMentionIdsMock: vi.fn(),
   pickPromptReferencesInOrderMock: vi.fn(),
   queuePromptContextMock: vi.fn(),
   readGitStatusSummaryWithTelemetryMock: vi.fn(),
@@ -171,6 +173,7 @@ vi.mock('../knowledge/promptReferences.js', () => ({
   buildReferencedMemoryDocsContext: buildReferencedMemoryDocsContextMock,
   buildReferencedTasksContext: buildReferencedTasksContextMock,
   expandPromptReferencesWithNodeGraph: expandPromptReferencesWithNodeGraphMock,
+  extractMentionIds: extractMentionIdsMock,
   pickPromptReferencesInOrder: pickPromptReferencesInOrderMock,
   resolvePromptReferences: resolvePromptReferencesMock,
 }));
@@ -338,6 +341,7 @@ describe('live session routes', () => {
     logWarnMock.mockReset();
     markBackgroundRunResultsDeliveredMock.mockReset();
     parseTailBlocksQueryMock.mockReset();
+    extractMentionIdsMock.mockReset();
     pickPromptReferencesInOrderMock.mockReset();
     queuePromptContextMock.mockReset();
     readGitStatusSummaryWithTelemetryMock.mockReset();
@@ -382,6 +386,7 @@ describe('live session routes', () => {
     loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: '/tmp/daemon.sock' } });
     markBackgroundRunResultsDeliveredMock.mockReturnValue([]);
     parseTailBlocksQueryMock.mockReturnValue(undefined);
+    extractMentionIdsMock.mockReturnValue([]);
     pickPromptReferencesInOrderMock.mockImplementation((ids: string[], entries: Array<{ id?: string }>) => entries.filter((entry) => entry.id && ids.includes(entry.id)));
     readGitStatusSummaryWithTelemetryMock.mockReturnValue({
       summary: {
@@ -404,7 +409,7 @@ describe('live session routes', () => {
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
     resolveDurableRunsRootMock.mockReturnValue('/daemon/runs');
     resolveMentionedVaultFilesMock.mockReturnValue([]);
-    resolvePromptReferencesMock.mockReturnValue({ taskIds: [], memoryDocIds: [] });
+    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: [], memoryDocIds: [], skillNames: [], profileIds: [] });
     restoreQueuedMessageMock.mockResolvedValue({ restoredIndex: 0 });
     resumeLocalSessionMock.mockResolvedValue({ id: 'live-resumed' });
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
@@ -415,7 +420,39 @@ describe('live session routes', () => {
     buildReferencedMemoryDocsContextMock.mockReturnValue('Memory docs context');
     buildReferencedTasksContextMock.mockReturnValue('Task context');
     buildReferencedVaultFilesContextMock.mockReturnValue('Vault files context');
-    expandPromptReferencesWithNodeGraphMock.mockReturnValue({ memoryDocIds: [] });
+    expandPromptReferencesWithNodeGraphMock.mockReturnValue({ projectIds: [], memoryDocIds: [], skillNames: [] });
+  });
+
+  it('skips reference catalog lookups for plain prompts without mentions', async () => {
+    const listMemoryDocs = vi.fn(() => [{ id: 'note-1', title: 'Memory', path: '/notes/memory.md', summary: 'Summary' }]);
+    const listTasksForCurrentProfile = vi.fn(() => [{ id: 'task-1', prompt: 'Run the tests', enabled: true, running: false }]);
+    createDesktopHarness({ listMemoryDocs, listTasksForCurrentProfile });
+
+    isLiveMock.mockReturnValue(true);
+    submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
+
+    const promptRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({
+      params: { id: 'live-plain' },
+      body: { text: 'Please continue.' },
+    }), promptRes);
+    await Promise.resolve();
+
+    expect(listTasksForCurrentProfile).not.toHaveBeenCalled();
+    expect(listMemoryDocs).not.toHaveBeenCalled();
+    expect(resolvePromptReferencesMock).not.toHaveBeenCalled();
+    expect(expandPromptReferencesWithNodeGraphMock).not.toHaveBeenCalled();
+    expect(resolveMentionedVaultFilesMock).not.toHaveBeenCalled();
+    expect(queuePromptContextMock).not.toHaveBeenCalled();
+    expect(promptRes.json).toHaveBeenCalledWith({
+      accepted: true,
+      delivery: 'started',
+      ok: true,
+      referencedAttachmentIds: [],
+      referencedMemoryDocIds: [],
+      referencedTaskIds: [],
+      referencedVaultFileIds: [],
+    });
   });
 
   it('handles prompt validation, hidden context injection, resumed sessions, and control conflicts', async () => {
@@ -443,8 +480,9 @@ describe('live session routes', () => {
     expect(badAttachmentRes.status).toHaveBeenCalledWith(400);
     expect(badAttachmentRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
-    resolvePromptReferencesMock.mockReturnValue({ taskIds: ['task-1'], memoryDocIds: ['note-1'] });
-    expandPromptReferencesWithNodeGraphMock.mockReturnValue({ memoryDocIds: ['note-1'] });
+    extractMentionIdsMock.mockReturnValue(['task-1', 'note-1', 'vault-1']);
+    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: ['task-1'], memoryDocIds: ['note-1'], skillNames: [], profileIds: [] });
+    expandPromptReferencesWithNodeGraphMock.mockReturnValue({ projectIds: [], memoryDocIds: ['note-1'], skillNames: [] });
     resolveMentionedVaultFilesMock.mockReturnValue([{ id: 'vault-1', title: 'Vault file' }]);
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([
       {
