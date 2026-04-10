@@ -5,10 +5,25 @@ import { fileURLToPath } from 'node:url';
 import {
   getPiAgentRuntimeDir,
   getStateRoot,
-  listProfileActivityEntries,
 } from '@personal-agent/core';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
+import {
+  activityCountCapability,
+  clearInboxCapability,
+  listActivityCapability,
+  markActivityReadCapability,
+  markConversationAttentionCapability,
+  readActivityCapability,
+  readSavedWebUiPreferencesCapability,
+  startActivityConversationCapability,
+} from '../automation/inboxCapability.js';
+import {
+  acknowledgeAlertCapability,
+  dismissAlertCapability,
+  readAlertSnapshotCapability,
+  snoozeAlertCapability,
+} from '../automation/alertCapability.js';
 import {
   createScheduledTaskCapability,
   listScheduledTasksCapability,
@@ -235,6 +250,14 @@ class LocalApiResponse {
 
 let localRoutesPromise: Promise<RegisteredRoute[]> | null = null;
 let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
+let localInboxCapabilityContext: {
+  getCurrentProfile: () => string;
+  getRepoRoot: () => string;
+  getDefaultWebCwd: () => string;
+  buildLiveSessionResourceOptions: LiveSessionCapabilityContext['buildLiveSessionResourceOptions'];
+  buildLiveSessionExtensionFactories: LiveSessionCapabilityContext['buildLiveSessionExtensionFactories'];
+  getSavedWebUiPreferences: () => ReturnType<typeof readSavedWebUiPreferences>;
+} | null = null;
 
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
@@ -366,13 +389,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     buildLiveSessionExtensionFactories: profileState.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes: async () => {},
     getSavedWebUiPreferences: () => readSavedWebUiPreferences(settingsFile),
-    listActivityForCurrentProfile: () => listProfileActivityEntries({
-      repoRoot,
-      profile: profileState.getCurrentProfile(),
-    }).map(({ entry }) => ({
-      ...entry,
-      read: false,
-    })),
+    listActivityForCurrentProfile: () => listActivityCapability(profileState.getCurrentProfile()),
     listTasksForCurrentProfile: () => {
       const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());
       const runtimeById = new Map(
@@ -430,6 +447,15 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     listMemoryDocs: context.listMemoryDocs,
   };
 
+  localInboxCapabilityContext = {
+    getCurrentProfile: context.getCurrentProfile,
+    getRepoRoot: context.getRepoRoot,
+    getDefaultWebCwd: context.getDefaultWebCwd,
+    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
+    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
+    getSavedWebUiPreferences: context.getSavedWebUiPreferences,
+  };
+
   const routes: RegisteredRoute[] = [];
   const appRouter = createRouteCollector(routes);
   const companionRouter = createRouteCollector([]);
@@ -457,6 +483,15 @@ async function getLocalLiveSessionCapabilityContext(): Promise<LiveSessionCapabi
   }
 
   return localLiveSessionCapabilityContext;
+}
+
+async function getLocalInboxCapabilityContext() {
+  await getLocalRoutes();
+  if (!localInboxCapabilityContext) {
+    throw new Error('Local inbox capability context is not initialized.');
+  }
+
+  return localInboxCapabilityContext;
 }
 
 function renderStatusText(statusCode: number): string {
@@ -1071,6 +1106,101 @@ export async function updateDesktopScheduledTask(input: {
 export async function runDesktopScheduledTask(taskId: string) {
   await getLocalRoutes();
   return runScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
+}
+
+export async function readDesktopActivity() {
+  const context = await getLocalInboxCapabilityContext();
+  return listActivityCapability(context.getCurrentProfile());
+}
+
+export async function readDesktopActivityById(activityId: string) {
+  const context = await getLocalInboxCapabilityContext();
+  const entry = readActivityCapability(context.getCurrentProfile(), activityId);
+  if (!entry) {
+    throw new Error('Not found');
+  }
+
+  return entry;
+}
+
+export async function markDesktopActivityRead(input: { activityId: string; read?: boolean }) {
+  const context = await getLocalInboxCapabilityContext();
+  const changed = markActivityReadCapability(context.getCurrentProfile(), input.activityId, input.read !== false);
+  if (!changed) {
+    throw new Error('Not found');
+  }
+
+  return { ok: true as const };
+}
+
+export async function readDesktopActivityCount() {
+  const context = await getLocalInboxCapabilityContext();
+  return activityCountCapability(context.getCurrentProfile());
+}
+
+export async function clearDesktopInbox() {
+  const context = await getLocalInboxCapabilityContext();
+  const preferences = readSavedWebUiPreferencesCapability(context.getSavedWebUiPreferences);
+  const result = clearInboxCapability({
+    profile: context.getCurrentProfile(),
+    openConversationIds: [...preferences.openConversationIds, ...preferences.pinnedConversationIds],
+  });
+
+  return {
+    ok: true as const,
+    deletedActivityIds: result.deletedActivityIds,
+    clearedConversationIds: result.clearedConversationIds,
+  };
+}
+
+export async function startDesktopActivityConversation(activityId: string) {
+  const context = await getLocalInboxCapabilityContext();
+  return startActivityConversationCapability(activityId, context);
+}
+
+export async function markDesktopConversationAttention(input: { conversationId: string; read?: boolean }) {
+  const context = await getLocalInboxCapabilityContext();
+  const updated = markConversationAttentionCapability(context.getCurrentProfile(), input.conversationId, input.read !== false);
+  if (!updated) {
+    throw new Error('Conversation not found');
+  }
+
+  return { ok: true as const };
+}
+
+export async function readDesktopAlerts() {
+  const context = await getLocalInboxCapabilityContext();
+  return readAlertSnapshotCapability(context.getCurrentProfile());
+}
+
+export async function acknowledgeDesktopAlert(alertId: string) {
+  const context = await getLocalInboxCapabilityContext();
+  const alert = acknowledgeAlertCapability(context.getCurrentProfile(), alertId);
+  if (!alert) {
+    throw new Error('Not found');
+  }
+
+  return { ok: true as const, alert };
+}
+
+export async function dismissDesktopAlert(alertId: string) {
+  const context = await getLocalInboxCapabilityContext();
+  const alert = dismissAlertCapability(context.getCurrentProfile(), alertId);
+  if (!alert) {
+    throw new Error('Not found');
+  }
+
+  return { ok: true as const, alert };
+}
+
+export async function snoozeDesktopAlert(input: { alertId: string; delay?: string; at?: string }) {
+  const context = await getLocalInboxCapabilityContext();
+  const result = await snoozeAlertCapability(context.getCurrentProfile(), input.alertId, input);
+  if (!result) {
+    throw new Error('Not found');
+  }
+
+  return { ok: true as const, ...result };
 }
 
 export async function readDesktopDurableRuns() {

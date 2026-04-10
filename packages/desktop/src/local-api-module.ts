@@ -29,6 +29,17 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopActivity(): Promise<unknown>;
+  readDesktopActivityById(activityId: string): Promise<unknown>;
+  markDesktopActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
+  readDesktopActivityCount(): Promise<{ count: number }>;
+  clearDesktopInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
+  startDesktopActivityConversation(activityId: string): Promise<unknown>;
+  markDesktopConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
+  readDesktopAlerts(): Promise<unknown>;
+  acknowledgeDesktopAlert(alertId: string): Promise<unknown>;
+  dismissDesktopAlert(alertId: string): Promise<unknown>;
+  snoozeDesktopAlert(input: { alertId: string; delay?: string; at?: string }): Promise<unknown>;
   readDesktopScheduledTasks(): Promise<unknown>;
   readDesktopScheduledTaskDetail(taskId: string): Promise<unknown>;
   readDesktopScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;

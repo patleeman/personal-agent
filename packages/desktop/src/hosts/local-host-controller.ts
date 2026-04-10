@@ -71,6 +71,61 @@ export class LocalHostController implements HostController {
     return module.invokeDesktopLocalApi({ method, path, body });
   }
 
+  async readActivity(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopActivity();
+  }
+
+  async readActivityById(activityId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopActivityById(activityId);
+  }
+
+  async markActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }> {
+    const module = await this.loadLocalApi();
+    return module.markDesktopActivityRead(input);
+  }
+
+  async readActivityCount(): Promise<{ count: number }> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopActivityCount();
+  }
+
+  async clearInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }> {
+    const module = await this.loadLocalApi();
+    return module.clearDesktopInbox();
+  }
+
+  async startActivityConversation(activityId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.startDesktopActivityConversation(activityId);
+  }
+
+  async markConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }> {
+    const module = await this.loadLocalApi();
+    return module.markDesktopConversationAttention(input);
+  }
+
+  async readAlerts(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopAlerts();
+  }
+
+  async acknowledgeAlert(alertId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.acknowledgeDesktopAlert(alertId);
+  }
+
+  async dismissAlert(alertId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.dismissDesktopAlert(alertId);
+  }
+
+  async snoozeAlert(input: { alertId: string; delay?: string; at?: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.snoozeDesktopAlert(input);
+  }
+
   async readScheduledTasks(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopScheduledTasks();

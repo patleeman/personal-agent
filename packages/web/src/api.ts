@@ -176,8 +176,22 @@ export const api = {
   exchangeCompanionPairingCode: (code: string, deviceLabel?: string) =>
     post<CompanionAuthSessionState>('/companion-auth/exchange', { code, deviceLabel }),
   logoutCompanionSession: () => post<{ ok: boolean }>('/companion-auth/logout'),
-  activity:     () => get<ActivityEntry[]>('/activity'),
-  activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
+  activity: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readActivity();
+    }
+
+    return get<ActivityEntry[]>('/activity');
+  },
+  activityById: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readActivityById(id);
+    }
+
+    return get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`);
+  },
   sessions:     () => get<SessionMeta[]>('/sessions'),
   sessionMeta:  (id: string) => get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`),
   companionConversationList: (options?: { archivedOffset?: number; archivedLimit?: number }) => {
@@ -450,19 +464,78 @@ export const api = {
   memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 
   // ── Alerts + activity ─────────────────────────────────────────────────────
-  alerts: () => get<AlertSnapshot>('/alerts'),
-  acknowledgeAlert: (id: string) => post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/ack`),
-  dismissAlert: (id: string) => post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/dismiss`),
-  snoozeAlert: (id: string, input: { delay?: string; at?: string }) =>
-    post<{ ok: boolean; alert: AlertEntry; resume: DeferredResumeSummary }>(`/alerts/${encodeURIComponent(id)}/snooze`, input),
-  activityCount: () => get<{ count: number }>('/activity/count'),
-  clearInbox: () => post<{ ok: boolean; deletedActivityIds: string[]; clearedConversationIds: string[] }>('/inbox/clear'),
-  markActivityRead: (id: string, read = true) =>
-    patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
-  startActivityConversation: (id: string) =>
-    post<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>(`/activity/${encodeURIComponent(id)}/start`),
-  markConversationAttentionRead: (id: string, read = true) =>
-    patch<{ ok: boolean }>(`/conversations/${encodeURIComponent(id)}/attention`, { read }),
+  alerts: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readAlerts();
+    }
+
+    return get<AlertSnapshot>('/alerts');
+  },
+  acknowledgeAlert: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.acknowledgeAlert(id);
+    }
+
+    return post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/ack`);
+  },
+  dismissAlert: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.dismissAlert(id);
+    }
+
+    return post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/dismiss`);
+  },
+  snoozeAlert: async (id: string, input: { delay?: string; at?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.snoozeAlert({ alertId: id, ...input });
+    }
+
+    return post<{ ok: boolean; alert: AlertEntry; resume: DeferredResumeSummary }>(`/alerts/${encodeURIComponent(id)}/snooze`, input);
+  },
+  activityCount: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readActivityCount();
+    }
+
+    return get<{ count: number }>('/activity/count');
+  },
+  clearInbox: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.clearInbox();
+    }
+
+    return post<{ ok: boolean; deletedActivityIds: string[]; clearedConversationIds: string[] }>('/inbox/clear');
+  },
+  markActivityRead: async (id: string, read = true) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.markActivityRead({ activityId: id, read });
+    }
+
+    return patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read });
+  },
+  startActivityConversation: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.startActivityConversation(id);
+    }
+
+    return post<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>(`/activity/${encodeURIComponent(id)}/start`);
+  },
+  markConversationAttentionRead: async (id: string, read = true) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.markConversationAttention({ conversationId: id, read });
+    }
+
+    return patch<{ ok: boolean }>(`/conversations/${encodeURIComponent(id)}/attention`, { read });
+  },
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),

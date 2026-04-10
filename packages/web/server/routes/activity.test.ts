@@ -1,33 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  clearInboxForCurrentProfileMock,
-  findActivityRecordMock,
-  invalidateAppTopicsMock,
-  listConversationSessionsSnapshotMock,
+  clearInboxCapabilityMock,
   logErrorMock,
-  markActivityReadStateMock,
+  markActivityReadCapabilityMock,
+  readActivityCountCapabilityMock,
+  readActivityDetailCapabilityMock,
+  readActivityEntriesCapabilityMock,
 } = vi.hoisted(() => ({
-  clearInboxForCurrentProfileMock: vi.fn(),
-  findActivityRecordMock: vi.fn(),
-  invalidateAppTopicsMock: vi.fn(),
-  listConversationSessionsSnapshotMock: vi.fn(),
+  clearInboxCapabilityMock: vi.fn(),
   logErrorMock: vi.fn(),
-  markActivityReadStateMock: vi.fn(),
+  markActivityReadCapabilityMock: vi.fn(),
+  readActivityCountCapabilityMock: vi.fn(),
+  readActivityDetailCapabilityMock: vi.fn(),
+  readActivityEntriesCapabilityMock: vi.fn(),
 }));
 
-vi.mock('../automation/inboxService.js', () => ({
-  clearInboxForCurrentProfile: clearInboxForCurrentProfileMock,
-  findActivityRecord: findActivityRecordMock,
-  markActivityReadState: markActivityReadStateMock,
-}));
-
-vi.mock('../conversations/conversationService.js', () => ({
-  listConversationSessionsSnapshot: listConversationSessionsSnapshotMock,
-}));
-
-vi.mock('../shared/appEvents.js', () => ({
-  invalidateAppTopics: invalidateAppTopicsMock,
+vi.mock('../automation/inboxCapability.js', () => ({
+  clearInboxCapability: clearInboxCapabilityMock,
+  markActivityReadCapability: markActivityReadCapabilityMock,
+  readActivityCountCapability: readActivityCountCapabilityMock,
+  readActivityDetailCapability: readActivityDetailCapabilityMock,
+  readActivityEntriesCapability: readActivityEntriesCapabilityMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -38,12 +32,12 @@ import { registerActivityRoutes } from './activity.js';
 
 describe('registerActivityRoutes', () => {
   beforeEach(() => {
-    clearInboxForCurrentProfileMock.mockReset();
-    findActivityRecordMock.mockReset();
-    invalidateAppTopicsMock.mockReset();
-    listConversationSessionsSnapshotMock.mockReset();
+    clearInboxCapabilityMock.mockReset();
     logErrorMock.mockReset();
-    markActivityReadStateMock.mockReset();
+    markActivityReadCapabilityMock.mockReset();
+    readActivityCountCapabilityMock.mockReset();
+    readActivityDetailCapabilityMock.mockReset();
+    readActivityEntriesCapabilityMock.mockReset();
   });
 
   function createHarness(options?: {
@@ -54,17 +48,17 @@ describe('registerActivityRoutes', () => {
       archivedConversationIds: string[];
       nodeBrowserViews: unknown[];
     };
-    listActivityForCurrentProfile?: () => Array<{ id?: string; read?: boolean }>;
   }) {
-    const handlers: Record<string, (req: any, res: any) => unknown> = {};
+    type RouteHandler = (req: unknown, res: unknown) => unknown;
+    const handlers: Record<string, RouteHandler> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => unknown) => {
+      get: vi.fn((path: string, next: RouteHandler) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => unknown) => {
+      post: vi.fn((path: string, next: RouteHandler) => {
         handlers[`POST ${path}`] = next;
       }),
-      patch: vi.fn((path: string, next: (req: any, res: any) => unknown) => {
+      patch: vi.fn((path: string, next: RouteHandler) => {
         handlers[`PATCH ${path}`] = next;
       }),
       delete: vi.fn(),
@@ -78,7 +72,6 @@ describe('registerActivityRoutes', () => {
         archivedConversationIds: [],
         nodeBrowserViews: [],
       })),
-      listActivityForCurrentProfile: options?.listActivityForCurrentProfile ?? (() => []),
     });
 
     return {
@@ -98,78 +91,48 @@ describe('registerActivityRoutes', () => {
   }
 
   it('counts unread activity entries and falls back to zero on errors', () => {
-    const { countHandler } = createHarness({
-      listActivityForCurrentProfile: () => [
-        { id: 'a', read: false },
-        { id: 'b', read: true },
-        { id: 'c' },
-      ],
-    });
+    const { countHandler } = createHarness();
     const res = createResponse();
+    readActivityCountCapabilityMock.mockReturnValue({ count: 2 });
 
     countHandler({}, res);
+    expect(readActivityCountCapabilityMock).toHaveBeenCalledWith('assistant');
     expect(res.json).toHaveBeenCalledWith({ count: 2 });
 
-    const failing = createHarness({
-      listActivityForCurrentProfile: () => {
-        throw new Error('count failed');
-      },
+    readActivityCountCapabilityMock.mockImplementation(() => {
+      throw new Error('count failed');
     });
     const fallbackRes = createResponse();
 
-    failing.countHandler({}, fallbackRes);
+    countHandler({}, fallbackRes);
     expect(fallbackRes.json).toHaveBeenCalledWith({ count: 0 });
   });
 
-  it('clears inbox activity and invalidates app topics when anything changes', () => {
+  it('clears inbox activity using the saved open conversation ids', () => {
     const { clearHandler } = createHarness();
     const res = createResponse();
-    listConversationSessionsSnapshotMock.mockReturnValue([
-      { id: 'conversation-1', messageCount: 3 },
-    ]);
-    clearInboxForCurrentProfileMock.mockReturnValue({
+    clearInboxCapabilityMock.mockReturnValue({
       deletedActivityIds: ['activity-1'],
       clearedConversationIds: ['conversation-1'],
     });
 
     clearHandler({}, res);
 
-    expect(clearInboxForCurrentProfileMock).toHaveBeenCalledWith({
+    expect(clearInboxCapabilityMock).toHaveBeenCalledWith({
       profile: 'assistant',
-      sessions: [{ id: 'conversation-1', messageCount: 3 }],
       openConversationIds: ['open-1', 'pinned-1'],
     });
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('activity', 'sessions');
     expect(res.json).toHaveBeenCalledWith({
       ok: true,
       deletedActivityIds: ['activity-1'],
       clearedConversationIds: ['conversation-1'],
-    });
-  });
-
-  it('does not invalidate topics when clearing the inbox makes no changes', () => {
-    const { clearHandler } = createHarness();
-    const res = createResponse();
-    listConversationSessionsSnapshotMock.mockReturnValue([]);
-    clearInboxForCurrentProfileMock.mockReturnValue({
-      deletedActivityIds: [],
-      clearedConversationIds: [],
-    });
-
-    clearHandler({}, res);
-
-    expect(invalidateAppTopicsMock).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({
-      ok: true,
-      deletedActivityIds: [],
-      clearedConversationIds: [],
     });
   });
 
   it('logs and returns 500 when clearing the inbox fails', () => {
     const { clearHandler } = createHarness();
     const res = createResponse();
-    clearInboxForCurrentProfileMock.mockImplementation(() => {
+    clearInboxCapabilityMock.mockImplementation(() => {
       throw new Error('clear failed');
     });
 
@@ -184,22 +147,20 @@ describe('registerActivityRoutes', () => {
 
   it('lists activity entries and logs failures', () => {
     const entries = [{ id: 'activity-1', read: true }];
-    const { listHandler } = createHarness({
-      listActivityForCurrentProfile: () => entries,
-    });
+    const { listHandler } = createHarness();
     const res = createResponse();
+    readActivityEntriesCapabilityMock.mockReturnValue(entries);
 
     listHandler({}, res);
+    expect(readActivityEntriesCapabilityMock).toHaveBeenCalledWith('assistant');
     expect(res.json).toHaveBeenCalledWith(entries);
 
-    const failing = createHarness({
-      listActivityForCurrentProfile: () => {
-        throw new Error('list failed');
-      },
+    readActivityEntriesCapabilityMock.mockImplementation(() => {
+      throw new Error('list failed');
     });
     const failingRes = createResponse();
 
-    failing.listHandler({}, failingRes);
+    listHandler({}, failingRes);
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
       message: 'list failed',
     }));
@@ -210,21 +171,22 @@ describe('registerActivityRoutes', () => {
   it('returns activity details with read state and 404s when the record is missing', () => {
     const { detailHandler } = createHarness();
     const res = createResponse();
-    findActivityRecordMock.mockReturnValue({
-      entry: { id: 'activity-1', title: 'Watch deploys' },
+    readActivityDetailCapabilityMock.mockReturnValue({
+      id: 'activity-1',
+      title: 'Watch deploys',
       read: true,
     });
 
     detailHandler({ params: { id: 'activity-1' } }, res);
 
-    expect(findActivityRecordMock).toHaveBeenCalledWith('assistant', 'activity-1');
+    expect(readActivityDetailCapabilityMock).toHaveBeenCalledWith('assistant', 'activity-1');
     expect(res.json).toHaveBeenCalledWith({
       id: 'activity-1',
       title: 'Watch deploys',
       read: true,
     });
 
-    findActivityRecordMock.mockReturnValue(undefined);
+    readActivityDetailCapabilityMock.mockReturnValue(undefined);
     const missingRes = createResponse();
 
     detailHandler({ params: { id: 'missing' } }, missingRes);
@@ -236,7 +198,7 @@ describe('registerActivityRoutes', () => {
   it('logs and returns 500 when looking up activity details fails', () => {
     const { detailHandler } = createHarness();
     const res = createResponse();
-    findActivityRecordMock.mockImplementation(() => {
+    readActivityDetailCapabilityMock.mockImplementation(() => {
       throw new Error('detail failed');
     });
 
@@ -251,20 +213,18 @@ describe('registerActivityRoutes', () => {
 
   it('marks activity read state, supports unread updates, and 404s for unknown ids', () => {
     const { patchHandler } = createHarness();
-    markActivityReadStateMock.mockReturnValue(true);
+    markActivityReadCapabilityMock.mockReturnValueOnce(true).mockReturnValueOnce(true).mockReturnValueOnce(false);
 
     const readRes = createResponse();
     patchHandler({ params: { id: 'activity-1' }, body: {} }, readRes);
-    expect(markActivityReadStateMock).toHaveBeenCalledWith('assistant', 'activity-1', true);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('activity', 'sessions');
+    expect(markActivityReadCapabilityMock).toHaveBeenCalledWith('assistant', 'activity-1', true);
     expect(readRes.json).toHaveBeenCalledWith({ ok: true });
 
     const unreadRes = createResponse();
     patchHandler({ params: { id: 'activity-1' }, body: { read: false } }, unreadRes);
-    expect(markActivityReadStateMock).toHaveBeenLastCalledWith('assistant', 'activity-1', false);
+    expect(markActivityReadCapabilityMock).toHaveBeenLastCalledWith('assistant', 'activity-1', false);
     expect(unreadRes.json).toHaveBeenCalledWith({ ok: true });
 
-    markActivityReadStateMock.mockReturnValue(false);
     const missingRes = createResponse();
     patchHandler({ params: { id: 'missing' }, body: {} }, missingRes);
     expect(missingRes.status).toHaveBeenCalledWith(404);
@@ -274,7 +234,7 @@ describe('registerActivityRoutes', () => {
   it('logs and returns 500 when updating activity read state fails', () => {
     const { patchHandler } = createHarness();
     const res = createResponse();
-    markActivityReadStateMock.mockImplementation(() => {
+    markActivityReadCapabilityMock.mockImplementation(() => {
       throw new Error('patch failed');
     });
 

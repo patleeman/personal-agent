@@ -2,12 +2,12 @@ import type { Express } from 'express';
 import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import type { ServerRouteContext } from './context.js';
 import {
-  clearInboxForCurrentProfile,
-  findActivityRecord,
-  markActivityReadState,
-} from '../automation/inboxService.js';
-import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+  clearInboxCapability,
+  markActivityReadCapability,
+  readActivityCountCapability,
+  readActivityDetailCapability,
+  readActivityEntriesCapability,
+} from '../automation/inboxCapability.js';
 import { logError } from '../middleware/index.js';
 
 let getCurrentProfileFn: () => string = () => {
@@ -21,24 +21,21 @@ let getSavedWebUiPreferencesFn: () => SavedWebUiPreferences = () => ({
   nodeBrowserViews: [],
 });
 
-let listActivityForCurrentProfileFn: () => Array<{ read?: boolean }> = () => [];
-
 function initializeActivityRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences' | 'listActivityForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getSavedWebUiPreferencesFn = context.getSavedWebUiPreferences;
-  listActivityForCurrentProfileFn = context.listActivityForCurrentProfile;
 }
 
 export function registerActivityRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences' | 'listActivityForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences'>,
 ): void {
   initializeActivityRoutesContext(context);
   router.get('/api/activity/count', (_req, res) => {
     try {
-      res.json({ count: listActivityForCurrentProfileFn().filter((entry) => !entry.read).length });
+      res.json(readActivityCountCapability(getCurrentProfileFn()));
     } catch {
       res.json({ count: 0 });
     }
@@ -47,14 +44,10 @@ export function registerActivityRoutes(
   router.post('/api/inbox/clear', (_req, res) => {
     try {
       const saved = getSavedWebUiPreferencesFn();
-      const result = clearInboxForCurrentProfile({
+      const result = clearInboxCapability({
         profile: getCurrentProfileFn(),
-        sessions: listConversationSessionsSnapshot(),
         openConversationIds: [...saved.openConversationIds, ...saved.pinnedConversationIds],
       });
-      if (result.deletedActivityIds.length > 0 || result.clearedConversationIds.length > 0) {
-        invalidateAppTopics('activity', 'sessions');
-      }
       res.json({
         ok: true,
         deletedActivityIds: result.deletedActivityIds,
@@ -71,7 +64,7 @@ export function registerActivityRoutes(
 
   router.get('/api/activity', (_req, res) => {
     try {
-      res.json(listActivityForCurrentProfileFn());
+      res.json(readActivityEntriesCapability(getCurrentProfileFn()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -83,14 +76,13 @@ export function registerActivityRoutes(
 
   router.get('/api/activity/:id', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const match = findActivityRecord(profile, req.params.id);
-      if (!match) {
+      const entry = readActivityDetailCapability(getCurrentProfileFn(), req.params.id);
+      if (!entry) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
 
-      res.json({ ...match.entry, read: match.read });
+      res.json(entry);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -102,15 +94,13 @@ export function registerActivityRoutes(
 
   router.patch('/api/activity/:id', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
       const { id } = req.params;
       const { read } = req.body as { read?: boolean };
-      const changed = markActivityReadState(profile, id, read !== false);
+      const changed = markActivityReadCapability(getCurrentProfileFn(), id, read !== false);
       if (!changed) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      invalidateAppTopics('activity', 'sessions');
       res.json({ ok: true });
     } catch (err) {
       logError('request handler error', {

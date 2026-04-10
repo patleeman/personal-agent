@@ -1,33 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  acknowledgeAlertForProfileMock,
-  dismissAlertForProfileMock,
-  getAlertForProfileMock,
-  getAlertSnapshotForProfileMock,
-  invalidateAppTopicsMock,
+  acknowledgeAlertCapabilityMock,
+  dismissAlertCapabilityMock,
   logErrorMock,
-  snoozeAlertForProfileMock,
+  readAlertCapabilityMock,
+  readAlertSnapshotCapabilityMock,
+  snoozeAlertCapabilityMock,
 } = vi.hoisted(() => ({
-  acknowledgeAlertForProfileMock: vi.fn(),
-  dismissAlertForProfileMock: vi.fn(),
-  getAlertForProfileMock: vi.fn(),
-  getAlertSnapshotForProfileMock: vi.fn(),
-  invalidateAppTopicsMock: vi.fn(),
+  acknowledgeAlertCapabilityMock: vi.fn(),
+  dismissAlertCapabilityMock: vi.fn(),
   logErrorMock: vi.fn(),
-  snoozeAlertForProfileMock: vi.fn(),
+  readAlertCapabilityMock: vi.fn(),
+  readAlertSnapshotCapabilityMock: vi.fn(),
+  snoozeAlertCapabilityMock: vi.fn(),
 }));
 
-vi.mock('../automation/alerts.js', () => ({
-  acknowledgeAlertForProfile: acknowledgeAlertForProfileMock,
-  dismissAlertForProfile: dismissAlertForProfileMock,
-  getAlertForProfile: getAlertForProfileMock,
-  getAlertSnapshotForProfile: getAlertSnapshotForProfileMock,
-  snoozeAlertForProfile: snoozeAlertForProfileMock,
-}));
-
-vi.mock('../shared/appEvents.js', () => ({
-  invalidateAppTopics: invalidateAppTopicsMock,
+vi.mock('../automation/alertCapability.js', () => ({
+  acknowledgeAlertCapability: acknowledgeAlertCapabilityMock,
+  dismissAlertCapability: dismissAlertCapabilityMock,
+  readAlertCapability: readAlertCapabilityMock,
+  readAlertSnapshotCapability: readAlertSnapshotCapabilityMock,
+  snoozeAlertCapability: snoozeAlertCapabilityMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -38,22 +32,22 @@ import { registerAlertRoutes } from './alerts.js';
 
 describe('registerAlertRoutes', () => {
   beforeEach(() => {
-    acknowledgeAlertForProfileMock.mockReset();
-    dismissAlertForProfileMock.mockReset();
-    getAlertForProfileMock.mockReset();
-    getAlertSnapshotForProfileMock.mockReset();
-    invalidateAppTopicsMock.mockReset();
+    acknowledgeAlertCapabilityMock.mockReset();
+    dismissAlertCapabilityMock.mockReset();
     logErrorMock.mockReset();
-    snoozeAlertForProfileMock.mockReset();
+    readAlertCapabilityMock.mockReset();
+    readAlertSnapshotCapabilityMock.mockReset();
+    snoozeAlertCapabilityMock.mockReset();
   });
 
   function createHarness(getCurrentProfile: () => string = () => 'assistant') {
-    const handlers: Record<string, (req: any, res: any) => unknown> = {};
+    type RouteHandler = (req: unknown, res: unknown) => unknown;
+    const handlers: Record<string, RouteHandler> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => unknown) => {
+      get: vi.fn((path: string, next: RouteHandler) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => unknown) => {
+      post: vi.fn((path: string, next: RouteHandler) => {
         handlers[`POST ${path}`] = next;
       }),
     };
@@ -79,14 +73,14 @@ describe('registerAlertRoutes', () => {
   it('returns the alert snapshot for the current profile', () => {
     const { listHandler } = createHarness(() => 'datadog');
     const res = createResponse();
-    getAlertSnapshotForProfileMock.mockReturnValue({
+    readAlertSnapshotCapabilityMock.mockReturnValue({
       entries: [{ id: 'alert-1' }],
       activeCount: 1,
     });
 
     listHandler({}, res);
 
-    expect(getAlertSnapshotForProfileMock).toHaveBeenCalledWith('datadog');
+    expect(readAlertSnapshotCapabilityMock).toHaveBeenCalledWith('datadog');
     expect(res.json).toHaveBeenCalledWith({
       entries: [{ id: 'alert-1' }],
       activeCount: 1,
@@ -96,7 +90,7 @@ describe('registerAlertRoutes', () => {
   it('logs and returns 500 when listing alerts fails', () => {
     const { listHandler } = createHarness();
     const res = createResponse();
-    getAlertSnapshotForProfileMock.mockImplementation(() => {
+    readAlertSnapshotCapabilityMock.mockImplementation(() => {
       throw new Error('snapshot failed');
     });
 
@@ -112,14 +106,14 @@ describe('registerAlertRoutes', () => {
   it('returns a specific alert and 404s when it is missing', () => {
     const { detailHandler } = createHarness();
     const res = createResponse();
-    getAlertForProfileMock.mockReturnValue({ id: 'alert-1', title: 'Wake up' });
+    readAlertCapabilityMock.mockReturnValue({ id: 'alert-1', title: 'Wake up' });
 
     detailHandler({ params: { id: 'alert-1' } }, res);
 
-    expect(getAlertForProfileMock).toHaveBeenCalledWith('assistant', 'alert-1');
+    expect(readAlertCapabilityMock).toHaveBeenCalledWith('assistant', 'alert-1');
     expect(res.json).toHaveBeenCalledWith({ id: 'alert-1', title: 'Wake up' });
 
-    getAlertForProfileMock.mockReturnValue(undefined);
+    readAlertCapabilityMock.mockReturnValue(undefined);
     const missingRes = createResponse();
 
     detailHandler({ params: { id: 'missing' } }, missingRes);
@@ -131,7 +125,7 @@ describe('registerAlertRoutes', () => {
   it('logs and returns 500 when loading a specific alert fails', () => {
     const { detailHandler } = createHarness();
     const res = createResponse();
-    getAlertForProfileMock.mockImplementation(() => {
+    readAlertCapabilityMock.mockImplementation(() => {
       throw new Error('detail failed');
     });
 
@@ -144,15 +138,14 @@ describe('registerAlertRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: detail failed' });
   });
 
-  it('acknowledges alerts and invalidates alert snapshots', () => {
+  it('acknowledges alerts', () => {
     const { acknowledgeHandler } = createHarness();
     const res = createResponse();
-    acknowledgeAlertForProfileMock.mockReturnValue({ id: 'alert-1', status: 'acknowledged' });
+    acknowledgeAlertCapabilityMock.mockReturnValue({ id: 'alert-1', status: 'acknowledged' });
 
     acknowledgeHandler({ params: { id: 'alert-1' } }, res);
 
-    expect(acknowledgeAlertForProfileMock).toHaveBeenCalledWith('assistant', 'alert-1');
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('alerts');
+    expect(acknowledgeAlertCapabilityMock).toHaveBeenCalledWith('assistant', 'alert-1');
     expect(res.json).toHaveBeenCalledWith({
       ok: true,
       alert: { id: 'alert-1', status: 'acknowledged' },
@@ -162,18 +155,17 @@ describe('registerAlertRoutes', () => {
   it('dismisses alerts, returning 404s for missing ids', () => {
     const { dismissHandler } = createHarness();
     const res = createResponse();
-    dismissAlertForProfileMock.mockReturnValue({ id: 'alert-1', status: 'dismissed' });
+    dismissAlertCapabilityMock.mockReturnValue({ id: 'alert-1', status: 'dismissed' });
 
     dismissHandler({ params: { id: 'alert-1' } }, res);
 
-    expect(dismissAlertForProfileMock).toHaveBeenCalledWith('assistant', 'alert-1');
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('alerts');
+    expect(dismissAlertCapabilityMock).toHaveBeenCalledWith('assistant', 'alert-1');
     expect(res.json).toHaveBeenCalledWith({
       ok: true,
       alert: { id: 'alert-1', status: 'dismissed' },
     });
 
-    dismissAlertForProfileMock.mockReturnValue(undefined);
+    dismissAlertCapabilityMock.mockReturnValue(undefined);
     const missingRes = createResponse();
 
     dismissHandler({ params: { id: 'missing' } }, missingRes);
@@ -185,7 +177,7 @@ describe('registerAlertRoutes', () => {
   it('logs and returns 500 when alert acknowledgements or dismissals fail', () => {
     const { acknowledgeHandler, dismissHandler } = createHarness();
 
-    acknowledgeAlertForProfileMock.mockImplementation(() => {
+    acknowledgeAlertCapabilityMock.mockImplementation(() => {
       throw new Error('ack failed');
     });
     const ackRes = createResponse();
@@ -193,7 +185,7 @@ describe('registerAlertRoutes', () => {
     expect(ackRes.status).toHaveBeenCalledWith(500);
     expect(ackRes.json).toHaveBeenCalledWith({ error: 'Error: ack failed' });
 
-    dismissAlertForProfileMock.mockImplementation(() => {
+    dismissAlertCapabilityMock.mockImplementation(() => {
       throw new Error('dismiss failed');
     });
     const dismissRes = createResponse();
@@ -209,10 +201,10 @@ describe('registerAlertRoutes', () => {
     }));
   });
 
-  it('snoozes alerts and invalidates alerts, sessions, and runs', async () => {
+  it('snoozes alerts', async () => {
     const { snoozeHandler } = createHarness();
     const res = createResponse();
-    snoozeAlertForProfileMock.mockResolvedValue({
+    snoozeAlertCapabilityMock.mockResolvedValue({
       alert: { id: 'alert-1', status: 'acknowledged' },
       resume: { id: 'resume-1', dueAt: '2026-04-09T15:00:00.000Z' },
     });
@@ -222,11 +214,10 @@ describe('registerAlertRoutes', () => {
       body: { delay: '15m', at: undefined },
     }, res);
 
-    expect(snoozeAlertForProfileMock).toHaveBeenCalledWith('assistant', 'alert-1', {
+    expect(snoozeAlertCapabilityMock).toHaveBeenCalledWith('assistant', 'alert-1', {
       delay: '15m',
       at: undefined,
     });
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('alerts', 'sessions', 'runs');
     expect(res.json).toHaveBeenCalledWith({
       ok: true,
       alert: { id: 'alert-1', status: 'acknowledged' },
@@ -237,13 +228,13 @@ describe('registerAlertRoutes', () => {
   it('returns 404 when snoozing a missing alert and 400 for invalid snoozes', async () => {
     const { snoozeHandler } = createHarness();
 
-    snoozeAlertForProfileMock.mockResolvedValue(undefined);
+    snoozeAlertCapabilityMock.mockResolvedValue(undefined);
     const missingRes = createResponse();
     await snoozeHandler({ params: { id: 'missing' }, body: { delay: '5m' } }, missingRes);
     expect(missingRes.status).toHaveBeenCalledWith(404);
     expect(missingRes.json).toHaveBeenCalledWith({ error: 'Not found' });
 
-    snoozeAlertForProfileMock.mockRejectedValue(new Error('Invalid delay'));
+    snoozeAlertCapabilityMock.mockRejectedValue(new Error('Invalid delay'));
     const invalidRes = createResponse();
     await snoozeHandler({ params: { id: 'alert-1' }, body: { delay: 'bogus' } }, invalidRes);
     expect(invalidRes.status).toHaveBeenCalledWith(400);

@@ -8,13 +8,12 @@
 import type { Express } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
-  acknowledgeAlertForProfile,
-  dismissAlertForProfile,
-  getAlertForProfile,
-  getAlertSnapshotForProfile,
-  snoozeAlertForProfile,
-} from '../automation/alerts.js';
-import { invalidateAppTopics } from '../shared/appEvents.js';
+  acknowledgeAlertCapability,
+  dismissAlertCapability,
+  readAlertCapability,
+  readAlertSnapshotCapability,
+  snoozeAlertCapability,
+} from '../automation/alertCapability.js';
 import { logError } from '../middleware/index.js';
 
 /**
@@ -45,7 +44,7 @@ export function registerAlertRoutes(
   initializeAlertRoutesContext(context);
   router.get('/api/alerts', (_req, res) => {
     try {
-      res.json(getAlertSnapshotForProfile(getCurrentProfileFn()));
+      res.json(readAlertSnapshotCapability(getCurrentProfileFn()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -57,7 +56,7 @@ export function registerAlertRoutes(
 
   router.get('/api/alerts/:id', (req, res) => {
     try {
-      const alert = getAlertForProfile(getCurrentProfileFn(), req.params.id);
+      const alert = readAlertCapability(getCurrentProfileFn(), req.params.id);
       if (!alert) {
         res.status(404).json({ error: 'Not found' });
         return;
@@ -75,13 +74,12 @@ export function registerAlertRoutes(
 
   router.post('/api/alerts/:id/ack', (req, res) => {
     try {
-      const alert = acknowledgeAlertForProfile(getCurrentProfileFn(), req.params.id);
+      const alert = acknowledgeAlertCapability(getCurrentProfileFn(), req.params.id);
       if (!alert) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
 
-      invalidateAppTopics('alerts');
       res.json({ ok: true, alert });
     } catch (err) {
       logError('request handler error', {
@@ -94,13 +92,12 @@ export function registerAlertRoutes(
 
   router.post('/api/alerts/:id/dismiss', (req, res) => {
     try {
-      const alert = dismissAlertForProfile(getCurrentProfileFn(), req.params.id);
+      const alert = dismissAlertCapability(getCurrentProfileFn(), req.params.id);
       if (!alert) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
 
-      invalidateAppTopics('alerts');
       res.json({ ok: true, alert });
     } catch (err) {
       logError('request handler error', {
@@ -114,13 +111,12 @@ export function registerAlertRoutes(
   router.post('/api/alerts/:id/snooze', async (req, res) => {
     try {
       const { delay, at } = req.body as { delay?: string; at?: string };
-      const result = await snoozeAlertForProfile(getCurrentProfileFn(), req.params.id, { delay, at });
+      const result = await snoozeAlertCapability(getCurrentProfileFn(), req.params.id, { delay, at });
       if (!result) {
         res.status(404).json({ error: 'Not found' });
         return;
       }
 
-      invalidateAppTopics('alerts', 'sessions', 'runs');
       res.json({ ok: true, ...result });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
