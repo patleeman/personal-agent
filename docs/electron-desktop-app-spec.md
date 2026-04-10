@@ -80,6 +80,8 @@ The main window hides on close unless the app is quitting.
 
 The preload bridge is intentionally narrow. The packaged `personal-agent://app` renderer receives it through a CommonJS preload script so the bridge remains available even though the rest of the desktop package uses ESM. It exposes actions such as:
 
+- subscribe to desktop-owned app bootstrap and hot state events in local mode
+
 - get desktop environment
 - get saved connections
 - switch host
@@ -90,7 +92,7 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - go back / forward
 - restart the active host
 
-In local Electron mode, hot app data no longer depends on same-origin loopback HTTP. The renderer uses desktop-aware request and stream transports that resolve through the Electron main process. Remote hosts still use their HTTP or SSH-backed adapters.
+In local Electron mode, hot app data no longer depends on same-origin loopback HTTP. App bootstrap and hot app-state updates now use a dedicated desktop bridge capability, while the remaining stream-heavy surfaces continue to resolve through the Electron main process. Remote hosts still use their HTTP or SSH-backed adapters.
 
 ## Runtime files
 

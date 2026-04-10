@@ -170,7 +170,7 @@ Live updates include:
 - daemon health
 - web UI state
 
-In browser mode those updates arrive over SSE. In local Electron mode, the desktop shell bridges the same hot streams through the main process. If live transport is temporarily offline, the UI falls back to snapshot refreshes when it can.
+In browser mode those updates arrive over SSE. In local Electron mode, app bootstrap and hot app-state updates now go through a dedicated desktop bridge capability, while the remaining stream-heavy surfaces bridge through the Electron main process. If live transport is temporarily offline, the UI falls back to snapshot refreshes when it can.
 
 ## Electron desktop shell integration
 
