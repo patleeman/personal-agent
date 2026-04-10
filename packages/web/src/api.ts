@@ -532,20 +532,8 @@ export const api = {
   abortSession: (id: string, surfaceId?: string) =>
     post<{ ok: boolean }>(`/live-sessions/${id}/abort`, surfaceId ? { surfaceId } : {}),
 
-  destroySession: (id: string, surfaceId?: string) => {
-    const requestPath = buildApiPath(`/live-sessions/${id}`);
-    return fetchWithRetry(requestPath, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(surfaceId ? { surfaceId } : {}),
-    }).then(async (r) => {
-      recordApiTiming(requestPath, r);
-      if (!r.ok) {
-        throw new Error(await readApiError(r));
-      }
-      return r.json() as Promise<{ ok: boolean }>;
-    });
-  },
+  destroySession: (id: string, surfaceId?: string) =>
+    requestJson<{ ok: boolean }>('DELETE', `/live-sessions/${encodeURIComponent(id)}`, surfaceId ? { surfaceId } : {}),
 
   forkEntries: (id: string) =>
     get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),

@@ -1,57 +1,33 @@
 import { type ChildProcess } from 'node:child_process';
-import { DEFAULT_WEB_UI_PORT } from '@personal-agent/core';
 import { pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import { isWebUiHealthy, waitForDaemonHealthy, waitForWebUiHealthy } from './health.js';
-import { assertTcpPortAvailable } from './ports.js';
+import { waitForDaemonHealthy } from './health.js';
 import { spawnLoggedChild, stopManagedChild, type ManagedChildProcess } from './child-process.js';
 
 interface LocalBackendStatus {
   daemonHealthy: boolean;
-  webHealthy: boolean;
-  webPort: number;
-  baseUrl: string;
 }
 
 export class LocalBackendProcesses {
   private daemonProcess?: ManagedChildProcess;
-  private webProcess?: ManagedChildProcess;
   private startPromise?: Promise<void>;
-  private readonly webPort = DEFAULT_WEB_UI_PORT;
 
-  async ensureStarted(): Promise<string> {
+  async ensureStarted(): Promise<void> {
     if (this.startPromise) {
       await this.startPromise;
-      return this.getBaseUrl();
+      return;
     }
 
-    if (this.hasOwnedRuntime()) {
-      return this.getBaseUrl();
-    }
-
-    const status = await this.getStatus();
-    if (status.daemonHealthy && status.webHealthy) {
-      return status.baseUrl;
+    if (this.hasOwnedRuntime() || await pingDaemon()) {
+      return;
     }
 
     await this.restart();
-    return this.getBaseUrl();
-  }
-
-  getBaseUrl(): string {
-    return `http://127.0.0.1:${String(this.webPort)}`;
   }
 
   async getStatus(): Promise<LocalBackendStatus> {
-    const baseUrl = this.getBaseUrl();
-    const daemonHealthy = await pingDaemon();
-    const webHealthy = await isWebUiHealthy(baseUrl);
-
     return {
-      daemonHealthy,
-      webHealthy,
-      webPort: this.webPort,
-      baseUrl,
+      daemonHealthy: await pingDaemon(),
     };
   }
 
@@ -65,14 +41,12 @@ export class LocalBackendProcesses {
   }
 
   async stop(): Promise<void> {
-    await stopManagedChild(this.webProcess);
     await stopManagedChild(this.daemonProcess);
-    this.webProcess = undefined;
     this.daemonProcess = undefined;
   }
 
   private hasOwnedRuntime(): boolean {
-    return this.isManagedChildRunning(this.daemonProcess) && this.isManagedChildRunning(this.webProcess);
+    return this.isManagedChildRunning(this.daemonProcess);
   }
 
   private isManagedChildRunning(managed: ManagedChildProcess | undefined): boolean {
@@ -98,15 +72,12 @@ export class LocalBackendProcesses {
       throw new Error('A daemon is already running outside the desktop app. Stop it before launching the desktop shell.');
     }
 
-    await assertTcpPortAvailable(this.webPort);
-
     const runtime = resolveDesktopRuntimePaths();
     const childBaseEnv = {
       ...process.env,
       ...(runtime.useElectronRunAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       PERSONAL_AGENT_DESKTOP_RUNTIME: '1',
       PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE: `${runtime.desktopLogsDir}/daemon.log`,
-      PERSONAL_AGENT_DESKTOP_WEB_LOG_FILE: `${runtime.desktopLogsDir}/web-ui.log`,
     };
 
     this.daemonProcess = spawnLoggedChild({
@@ -116,44 +87,19 @@ export class LocalBackendProcesses {
       env: childBaseEnv,
       logPath: `${runtime.desktopLogsDir}/daemon.log`,
     });
-    this.attachExitLogging(this.daemonProcess.child, 'daemon');
+    this.attachExitLogging(this.daemonProcess.child);
     await waitForDaemonHealthy();
-
-    this.webProcess = spawnLoggedChild({
-      command: runtime.nodeCommand,
-      args: [runtime.webServerEntryFile],
-      cwd: runtime.repoRoot,
-      env: {
-        ...childBaseEnv,
-        PA_WEB_PORT: String(this.webPort),
-        PA_WEB_DIST: runtime.webDistDir,
-        PA_WEB_DISABLE_COMPANION: '1',
-        PERSONAL_AGENT_REPO_ROOT: runtime.repoRoot,
-      },
-      logPath: `${runtime.desktopLogsDir}/web-ui.log`,
-    });
-    this.attachExitLogging(this.webProcess.child, 'web-ui');
-
-    try {
-      await waitForWebUiHealthy(this.getBaseUrl());
-    } catch (error) {
-      await this.stop();
-      throw error;
-    }
   }
 
-  private attachExitLogging(child: ChildProcess, label: 'daemon' | 'web-ui'): void {
+  private attachExitLogging(child: ChildProcess): void {
     child.once('exit', (code, signal) => {
-      if (label === 'daemon' && this.daemonProcess?.child === child) {
+      if (this.daemonProcess?.child === child) {
         this.daemonProcess = undefined;
-      }
-      if (label === 'web-ui' && this.webProcess?.child === child) {
-        this.webProcess = undefined;
       }
 
       const renderedCode = typeof code === 'number' ? String(code) : 'null';
       const renderedSignal = signal ?? 'none';
-      console.warn(`[desktop] ${label} exited code=${renderedCode} signal=${renderedSignal}`);
+      console.warn(`[desktop] daemon exited code=${renderedCode} signal=${renderedSignal}`);
     });
   }
 }

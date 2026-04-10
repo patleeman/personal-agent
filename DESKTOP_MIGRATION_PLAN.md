@@ -238,8 +238,8 @@ Completed already:
 
 Now in progress:
 
-- moving the remaining live-session mutation paths fully in-process so the local web child is no longer needed for conversations
-- preparing the final cut from `http://127.0.0.1` window loading to packaged/local desktop assets
+- migrating the remaining non-conversation desktop surfaces off legacy local-web assumptions so the menu bar shell can delete the last child-process compatibility code
+- cleaning up local launch/dev scripts and runtime diagnostics that still talk about the old web child model
 - using this migration plan as the execution checklist for the full cutover
 
 Just completed:
@@ -247,6 +247,8 @@ Just completed:
 - local Electron conversation bootstrap now uses a desktop IPC path instead of renderer-side HTTP
 - the bootstrap logic now lives in a reusable service module so the desktop app and HTTP route can share it
 - local desktop JSON API calls now route through the Electron main process
-- local desktop event streams now route through the Electron main process
+- local desktop event streams for app events, live sessions, runs, and provider OAuth now resolve in-process instead of proxying through loopback HTTP
+- the desktop protocol now serves local `/api/...` resource and mutation requests in-process, covering session images, attachment downloads, and residual direct fetch paths like live-session delete
+- local desktop startup now treats the daemon as the only required child process; the main window can boot and run core conversation flows with the web child absent
 - session-tab layout sync now uses the desktop-aware API layer instead of direct renderer fetches
 - the local desktop window now loads packaged renderer assets from a desktop protocol instead of loading the app shell from `http://127.0.0.1`

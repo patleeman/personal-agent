@@ -38,7 +38,8 @@ describe('api desktop transport', () => {
         activityCount: 0,
         projectCount: 0,
       })
-      .mockResolvedValueOnce(createBootstrapState());
+      .mockResolvedValueOnce(createBootstrapState())
+      .mockResolvedValueOnce({ ok: true });
     const getEnvironment = vi.fn().mockResolvedValue({
       isElectron: true,
       activeHostId: 'local',
@@ -60,13 +61,16 @@ describe('api desktop transport', () => {
       knownSessionSignature: 'sig-1',
       tailBlocks: 12,
     });
+    const destroyed = await api.destroySession('conversation-1', 'surface-1');
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
     expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
     expect(invokeLocalApi).toHaveBeenNthCalledWith(2, 'GET', '/api/conversations/conversation-1/bootstrap?tailBlocks=12&knownSessionSignature=sig-1', undefined);
+    expect(invokeLocalApi).toHaveBeenNthCalledWith(3, 'DELETE', '/api/live-sessions/conversation-1', { surfaceId: 'surface-1' });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toMatchObject({ profile: 'assistant' });
     expect(bootstrap).toEqual(createBootstrapState());
+    expect(destroyed).toEqual({ ok: true });
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {

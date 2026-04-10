@@ -52,7 +52,7 @@ function getActivitySnapshotForCurrentProfile(): { entries: ActivityListEntryLik
   };
 }
 
-async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknown[]> {
+export async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknown[]> {
   switch (topic) {
     case 'activity': {
       const snapshot = getActivitySnapshotForCurrentProfile();

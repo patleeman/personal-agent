@@ -2,7 +2,6 @@
 
 import { existsSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,36 +16,6 @@ if (!existsSync(desktopMainFile)) {
   process.exit(1);
 }
 
-async function isTcpPortAvailable(port, host = '127.0.0.1') {
-  return new Promise((resolveAvailability) => {
-    const server = createServer();
-
-    server.once('error', () => {
-      resolveAvailability(false);
-    });
-
-    server.once('listening', () => {
-      server.close(() => resolveAvailability(true));
-    });
-
-    server.listen(port, host);
-  });
-}
-
-async function runLaunchPreflight() {
-  const [{ DEFAULT_WEB_UI_PORT }, { pingDaemon }] = await Promise.all([
-    import('@personal-agent/core'),
-    import('@personal-agent/daemon'),
-  ]);
-
-  if (await pingDaemon()) {
-    throw new Error('A daemon is already running outside the desktop app. Stop it before launching the desktop shell.');
-  }
-
-  if (!(await isTcpPortAvailable(DEFAULT_WEB_UI_PORT))) {
-    throw new Error(`Port ${String(DEFAULT_WEB_UI_PORT)} on 127.0.0.1 is already in use.`);
-  }
-}
 
 async function launchMacDevApp() {
   const child = spawn(electronBinary, [desktopMainFile], {
@@ -93,13 +62,6 @@ async function launchMacDevApp() {
   });
 
   process.exit(exitCode);
-}
-
-try {
-  await runLaunchPreflight();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
 }
 
 if (process.platform === 'darwin') {

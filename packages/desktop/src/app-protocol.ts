@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, protocol, session } from 'electron';
-import { DEFAULT_WEB_UI_PORT } from '@personal-agent/core';
+import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { HostManager } from './hosts/host-manager.js';
 
@@ -25,10 +25,6 @@ protocol.registerSchemesAsPrivileged([
 
 export function getDesktopAppBaseUrl(): string {
   return `${DESKTOP_APP_SCHEME}://${DESKTOP_APP_HOST}/`;
-}
-
-function getLocalDesktopWebProxyBaseUrl(): string {
-  return `http://127.0.0.1:${String(DEFAULT_WEB_UI_PORT)}`;
 }
 
 function getMimeType(filePath: string): string {
@@ -88,7 +84,45 @@ function resolveStaticFilePath(requestPath: string): string {
   return candidate;
 }
 
-function createDesktopProtocolHandler() {
+async function readDesktopProtocolRequestBody(request: Request): Promise<unknown> {
+  if (request.method === 'GET' || request.method === 'HEAD') {
+    return undefined;
+  }
+
+  const contentType = request.headers.get('content-type') ?? '';
+  const bodyText = await request.text();
+  if (bodyText.length === 0) {
+    return undefined;
+  }
+
+  if (contentType.toLowerCase().includes('application/json')) {
+    return JSON.parse(bodyText) as unknown;
+  }
+
+  return bodyText;
+}
+
+function buildDesktopProtocolErrorResponse(error: unknown): Response {
+  const message = error instanceof Error ? error.message : String(error);
+  const status = message.startsWith('No local API route for ')
+    ? 404
+    : message.includes('requires subscribeDesktopLocalApiStream')
+      ? 501
+      : 500;
+
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+  });
+}
+
+export function createDesktopProtocolHandler(options?: {
+  loadLocalApiModule?: LocalApiModuleLoader;
+}) {
+  const loadLocalApi = options?.loadLocalApiModule ?? loadLocalApiModule;
+
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     if (url.host !== DESKTOP_APP_HOST) {
@@ -96,27 +130,26 @@ function createDesktopProtocolHandler() {
     }
 
     if (url.pathname.startsWith('/api/')) {
-      const forwardedHeaders = new Headers();
-      request.headers.forEach((value, key) => {
-        const normalizedKey = key.toLowerCase();
-        if (normalizedKey === 'origin' || normalizedKey === 'host' || normalizedKey === 'referer') {
-          return;
-        }
+      if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'PATCH' && request.method !== 'DELETE') {
+        return new Response('Method not allowed', { status: 405 });
+      }
 
-        forwardedHeaders.set(key, value);
-      });
-      forwardedHeaders.set('Origin', getLocalDesktopWebProxyBaseUrl());
-      forwardedHeaders.set('Referer', `${getLocalDesktopWebProxyBaseUrl()}/`);
+      try {
+        const module = await loadLocalApi();
+        const response = await module.dispatchDesktopLocalApiRequest({
+          method: request.method,
+          path: `${url.pathname}${url.search}`,
+          body: await readDesktopProtocolRequestBody(request),
+          headers: Object.fromEntries(request.headers.entries()),
+        });
 
-      const body = request.method === 'GET' || request.method === 'HEAD'
-        ? undefined
-        : await request.arrayBuffer();
-
-      return fetch(new URL(`${url.pathname}${url.search}`, getLocalDesktopWebProxyBaseUrl()), {
-        method: request.method,
-        headers: forwardedHeaders,
-        ...(body !== undefined ? { body } : {}),
-      });
+        return new Response(response.body, {
+          status: response.statusCode,
+          headers: response.headers,
+        });
+      } catch (error) {
+        return buildDesktopProtocolErrorResponse(error);
+      }
     }
 
     const filePath = resolveStaticFilePath(url.pathname);

@@ -3,10 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   pingDaemon: vi.fn(),
   resolveDesktopRuntimePaths: vi.fn(),
-  isWebUiHealthy: vi.fn(),
   waitForDaemonHealthy: vi.fn(),
-  waitForWebUiHealthy: vi.fn(),
-  assertTcpPortAvailable: vi.fn(),
   spawnLoggedChild: vi.fn(),
   stopManagedChild: vi.fn(),
 }));
@@ -20,13 +17,7 @@ vi.mock('../desktop-env.js', () => ({
 }));
 
 vi.mock('./health.js', () => ({
-  isWebUiHealthy: mocks.isWebUiHealthy,
   waitForDaemonHealthy: mocks.waitForDaemonHealthy,
-  waitForWebUiHealthy: mocks.waitForWebUiHealthy,
-}));
-
-vi.mock('./ports.js', () => ({
-  assertTcpPortAvailable: mocks.assertTcpPortAvailable,
 }));
 
 vi.mock('./child-process.js', () => ({
@@ -65,32 +56,31 @@ describe('LocalBackendProcesses', () => {
       colorIconFile: '/repo/packages/desktop/assets/icon-color.svg',
     });
     mocks.pingDaemon.mockResolvedValue(false);
-    mocks.isWebUiHealthy.mockResolvedValue(false);
     mocks.waitForDaemonHealthy.mockResolvedValue(undefined);
-    mocks.waitForWebUiHealthy.mockResolvedValue(undefined);
-    mocks.assertTcpPortAvailable.mockResolvedValue(undefined);
     mocks.stopManagedChild.mockResolvedValue(undefined);
-
-    const daemonChild = createManagedChild('daemon');
-    const webChild = createManagedChild('web-ui');
-    mocks.spawnLoggedChild
-      .mockReturnValueOnce(daemonChild)
-      .mockReturnValueOnce(webChild);
+    mocks.spawnLoggedChild.mockReturnValue(createManagedChild('daemon'));
   });
 
-  it('keeps the owned runtime warm instead of re-checking health on every ensureStarted call', async () => {
+  it('keeps the owned daemon warm instead of re-checking health on every ensureStarted call', async () => {
     const backend = new LocalBackendProcesses();
 
-    await expect(backend.ensureStarted()).resolves.toBe('http://127.0.0.1:3741');
-    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(2);
+    await expect(backend.ensureStarted()).resolves.toBeUndefined();
+    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(1);
 
     mocks.pingDaemon.mockReset();
-    mocks.isWebUiHealthy.mockReset();
 
-    await expect(backend.ensureStarted()).resolves.toBe('http://127.0.0.1:3741');
+    await expect(backend.ensureStarted()).resolves.toBeUndefined();
 
     expect(mocks.pingDaemon).not.toHaveBeenCalled();
-    expect(mocks.isWebUiHealthy).not.toHaveBeenCalled();
+  });
+
+  it('does not spawn a new daemon when one is already reachable', async () => {
+    mocks.pingDaemon.mockResolvedValue(true);
+    const backend = new LocalBackendProcesses();
+
+    await expect(backend.ensureStarted()).resolves.toBeUndefined();
+
+    expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
   });
 
   it('clears owned child references on exit so the next ensureStarted can recover', async () => {
@@ -99,19 +89,13 @@ describe('LocalBackendProcesses', () => {
     await backend.ensureStarted();
 
     const daemonExitHandler = mocks.spawnLoggedChild.mock.results[0]?.value.child.once.mock.calls[0]?.[1];
-    const webExitHandler = mocks.spawnLoggedChild.mock.results[1]?.value.child.once.mock.calls[0]?.[1];
-
     daemonExitHandler?.(1, null);
-    webExitHandler?.(1, null);
 
     mocks.pingDaemon.mockResolvedValue(false);
-    mocks.isWebUiHealthy.mockResolvedValue(false);
-    mocks.spawnLoggedChild
-      .mockReturnValueOnce(createManagedChild('daemon-restart'))
-      .mockReturnValueOnce(createManagedChild('web-ui-restart'));
+    mocks.spawnLoggedChild.mockReturnValueOnce(createManagedChild('daemon-restart'));
 
     await backend.ensureStarted();
 
-    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(4);
+    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(2);
   });
 });
