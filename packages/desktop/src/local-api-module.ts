@@ -29,6 +29,9 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopAppStatus(): Promise<unknown>;
+  readDesktopDaemonState(): Promise<unknown>;
+  readDesktopWebUiState(): Promise<unknown>;
   readDesktopProfiles(): Promise<unknown>;
   setDesktopCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readDesktopModels(): Promise<unknown>;
@@ -42,6 +45,11 @@ export interface LocalApiModule {
   updateDesktopVaultRoot(root: string | null): Promise<unknown>;
   readDesktopConversationTitleSettings(): Promise<unknown>;
   updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
+  readDesktopConversationPlanDefaults(): Promise<unknown>;
+  updateDesktopConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<unknown>;
+  readDesktopConversationPlanLibrary(): Promise<unknown>;
+  updateDesktopConversationPlanLibrary(input: { presets?: unknown; defaultPresetIds?: unknown }): Promise<unknown>;
+  readDesktopConversationPlansWorkspace(): Promise<unknown>;
   readDesktopModelProviders(): Promise<unknown>;
   saveDesktopModelProvider(input: {
     provider: string;

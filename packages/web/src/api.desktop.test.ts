@@ -32,13 +32,24 @@ describe('api desktop transport', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const invokeLocalApi = vi.fn()
-      .mockResolvedValueOnce({
-        profile: 'assistant',
-        repoRoot: '/repo',
-        activityCount: 0,
-        projectCount: 0,
-      })
-      .mockResolvedValueOnce({ ok: true });
+      .mockResolvedValueOnce({ index: { 'conversation-1': 'hello world' } });
+    const readAppStatus = vi.fn().mockResolvedValue({
+      profile: 'assistant',
+      repoRoot: '/repo',
+      activityCount: 0,
+      webUiRevision: 'rev-1',
+    });
+    const readDaemonState = vi.fn().mockResolvedValue({
+      warnings: [],
+      service: { platform: 'desktop', identifier: 'daemon', manifestPath: '/tmp/daemon.plist', installed: true, running: true },
+      runtime: { running: true, socketPath: '/tmp/daemon.sock', moduleCount: 3 },
+      log: { lines: [] },
+    });
+    const readWebUiState = vi.fn().mockResolvedValue({
+      warnings: [],
+      service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
+      log: { lines: [] },
+    });
     const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
     const updateModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
@@ -122,6 +133,9 @@ describe('api desktop transport', () => {
       personalAgentDesktop: {
         getEnvironment,
         invokeLocalApi,
+        readAppStatus,
+        readDaemonState,
+        readWebUiState,
         readModels,
         updateModelPreferences,
         readModelProviders,
@@ -187,6 +201,9 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const status = await api.status();
+    const daemon = await api.daemon();
+    const webUiState = await api.webUiState();
+    const sessionSearchIndex = await api.sessionSearchIndex(['conversation-1']);
     const models = await api.models();
     const modelPreferenceUpdate = await api.updateModelPreferences({ thinkingLevel: 'medium' });
     const modelProviders = await api.modelProviders();
@@ -253,7 +270,10 @@ describe('api desktop transport', () => {
     const destroyed = await api.destroySession('conversation-1', 'surface-1');
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
-    expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
+    expect(readAppStatus).toHaveBeenCalledTimes(1);
+    expect(readDaemonState).toHaveBeenCalledTimes(1);
+    expect(readWebUiState).toHaveBeenCalledTimes(1);
+    expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'POST', '/api/sessions/search-index', { sessionIds: ['conversation-1'] });
     expect(readModels).toHaveBeenCalledTimes(1);
     expect(updateModelPreferences).toHaveBeenCalledWith({ thinkingLevel: 'medium' });
     expect(readModelProviders).toHaveBeenCalledTimes(1);
@@ -344,7 +364,24 @@ describe('api desktop transport', () => {
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(status).toMatchObject({ profile: 'assistant' });
+    expect(status).toEqual({
+      profile: 'assistant',
+      repoRoot: '/repo',
+      activityCount: 0,
+      webUiRevision: 'rev-1',
+    });
+    expect(daemon).toEqual({
+      warnings: [],
+      service: { platform: 'desktop', identifier: 'daemon', manifestPath: '/tmp/daemon.plist', installed: true, running: true },
+      runtime: { running: true, socketPath: '/tmp/daemon.sock', moduleCount: 3 },
+      log: { lines: [] },
+    });
+    expect(webUiState).toEqual({
+      warnings: [],
+      service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
+      log: { lines: [] },
+    });
+    expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
     expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
     expect(modelPreferenceUpdate).toEqual({ ok: true });
     expect(modelProviders).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
@@ -473,6 +510,76 @@ describe('api desktop transport', () => {
     expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+  });
+
+  it('uses dedicated desktop automation preset bridges on the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const readConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: true });
+    const updateConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: false });
+    const readConversationPlanLibrary = vi.fn().mockResolvedValue({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: ['preset-1'],
+    });
+    const updateConversationPlanLibrary = vi.fn().mockResolvedValue({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: [],
+    });
+    const readConversationPlansWorkspace = vi.fn().mockResolvedValue({
+      defaultEnabled: true,
+      presetLibrary: {
+        presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+        defaultPresetIds: ['preset-1'],
+      },
+    });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        readConversationPlanDefaults,
+        updateConversationPlanDefaults,
+        readConversationPlanLibrary,
+        updateConversationPlanLibrary,
+        readConversationPlansWorkspace,
+      },
+    });
+
+    const { api } = await import('./api');
+    const defaults = await api.conversationPlanDefaults();
+    const savedDefaults = await api.updateConversationPlanDefaults({ defaultEnabled: false });
+    const library = await api.conversationPlanLibrary();
+    const savedLibrary = await api.updateConversationPlanLibrary({ defaultPresetIds: [], presets: [] });
+    const workspace = await api.conversationPlansWorkspace();
+
+    expect(readConversationPlanDefaults).toHaveBeenCalledTimes(1);
+    expect(updateConversationPlanDefaults).toHaveBeenCalledWith({ defaultEnabled: false });
+    expect(readConversationPlanLibrary).toHaveBeenCalledTimes(1);
+    expect(updateConversationPlanLibrary).toHaveBeenCalledWith({ defaultPresetIds: [], presets: [] });
+    expect(readConversationPlansWorkspace).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(defaults).toEqual({ defaultEnabled: true });
+    expect(savedDefaults).toEqual({ defaultEnabled: false });
+    expect(library).toEqual({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: ['preset-1'],
+    });
+    expect(savedLibrary).toEqual({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: [],
+    });
+    expect(workspace).toEqual({
+      defaultEnabled: true,
+      presetLibrary: {
+        presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+        defaultPresetIds: ['preset-1'],
+      },
+    });
   });
 
   it('uses dedicated desktop inbox and alert bridges on the local Electron host', async () => {
@@ -779,6 +886,116 @@ describe('api desktop transport', () => {
     expect(savedVaultRoot).toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     expect(conversationTitleSettings).toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
+  });
+
+  it('falls back to HTTP for desktop automation preset bridges on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true }))
+      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: false }))
+      .mockResolvedValueOnce(createJsonResponse({ presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: ['preset-1'] }))
+      .mockResolvedValueOnce(createJsonResponse({ presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: [] }))
+      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true, presetLibrary: { presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: ['preset-1'] } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readConversationPlanDefaults = vi.fn();
+    const readConversationPlanLibrary = vi.fn();
+    const readConversationPlansWorkspace = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readConversationPlanDefaults,
+        readConversationPlanLibrary,
+        readConversationPlansWorkspace,
+      },
+    });
+
+    const { api } = await import('./api');
+    const defaults = await api.conversationPlanDefaults();
+    const savedDefaults = await api.updateConversationPlanDefaults({ defaultEnabled: false });
+    const library = await api.conversationPlanLibrary();
+    const savedLibrary = await api.updateConversationPlanLibrary({ defaultPresetIds: [], presets: [] });
+    const workspace = await api.conversationPlansWorkspace();
+
+    expect(readConversationPlanDefaults).not.toHaveBeenCalled();
+    expect(readConversationPlanLibrary).not.toHaveBeenCalled();
+    expect(readConversationPlansWorkspace).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversation-plans/defaults', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversation-plans/defaults', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ defaultEnabled: false }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversation-plans/library', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversation-plans/library', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ defaultPresetIds: [], presets: [] }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversation-plans/workspace', { method: 'GET', cache: 'no-store' });
+    expect(defaults).toEqual({ defaultEnabled: true });
+    expect(savedDefaults).toEqual({ defaultEnabled: false });
+    expect(library).toEqual({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: ['preset-1'],
+    });
+    expect(savedLibrary).toEqual({
+      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+      defaultPresetIds: [],
+    });
+    expect(workspace).toEqual({
+      defaultEnabled: true,
+      presetLibrary: {
+        presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
+        defaultPresetIds: ['preset-1'],
+      },
+    });
+  });
+
+  it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', activityCount: 1, webUiRevision: 'rev-2' }))
+      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }))
+      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readAppStatus = vi.fn();
+    const readDaemonState = vi.fn();
+    const readWebUiState = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readAppStatus,
+        readDaemonState,
+        readWebUiState,
+      },
+    });
+
+    const { api } = await import('./api');
+    const status = await api.status();
+    const daemon = await api.daemon();
+    const webUiState = await api.webUiState();
+
+    expect(readAppStatus).not.toHaveBeenCalled();
+    expect(readDaemonState).not.toHaveBeenCalled();
+    expect(readWebUiState).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/status', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/daemon', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/web-ui/state', { method: 'GET', cache: 'no-store' });
+    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', activityCount: 1, webUiRevision: 'rev-2' });
+    expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
+    expect(webUiState).toEqual({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } });
   });
 
   it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {

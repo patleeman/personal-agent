@@ -3,6 +3,9 @@ import type {
   AlertEntry,
   AlertSnapshot,
   CodexPlanUsageState,
+  ConversationAutomationPreferencesState,
+  ConversationAutomationWorkflowPresetLibraryState,
+  ConversationAutomationWorkspaceState,
   ConversationTitleSettingsState,
   DefaultCwdState,
   ModelProviderState,
@@ -46,6 +49,9 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readAppStatus(): Promise<AppStatus>;
+  readDaemonState(): Promise<DaemonState>;
+  readWebUiState(): Promise<WebUiState>;
   readProfiles(): Promise<ProfileState>;
   setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels(): Promise<ModelState>;
@@ -56,6 +62,11 @@ export interface PersonalAgentDesktopBridge {
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
+  readConversationPlanDefaults(): Promise<ConversationAutomationPreferencesState>;
+  updateConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<ConversationAutomationPreferencesState>;
+  readConversationPlanLibrary(): Promise<ConversationAutomationWorkflowPresetLibraryState>;
+  updateConversationPlanLibrary(input: ConversationAutomationWorkflowPresetLibraryState): Promise<ConversationAutomationWorkflowPresetLibraryState>;
+  readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
   readModelProviders(): Promise<ModelProviderState>;
   saveModelProvider(input: {
     provider: string;

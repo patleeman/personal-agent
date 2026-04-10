@@ -119,6 +119,39 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readAppStatus) {
+      throw new Error('Dedicated desktop app status reads are only available for the local host.');
+    }
+
+    return controller.readAppStatus();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-daemon-state`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDaemonState) {
+      throw new Error('Dedicated desktop daemon-state reads are only available for the local host.');
+    }
+
+    return controller.readDaemonState();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-web-ui-state`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readWebUiState) {
+      throw new Error('Dedicated desktop web-ui-state reads are only available for the local host.');
+    }
+
+    return controller.readWebUiState();
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-profiles`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -227,6 +260,61 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.updateConversationTitleSettings(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plan-defaults`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationPlanDefaults) {
+      throw new Error('Dedicated desktop conversation-plan default reads are only available for the local host.');
+    }
+
+    return controller.readConversationPlanDefaults();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-plan-defaults`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateConversationPlanDefaults) {
+      throw new Error('Dedicated desktop conversation-plan default writes are only available for the local host.');
+    }
+
+    return controller.updateConversationPlanDefaults(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plan-library`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationPlanLibrary) {
+      throw new Error('Dedicated desktop conversation-plan library reads are only available for the local host.');
+    }
+
+    return controller.readConversationPlanLibrary();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-plan-library`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateConversationPlanLibrary) {
+      throw new Error('Dedicated desktop conversation-plan library writes are only available for the local host.');
+    }
+
+    return controller.updateConversationPlanLibrary(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationPlansWorkspace) {
+      throw new Error('Dedicated desktop conversation-plan workspace reads are only available for the local host.');
+    }
+
+    return controller.readConversationPlansWorkspace();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-model-providers`, async (event) => {

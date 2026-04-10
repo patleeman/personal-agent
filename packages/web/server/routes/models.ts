@@ -4,9 +4,9 @@
  * Handles model preferences, model providers, and provider authentication.
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { Express } from 'express';
 import { getDefaultVaultRoot, getVaultRoot, readMachineConfig, updateMachineConfig } from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
@@ -33,6 +33,13 @@ import {
 } from '../models/providerAuth.js';
 import { readCodexPlanUsage } from '../models/codexUsage.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
+import {
+  readConversationPlanDefaults,
+  readConversationPlanLibrary,
+  readConversationPlansWorkspace,
+  writeConversationPlanDefaults,
+  writeConversationPlanLibrary,
+} from '../ui/conversationPlanPreferences.js';
 import {
   logError,
   persistSettingsWrite,
@@ -76,225 +83,6 @@ function readConfiguredVaultRoot(): string {
   return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
 }
 
-function readSettingsObject(settingsFile: string): Record<string, unknown> {
-  if (!existsSync(settingsFile)) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(settingsFile, 'utf-8')) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return { ...(parsed as Record<string, unknown>) };
-  } catch {
-    return {};
-  }
-}
-
-function writeSettingsObject(settingsFile: string, settings: Record<string, unknown>): void {
-  mkdirSync(dirname(settingsFile), { recursive: true });
-  writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readConversationPlanDefaults(settingsFile: string): { defaultEnabled: boolean } {
-  const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
-
-  return {
-    defaultEnabled: conversationAutomation.defaultEnabled === true,
-  };
-}
-
-function writeConversationPlanDefaults(input: { defaultEnabled?: boolean }, settingsFile: string): { defaultEnabled: boolean } {
-  const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
-
-  if (typeof input.defaultEnabled === 'boolean') {
-    conversationAutomation.defaultEnabled = input.defaultEnabled;
-  }
-
-  webUi.conversationAutomation = conversationAutomation;
-  settings.webUi = webUi;
-  writeSettingsObject(settingsFile, settings);
-  return readConversationPlanDefaults(settingsFile);
-}
-
-type ConversationPlanItemRecord = Record<string, unknown>;
-type ConversationPlanPresetRecord = {
-  id: string;
-  name: string;
-  updatedAt: string;
-  items: ConversationPlanItemRecord[];
-};
-
-function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const kind = value.kind === 'skill' ? 'skill' : 'instruction';
-  const id = typeof value.id === 'string' && value.id.trim().length > 0
-    ? value.id.trim()
-    : `item-${index + 1}`;
-  const label = typeof value.label === 'string' && value.label.trim().length > 0
-    ? value.label.trim()
-    : kind === 'skill'
-      ? 'Skill'
-      : 'Instruction';
-
-  if (kind === 'skill') {
-    const skillName = typeof value.skillName === 'string' ? value.skillName.trim() : '';
-    if (!skillName) {
-      return null;
-    }
-
-    const skillArgs = typeof value.skillArgs === 'string' && value.skillArgs.trim().length > 0
-      ? value.skillArgs.trim()
-      : undefined;
-
-    return {
-      id,
-      kind,
-      label,
-      skillName,
-      ...(skillArgs ? { skillArgs } : {}),
-    };
-  }
-
-  const text = typeof value.text === 'string' ? value.text.trim() : '';
-  if (!text) {
-    return null;
-  }
-
-  return {
-    id,
-    kind,
-    label,
-    text,
-  };
-}
-
-function readConversationPlanLibrary(settingsFile: string): { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } {
-  const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
-  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? conversationAutomation.workflowPresets : {};
-
-  const presets = Array.isArray(workflowPresets.presets)
-    ? workflowPresets.presets
-        .map((preset, index) => {
-          if (!isRecord(preset)) {
-            return null;
-          }
-
-          const id = typeof preset.id === 'string' && preset.id.trim().length > 0
-            ? preset.id.trim()
-            : `preset-${index + 1}`;
-          const name = typeof preset.name === 'string' && preset.name.trim().length > 0
-            ? preset.name.trim()
-            : `Preset ${index + 1}`;
-          const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
-            ? preset.updatedAt.trim()
-            : new Date(0).toISOString();
-          const items = Array.isArray(preset.items)
-            ? preset.items
-                .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
-                .filter((item): item is ConversationPlanItemRecord => item !== null)
-            : [];
-
-          return { id, name, updatedAt, items };
-        })
-        .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
-    : [];
-
-  const presetIdSet = new Set(presets.map((preset) => String(preset.id)));
-  const defaultPresetIds = Array.isArray(workflowPresets.defaultPresetIds)
-    ? workflowPresets.defaultPresetIds
-        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-        .map((value) => value.trim())
-        .filter((value, index, list) => list.indexOf(value) === index)
-        .filter((value) => presetIdSet.has(value))
-    : [];
-
-  return { presets, defaultPresetIds };
-}
-
-function writeConversationPlanLibrary(
-  input: { presets?: unknown; defaultPresetIds?: unknown },
-  settingsFile: string,
-): { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } {
-  const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
-  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? { ...conversationAutomation.workflowPresets } : {};
-
-  if (input.presets !== undefined) {
-    workflowPresets.presets = Array.isArray(input.presets)
-      ? input.presets
-          .map((preset, index) => {
-            if (!isRecord(preset)) {
-              return null;
-            }
-
-            const id = typeof preset.id === 'string' && preset.id.trim().length > 0
-              ? preset.id.trim()
-              : `preset-${index + 1}`;
-            const name = typeof preset.name === 'string' && preset.name.trim().length > 0
-              ? preset.name.trim()
-              : `Preset ${index + 1}`;
-            const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
-              ? preset.updatedAt.trim()
-              : new Date().toISOString();
-            const items = Array.isArray(preset.items)
-              ? preset.items
-                  .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
-                  .filter((item): item is ConversationPlanItemRecord => item !== null)
-              : [];
-
-            return { id, name, updatedAt, items };
-          })
-          .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
-      : [];
-  }
-
-  if (input.defaultPresetIds !== undefined) {
-    const presetIdSet = new Set(
-      Array.isArray(workflowPresets.presets)
-        ? workflowPresets.presets
-            .filter((preset): preset is ConversationPlanPresetRecord => isRecord(preset) && typeof preset.id === 'string' && typeof preset.name === 'string' && typeof preset.updatedAt === 'string' && Array.isArray(preset.items))
-            .map((preset) => preset.id)
-        : [],
-    );
-    workflowPresets.defaultPresetIds = Array.isArray(input.defaultPresetIds)
-      ? input.defaultPresetIds
-          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-          .map((value) => value.trim())
-          .filter((value, index, list) => list.indexOf(value) === index)
-          .filter((value) => presetIdSet.has(value))
-      : [];
-  }
-
-  conversationAutomation.workflowPresets = workflowPresets;
-  webUi.conversationAutomation = conversationAutomation;
-  settings.webUi = webUi;
-  writeSettingsObject(settingsFile, settings);
-  return readConversationPlanLibrary(settingsFile);
-}
-
-function readConversationPlansWorkspace(settingsFile: string): { defaultEnabled: boolean; presetLibrary: { presets: ConversationPlanPresetRecord[]; defaultPresetIds: string[] } } {
-  return {
-    ...readConversationPlanDefaults(settingsFile),
-    presetLibrary: readConversationPlanLibrary(settingsFile),
-  };
-}
 
 function initializeModelRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,

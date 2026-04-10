@@ -83,6 +83,15 @@ export interface DesktopModelPreferencesUpdateRequest {
   thinkingLevel?: string | null;
 }
 
+export interface DesktopConversationPlanDefaultsUpdateRequest {
+  defaultEnabled?: boolean;
+}
+
+export interface DesktopConversationPlanLibraryUpdateRequest {
+  presets?: unknown;
+  defaultPresetIds?: unknown;
+}
+
 export interface DesktopConversationAttentionRequest {
   conversationId: string;
   read?: boolean;
@@ -222,6 +231,9 @@ export interface HostController {
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  readAppStatus?(): Promise<unknown>;
+  readDaemonState?(): Promise<unknown>;
+  readWebUiState?(): Promise<unknown>;
   readProfiles?(): Promise<unknown>;
   setCurrentProfile?(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels?(): Promise<unknown>;
@@ -232,6 +244,11 @@ export interface HostController {
   updateVaultRoot?(root: string | null): Promise<unknown>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
+  readConversationPlanDefaults?(): Promise<unknown>;
+  updateConversationPlanDefaults?(input: DesktopConversationPlanDefaultsUpdateRequest): Promise<unknown>;
+  readConversationPlanLibrary?(): Promise<unknown>;
+  updateConversationPlanLibrary?(input: DesktopConversationPlanLibraryUpdateRequest): Promise<unknown>;
+  readConversationPlansWorkspace?(): Promise<unknown>;
   readModelProviders?(): Promise<unknown>;
   saveModelProvider?(input: {
     provider: string;

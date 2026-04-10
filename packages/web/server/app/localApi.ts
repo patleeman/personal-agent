@@ -10,6 +10,7 @@ import {
   readMachineConfig,
   updateMachineConfig,
 } from '@personal-agent/core';
+import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
@@ -106,11 +107,19 @@ import {
   writeSavedConversationTitlePreferences,
 } from '../ui/conversationTitlePreferences.js';
 import {
+  readConversationPlanDefaults,
+  readConversationPlanLibrary,
+  readConversationPlansWorkspace,
+  writeConversationPlanDefaults,
+  writeConversationPlanLibrary,
+} from '../ui/conversationPlanPreferences.js';
+import {
   readSavedDefaultCwdPreferences,
   writeSavedDefaultCwdPreference,
 } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readWebUiState } from '../ui/webUi.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
@@ -1134,6 +1143,25 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
   return bodyText as T;
 }
 
+export async function readDesktopAppStatus() {
+  const context = await getLocalServerRouteContext();
+  const activities = context.listActivityForCurrentProfile();
+  return {
+    profile: context.getCurrentProfile(),
+    repoRoot: context.getRepoRoot(),
+    activityCount: activities.length,
+    webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
+  };
+}
+
+export async function readDesktopDaemonState() {
+  return readDaemonState();
+}
+
+export async function readDesktopWebUiState() {
+  return readWebUiState();
+}
+
 export async function readDesktopProfiles() {
   const context = await getLocalServerRouteContext();
   return {
@@ -1266,6 +1294,55 @@ export async function updateDesktopConversationTitleSettings(input: {
     (settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile),
     { runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE },
   );
+}
+
+export async function readDesktopConversationPlanDefaults() {
+  return readConversationPlanDefaults(DEFAULT_RUNTIME_SETTINGS_FILE);
+}
+
+export async function updateDesktopConversationPlanDefaults(input: {
+  defaultEnabled?: boolean;
+}) {
+  if (typeof input.defaultEnabled !== 'boolean') {
+    throw new Error('defaultEnabled required');
+  }
+
+  const context = await getLocalServerRouteContext();
+  const state = persistSettingsWrite(
+    (settingsFile) => writeConversationPlanDefaults({ defaultEnabled: input.defaultEnabled }, settingsFile),
+    {
+      localSettingsFile: context.getCurrentProfileSettingsFile(),
+      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+    },
+  );
+
+  context.materializeWebProfile(context.getCurrentProfile());
+  return state;
+}
+
+export async function readDesktopConversationPlanLibrary() {
+  return readConversationPlanLibrary(DEFAULT_RUNTIME_SETTINGS_FILE);
+}
+
+export async function updateDesktopConversationPlanLibrary(input: {
+  presets?: unknown;
+  defaultPresetIds?: unknown;
+}) {
+  const context = await getLocalServerRouteContext();
+  const state = persistSettingsWrite(
+    (settingsFile) => writeConversationPlanLibrary(input, settingsFile),
+    {
+      localSettingsFile: context.getCurrentProfileSettingsFile(),
+      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
+    },
+  );
+
+  context.materializeWebProfile(context.getCurrentProfile());
+  return state;
+}
+
+export async function readDesktopConversationPlansWorkspace() {
+  return readConversationPlansWorkspace(DEFAULT_RUNTIME_SETTINGS_FILE);
 }
 
 export async function readDesktopModelProviders() {

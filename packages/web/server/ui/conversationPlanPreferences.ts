@@ -1,0 +1,254 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+
+export type ConversationPlanItemRecord =
+  | {
+      id: string;
+      kind: 'instruction';
+      label: string;
+      text: string;
+    }
+  | {
+      id: string;
+      kind: 'skill';
+      label: string;
+      skillName: string;
+      skillArgs?: string;
+    };
+
+export interface ConversationPlanPresetRecord {
+  id: string;
+  name: string;
+  updatedAt: string;
+  items: ConversationPlanItemRecord[];
+}
+
+export interface ConversationPlanDefaultsState {
+  defaultEnabled: boolean;
+}
+
+export interface ConversationPlanLibraryState {
+  presets: ConversationPlanPresetRecord[];
+  defaultPresetIds: string[];
+}
+
+export interface ConversationPlanWorkspaceState extends ConversationPlanDefaultsState {
+  presetLibrary: ConversationPlanLibraryState;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readSettingsObject(settingsFile: string): Record<string, unknown> {
+  if (!existsSync(settingsFile)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(settingsFile, 'utf-8')) as unknown;
+    return isRecord(parsed) ? { ...parsed } : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSettingsObject(settingsFile: string, settings: Record<string, unknown>): void {
+  mkdirSync(dirname(settingsFile), { recursive: true });
+  writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
+}
+
+function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const kind = value.kind === 'skill' ? 'skill' : 'instruction';
+  const id = typeof value.id === 'string' && value.id.trim().length > 0
+    ? value.id.trim()
+    : `item-${index + 1}`;
+  const label = typeof value.label === 'string' && value.label.trim().length > 0
+    ? value.label.trim()
+    : kind === 'skill'
+      ? 'Skill'
+      : 'Instruction';
+
+  if (kind === 'skill') {
+    const skillName = typeof value.skillName === 'string' ? value.skillName.trim() : '';
+    if (!skillName) {
+      return null;
+    }
+
+    const skillArgs = typeof value.skillArgs === 'string' && value.skillArgs.trim().length > 0
+      ? value.skillArgs.trim()
+      : undefined;
+
+    return {
+      id,
+      kind,
+      label,
+      skillName,
+      ...(skillArgs ? { skillArgs } : {}),
+    };
+  }
+
+  const text = typeof value.text === 'string' ? value.text.trim() : '';
+  if (!text) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    label,
+    text,
+  };
+}
+
+export function readConversationPlanDefaults(settingsFile: string): ConversationPlanDefaultsState {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+
+  return {
+    defaultEnabled: conversationAutomation.defaultEnabled === true,
+  };
+}
+
+export function writeConversationPlanDefaults(
+  input: { defaultEnabled?: boolean },
+  settingsFile: string,
+): ConversationPlanDefaultsState {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+
+  if (typeof input.defaultEnabled === 'boolean') {
+    conversationAutomation.defaultEnabled = input.defaultEnabled;
+  }
+
+  webUi.conversationAutomation = conversationAutomation;
+  settings.webUi = webUi;
+  writeSettingsObject(settingsFile, settings);
+  return readConversationPlanDefaults(settingsFile);
+}
+
+export function readConversationPlanLibrary(settingsFile: string): ConversationPlanLibraryState {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? conversationAutomation.workflowPresets : {};
+
+  const presets = Array.isArray(workflowPresets.presets)
+    ? workflowPresets.presets
+        .map((preset, index) => {
+          if (!isRecord(preset)) {
+            return null;
+          }
+
+          const id = typeof preset.id === 'string' && preset.id.trim().length > 0
+            ? preset.id.trim()
+            : `preset-${index + 1}`;
+          const name = typeof preset.name === 'string' && preset.name.trim().length > 0
+            ? preset.name.trim()
+            : `Preset ${index + 1}`;
+          const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
+            ? preset.updatedAt.trim()
+            : new Date(0).toISOString();
+          const items = Array.isArray(preset.items)
+            ? preset.items
+                .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
+                .filter((item): item is ConversationPlanItemRecord => item !== null)
+            : [];
+
+          return { id, name, updatedAt, items };
+        })
+        .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
+    : [];
+
+  const presetIdSet = new Set(presets.map((preset) => preset.id));
+  const defaultPresetIds = Array.isArray(workflowPresets.defaultPresetIds)
+    ? workflowPresets.defaultPresetIds
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim())
+        .filter((value, index, list) => list.indexOf(value) === index)
+        .filter((value) => presetIdSet.has(value))
+    : [];
+
+  return { presets, defaultPresetIds };
+}
+
+export function writeConversationPlanLibrary(
+  input: { presets?: unknown; defaultPresetIds?: unknown },
+  settingsFile: string,
+): ConversationPlanLibraryState {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
+  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+  const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? { ...conversationAutomation.workflowPresets } : {};
+
+  if (input.presets !== undefined) {
+    workflowPresets.presets = Array.isArray(input.presets)
+      ? input.presets
+          .map((preset, index) => {
+            if (!isRecord(preset)) {
+              return null;
+            }
+
+            const id = typeof preset.id === 'string' && preset.id.trim().length > 0
+              ? preset.id.trim()
+              : `preset-${index + 1}`;
+            const name = typeof preset.name === 'string' && preset.name.trim().length > 0
+              ? preset.name.trim()
+              : `Preset ${index + 1}`;
+            const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
+              ? preset.updatedAt.trim()
+              : new Date().toISOString();
+            const items = Array.isArray(preset.items)
+              ? preset.items
+                  .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
+                  .filter((item): item is ConversationPlanItemRecord => item !== null)
+              : [];
+
+            return { id, name, updatedAt, items };
+          })
+          .filter((preset): preset is ConversationPlanPresetRecord => preset !== null)
+      : [];
+  }
+
+  if (input.defaultPresetIds !== undefined) {
+    const presetIdSet = new Set(
+      Array.isArray(workflowPresets.presets)
+        ? workflowPresets.presets
+            .filter((preset): preset is ConversationPlanPresetRecord => (
+              isRecord(preset)
+              && typeof preset.id === 'string'
+              && typeof preset.name === 'string'
+              && typeof preset.updatedAt === 'string'
+              && Array.isArray(preset.items)
+            ))
+            .map((preset) => preset.id)
+        : [],
+    );
+    workflowPresets.defaultPresetIds = Array.isArray(input.defaultPresetIds)
+      ? input.defaultPresetIds
+          .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+          .map((value) => value.trim())
+          .filter((value, index, list) => list.indexOf(value) === index)
+          .filter((value) => presetIdSet.has(value))
+      : [];
+  }
+
+  conversationAutomation.workflowPresets = workflowPresets;
+  webUi.conversationAutomation = conversationAutomation;
+  settings.webUi = webUi;
+  writeSettingsObject(settingsFile, settings);
+  return readConversationPlanLibrary(settingsFile);
+}
+
+export function readConversationPlansWorkspace(settingsFile: string): ConversationPlanWorkspaceState {
+  return {
+    ...readConversationPlanDefaults(settingsFile),
+    presetLibrary: readConversationPlanLibrary(settingsFile),
+  };
+}

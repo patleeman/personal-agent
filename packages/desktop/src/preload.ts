@@ -33,6 +33,9 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
+  readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
+  readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
   readProfiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-profiles`),
   setCurrentProfile: (profile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-current-profile`, profile),
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
@@ -45,6 +48,13 @@ const desktopBridge = {
   readConversationTitleSettings: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-title-settings`),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
+  readConversationPlanDefaults: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plan-defaults`),
+  updateConversationPlanDefaults: (input: { defaultEnabled?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-plan-defaults`, input),
+  readConversationPlanLibrary: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plan-library`),
+  updateConversationPlanLibrary: (input: { presets?: unknown; defaultPresetIds?: unknown }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-plan-library`, input),
+  readConversationPlansWorkspace: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`),
   readModelProviders: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-model-providers`),
   saveModelProvider: (input: {
     provider: string;

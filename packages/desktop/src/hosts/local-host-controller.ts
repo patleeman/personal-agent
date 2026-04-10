@@ -71,6 +71,21 @@ export class LocalHostController implements HostController {
     return module.invokeDesktopLocalApi({ method, path, body });
   }
 
+  async readAppStatus(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopAppStatus();
+  }
+
+  async readDaemonState(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopDaemonState();
+  }
+
+  async readWebUiState(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopWebUiState();
+  }
+
   async readProfiles(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopProfiles();
@@ -119,6 +134,31 @@ export class LocalHostController implements HostController {
   async updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.updateDesktopConversationTitleSettings(input);
+  }
+
+  async readConversationPlanDefaults(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationPlanDefaults();
+  }
+
+  async updateConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopConversationPlanDefaults(input);
+  }
+
+  async readConversationPlanLibrary(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationPlanLibrary();
+  }
+
+  async updateConversationPlanLibrary(input: { presets?: unknown; defaultPresetIds?: unknown }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopConversationPlanLibrary(input);
+  }
+
+  async readConversationPlansWorkspace(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationPlansWorkspace();
   }
 
   async readModelProviders(): Promise<unknown> {
