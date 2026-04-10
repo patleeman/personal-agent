@@ -36,7 +36,7 @@ Local JSON API requests and stream subscriptions are resolved inside Electron th
 
 - the desktop protocol handler for `/api/...` resource and mutation requests
 - the main-process host controller bridge for local capability calls
-- an in-process local API dispatcher that reuses shared server route logic where practical
+- an in-process local API dispatcher that reuses shared server route logic where practical and, in packaged builds, loads its `localApi.js` entrypoint from the bundled `@personal-agent/web/dist-server` package path
 
 So the desktop-owned local backend is intentionally desktop-only and no longer depends on a loopback web child for core local flows.
 

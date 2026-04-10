@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { existsSync } from 'node:fs';
 import { app } from 'electron';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 
@@ -148,9 +149,43 @@ export function resolveLocalApiModuleUrl(input: {
   return pathToFileURL(resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js')).href;
 }
 
+function resolveFallbackLocalApiModuleUrl(): string | null {
+  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
+  if (!repoRoot) {
+    return null;
+  }
+
+  const filePath = resolve(repoRoot, 'packages', 'web', 'dist-server', 'app', 'localApi.js');
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  return pathToFileURL(filePath).href;
+}
+
+export async function importLocalApiModuleWithFallback(input: {
+  primaryUrl: string;
+  fallbackUrl?: string | null;
+  loadModule: (moduleUrl: string) => Promise<LocalApiModule>;
+}): Promise<LocalApiModule> {
+  try {
+    return await input.loadModule(input.primaryUrl);
+  } catch (error) {
+    if (!input.fallbackUrl || input.fallbackUrl === input.primaryUrl) {
+      throw error;
+    }
+
+    return input.loadModule(input.fallbackUrl);
+  }
+}
+
 export function loadLocalApiModule(): Promise<LocalApiModule> {
   if (!localApiModulePromise) {
-    localApiModulePromise = import(resolveLocalApiModuleUrl()) as Promise<LocalApiModule>;
+    localApiModulePromise = importLocalApiModuleWithFallback({
+      primaryUrl: resolveLocalApiModuleUrl(),
+      fallbackUrl: resolveFallbackLocalApiModuleUrl(),
+      loadModule: (moduleUrl) => import(moduleUrl) as Promise<LocalApiModule>,
+    });
   }
 
   return localApiModulePromise;
