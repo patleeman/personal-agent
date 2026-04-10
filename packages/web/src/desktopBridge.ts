@@ -296,6 +296,7 @@ export interface PersonalAgentDesktopBridge {
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
   restartActiveHost(): Promise<void>;
+  checkForUpdates(): Promise<void>;
 }
 
 export function getDesktopBridge(): PersonalAgentDesktopBridge | null {

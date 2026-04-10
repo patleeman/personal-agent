@@ -14,7 +14,15 @@ import {
   uninstallDaemonServiceAndReadState,
 } from '../automation/daemon.js';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
-import { createServiceAttentionMonitor, suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
+import { suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
+
+function mapDaemonServiceLifecycleErrorStatus(message: string): number {
+  if (message.startsWith('Managed daemon service lifecycle is unavailable in desktop runtime')) {
+    return 400;
+  }
+
+  return 500;
+}
 
 /**
  * Register daemon routes on the given router.
@@ -39,11 +47,12 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 
@@ -54,11 +63,12 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 
@@ -69,11 +79,12 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 
@@ -84,11 +95,12 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 
@@ -99,11 +111,12 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 }
@@ -128,11 +141,12 @@ export function registerCompanionDaemonRoutes(router: Pick<Express, 'get' | 'pos
       invalidateAppTopics('daemon');
       res.json(state);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
     }
   });
 }

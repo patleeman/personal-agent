@@ -334,8 +334,13 @@ describe('companion operational pages', () => {
     expect(html).toContain('Update app');
   });
 
-  it('treats the packaged local shell as a desktop-owned surface instead of a restartable web service', () => {
+  it('treats the packaged local shell as desktop-owned runtime instead of restartable services', () => {
     const html = renderWithProviders(<CompanionSystemPage />, {
+      daemon: {
+        service: {
+          platform: 'desktop',
+        },
+      },
       webUi: {
         service: {
           platform: 'desktop',
@@ -347,11 +352,14 @@ describe('companion operational pages', () => {
       },
     });
 
+    expect(html).toContain('Desktop runtime');
+    expect(html).toContain('desktop-owned runtime');
+    expect(html).toContain('App-owned background runtime for runs, tasks, and automation.');
     expect(html).toContain('Desktop shell');
     expect(html).not.toContain('Web UI');
     expect(html).toContain('desktop-only');
     expect(html).toContain('Not exposed in desktop mode.');
     expect(html).toContain('personal-agent://app/');
-    expect(html).not.toContain('Restarting…');
+    expect(html.match(/>Restart</g)?.length ?? 0).toBe(0);
   });
 });

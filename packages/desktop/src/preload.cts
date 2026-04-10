@@ -274,6 +274,7 @@ const desktopBridge = {
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
   restartActiveHost: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:restart-active-host`),
+  checkForUpdates: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:check-for-updates`),
 };
 
 if (domGlobals.document?.documentElement) {

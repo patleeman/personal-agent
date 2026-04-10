@@ -114,6 +114,8 @@ function withViewProfile(path: string, profile?: string): string {
 
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
+const DESKTOP_DAEMON_SERVICE_MESSAGE = 'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.';
+const DESKTOP_WEB_UI_SERVICE_MESSAGE = 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
 
 function buildMemoryRequestKey(options?: { profile?: string }): string {
   return options?.profile?.trim() || '__current__';
@@ -166,6 +168,15 @@ async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
   return environment?.activeHostKind === 'local';
 }
 
+function buildLocalDesktopApplicationResult(message: string): ApplicationRestartRequestResult {
+  return {
+    accepted: true,
+    message,
+    requestedAt: new Date().toISOString(),
+    logFile: 'desktop app',
+  };
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => {
@@ -184,11 +195,46 @@ export const api = {
 
     return get<DaemonState>('/daemon');
   },
-  installDaemonService: () => post<DaemonState>('/daemon/service/install'),
-  startDaemonService: () => post<DaemonState>('/daemon/service/start'),
-  restartDaemonService: () => post<DaemonState>('/daemon/service/restart'),
-  stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
-  uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
+  installDaemonService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+    }
+
+    return post<DaemonState>('/daemon/service/install');
+  },
+  startDaemonService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+    }
+
+    return post<DaemonState>('/daemon/service/start');
+  },
+  restartDaemonService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+    }
+
+    return post<DaemonState>('/daemon/service/restart');
+  },
+  stopDaemonService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+    }
+
+    return post<DaemonState>('/daemon/service/stop');
+  },
+  uninstallDaemonService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+    }
+
+    return post<DaemonState>('/daemon/service/uninstall');
+  },
   webUiState:   async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -197,13 +243,64 @@ export const api = {
 
     return get<WebUiState>('/web-ui/state');
   },
-  restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
-  updateApplication: () => post<ApplicationRestartRequestResult>('/application/update'),
-  installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
-  startWebUiService: () => post<WebUiState>('/web-ui/service/start'),
-  restartWebUiService: () => post<ApplicationRestartRequestResult>('/web-ui/service/restart'),
-  stopWebUiService: () => post<WebUiState>('/web-ui/service/stop'),
-  uninstallWebUiService: () => post<WebUiState>('/web-ui/service/uninstall'),
+  restartApplication: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      await desktopBridge.restartActiveHost();
+      return buildLocalDesktopApplicationResult('Restarting the local desktop runtime.');
+    }
+
+    return post<ApplicationRestartRequestResult>('/application/restart');
+  },
+  updateApplication: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      await desktopBridge.checkForUpdates();
+      return buildLocalDesktopApplicationResult('Checking for desktop app updates.');
+    }
+
+    return post<ApplicationRestartRequestResult>('/application/update');
+  },
+  installWebUiService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+    }
+
+    return post<WebUiState>('/web-ui/service/install');
+  },
+  startWebUiService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+    }
+
+    return post<WebUiState>('/web-ui/service/start');
+  },
+  restartWebUiService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+    }
+
+    return post<ApplicationRestartRequestResult>('/web-ui/service/restart');
+  },
+  stopWebUiService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+    }
+
+    return post<WebUiState>('/web-ui/service/stop');
+  },
+  uninstallWebUiService: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
+    }
+
+    return post<WebUiState>('/web-ui/service/uninstall');
+  },
   setWebUiConfig: async (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

@@ -28,8 +28,16 @@ interface LogTail {
   lines: string[];
 }
 
+const DESKTOP_DAEMON_SERVICE_MESSAGE = 'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.';
+
 function isDesktopRuntime(): boolean {
   return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+}
+
+function assertManagedDaemonServiceLifecycleAvailable(): void {
+  if (isDesktopRuntime()) {
+    throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
+  }
 }
 
 function getDesktopDaemonLogFile(): string | undefined {
@@ -202,16 +210,19 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
 }
 
 export async function installDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {
+  assertManagedDaemonServiceLifecycleAvailable();
   installManagedDaemonService();
   return readDaemonState();
 }
 
 export async function startDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {
+  assertManagedDaemonServiceLifecycleAvailable();
   startManagedDaemonService();
   return readDaemonState();
 }
 
 export async function restartDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {
+  assertManagedDaemonServiceLifecycleAvailable();
   const restarted = restartManagedDaemonServiceIfInstalled();
   if (!restarted) {
     throw new Error('Daemon service is not installed. Install it from this page or run `pa daemon service install`.');
@@ -221,11 +232,13 @@ export async function restartDaemonServiceAndReadState(): Promise<DaemonStateSna
 }
 
 export async function stopDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {
+  assertManagedDaemonServiceLifecycleAvailable();
   stopManagedDaemonService();
   return readDaemonState();
 }
 
 export async function uninstallDaemonServiceAndReadState(): Promise<DaemonStateSnapshot> {
+  assertManagedDaemonServiceLifecycleAvailable();
   uninstallManagedDaemonService();
   return readDaemonState();
 }

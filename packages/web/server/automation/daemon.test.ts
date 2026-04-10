@@ -251,6 +251,32 @@ describe('automation daemon', () => {
     });
   });
 
+  it('rejects daemon managed service lifecycle actions in desktop runtime mode', async () => {
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+
+    await expect(installDaemonServiceAndReadState()).rejects.toThrow(
+      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+    );
+    await expect(startDaemonServiceAndReadState()).rejects.toThrow(
+      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+    );
+    await expect(restartDaemonServiceAndReadState()).rejects.toThrow(
+      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+    );
+    await expect(stopDaemonServiceAndReadState()).rejects.toThrow(
+      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+    );
+    await expect(uninstallDaemonServiceAndReadState()).rejects.toThrow(
+      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+    );
+
+    expect(installManagedDaemonServiceMock).not.toHaveBeenCalled();
+    expect(startManagedDaemonServiceMock).not.toHaveBeenCalled();
+    expect(restartManagedDaemonServiceIfInstalledMock).not.toHaveBeenCalled();
+    expect(stopManagedDaemonServiceMock).not.toHaveBeenCalled();
+    expect(uninstallManagedDaemonServiceMock).not.toHaveBeenCalled();
+  });
+
   it('runs daemon lifecycle actions and rejects restart when the service is not installed', async () => {
     const dir = createTempDir();
     const logFile = join(dir, 'personal-agentd.log');

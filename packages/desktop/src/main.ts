@@ -172,6 +172,14 @@ async function restartActiveHost(): Promise<void> {
   }
 }
 
+async function checkForDesktopUpdates(): Promise<void> {
+  try {
+    await updateManager?.checkForUpdates({ userInitiated: true });
+  } catch (error) {
+    reportDesktopError(error);
+  }
+}
+
 async function bootstrapDesktopApp(): Promise<void> {
   configureDesktopRuntimeEnvironment();
   hostManager = new HostManager();
@@ -260,6 +268,7 @@ async function bootstrapDesktopApp(): Promise<void> {
     onHostStateChanged: () => {
       trayController?.refresh();
     },
+    onCheckForUpdates: () => checkForDesktopUpdates(),
   });
 
   updateManager.start();

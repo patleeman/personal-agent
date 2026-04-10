@@ -60,14 +60,15 @@ function DaemonSection({
     );
   }
 
+  const desktopOwned = daemon.service.platform === 'desktop';
   const online = daemon.runtime.running;
   const tone = daemon.warnings.length > 0 ? 'warning' : online ? 'success' : 'danger';
   const logLines = takeLogLines(daemon.log, 24);
 
   return (
     <Section
-      title="Daemon"
-      action={(
+      title={desktopOwned ? 'Desktop runtime' : 'Daemon'}
+      action={desktopOwned ? undefined : (
         <button
           type="button"
           onClick={onRestart}
@@ -81,14 +82,14 @@ function DaemonSection({
       <div className="rounded-xl bg-base/65 px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           {statusPill(tone, online ? 'running' : 'offline')}
-          <span className="text-[12px] text-secondary">{daemon.runtime.moduleCount} modules</span>
+          <span className="text-[12px] text-secondary">{desktopOwned ? 'desktop-owned runtime' : `${daemon.runtime.moduleCount} modules`}</span>
           {typeof daemon.runtime.queueDepth === 'number' && typeof daemon.runtime.maxQueueDepth === 'number' ? (
             <span className="text-[12px] text-dim">queue {daemon.runtime.queueDepth}/{daemon.runtime.maxQueueDepth}</span>
           ) : null}
         </div>
         <p className="mt-2 break-words text-[12px] text-dim">
-          {daemon.runtime.startedAt ? `started ${timeAgo(daemon.runtime.startedAt)}` : 'not started'}
-          {daemon.runtime.pid ? ` · pid ${daemon.runtime.pid}` : ''}
+          {desktopOwned ? 'App-owned background runtime for runs, tasks, and automation.' : daemon.runtime.startedAt ? `started ${timeAgo(daemon.runtime.startedAt)}` : 'not started'}
+          {!desktopOwned && daemon.runtime.pid ? ` · pid ${daemon.runtime.pid}` : ''}
         </p>
         {issueSummary(daemon.warnings) ? <p className="mt-2 text-[12px] leading-relaxed text-warning">{issueSummary(daemon.warnings)}</p> : null}
       </div>

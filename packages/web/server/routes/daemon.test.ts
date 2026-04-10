@@ -43,6 +43,13 @@ vi.mock('../shared/internalAttention.js', () => ({
 
 import { registerCompanionDaemonRoutes, registerDaemonRoutes } from './daemon.js';
 
+type TestRequest = Record<string, never>;
+type TestResponse = {
+  status: ReturnType<typeof vi.fn>;
+  json: ReturnType<typeof vi.fn>;
+};
+type TestHandler = (req: TestRequest, res: TestResponse) => Promise<void> | void;
+
 describe('registerDaemonRoutes', () => {
   beforeEach(() => {
     installDaemonServiceAndReadStateMock.mockReset();
@@ -57,12 +64,12 @@ describe('registerDaemonRoutes', () => {
   });
 
   function createHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, TestHandler> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: TestHandler) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: TestHandler) => {
         handlers[`POST ${path}`] = next;
       }),
     };
@@ -80,12 +87,12 @@ describe('registerDaemonRoutes', () => {
   }
 
   function createCompanionHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, TestHandler> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: TestHandler) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: TestHandler) => {
         handlers[`POST ${path}`] = next;
       }),
     };
@@ -152,6 +159,43 @@ describe('registerDaemonRoutes', () => {
     expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledWith('daemon');
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(6);
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('daemon');
+  });
+
+  it('returns 400 for desktop-runtime daemon lifecycle errors', async () => {
+    const { installHandler, startHandler, restartHandler, stopHandler, uninstallHandler } = createHarness();
+    const { restartHandler: companionRestartHandler } = createCompanionHarness();
+    const desktopError = new Error('Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.');
+
+    installDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const installRes = createResponse();
+    await installHandler({}, installRes);
+    expect(installRes.status).toHaveBeenCalledWith(400);
+    expect(installRes.json).toHaveBeenCalledWith({ error: desktopError.message });
+
+    startDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const startRes = createResponse();
+    await startHandler({}, startRes);
+    expect(startRes.status).toHaveBeenCalledWith(400);
+
+    restartDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const restartRes = createResponse();
+    await restartHandler({}, restartRes);
+    expect(restartRes.status).toHaveBeenCalledWith(400);
+
+    stopDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const stopRes = createResponse();
+    await stopHandler({}, stopRes);
+    expect(stopRes.status).toHaveBeenCalledWith(400);
+
+    uninstallDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const uninstallRes = createResponse();
+    await uninstallHandler({}, uninstallRes);
+    expect(uninstallRes.status).toHaveBeenCalledWith(400);
+
+    restartDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
+    const companionRestartRes = createResponse();
+    await companionRestartHandler({}, companionRestartRes);
+    expect(companionRestartRes.status).toHaveBeenCalledWith(400);
   });
 
   it('logs and returns 500 when daemon state or lifecycle handlers fail', async () => {

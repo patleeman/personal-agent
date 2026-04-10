@@ -11,6 +11,7 @@ export function registerDesktopIpc(options: {
   hostManager: HostManager;
   windowController: DesktopWindowController;
   onHostStateChanged?: () => void;
+  onCheckForUpdates?: () => Promise<void> | void;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
   const appEventSubscriptions = new Map<string, () => void>();
@@ -1364,5 +1365,9 @@ export function registerDesktopIpc(options: {
       ?? options.hostManager.getActiveHostId();
     await options.hostManager.restartHost(hostId);
     options.onHostStateChanged?.();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:check-for-updates`, async () => {
+    await options.onCheckForUpdates?.();
   });
 }
