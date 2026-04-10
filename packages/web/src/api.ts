@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, CompanionAuthAdminState, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -301,7 +301,7 @@ export const api = {
 
     return post<WebUiState>('/web-ui/service/uninstall');
   },
-  setWebUiConfig: async (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => {
+  setWebUiConfig: async (input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       return desktopBridge.updateWebUiConfig(input);
@@ -344,10 +344,6 @@ export const api = {
   exchangeDesktopPairingCode: (code: string, deviceLabel?: string) =>
     post<DesktopAuthSessionState>('/desktop-auth/exchange', { code, deviceLabel }),
   logoutDesktopSession: () => post<{ ok: boolean }>('/desktop-auth/logout'),
-  companionSession: () => get<CompanionAuthSessionState>('/companion-auth/session'),
-  exchangeCompanionPairingCode: (code: string, deviceLabel?: string) =>
-    post<CompanionAuthSessionState>('/companion-auth/exchange', { code, deviceLabel }),
-  logoutCompanionSession: () => post<{ ok: boolean }>('/companion-auth/logout'),
   activity: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -379,18 +375,6 @@ export const api = {
     }
 
     return get<SessionMeta>(`/sessions/${encodeURIComponent(id)}/meta`);
-  },
-  companionConversationList: (options?: { archivedOffset?: number; archivedLimit?: number }) => {
-    const params = new URLSearchParams();
-    if (typeof options?.archivedOffset === 'number' && Number.isInteger(options.archivedOffset) && options.archivedOffset >= 0) {
-      params.set('archivedOffset', String(options.archivedOffset));
-    }
-    if (typeof options?.archivedLimit === 'number' && Number.isInteger(options.archivedLimit) && options.archivedLimit > 0) {
-      params.set('archivedLimit', String(options.archivedLimit));
-    }
-
-    const query = params.toString();
-    return get<CompanionConversationListResult>(`/companion/conversations${query ? `?${query}` : ''}`);
   },
   sessionDetail: async (id: string, options?: {
     tailBlocks?: number;

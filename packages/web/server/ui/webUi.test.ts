@@ -90,7 +90,6 @@ function createStatus(overrides: Record<string, unknown> = {}) {
 describe('web UI config', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
-    delete process.env.PA_WEB_COMPANION_PORT;
     delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
 
     filterSystemLogTailLinesMock.mockReset();
@@ -115,21 +114,19 @@ describe('web UI config', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it('uses the default companion port and resume fallback prompt when no config file exists', () => {
+  it('uses the default resume fallback prompt when no config file exists', () => {
     configureTempWebUiConfig();
 
     const config = readWebUiConfig();
-    expect(config.companionPort).toBe(3742);
     expect(config.resumeFallbackPrompt).toBe(DEFAULT_RESUME_FALLBACK_PROMPT);
   });
 
-  it('persists a custom companion port and resume fallback prompt', () => {
+  it('persists a custom resume fallback prompt', () => {
     configureTempWebUiConfig();
 
-    writeWebUiConfig({ companionPort: 4800, resumeFallbackPrompt: '  Pick up from the last successful step.  ' });
+    writeWebUiConfig({ resumeFallbackPrompt: '  Pick up from the last successful step.  ' });
 
     const config = readWebUiConfig();
-    expect(config.companionPort).toBe(4800);
     expect(config.resumeFallbackPrompt).toBe('Pick up from the last successful step.');
   });
 
@@ -148,7 +145,6 @@ describe('web UI config', () => {
     writeFileSync(logFile, 'alpha\nskip\n beta  \n');
     writeWebUiConfig({
       port: 4100,
-      companionPort: 4800,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Resume from the last good step.',
     });
@@ -184,8 +180,6 @@ describe('web UI config', () => {
         repoRoot: '/repo',
         port: 4100,
         url: 'http://127.0.0.1:4100',
-        companionPort: 4800,
-        companionUrl: 'http://127.0.0.1:4800',
         tailscaleServe: true,
         tailscaleUrl: 'https://tailnet.test/ui',
         resumeFallbackPrompt: 'Resume from the last good step.',
@@ -211,7 +205,6 @@ describe('web UI config', () => {
   it('falls back to default service state when inspection fails', () => {
     configureTempWebUiConfig();
     writeWebUiConfig({
-      companionPort: 4900,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Resume from the last step.',
     });
@@ -233,8 +226,6 @@ describe('web UI config', () => {
         repoRoot: process.cwd(),
         port: DEFAULT_WEB_UI_PORT,
         url: `http://127.0.0.1:${DEFAULT_WEB_UI_PORT}`,
-        companionPort: 4900,
-        companionUrl: 'http://127.0.0.1:4900',
         tailscaleServe: true,
         tailscaleUrl: undefined,
         resumeFallbackPrompt: 'Resume from the last step.',
@@ -286,20 +277,18 @@ describe('web UI config', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = createTempDir('pa-desktop-state-');
     configureTempWebUiConfig();
     writeWebUiConfig({
-      companionPort: 4900,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Resume inside desktop.',
     });
 
     expect(readWebUiState()).toEqual(expect.objectContaining({
-      warnings: ['The packaged desktop shell does not expose the companion or full web UI over Tailnet HTTPS. Run a managed web UI separately if you need remote browser or companion access.'],
+      warnings: ['The packaged desktop shell does not expose Tailnet HTTPS access. Run a managed web UI separately if you need remote browser access.'],
       service: expect.objectContaining({
         platform: 'desktop',
         identifier: 'desktop-app-shell',
         manifestPath: 'desktop app bundle',
         port: 0,
         url: 'personal-agent://app/',
-        companionUrl: 'personal-agent://app/',
         tailscaleServe: true,
       }),
       log: expect.objectContaining({
@@ -336,18 +325,17 @@ describe('web UI config', () => {
 
   it('syncs configured tailscale settings and wraps service lifecycle operations', () => {
     configureTempWebUiConfig();
-    writeWebUiConfig({ port: 4200, companionPort: 4950 });
+    writeWebUiConfig({ port: 4200 });
     getWebUiServiceStatusMock.mockReturnValue(createStatus({ port: 4200, url: 'http://127.0.0.1:4200' }));
 
     syncConfiguredWebUiTailscaleServe(true);
     expect(syncWebUiTailscaleServeMock).toHaveBeenCalledWith({
       enabled: true,
       port: 4200,
-      companionPort: 4950,
     });
 
     expect(installWebUiServiceAndReadState()).toEqual(expect.objectContaining({
-      service: expect.objectContaining({ port: 4200, companionPort: 4950 }),
+      service: expect.objectContaining({ port: 4200 }),
     }));
     expect(startWebUiServiceAndReadState()).toEqual(expect.objectContaining({
       service: expect.objectContaining({ port: 4200 }),

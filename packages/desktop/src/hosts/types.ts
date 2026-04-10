@@ -255,7 +255,7 @@ export interface HostController {
   readAppStatus?(): Promise<unknown>;
   readDaemonState?(): Promise<unknown>;
   readWebUiState?(): Promise<unknown>;
-  updateWebUiConfig?(input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<unknown>;
+  updateWebUiConfig?(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<unknown>;
   readCompanionAuthState?(): Promise<unknown>;
   createCompanionPairingCode?(): Promise<unknown>;
   revokeCompanionSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;

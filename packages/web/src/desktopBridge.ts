@@ -16,12 +16,14 @@ import type {
   ConversationAutomationWorkspaceState,
   ConversationTitleSettingsState,
   DefaultCwdState,
+  DaemonState,
   ModelProviderState,
   ModelState,
   ProfileState,
   ProviderAuthState,
   ProviderOAuthLoginState,
   VaultRootState,
+  WebUiState,
   ConversationBootstrapState,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
@@ -65,7 +67,7 @@ export interface PersonalAgentDesktopBridge {
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;
-  updateWebUiConfig(input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<WebUiState>;
+  updateWebUiConfig(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<WebUiState>;
   readCompanionAuthState(): Promise<CompanionAuthAdminState>;
   createCompanionPairingCode(): Promise<CompanionPairingCodeResult>;
   revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: CompanionAuthAdminState }>;

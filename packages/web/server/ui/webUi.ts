@@ -52,8 +52,6 @@ interface WebUiServiceSummary {
   repoRoot: string;
   port: number;
   url: string;
-  companionPort: number;
-  companionUrl: string;
   tailscaleServe: boolean;
   tailscaleUrl?: string;
   resumeFallbackPrompt: string;
@@ -98,7 +96,6 @@ export function syncConfiguredWebUiTailscaleServe(enabled: boolean): void {
   syncWebUiTailscaleServe({
     enabled,
     port: config.port,
-    companionPort: config.companionPort,
   });
 }
 
@@ -158,8 +155,6 @@ function readDesktopWebUiServiceSummary(config: WebUiConfigState): WebUiServiceS
     repoRoot: WEB_REPO_ROOT,
     port: 0,
     url: DESKTOP_SHELL_URL,
-    companionPort: config.companionPort,
-    companionUrl: DESKTOP_SHELL_URL,
     tailscaleServe: config.useTailscaleServe,
     tailscaleUrl: undefined,
     resumeFallbackPrompt: config.resumeFallbackPrompt,
@@ -187,8 +182,6 @@ function readWebUiServiceSummary(): WebUiServiceSummary {
       repoRoot: status.repoRoot,
       port: status.port,
       url: status.url,
-      companionPort: config.companionPort,
-      companionUrl: `http://127.0.0.1:${config.companionPort}`,
       tailscaleServe: config.useTailscaleServe,
       tailscaleUrl,
       resumeFallbackPrompt: config.resumeFallbackPrompt,
@@ -204,8 +197,6 @@ function readWebUiServiceSummary(): WebUiServiceSummary {
       repoRoot: process.cwd(),
       port: DEFAULT_WEB_UI_PORT,
       url: `http://127.0.0.1:${DEFAULT_WEB_UI_PORT}`,
-      companionPort: config.companionPort,
-      companionUrl: `http://127.0.0.1:${config.companionPort}`,
       tailscaleServe: config.useTailscaleServe,
       tailscaleUrl,
       resumeFallbackPrompt: config.resumeFallbackPrompt,
@@ -227,7 +218,7 @@ export function readWebUiState(): WebUiStateSnapshot {
   }
 
   if (isDesktopRuntime() && service.tailscaleServe) {
-    warnings.push('The packaged desktop shell does not expose the companion or full web UI over Tailnet HTTPS. Run a managed web UI separately if you need remote browser or companion access.');
+    warnings.push('The packaged desktop shell does not expose Tailnet HTTPS access. Run a managed web UI separately if you need remote browser access.');
   } else if (service.tailscaleServe && !service.tailscaleUrl) {
     warnings.push('Tailscale Serve is enabled, but a Tailnet URL could not be resolved from `tailscale status --json`. Ensure Tailscale is running and authenticated on this machine.');
   }

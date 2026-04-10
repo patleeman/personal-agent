@@ -359,7 +359,7 @@ describe('runPresentation', () => {
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
           taskSlug: 'web-ui-smoke',
-          shellCommand: 'PA_WEB_PORT=4232 PA_WEB_COMPANION_PORT=4233 npm --prefix packages/web run dev',
+          shellCommand: 'PA_WEB_PORT=4232 npm --prefix packages/web run dev',
         },
         source: {
           type: 'tool',

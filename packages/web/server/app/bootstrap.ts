@@ -14,29 +14,18 @@ import {
 import { subscribeProviderOAuthLogins } from '../models/providerAuth.js';
 import { createServiceAttentionMonitor, type ServiceAttentionMonitorOptions } from '../shared/internalAttention.js';
 import { startAppEventMonitor } from '../shared/appEvents.js';
-import { shouldServeCompanionIndex } from '../ui/companionSpaIndex.js';
 
-export function createServerApps(): { app: Express; companionApp: Express } {
+export function createServerApps(): { app: Express } {
   const app = express();
-  const companionApp = express();
 
-  for (const serverApp of [app, companionApp]) {
-    serverApp.set('etag', false);
-    serverApp.set('trust proxy', true);
-    serverApp.use(applyWebSecurityHeaders);
-    serverApp.use(express.json({ limit: '25mb' }));
-    serverApp.use(webRequestLoggingMiddleware);
-    serverApp.use(enforceSameOriginUnsafeRequests);
-  }
+  app.set('etag', false);
+  app.set('trust proxy', true);
+  app.use(applyWebSecurityHeaders);
+  app.use(express.json({ limit: '25mb' }));
+  app.use(webRequestLoggingMiddleware);
+  app.use(enforceSameOriginUnsafeRequests);
 
-  companionApp.use((req, _res, next) => {
-    if (req.url === '/app/api' || req.url.startsWith('/app/api/')) {
-      req.url = req.url.slice('/app'.length);
-    }
-    next();
-  });
-
-  return { app, companionApp };
+  return { app };
 }
 
 export function startBootstrapMonitors(options: {
@@ -122,63 +111,14 @@ export function startConversationRecovery(options: {
 
 export function mountStaticServerApps(options: {
   app: Express;
-  companionApp: Express;
   distDir: string;
-  companionDistDir: string;
-  distAssetsDir: string;
-  companionDisabled: boolean;
-  loopbackHost: string;
-  companionPort: number;
 }): void {
   const {
     app,
-    companionApp,
     distDir,
-    companionDistDir,
-    distAssetsDir,
-    companionDisabled,
-    loopbackHost,
-    companionPort,
   } = options;
 
   if (existsSync(distDir)) {
-    companionApp.use('/assets', express.static(distAssetsDir));
-    companionApp.use('/app', express.static(companionDistDir));
-    companionApp.get('/', (_req, res) => {
-      res.redirect('/app/inbox');
-    });
-    companionApp.use(express.static(companionDistDir, { index: false }));
-    companionApp.get('*', (req, res, next) => {
-      if (!shouldServeCompanionIndex(req.path)) {
-        next();
-        return;
-      }
-
-      res.sendFile(join(companionDistDir, 'index.html'));
-    });
-  } else {
-    companionApp.get('*', (_req, res) => {
-      res.send(
-        '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">'
-          + 'personal-agent companion\n\n'
-          + 'SPA not built yet.\n'
-          + 'Run: npm run build in packages/web\n'
-          + '</pre>',
-      );
-    });
-  }
-
-  if (existsSync(distDir)) {
-    if (companionDisabled) {
-      app.get('/app*', (_req, res) => {
-        res.sendFile(join(companionDistDir, 'index.html'));
-      });
-    } else {
-      app.get('/app*', (req, res) => {
-        const search = typeof req.url === 'string' && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-        res.redirect(`http://${loopbackHost}:${companionPort}${req.path}${search}`);
-      });
-    }
     app.use(express.static(distDir));
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api/')) {
@@ -203,16 +143,12 @@ export function mountStaticServerApps(options: {
 
 export function startServerListeners(options: {
   app: Express;
-  companionApp: Express;
   port: number;
-  companionPort: number;
   loopbackHost: string;
-  companionDisabled: boolean;
   getCurrentProfile: () => string;
   getDefaultWebCwd: () => string;
   repoRoot: string;
   distDir: string;
-  companionDistDir: string;
 }): void {
   options.app.listen(options.port, options.loopbackHost, () => {
     logInfo('web ui started', {
@@ -223,15 +159,4 @@ export function startServerListeners(options: {
       dist: options.distDir,
     });
   });
-
-  if (!options.companionDisabled) {
-    options.companionApp.listen(options.companionPort, options.loopbackHost, () => {
-      logInfo('companion service started', {
-        url: `http://${options.loopbackHost}:${options.companionPort}`,
-        profile: options.getCurrentProfile(),
-        repoRoot: options.repoRoot,
-        dist: options.companionDistDir,
-      });
-    });
-  }
 }

@@ -209,8 +209,6 @@ describe('LocalHostController', () => {
         running: true,
         platform: 'desktop',
         identifier: 'web-ui',
-        companionPort: 4832,
-        companionUrl: 'http://127.0.0.1:4832',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the task.',
       },
@@ -256,14 +254,12 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
-    await expect(controller.updateWebUiConfig?.({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' })).resolves.toEqual({
+    await expect(controller.updateWebUiConfig?.({ resumeFallbackPrompt: 'Resume the task.' })).resolves.toEqual({
       warnings: [],
       service: {
         running: true,
         platform: 'desktop',
         identifier: 'web-ui',
-        companionPort: 4832,
-        companionUrl: 'http://127.0.0.1:4832',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the task.',
       },
@@ -295,7 +291,7 @@ describe('LocalHostController', () => {
       archivedSessionIds: ['conversation-6'],
     });
 
-    expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' });
+    expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
     expect(readDesktopCompanionAuthState).toHaveBeenCalledTimes(1);
     expect(createDesktopCompanionPairingCode).toHaveBeenCalledTimes(1);
     expect(revokeDesktopCompanionSession).toHaveBeenCalledWith('session-1');

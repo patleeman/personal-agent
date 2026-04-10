@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildApiPath, COMPANION_API_PREFIX, DESKTOP_API_PREFIX, resolveApiPrefix } from './apiBase.js';
+import { buildApiPath, DESKTOP_API_PREFIX, resolveApiPrefix } from './apiBase.js';
 
 describe('resolveApiPrefix', () => {
   it('uses the desktop api prefix for desktop routes', () => {
@@ -7,9 +7,9 @@ describe('resolveApiPrefix', () => {
     expect(resolveApiPrefix('/conversations/conv-123')).toBe(DESKTOP_API_PREFIX);
   });
 
-  it('uses the companion api prefix for companion routes', () => {
-    expect(resolveApiPrefix('/app')).toBe(COMPANION_API_PREFIX);
-    expect(resolveApiPrefix('/app/conversations/conv-123')).toBe(COMPANION_API_PREFIX);
+  it('ignores legacy companion paths and still uses the desktop api prefix', () => {
+    expect(resolveApiPrefix('/app')).toBe(DESKTOP_API_PREFIX);
+    expect(resolveApiPrefix('/app/conversations/conv-123')).toBe(DESKTOP_API_PREFIX);
   });
 });
 
@@ -18,7 +18,7 @@ describe('buildApiPath', () => {
     expect(buildApiPath('/sessions', '/conversations')).toBe('/api/sessions');
   });
 
-  it('builds companion api urls', () => {
-    expect(buildApiPath('/companion-auth/session', '/app/conversations')).toBe('/app/api/companion-auth/session');
+  it('always builds standard api urls', () => {
+    expect(buildApiPath('/companion-auth/session', '/app/conversations')).toBe('/api/companion-auth/session');
   });
 });

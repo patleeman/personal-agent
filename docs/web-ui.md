@@ -30,7 +30,6 @@ Useful notes:
 
 - `pa ui` with no subcommand shows status instead of launching a server
 - default local address is `http://localhost:3741`
-- default companion port is `3742`
 - if the managed service is already healthy on the requested port, foreground launch reuses it instead of starting a duplicate server
 
 ## Main desktop routes
@@ -62,7 +61,7 @@ Important behaviors:
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
 - working directory and model preferences stay attached to the conversation
-- desktop and companion surfaces can watch the same live conversation
+- desktop and remote browser sessions can watch the same live conversation
 
 ## Inbox and notifications
 
@@ -126,29 +125,9 @@ When the web UI is running inside the Electron shell on the local desktop host, 
 
 ## Companion surface
 
-The companion/mobile UI lives under:
-
-```text
-/app
-```
-
-It is intentionally narrower than the desktop UI.
-
-Current companion routes are:
-
-- `/app/inbox`
-- `/app/conversations`
-- `/app/conversations/:id`
-- `/app/tasks`
-- `/app/tasks/:id`
-- `/app/system`
-
 ## Pairing and Tailscale Serve
 
-When Tailscale Serve is enabled for the web UI:
-
-- the full desktop UI is exposed at the Tailnet root (`/`)
-- the companion surface is exposed at `/app`
+When Tailscale Serve is enabled for the web UI, the full browser UI is exposed at the Tailnet root (`/`).
 
 Pairing model:
 

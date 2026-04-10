@@ -90,7 +90,6 @@ export class LocalHostController implements HostController {
   }
 
   async updateWebUiConfig(input: {
-    companionPort?: number;
     useTailscaleServe?: boolean;
     resumeFallbackPrompt?: string;
   }): Promise<unknown> {

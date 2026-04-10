@@ -33,7 +33,6 @@ export interface LocalApiModule {
   readDesktopDaemonState(): Promise<unknown>;
   readDesktopWebUiState(): Promise<unknown>;
   updateDesktopWebUiConfig(input: {
-    companionPort?: number;
     useTailscaleServe?: boolean;
     resumeFallbackPrompt?: string;
   }): Promise<unknown>;

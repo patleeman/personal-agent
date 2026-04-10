@@ -45,7 +45,6 @@ Example:
   },
   "webUi": {
     "port": 3741,
-    "companionPort": 3742,
     "useTailscaleServe": false,
     "resumeFallbackPrompt": "Continue from where you left off."
   }
@@ -146,7 +145,6 @@ The most useful overrides are:
 - `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay directory
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — override daemon socket path
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — force Tailscale Serve on/off for the web UI
-- `PA_WEB_COMPANION_PORT` — override the companion port
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` — Pi execution timeout
 - `PI_OPENAI_NATIVE_COMPACTION=0` — disable the built-in OpenAI/Codex native compaction replay extension
 - `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` — show UI notices when native compaction replay activates or falls back

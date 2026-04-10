@@ -909,8 +909,6 @@ describe('api desktop transport', () => {
         running: true,
         platform: 'desktop',
         identifier: 'web-ui',
-        companionPort: 4832,
-        companionUrl: 'http://127.0.0.1:4832',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the task.',
       },
@@ -961,14 +959,14 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const webUiState = await api.setWebUiConfig({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' });
+    const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
     const authState = await api.companionAuthState();
     const pairing = await api.createCompanionPairingCode();
     const revoked = await api.revokeCompanionSession('session-1');
     const layout = await api.openConversationTabs();
     const savedLayout = await api.setOpenConversationTabs(['conversation-4'], ['conversation-5'], ['conversation-6']);
 
-    expect(updateWebUiConfig).toHaveBeenCalledWith({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' });
+    expect(updateWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
     expect(readCompanionAuthState).toHaveBeenCalledTimes(1);
     expect(createCompanionPairingCode).toHaveBeenCalledTimes(1);
     expect(revokeCompanionSession).toHaveBeenCalledWith('session-1');
@@ -985,8 +983,6 @@ describe('api desktop transport', () => {
         running: true,
         platform: 'desktop',
         identifier: 'web-ui',
-        companionPort: 4832,
-        companionUrl: 'http://127.0.0.1:4832',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the task.',
       },
@@ -1537,8 +1533,6 @@ describe('api desktop transport', () => {
           running: true,
           platform: 'desktop',
           identifier: 'web-ui',
-          companionPort: 4832,
-          companionUrl: 'http://127.0.0.1:4832',
           tailscaleServe: false,
           resumeFallbackPrompt: 'Resume the task.',
         },
@@ -1590,7 +1584,7 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const webUiState = await api.setWebUiConfig({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' });
+    const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
     const authState = await api.companionAuthState();
     const pairing = await api.createCompanionPairingCode();
     const revoked = await api.revokeCompanionSession('session-1');
@@ -1606,7 +1600,7 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/web-ui/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companionPort: 4832, resumeFallbackPrompt: 'Resume the task.' }),
+      body: JSON.stringify({ resumeFallbackPrompt: 'Resume the task.' }),
     });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/companion-auth', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/companion-auth/pairing-code', {
@@ -1635,8 +1629,6 @@ describe('api desktop transport', () => {
         running: true,
         platform: 'desktop',
         identifier: 'web-ui',
-        companionPort: 4832,
-        companionUrl: 'http://127.0.0.1:4832',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the task.',
       },

@@ -426,8 +426,6 @@ export interface WebUiServiceSummary {
   repoRoot: string;
   port: number;
   url: string;
-  companionPort: number;
-  companionUrl: string;
   tailscaleServe: boolean;
   tailscaleUrl?: string;
   resumeFallbackPrompt: string;
@@ -463,18 +461,6 @@ export interface SessionMeta {
   attentionUnreadActivityCount?: number;
   attentionActivityIds?: string[];
   deferredResumes?: DeferredResumeSummary[];
-}
-
-export interface CompanionConversationListResult {
-  live: SessionMeta[];
-  needsReview: SessionMeta[];
-  active: SessionMeta[];
-  archived: SessionMeta[];
-  archivedTotal: number;
-  archivedOffset: number;
-  archivedLimit: number;
-  hasMoreArchived: boolean;
-  workspaceSessionIds: string[];
 }
 
 export type DisplayBlock =
@@ -686,10 +672,6 @@ export interface CompanionPairingCodeResult {
   code: string;
   createdAt: string;
   expiresAt: string;
-}
-
-export interface CompanionAuthSessionState {
-  session: CompanionAuthSessionSummary;
 }
 
 export interface DesktopAuthSessionState {

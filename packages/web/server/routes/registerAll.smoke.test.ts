@@ -39,9 +39,7 @@ describe('registerServerRoutes smoke test', () => {
   const profilesRoot = join(tempRoot, 'profiles');
 
   let appBaseUrl = '';
-  let companionBaseUrl = '';
   let closeAppServer: (() => Promise<void>) | null = null;
-  let closeCompanionServer: (() => Promise<void>) | null = null;
 
   beforeAll(async () => {
     mkdirSync(workspaceDir, { recursive: true });
@@ -91,22 +89,16 @@ describe('registerServerRoutes smoke test', () => {
     };
 
     const app = express();
-    const companionApp = express();
     app.use(express.json({ limit: '5mb' }));
-    companionApp.use(express.json({ limit: '5mb' }));
-    registerServerRoutes({ app, companionApp, context });
+    registerServerRoutes({ app, context });
 
     const appServer = await startServer(app);
-    const companionServer = await startServer(companionApp);
     appBaseUrl = appServer.baseUrl;
-    companionBaseUrl = companionServer.baseUrl;
     closeAppServer = appServer.close;
-    closeCompanionServer = companionServer.close;
   });
 
   afterAll(async () => {
     await closeAppServer?.();
-    await closeCompanionServer?.();
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
@@ -150,47 +142,15 @@ describe('registerServerRoutes smoke test', () => {
     });
   });
 
-  it('serves companion pairing admin routes through the desktop app surface and keeps the companion surface gated', async () => {
-    const [pairingCodeResponse, gatedPairingCodeResponse] = await Promise.all([
-      fetch(`${appBaseUrl}/api/companion-auth/pairing-code`, {
-        method: 'POST',
-      }),
-      fetch(`${companionBaseUrl}/api/companion-auth/pairing-code`, {
-        method: 'POST',
-      }),
-    ]);
+  it('serves remote pairing admin routes through the main app surface', async () => {
+    const pairingCodeResponse = await fetch(`${appBaseUrl}/api/companion-auth/pairing-code`, {
+      method: 'POST',
+    });
 
     expect(pairingCodeResponse.status).toBe(201);
-    expect(gatedPairingCodeResponse.status).toBe(401);
-    const pairingCodeBody = await pairingCodeResponse.json() as { code: string };
-
-    const exchangeResponse = await fetch(`${companionBaseUrl}/api/companion-auth/exchange`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: pairingCodeBody.code }),
-    });
-    expect(exchangeResponse.status).toBe(201);
-    const companionCookie = exchangeResponse.headers.get('set-cookie');
-    expect(companionCookie).toContain('pa_companion=');
-
-    const [liveSessionsResponse, conversationsResponse] = await Promise.all([
-      fetch(`${companionBaseUrl}/api/live-sessions`, {
-        headers: { cookie: companionCookie ?? '' },
-      }),
-      fetch(`${companionBaseUrl}/api/companion/conversations`, {
-        headers: { cookie: companionCookie ?? '' },
-      }),
-    ]);
-
-    expect(liveSessionsResponse.status).toBe(200);
-    expect(liveSessionsResponse.headers.get('set-cookie')).toContain('pa_companion=');
-    expect(conversationsResponse.status).toBe(200);
-    expect(await liveSessionsResponse.json()).toEqual(expect.any(Array));
-    expect(await conversationsResponse.json()).toEqual(expect.objectContaining({
-      live: expect.any(Array),
-      needsReview: expect.any(Array),
-      active: expect.any(Array),
-      archived: expect.any(Array),
+    expect(await pairingCodeResponse.json()).toEqual(expect.objectContaining({
+      code: expect.any(String),
+      expiresAt: expect.any(String),
     }));
   });
 });

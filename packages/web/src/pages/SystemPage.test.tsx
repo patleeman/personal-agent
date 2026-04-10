@@ -46,8 +46,6 @@ function renderSystem(initialEntry: string, element: React.ReactElement) {
               repoRoot: '/repo',
               port: 3741,
               url: 'http://127.0.0.1:3741',
-              companionPort: 3742,
-              companionUrl: 'http://127.0.0.1:3742',
               tailscaleServe: false,
               resumeFallbackPrompt: 'Resume the conversation from the latest durable state.',
               deployment: {
@@ -99,7 +97,7 @@ describe('System settings integration', () => {
     const html = renderSystem('/settings', <SystemSettingsContent />);
 
     expect(html).toContain('Runtime services');
-    expect(html).toContain('Web UI and daemon status, logs, and companion transport settings stay inline here.');
+    expect(html).toContain('Web UI and daemon status, logs, and remote browser access settings stay inline here.');
     expect(html).not.toContain('Restart daemon');
     expect(html).not.toContain('Restart web UI');
     expect(html).toContain('Queue');

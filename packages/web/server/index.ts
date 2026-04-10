@@ -205,10 +205,6 @@ import {
 } from './automation/deferredResumes.js';
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
-const COMPANION_DISABLED = process.env.PA_WEB_DISABLE_COMPANION === '1';
-const COMPANION_PORT = COMPANION_DISABLED
-  ? 0
-  : parseInt(process.env.PA_WEB_COMPANION_PORT ?? String(readWebUiConfig().companionPort), 10);
 const LOOPBACK_HOST = '127.0.0.1';
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
@@ -1221,10 +1217,8 @@ startInboxCullLoop();
 const DIST_DIR =
   process.env.PA_WEB_DIST ??
   join(dirname(fileURLToPath(import.meta.url)), '../dist');
-const COMPANION_DIST_DIR = join(DIST_DIR, 'app');
-const DIST_ASSETS_DIR = join(DIST_DIR, 'assets');
 
-const { app, companionApp } = createServerApps();
+const { app } = createServerApps();
 
 startBootstrapMonitors({
   repoRoot: REPO_ROOT,
@@ -1264,33 +1258,22 @@ const routeContext = createServerRouteContext({
 
 registerServerRoutes({
   app,
-  companionApp,
   context: routeContext,
 });
 
 mountStaticServerApps({
   app,
-  companionApp,
   distDir: DIST_DIR,
-  companionDistDir: COMPANION_DIST_DIR,
-  distAssetsDir: DIST_ASSETS_DIR,
-  companionDisabled: COMPANION_DISABLED,
-  loopbackHost: LOOPBACK_HOST,
-  companionPort: COMPANION_PORT,
 });
 
 warmMemoryBrowserCaches(getCurrentProfile());
 
 startServerListeners({
   app,
-  companionApp,
   port: PORT,
-  companionPort: COMPANION_PORT,
   loopbackHost: LOOPBACK_HOST,
-  companionDisabled: COMPANION_DISABLED,
   getCurrentProfile,
   getDefaultWebCwd,
   repoRoot: REPO_ROOT,
   distDir: DIST_DIR,
-  companionDistDir: COMPANION_DIST_DIR,
 });

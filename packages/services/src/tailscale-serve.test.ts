@@ -26,43 +26,18 @@ describe('syncWebUiTailscaleServe', () => {
     );
   });
 
-  it('enables tailscale serve for both the desktop root and companion path when a companion port is provided', () => {
-    syncWebUiTailscaleServe({ enabled: true, port: 3741, companionPort: 3742 });
+  it('disables tailscale serve for the provided web UI port', () => {
+    syncWebUiTailscaleServe({ enabled: false, port: 3741 });
 
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      1,
-      'tailscale',
-      ['serve', '--bg', 'localhost:3741'],
-      { encoding: 'utf-8' },
-    );
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      2,
-      'tailscale',
-      ['serve', '--bg', '--set-path=/app', 'localhost:3742'],
-      { encoding: 'utf-8' },
-    );
-  });
-
-  it('disables tailscale serve for both the desktop root and companion path when a companion port is provided', () => {
-    syncWebUiTailscaleServe({ enabled: false, port: 3741, companionPort: 3742 });
-
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      1,
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
       'tailscale',
       ['serve', '--bg', 'localhost:3741', 'off'],
-      { encoding: 'utf-8' },
-    );
-    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
-      2,
-      'tailscale',
-      ['serve', '--bg', '--set-path=/app', 'localhost:3742', 'off'],
       { encoding: 'utf-8' },
     );
   });
 
   it('fails fast for invalid ports', () => {
     expect(() => syncWebUiTailscaleServe({ enabled: true, port: 0 })).toThrow('Invalid web UI port');
-    expect(() => syncWebUiTailscaleServe({ enabled: true, port: 3741, companionPort: 0 })).toThrow('Invalid web UI port');
     expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 
@@ -82,13 +57,11 @@ describe('syncWebUiTailscaleServe', () => {
     );
   });
 
-  it('reports which mapping failed when the companion path command errors', () => {
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 1, stdout: '', stderr: 'serve path already in use' });
+  it('reports which mapping failed when tailscale serve returns an error', () => {
+    mocks.spawnSync.mockReturnValueOnce({ status: 1, stdout: '', stderr: 'serve path already in use' });
 
-    expect(() => syncWebUiTailscaleServe({ enabled: true, port: 3741, companionPort: 3742 })).toThrow(
-      '/app -> localhost:3742',
+    expect(() => syncWebUiTailscaleServe({ enabled: true, port: 3741 })).toThrow(
+      '/ -> localhost:3741',
     );
   });
 });

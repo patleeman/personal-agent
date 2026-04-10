@@ -102,8 +102,6 @@ describe('SettingsPage', () => {
           repoRoot: '/Users/patrick/workingdir/personal-agent',
           port: 3000,
           url: 'http://127.0.0.1:3000',
-          companionPort: 3001,
-          companionUrl: 'http://127.0.0.1:3001',
           tailscaleServe: false,
           resumeFallbackPrompt: 'Continue where you left off.',
           deployment: {
@@ -266,7 +264,7 @@ describe('SettingsPage', () => {
         });
       }
 
-      if (key === 'system-companion-auth') {
+      if (key === 'system-remote-auth') {
         return buildUseApiResult({
           sessions: [],
           pendingPairings: [],

@@ -76,6 +76,5 @@ export interface ServerRouteContext {
 
 export interface RegisterServerRoutesInput {
   app: Express;
-  companionApp: Express;
   context: ServerRouteContext;
 }

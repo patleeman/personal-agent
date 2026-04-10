@@ -46,7 +46,7 @@ export function SystemSettingsContent({
         <p className="ui-card-meta max-w-3xl">
           {desktopShell && desktopEnvironment?.activeHostKind && desktopEnvironment.activeHostKind !== 'local'
             ? 'Daemon and web UI status for the current remote host stay inline here.'
-            : 'Web UI and daemon status, logs, and companion transport settings stay inline here.'}
+            : 'Web UI and daemon status, logs, and remote browser access settings stay inline here.'}
         </p>
       </div>
 

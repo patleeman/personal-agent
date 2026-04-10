@@ -1,6 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { COMPANION_APP_PATH, resolveCompanionRouteRedirect } from './companion/routes';
 import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
@@ -74,26 +73,6 @@ function ConversationsRouteRedirect() {
   return <Navigate to={redirectPath} replace />;
 }
 
-function CompanionRouteValidationBoundary() {
-  const location = useLocation();
-  const redirectPath = resolveCompanionRouteRedirect(location.pathname);
-
-  if (redirectPath) {
-    return <Navigate to={{ pathname: redirectPath, search: location.search }} replace />;
-  }
-
-  return <CompanionLayout />;
-}
-
-function isCompanionBrowserRoute(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  return window.location.pathname === COMPANION_APP_PATH
-    || window.location.pathname.startsWith(`${COMPANION_APP_PATH}/`);
-}
-
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
@@ -101,14 +80,6 @@ const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ defau
 const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
-const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
-const CompanionInboxPage = lazy(() => import('./companion/CompanionInboxPage').then((module) => ({ default: module.CompanionInboxPage })));
-const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
-const CompanionNewConversationPage = lazy(() => import('./companion/CompanionNewConversationPage').then((module) => ({ default: module.CompanionNewConversationPage })));
-const CompanionConversationPage = lazy(() => import('./companion/CompanionConversationPage').then((module) => ({ default: module.CompanionConversationPage })));
-const CompanionTasksPage = lazy(() => import('./companion/CompanionTasksPage').then((module) => ({ default: module.CompanionTasksPage })));
-const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDetailPage').then((module) => ({ default: module.CompanionTaskDetailPage })));
-const CompanionSystemPage = lazy(() => import('./companion/CompanionSystemPage').then((module) => ({ default: module.CompanionSystemPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -312,14 +283,6 @@ export function App() {
         return;
       case 'session_meta_changed':
         bumpConversationVersion(payload.sessionId);
-        if (isCompanionBrowserRoute()) {
-          setEventVersions((prev) => ({
-            ...prev,
-            sessions: prev.sessions + 1,
-          }));
-          return;
-        }
-
         void refreshSessionMeta(payload.sessionId);
         return;
       case 'session_file_changed':
@@ -332,14 +295,6 @@ export function App() {
         setAlerts(payload.snapshot);
         return;
       case 'sessions':
-        if (isCompanionBrowserRoute()) {
-          setEventVersions((prev) => ({
-            ...prev,
-            sessions: prev.sessions + 1,
-          }));
-          return;
-        }
-
         setSessions(payload.sessions);
         return;
       case 'tasks':
@@ -366,8 +321,6 @@ export function App() {
   }, [bumpConversationVersion, refreshSessionMeta, setActivity, setAlerts, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
 
   const bootstrapSnapshots = useCallback(() => {
-    const companionRoute = isCompanionBrowserRoute();
-
     void api.activity()
       .then((entries) => {
         setActivity({
@@ -387,15 +340,13 @@ export function App() {
         // Keep waiting for SSE or a later retry.
       });
 
-    if (!companionRoute) {
-      void fetchSessionsSnapshot()
-        .then((items) => {
-          setSessions(items);
-        })
-        .catch(() => {
-          // Keep waiting for SSE or a later retry.
-        });
-    }
+    void fetchSessionsSnapshot()
+      .then((items) => {
+        setSessions(items);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
 
     void api.tasks()
       .then((items) => {
@@ -567,16 +518,6 @@ export function App() {
               <ThemeProvider>
                 <BrowserRouter>
                   <Routes>
-                    <Route path="app/*" element={suspendRoute(<CompanionRouteValidationBoundary />)}>
-                      <Route index element={<Navigate to="/app/inbox" replace />} />
-                      <Route path="inbox" element={suspendRoute(<CompanionInboxPage />)} />
-                      <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
-                      <Route path="conversations/new" element={suspendRoute(<CompanionNewConversationPage />)} />
-                      <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />
-                      <Route path="tasks" element={suspendRoute(<CompanionTasksPage />)} />
-                      <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
-                      <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
-                    </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/conversations/new" replace />} />
                       <Route path="conversations" element={<ConversationsRouteRedirect />} />

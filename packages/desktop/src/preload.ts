@@ -36,7 +36,7 @@ const desktopBridge = {
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
-  updateWebUiConfig: (input: { companionPort?: number; useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) =>
+  updateWebUiConfig: (input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-web-ui-config`, input),
   readCompanionAuthState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-companion-auth-state`),
   createCompanionPairingCode: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-companion-pairing-code`),

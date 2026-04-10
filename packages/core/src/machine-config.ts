@@ -4,7 +4,6 @@ import { getConfigRoot } from './runtime/paths.js';
 
 export const DEFAULT_MACHINE_DEFAULT_PROFILE = 'shared';
 export const DEFAULT_WEB_UI_PORT = 3741;
-export const DEFAULT_WEB_UI_COMPANION_PORT = 3742;
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
 
 export type MachineConfigSectionKey = 'daemon' | 'webUi';
@@ -23,7 +22,6 @@ export interface MachineConfigOptions {
 
 export interface MachineWebUiConfigState {
   port: number;
-  companionPort: number;
   useTailscaleServe: boolean;
   resumeFallbackPrompt: string;
 }
@@ -36,7 +34,6 @@ export interface MachineVaultRootState {
 
 export interface WriteMachineWebUiConfigInput {
   port?: number;
-  companionPort?: number;
   useTailscaleServe?: boolean;
   resumeFallbackPrompt?: string;
 }
@@ -337,28 +334,8 @@ function normalizeWebUiConfigPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT
   return parsed > 0 && parsed <= 65535 ? parsed : fallback;
 }
 
-function normalizeWebUiCompanionPort(value: unknown, fallback = DEFAULT_WEB_UI_COMPANION_PORT): number {
-  return normalizeWebUiConfigPort(value, fallback);
-}
-
 export function finalizeMachineWebUiConfigState(config: MachineWebUiConfigState): MachineWebUiConfigState {
-  if (config.companionPort !== config.port) {
-    return config;
-  }
-
-  return {
-    ...config,
-    companionPort: config.port === DEFAULT_WEB_UI_COMPANION_PORT ? DEFAULT_WEB_UI_COMPANION_PORT + 1 : config.port + 1,
-  };
-}
-
-function parseWebUiConfigPort(value: string | undefined): number | undefined {
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : undefined;
+  return config;
 }
 
 function parseWebUiConfigBool(value: unknown): boolean | undefined {
@@ -384,12 +361,10 @@ function normalizeResumeFallbackPrompt(value: unknown): string {
 
 export function readMachineWebUiConfig(options: MachineConfigOptions = {}): MachineWebUiConfigState {
   const fromEnv = parseWebUiConfigBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
-  const companionPortFromEnv = parseWebUiConfigPort(process.env.PA_WEB_COMPANION_PORT);
   const section = readMachineConfigSection('webUi', options) ?? {};
 
   return finalizeMachineWebUiConfigState({
     port: normalizeWebUiConfigPort(section.port),
-    companionPort: companionPortFromEnv ?? normalizeWebUiCompanionPort(section.companionPort),
     useTailscaleServe: fromEnv ?? parseWebUiConfigBool(section.useTailscaleServe) ?? false,
     resumeFallbackPrompt: normalizeResumeFallbackPrompt(section.resumeFallbackPrompt),
   });
@@ -404,9 +379,6 @@ export function writeMachineWebUiConfig(
 
   const updated = finalizeMachineWebUiConfigState({
     port: input.port === undefined ? currentState.port : normalizeWebUiConfigPort(input.port, currentState.port),
-    companionPort: input.companionPort === undefined
-      ? currentState.companionPort
-      : normalizeWebUiCompanionPort(input.companionPort, currentState.companionPort),
     useTailscaleServe: input.useTailscaleServe === undefined ? currentState.useTailscaleServe : input.useTailscaleServe,
     resumeFallbackPrompt: input.resumeFallbackPrompt === undefined
       ? currentState.resumeFallbackPrompt
@@ -416,7 +388,6 @@ export function writeMachineWebUiConfig(
   updateMachineConfigSection('webUi', () => ({
     ...currentSection,
     port: updated.port,
-    companionPort: updated.companionPort,
     useTailscaleServe: updated.useTailscaleServe,
     resumeFallbackPrompt: updated.resumeFallbackPrompt,
   }), options);

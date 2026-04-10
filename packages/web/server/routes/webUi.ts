@@ -256,22 +256,15 @@ function handleWebUiServiceUninstall(_req: Request, res: Response): void {
 function handleWebUiConfigPatch(req: Request, res: Response): void {
   try {
     const {
-      companionPort,
       useTailscaleServe,
       resumeFallbackPrompt,
     } = req.body as {
-      companionPort?: unknown;
       useTailscaleServe?: unknown;
       resumeFallbackPrompt?: unknown;
     };
 
-    if (companionPort === undefined && useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
-      res.status(400).json({ error: 'Provide companionPort, useTailscaleServe, and/or resumeFallbackPrompt.' });
-      return;
-    }
-
-    if (companionPort !== undefined && (!Number.isInteger(companionPort) || Number(companionPort) <= 0 || Number(companionPort) > 65535)) {
-      res.status(400).json({ error: 'companionPort must be a valid port when provided.' });
+    if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
+      res.status(400).json({ error: 'Provide useTailscaleServe and/or resumeFallbackPrompt.' });
       return;
     }
 
@@ -286,12 +279,11 @@ function handleWebUiConfigPatch(req: Request, res: Response): void {
     }
 
     const savedConfig = writeWebUiConfig({
-      ...(companionPort !== undefined ? { companionPort: Number(companionPort) } : {}),
       ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
       ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
     });
 
-    if (useTailscaleServe !== undefined || companionPort !== undefined) {
+    if (useTailscaleServe !== undefined) {
       syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
     }
 
@@ -302,8 +294,6 @@ function handleWebUiConfigPatch(req: Request, res: Response): void {
       ...state,
       service: {
         ...state.service,
-        companionPort: savedConfig.companionPort,
-        companionUrl: `http://127.0.0.1:${savedConfig.companionPort}`,
         tailscaleServe: savedConfig.useTailscaleServe,
         resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
       },

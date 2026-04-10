@@ -551,10 +551,8 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
 
   const routes: RegisteredRoute[] = [];
   const appRouter = createRouteCollector(routes);
-  const companionRouter = createRouteCollector([]);
   registerServerRoutes({
     app: appRouter as never,
-    companionApp: companionRouter as never,
     context,
   });
 
@@ -1211,18 +1209,13 @@ export async function readDesktopWebUiState() {
 }
 
 export async function updateDesktopWebUiConfig(input: {
-  companionPort?: number;
   useTailscaleServe?: boolean;
   resumeFallbackPrompt?: string;
 }) {
-  const { companionPort, useTailscaleServe, resumeFallbackPrompt } = input;
+  const { useTailscaleServe, resumeFallbackPrompt } = input;
 
-  if (companionPort === undefined && useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
-    throw new Error('Provide companionPort, useTailscaleServe, and/or resumeFallbackPrompt.');
-  }
-
-  if (companionPort !== undefined && (!Number.isInteger(companionPort) || Number(companionPort) <= 0 || Number(companionPort) > 65535)) {
-    throw new Error('companionPort must be a valid port when provided.');
+  if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
+    throw new Error('Provide useTailscaleServe and/or resumeFallbackPrompt.');
   }
 
   if (useTailscaleServe !== undefined && typeof useTailscaleServe !== 'boolean') {
@@ -1234,12 +1227,11 @@ export async function updateDesktopWebUiConfig(input: {
   }
 
   const savedConfig = writeWebUiConfig({
-    ...(companionPort !== undefined ? { companionPort: Number(companionPort) } : {}),
     ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
     ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
   });
 
-  if (useTailscaleServe !== undefined || companionPort !== undefined) {
+  if (useTailscaleServe !== undefined) {
     syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
   }
 
@@ -1250,8 +1242,6 @@ export async function updateDesktopWebUiConfig(input: {
     ...state,
     service: {
       ...state.service,
-      companionPort: savedConfig.companionPort,
-      companionUrl: `http://127.0.0.1:${savedConfig.companionPort}`,
       tailscaleServe: savedConfig.useTailscaleServe,
       resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
     },

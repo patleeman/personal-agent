@@ -3,7 +3,6 @@ import { spawnSync, type SpawnSyncReturns } from 'child_process';
 export interface SyncWebUiTailscaleServeInput {
   enabled: boolean;
   port: number;
-  companionPort?: number;
 }
 
 interface TailscaleStatusPayload {
@@ -142,29 +141,17 @@ function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | und
 
 export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
   const normalizedPort = normalizePort(input.port);
-  const normalizedCompanionPort = input.companionPort === undefined ? undefined : normalizePort(input.companionPort);
-  const mappings = [
-    { port: normalizedPort, label: '/', path: undefined as string | undefined },
-    ...(normalizedCompanionPort === undefined
-      ? []
-      : [{ port: normalizedCompanionPort, label: '/app', path: '/app' }]),
-  ];
+  const execution = runTailscaleCommand(buildTailscaleServeArgs({
+    enabled: input.enabled,
+    port: normalizedPort,
+  }));
+  const status = execution.result.status ?? 1;
 
-  for (const mapping of mappings) {
-    const args = buildTailscaleServeArgs({
-      enabled: input.enabled,
-      port: mapping.port,
-      ...(mapping.path ? { path: mapping.path } : {}),
-    });
-    const execution = runTailscaleCommand(args);
-    const status = execution.result.status ?? 1;
-
-    if (status !== 0) {
-      const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
-      throw new Error(
-        `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${mapping.label} -> localhost:${mapping.port}: ${detail}`,
-      );
-    }
+  if (status !== 0) {
+    const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
+    throw new Error(
+      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for / -> localhost:${normalizedPort}: ${detail}`,
+    );
   }
 }
 

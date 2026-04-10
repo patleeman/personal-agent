@@ -180,32 +180,23 @@ describe('startServerListeners', () => {
     logInfoMock.mockReset();
   });
 
-  it('logs startup details for both servers when the companion service is enabled', () => {
+  it('logs startup details for the main server', () => {
     const appListen = vi.fn((_port: number, _host: string, callback: () => void) => {
-      callback();
-      return {};
-    });
-    const companionListen = vi.fn((_port: number, _host: string, callback: () => void) => {
       callback();
       return {};
     });
 
     startServerListeners({
       app: { listen: appListen } as never,
-      companionApp: { listen: companionListen } as never,
       port: 3000,
-      companionPort: 3001,
       loopbackHost: '127.0.0.1',
-      companionDisabled: false,
       getCurrentProfile: () => 'assistant',
       getDefaultWebCwd: () => '/repo/packages/web',
       repoRoot: '/repo',
       distDir: '/repo/packages/web/dist',
-      companionDistDir: '/repo/packages/web/companion-dist',
     });
 
     expect(appListen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function));
-    expect(companionListen).toHaveBeenCalledWith(3001, '127.0.0.1', expect.any(Function));
     expect(logInfoMock).toHaveBeenCalledWith('web ui started', {
       url: 'http://127.0.0.1:3000',
       profile: 'assistant',
@@ -213,36 +204,5 @@ describe('startServerListeners', () => {
       cwd: '/repo/packages/web',
       dist: '/repo/packages/web/dist',
     });
-    expect(logInfoMock).toHaveBeenCalledWith('companion service started', {
-      url: 'http://127.0.0.1:3001',
-      profile: 'assistant',
-      repoRoot: '/repo',
-      dist: '/repo/packages/web/companion-dist',
-    });
-  });
-
-  it('does not start the companion listener when the companion service is disabled', () => {
-    const appListen = vi.fn((_port: number, _host: string, callback: () => void) => {
-      callback();
-      return {};
-    });
-    const companionListen = vi.fn();
-
-    startServerListeners({
-      app: { listen: appListen } as never,
-      companionApp: { listen: companionListen } as never,
-      port: 3000,
-      companionPort: 3001,
-      loopbackHost: '127.0.0.1',
-      companionDisabled: true,
-      getCurrentProfile: () => 'assistant',
-      getDefaultWebCwd: () => '/repo/packages/web',
-      repoRoot: '/repo',
-      distDir: '/repo/packages/web/dist',
-      companionDistDir: '/repo/packages/web/companion-dist',
-    });
-
-    expect(appListen).toHaveBeenCalledTimes(1);
-    expect(companionListen).not.toHaveBeenCalled();
   });
 });
