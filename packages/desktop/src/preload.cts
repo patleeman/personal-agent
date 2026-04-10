@@ -31,6 +31,33 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  readScheduledTasks: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-tasks`),
+  readScheduledTaskDetail: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-detail`, taskId),
+  readScheduledTaskLog: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-log`, taskId),
+  createScheduledTask: (input: {
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-scheduled-task`, input),
+  updateScheduledTask: (input: {
+    taskId: string;
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-scheduled-task`, input),
+  runScheduledTask: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:run-scheduled-task`, taskId),
   readDurableRuns: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-runs`),
   readDurableRun: (runId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run`, runId),
   readDurableRunLog: (input: { runId: string; tail?: number }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-durable-run-log`, input),

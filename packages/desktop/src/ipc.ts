@@ -117,6 +117,72 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-tasks`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readScheduledTasks) {
+      throw new Error('Dedicated desktop task reads are only available for the local host.');
+    }
+
+    return controller.readScheduledTasks();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-task-detail`, async (event, taskId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readScheduledTaskDetail) {
+      throw new Error('Dedicated desktop task detail is only available for the local host.');
+    }
+
+    return controller.readScheduledTaskDetail(taskId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-task-log`, async (event, taskId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readScheduledTaskLog) {
+      throw new Error('Dedicated desktop task logs are only available for the local host.');
+    }
+
+    return controller.readScheduledTaskLog(taskId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:create-scheduled-task`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.createScheduledTask) {
+      throw new Error('Dedicated desktop task creation is only available for the local host.');
+    }
+
+    return controller.createScheduledTask(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-scheduled-task`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateScheduledTask) {
+      throw new Error('Dedicated desktop task updates are only available for the local host.');
+    }
+
+    return controller.updateScheduledTask(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:run-scheduled-task`, async (event, taskId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.runScheduledTask) {
+      throw new Error('Dedicated desktop task execution is only available for the local host.');
+    }
+
+    return controller.runScheduledTask(taskId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-durable-runs`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

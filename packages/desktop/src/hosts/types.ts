@@ -115,6 +115,19 @@ export interface DesktopDurableRunLogRequest {
   tail?: number;
 }
 
+export interface DesktopScheduledTaskUpdateRequest {
+  taskId: string;
+  title?: string;
+  enabled?: boolean;
+  cron?: string | null;
+  at?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  cwd?: string | null;
+  timeoutSeconds?: number | null;
+  prompt?: string;
+}
+
 export interface DesktopLiveSessionCreateRequest {
   cwd?: string;
   model?: string | null;
@@ -183,6 +196,12 @@ export interface HostController {
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  readScheduledTasks?(): Promise<unknown>;
+  readScheduledTaskDetail?(taskId: string): Promise<unknown>;
+  readScheduledTaskLog?(taskId: string): Promise<{ path: string; log: string }>;
+  createScheduledTask?(input: Omit<DesktopScheduledTaskUpdateRequest, 'taskId'>): Promise<unknown>;
+  updateScheduledTask?(input: DesktopScheduledTaskUpdateRequest): Promise<unknown>;
+  runScheduledTask?(taskId: string): Promise<unknown>;
   readDurableRuns?(): Promise<unknown>;
   readDurableRun?(runId: string): Promise<unknown>;
   readDurableRunLog?(input: DesktopDurableRunLogRequest): Promise<{ path: string; log: string }>;

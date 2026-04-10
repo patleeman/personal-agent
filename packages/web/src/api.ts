@@ -327,10 +327,23 @@ export const api = {
     patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds, archivedSessionIds }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
-  tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
-  taskDetail: (id: string) =>
-    get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`),
-  createTask: (input: {
+  tasks: async () => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readScheduledTasks();
+    }
+
+    return get<ScheduledTaskSummary[]>('/tasks');
+  },
+  taskDetail: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readScheduledTaskDetail(id);
+    }
+
+    return get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`);
+  },
+  createTask: async (input: {
     title: string;
     enabled?: boolean;
     cron?: string | null;
@@ -340,10 +353,23 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt: string;
-  }) => post<{ ok: boolean; task: ScheduledTaskDetail }>('/tasks', input),
-  setTaskEnabled: (id: string, enabled: boolean) =>
-    patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
-  saveTask: (id: string, input: {
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.createScheduledTask(input);
+    }
+
+    return post<{ ok: boolean; task: ScheduledTaskDetail }>('/tasks', input);
+  },
+  setTaskEnabled: async (id: string, enabled: boolean) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateScheduledTask({ taskId: id, enabled });
+    }
+
+    return patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, { enabled });
+  },
+  saveTask: async (id: string, input: {
     title?: string;
     enabled?: boolean;
     cron?: string | null;
@@ -353,11 +379,30 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
-  }) => patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, input),
-  taskLog: (id: string) =>
-    get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
-  runTaskNow: (id: string) =>
-    post<{ ok: boolean; accepted: boolean; runId: string }>(`/tasks/${encodeURIComponent(id)}/run`),
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateScheduledTask({ taskId: id, ...input });
+    }
+
+    return patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, input);
+  },
+  taskLog: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readScheduledTaskLog(id);
+    }
+
+    return get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`);
+  },
+  runTaskNow: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.runScheduledTask(id);
+    }
+
+    return post<{ ok: boolean; accepted: boolean; runId: string }>(`/tasks/${encodeURIComponent(id)}/run`);
+  },
   runs: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

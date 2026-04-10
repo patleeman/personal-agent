@@ -10,6 +10,14 @@ import {
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
+  createScheduledTaskCapability,
+  listScheduledTasksCapability,
+  readScheduledTaskCapability,
+  readScheduledTaskLogCapability,
+  runScheduledTaskCapability,
+  updateScheduledTaskCapability,
+} from '../automation/scheduledTaskCapability.js';
+import {
   cancelDurableRunCapability,
   listDurableRunsCapability,
   readDurableRunCapability,
@@ -1008,6 +1016,61 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
   }
 
   return bodyText as T;
+}
+
+export async function readDesktopScheduledTasks() {
+  await getLocalRoutes();
+  return listScheduledTasksCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant');
+}
+
+export async function readDesktopScheduledTaskDetail(taskId: string) {
+  await getLocalRoutes();
+  return readScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
+}
+
+export async function readDesktopScheduledTaskLog(taskId: string) {
+  await getLocalRoutes();
+  return readScheduledTaskLogCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
+}
+
+export async function createDesktopScheduledTask(input: {
+  title?: string;
+  enabled?: boolean;
+  cron?: string | null;
+  at?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  cwd?: string | null;
+  timeoutSeconds?: number | null;
+  prompt?: string;
+}) {
+  await getLocalRoutes();
+  return createScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', {
+    ...input,
+    title: input.title ?? '',
+    prompt: input.prompt ?? '',
+  });
+}
+
+export async function updateDesktopScheduledTask(input: {
+  taskId: string;
+  title?: string;
+  enabled?: boolean;
+  cron?: string | null;
+  at?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  cwd?: string | null;
+  timeoutSeconds?: number | null;
+  prompt?: string;
+}) {
+  await getLocalRoutes();
+  return updateScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', input);
+}
+
+export async function runDesktopScheduledTask(taskId: string) {
+  await getLocalRoutes();
+  return runScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
 }
 
 export async function readDesktopDurableRuns() {

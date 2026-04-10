@@ -84,6 +84,7 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - read local conversation bootstrap, live-session state, and session detail/block data without loopback HTTP
 - create, resume, rename, and control local conversations/live sessions for hot flows such as prompt delivery, queue restore, compact/reload, fork/branch, summarize-fork, destroy, and abort
 - read durable run lists/details/logs and cancel local runs without routing those hot paths through generic local API calls
+- read and manage local scheduled tasks without routing those operator flows through generic local API calls
 
 - get desktop environment
 - get saved connections

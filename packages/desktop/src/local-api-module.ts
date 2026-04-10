@@ -29,6 +29,33 @@ export interface LocalApiModule {
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<DesktopLocalApiDispatchResult>;
+  readDesktopScheduledTasks(): Promise<unknown>;
+  readDesktopScheduledTaskDetail(taskId: string): Promise<unknown>;
+  readDesktopScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
+  createDesktopScheduledTask(input: {
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<unknown>;
+  updateDesktopScheduledTask(input: {
+    taskId: string;
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<unknown>;
+  runDesktopScheduledTask(taskId: string): Promise<unknown>;
   readDesktopDurableRuns(): Promise<unknown>;
   readDesktopDurableRun(runId: string): Promise<unknown>;
   readDesktopDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;

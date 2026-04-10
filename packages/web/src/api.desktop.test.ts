@@ -39,6 +39,12 @@ describe('api desktop transport', () => {
         projectCount: 0,
       })
       .mockResolvedValueOnce({ ok: true });
+    const readScheduledTasks = vi.fn().mockResolvedValue([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
+    const readScheduledTaskDetail = vi.fn().mockResolvedValue({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body' });
+    const readScheduledTaskLog = vi.fn().mockResolvedValue({ path: '/tasks/task-1.log', log: 'task tail' });
+    const createScheduledTask = vi.fn().mockResolvedValue({ ok: true, task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body' } });
+    const updateScheduledTask = vi.fn().mockResolvedValue({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body' } });
+    const runScheduledTask = vi.fn().mockResolvedValue({ ok: true, accepted: true, runId: 'run-from-task' });
     const readDurableRuns = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', summary: { total: 0, recoveryActions: {}, statuses: {} }, runs: [] });
     const readDurableRun = vi.fn().mockResolvedValue({ scannedAt: '2026-04-10T11:00:00.000Z', runsRoot: '/runs', run: { runId: 'run-1' } });
     const readDurableRunLog = vi.fn().mockResolvedValue({ path: '/runs/run-1.log', log: 'tail' });
@@ -90,6 +96,12 @@ describe('api desktop transport', () => {
       personalAgentDesktop: {
         getEnvironment,
         invokeLocalApi,
+        readScheduledTasks,
+        readScheduledTaskDetail,
+        readScheduledTaskLog,
+        createScheduledTask,
+        updateScheduledTask,
+        runScheduledTask,
         readDurableRuns,
         readDurableRun,
         readDurableRunLog,
@@ -123,6 +135,13 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const status = await api.status();
+    const tasks = await api.tasks();
+    const taskDetail = await api.taskDetail('task-1');
+    const taskLog = await api.taskLog('task-1');
+    const createdTask = await api.createTask({ title: 'Created task', prompt: 'Prompt body' });
+    const toggledTask = await api.setTaskEnabled('task-1', false);
+    const savedTask = await api.saveTask('task-1', { prompt: 'Updated task body' });
+    const taskRun = await api.runTaskNow('task-1');
     const runs = await api.runs();
     const durableRun = await api.durableRun('run-1');
     const durableRunLog = await api.durableRunLog('run-1', 25);
@@ -157,6 +176,13 @@ describe('api desktop transport', () => {
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
     expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
+    expect(readScheduledTasks).toHaveBeenCalledTimes(1);
+    expect(readScheduledTaskDetail).toHaveBeenCalledWith('task-1');
+    expect(readScheduledTaskLog).toHaveBeenCalledWith('task-1');
+    expect(createScheduledTask).toHaveBeenCalledWith({ title: 'Created task', prompt: 'Prompt body' });
+    expect(updateScheduledTask).toHaveBeenCalledWith({ taskId: 'task-1', enabled: false });
+    expect(updateScheduledTask).toHaveBeenCalledWith({ taskId: 'task-1', prompt: 'Updated task body' });
+    expect(runScheduledTask).toHaveBeenCalledWith('task-1');
     expect(readDurableRuns).toHaveBeenCalledTimes(1);
     expect(readDurableRun).toHaveBeenCalledWith('run-1');
     expect(readDurableRunLog).toHaveBeenCalledWith({ runId: 'run-1', tail: 25 });
@@ -215,6 +241,13 @@ describe('api desktop transport', () => {
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toMatchObject({ profile: 'assistant' });
+    expect(tasks).toEqual([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
+    expect(taskDetail).toEqual({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body' });
+    expect(taskLog).toEqual({ path: '/tasks/task-1.log', log: 'task tail' });
+    expect(createdTask).toEqual({ ok: true, task: { id: 'task-2', scheduleType: 'cron', running: false, enabled: true, prompt: 'Created task body' } });
+    expect(toggledTask).toEqual({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body' } });
+    expect(savedTask).toEqual({ ok: true, task: { id: 'task-1', scheduleType: 'cron', running: false, enabled: false, prompt: 'Updated task body' } });
+    expect(taskRun).toEqual({ ok: true, accepted: true, runId: 'run-from-task' });
     expect(runs).toMatchObject({ runsRoot: '/runs' });
     expect(durableRun).toMatchObject({ runsRoot: '/runs' });
     expect(durableRunLog).toEqual({ path: '/runs/run-1.log', log: 'tail' });
@@ -313,7 +346,7 @@ describe('api desktop transport', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: undefined,
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(

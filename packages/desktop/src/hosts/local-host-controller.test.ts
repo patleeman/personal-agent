@@ -26,6 +26,12 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
   return {
     invokeDesktopLocalApi: vi.fn(),
     dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopScheduledTasks: vi.fn(),
+    readDesktopScheduledTaskDetail: vi.fn(),
+    readDesktopScheduledTaskLog: vi.fn(),
+    createDesktopScheduledTask: vi.fn(),
+    updateDesktopScheduledTask: vi.fn(),
+    runDesktopScheduledTask: vi.fn(),
     readDesktopDurableRuns: vi.fn(),
     readDesktopDurableRun: vi.fn(),
     readDesktopDurableRunLog: vi.fn(),

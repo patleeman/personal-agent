@@ -71,6 +71,57 @@ export class LocalHostController implements HostController {
     return module.invokeDesktopLocalApi({ method, path, body });
   }
 
+  async readScheduledTasks(): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopScheduledTasks();
+  }
+
+  async readScheduledTaskDetail(taskId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopScheduledTaskDetail(taskId);
+  }
+
+  async readScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopScheduledTaskLog(taskId);
+  }
+
+  async createScheduledTask(input: {
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.createDesktopScheduledTask(input);
+  }
+
+  async updateScheduledTask(input: {
+    taskId: string;
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopScheduledTask(input);
+  }
+
+  async runScheduledTask(taskId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.runDesktopScheduledTask(taskId);
+  }
+
   async readDurableRuns(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopDurableRuns();

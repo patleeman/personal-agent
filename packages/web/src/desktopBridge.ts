@@ -6,6 +6,8 @@ import type {
   DurableRunDetailResult,
   DurableRunListResult,
   DesktopEnvironmentState,
+  ScheduledTaskDetail,
+  ScheduledTaskSummary,
   DesktopHostRecord,
   DesktopNavigationState,
   DisplayBlock,
@@ -30,6 +32,33 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readScheduledTasks(): Promise<ScheduledTaskSummary[]>;
+  readScheduledTaskDetail(taskId: string): Promise<ScheduledTaskDetail>;
+  readScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
+  createScheduledTask(input: {
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<{ ok: true; task: ScheduledTaskDetail }>;
+  updateScheduledTask(input: {
+    taskId: string;
+    title?: string;
+    enabled?: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt?: string;
+  }): Promise<{ ok: true; task: ScheduledTaskDetail }>;
+  runScheduledTask(taskId: string): Promise<{ ok: true; accepted: boolean; runId: string; reason?: string }>;
   readDurableRuns(): Promise<DurableRunListResult>;
   readDurableRun(runId: string): Promise<DurableRunDetailResult>;
   readDurableRunLog(input: { runId: string; tail?: number }): Promise<{ path: string; log: string }>;
