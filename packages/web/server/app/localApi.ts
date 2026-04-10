@@ -67,6 +67,7 @@ import {
   inlineConversationBootstrapAssetsCapability,
   inlineConversationSessionDetailAssetsCapability,
   inlineConversationSessionDetailAppendOnlyAssetsCapability,
+  inlineConversationSessionSnapshotAssetsCapability,
   readConversationSessionBlockWithInlineAssetsCapability,
 } from '../conversations/conversationSessionAssetCapability.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
@@ -83,6 +84,7 @@ import {
   readSessionBlocks,
   readSessionMeta,
   renameStoredSession,
+  type DisplayBlock,
 } from '../conversations/sessions.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
@@ -940,12 +942,21 @@ async function subscribeDesktopLiveSessionStream(
       return;
     }
 
+    const payload = event && typeof event === 'object' && (event as { type?: unknown }).type === 'snapshot'
+      ? inlineConversationSessionSnapshotAssetsCapability(sessionId, event as {
+          type: 'snapshot';
+          blocks: DisplayBlock[];
+          blockOffset: number;
+          totalBlocks: number;
+        })
+      : event;
+
     if (!opened) {
-      pendingPayloads.push(event);
+      pendingPayloads.push(payload);
       return;
     }
 
-    emitStreamMessage(onEvent, event);
+    emitStreamMessage(onEvent, payload);
   };
 
   const unsubscribe = subscribeLiveSession(sessionId, writeEvent, {

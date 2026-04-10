@@ -115,6 +115,14 @@ export function inlineConversationBootstrapAssetsCapability(
       };
 }
 
+export function inlineConversationSessionSnapshotAssetsCapability<T extends {
+  type: 'snapshot';
+  blocks: DisplayBlock[];
+}>(sessionId: string, event: T): T {
+  const blocks = inlineConversationSessionBlocksAssetsCapability(sessionId, event.blocks);
+  return blocks === event.blocks ? event : { ...event, blocks };
+}
+
 export function readConversationSessionBlockWithInlineAssetsCapability(sessionId: string, blockId: string): DisplayBlock | null {
   const normalizedSessionId = sessionId.trim();
   const normalizedBlockId = blockId.trim();

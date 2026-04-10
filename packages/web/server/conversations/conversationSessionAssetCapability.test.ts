@@ -19,6 +19,7 @@ import {
   inlineConversationSessionBlocksAssetsCapability,
   inlineConversationSessionDetailAppendOnlyAssetsCapability,
   inlineConversationSessionDetailAssetsCapability,
+  inlineConversationSessionSnapshotAssetsCapability,
   readConversationSessionBlockWithInlineAssetsCapability,
 } from './conversationSessionAssetCapability.js';
 
@@ -207,6 +208,35 @@ describe('conversationSessionAssetCapability', () => {
     });
     expect(bootstrap.sessionDetail?.blocks[0]).toEqual(detail.blocks[0]);
     expect(bootstrap.sessionDetailAppendOnly?.blocks[0]).toEqual(appendOnly.blocks[0]);
+  });
+
+  it('inlines assets in live-session snapshot events', () => {
+    readSessionImageAssetMock.mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('snapshot-image') });
+
+    expect(inlineConversationSessionSnapshotAssetsCapability('conversation-1', {
+      type: 'snapshot',
+      blocks: [{
+        id: 'tool-block-1-i0',
+        type: 'image',
+        alt: 'Snapshot image',
+        src: '/api/sessions/conversation-1/blocks/tool-block-1-i0/image',
+        ts: '2026-04-10T12:00:00.000Z',
+      }],
+      blockOffset: 0,
+      totalBlocks: 1,
+    })).toEqual({
+      type: 'snapshot',
+      blocks: [{
+        id: 'tool-block-1-i0',
+        type: 'image',
+        alt: 'Snapshot image',
+        src: 'data:image/png;base64,c25hcHNob3QtaW1hZ2U=',
+        mimeType: 'image/png',
+        ts: '2026-04-10T12:00:00.000Z',
+      }],
+      blockOffset: 0,
+      totalBlocks: 1,
+    });
   });
 
   it('reads session blocks and inlines their assets for local desktop hydration', () => {
