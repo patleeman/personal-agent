@@ -252,3 +252,4 @@ Just completed:
 - local desktop startup now treats the daemon as the only required child process; the main window can boot and run core conversation flows with the web child absent
 - session-tab layout sync now uses the desktop-aware API layer instead of direct renderer fetches
 - the local desktop window now loads packaged renderer assets from a desktop protocol instead of loading the app shell from `http://127.0.0.1`
+- desktop-owned daemon and web runtime state now resolve correctly inside the Electron main process, and the remaining shell diagnostics/docs no longer describe a fake local web child

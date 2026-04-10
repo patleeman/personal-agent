@@ -28,8 +28,13 @@ interface LogTail {
   lines: string[];
 }
 
-const DESKTOP_RUNTIME = process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
-const DESKTOP_DAEMON_LOG_FILE = process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE?.trim() || undefined;
+function isDesktopRuntime(): boolean {
+  return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+}
+
+function getDesktopDaemonLogFile(): string | undefined {
+  return process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE?.trim() || undefined;
+}
 
 interface DaemonServiceSummary {
   platform: string;
@@ -105,14 +110,14 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
 }
 
 function readDaemonServiceSummary(defaultLogFile: string): DaemonServiceSummary {
-  if (DESKTOP_RUNTIME) {
+  if (isDesktopRuntime()) {
     return {
       platform: 'desktop',
       identifier: 'desktop-local-daemon',
       manifestPath: 'desktop menubar runtime',
       installed: true,
       running: true,
-      logFile: DESKTOP_DAEMON_LOG_FILE ?? join(getStateRoot(), 'desktop', 'logs', 'daemon.log'),
+      logFile: getDesktopDaemonLogFile() ?? join(getStateRoot(), 'desktop', 'logs', 'daemon.log'),
     };
   }
 
@@ -171,9 +176,9 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
 
   if (service.error) {
     warnings.push(`Could not inspect daemon service status: ${service.error}`);
-  } else if (!DESKTOP_RUNTIME && service.installed && !service.running) {
+  } else if (!isDesktopRuntime() && service.installed && !service.running) {
     warnings.push('Daemon service is installed but not running.');
-  } else if (!DESKTOP_RUNTIME && !service.installed && !runtime.running) {
+  } else if (!isDesktopRuntime() && !service.installed && !runtime.running) {
     warnings.push('Daemon service is not installed. Install it from this page or run `pa daemon service install`.');
   }
 

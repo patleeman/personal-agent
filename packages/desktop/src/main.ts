@@ -66,6 +66,13 @@ async function openDesktopLogs(): Promise<void> {
   }
 }
 
+function configureDesktopRuntimeEnvironment(): void {
+  const runtime = resolveDesktopRuntimePaths();
+  process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+  process.env.PERSONAL_AGENT_REPO_ROOT = runtime.repoRoot;
+  process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE = `${runtime.desktopLogsDir}/daemon.log`;
+}
+
 async function ensureDesktopBackendAvailable(): Promise<boolean> {
   if (!hostManager) {
     return false;
@@ -166,6 +173,7 @@ async function restartActiveHost(): Promise<void> {
 }
 
 async function bootstrapDesktopApp(): Promise<void> {
+  configureDesktopRuntimeEnvironment();
   hostManager = new HostManager();
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);

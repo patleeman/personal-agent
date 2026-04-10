@@ -54,6 +54,7 @@ import {
 } from './daemon.js';
 
 const tempDirs: string[] = [];
+const originalEnv = process.env;
 
 function createTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-daemon-state-'));
@@ -75,10 +76,12 @@ function expectedServicePlatform(): string {
 
 describe('automation daemon', () => {
   afterEach(async () => {
+    process.env = originalEnv;
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
   beforeEach(() => {
+    process.env = { ...originalEnv };
     getDaemonStatusMock.mockReset();
     getManagedDaemonServiceStatusMock.mockReset();
     installManagedDaemonServiceMock.mockReset();
@@ -212,6 +215,37 @@ describe('automation daemon', () => {
       },
       log: {
         path: unreadableLogPath,
+        lines: [],
+      },
+    });
+  });
+
+  it('reports the daemon as desktop-owned in desktop runtime mode', async () => {
+    const dir = createTempDir();
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+    process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE = join(dir, 'desktop-daemon.log');
+
+    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile: join(dir, 'ignored.log') });
+    pingDaemonMock.mockResolvedValue(false);
+
+    await expect(readDaemonState()).resolves.toEqual({
+      warnings: ['Daemon runtime is not responding on the local socket.'],
+      service: {
+        platform: 'desktop',
+        identifier: 'desktop-local-daemon',
+        manifestPath: 'desktop menubar runtime',
+        installed: true,
+        running: true,
+        logFile: join(dir, 'desktop-daemon.log'),
+      },
+      runtime: {
+        running: false,
+        socketPath: '/tmp/runtime.sock',
+        moduleCount: 0,
+      },
+      log: {
+        path: join(dir, 'desktop-daemon.log'),
         lines: [],
       },
     });

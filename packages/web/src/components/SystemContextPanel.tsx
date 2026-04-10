@@ -53,22 +53,29 @@ function buildPanel(selected: SystemPanelData) {
       return {
         title: 'Web UI',
         description: desktopOwned
-          ? 'Desktop-owned frontend runtime and current build metadata.'
+          ? 'Packaged desktop shell surface and current build metadata.'
           : 'Managed frontend service and current build metadata.',
         tone: systemTone(running, data.warnings.length, data.service.error),
         status: systemLabel(running, data.warnings.length, data.service.error),
         warnings: data.warnings,
         log: data.log,
-        details: [
-          { label: 'Service', value: desktopOwned ? 'desktop-owned' : running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
-          { label: 'Desktop URL', value: data.service.url },
-          { label: 'Companion service', value: `${companion.statusLabel} · ${companion.localUrl}` },
-          { label: 'Companion port', value: String(data.service.companionPort) },
-          { label: 'Tailnet desktop', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
-          { label: 'Tailnet companion', value: companion.tailnetUrl ?? 'Enable Tailscale Serve to expose /app over HTTPS.' },
-          { label: 'Release', value: release },
-        ],
-        emptyLogLabel: 'No recent web UI log lines.',
+        details: desktopOwned
+          ? [
+              { label: 'Surface', value: 'desktop shell' },
+              { label: 'Desktop URL', value: data.service.url },
+              { label: 'Companion access', value: companion.detail },
+              { label: 'Release', value: release },
+            ]
+          : [
+              { label: 'Service', value: running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
+              { label: 'Desktop URL', value: data.service.url },
+              { label: 'Companion service', value: `${companion.statusLabel} · ${companion.localUrl}` },
+              { label: 'Companion port', value: String(data.service.companionPort) },
+              { label: 'Tailnet desktop', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
+              { label: 'Tailnet companion', value: companion.tailnetUrl ?? 'Enable Tailscale Serve to expose /app over HTTPS.' },
+              { label: 'Release', value: release },
+            ],
+        emptyLogLabel: desktopOwned ? 'No recent desktop shell log lines.' : 'No recent web UI log lines.',
       };
     }
     case 'daemon': {
@@ -268,7 +275,7 @@ export function SystemServiceSection({
   }, [componentId, refreshing, setDaemon, setWebUi]);
 
   const handleToggleWebUiTailscale = useCallback(async () => {
-    if (actionBusy || !selected || selected.kind !== 'web-ui') {
+    if (actionBusy || !selected || selected.kind !== 'web-ui' || selected.data.service.platform === 'desktop') {
       return;
     }
 
@@ -353,7 +360,7 @@ export function SystemServiceSection({
             </div>
           </div>
 
-          {selected.kind === 'web-ui' && companion && (
+          {selected.kind === 'web-ui' && companion && selected.data.service.platform !== 'desktop' && (
             <>
               <div className="space-y-3 border-t border-border-subtle pt-4">
                 <div className="space-y-1">
@@ -442,7 +449,7 @@ export function SystemServiceSection({
           </div>
         </div>
 
-        {selected.kind === 'web-ui' && companion && (
+        {selected.kind === 'web-ui' && companion && selected.data.service.platform !== 'desktop' && (
           <>
             <div className="space-y-3 border-t border-border-subtle pt-4">
               <div className="space-y-1">

@@ -13,8 +13,18 @@ function joinCompanionPath(baseUrl: string): string {
 }
 
 export function buildWebUiCompanionAccessSummary(
-  service: Pick<WebUiServiceSummary, 'companionUrl' | 'tailscaleServe' | 'tailscaleUrl'>,
+  service: Pick<WebUiServiceSummary, 'platform' | 'companionUrl' | 'tailscaleServe' | 'tailscaleUrl'>,
 ): WebUiCompanionAccessSummary {
+  if (service.platform === 'desktop') {
+    return {
+      localUrl: 'Not exposed in desktop mode.',
+      tailnetUrl: null,
+      secureOriginReady: false,
+      statusLabel: 'desktop-only',
+      detail: 'The packaged desktop shell keeps the local UI inside Electron and does not expose the companion /app surface or Tailnet HTTPS access.',
+    };
+  }
+
   const localUrl = joinCompanionPath(service.companionUrl);
   const tailnetUrl = service.tailscaleUrl ? joinCompanionPath(service.tailscaleUrl) : null;
   const secureOriginReady = Boolean(service.tailscaleServe && tailnetUrl?.startsWith('https://'));

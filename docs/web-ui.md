@@ -59,7 +59,7 @@ Important behaviors:
 
 - draft conversation state is durable in the browser UI
 - multiple saved conversations can stay open or pinned at once
-- live threads update over SSE
+- live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
 - working directory and model preferences stay attached to the conversation
 - desktop and companion surfaces can watch the same live conversation
@@ -159,7 +159,7 @@ Pairing model:
 
 ## Live updates
 
-The web UI relies heavily on SSE.
+The web UI relies heavily on push updates.
 
 Live updates include:
 
@@ -170,7 +170,7 @@ Live updates include:
 - daemon health
 - web UI state
 
-If SSE is temporarily offline, the UI falls back to snapshot refreshes when it can.
+In browser mode those updates arrive over SSE. In local Electron mode, the desktop shell bridges the same hot streams through the main process. If live transport is temporarily offline, the UI falls back to snapshot refreshes when it can.
 
 ## Electron desktop shell integration
 
@@ -182,7 +182,7 @@ When the UI runs inside the Electron shell it gains desktop-specific chrome and 
 - host switching
 - opening saved remote hosts in dedicated windows
 
-The application data model is still the same web UI.
+The application data model is still the same web UI, but local Electron mode now loads the packaged renderer over `personal-agent://app/` and resolves hot local API/event flows through the Electron main process instead of a loopback web server.
 
 ## What the web UI does not try to be
 

@@ -69,7 +69,6 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('/custom/node');
     expect(result.useElectronRunAsNode).toBe(false);
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
-    expect(result.webServerEntryFile).toBe(join(repoRoot, 'packages', 'web', 'dist-server', 'index.js'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(repoRoot, 'packages', 'desktop', 'assets', 'icon.png'));
@@ -96,7 +95,6 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.nodeCommand).toBe('/Applications/Personal Agent.app/Contents/MacOS/Personal Agent');
     expect(result.useElectronRunAsNode).toBe(true);
     expect(result.daemonEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'));
-    expect(result.webServerEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server', 'index.js'));
     expect(result.webDistDir).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(appRoot, 'assets', 'icon.png'));

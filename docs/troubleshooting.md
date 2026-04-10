@@ -187,7 +187,6 @@ By default:
 ~/.local/state/personal-agent/web/logs/web.log
 ~/.local/state/personal-agent/desktop/logs/main.log
 ~/.local/state/personal-agent/desktop/logs/daemon.log
-~/.local/state/personal-agent/desktop/logs/web-ui.log
 ```
 
 ## Related docs

@@ -4,6 +4,7 @@ import { buildWebUiCompanionAccessSummary } from './webUiCompanion';
 describe('buildWebUiCompanionAccessSummary', () => {
   it('marks the companion app https-ready when a tailnet https url exists', () => {
     const summary = buildWebUiCompanionAccessSummary({
+      platform: 'launchd',
       companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: true,
       tailscaleUrl: 'https://agent.tail.ts.net',
@@ -19,6 +20,7 @@ describe('buildWebUiCompanionAccessSummary', () => {
 
   it('marks the companion app local-only when tailscale serve is disabled', () => {
     const summary = buildWebUiCompanionAccessSummary({
+      platform: 'launchd',
       companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: false,
       tailscaleUrl: undefined,
@@ -33,6 +35,7 @@ describe('buildWebUiCompanionAccessSummary', () => {
 
   it('marks the companion app resolving when serve is enabled without a tailnet url', () => {
     const summary = buildWebUiCompanionAccessSummary({
+      platform: 'launchd',
       companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: true,
       tailscaleUrl: undefined,
@@ -42,6 +45,22 @@ describe('buildWebUiCompanionAccessSummary', () => {
       tailnetUrl: null,
       secureOriginReady: false,
       statusLabel: 'resolving',
+    }));
+  });
+
+  it('marks the companion app unavailable in desktop mode', () => {
+    const summary = buildWebUiCompanionAccessSummary({
+      platform: 'desktop',
+      companionUrl: 'personal-agent://app/',
+      tailscaleServe: true,
+      tailscaleUrl: undefined,
+    });
+
+    expect(summary).toEqual(expect.objectContaining({
+      localUrl: 'Not exposed in desktop mode.',
+      tailnetUrl: null,
+      secureOriginReady: false,
+      statusLabel: 'desktop-only',
     }));
   });
 });

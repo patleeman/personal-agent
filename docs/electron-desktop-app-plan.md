@@ -4,7 +4,7 @@
 
 `personal-agent` includes an Electron desktop shell in `packages/desktop`.
 
-The desktop app is a tray/menubar-style wrapper around the existing web UI. It owns a local backend while it is running and can also connect to saved remote hosts.
+The desktop app is a tray/menubar-style wrapper around the existing web UI. It owns the local runtime while it is running and can also connect to saved remote hosts.
 
 On macOS, the desktop shell is the intended local product surface. Background behavior comes from the menubar app staying alive, not from separate launchd-managed daemon or web UI services.
 
@@ -12,8 +12,8 @@ On macOS, the desktop shell is the intended local product surface. Background be
 
 - ships as a macOS menu bar app with an always-available menubar icon and no dock icon
 - keeps a tray app alive after the main window closes
-- opens the existing web UI in Electron windows
-- owns a local daemon + web UI child-process pair for the local host
+- loads the packaged web UI inside Electron windows
+- owns the local daemon for the local host and keeps core local API/event flows inside the Electron process
 - supports saved **web** and **ssh** remote hosts
 - lets you switch hosts or open a remote host in its own window
 - stores machine-local desktop config and window state
@@ -70,10 +70,11 @@ That gives us distinct shortcuts for closing a conversation, moving around the c
 The local desktop host:
 
 - starts its own daemon in foreground child-process mode
-- starts its own web server on `http://127.0.0.1:3741`
+- loads the packaged renderer over `personal-agent://app/`
+- resolves local JSON API requests and event streams through the Electron main process instead of a loopback web child
 - keeps that local runtime warm for as long as the menubar app stays open
-- disables the companion surface for that desktop-owned local backend
-- refuses to start if another daemon is already running or the web port is already occupied
+- does not expose the companion surface from the packaged desktop shell
+- refuses to start if another daemon is already running
 
 ### Web remote host
 
@@ -100,11 +101,11 @@ By default, the desktop shell stores state in:
 Important files:
 
 - `config.json` — saved hosts, default host, window state
-- `logs/` — desktop, daemon-child, and web-child logs
+- `logs/` — desktop shell and daemon-child logs
 
 ## Runtime controls in the app
 
-In the desktop shell, the local daemon and web server are treated as internal runtime components.
+In the desktop shell, the local daemon and packaged renderer are treated as internal runtime components.
 
 That means:
 
@@ -115,6 +116,7 @@ That means:
 ## Current limitations
 
 - the desktop-owned local backend intentionally does not expose the companion surface
+- remote browser or companion access still requires a separately managed web UI
 - the desktop shell does not reuse an already-running external local daemon/web UI pair
 
 ## Related docs

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   filterSystemLogTailLinesMock,
+  getWebUiDeploymentSummaryMock,
   getWebUiServiceStatusMock,
   installWebUiServiceMock,
   resolveWebUiTailscaleUrlMock,
@@ -17,6 +18,7 @@ const {
   uninstallWebUiServiceMock,
 } = vi.hoisted(() => ({
   filterSystemLogTailLinesMock: vi.fn(),
+  getWebUiDeploymentSummaryMock: vi.fn(),
   getWebUiServiceStatusMock: vi.fn(),
   installWebUiServiceMock: vi.fn(),
   resolveWebUiTailscaleUrlMock: vi.fn(),
@@ -28,6 +30,7 @@ const {
 }));
 
 vi.mock('@personal-agent/services', () => ({
+  getWebUiDeploymentSummary: getWebUiDeploymentSummaryMock,
   getWebUiServiceStatus: getWebUiServiceStatusMock,
   installWebUiService: installWebUiServiceMock,
   resolveWebUiTailscaleUrl: resolveWebUiTailscaleUrlMock,
@@ -91,6 +94,7 @@ describe('web UI config', () => {
     delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
 
     filterSystemLogTailLinesMock.mockReset();
+    getWebUiDeploymentSummaryMock.mockReset();
     getWebUiServiceStatusMock.mockReset();
     installWebUiServiceMock.mockReset();
     resolveWebUiTailscaleUrlMock.mockReset();
@@ -102,6 +106,7 @@ describe('web UI config', () => {
 
     filterSystemLogTailLinesMock.mockImplementation((lines: string[]) => lines);
     resolveWebUiTailscaleUrlMock.mockReturnValue(undefined);
+    getWebUiDeploymentSummaryMock.mockReturnValue(undefined);
     getWebUiServiceStatusMock.mockReturnValue(createStatus());
   });
 
@@ -274,6 +279,33 @@ describe('web UI config', () => {
       },
     }));
     expect(filterSystemLogTailLinesMock).not.toHaveBeenCalled();
+  });
+
+  it('reports the packaged shell instead of a loopback web service in desktop runtime mode', () => {
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+    process.env.PERSONAL_AGENT_STATE_ROOT = createTempDir('pa-desktop-state-');
+    configureTempWebUiConfig();
+    writeWebUiConfig({
+      companionPort: 4900,
+      useTailscaleServe: true,
+      resumeFallbackPrompt: 'Resume inside desktop.',
+    });
+
+    expect(readWebUiState()).toEqual(expect.objectContaining({
+      warnings: ['The packaged desktop shell does not expose the companion or full web UI over Tailnet HTTPS. Run a managed web UI separately if you need remote browser or companion access.'],
+      service: expect.objectContaining({
+        platform: 'desktop',
+        identifier: 'desktop-app-shell',
+        manifestPath: 'desktop app bundle',
+        port: 0,
+        url: 'personal-agent://app/',
+        companionUrl: 'personal-agent://app/',
+        tailscaleServe: true,
+      }),
+      log: expect.objectContaining({
+        path: expect.stringMatching(/desktop\/logs\/main\.log$/),
+      }),
+    }));
   });
 
   it('syncs configured tailscale settings and wraps service lifecycle operations', () => {

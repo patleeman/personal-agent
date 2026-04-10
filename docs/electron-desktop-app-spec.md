@@ -26,18 +26,19 @@ The local host controller uses `LocalBackendProcesses`.
 That component:
 
 1. checks that no external daemon is already running
-2. checks that port `3741` is free
-3. spawns the daemon as a child process in foreground mode
-4. spawns the web server as a child process
-5. waits for both health checks to pass
+2. spawns the daemon as a child process in foreground mode
+3. marks the process environment as desktop-owned runtime
+4. keeps the local daemon warm for the menubar shell
 
-The child web server is started with:
+The renderer itself is loaded from packaged assets over `personal-agent://app/`.
 
-- `PA_WEB_PORT=3741`
-- `PA_WEB_DISABLE_COMPANION=1`
-- `PERSONAL_AGENT_REPO_ROOT=<repoRoot>`
+Local JSON API requests and stream subscriptions are resolved inside Electron through:
 
-So the desktop-owned local backend is intentionally desktop-only.
+- the desktop protocol handler for `/api/...` resource and mutation requests
+- the main-process host controller bridge for local capability calls
+- an in-process local API dispatcher that reuses shared server route logic where practical
+
+So the desktop-owned local backend is intentionally desktop-only and no longer depends on a loopback web child for core local flows.
 
 ## Remote host architecture
 
@@ -89,7 +90,7 @@ The preload bridge is intentionally narrow. It exposes actions such as:
 - go back / forward
 - restart the active host
 
-Application data still flows over HTTP to the same web UI server.
+In local Electron mode, hot app data no longer depends on same-origin loopback HTTP. The renderer uses desktop-aware request and stream transports that resolve through the Electron main process. Remote hosts still use their HTTP or SSH-backed adapters.
 
 ## Runtime files
 
@@ -119,9 +120,9 @@ The desktop shell is a host shell around the existing web product, not a second 
 That keeps:
 
 - one application UI
-- one HTTP/API model
-- one set of server routes
-- a narrow native bridge for desktop-only actions
+- one shared set of route/service modules
+- one host boundary for local and remote adapters
+- a narrow native bridge where desktop-specific capabilities need it
 
 ## Related docs
 

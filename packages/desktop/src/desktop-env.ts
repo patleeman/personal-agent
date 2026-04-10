@@ -9,7 +9,6 @@ export interface DesktopRuntimePaths {
   nodeCommand: string;
   useElectronRunAsNode: boolean;
   daemonEntryFile: string;
-  webServerEntryFile: string;
   webDistDir: string;
   desktopStateDir: string;
   desktopLogsDir: string;
@@ -97,9 +96,6 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
   const daemonEntryFile = resolveExistingFile('daemon entry file', isPackaged
     ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
     : [resolve(repoRoot, 'packages', 'daemon', 'dist', 'index.js')]);
-  const webServerEntryFile = resolveExistingFile('web server entry file', isPackaged
-    ? [resolve(appRoot, 'node_modules', '@personal-agent', 'web', 'dist-server', 'index.js')]
-    : [resolve(repoRoot, 'packages', 'web', 'dist-server', 'index.js')]);
   const webDistDir = resolveExistingFile('web UI dist directory', isPackaged
     ? [resolve(appRoot, 'node_modules', '@personal-agent', 'web', 'dist')]
     : [resolve(repoRoot, 'packages', 'web', 'dist')]);
@@ -115,7 +111,6 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     nodeCommand,
     useElectronRunAsNode: isPackaged,
     daemonEntryFile,
-    webServerEntryFile,
     webDistDir,
     desktopStateDir,
     desktopLogsDir,
