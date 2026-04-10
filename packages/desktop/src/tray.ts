@@ -10,9 +10,9 @@ export type DesktopTrayStartupState =
 export interface DesktopTrayActions {
   onOpen: () => void;
   onNewConversation: () => void;
-  onConnections: () => void;
+  onSettings: () => void;
   onCheckForUpdates: () => void;
-  onRestartBackend: () => void;
+  onRestartRuntime: () => void;
   onOpenLogs: () => void;
   onQuit: () => void;
 }
@@ -85,7 +85,7 @@ export function buildDesktopTrayMenuTemplate(options: {
   template.push(
     { type: 'separator' },
     {
-      label: startupState.kind === 'error' ? 'Retry Personal Agent' : 'Open Personal Agent',
+      label: startupState.kind === 'error' ? 'Retry Personal Agent' : 'Show Personal Agent',
       click: actions.onOpen,
       enabled: canRetry,
     },
@@ -95,8 +95,8 @@ export function buildDesktopTrayMenuTemplate(options: {
       enabled: controlsReady,
     },
     {
-      label: 'Connections…',
-      click: actions.onConnections,
+      label: 'Settings…',
+      click: actions.onSettings,
       enabled: controlsReady,
     },
     {
@@ -104,8 +104,8 @@ export function buildDesktopTrayMenuTemplate(options: {
       click: actions.onCheckForUpdates,
     },
     {
-      label: 'Restart Backend',
-      click: actions.onRestartBackend,
+      label: 'Restart Runtime',
+      click: actions.onRestartRuntime,
       enabled: canRetry,
     },
   );

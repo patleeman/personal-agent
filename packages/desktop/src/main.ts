@@ -233,13 +233,13 @@ async function bootstrapDesktopApp(): Promise<void> {
     onHideWindow: () => {
       windowController?.hideFocusedWindow();
     },
-    onConnections: () => {
-      void openMainRoute('/settings#desktop-connections');
+    onSettings: () => {
+      void openMainRoute('/settings');
     },
     onCheckForUpdates: () => {
       void updateManager?.checkForUpdates({ userInitiated: true });
     },
-    onRestartBackend: () => {
+    onRestartRuntime: () => {
       void restartActiveHost();
     },
     onOpenLogs: () => {
@@ -254,9 +254,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     hostManager,
     onOpen: shellActions.onOpen,
     onNewConversation: shellActions.onNewConversation,
-    onConnections: shellActions.onConnections,
+    onSettings: shellActions.onSettings,
     onCheckForUpdates: shellActions.onCheckForUpdates,
-    onRestartBackend: shellActions.onRestartBackend,
+    onRestartRuntime: shellActions.onRestartRuntime,
     onOpenLogs: shellActions.onOpenLogs,
     onQuit: shellActions.onQuit,
   });

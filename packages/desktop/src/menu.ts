@@ -16,9 +16,9 @@ export interface DesktopApplicationMenuActions {
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
   onHideWindow: () => void;
-  onConnections: () => void;
+  onSettings: () => void;
   onCheckForUpdates: () => void;
-  onRestartBackend: () => void;
+  onRestartRuntime: () => void;
   onQuit: () => void;
 }
 
@@ -39,7 +39,7 @@ export function buildDesktopApplicationMenuTemplate(
     label: 'File',
     submenu: [
       {
-        label: 'Open Personal Agent',
+        label: 'Show Personal Agent',
         accelerator: 'CommandOrControl+Shift+A',
         click: actions.onOpen,
       },
@@ -109,9 +109,9 @@ export function buildDesktopApplicationMenuTemplate(
               type: 'separator' as const,
             },
             {
-              label: 'Connections…',
+              label: 'Settings…',
               accelerator: 'CommandOrControl+,',
-              click: actions.onConnections,
+              click: actions.onSettings,
             },
             {
               label: 'Check for Updates…',
@@ -122,8 +122,8 @@ export function buildDesktopApplicationMenuTemplate(
             },
           ]),
       {
-        label: 'Restart Backend',
-        click: actions.onRestartBackend,
+        label: 'Restart Runtime',
+        click: actions.onRestartRuntime,
       },
       ...(!isMac
         ? [
@@ -217,9 +217,9 @@ export function buildDesktopApplicationMenuTemplate(
         click: actions.onCheckForUpdates,
       },
       {
-        label: 'Connections…',
+        label: 'Settings…',
         accelerator: 'CommandOrControl+,',
-        click: actions.onConnections,
+        click: actions.onSettings,
       },
       { type: 'separator' },
       { role: 'services' },

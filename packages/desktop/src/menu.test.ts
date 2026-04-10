@@ -18,9 +18,9 @@ function createActions() {
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
     onHideWindow: vi.fn(),
-    onConnections: vi.fn(),
+    onSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
-    onRestartBackend: vi.fn(),
+    onRestartRuntime: vi.fn(),
     onQuit: vi.fn(),
   };
 }
@@ -44,7 +44,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     expect(appMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'about' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
-      expect.objectContaining({ label: 'Connections…', accelerator: 'CommandOrControl+,' }),
+      expect.objectContaining({ label: 'Settings…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'CommandOrControl+Q' }),
     ]));
 
@@ -62,7 +62,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Edit Working Directory', accelerator: 'CommandOrControl+Shift+L' }),
     ]));
     expect(fileMenu?.submenu).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Connections…' }),
+      expect.objectContaining({ label: 'Settings…' }),
       expect.objectContaining({ role: 'close' }),
     ]));
 
@@ -93,7 +93,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
 
     const fileMenu = template[0];
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Open Personal Agent', accelerator: 'CommandOrControl+Shift+A' }),
+      expect.objectContaining({ label: 'Show Personal Agent', accelerator: 'CommandOrControl+Shift+A' }),
       expect.objectContaining({ label: 'New Conversation', accelerator: 'CommandOrControl+N' }),
       expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
@@ -105,9 +105,9 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Rename Conversation', accelerator: 'CommandOrControl+Alt+R' }),
       expect.objectContaining({ label: 'Focus Composer', accelerator: 'CommandOrControl+L' }),
       expect.objectContaining({ label: 'Edit Working Directory', accelerator: 'CommandOrControl+Shift+L' }),
-      expect.objectContaining({ label: 'Connections…', accelerator: 'CommandOrControl+,' }),
+      expect.objectContaining({ label: 'Settings…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
-      expect.objectContaining({ label: 'Restart Backend' }),
+      expect.objectContaining({ label: 'Restart Runtime' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'Alt+F4' }),
     ]));
 
