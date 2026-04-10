@@ -14,14 +14,7 @@ import {
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
 import {
-  deleteConversationArtifact,
-  deleteConversationAttachment,
-  getConversationArtifact,
-  getConversationAttachment,
-  listConversationArtifacts,
-  listConversationAttachments,
   readConversationAttachmentDownload,
-  saveConversationAttachment,
 } from '@personal-agent/core';
 import {
   cancelDeferredResumeForSessionFile,
@@ -59,6 +52,18 @@ import {
   setServerTimingHeaders,
   invalidateAppTopics,
 } from '../middleware/index.js';
+import {
+  ConversationAssetCapabilityInputError,
+  ConversationAssetCapabilityNotFoundError,
+  createConversationAttachmentCapability,
+  deleteConversationArtifactCapability,
+  deleteConversationAttachmentCapability,
+  readConversationArtifactCapability,
+  readConversationArtifactsCapability,
+  readConversationAttachmentCapability,
+  readConversationAttachmentsCapability,
+  updateConversationAttachmentCapability,
+} from '../conversations/conversationAssetsCapability.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
@@ -100,6 +105,24 @@ function parseTrimmedQueryString(rawValue: unknown): string | undefined {
 
   const normalized = candidate.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function writeConversationAssetCapabilityError(
+  res: { status(code: number): { json(value: unknown): void } },
+  err: unknown,
+  options?: { notFoundMessage?: string },
+): boolean {
+  if (err instanceof ConversationAssetCapabilityInputError) {
+    res.status(400).json({ error: err.message });
+    return true;
+  }
+
+  if (err instanceof ConversationAssetCapabilityNotFoundError) {
+    res.status(404).json({ error: options?.notFoundMessage ?? err.message });
+    return true;
+  }
+
+  return false;
 }
 
 function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
@@ -432,116 +455,90 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/artifacts', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const artifacts = listConversationArtifacts({
-        profile,
-        conversationId: req.params.id,
-      });
-
-      res.json({ conversationId: req.params.id, artifacts });
+      res.json(readConversationArtifactsCapability(getCurrentProfileFn(), req.params.id));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const artifact = getConversationArtifact({
-        profile,
+      res.json(readConversationArtifactCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         artifactId: req.params.artifactId,
-      });
-
-      if (!artifact) {
-        res.status(404).json({ error: 'Artifact not found' });
-        return;
-      }
-
-      res.json({ conversationId: req.params.id, artifact });
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const deleted = deleteConversationArtifact({
-        profile,
+      res.json(deleteConversationArtifactCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         artifactId: req.params.artifactId,
-      });
-
-      invalidateAppTopics('artifacts');
-      res.json({
-        conversationId: req.params.id,
-        deleted,
-        artifactId: req.params.artifactId,
-        artifacts: listConversationArtifacts({ profile, conversationId: req.params.id }),
-      });
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.get('/api/conversations/:id/attachments', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const attachments = listConversationAttachments({
-        profile,
-        conversationId: req.params.id,
-      });
-
-      res.json({ conversationId: req.params.id, attachments });
+      res.json(readConversationAttachmentsCapability(getCurrentProfileFn(), req.params.id));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.get('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const attachment = getConversationAttachment({
-        profile,
+      res.json(readConversationAttachmentCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         attachmentId: req.params.attachmentId,
-      });
-
-      if (!attachment) {
-        res.status(404).json({ error: 'Attachment not found' });
-        return;
-      }
-
-      res.json({ conversationId: req.params.id, attachment });
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.post('/api/conversations/:id/attachments', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
       const body = req.body as {
         kind?: 'excalidraw';
         title?: string;
@@ -554,43 +551,24 @@ export function registerConversationRoutes(
         note?: string;
       };
 
-      if (!body.sourceData || !body.previewData) {
-        res.status(400).json({ error: 'sourceData and previewData are required.' });
-        return;
-      }
-
-      const attachment = saveConversationAttachment({
-        profile,
+      res.json(createConversationAttachmentCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
-        kind: body.kind ?? 'excalidraw',
-        title: body.title,
-        sourceData: body.sourceData,
-        sourceName: body.sourceName,
-        sourceMimeType: body.sourceMimeType,
-        previewData: body.previewData,
-        previewName: body.previewName,
-        previewMimeType: body.previewMimeType,
-        note: body.note,
-      });
-
-      invalidateAppTopics('attachments');
-      res.json({
-        conversationId: req.params.id,
-        attachment,
-        attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
-      });
+        ...body,
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.patch('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
       const body = req.body as {
         title?: string;
         sourceData?: string;
@@ -602,72 +580,37 @@ export function registerConversationRoutes(
         note?: string;
       };
 
-      if (!body.sourceData || !body.previewData) {
-        res.status(400).json({ error: 'sourceData and previewData are required.' });
-        return;
-      }
-
-      const existing = getConversationAttachment({
-        profile,
+      res.json(updateConversationAttachmentCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         attachmentId: req.params.attachmentId,
-      });
-
-      if (!existing) {
-        res.status(404).json({ error: 'Attachment not found' });
-        return;
-      }
-
-      const attachment = saveConversationAttachment({
-        profile,
-        conversationId: req.params.id,
-        attachmentId: req.params.attachmentId,
-        title: body.title,
-        sourceData: body.sourceData,
-        sourceName: body.sourceName,
-        sourceMimeType: body.sourceMimeType,
-        previewData: body.previewData,
-        previewName: body.previewName,
-        previewMimeType: body.previewMimeType,
-        note: body.note,
-      });
-
-      invalidateAppTopics('attachments');
-      res.json({
-        conversationId: req.params.id,
-        attachment,
-        attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
-      });
+        ...body,
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.delete('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const deleted = deleteConversationAttachment({
-        profile,
+      res.json(deleteConversationAttachmentCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         attachmentId: req.params.attachmentId,
-      });
-
-      invalidateAppTopics('attachments');
-      res.json({
-        conversationId: req.params.id,
-        deleted,
-        attachmentId: req.params.attachmentId,
-        attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
-      });
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
@@ -777,22 +720,22 @@ export function registerCompanionConversationRoutes(
   registerConversationReadRoutes(router);
   router.get('/api/conversations/:id/artifacts', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const artifacts = listConversationArtifacts({ profile, conversationId: req.params.id });
-      res.json(artifacts);
+      res.json(readConversationArtifactsCapability(getCurrentProfileFn(), req.params.id).artifacts);
     } catch (err) {
       logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+      if (writeConversationAssetCapabilityError(res, err, { notFoundMessage: 'Not found' })) { return; }
       res.status(500).json({ error: String(err) });
     }
   });
   router.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
     try {
-      const profile = getCurrentProfileFn();
-      const artifact = getConversationArtifact({ profile, conversationId: req.params.id, artifactId: req.params.artifactId });
-      if (!artifact) { res.status(404).json({ error: 'Not found' }); return; }
-      res.json(artifact);
+      res.json(readConversationArtifactCapability(getCurrentProfileFn(), {
+        conversationId: req.params.id,
+        artifactId: req.params.artifactId,
+      }).artifact);
     } catch (err) {
       logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
+      if (writeConversationAssetCapabilityError(res, err, { notFoundMessage: 'Not found' })) { return; }
       res.status(500).json({ error: String(err) });
     }
   });

@@ -448,6 +448,68 @@ export class LocalHostController implements HostController {
     return module.updateDesktopConversationModelPreferences(input);
   }
 
+  async readConversationArtifacts(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationArtifacts(conversationId);
+  }
+
+  async readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationArtifact(input);
+  }
+
+  async deleteConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.deleteDesktopConversationArtifact(input);
+  }
+
+  async readConversationAttachments(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationAttachments(conversationId);
+  }
+
+  async readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationAttachment(input);
+  }
+
+  async createConversationAttachment(input: {
+    conversationId: string;
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.createDesktopConversationAttachment(input);
+  }
+
+  async updateConversationAttachment(input: {
+    conversationId: string;
+    attachmentId: string;
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopConversationAttachment(input);
+  }
+
+  async deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.deleteDesktopConversationAttachment(input);
+  }
+
   async readLiveSessions(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSessions();

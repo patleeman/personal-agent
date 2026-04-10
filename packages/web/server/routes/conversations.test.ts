@@ -149,6 +149,10 @@ vi.mock('../middleware/index.js', () => ({
   setServerTimingHeaders: setServerTimingHeadersMock,
 }));
 
+vi.mock('../shared/appEvents.js', () => ({
+  invalidateAppTopics: invalidateAppTopicsMock,
+}));
+
 vi.mock('../conversations/conversationService.js', () => ({
   handleCompanionConversationListRequest: handleCompanionConversationListRequestMock,
   listConversationSessionsSnapshot: listConversationSessionsSnapshotMock,
@@ -165,7 +169,10 @@ vi.mock('../conversations/conversationService.js', () => ({
 
 import { registerCompanionConversationRoutes, registerConversationRoutes } from './conversations.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (
+  req: { body?: unknown; params?: Record<string, string>; query?: Record<string, unknown> },
+  res: ReturnType<typeof createResponse>,
+) => Promise<void> | void;
 
 function createRequest(overrides: Record<string, unknown> = {}) {
   return {
@@ -324,7 +331,10 @@ describe('conversation routes', () => {
     getAvailableModelObjectsMock.mockReturnValue([{ id: 'gpt-4o' }]);
     getConversationArtifactMock.mockReturnValue({ id: 'artifact-1', title: 'Artifact 1' });
     getConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
-    handleCompanionConversationListRequestMock.mockImplementation((_req: any, res: any) => {
+    handleCompanionConversationListRequestMock.mockImplementation((
+      _req: unknown,
+      res: { json(value: unknown): void },
+    ) => {
       res.json([{ id: 'conversation-1' }]);
     });
     isLocalLiveMock.mockReturnValue(false);

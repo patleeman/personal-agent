@@ -938,15 +938,47 @@ export const api = {
 
     return get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`);
   },
-  conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
-  conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
-  deleteConversationArtifact: (id: string, artifactId: string) =>
-    requestJson<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
-  conversationAttachments: (id: string) =>
-    get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(`/conversations/${encodeURIComponent(id)}/attachments`),
-  conversationAttachment: (id: string, attachmentId: string) =>
-    get<{ conversationId: string; attachment: ConversationAttachmentRecord }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`),
-  createConversationAttachment: (id: string, input: {
+  conversationArtifacts: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationArtifacts(id);
+    }
+
+    return get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`);
+  },
+  conversationArtifact: async (id: string, artifactId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationArtifact({ conversationId: id, artifactId });
+    }
+
+    return get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`);
+  },
+  deleteConversationArtifact: async (id: string, artifactId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.deleteConversationArtifact({ conversationId: id, artifactId });
+    }
+
+    return requestJson<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`);
+  },
+  conversationAttachments: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationAttachments(id);
+    }
+
+    return get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(`/conversations/${encodeURIComponent(id)}/attachments`);
+  },
+  conversationAttachment: async (id: string, attachmentId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationAttachment({ conversationId: id, attachmentId });
+    }
+
+    return get<{ conversationId: string; attachment: ConversationAttachmentRecord }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`);
+  },
+  createConversationAttachment: async (id: string, input: {
     kind?: 'excalidraw';
     title?: string;
     sourceData: string;
@@ -956,13 +988,19 @@ export const api = {
     previewName?: string;
     previewMimeType?: string;
     note?: string;
-  }) =>
-    post<{
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.createConversationAttachment({ conversationId: id, ...input });
+    }
+
+    return post<{
       conversationId: string;
       attachment: ConversationAttachmentRecord;
       attachments: ConversationAttachmentSummary[];
-    }>(`/conversations/${encodeURIComponent(id)}/attachments`, input),
-  updateConversationAttachment: (id: string, attachmentId: string, input: {
+    }>(`/conversations/${encodeURIComponent(id)}/attachments`, input);
+  },
+  updateConversationAttachment: async (id: string, attachmentId: string, input: {
     title?: string;
     sourceData: string;
     sourceName?: string;
@@ -971,19 +1009,31 @@ export const api = {
     previewName?: string;
     previewMimeType?: string;
     note?: string;
-  }) =>
-    patch<{
+  }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateConversationAttachment({ conversationId: id, attachmentId, ...input });
+    }
+
+    return patch<{
       conversationId: string;
       attachment: ConversationAttachmentRecord;
       attachments: ConversationAttachmentSummary[];
-    }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, input),
-  deleteConversationAttachment: (id: string, attachmentId: string) =>
-    requestJson<{
+    }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, input);
+  },
+  deleteConversationAttachment: async (id: string, attachmentId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.deleteConversationAttachment({ conversationId: id, attachmentId });
+    }
+
+    return requestJson<{
       conversationId: string;
       deleted: boolean;
       attachmentId: string;
       attachments: ConversationAttachmentSummary[];
-    }>('DELETE', `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`),
+    }>('DELETE', `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`);
+  },
   deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
   scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
     requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes`, input),

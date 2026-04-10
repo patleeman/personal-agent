@@ -323,6 +323,36 @@ export interface HostController {
   recoverConversation?(conversationId: string): Promise<unknown>;
   readConversationModelPreferences?(input: DesktopConversationModelPreferencesRequest): Promise<unknown>;
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
+  readConversationArtifacts?(conversationId: string): Promise<unknown>;
+  readConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  deleteConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  readConversationAttachments?(conversationId: string): Promise<unknown>;
+  readConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
+  createConversationAttachment?(input: {
+    conversationId: string;
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown>;
+  updateConversationAttachment?(input: {
+    conversationId: string;
+    attachmentId: string;
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown>;
+  deleteConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessions?(): Promise<unknown>;
   readLiveSessionStats?(conversationId: string): Promise<unknown>;

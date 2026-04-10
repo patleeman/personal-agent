@@ -6,6 +6,10 @@ import type {
   CodexPlanUsageState,
   CompanionAuthAdminState,
   CompanionPairingCodeResult,
+  ConversationArtifactRecord,
+  ConversationArtifactSummary,
+  ConversationAttachmentRecord,
+  ConversationAttachmentSummary,
   ConversationAutomationPreferencesState,
   ConversationAutomationWorkflowPresetLibraryState,
   ConversationAutomationWorkspaceState,
@@ -175,6 +179,36 @@ export interface PersonalAgentDesktopBridge {
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
   readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
+  readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
+  readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
+  deleteConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>;
+  readConversationAttachments(conversationId: string): Promise<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>;
+  readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord }>;
+  createConversationAttachment(input: {
+    conversationId: string;
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
+  updateConversationAttachment(input: {
+    conversationId: string;
+    attachmentId: string;
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
+  deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; deleted: boolean; attachmentId: string; attachments: ConversationAttachmentSummary[] }>;
   readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionStats(conversationId: string): Promise<LiveSessionStats>;

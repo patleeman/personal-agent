@@ -160,6 +160,40 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, input),
   updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
+  readConversationArtifacts: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
+  readConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifact`, input),
+  deleteConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-conversation-artifact`, input),
+  readConversationAttachments: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachments`, conversationId),
+  readConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment`, input),
+  createConversationAttachment: (input: {
+    conversationId: string;
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-conversation-attachment`, input),
+  updateConversationAttachment: (input: {
+    conversationId: string;
+    attachmentId: string;
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-attachment`, input),
+  deleteConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-conversation-attachment`, input),
   readLiveSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-sessions`),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
   readLiveSessionStats: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-stats`, conversationId),

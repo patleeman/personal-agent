@@ -89,6 +89,14 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     recoverDesktopConversation: vi.fn(),
     readDesktopConversationModelPreferences: vi.fn(),
     updateDesktopConversationModelPreferences: vi.fn(),
+    readDesktopConversationArtifacts: vi.fn(),
+    readDesktopConversationArtifact: vi.fn(),
+    deleteDesktopConversationArtifact: vi.fn(),
+    readDesktopConversationAttachments: vi.fn(),
+    readDesktopConversationAttachment: vi.fn(),
+    createDesktopConversationAttachment: vi.fn(),
+    updateDesktopConversationAttachment: vi.fn(),
+    deleteDesktopConversationAttachment: vi.fn(),
     readDesktopLiveSessions: vi.fn(),
     readDesktopLiveSession: vi.fn(),
     renameDesktopLiveSession: vi.fn(),
@@ -419,6 +427,112 @@ describe('LocalHostController', () => {
     expect(readDesktopLiveSessionStats).toHaveBeenCalledWith('live-1');
     expect(renameDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed live session' });
     expect(readDesktopLiveSessionContextUsage).toHaveBeenCalledWith('live-1');
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop conversation artifact and attachment capabilities through the local API module without loopback proxying', async () => {
+    const readDesktopConversationArtifacts = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      artifacts: [{ id: 'artifact-1', title: 'Artifact 1' }],
+    });
+    const readDesktopConversationArtifact = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html' },
+    });
+    const deleteDesktopConversationArtifact = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      deleted: true,
+      artifactId: 'artifact-1',
+      artifacts: [],
+    });
+    const readDesktopConversationAttachments = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    const readDesktopConversationAttachment = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+    });
+    const createDesktopConversationAttachment = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    const updateDesktopConversationAttachment = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    const deleteDesktopConversationAttachment = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      deleted: true,
+      attachmentId: 'attachment-1',
+      attachments: [],
+    });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      readDesktopConversationArtifacts,
+      readDesktopConversationArtifact,
+      deleteDesktopConversationArtifact,
+      readDesktopConversationAttachments,
+      readDesktopConversationAttachment,
+      createDesktopConversationAttachment,
+      updateDesktopConversationAttachment,
+      deleteDesktopConversationAttachment,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.readConversationArtifacts?.('conversation-1')).resolves.toEqual({
+      conversationId: 'conversation-1',
+      artifacts: [{ id: 'artifact-1', title: 'Artifact 1' }],
+    });
+    await expect(controller.readConversationArtifact?.({ conversationId: 'conversation-1', artifactId: 'artifact-1' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html' },
+    });
+    await expect(controller.deleteConversationArtifact?.({ conversationId: 'conversation-1', artifactId: 'artifact-1' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      deleted: true,
+      artifactId: 'artifact-1',
+      artifacts: [],
+    });
+    await expect(controller.readConversationAttachments?.('conversation-1')).resolves.toEqual({
+      conversationId: 'conversation-1',
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    await expect(controller.readConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+    });
+    await expect(controller.createConversationAttachment?.({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    await expect(controller.updateConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
+      attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
+    });
+    await expect(controller.deleteConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      deleted: true,
+      attachmentId: 'attachment-1',
+      attachments: [],
+    });
+
+    expect(readDesktopConversationArtifacts).toHaveBeenCalledWith('conversation-1');
+    expect(readDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
+    expect(deleteDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
+    expect(readDesktopConversationAttachments).toHaveBeenCalledWith('conversation-1');
+    expect(readDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
+    expect(createDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
+    expect(updateDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
+    expect(deleteDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

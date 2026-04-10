@@ -149,6 +149,16 @@ import {
 } from '../conversations/conversationModelPreferences.js';
 import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
 import {
+  createConversationAttachmentCapability,
+  deleteConversationArtifactCapability,
+  deleteConversationAttachmentCapability,
+  readConversationArtifactCapability,
+  readConversationArtifactsCapability,
+  readConversationAttachmentCapability,
+  readConversationAttachmentsCapability,
+  updateConversationAttachmentCapability,
+} from '../conversations/conversationAssetsCapability.js';
+import {
   createCompanionPairingCode,
   readCompanionAuthAdminState,
   revokeCompanionSession,
@@ -1879,6 +1889,80 @@ export async function changeDesktopConversationCwd(input: {
 
   publishConversationSessionMetaChanged(conversationId, result.id);
   return { id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true };
+}
+
+export async function readDesktopConversationArtifacts(conversationId: string) {
+  const context = await getLocalServerRouteContext();
+  return readConversationArtifactsCapability(context.getCurrentProfile(), conversationId);
+}
+
+export async function readDesktopConversationArtifact(input: {
+  conversationId: string;
+  artifactId: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return readConversationArtifactCapability(context.getCurrentProfile(), input);
+}
+
+export async function deleteDesktopConversationArtifact(input: {
+  conversationId: string;
+  artifactId: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return deleteConversationArtifactCapability(context.getCurrentProfile(), input);
+}
+
+export async function readDesktopConversationAttachments(conversationId: string) {
+  const context = await getLocalServerRouteContext();
+  return readConversationAttachmentsCapability(context.getCurrentProfile(), conversationId);
+}
+
+export async function readDesktopConversationAttachment(input: {
+  conversationId: string;
+  attachmentId: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return readConversationAttachmentCapability(context.getCurrentProfile(), input);
+}
+
+export async function createDesktopConversationAttachment(input: {
+  conversationId: string;
+  kind?: 'excalidraw';
+  title?: string;
+  sourceData?: string;
+  sourceName?: string;
+  sourceMimeType?: string;
+  previewData?: string;
+  previewName?: string;
+  previewMimeType?: string;
+  note?: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return createConversationAttachmentCapability(context.getCurrentProfile(), input);
+}
+
+export async function updateDesktopConversationAttachment(input: {
+  conversationId: string;
+  attachmentId: string;
+  title?: string;
+  sourceData?: string;
+  sourceName?: string;
+  sourceMimeType?: string;
+  previewData?: string;
+  previewName?: string;
+  previewMimeType?: string;
+  note?: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return updateConversationAttachmentCapability(context.getCurrentProfile(), input);
+}
+
+export async function deleteDesktopConversationAttachment(input: {
+  conversationId: string;
+  attachmentId: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return deleteConversationAttachmentCapability(context.getCurrentProfile(), input);
 }
 
 export async function recoverDesktopConversation(conversationId: string) {

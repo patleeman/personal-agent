@@ -176,6 +176,36 @@ export interface LocalApiModule {
     thinkingLevel?: string | null;
     surfaceId?: string;
   }): Promise<unknown>;
+  readDesktopConversationArtifacts(conversationId: string): Promise<unknown>;
+  readDesktopConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  deleteDesktopConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  readDesktopConversationAttachments(conversationId: string): Promise<unknown>;
+  readDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
+  createDesktopConversationAttachment(input: {
+    conversationId: string;
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown>;
+  updateDesktopConversationAttachment(input: {
+    conversationId: string;
+    attachmentId: string;
+    title?: string;
+    sourceData?: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData?: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }): Promise<unknown>;
+  deleteDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   readDesktopLiveSessions(): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
   readDesktopLiveSessionStats(conversationId: string): Promise<unknown>;

@@ -817,6 +817,94 @@ export function registerDesktopIpc(options: {
     return controller.updateConversationModelPreferences(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-artifacts`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationArtifacts) {
+      throw new Error('Dedicated desktop conversation artifact list reads are only available for the local host.');
+    }
+
+    return controller.readConversationArtifacts(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-artifact`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationArtifact) {
+      throw new Error('Dedicated desktop conversation artifact reads are only available for the local host.');
+    }
+
+    return controller.readConversationArtifact(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:delete-conversation-artifact`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.deleteConversationArtifact) {
+      throw new Error('Dedicated desktop conversation artifact deletes are only available for the local host.');
+    }
+
+    return controller.deleteConversationArtifact(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-attachments`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationAttachments) {
+      throw new Error('Dedicated desktop conversation attachment list reads are only available for the local host.');
+    }
+
+    return controller.readConversationAttachments(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-attachment`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationAttachment) {
+      throw new Error('Dedicated desktop conversation attachment reads are only available for the local host.');
+    }
+
+    return controller.readConversationAttachment(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:create-conversation-attachment`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.createConversationAttachment) {
+      throw new Error('Dedicated desktop conversation attachment creates are only available for the local host.');
+    }
+
+    return controller.createConversationAttachment(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-attachment`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateConversationAttachment) {
+      throw new Error('Dedicated desktop conversation attachment updates are only available for the local host.');
+    }
+
+    return controller.updateConversationAttachment(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:delete-conversation-attachment`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.deleteConversationAttachment) {
+      throw new Error('Dedicated desktop conversation attachment deletes are only available for the local host.');
+    }
+
+    return controller.deleteConversationAttachment(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-sessions`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
