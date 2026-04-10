@@ -1,9 +1,10 @@
-import { ipcMain } from 'electron';
+import { ipcMain, type WebContents } from 'electron';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
+const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
 
 export function registerDesktopIpc(options: {
   hostManager: HostManager;
@@ -11,6 +12,64 @@ export function registerDesktopIpc(options: {
   onHostStateChanged?: () => void;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
+  const appEventSubscriptions = new Map<string, () => void>();
+
+  const sendBufferedSubscriptionEvent = <T>(input: {
+    sender: WebContents;
+    channel: string;
+    subscriptionId: string;
+    subscribe: (emit: (event: T) => void) => Promise<() => void>;
+    store: Map<string, () => void>;
+  }): Promise<void> => (async () => {
+    const pendingEvents: T[] = [];
+    let deliveryEnabled = false;
+    let active = true;
+
+    const deliver = (nextEvent: T) => {
+      if (!active || input.sender.isDestroyed()) {
+        return;
+      }
+
+      if (!deliveryEnabled) {
+        pendingEvents.push(nextEvent);
+        return;
+      }
+
+      input.sender.send(input.channel, {
+        subscriptionId: input.subscriptionId,
+        event: nextEvent,
+      });
+    };
+
+    const unsubscribe = await input.subscribe(deliver);
+    const cleanup = () => {
+      if (!active) {
+        return;
+      }
+
+      active = false;
+      unsubscribe();
+      input.store.delete(input.subscriptionId);
+      pendingEvents.length = 0;
+    };
+
+    input.store.set(input.subscriptionId, cleanup);
+    input.sender.once('destroyed', cleanup);
+    deliveryEnabled = true;
+    setImmediate(() => {
+      if (!active || input.sender.isDestroyed()) {
+        return;
+      }
+
+      for (const pendingEvent of pendingEvents) {
+        input.sender.send(input.channel, {
+          subscriptionId: input.subscriptionId,
+          event: pendingEvent,
+        });
+      }
+      pendingEvents.length = 0;
+    });
+  })();
 
   ipcMain.handle(`${CHANNEL_PREFIX}:get-environment`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
@@ -62,27 +121,41 @@ export function registerDesktopIpc(options: {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const subscriptionId = `${event.sender.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
-    const unsubscribe = await options.hostManager.getHostController(hostId).subscribeApiStream(path, (streamEvent) => {
-      if (event.sender.isDestroyed()) {
-        return;
-      }
-
-      event.sender.send(API_STREAM_CHANNEL, {
-        subscriptionId,
-        event: streamEvent,
-      });
+    await sendBufferedSubscriptionEvent({
+      sender: event.sender,
+      channel: API_STREAM_CHANNEL,
+      subscriptionId,
+      store: streamSubscriptions,
+      subscribe: (emit) => options.hostManager.getHostController(hostId).subscribeApiStream(path, emit),
     });
-    const cleanup = () => {
-      unsubscribe();
-      streamSubscriptions.delete(subscriptionId);
-    };
-    streamSubscriptions.set(subscriptionId, cleanup);
-    event.sender.once('destroyed', cleanup);
     return { subscriptionId };
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, async (_event, subscriptionId: string) => {
     streamSubscriptions.get(subscriptionId)?.();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-app-events`, async (event) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.subscribeDesktopAppEvents) {
+      throw new Error('Desktop app events are only available for the local host.');
+    }
+
+    const subscriptionId = `${event.sender.id}:app:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    await sendBufferedSubscriptionEvent({
+      sender: event.sender,
+      channel: APP_EVENTS_CHANNEL,
+      subscriptionId,
+      store: appEventSubscriptions,
+      subscribe: (emit) => controller.subscribeDesktopAppEvents!(emit),
+    });
+    return { subscriptionId };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-app-events`, async (_event, subscriptionId: string) => {
+    appEventSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {

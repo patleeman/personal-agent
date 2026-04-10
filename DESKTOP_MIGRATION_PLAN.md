@@ -253,3 +253,5 @@ Just completed:
 - session-tab layout sync now uses the desktop-aware API layer instead of direct renderer fetches
 - the local desktop window now loads packaged renderer assets from a desktop protocol instead of loading the app shell from `http://127.0.0.1`
 - desktop-owned daemon and web runtime state now resolve correctly inside the Electron main process, and the remaining shell diagnostics/docs no longer describe a fake local web child
+- the packaged `personal-agent://app` renderer now receives the real desktop preload bridge again, which fixes local desktop IPC transport, main-process stream bridging, and top-bar navigation controls in the packaged shell
+- local desktop app invalidation/activity/session/task/daemon/web-ui updates can now bypass `/api/events` entirely and stream over a dedicated desktop app-events bridge from the main process

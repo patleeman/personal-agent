@@ -3,6 +3,7 @@ import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
 import type {
   DesktopApiStreamEvent,
+  DesktopAppBridgeEvent,
   DesktopHostRecord,
   HostController,
   HostStatus,
@@ -55,6 +56,11 @@ export class LocalHostController implements HostController {
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
     const module = await this.loadLocalApi();
     return module.subscribeDesktopLocalApiStream(path, onEvent);
+  }
+
+  async subscribeDesktopAppEvents(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void> {
+    const module = await this.loadLocalApi();
+    return module.subscribeDesktopAppEvents(onEvent);
   }
 
   async restart(): Promise<void> {

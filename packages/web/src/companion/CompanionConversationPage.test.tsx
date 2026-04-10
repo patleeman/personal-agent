@@ -4,6 +4,24 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LiveTitlesContext, AppDataContext, SseConnectionContext } from '../contexts.js';
 import type { LiveSessionPresenceState, SessionDetail, SessionMeta } from '../types.js';
+
+const apiMocks = vi.hoisted(() => ({
+  openConversationTabs: vi.fn(),
+  setOpenConversationTabs: vi.fn(),
+}));
+
+vi.mock('../api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../api')>();
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      openConversationTabs: apiMocks.openConversationTabs,
+      setOpenConversationTabs: apiMocks.setOpenConversationTabs,
+    },
+  };
+});
+
 import {
   CompanionConversationPage,
   resolveCompanionControlState,
@@ -132,12 +150,18 @@ describe('companion conversation helpers', () => {
 
 describe('syncCompanionConversationWorkspaceLayout', () => {
   const dispatchEvent = vi.fn();
-  const fetchMock = vi.fn(() => Promise.resolve({ ok: true }));
 
   beforeEach(() => {
     vi.stubGlobal('localStorage', createStorage());
-    vi.stubGlobal('window', { dispatchEvent });
-    vi.stubGlobal('fetch', fetchMock);
+    apiMocks.openConversationTabs.mockReset();
+    apiMocks.setOpenConversationTabs.mockReset();
+    apiMocks.openConversationTabs.mockResolvedValue({ sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [] });
+    apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true });
+
+    vi.stubGlobal('window', {
+      dispatchEvent,
+      location: { pathname: '/app/conversations/conv-123' },
+    });
 
     if (typeof CustomEvent === 'undefined') {
       vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> {
@@ -154,33 +178,16 @@ describe('syncCompanionConversationWorkspaceLayout', () => {
 
   afterEach(() => {
     dispatchEvent.mockReset();
-    fetchMock.mockReset();
-    fetchMock.mockImplementation(() => Promise.resolve({ ok: true }));
     vi.unstubAllGlobals();
   });
 
   it('syncs the shared workspace layout without auto-opening the viewed conversation', async () => {
-    // First call (GET): server returns empty layout; second call (PATCH): sync writes the merged empty layout back.
-    fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [] }),
-      });
-
     await expect(syncCompanionConversationWorkspaceLayout()).resolves.toEqual({
       sessionIds: [],
       pinnedSessionIds: [],
       archivedSessionIds: [],
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionIds: [],
-        pinnedSessionIds: [],
-        archivedSessionIds: [],
-      }),
-    }));
+    expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith([], [], []);
   });
 });
 

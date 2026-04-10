@@ -16,7 +16,6 @@ import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { subscribeAppEvents } from '../shared/appEvents.js';
-import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
 import { getProfileConfigFilePath } from '../ui/profilePreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
@@ -57,6 +56,12 @@ export interface DesktopLocalApiDispatchResult {
 type DesktopLocalApiStreamEvent =
   | { type: 'open' }
   | { type: 'message'; data: string }
+  | { type: 'error'; message: string }
+  | { type: 'close' };
+
+type DesktopAppBridgeEvent =
+  | { type: 'open' }
+  | { type: 'event'; event: unknown }
   | { type: 'error'; message: string }
   | { type: 'close' };
 
@@ -444,6 +449,85 @@ function parsePositiveInteger(raw: string | null, options?: { minimum?: number; 
   return parsed;
 }
 
+function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
+  if (!event || typeof event !== 'object') {
+    return null;
+  }
+
+  const typedEvent = event as {
+    type?: string;
+    entries?: unknown;
+    unreadCount?: unknown;
+    activeCount?: unknown;
+    sessions?: unknown;
+    tasks?: unknown;
+    state?: unknown;
+  };
+
+  switch (typedEvent.type) {
+    case 'activity_snapshot':
+      return {
+        type: 'activity',
+        snapshot: {
+          entries: Array.isArray(typedEvent.entries) ? typedEvent.entries : [],
+          unreadCount: typeof typedEvent.unreadCount === 'number' ? typedEvent.unreadCount : 0,
+        },
+      };
+    case 'alerts_snapshot':
+      return {
+        type: 'alerts',
+        snapshot: {
+          entries: Array.isArray(typedEvent.entries) ? typedEvent.entries : [],
+          activeCount: typeof typedEvent.activeCount === 'number' ? typedEvent.activeCount : 0,
+        },
+      };
+    case 'sessions_snapshot':
+      return {
+        type: 'sessions',
+        sessions: Array.isArray(typedEvent.sessions) ? typedEvent.sessions : [],
+      };
+    case 'tasks_snapshot':
+      return {
+        type: 'tasks',
+        tasks: Array.isArray(typedEvent.tasks) ? typedEvent.tasks : [],
+      };
+    case 'daemon_snapshot':
+      return {
+        type: 'daemon',
+        state: typedEvent.state ?? null,
+      };
+    case 'web_ui_snapshot':
+      return {
+        type: 'webUi',
+        state: typedEvent.state ?? null,
+      };
+    default:
+      return null;
+  }
+}
+
+async function buildDesktopAppEventsForTopics(topics: readonly string[]): Promise<unknown[]> {
+  const events: unknown[] = [];
+  const seen = new Set<string>();
+
+  for (const topic of topics) {
+    if (seen.has(topic) || topic === 'runs') {
+      continue;
+    }
+
+    seen.add(topic);
+    const snapshotEvents = await buildSnapshotEventsForTopic(topic as Parameters<typeof buildSnapshotEventsForTopic>[0]);
+    for (const snapshotEvent of snapshotEvents) {
+      const mappedEvent = mapSnapshotEventToDesktopAppEvent(snapshotEvent);
+      if (mappedEvent) {
+        events.push(mappedEvent);
+      }
+    }
+  }
+
+  return events;
+}
+
 async function subscribeDesktopAppEventStream(
   onEvent: (event: DesktopLocalApiStreamEvent) => void,
 ): Promise<() => void> {
@@ -484,21 +568,19 @@ async function subscribeDesktopAppEventStream(
   onEvent({ type: 'open' });
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await streamSnapshotEvents(INITIAL_APP_EVENT_TOPICS, {
-      buildEvents: buildSnapshotEventsForTopic,
-      writeEvent,
-    });
+    const bootstrapEvents = await buildDesktopAppEventsForTopics(INITIAL_APP_EVENT_TOPICS);
+    for (const event of bootstrapEvents) {
+      writeEvent(event);
+    }
   });
 
   const unsubscribe = subscribeAppEvents((event) => {
     if (event.type === 'invalidate') {
       const snapshotTopics = event.topics.filter((topic) => topic !== 'runs');
       enqueueWrite(async () => {
-        if (snapshotTopics.length > 0) {
-          await streamSnapshotEvents(snapshotTopics, {
-            buildEvents: buildSnapshotEventsForTopic,
-            writeEvent,
-          });
+        const mappedEvents = await buildDesktopAppEventsForTopics(snapshotTopics);
+        for (const mappedEvent of mappedEvents) {
+          writeEvent(mappedEvent);
         }
         writeEvent(event);
       });
@@ -506,6 +588,78 @@ async function subscribeDesktopAppEventStream(
     }
 
     writeEvent(event);
+  });
+
+  return () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    unsubscribe();
+    onEvent({ type: 'close' });
+  };
+}
+
+export async function subscribeDesktopAppEvents(
+  onEvent: (event: DesktopAppBridgeEvent) => void,
+): Promise<() => void> {
+  await getLocalRoutes();
+
+  let closed = false;
+  let writeQueue = Promise.resolve();
+
+  const emitEvent = (event: unknown) => {
+    if (closed) {
+      return;
+    }
+
+    onEvent({ type: 'event', event });
+  };
+
+  const enqueueWrite = (task: () => Promise<void> | void) => {
+    writeQueue = writeQueue
+      .then(async () => {
+        if (closed) {
+          return;
+        }
+
+        await task();
+      })
+      .catch((error) => {
+        if (closed) {
+          return;
+        }
+
+        onEvent({
+          type: 'error',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  };
+
+  onEvent({ type: 'open' });
+  enqueueWrite(async () => {
+    const bootstrapEvents = await buildDesktopAppEventsForTopics(INITIAL_APP_EVENT_TOPICS);
+    for (const event of bootstrapEvents) {
+      emitEvent(event);
+    }
+  });
+
+  const unsubscribe = subscribeAppEvents((event) => {
+    if (event.type === 'invalidate') {
+      const snapshotTopics = event.topics.filter((topic) => topic !== 'runs');
+      enqueueWrite(async () => {
+        const mappedEvents = await buildDesktopAppEventsForTopics(snapshotTopics);
+        for (const mappedEvent of mappedEvents) {
+          emitEvent(mappedEvent);
+        }
+        emitEvent(event);
+      });
+      return;
+    }
+
+    emitEvent(event);
   });
 
   return () => {

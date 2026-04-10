@@ -29,6 +29,7 @@ describe('LocalHostController', () => {
       invokeDesktopLocalApi,
       dispatchDesktopLocalApiRequest: vi.fn(),
       subscribeDesktopLocalApiStream: vi.fn(),
+      subscribeDesktopAppEvents: vi.fn(),
     } satisfies LocalApiModule);
     const backend = {
       ensureStarted: vi.fn(),
@@ -67,6 +68,7 @@ describe('LocalHostController', () => {
       invokeDesktopLocalApi: vi.fn(),
       dispatchDesktopLocalApiRequest: vi.fn(),
       subscribeDesktopLocalApiStream,
+      subscribeDesktopAppEvents: vi.fn(),
     } satisfies LocalApiModule);
     const backend = {
       ensureStarted: vi.fn(),
@@ -86,6 +88,36 @@ describe('LocalHostController', () => {
 
     expect(loadLocalApi).toHaveBeenCalledTimes(1);
     expect(subscribeDesktopLocalApiStream).toHaveBeenCalledWith('/api/live-sessions/live-1/events?tailBlocks=20', onEvent);
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop app events through the local API module without loopback proxying', async () => {
+    const unsubscribe = vi.fn();
+    const subscribeDesktopAppEvents = vi.fn().mockResolvedValue(unsubscribe);
+    const loadLocalApi = vi.fn().mockResolvedValue({
+      invokeDesktopLocalApi: vi.fn(),
+      dispatchDesktopLocalApiRequest: vi.fn(),
+      subscribeDesktopLocalApiStream: vi.fn(),
+      subscribeDesktopAppEvents,
+    } satisfies LocalApiModule);
+    const backend = {
+      ensureStarted: vi.fn(),
+      getStatus: vi.fn(),
+      restart: vi.fn(),
+      stop: vi.fn(),
+    } as unknown as LocalBackendProcesses;
+
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+    const onEvent = vi.fn();
+
+    await expect(controller.subscribeDesktopAppEvents?.(onEvent)).resolves.toBe(unsubscribe);
+
+    expect(loadLocalApi).toHaveBeenCalledTimes(1);
+    expect(subscribeDesktopAppEvents).toHaveBeenCalledWith(onEvent);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 });

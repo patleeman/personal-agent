@@ -551,6 +551,18 @@ export type AppEvent =
   | { type: 'daemon_snapshot'; state: DaemonState }
   | { type: 'web_ui_snapshot'; state: WebUiState };
 
+export type DesktopAppEvent =
+  | { type: 'invalidate'; topics: AppEventTopic[] }
+  | { type: 'live_title'; sessionId: string; title: string }
+  | { type: 'session_meta_changed'; sessionId: string }
+  | { type: 'session_file_changed'; sessionId: string }
+  | { type: 'activity'; snapshot: ActivitySnapshot }
+  | { type: 'alerts'; snapshot: AlertSnapshot }
+  | { type: 'sessions'; sessions: SessionMeta[] }
+  | { type: 'tasks'; tasks: ScheduledTaskSummary[] }
+  | { type: 'daemon'; state: DaemonState }
+  | { type: 'webUi'; state: WebUiState };
+
 // ── Live session ──────────────────────────────────────────────────────────────
 
 export interface GitWorkingTreeChange {

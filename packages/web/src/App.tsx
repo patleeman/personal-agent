@@ -4,6 +4,9 @@ import { COMPANION_APP_PATH, resolveCompanionRouteRedirect } from './companion/r
 import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
+import { normalizeAppEvent } from './appEventTransport';
+import { subscribeDesktopAppEvents } from './desktopAppEvents';
+import { readDesktopEnvironment } from './desktopBridge';
 import { createDesktopAwareEventSource } from './desktopEventSource';
 import { Layout } from './components/Layout';
 import { resolveConversationIndexRedirect } from './conversationRoutes';
@@ -39,6 +42,7 @@ import type {
   AppEvent,
   AppEventTopic,
   DaemonState,
+  DesktopAppEvent,
   DesktopAuthSessionState,
   DurableRunListResult,
   ScheduledTaskSummary,
@@ -301,6 +305,66 @@ export function App() {
     setWebUiState(state);
   }, []);
 
+  const handleDesktopAppEvent = useCallback((payload: DesktopAppEvent) => {
+    switch (payload.type) {
+      case 'live_title':
+        setTitle(payload.sessionId, payload.title);
+        return;
+      case 'session_meta_changed':
+        bumpConversationVersion(payload.sessionId);
+        if (isCompanionBrowserRoute()) {
+          setEventVersions((prev) => ({
+            ...prev,
+            sessions: prev.sessions + 1,
+          }));
+          return;
+        }
+
+        void refreshSessionMeta(payload.sessionId);
+        return;
+      case 'session_file_changed':
+        bumpConversationVersion(payload.sessionId);
+        return;
+      case 'activity':
+        setActivity(payload.snapshot);
+        return;
+      case 'alerts':
+        setAlerts(payload.snapshot);
+        return;
+      case 'sessions':
+        if (isCompanionBrowserRoute()) {
+          setEventVersions((prev) => ({
+            ...prev,
+            sessions: prev.sessions + 1,
+          }));
+          return;
+        }
+
+        setSessions(payload.sessions);
+        return;
+      case 'tasks':
+        setTasks(payload.tasks);
+        return;
+      case 'daemon':
+        setDaemon(payload.state);
+        return;
+      case 'webUi':
+        setWebUi(payload.state);
+        return;
+      case 'invalidate':
+        setEventVersions((prev) => {
+          const next = { ...prev };
+          for (const topic of payload.topics) {
+            next[topic as AppEventTopic] += 1;
+          }
+          return next;
+        });
+        return;
+      default:
+        return;
+    }
+  }, [bumpConversationVersion, refreshSessionMeta, setActivity, setAlerts, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
+
   const bootstrapSnapshots = useCallback(() => {
     const companionRoute = isCompanionBrowserRoute();
 
@@ -385,7 +449,8 @@ export function App() {
       return;
     }
 
-    const es = createDesktopAwareEventSource(buildApiPath('/events'));
+    let cancelled = false;
+    let cleanup = () => {};
     const bootstrapTimer = window.setTimeout(() => {
       if (!openedOnceRef.current) {
         setSseStatus('offline');
@@ -393,96 +458,93 @@ export function App() {
       }
     }, 1500);
 
-    es.onopen = () => {
-      openedOnceRef.current = true;
-      window.clearTimeout(bootstrapTimer);
-      setSseStatus('open');
-    };
+    const startLegacyAppStream = () => {
+      const es = createDesktopAwareEventSource(buildApiPath('/events'));
+      es.onopen = () => {
+        openedOnceRef.current = true;
+        window.clearTimeout(bootstrapTimer);
+        setSseStatus('open');
+      };
 
-    es.onmessage = (event) => {
-      let payload: AppEvent;
-      try {
-        payload = JSON.parse(event.data) as AppEvent;
-      } catch {
-        return;
-      }
+      es.onmessage = (event) => {
+        let payload: AppEvent;
+        try {
+          payload = JSON.parse(event.data) as AppEvent;
+        } catch {
+          return;
+        }
 
-      switch (payload.type) {
-        case 'live_title':
-          setTitle(payload.sessionId, payload.title);
-          return;
-        case 'session_meta_changed':
-          bumpConversationVersion(payload.sessionId);
-          if (isCompanionBrowserRoute()) {
-            setEventVersions((prev) => ({
-              ...prev,
-              sessions: prev.sessions + 1,
-            }));
-            return;
-          }
+        const normalized = normalizeAppEvent(payload);
+        if (normalized) {
+          handleDesktopAppEvent(normalized);
+        }
 
-          void refreshSessionMeta(payload.sessionId);
-          return;
-        case 'session_file_changed':
-          bumpConversationVersion(payload.sessionId);
-          return;
-        case 'activity_snapshot':
-          setActivity({ entries: payload.entries, unreadCount: payload.unreadCount });
-          return;
-        case 'alerts_snapshot':
-          setAlerts({ entries: payload.entries, activeCount: payload.activeCount });
-          return;
-        case 'sessions_snapshot':
-          if (isCompanionBrowserRoute()) {
-            setEventVersions((prev) => ({
-              ...prev,
-              sessions: prev.sessions + 1,
-            }));
-            return;
-          }
-
-          setSessions(payload.sessions);
-          return;
-        case 'tasks_snapshot':
-          setTasks(payload.tasks);
-          return;
-        case 'runs_snapshot':
+        if (payload.type === 'runs_snapshot') {
           setRuns(payload.result);
+        }
+      };
+
+      es.onerror = () => {
+        if (es.readyState === EventSource.CLOSED) {
+          setSseStatus('offline');
           return;
-        case 'daemon_snapshot':
-          setDaemon(payload.state);
-          return;
-        case 'web_ui_snapshot':
-          setWebUi(payload.state);
-          return;
-        case 'invalidate':
-          setEventVersions((prev) => {
-            const next = { ...prev };
-            for (const topic of payload.topics) {
-              next[topic as AppEventTopic] += 1;
-            }
-            return next;
-          });
-          return;
-        default:
-          return;
-      }
+        }
+        setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
+      };
+
+      return () => {
+        es.close();
+      };
     };
 
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        setSseStatus('offline');
+    void (async () => {
+      const environment = await readDesktopEnvironment().catch(() => null);
+      if (cancelled) {
         return;
       }
-      setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
-    };
+
+      if (environment?.activeHostKind === 'local') {
+        try {
+          const localCleanup = await subscribeDesktopAppEvents({
+            onopen: () => {
+              openedOnceRef.current = true;
+              window.clearTimeout(bootstrapTimer);
+              setSseStatus('open');
+            },
+            onevent: handleDesktopAppEvent,
+            onerror: () => {
+              setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
+            },
+            onclose: () => {
+              setSseStatus('offline');
+            },
+          });
+          if (cancelled) {
+            localCleanup();
+            return;
+          }
+
+          cleanup = localCleanup;
+          return;
+        } catch {
+          // Fall through to the legacy desktop-aware event transport.
+        }
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      cleanup = startLegacyAppStream();
+    })();
 
     return () => {
+      cancelled = true;
       window.clearTimeout(bootstrapTimer);
-      es.close();
+      cleanup();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, bumpConversationVersion, desktopAccessGranted, refreshSessionMeta, setActivity, setAlerts, setDaemon, setRuns, setSessions, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, handleDesktopAppEvent, setRuns]);
 
   if (desktopAuth === null) {
     return (

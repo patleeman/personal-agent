@@ -10,7 +10,7 @@ import type { DesktopHostRecord } from './hosts/types.js';
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  return resolve(currentDir, 'preload.js');
+  return resolve(currentDir, 'preload.cjs');
 }
 
 export interface DesktopNavigationState {

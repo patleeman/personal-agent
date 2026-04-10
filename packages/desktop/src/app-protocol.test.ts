@@ -47,6 +47,7 @@ describe('createDesktopProtocolHandler', () => {
         invokeDesktopLocalApi: vi.fn(),
         dispatchDesktopLocalApiRequest,
         subscribeDesktopLocalApiStream: vi.fn(),
+        subscribeDesktopAppEvents: vi.fn(),
       } satisfies LocalApiModule),
     });
 
@@ -77,6 +78,7 @@ describe('createDesktopProtocolHandler', () => {
         invokeDesktopLocalApi: vi.fn(),
         dispatchDesktopLocalApiRequest,
         subscribeDesktopLocalApiStream: vi.fn(),
+        subscribeDesktopAppEvents: vi.fn(),
       } satisfies LocalApiModule),
     });
 

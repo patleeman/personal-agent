@@ -2,6 +2,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 
+export type DesktopAppBridgeEvent =
+  | { type: 'open' }
+  | { type: 'event'; event: unknown }
+  | { type: 'error'; message: string }
+  | { type: 'close' };
+
 export interface DesktopLocalApiDispatchResult {
   statusCode: number;
   headers: Record<string, string>;
@@ -24,6 +30,9 @@ export interface LocalApiModule {
   subscribeDesktopLocalApiStream(
     path: string,
     onEvent: (event: DesktopApiStreamEvent) => void,
+  ): Promise<() => void>;
+  subscribeDesktopAppEvents(
+    onEvent: (event: DesktopAppBridgeEvent) => void,
   ): Promise<() => void>;
 }
 

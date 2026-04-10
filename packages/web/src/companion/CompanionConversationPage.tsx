@@ -99,11 +99,11 @@ export async function syncCompanionConversationWorkspaceLayout(
       };
 
       // Write to server so web UI picks up the change.
-      void fetch('/api/web-ui/open-conversations', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(next),
-      }).catch(() => { /* best-effort */ });
+      void api.setOpenConversationTabs(
+        next.sessionIds,
+        next.pinnedSessionIds,
+        next.archivedSessionIds,
+      ).catch(() => { /* best-effort */ });
 
       return next;
     }

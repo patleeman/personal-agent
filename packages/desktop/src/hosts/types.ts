@@ -53,6 +53,12 @@ export interface DesktopApiStreamEvent {
   message?: string;
 }
 
+export interface DesktopAppBridgeEvent {
+  type: 'open' | 'event' | 'error' | 'close';
+  event?: unknown;
+  message?: string;
+}
+
 export interface HostController {
   readonly id: string;
   readonly label: string;
@@ -63,6 +69,7 @@ export interface HostController {
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
+  subscribeDesktopAppEvents?(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void>;
   restart(): Promise<void>;
   stop(): Promise<void>;
   dispose(): Promise<void>;

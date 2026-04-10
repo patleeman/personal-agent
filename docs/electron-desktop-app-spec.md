@@ -78,7 +78,7 @@ The main window hides on close unless the app is quitting.
 
 ## Desktop bridge
 
-The preload bridge is intentionally narrow. It exposes actions such as:
+The preload bridge is intentionally narrow. The packaged `personal-agent://app` renderer receives it through a CommonJS preload script so the bridge remains available even though the rest of the desktop package uses ESM. It exposes actions such as:
 
 - get desktop environment
 - get saved connections

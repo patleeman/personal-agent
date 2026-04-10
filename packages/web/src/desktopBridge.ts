@@ -6,6 +6,7 @@ import type {
 } from './types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
+export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
@@ -18,6 +19,8 @@ export interface PersonalAgentDesktopBridge {
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   subscribeApiStream(path: string): Promise<{ subscriptionId: string }>;
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
+  subscribeAppEvents(): Promise<{ subscriptionId: string }>;
+  unsubscribeAppEvents(subscriptionId: string): Promise<void>;
   openHostWindow(hostId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
