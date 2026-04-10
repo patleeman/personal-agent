@@ -81,8 +81,8 @@ The main window hides on close unless the app is quitting.
 The preload bridge is intentionally narrow. The packaged `personal-agent://app` renderer receives it through a CommonJS preload script so the bridge remains available even though the rest of the desktop package uses ESM. It exposes actions such as:
 
 - subscribe to desktop-owned app bootstrap and hot state events in local mode
-- create or resume a live session in local mode
-- submit or abort a live-session prompt in local mode
+- read local conversation bootstrap, live-session state, and session detail/block data without loopback HTTP
+- create, resume, rename, and control local conversations/live sessions for hot flows such as prompt delivery, queue restore, compact/reload, fork/branch, summarize-fork, destroy, and abort
 
 - get desktop environment
 - get saved connections
