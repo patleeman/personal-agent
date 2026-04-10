@@ -40,6 +40,11 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' 
       summary: `${label} ready`,
     }),
     openNewConversation: vi.fn().mockResolvedValue(`http://${id}.example.test/conversations/new`),
+    readConversationBootstrap: vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      sessionDetail: null,
+      liveSession: { live: false },
+    }),
     restart: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn().mockResolvedValue(undefined),

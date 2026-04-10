@@ -2,7 +2,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { getAvailableTcpPort } from '../backend/ports.js';
-import type { DesktopHostRecord, HostController, HostStatus } from './types.js';
+import type {
+  ConversationBootstrapRequest,
+  DesktopHostRecord,
+  HostController,
+  HostStatus,
+} from './types.js';
 
 function getRemoteBaseUrl(port: number): string {
   return `http://127.0.0.1:${String(port)}`;
@@ -96,6 +101,10 @@ export class SshHostController implements HostController {
   async openNewConversation(): Promise<string> {
     const baseUrl = await this.getBaseUrl();
     return new URL('/conversations/new', baseUrl).toString();
+  }
+
+  async readConversationBootstrap(_conversationId: string, _options?: ConversationBootstrapRequest): Promise<never> {
+    throw new Error('Desktop conversation bootstrap IPC is only available for the local host.');
   }
 
   async restart(): Promise<void> {

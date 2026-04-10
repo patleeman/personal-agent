@@ -1,4 +1,9 @@
-import type { DesktopHostRecord, HostController, HostStatus } from './types.js';
+import type {
+  ConversationBootstrapRequest,
+  DesktopHostRecord,
+  HostController,
+  HostStatus,
+} from './types.js';
 
 function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim();
@@ -61,6 +66,10 @@ export class WebHostController implements HostController {
   async openNewConversation(): Promise<string> {
     const baseUrl = await this.getBaseUrl();
     return new URL('/conversations/new', baseUrl).toString();
+  }
+
+  async readConversationBootstrap(_conversationId: string, _options?: ConversationBootstrapRequest): Promise<never> {
+    throw new Error('Desktop conversation bootstrap IPC is only available for the local host.');
   }
 
   async restart(): Promise<void> {

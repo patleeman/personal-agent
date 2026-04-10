@@ -1,4 +1,10 @@
-import type { DesktopConnectionsState, DesktopEnvironmentState, DesktopHostRecord, DesktopNavigationState } from './types';
+import type {
+  ConversationBootstrapState,
+  DesktopConnectionsState,
+  DesktopEnvironmentState,
+  DesktopHostRecord,
+  DesktopNavigationState,
+} from './types';
 
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
@@ -8,6 +14,16 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  readConversationBootstrap(
+    conversationId: string,
+    options?: {
+      tailBlocks?: number;
+      knownSessionSignature?: string;
+      knownBlockOffset?: number;
+      knownTotalBlocks?: number;
+      knownLastBlockId?: string;
+    },
+  ): Promise<ConversationBootstrapState>;
   openHostWindow(hostId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;

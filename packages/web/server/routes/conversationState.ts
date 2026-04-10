@@ -11,14 +11,10 @@ import {
   syncWebLiveConversationRun,
 } from '../conversations/conversationRuns.js';
 import {
-  listAllLiveSessions,
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
   readConversationModelPreferenceStateById,
-  readConversationSessionSignature,
-  readSessionDetailForRoute,
   resolveConversationSessionFile,
-  toPublicLiveSessionMeta,
 } from '../conversations/conversationService.js';
 import {
   canInjectResumeFallbackPrompt,
@@ -34,7 +30,6 @@ import {
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
 import {
-  buildAppendOnlySessionDetailResponse,
   readSessionBlocks,
   renameStoredSession,
 } from '../conversations/sessions.js';
@@ -54,6 +49,10 @@ import {
   ensureRequestControlsLocalLiveConversation,
   writeLiveConversationControlError,
 } from './liveSessions.js';
+import {
+  isMissingConversationBootstrapState,
+  readConversationBootstrapState,
+} from '../conversations/conversationBootstrap.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation state routes');
@@ -102,64 +101,6 @@ function parseTrimmedQueryString(rawValue: unknown): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-async function readConversationBootstrapState(input: {
-  conversationId: string;
-  profile: string;
-  tailBlocks?: number;
-  knownSessionSignature?: string;
-  knownBlockOffset?: number;
-  knownTotalBlocks?: number;
-  knownLastBlockId?: string;
-}) {
-  const sessionSignature = readConversationSessionSignature(input.conversationId);
-  const sessionDetailReused = Boolean(
-    sessionSignature
-    && input.knownSessionSignature
-    && input.knownSessionSignature === sessionSignature,
-  );
-  const sessionResult = sessionDetailReused
-    ? {
-        sessionRead: {
-          detail: null,
-          telemetry: null,
-        },
-        remoteMirror: { status: 'deferred' as const, durationMs: 0 },
-      }
-    : await readSessionDetailForRoute({
-        conversationId: input.conversationId,
-        profile: input.profile,
-        tailBlocks: input.tailBlocks,
-      });
-  const sessionDetailAppendOnly = !sessionDetailReused && input.knownSessionSignature && sessionResult.sessionRead.detail?.signature && input.knownSessionSignature !== sessionResult.sessionRead.detail.signature
-    ? buildAppendOnlySessionDetailResponse({
-        detail: sessionResult.sessionRead.detail,
-        knownBlockOffset: input.knownBlockOffset,
-        knownTotalBlocks: input.knownTotalBlocks,
-        knownLastBlockId: input.knownLastBlockId,
-      })
-    : null;
-
-  const liveSession = listAllLiveSessions().find((session) => session.id === input.conversationId);
-
-  return {
-    state: {
-      conversationId: input.conversationId,
-      sessionDetail: sessionDetailAppendOnly ? null : sessionResult.sessionRead.detail,
-      sessionDetailSignature: sessionDetailAppendOnly?.signature ?? sessionResult.sessionRead.detail?.signature ?? sessionSignature,
-      ...(sessionDetailReused ? { sessionDetailUnchanged: true } : {}),
-      ...(sessionDetailAppendOnly ? { sessionDetailAppendOnly } : {}),
-      liveSession: liveSession
-        ? { live: true as const, ...toPublicLiveSessionMeta(liveSession) }
-        : { live: false as const },
-    },
-    telemetry: {
-      sessionRead: sessionResult.sessionRead.telemetry,
-      sessionDetailReused,
-      remoteMirror: sessionResult.remoteMirror,
-    },
-  };
-}
-
 export function registerConversationStateRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes'>,
@@ -188,7 +129,7 @@ export function registerConversationStateRoutes(
         knownTotalBlocks,
         knownLastBlockId,
       });
-      if (!bootstrap.state.sessionDetail && !bootstrap.state.sessionDetailUnchanged && !bootstrap.state.sessionDetailAppendOnly && !bootstrap.state.liveSession.live) {
+      if (isMissingConversationBootstrapState(bootstrap.state)) {
         res.status(404).json({ error: 'Conversation not found' });
         return;
       }

@@ -47,6 +47,14 @@ export interface HostStatus {
   lastError?: string;
 }
 
+export interface ConversationBootstrapRequest {
+  tailBlocks?: number;
+  knownSessionSignature?: string;
+  knownBlockOffset?: number;
+  knownTotalBlocks?: number;
+  knownLastBlockId?: string;
+}
+
 export interface HostController {
   readonly id: string;
   readonly label: string;
@@ -55,6 +63,7 @@ export interface HostController {
   getBaseUrl(): Promise<string>;
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
+  readConversationBootstrap(conversationId: string, options?: ConversationBootstrapRequest): Promise<unknown>;
   restart(): Promise<void>;
   stop(): Promise<void>;
   dispose(): Promise<void>;

@@ -49,6 +49,18 @@ export function registerDesktopIpc(options: {
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, async (event, conversationId: string, request?: {
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    return options.hostManager.getHostController(hostId).readConversationBootstrap(conversationId, request);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {
     await options.windowController.openMainWindow('/settings#desktop-connections');
   });
