@@ -5,6 +5,8 @@ const SHORTCUT_CHANNEL = `${CHANNEL_PREFIX}:shortcut`;
 const SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const NAVIGATE_CHANNEL = `${CHANNEL_PREFIX}:navigate`;
 const NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
+const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
+const API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -27,13 +29,10 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
-  readConversationBootstrap: (conversationId: string, options?: {
-    tailBlocks?: number;
-    knownSessionSignature?: string;
-    knownBlockOffset?: number;
-    knownTotalBlocks?: number;
-    knownLastBlockId?: string;
-  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, conversationId, options),
+  invokeLocalApi: (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:invoke-local-api`, method, path, body),
+  subscribeApiStream: (path: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-api-stream`, path),
+  unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   openHostWindow: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-host-window`, hostId),
   showConnectionsWindow: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-connections`),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
@@ -63,6 +62,10 @@ ipcRenderer.on(SHORTCUT_CHANNEL, (_event, action: unknown) => {
 
 ipcRenderer.on(NAVIGATE_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(NAVIGATE_EVENT, payload);
+});
+
+ipcRenderer.on(API_STREAM_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(API_STREAM_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

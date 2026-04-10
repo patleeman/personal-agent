@@ -3,12 +3,15 @@ import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
+const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 
 export function registerDesktopIpc(options: {
   hostManager: HostManager;
   windowController: DesktopWindowController;
   onHostStateChanged?: () => void;
 }): void {
+  const streamSubscriptions = new Map<string, () => void>();
+
   ipcMain.handle(`${CHANNEL_PREFIX}:get-environment`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -49,16 +52,37 @@ export function registerDesktopIpc(options: {
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, async (event, conversationId: string, request?: {
-    tailBlocks?: number;
-    knownSessionSignature?: string;
-    knownBlockOffset?: number;
-    knownTotalBlocks?: number;
-    knownLastBlockId?: string;
-  }) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:invoke-local-api`, async (event, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
-    return options.hostManager.getHostController(hostId).readConversationBootstrap(conversationId, request);
+    return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-api-stream`, async (event, path: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const subscriptionId = `${event.sender.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    const unsubscribe = await options.hostManager.getHostController(hostId).subscribeApiStream(path, (streamEvent) => {
+      if (event.sender.isDestroyed()) {
+        return;
+      }
+
+      event.sender.send(API_STREAM_CHANNEL, {
+        subscriptionId,
+        event: streamEvent,
+      });
+    });
+    const cleanup = () => {
+      unsubscribe();
+      streamSubscriptions.delete(subscriptionId);
+    };
+    streamSubscriptions.set(subscriptionId, cleanup);
+    event.sender.once('destroyed', cleanup);
+    return { subscriptionId };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, async (_event, subscriptionId: string) => {
+    streamSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {

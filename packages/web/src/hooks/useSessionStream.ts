@@ -14,6 +14,7 @@ import type {
   SseEvent,
 } from '../types';
 import { api } from '../api';
+import { createDesktopAwareEventSource, type EventSourceLike } from '../desktopEventSource';
 import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { parseSkillBlock } from '../skillBlock';
@@ -590,7 +591,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   useEffect(() => {
     if (!requestedSessionId) return;
 
-    let es: EventSource;
+    let es: EventSourceLike;
     let closed = false;
 
     function connect() {
@@ -603,7 +604,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
         params.set('surfaceType', surfaceType);
       }
       const query = params.toString();
-      es = new EventSource(`/api/live-sessions/${requestedSessionId}/events${query ? `?${query}` : ''}`);
+      es = createDesktopAwareEventSource(`/api/live-sessions/${requestedSessionId}/events${query ? `?${query}` : ''}`);
 
       es.onmessage = (e: MessageEvent<string>) => {
         if (closed) return;
@@ -617,19 +618,22 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       es.onerror = () => {
         if (closed) return;
         es.close();
-        fetch(`/api/live-sessions/${requestedSessionId}`)
-          .then((response) => {
-            if (!closed && (response.ok || shouldRetrySessionStreamAfterError(response.status))) {
+        api.liveSession(requestedSessionId)
+          .then(() => {
+            if (!closed) {
+              setTimeout(connect, 2_000);
+            }
+          })
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            const statusMatch = message.match(/^(\d{3})\b/);
+            const status = statusMatch ? Number.parseInt(statusMatch[1] ?? '', 10) : undefined;
+            if (!closed && shouldRetrySessionStreamAfterError(status)) {
               setTimeout(connect, 2_000);
               return;
             }
 
             clearWarmLiveSessionState(requestedSessionId);
-          })
-          .catch(() => {
-            if (!closed && shouldRetrySessionStreamAfterError()) {
-              setTimeout(connect, 2_000);
-            }
           });
       };
     }

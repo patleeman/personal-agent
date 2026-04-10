@@ -3,6 +3,7 @@ import {
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from './localSettings';
+import { api } from './api';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
 
@@ -105,15 +106,11 @@ function sameConversationLayout(left: ConversationLayout, right: ConversationLay
 }
 
 function persistConversationLayoutToServer(layout: ConversationLayout): void {
-  if (typeof fetch !== 'function') {
-    return;
-  }
-
-  void fetch('/api/web-ui/open-conversations', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(layout),
-  }).catch(() => {
+  void api.setOpenConversationTabs(
+    layout.sessionIds,
+    layout.pinnedSessionIds,
+    layout.archivedSessionIds,
+  ).catch(() => {
     // Ignore best-effort sync failures.
   });
 }
@@ -140,10 +137,7 @@ export function syncOpenConversationTabsToServer(
  */
 export async function syncConversationLayoutMerge(): Promise<ConversationLayout> {
   try {
-    const serverLayout = await fetch('/api/web-ui/open-conversations', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    }).then((res) => res.json() as Promise<ConversationLayout>);
+    const serverLayout = await api.openConversationTabs() as ConversationLayout;
 
     // Server is the source of truth. localStorage is read-only cache — never written.
     persistConversationLayoutToServer(serverLayout);
@@ -166,10 +160,7 @@ export async function commitConversationLayoutMerge(
   intended: ConversationLayoutInput,
 ): Promise<ConversationLayout> {
   try {
-    const serverLayout = await fetch('/api/web-ui/open-conversations', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    }).then((res) => res.json() as Promise<ConversationLayout>);
+    const serverLayout = await api.openConversationTabs() as ConversationLayout;
 
     // Server is the source of truth. localStorage is read-only cache — never written.
     const mergedOpen = [...new Set([...normalizeSessionIds(intended.sessionIds ?? []), ...serverLayout.sessionIds])];

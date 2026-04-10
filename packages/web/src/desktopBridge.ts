@@ -1,10 +1,11 @@
 import type {
-  ConversationBootstrapState,
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopNavigationState,
 } from './types';
+
+export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
@@ -14,16 +15,9 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
-  readConversationBootstrap(
-    conversationId: string,
-    options?: {
-      tailBlocks?: number;
-      knownSessionSignature?: string;
-      knownBlockOffset?: number;
-      knownTotalBlocks?: number;
-      knownLastBlockId?: string;
-    },
-  ): Promise<ConversationBootstrapState>;
+  invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  subscribeApiStream(path: string): Promise<{ subscriptionId: string }>;
+  unsubscribeApiStream(subscriptionId: string): Promise<void>;
   openHostWindow(hostId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
 import { app, dialog, shell } from 'electron';
 import { applyDesktopShellAppMode } from './app-mode.js';
+import { registerDesktopAppProtocol } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
 import { DesktopWindowController } from './window.js';
@@ -166,6 +167,7 @@ async function restartActiveHost(): Promise<void> {
 
 async function bootstrapDesktopApp(): Promise<void> {
   hostManager = new HostManager();
+  registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
   updateManager = new DesktopUpdateManager();
 

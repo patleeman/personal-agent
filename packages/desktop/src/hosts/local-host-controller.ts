@@ -1,54 +1,66 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
+import { proxyApiStream } from './api-stream.js';
 import type {
-  ConversationBootstrapRequest,
+  DesktopApiStreamEvent,
   DesktopHostRecord,
   HostController,
   HostStatus,
 } from './types.js';
 
-interface ConversationBootstrapModule {
-  readConversationBootstrapState(input: {
-    conversationId: string;
-    profile: string;
-    tailBlocks?: number;
-    knownSessionSignature?: string;
-    knownBlockOffset?: number;
-    knownTotalBlocks?: number;
-    knownLastBlockId?: string;
-  }): Promise<{
-    state: {
-      sessionDetail: unknown | null;
-      sessionDetailUnchanged?: boolean;
-      sessionDetailAppendOnly?: unknown;
-      liveSession: { live: boolean };
-    };
-  }>;
-  isMissingConversationBootstrapState(state: {
-    sessionDetail: unknown | null;
-    sessionDetailUnchanged?: boolean;
-    sessionDetailAppendOnly?: unknown;
-    liveSession: { live: boolean };
-  }): boolean;
+interface LocalApiModule {
+  invokeDesktopLocalApi<T = unknown>(input: {
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    path: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }): Promise<T>;
 }
 
-let conversationBootstrapModulePromise: Promise<ConversationBootstrapModule> | null = null;
-
-function getCurrentDesktopProfile(): string {
-  return process.env.PERSONAL_AGENT_ACTIVE_PROFILE?.trim()
-    || process.env.PERSONAL_AGENT_PROFILE?.trim()
-    || 'assistant';
+function isDirectDesktopApiPath(path: string): boolean {
+  const pathname = path.split('?', 1)[0] ?? path;
+  return pathname === '/api/status'
+    || pathname === '/api/daemon'
+    || pathname === '/api/web-ui/state'
+    || pathname === '/api/profiles'
+    || pathname === '/api/models'
+    || pathname === '/api/models/current'
+    || pathname === '/api/default-cwd'
+    || pathname === '/api/vault-root'
+    || pathname === '/api/vault-files'
+    || pathname === '/api/memory'
+    || pathname === '/api/memory/file'
+    || pathname.startsWith('/api/model-providers')
+    || pathname.startsWith('/api/sessions')
+    || pathname.endsWith('/bootstrap')
+    || pathname.endsWith('/model-preferences');
 }
 
-function loadConversationBootstrapModule(): Promise<ConversationBootstrapModule> {
-  if (!conversationBootstrapModulePromise) {
-    const currentDir = dirname(fileURLToPath(import.meta.url));
-    const moduleUrl = pathToFileURL(resolve(currentDir, '../../../web/dist-server/conversations/conversationBootstrap.js')).href;
-    conversationBootstrapModulePromise = import(moduleUrl) as Promise<ConversationBootstrapModule>;
+async function readProxyApiError(res: Response): Promise<string> {
+  try {
+    const data = await res.json() as { error?: string };
+    if (typeof data.error === 'string' && data.error.trim().length > 0) {
+      return data.error;
+    }
+  } catch {
+    // Ignore malformed proxy error bodies.
   }
 
-  return conversationBootstrapModulePromise;
+  return `${res.status} ${res.statusText}`;
+}
+
+let localApiModulePromise: Promise<LocalApiModule> | null = null;
+
+function loadLocalApiModule(): Promise<LocalApiModule> {
+  if (!localApiModulePromise) {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const moduleUrl = pathToFileURL(resolve(currentDir, '../../../web/dist-server/app/localApi.js')).href;
+    localApiModulePromise = import(moduleUrl) as Promise<LocalApiModule>;
+  }
+
+  return localApiModulePromise;
 }
 
 export class LocalHostController implements HostController {
@@ -69,7 +81,8 @@ export class LocalHostController implements HostController {
   }
 
   async getBaseUrl(): Promise<string> {
-    return this.backend.ensureStarted();
+    await this.backend.ensureStarted();
+    return getDesktopAppBaseUrl();
   }
 
   async getStatus(): Promise<HostStatus> {
@@ -78,7 +91,7 @@ export class LocalHostController implements HostController {
       reachable: status.daemonHealthy && status.webHealthy,
       mode: 'local-child-process',
       summary: status.daemonHealthy && status.webHealthy ? 'Local backend is healthy.' : 'Local backend is starting or unavailable.',
-      webUrl: status.baseUrl,
+      webUrl: getDesktopAppBaseUrl(),
       daemonHealthy: status.daemonHealthy,
       webHealthy: status.webHealthy,
     };
@@ -89,19 +102,37 @@ export class LocalHostController implements HostController {
     return new URL('/conversations/new', baseUrl).toString();
   }
 
-  async readConversationBootstrap(conversationId: string, options?: ConversationBootstrapRequest): Promise<unknown> {
-    const module = await loadConversationBootstrapModule();
-    const result = await module.readConversationBootstrapState({
-      conversationId,
-      profile: getCurrentDesktopProfile(),
-      ...options,
-    });
-
-    if (module.isMissingConversationBootstrapState(result.state)) {
-      throw new Error('Conversation not found');
+  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+    if (isDirectDesktopApiPath(path)) {
+      const module = await loadLocalApiModule();
+      return module.invokeDesktopLocalApi({ method, path, body });
     }
 
-    return result.state;
+    const baseUrl = await this.backend.ensureStarted();
+    const response = await fetch(new URL(path, baseUrl), {
+      method,
+      ...(method === 'GET'
+        ? {}
+        : {
+            headers: {
+              'Content-Type': 'application/json',
+              Origin: baseUrl,
+              Referer: `${baseUrl}/`,
+            },
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+          }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await readProxyApiError(response));
+    }
+
+    return response.json();
+  }
+
+  async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
+    const baseUrl = await this.backend.ensureStarted();
+    return proxyApiStream(baseUrl, path, onEvent);
   }
 
   async restart(): Promise<void> {

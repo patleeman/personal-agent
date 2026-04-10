@@ -19,7 +19,7 @@ function createJsonResponse(data: unknown): Response {
   });
 }
 
-describe('api.conversationBootstrap desktop transport', () => {
+describe('api desktop transport', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -28,10 +28,17 @@ describe('api.conversationBootstrap desktop transport', () => {
     });
   });
 
-  it('uses the desktop bridge on the local Electron host', async () => {
+  it('uses the desktop local API bridge on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
+    const invokeLocalApi = vi.fn()
+      .mockResolvedValueOnce({
+        profile: 'assistant',
+        repoRoot: '/repo',
+        activityCount: 0,
+        projectCount: 0,
+      })
+      .mockResolvedValueOnce(createBootstrapState());
     const getEnvironment = vi.fn().mockResolvedValue({
       isElectron: true,
       activeHostId: 'local',
@@ -43,23 +50,23 @@ describe('api.conversationBootstrap desktop transport', () => {
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment,
-        readConversationBootstrap,
+        invokeLocalApi,
       },
     });
 
     const { api } = await import('./api');
-    const result = await api.conversationBootstrap('conversation-1', {
+    const status = await api.status();
+    const bootstrap = await api.conversationBootstrap('conversation-1', {
       knownSessionSignature: 'sig-1',
       tailBlocks: 12,
     });
 
     expect(getEnvironment).toHaveBeenCalledTimes(1);
-    expect(readConversationBootstrap).toHaveBeenCalledWith('conversation-1', {
-      knownSessionSignature: 'sig-1',
-      tailBlocks: 12,
-    });
+    expect(invokeLocalApi).toHaveBeenNthCalledWith(1, 'GET', '/api/status', undefined);
+    expect(invokeLocalApi).toHaveBeenNthCalledWith(2, 'GET', '/api/conversations/conversation-1/bootstrap?tailBlocks=12&knownSessionSignature=sig-1', undefined);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(result).toEqual(createBootstrapState());
+    expect(status).toMatchObject({ profile: 'assistant' });
+    expect(bootstrap).toEqual(createBootstrapState());
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {
@@ -67,7 +74,7 @@ describe('api.conversationBootstrap desktop transport', () => {
       conversationId: 'remote-conversation',
     })));
     vi.stubGlobal('fetch', fetchMock);
-    const readConversationBootstrap = vi.fn();
+    const invokeLocalApi = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -78,7 +85,7 @@ describe('api.conversationBootstrap desktop transport', () => {
           activeHostSummary: 'Remote host reachable.',
           canManageConnections: true,
         }),
-        readConversationBootstrap,
+        invokeLocalApi,
       },
     });
 
@@ -88,10 +95,10 @@ describe('api.conversationBootstrap desktop transport', () => {
       tailBlocks: 5,
     });
 
-    expect(readConversationBootstrap).not.toHaveBeenCalled();
+    expect(invokeLocalApi).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/conversations/remote-conversation/bootstrap?tailBlocks=5&knownSessionSignature=sig-2',
-      { cache: 'no-store' },
+      { method: 'GET', cache: 'no-store' },
     );
     expect(result.conversationId).toBe('remote-conversation');
   });

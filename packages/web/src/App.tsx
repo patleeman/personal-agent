@@ -4,6 +4,7 @@ import { COMPANION_APP_PATH, resolveCompanionRouteRedirect } from './companion/r
 import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
+import { createDesktopAwareEventSource } from './desktopEventSource';
 import { Layout } from './components/Layout';
 import { resolveConversationIndexRedirect } from './conversationRoutes';
 import {
@@ -384,7 +385,7 @@ export function App() {
       return;
     }
 
-    const es = new EventSource(buildApiPath('/events'));
+    const es = createDesktopAwareEventSource(buildApiPath('/events'));
     const bootstrapTimer = window.setTimeout(() => {
       if (!openedOnceRef.current) {
         setSseStatus('offline');

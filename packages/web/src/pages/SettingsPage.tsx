@@ -6,6 +6,7 @@ import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferenc
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
+import { createDesktopAwareEventSource } from '../desktopEventSource';
 import type {
   CodexPlanUsageState,
   DesktopConnectionsState,
@@ -1118,7 +1119,7 @@ export function SettingsPage() {
     }
 
     const loginId = oauthLoginState.id;
-    const stream = new EventSource(`/api/provider-auth/oauth/${encodeURIComponent(loginId)}/events`);
+    const stream = createDesktopAwareEventSource(`/api/provider-auth/oauth/${encodeURIComponent(loginId)}/events`);
     stream.onmessage = (event) => {
       let payload: ProviderOAuthLoginStreamEvent;
       try {

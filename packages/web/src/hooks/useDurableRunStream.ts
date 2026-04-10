@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import { createDesktopAwareEventSource, type EventSourceLike } from '../desktopEventSource';
 import type { DurableRunDetailResult, DurableRunSseEvent } from '../types';
 
 interface DurableRunStreamState {
@@ -48,7 +49,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
     }
 
     let closed = false;
-    let stream: EventSource | null = null;
+    let stream: EventSourceLike | null = null;
 
     const connect = async () => {
       try {
@@ -74,7 +75,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
         return;
       }
 
-      stream = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events?tail=${encodeURIComponent(String(tail))}`);
+      stream = createDesktopAwareEventSource(`/api/runs/${encodeURIComponent(runId)}/events?tail=${encodeURIComponent(String(tail))}`);
       stream.onmessage = (event: MessageEvent<string>) => {
         if (closed) {
           return;

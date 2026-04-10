@@ -1,4 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const apiMocks = vi.hoisted(() => ({
+  openConversationTabs: vi.fn(),
+  setOpenConversationTabs: vi.fn(),
+}));
+
+vi.mock('./api', () => ({
+  api: apiMocks,
+}));
+
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
@@ -47,12 +57,13 @@ function createStorage(): MockStorage {
 
 describe('sessionTabs', () => {
   const dispatchEvent = vi.fn();
-  const fetchMock = vi.fn(() => Promise.resolve({ ok: true }));
 
   beforeEach(() => {
     vi.stubGlobal('localStorage', createStorage());
     vi.stubGlobal('window', { dispatchEvent });
-    vi.stubGlobal('fetch', fetchMock);
+    apiMocks.openConversationTabs.mockReset();
+    apiMocks.setOpenConversationTabs.mockReset();
+    apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true });
 
     if (typeof CustomEvent === 'undefined') {
       vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> {
@@ -69,8 +80,6 @@ describe('sessionTabs', () => {
 
   afterEach(() => {
     dispatchEvent.mockReset();
-    fetchMock.mockReset();
-    fetchMock.mockImplementation(() => Promise.resolve({ ok: true }));
     vi.unstubAllGlobals();
   });
 
@@ -318,13 +327,10 @@ describe('sessionTabs', () => {
       dispatchEvent.mockReset();
 
       // Server has different (authoritative) state
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          sessionIds: ['server-1'],
-          pinnedSessionIds: ['server-pinned'],
-          archivedSessionIds: ['server-archived'],
-        }),
+      apiMocks.openConversationTabs.mockResolvedValue({
+        sessionIds: ['server-1'],
+        pinnedSessionIds: ['server-pinned'],
+        archivedSessionIds: ['server-archived'],
       });
 
       const result = await syncConversationLayoutMerge();
@@ -338,7 +344,11 @@ describe('sessionTabs', () => {
       expect(readArchivedSessionIds()).toEqual(['local-archived']); // cache untouched
 
       // Persisted server state back to server (write-through)
-      expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
+      expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(
+        ['server-1'],
+        ['server-pinned'],
+        ['server-archived'],
+      );
 
 
       // Dispatched event so components can refresh
@@ -348,7 +358,7 @@ describe('sessionTabs', () => {
     it('falls back to local state when the fetch fails', async () => {
       replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: [] });
       dispatchEvent.mockReset();
-      fetchMock.mockRejectedValue(new Error('network error'));
+      apiMocks.openConversationTabs.mockRejectedValue(new Error('network error'));
 
       const result = await syncConversationLayoutMerge();
 
@@ -361,13 +371,10 @@ describe('sessionTabs', () => {
   describe('commitConversationLayoutMerge', () => {
     it('fetches server state, applies intended change as union, and writes merged result', async () => {
       // Server has: open [server-1], pinned [server-pinned], archived []
-      fetchMock.mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({
-          sessionIds: ['server-1'],
-          pinnedSessionIds: ['server-pinned'],
-          archivedSessionIds: [],
-        }),
+      apiMocks.openConversationTabs.mockResolvedValue({
+        sessionIds: ['server-1'],
+        pinnedSessionIds: ['server-pinned'],
+        archivedSessionIds: [],
       });
 
       // Intended: open companion-tab-1, pinned [], archived []
@@ -379,11 +386,15 @@ describe('sessionTabs', () => {
       expect(result.archivedSessionIds).toEqual([]);
 
       // Written to server only (localStorage is cache, not source of truth)
-      expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({ method: 'PATCH' }));
+      expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(
+        ['companion-tab-1', 'server-1'],
+        ['server-pinned'],
+        [],
+      );
     });
 
     it('falls back to writing intended layout when fetch fails', async () => {
-      fetchMock.mockRejectedValue(new Error('network error'));
+      apiMocks.openConversationTabs.mockRejectedValue(new Error('network error'));
       dispatchEvent.mockReset();
 
       const result = await commitConversationLayoutMerge({ sessionIds: ['tab-1'], pinnedSessionIds: [] });

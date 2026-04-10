@@ -1,5 +1,6 @@
+import { proxyApiStream } from './api-stream.js';
 import type {
-  ConversationBootstrapRequest,
+  DesktopApiStreamEvent,
   DesktopHostRecord,
   HostController,
   HostStatus,
@@ -68,8 +69,13 @@ export class WebHostController implements HostController {
     return new URL('/conversations/new', baseUrl).toString();
   }
 
-  async readConversationBootstrap(_conversationId: string, _options?: ConversationBootstrapRequest): Promise<never> {
-    throw new Error('Desktop conversation bootstrap IPC is only available for the local host.');
+  async invokeLocalApi(_method: 'GET' | 'POST' | 'PATCH' | 'DELETE', _path: string, _body?: unknown): Promise<never> {
+    throw new Error('Desktop local API IPC is only available for the local host.');
+  }
+
+  async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
+    const baseUrl = await this.getBaseUrl();
+    return proxyApiStream(baseUrl, path, onEvent);
   }
 
   async restart(): Promise<void> {

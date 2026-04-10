@@ -47,12 +47,10 @@ export interface HostStatus {
   lastError?: string;
 }
 
-export interface ConversationBootstrapRequest {
-  tailBlocks?: number;
-  knownSessionSignature?: string;
-  knownBlockOffset?: number;
-  knownTotalBlocks?: number;
-  knownLastBlockId?: string;
+export interface DesktopApiStreamEvent {
+  type: 'open' | 'message' | 'error' | 'close';
+  data?: string;
+  message?: string;
 }
 
 export interface HostController {
@@ -63,7 +61,8 @@ export interface HostController {
   getBaseUrl(): Promise<string>;
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
-  readConversationBootstrap(conversationId: string, options?: ConversationBootstrapRequest): Promise<unknown>;
+  invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
   restart(): Promise<void>;
   stop(): Promise<void>;
   dispose(): Promise<void>;

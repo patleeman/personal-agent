@@ -40,44 +40,41 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Pro
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 
-async function get<T>(path: string): Promise<T> {
+async function requestJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const requestPath = buildApiPath(path);
-  const res = await fetchWithRetry(requestPath, { cache: 'no-store' });
+  const desktopBridge = getDesktopBridge();
+  if (desktopBridge && await shouldUseDesktopLocalApi(method, requestPath)) {
+    return desktopBridge.invokeLocalApi(method, requestPath, body) as Promise<T>;
+  }
+
+  const res = await fetchWithRetry(requestPath, {
+    method,
+    ...(method === 'GET'
+      ? { cache: 'no-store' as const }
+      : {
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+  });
   recordApiTiming(requestPath, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
+}
+
+async function get<T>(path: string): Promise<T> {
+  return requestJson<T>('GET', path);
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const requestPath = buildApiPath(path);
-  const res = await fetchWithRetry(requestPath, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  recordApiTiming(requestPath, res);
-  if (!res.ok) throw new Error(await readApiError(res));
-  return res.json() as Promise<T>;
+  return requestJson<T>('POST', path, body);
 }
 
 async function patch<T>(path: string, body?: unknown): Promise<T> {
-  const requestPath = buildApiPath(path);
-  const res = await fetchWithRetry(requestPath, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  recordApiTiming(requestPath, res);
-  if (!res.ok) throw new Error(await readApiError(res));
-  return res.json() as Promise<T>;
+  return requestJson<T>('PATCH', path, body);
 }
 
 async function del<T>(path: string): Promise<T> {
-  const requestPath = buildApiPath(path);
-  const res = await fetchWithRetry(requestPath, { method: 'DELETE' });
-  recordApiTiming(requestPath, res);
-  if (!res.ok) throw new Error(await readApiError(res));
-  return res.json() as Promise<T>;
+  return requestJson<T>('DELETE', path);
 }
 
 async function readApiError(res: Response): Promise<string> {
@@ -131,8 +128,8 @@ async function readCachedDesktopEnvironment(): Promise<DesktopEnvironmentState |
   return desktopEnvironmentPromise;
 }
 
-async function shouldUseDesktopLocalConversationBootstrap(): Promise<boolean> {
-  if (!getDesktopBridge()) {
+async function shouldUseDesktopLocalApi(_method: 'GET' | 'POST' | 'PATCH' | 'DELETE', requestPath: string): Promise<boolean> {
+  if (!getDesktopBridge() || !requestPath.startsWith('/api/')) {
     return false;
   }
 
@@ -361,18 +358,13 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
-  conversationBootstrap: async (id: string, options?: {
+  conversationBootstrap: (id: string, options?: {
     tailBlocks?: number;
     knownSessionSignature?: string;
     knownBlockOffset?: number;
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalConversationBootstrap()) {
-      return desktopBridge.readConversationBootstrap(id, options);
-    }
-
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
@@ -410,13 +402,7 @@ export const api = {
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
   deleteConversationArtifact: (id: string, artifactId: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`), { method: 'DELETE' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>;
-    }),
+    requestJson<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
   conversationAttachments: (id: string) =>
     get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(`/conversations/${encodeURIComponent(id)}/attachments`),
   conversationAttachment: (id: string, attachmentId: string) =>
@@ -453,59 +439,21 @@ export const api = {
       attachments: ConversationAttachmentSummary[];
     }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, input),
   deleteConversationAttachment: (id: string, attachmentId: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`), { method: 'DELETE' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{
-        conversationId: string;
-        deleted: boolean;
-        attachmentId: string;
-        attachments: ConversationAttachmentSummary[];
-      }>;
-    }),
+    requestJson<{
+      conversationId: string;
+      deleted: boolean;
+      attachmentId: string;
+      attachments: ConversationAttachmentSummary[];
+    }>('DELETE', `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`),
   deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
   scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
-    }),
+    requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes`, input),
   fireDeferredResumeNow: (id: string, resumeId: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`), { method: 'POST' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
-    }),
+    requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`),
   cancelDeferredResume: (id: string, resumeId: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`), { method: 'DELETE' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
-    }),
+    requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`),
   changeConversationCwd: (id: string, cwd: string, surfaceId?: string) =>
-    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/cwd`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd, ...(surfaceId ? { surfaceId } : {}) }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<ConversationCwdChangeResult>;
-    }),
+    requestJson<ConversationCwdChangeResult>('POST', `/conversations/${encodeURIComponent(id)}/cwd`, { cwd, ...(surfaceId ? { surfaceId } : {}) }),
   renameConversation: (id: string, name: string, surfaceId?: string) =>
     patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) }),
   conversationModelPreferences: (id: string) =>

@@ -69,10 +69,17 @@ We will move the renderer onto desktop-owned capabilities one slice at a time. E
 
 Goal: the renderer stops assuming that local data always comes from same-origin fetch.
 
-- [ ] Add typed desktop bridge methods for product capabilities.
-- [ ] Add a desktop host capability layer in the main process.
-- [ ] Route hot local capabilities through Electron IPC.
-- [ ] Keep browser mode and future remote mode working through fallback adapters.
+- [x] Add typed desktop bridge methods for product capabilities.
+- [x] Add a desktop host capability layer in the main process.
+- [x] Route hot local capabilities through Electron IPC.
+- [x] Keep browser mode and future remote mode working through fallback adapters.
+
+Completed in this phase:
+
+- [x] local desktop JSON API requests from `api.ts` now go through the Electron main process
+- [x] safe file-backed local endpoints have an in-process route dispatcher fast path in the main process
+- [x] remaining local desktop JSON endpoints are proxied through the active host controller instead of renderer-side fetch
+- [x] local desktop EventSource consumers now go through a main-process stream bridge for app events, live-session events, run events, and provider OAuth progress events
 
 Initial capabilities to migrate:
 
@@ -87,10 +94,10 @@ Initial capabilities to migrate:
 Goal: opening and using a conversation in local desktop mode should not depend on local HTTP.
 
 - [ ] Create local desktop conversation services in the main process.
-- [ ] Reuse shared Node-side conversation logic without going through Express.
-- [ ] Replace local SSE conversation updates with IPC push/subscription flows.
+- [x] Reuse shared Node-side conversation logic without going through Express where practical.
+- [x] Replace local SSE conversation updates with IPC push/subscription flows.
 - [ ] Move conversation open, transcript updates, send, abort, rename, cwd change, fork, and branch to IPC-backed capabilities.
-- [ ] Keep prewarming and transcript caches in the desktop-owned runtime.
+- [x] Keep prewarming and transcript caches in the desktop-owned runtime.
 
 Success bar:
 
@@ -128,9 +135,9 @@ Goal: local file-heavy features use desktop-owned services directly.
 
 Goal: local Electron mode loads packaged UI assets directly.
 
-- [ ] Load built renderer assets without the local web UI server.
+- [x] Load built renderer assets without the local web UI server for the window surface.
 - [ ] Remove local dependency on `/api/...` for the renderer.
-- [ ] Replace local SSE bootstrap/event plumbing with desktop IPC event plumbing.
+- [x] Replace local SSE bootstrap/event plumbing with desktop IPC/event-aware transport plumbing.
 - [ ] Make desktop startup independent from starting a local web UI child process.
 
 Success bar:
@@ -231,10 +238,15 @@ Completed already:
 
 Now in progress:
 
-- moving live session creation and prompt send onto the desktop capability boundary
+- moving the remaining live-session mutation paths fully in-process so the local web child is no longer needed for conversations
+- preparing the final cut from `http://127.0.0.1` window loading to packaged/local desktop assets
 - using this migration plan as the execution checklist for the full cutover
 
 Just completed:
 
 - local Electron conversation bootstrap now uses a desktop IPC path instead of renderer-side HTTP
 - the bootstrap logic now lives in a reusable service module so the desktop app and HTTP route can share it
+- local desktop JSON API calls now route through the Electron main process
+- local desktop event streams now route through the Electron main process
+- session-tab layout sync now uses the desktop-aware API layer instead of direct renderer fetches
+- the local desktop window now loads packaged renderer assets from a desktop protocol instead of loading the app shell from `http://127.0.0.1`
