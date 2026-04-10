@@ -5,8 +5,10 @@ import {
   buildPendingConversationPromptStorageKey,
   clearPendingConversationPrompt,
   consumePendingConversationPrompt,
+  isPendingConversationPromptDispatching,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
+  setPendingConversationPromptDispatching,
 } from './pendingConversationPrompt';
 
 function createStorage(): StorageLike {
@@ -116,5 +118,17 @@ describe('pendingConversationPrompt helpers', () => {
     }, storage);
 
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
+  });
+
+  it('tracks background initial-prompt dispatch state per session', () => {
+    const storage = createStorage();
+
+    expect(isPendingConversationPromptDispatching('session-123')).toBe(false);
+
+    setPendingConversationPromptDispatching('session-123', true, storage);
+    expect(isPendingConversationPromptDispatching('session-123')).toBe(true);
+
+    setPendingConversationPromptDispatching('session-123', false, storage);
+    expect(isPendingConversationPromptDispatching('session-123')).toBe(false);
   });
 });

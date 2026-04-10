@@ -10,6 +10,32 @@ export interface PendingConversationPrompt {
 }
 
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
+const inFlightPendingPromptDispatches = new Set<string>();
+
+export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
+
+export interface PendingConversationPromptChangedDetail {
+  sessionId: string;
+  prompt: PendingConversationPrompt | null;
+  dispatching: boolean;
+}
+
+function emitPendingConversationPromptChanged(sessionId: string, prompt: PendingConversationPrompt | null): void {
+  if (typeof window === 'undefined' || !sessionId) {
+    return;
+  }
+
+  window.dispatchEvent(new CustomEvent<PendingConversationPromptChangedDetail>(
+    PENDING_CONVERSATION_PROMPT_CHANGED_EVENT,
+    {
+      detail: {
+        sessionId,
+        prompt,
+        dispatching: inFlightPendingPromptDispatches.has(sessionId),
+      },
+    },
+  ));
+}
 
 export function buildPendingConversationPromptStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:pending-prompt`;
@@ -37,6 +63,7 @@ export function persistPendingConversationPrompt(
     storage,
     shouldPersist: () => shouldPersist,
   });
+  emitPendingConversationPromptChanged(sessionId, shouldPersist ? prompt : null);
 }
 
 export function readPendingConversationPrompt(
@@ -130,4 +157,27 @@ export function clearPendingConversationPrompt(
 
   inMemoryPendingPrompts.delete(sessionId);
   clearStoredState(storage, buildPendingConversationPromptStorageKey(sessionId));
+  emitPendingConversationPromptChanged(sessionId, null);
+}
+
+export function isPendingConversationPromptDispatching(sessionId: string): boolean {
+  return Boolean(sessionId) && inFlightPendingPromptDispatches.has(sessionId);
+}
+
+export function setPendingConversationPromptDispatching(
+  sessionId: string,
+  dispatching: boolean,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  if (!sessionId) {
+    return;
+  }
+
+  if (dispatching) {
+    inFlightPendingPromptDispatches.add(sessionId);
+  } else {
+    inFlightPendingPromptDispatches.delete(sessionId);
+  }
+
+  emitPendingConversationPromptChanged(sessionId, readPendingConversationPrompt(sessionId, storage));
 }

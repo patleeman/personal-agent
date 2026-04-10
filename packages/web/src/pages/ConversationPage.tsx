@@ -70,10 +70,15 @@ import {
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
+  clearPendingConversationPrompt,
   consumePendingConversationPrompt,
+  isPendingConversationPromptDispatching,
+  PENDING_CONVERSATION_PROMPT_CHANGED_EVENT,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
+  setPendingConversationPromptDispatching,
   type PendingConversationPrompt,
+  type PendingConversationPromptChangedDetail,
 } from '../pendingConversationPrompt';
 import { appendPendingInitialPromptBlock } from '../pendingQueueMessages';
 import {
@@ -247,6 +252,20 @@ export function shouldShowConversationTakeoverBanner(_input: {
   conversationNeedsTakeover: boolean;
 }): boolean {
   return false;
+}
+
+export function shouldAutoDispatchPendingInitialPrompt(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  hasPendingInitialPrompt: boolean;
+  pendingInitialPromptDispatching: boolean;
+  hasStreamSnapshot: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.hasPendingInitialPrompt
+    && !input.pendingInitialPromptDispatching
+    && input.hasStreamSnapshot;
 }
 
 export function resolveConversationPageTitle(input: {
@@ -1237,6 +1256,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
 
   const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
+  const [pendingInitialPromptDispatching, setPendingInitialPromptDispatchingState] = useState(false);
   const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
   const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
@@ -1785,6 +1805,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     if (draft || !id) {
       setPendingInitialPrompt(null);
+      setPendingInitialPromptDispatchingState(false);
       pendingInitialPromptSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
       pinnedInitialPromptTailKeyRef.current = null;
@@ -1792,9 +1813,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     setPendingInitialPrompt(readPendingConversationPrompt(id));
+    setPendingInitialPromptDispatchingState(isPendingConversationPromptDispatching(id));
     pendingInitialPromptSessionIdRef.current = null;
     pinnedInitialPromptScrollSessionIdRef.current = null;
     pinnedInitialPromptTailKeyRef.current = null;
+  }, [draft, id]);
+
+  useEffect(() => {
+    if (draft || !id || typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePendingPromptChange = (event: Event) => {
+      const detail = (event as CustomEvent<PendingConversationPromptChangedDetail>).detail;
+      if (!detail || detail.sessionId !== id) {
+        return;
+      }
+
+      setPendingInitialPrompt(detail.prompt);
+      setPendingInitialPromptDispatchingState(detail.dispatching);
+    };
+
+    window.addEventListener(PENDING_CONVERSATION_PROMPT_CHANGED_EVENT, handlePendingPromptChange);
+    return () => {
+      window.removeEventListener(PENDING_CONVERSATION_PROMPT_CHANGED_EVENT, handlePendingPromptChange);
+    };
   }, [draft, id]);
 
   useEffect(() => {
@@ -2843,7 +2886,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [conversationCwdBusy, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming, submitConversationCwdChange]);
 
   useEffect(() => {
-    if (draft || !id || !pendingInitialPrompt || !stream.hasSnapshot) {
+    if (!shouldAutoDispatchPendingInitialPrompt({
+      draft,
+      conversationId: id,
+      hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+      pendingInitialPromptDispatching,
+      hasStreamSnapshot: stream.hasSnapshot,
+    })) {
       return;
     }
 
@@ -2883,6 +2932,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draft,
     id,
     pendingInitialPrompt,
+    pendingInitialPromptDispatching,
     allowQueuedPrompts,
     stream.hasSnapshot,
     stream.send,
@@ -3957,23 +4007,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           };
 
           rememberComposerInput(inputSnapshot, newId);
-
-          try {
-            // Start the first turn immediately instead of waiting for the new
-            // conversation page to mount, connect SSE, and receive its first
-            // snapshot. That avoids "new conversation hangs if I click away"
-            // because the initial prompt no longer depends on the page staying open.
-            await api.promptSession(
-              newId,
-              initialPrompt.text,
-              initialPrompt.behavior,
-              initialPrompt.images,
-              initialPrompt.attachmentRefs,
-            );
-          } catch (error) {
-            persistPendingConversationPrompt(newId, initialPrompt);
-            showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-          }
+          persistPendingConversationPrompt(newId, initialPrompt);
+          setPendingConversationPromptDispatching(newId, true);
 
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
@@ -3982,6 +4017,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
+
+          // Kick off the first turn immediately, but do not hold route
+          // navigation open on the prompt-start roundtrip. The pending prompt
+          // stays mirrored in storage so the new conversation page can show
+          // optimistic state and retry only if this detached start fails.
+          void api.promptSession(
+            newId,
+            initialPrompt.text,
+            initialPrompt.behavior,
+            initialPrompt.images,
+            initialPrompt.attachmentRefs,
+          ).then(() => {
+            clearPendingConversationPrompt(newId);
+            setPendingConversationPromptDispatching(newId, false);
+          }).catch((error) => {
+            setPendingConversationPromptDispatching(newId, false);
+            console.error('Initial prompt failed:', error);
+          });
         } catch (error) {
           setPendingAssistantStatusLabel(null);
           setDraftPendingPrompt(null);

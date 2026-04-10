@@ -17,6 +17,7 @@ import {
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
+  shouldAutoDispatchPendingInitialPrompt,
   truncateConversationShelfText,
   formatQueuedPromptShelfText,
   formatQueuedPromptImageSummary,
@@ -215,6 +216,32 @@ describe('conversation live state helpers', () => {
     expect(shouldShowConversationInlineLoadingState({
       showConversationLoadingState: false,
       hasVisibleTranscript: true,
+    })).toBe(false);
+  });
+
+  it('waits to auto-dispatch a pending initial prompt until no background start is in flight', () => {
+    expect(shouldAutoDispatchPendingInitialPrompt({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: false,
+      hasStreamSnapshot: true,
+    })).toBe(true);
+
+    expect(shouldAutoDispatchPendingInitialPrompt({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: true,
+      hasStreamSnapshot: true,
+    })).toBe(false);
+
+    expect(shouldAutoDispatchPendingInitialPrompt({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: false,
+      hasStreamSnapshot: false,
     })).toBe(false);
   });
 
