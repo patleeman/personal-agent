@@ -128,6 +128,61 @@ export function registerDesktopIpc(options: {
     return controller.readConversationBootstrap(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:rename-conversation`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.renameConversation) {
+      throw new Error('Dedicated desktop conversation rename is only available for the local host.');
+    }
+
+    return controller.renameConversation(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readLiveSession) {
+      throw new Error('Dedicated desktop live-session reads are only available for the local host.');
+    }
+
+    return controller.readLiveSession(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-context`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readLiveSessionContext) {
+      throw new Error('Dedicated desktop live-session context reads are only available for the local host.');
+    }
+
+    return controller.readLiveSessionContext(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-session-detail`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readSessionDetail) {
+      throw new Error('Dedicated desktop session detail reads are only available for the local host.');
+    }
+
+    return controller.readSessionDetail(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-session-block`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readSessionBlock) {
+      throw new Error('Dedicated desktop session block reads are only available for the local host.');
+    }
+
+    return controller.readSessionBlock(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:create-live-session`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -159,6 +214,83 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.takeOverLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:restore-queued-live-session-message`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.restoreQueuedLiveSessionMessage) {
+      throw new Error('Dedicated desktop queued prompt restore is only available for the local host.');
+    }
+
+    return controller.restoreQueuedLiveSessionMessage(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:compact-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.compactLiveSession) {
+      throw new Error('Dedicated desktop live-session compaction is only available for the local host.');
+    }
+
+    return controller.compactLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:reload-live-session`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.reloadLiveSession) {
+      throw new Error('Dedicated desktop live-session reload is only available for the local host.');
+    }
+
+    return controller.reloadLiveSession(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:destroy-live-session`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.destroyLiveSession) {
+      throw new Error('Dedicated desktop live-session destroy is only available for the local host.');
+    }
+
+    return controller.destroyLiveSession(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:branch-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.branchLiveSession) {
+      throw new Error('Dedicated desktop live-session branching is only available for the local host.');
+    }
+
+    return controller.branchLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:fork-live-session`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.forkLiveSession) {
+      throw new Error('Dedicated desktop live-session forking is only available for the local host.');
+    }
+
+    return controller.forkLiveSession(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:summarize-and-fork-live-session`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.summarizeAndForkLiveSession) {
+      throw new Error('Dedicated desktop live-session summary fork is only available for the local host.');
+    }
+
+    return controller.summarizeAndForkLiveSession(conversationId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:submit-live-session-prompt`, async (event, input) => {

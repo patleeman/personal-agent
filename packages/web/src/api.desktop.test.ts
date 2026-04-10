@@ -40,6 +40,11 @@ describe('api desktop transport', () => {
       })
       .mockResolvedValueOnce({ ok: true });
     const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
+    const renameConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
+    const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
+    const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
+    const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
+    const readSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
     const createLiveSession = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
     const resumeLiveSession = vi.fn().mockResolvedValue({ id: 'live-1' });
     const takeOverLiveSession = vi.fn().mockResolvedValue({
@@ -49,7 +54,14 @@ describe('api desktop transport', () => {
       controllerAcquiredAt: '2026-04-04T00:00:00.000Z',
     });
     const submitLiveSessionPrompt = vi.fn().mockResolvedValue({ ok: true, accepted: true, delivery: 'started' });
+    const restoreQueuedLiveSessionMessage = vi.fn().mockResolvedValue({ ok: true, text: 'queued hello', images: [] });
+    const compactLiveSession = vi.fn().mockResolvedValue({ ok: true, result: { compacted: true } });
+    const reloadLiveSession = vi.fn().mockResolvedValue({ ok: true });
+    const branchLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
+    const forkLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    const summarizeAndForkLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     const abortLiveSession = vi.fn().mockResolvedValue({ ok: true });
+    const destroyLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const getEnvironment = vi.fn().mockResolvedValue({
       isElectron: true,
       activeHostId: 'local',
@@ -63,11 +75,23 @@ describe('api desktop transport', () => {
         getEnvironment,
         invokeLocalApi,
         readConversationBootstrap,
+        renameConversation,
+        readLiveSession,
+        readLiveSessionContext,
+        readSessionDetail,
+        readSessionBlock,
         createLiveSession,
         resumeLiveSession,
         takeOverLiveSession,
         submitLiveSessionPrompt,
+        restoreQueuedLiveSessionMessage,
+        compactLiveSession,
+        reloadLiveSession,
+        branchLiveSession,
+        forkLiveSession,
+        summarizeAndForkLiveSession,
         abortLiveSession,
+        destroyLiveSession,
       },
     });
 
@@ -77,10 +101,21 @@ describe('api desktop transport', () => {
       knownSessionSignature: 'sig-1',
       tailBlocks: 12,
     });
+    const renamed = await api.renameConversation('conversation-1', 'Renamed conversation', 'surface-1');
+    const live = await api.liveSession('live-1');
+    const liveContext = await api.liveSessionContext('live-1');
+    const sessionDetail = await api.sessionDetail('live-1', { tailBlocks: 24 });
+    const sessionBlock = await api.sessionBlock('live-1', 'block-1');
     const created = await api.createLiveSession('/repo', undefined, { model: 'gpt-5.4' });
     const resumed = await api.resumeSession('/tmp/live-1.jsonl');
     const takeover = await api.takeoverLiveSession('live-1', 'surface-1');
     const prompted = await api.promptSession('live-1', 'hello', 'followUp', [], [], 'surface-1');
+    const restored = await api.restoreQueuedMessage('live-1', { behavior: 'followUp', index: 0, previewId: 'queue-1' }, 'surface-1');
+    const compacted = await api.compactSession('live-1', 'be shorter', 'surface-1');
+    const reloaded = await api.reloadSession('live-1', 'surface-1');
+    const branched = await api.branchSession('live-1', 'entry-1', 'surface-1');
+    const forked = await api.forkSession('live-1', 'entry-1', { preserveSource: true }, 'surface-1');
+    const summaryFork = await api.summarizeAndForkSession('live-1', 'surface-1');
     const aborted = await api.abortSession('live-1', 'surface-1');
     const destroyed = await api.destroySession('conversation-1', 'surface-1');
 
@@ -91,6 +126,15 @@ describe('api desktop transport', () => {
       tailBlocks: 12,
       knownSessionSignature: 'sig-1',
     });
+    expect(renameConversation).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      name: 'Renamed conversation',
+      surfaceId: 'surface-1',
+    });
+    expect(readLiveSession).toHaveBeenCalledWith('live-1');
+    expect(readLiveSessionContext).toHaveBeenCalledWith('live-1');
+    expect(readSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
+    expect(readSessionBlock).toHaveBeenCalledWith({ sessionId: 'live-1', blockId: 'block-1' });
     expect(createLiveSession).toHaveBeenCalledWith({ cwd: '/repo', model: 'gpt-5.4' });
     expect(resumeLiveSession).toHaveBeenCalledWith('/tmp/live-1.jsonl');
     expect(takeOverLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', surfaceId: 'surface-1' });
@@ -102,23 +146,47 @@ describe('api desktop transport', () => {
       images: [],
       attachmentRefs: [],
     });
+    expect(restoreQueuedLiveSessionMessage).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      behavior: 'followUp',
+      index: 0,
+      previewId: 'queue-1',
+    });
+    expect(compactLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', customInstructions: 'be shorter' });
+    expect(reloadLiveSession).toHaveBeenCalledWith('live-1');
+    expect(branchLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1' });
+    expect(forkLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true });
+    expect(summarizeAndForkLiveSession).toHaveBeenCalledWith('live-1');
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
-    expect(invokeLocalApi).toHaveBeenNthCalledWith(2, 'DELETE', '/api/live-sessions/conversation-1', { surfaceId: 'surface-1' });
+    expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(status).toMatchObject({ profile: 'assistant' });
     expect(bootstrap).toEqual(createBootstrapState());
+    expect(renamed).toEqual({ ok: true, title: 'Renamed conversation' });
+    expect(live).toEqual({ live: true, id: 'live-1' });
+    expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });
+    expect(sessionDetail).toEqual({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
+    expect(sessionBlock).toEqual({ id: 'block-1', type: 'text', text: 'hello' });
     expect(created).toEqual({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
     expect(resumed).toEqual({ id: 'live-1' });
     expect(takeover).toMatchObject({ controllerSurfaceId: 'surface-1' });
     expect(prompted).toEqual({ ok: true, accepted: true, delivery: 'started' });
+    expect(restored).toEqual({ ok: true, text: 'queued hello', images: [] });
+    expect(compacted).toEqual({ ok: true, result: { compacted: true } });
+    expect(reloaded).toEqual({ ok: true });
+    expect(branched).toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
+    expect(forked).toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    expect(summaryFork).toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     expect(aborted).toEqual({ ok: true });
     expect(destroyed).toEqual({ ok: true });
   });
 
   it('falls back to HTTP for non-local desktop hosts', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse(createBootstrapState({
-      conversationId: 'remote-conversation',
-    })));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse(createBootstrapState({
+        conversationId: 'remote-conversation',
+      })))
+      .mockResolvedValueOnce(createJsonResponse({ ok: true, title: 'Remote rename' }));
     vi.stubGlobal('fetch', fetchMock);
     const invokeLocalApi = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -140,12 +208,24 @@ describe('api desktop transport', () => {
       knownSessionSignature: 'sig-2',
       tailBlocks: 5,
     });
+    const renamed = await api.renameConversation('remote-conversation', 'Remote rename', 'surface-1');
 
     expect(invokeLocalApi).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       '/api/conversations/remote-conversation/bootstrap?tailBlocks=5&knownSessionSignature=sig-2',
       { method: 'GET', cache: 'no-store' },
     );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/conversations/remote-conversation/title',
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Remote rename', surfaceId: 'surface-1' }),
+      },
+    );
     expect(result.conversationId).toBe('remote-conversation');
+    expect(renamed).toEqual({ ok: true, title: 'Remote rename' });
   });
 });

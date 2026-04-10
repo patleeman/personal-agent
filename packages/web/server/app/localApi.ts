@@ -10,14 +10,29 @@ import {
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
+  getLiveSessions as getLocalLiveSessions,
+  isLive as isLiveSession,
+  registry as liveRegistry,
+  renameSession,
   subscribe as subscribeLiveSession,
-  takeOverSessionControl,
 } from '../conversations/liveSessions.js';
 import {
   isMissingConversationBootstrapState,
   readConversationBootstrapState,
 } from '../conversations/conversationBootstrap.js';
+import {
+  publishConversationSessionMetaChanged,
+  readConversationSessionSignature,
+  readSessionDetailForRoute,
+} from '../conversations/conversationService.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
+import {
+  buildAppendOnlySessionDetailResponse,
+  readSessionBlock,
+  readSessionMeta,
+  renameStoredSession,
+} from '../conversations/sessions.js';
+import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
 import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import { registerServerRoutes } from '../routes/registerAll.js';
@@ -28,9 +43,17 @@ import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import {
   abortLiveSessionCapability,
+  branchLiveSessionCapability,
+  compactLiveSessionCapability,
   createLiveSessionCapability,
+  destroyLiveSessionCapability,
+  forkLiveSessionCapability,
+  reloadLiveSessionCapability,
+  restoreQueuedLiveSessionMessageCapability,
   resumeLiveSessionCapability,
   submitLiveSessionPromptCapability,
+  summarizeAndForkLiveSessionCapability,
+  takeOverLiveSessionCapability,
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
 import { createProfileState } from './profileState.js';
@@ -984,6 +1007,136 @@ export async function readDesktopConversationBootstrap(input: {
   return bootstrap.state;
 }
 
+export async function renameDesktopConversation(input: {
+  conversationId: string;
+  name: string;
+  surfaceId?: string;
+}): Promise<{ ok: true; title: string }> {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const nextName = input.name.trim();
+  if (!nextName) {
+    throw new Error('name required');
+  }
+
+  if (isLiveSession(conversationId)) {
+    renameSession(conversationId, nextName);
+    return { ok: true, title: nextName };
+  }
+
+  const renamed = renameStoredSession(conversationId, nextName);
+  publishConversationSessionMetaChanged(conversationId);
+  return { ok: true, title: renamed.title };
+}
+
+export async function readDesktopLiveSession(conversationId: string) {
+  await getLocalRoutes();
+
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId || !isLiveSession(normalizedConversationId)) {
+    throw new Error('404 Not Found');
+  }
+
+  const entry = getLocalLiveSessions().find((session) => session.id === normalizedConversationId);
+  if (!entry) {
+    throw new Error('404 Not Found');
+  }
+
+  return { live: true as const, ...entry };
+}
+
+export async function readDesktopLiveSessionContext(conversationId: string) {
+  await getLocalRoutes();
+
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    throw new Error('Session not found');
+  }
+
+  const liveEntry = liveRegistry.get(normalizedConversationId);
+  const storedSession = !liveEntry ? readSessionMeta(normalizedConversationId) : null;
+  const cwd = liveEntry?.cwd ?? storedSession?.cwd;
+  if (!cwd) {
+    throw new Error('Session not found');
+  }
+
+  const gitSummary = readGitStatusSummaryWithTelemetry(cwd).summary;
+  return {
+    cwd,
+    branch: gitSummary?.branch ?? null,
+    git: gitSummary
+      ? {
+          changeCount: gitSummary.changeCount,
+          linesAdded: gitSummary.linesAdded,
+          linesDeleted: gitSummary.linesDeleted,
+          changes: gitSummary.changes.map((change) => ({
+            relativePath: change.relativePath,
+            change: change.change,
+          })),
+        }
+      : null,
+  };
+}
+
+export async function readDesktopSessionDetail(input: {
+  sessionId: string;
+  tailBlocks?: number;
+  knownSessionSignature?: string;
+  knownBlockOffset?: number;
+  knownTotalBlocks?: number;
+  knownLastBlockId?: string;
+}) {
+  const context = await getLocalLiveSessionCapabilityContext();
+  const sessionId = input.sessionId.trim();
+  const currentSessionSignature = readConversationSessionSignature(sessionId);
+  if (input.knownSessionSignature && currentSessionSignature && input.knownSessionSignature === currentSessionSignature) {
+    return {
+      unchanged: true as const,
+      sessionId,
+      signature: currentSessionSignature,
+    };
+  }
+
+  const { sessionRead } = await readSessionDetailForRoute({
+    conversationId: sessionId,
+    profile: context.getCurrentProfile(),
+    tailBlocks: input.tailBlocks,
+  });
+  if (!sessionRead.detail) {
+    throw new Error('Session not found');
+  }
+
+  const appendOnly = input.knownSessionSignature && sessionRead.detail.signature && input.knownSessionSignature !== sessionRead.detail.signature
+    ? buildAppendOnlySessionDetailResponse({
+        detail: sessionRead.detail,
+        knownBlockOffset: input.knownBlockOffset,
+        knownTotalBlocks: input.knownTotalBlocks,
+        knownLastBlockId: input.knownLastBlockId,
+      })
+    : null;
+
+  return appendOnly ?? sessionRead.detail;
+}
+
+export async function readDesktopSessionBlock(input: {
+  sessionId: string;
+  blockId: string;
+}) {
+  await getLocalRoutes();
+
+  const result = readSessionBlock(input.sessionId.trim(), input.blockId.trim());
+  if (!result) {
+    throw new Error('Session block not found');
+  }
+
+  return result;
+}
+
 export async function createDesktopLiveSession(input: {
   cwd?: string;
   model?: string | null;
@@ -1019,19 +1172,54 @@ export async function takeOverDesktopLiveSession(input: {
   conversationId: string;
   surfaceId: string;
 }) {
-  await getLocalRoutes();
+  return takeOverLiveSessionCapability(input);
+}
 
-  const conversationId = input.conversationId.trim();
-  if (!conversationId) {
-    throw new Error('conversationId required');
-  }
+export async function restoreDesktopQueuedLiveSessionMessage(input: {
+  conversationId: string;
+  behavior: 'steer' | 'followUp';
+  index: number;
+  previewId?: string;
+}) {
+  return restoreQueuedLiveSessionMessageCapability(input);
+}
 
-  const surfaceId = input.surfaceId.trim();
-  if (!surfaceId) {
-    throw new Error('surfaceId required');
-  }
+export async function compactDesktopLiveSession(input: {
+  conversationId: string;
+  customInstructions?: string;
+}) {
+  return compactLiveSessionCapability(input);
+}
 
-  return takeOverSessionControl(conversationId, surfaceId);
+export async function reloadDesktopLiveSession(input: {
+  conversationId: string;
+}) {
+  return reloadLiveSessionCapability(input);
+}
+
+export async function destroyDesktopLiveSession(conversationId: string): Promise<{ ok: true }> {
+  return destroyLiveSessionCapability({ conversationId });
+}
+
+export async function branchDesktopLiveSession(input: {
+  conversationId: string;
+  entryId: string;
+}) {
+  return branchLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function forkDesktopLiveSession(input: {
+  conversationId: string;
+  entryId: string;
+  preserveSource?: boolean;
+}) {
+  return forkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function summarizeAndForkDesktopLiveSession(input: {
+  conversationId: string;
+}) {
+  return summarizeAndForkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
 export async function abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }> {

@@ -68,6 +68,26 @@ export interface DesktopConversationBootstrapRequest {
   knownLastBlockId?: string;
 }
 
+export interface DesktopConversationRenameRequest {
+  conversationId: string;
+  name: string;
+  surfaceId?: string;
+}
+
+export interface DesktopSessionDetailRequest {
+  sessionId: string;
+  tailBlocks?: number;
+  knownSessionSignature?: string;
+  knownBlockOffset?: number;
+  knownTotalBlocks?: number;
+  knownLastBlockId?: string;
+}
+
+export interface DesktopSessionBlockRequest {
+  sessionId: string;
+  blockId: string;
+}
+
 export interface DesktopLiveSessionCreateRequest {
   cwd?: string;
   model?: string | null;
@@ -98,6 +118,35 @@ export interface DesktopLiveSessionPromptResult {
   referencedAttachmentIds: string[];
 }
 
+export interface DesktopLiveSessionQueueRestoreRequest {
+  conversationId: string;
+  behavior: 'steer' | 'followUp';
+  index: number;
+  previewId?: string;
+}
+
+export interface DesktopLiveSessionQueueRestoreResult {
+  ok: true;
+  text: string;
+  images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
+}
+
+export interface DesktopLiveSessionCompactRequest {
+  conversationId: string;
+  customInstructions?: string;
+}
+
+export interface DesktopLiveSessionBranchRequest {
+  conversationId: string;
+  entryId: string;
+}
+
+export interface DesktopLiveSessionForkRequest {
+  conversationId: string;
+  entryId: string;
+  preserveSource?: boolean;
+}
+
 export interface HostController {
   readonly id: string;
   readonly label: string;
@@ -108,9 +157,21 @@ export interface HostController {
   openNewConversation(): Promise<string>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   readConversationBootstrap?(input: DesktopConversationBootstrapRequest): Promise<unknown>;
+  renameConversation?(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }>;
+  readLiveSession?(conversationId: string): Promise<unknown>;
+  readLiveSessionContext?(conversationId: string): Promise<unknown>;
+  readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;
+  readSessionBlock?(input: DesktopSessionBlockRequest): Promise<unknown>;
   createLiveSession?(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string }>;
   resumeLiveSession?(sessionFile: string): Promise<{ id: string }>;
   takeOverLiveSession?(input: DesktopLiveSessionTakeoverRequest): Promise<unknown>;
+  restoreQueuedLiveSessionMessage?(input: DesktopLiveSessionQueueRestoreRequest): Promise<DesktopLiveSessionQueueRestoreResult>;
+  compactLiveSession?(input: DesktopLiveSessionCompactRequest): Promise<{ ok: true; result: unknown }>;
+  reloadLiveSession?(conversationId: string): Promise<{ ok: true }>;
+  destroyLiveSession?(conversationId: string): Promise<{ ok: true }>;
+  branchLiveSession?(input: DesktopLiveSessionBranchRequest): Promise<{ newSessionId: string; sessionFile: string }>;
+  forkLiveSession?(input: DesktopLiveSessionForkRequest): Promise<{ newSessionId: string; sessionFile: string }>;
+  summarizeAndForkLiveSession?(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt?(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult>;
   abortLiveSession?(conversationId: string): Promise<{ ok: true }>;
   subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;

@@ -35,6 +35,25 @@ export interface LocalApiModule {
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }): Promise<unknown>;
+  renameDesktopConversation(input: {
+    conversationId: string;
+    name: string;
+    surfaceId?: string;
+  }): Promise<{ ok: true; title: string }>;
+  readDesktopLiveSession(conversationId: string): Promise<unknown>;
+  readDesktopLiveSessionContext(conversationId: string): Promise<unknown>;
+  readDesktopSessionDetail(input: {
+    sessionId: string;
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }): Promise<unknown>;
+  readDesktopSessionBlock(input: {
+    sessionId: string;
+    blockId: string;
+  }): Promise<unknown>;
   createDesktopLiveSession(input: {
     cwd?: string;
     model?: string | null;
@@ -61,6 +80,32 @@ export interface LocalApiModule {
     conversationId: string;
     surfaceId: string;
   }): Promise<unknown>;
+  restoreDesktopQueuedLiveSessionMessage(input: {
+    conversationId: string;
+    behavior: 'steer' | 'followUp';
+    index: number;
+    previewId?: string;
+  }): Promise<{ ok: true; text: string; images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }> }>;
+  compactDesktopLiveSession(input: {
+    conversationId: string;
+    customInstructions?: string;
+  }): Promise<{ ok: true; result: unknown }>;
+  reloadDesktopLiveSession(input: {
+    conversationId: string;
+  }): Promise<{ ok: true }>;
+  destroyDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
+  branchDesktopLiveSession(input: {
+    conversationId: string;
+    entryId: string;
+  }): Promise<{ newSessionId: string; sessionFile: string }>;
+  forkDesktopLiveSession(input: {
+    conversationId: string;
+    entryId: string;
+    preserveSource?: boolean;
+  }): Promise<{ newSessionId: string; sessionFile: string }>;
+  summarizeAndForkDesktopLiveSession(input: {
+    conversationId: string;
+  }): Promise<{ newSessionId: string; sessionFile: string }>;
   abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
   subscribeDesktopLocalApiStream(
     path: string,

@@ -85,8 +85,8 @@ Initial capabilities to migrate:
 
 - [x] conversation bootstrap
 - [x] live session creation
-- [ ] live session prompt send / abort / queue control
-- [ ] session detail windowing and block hydrate
+- [x] live session prompt send / abort / queue control
+- [x] session detail windowing and block hydrate
 - [ ] conversation event stream / invalidation stream
 
 ### Phase 2 — Move conversation flow off the local web server
@@ -257,4 +257,6 @@ Just completed:
 - local desktop app bootstrap and hot app-state updates now use a dedicated desktop bridge capability instead of routing the packaged renderer through `/api/events` snapshot plumbing
 - local desktop app invalidation/activity/session/task/daemon/web-ui updates can now bypass `/api/events` entirely and stream over a dedicated desktop app-events bridge from the main process
 - desktop Settings no longer hides runtime/service diagnostics just because the shell is Electron; local desktop hosts show app-owned runtime messaging while remote hosts still expose their runtime panels
-- local desktop live-session creation, resume, prompt send, and abort now run through dedicated desktop bridge methods instead of the generic local API path
+- local desktop live-session creation, resume, prompt send, takeover, queued prompt restore, compaction, reload, summarize-fork, branch/fork, destroy, and abort now run through dedicated desktop bridge methods instead of the generic local API path
+- local desktop conversation bootstrap, rename, live-session status/context reads, session detail windowing, and block hydrate now also use dedicated bridge methods backed by shared Node-side conversation services, while remote hosts keep the existing HTTP fallback
+- validation for this slice: targeted Vitest coverage for desktop bridge routing, local host controller routing, and live-session routes, `npm run desktop:build`, and agent-browser smoke checks against the built Electron app covering existing conversation open, rename, and local live-session control actions

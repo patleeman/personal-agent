@@ -3,31 +3,31 @@ import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
   prewarmLiveSessionLoader,
-  destroySession,
   exportSessionHtml,
-  forkSession,
   getLiveSessions as getLocalLiveSessions,
-  summarizeAndForkSession,
   getLiveSessionForkEntries,
   getSessionContextUsage,
   getSessionStats,
   isLive as isLocalLive,
   LiveSessionControlError,
-  compactSession,
-  reloadSessionResources,
   renameSession,
-  restoreQueuedMessage,
-  branchSession,
   subscribe as subscribeLocal,
-  takeOverSessionControl,
   registry as liveRegistry,
 } from '../conversations/liveSessions.js';
 import {
   abortLiveSessionCapability,
+  branchLiveSessionCapability,
+  compactLiveSessionCapability,
   createLiveSessionCapability,
+  destroyLiveSessionCapability,
+  forkLiveSessionCapability,
   LiveSessionCapabilityInputError,
+  reloadLiveSessionCapability,
+  restoreQueuedLiveSessionMessageCapability,
   resumeLiveSessionCapability,
   submitLiveSessionPromptCapability,
+  summarizeAndForkLiveSessionCapability,
+  takeOverLiveSessionCapability,
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
 import { readCompanionSession } from '../ui/companionAuth.js';
@@ -404,7 +404,7 @@ export function registerLiveSessionRoutes(
         return;
       }
 
-      res.json(takeOverSessionControl(id, surfaceId));
+      res.json(takeOverLiveSessionCapability({ conversationId: id, surfaceId }));
     } catch (error) {
       if (error instanceof LiveSessionControlError) {
         res.status(409).json({ error: error.message });
@@ -438,13 +438,12 @@ export function registerLiveSessionRoutes(
         return;
       }
 
-      const restored = await restoreQueuedMessage(
-        req.params.id,
+      res.json(await restoreQueuedLiveSessionMessageCapability({
+        conversationId: req.params.id,
         behavior,
-        index as number,
-        typeof previewId === 'string' ? previewId : undefined,
-      );
-      res.json({ ok: true, ...restored });
+        index: index as number,
+        ...(typeof previewId === 'string' ? { previewId } : {}),
+      }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
@@ -466,8 +465,10 @@ export function registerLiveSessionRoutes(
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
       const { customInstructions } = req.body as { customInstructions?: string; surfaceId?: string };
-      const result = await compactSession(req.params.id, customInstructions?.trim() || undefined);
-      res.json({ ok: true, result });
+      res.json(await compactLiveSessionCapability({
+        conversationId: req.params.id,
+        customInstructions: customInstructions?.trim() || undefined,
+      }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -483,8 +484,7 @@ export function registerLiveSessionRoutes(
   router.post('/api/live-sessions/:id/reload', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      await reloadSessionResources(req.params.id);
-      res.json({ ok: true });
+      res.json(await reloadLiveSessionCapability({ conversationId: req.params.id }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -618,7 +618,7 @@ export function registerLiveSessionRoutes(
   router.post('/api/live-sessions/:id/summarize-fork', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      res.json(await summarizeAndForkSession(req.params.id, buildLiveSessionResourceOptions()));
+      res.json(await summarizeAndForkLiveSessionCapability({ conversationId: req.params.id }, getLiveSessionCapabilityContext()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -636,7 +636,7 @@ export function registerLiveSessionRoutes(
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
       const { entryId } = req.body as { entryId: string; surfaceId?: string };
       if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
-      res.json(await branchSession(req.params.id, entryId, buildLiveSessionResourceOptions()));
+      res.json(await branchLiveSessionCapability({ conversationId: req.params.id, entryId }, getLiveSessionCapabilityContext()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -654,10 +654,11 @@ export function registerLiveSessionRoutes(
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
       const { entryId, preserveSource } = req.body as { entryId: string; preserveSource?: boolean; surfaceId?: string };
       if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
-      res.json(await forkSession(req.params.id, entryId, {
+      res.json(await forkLiveSessionCapability({
+        conversationId: req.params.id,
+        entryId,
         preserveSource,
-        ...buildLiveSessionResourceOptions(),
-      }));
+      }, getLiveSessionCapabilityContext()));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -675,8 +676,7 @@ export function registerLiveSessionRoutes(
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
 
-      destroySession(req.params.id);
-      res.json({ ok: true });
+      res.json(await destroyLiveSessionCapability({ conversationId: req.params.id }));
     } catch (err) {
       if (writeLiveConversationControlError(res, err)) {
         return;
@@ -757,7 +757,7 @@ export function registerCompanionLiveSessionRoutes(
         return;
       }
 
-      res.json(takeOverSessionControl(id, surfaceId));
+      res.json(takeOverLiveSessionCapability({ conversationId: id, surfaceId }));
     } catch (error) {
       if (error instanceof LiveSessionControlError) {
         res.status(409).json({ error: error.message });

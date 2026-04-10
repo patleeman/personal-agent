@@ -4,9 +4,13 @@ import type {
   DesktopEnvironmentState,
   DesktopHostRecord,
   DesktopNavigationState,
+  DisplayBlock,
+  LiveSessionContext,
+  LiveSessionMeta,
   LiveSessionPresenceState,
   PromptAttachmentRefInput,
   PromptImageInput,
+  SessionDetailResult,
 } from './types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
@@ -28,9 +32,33 @@ export interface PersonalAgentDesktopBridge {
     knownTotalBlocks?: number;
     knownLastBlockId?: string;
   }): Promise<ConversationBootstrapState>;
+  renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
+  readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
+  readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
+  readSessionDetail(input: {
+    sessionId: string;
+    tailBlocks?: number;
+    knownSessionSignature?: string;
+    knownBlockOffset?: number;
+    knownTotalBlocks?: number;
+    knownLastBlockId?: string;
+  }): Promise<SessionDetailResult>;
+  readSessionBlock(input: { sessionId: string; blockId: string }): Promise<DisplayBlock>;
   createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }): Promise<{ id: string; sessionFile: string }>;
   resumeLiveSession(sessionFile: string): Promise<{ id: string }>;
   takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
+  restoreQueuedLiveSessionMessage(input: {
+    conversationId: string;
+    behavior: 'steer' | 'followUp';
+    index: number;
+    previewId?: string;
+  }): Promise<{ ok: true; text: string; images: Array<{ type: 'image'; data: string; mimeType: string; name?: string }> }>;
+  compactLiveSession(input: { conversationId: string; customInstructions?: string }): Promise<{ ok: true; result: unknown }>;
+  reloadLiveSession(conversationId: string): Promise<{ ok: true }>;
+  destroyLiveSession(conversationId: string): Promise<{ ok: true }>;
+  branchLiveSession(input: { conversationId: string; entryId: string }): Promise<{ newSessionId: string; sessionFile: string }>;
+  forkLiveSession(input: { conversationId: string; entryId: string; preserveSource?: boolean }): Promise<{ newSessionId: string; sessionFile: string }>;
+  summarizeAndForkLiveSession(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt(input: {
     conversationId: string;
     text?: string;

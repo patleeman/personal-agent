@@ -29,10 +29,22 @@ describe('LocalHostController', () => {
       invokeDesktopLocalApi,
       dispatchDesktopLocalApiRequest: vi.fn(),
       readDesktopConversationBootstrap: vi.fn(),
+      renameDesktopConversation: vi.fn(),
+      readDesktopLiveSession: vi.fn(),
+      readDesktopLiveSessionContext: vi.fn(),
+      readDesktopSessionDetail: vi.fn(),
+      readDesktopSessionBlock: vi.fn(),
       createDesktopLiveSession: vi.fn(),
       resumeDesktopLiveSession: vi.fn(),
       submitDesktopLiveSessionPrompt: vi.fn(),
       takeOverDesktopLiveSession: vi.fn(),
+      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
+      compactDesktopLiveSession: vi.fn(),
+      reloadDesktopLiveSession: vi.fn(),
+      destroyDesktopLiveSession: vi.fn(),
+      branchDesktopLiveSession: vi.fn(),
+      forkDesktopLiveSession: vi.fn(),
+      summarizeAndForkDesktopLiveSession: vi.fn(),
       abortDesktopLiveSession: vi.fn(),
       subscribeDesktopLocalApiStream: vi.fn(),
       subscribeDesktopAppEvents: vi.fn(),
@@ -74,10 +86,22 @@ describe('LocalHostController', () => {
       invokeDesktopLocalApi: vi.fn(),
       dispatchDesktopLocalApiRequest: vi.fn(),
       readDesktopConversationBootstrap: vi.fn(),
+      renameDesktopConversation: vi.fn(),
+      readDesktopLiveSession: vi.fn(),
+      readDesktopLiveSessionContext: vi.fn(),
+      readDesktopSessionDetail: vi.fn(),
+      readDesktopSessionBlock: vi.fn(),
       createDesktopLiveSession: vi.fn(),
       resumeDesktopLiveSession: vi.fn(),
       submitDesktopLiveSessionPrompt: vi.fn(),
       takeOverDesktopLiveSession: vi.fn(),
+      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
+      compactDesktopLiveSession: vi.fn(),
+      reloadDesktopLiveSession: vi.fn(),
+      destroyDesktopLiveSession: vi.fn(),
+      branchDesktopLiveSession: vi.fn(),
+      forkDesktopLiveSession: vi.fn(),
+      summarizeAndForkDesktopLiveSession: vi.fn(),
       abortDesktopLiveSession: vi.fn(),
       subscribeDesktopLocalApiStream,
       subscribeDesktopAppEvents: vi.fn(),
@@ -109,6 +133,11 @@ describe('LocalHostController', () => {
       sessionDetail: null,
       liveSession: { live: true, id: 'live-1' },
     });
+    const renameDesktopConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
+    const readDesktopLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
+    const readDesktopLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
+    const readDesktopSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
+    const readDesktopSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
     const createDesktopLiveSession = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
     const resumeDesktopLiveSession = vi.fn().mockResolvedValue({ id: 'live-1' });
     const submitDesktopLiveSessionPrompt = vi.fn().mockResolvedValue({
@@ -121,15 +150,34 @@ describe('LocalHostController', () => {
       referencedAttachmentIds: [],
     });
     const takeOverDesktopLiveSession = vi.fn().mockResolvedValue({ controllerSurfaceId: 'surface-1' });
+    const restoreDesktopQueuedLiveSessionMessage = vi.fn().mockResolvedValue({ ok: true, text: 'queued hello', images: [] });
+    const compactDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, result: { compacted: true } });
+    const reloadDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
+    const destroyDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
+    const branchDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
+    const forkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     const abortDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
     const loadLocalApi = vi.fn().mockResolvedValue({
       invokeDesktopLocalApi: vi.fn(),
       dispatchDesktopLocalApiRequest: vi.fn(),
       readDesktopConversationBootstrap,
+      renameDesktopConversation,
+      readDesktopLiveSession,
+      readDesktopLiveSessionContext,
+      readDesktopSessionDetail,
+      readDesktopSessionBlock,
       createDesktopLiveSession,
       resumeDesktopLiveSession,
       submitDesktopLiveSessionPrompt,
       takeOverDesktopLiveSession,
+      restoreDesktopQueuedLiveSessionMessage,
+      compactDesktopLiveSession,
+      reloadDesktopLiveSession,
+      destroyDesktopLiveSession,
+      branchDesktopLiveSession,
+      forkDesktopLiveSession,
+      summarizeAndForkDesktopLiveSession,
       abortDesktopLiveSession,
       subscribeDesktopLocalApiStream: vi.fn(),
       subscribeDesktopAppEvents: vi.fn(),
@@ -152,6 +200,24 @@ describe('LocalHostController', () => {
       sessionDetail: null,
       liveSession: { live: true, id: 'live-1' },
     });
+    await expect(controller.renameConversation?.({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' })).resolves.toEqual({
+      ok: true,
+      title: 'Renamed conversation',
+    });
+    await expect(controller.readLiveSession?.('live-1')).resolves.toEqual({ live: true, id: 'live-1' });
+    await expect(controller.readLiveSessionContext?.('live-1')).resolves.toEqual({ cwd: '/repo', branch: 'main', git: null });
+    await expect(controller.readSessionDetail?.({ sessionId: 'live-1', tailBlocks: 24 })).resolves.toEqual({
+      meta: { id: 'live-1' },
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      contextUsage: null,
+    });
+    await expect(controller.readSessionBlock?.({ sessionId: 'live-1', blockId: 'block-1' })).resolves.toEqual({
+      id: 'block-1',
+      type: 'text',
+      text: 'hello',
+    });
     await expect(controller.createLiveSession?.({ cwd: '/repo', model: 'gpt-5.4' })).resolves.toEqual({
       id: 'live-1',
       sessionFile: '/tmp/live-1.jsonl',
@@ -165,9 +231,21 @@ describe('LocalHostController', () => {
       text: 'hello',
       surfaceId: 'surface-1',
     })).resolves.toEqual(expect.objectContaining({ ok: true, delivery: 'started' }));
+    await expect(controller.restoreQueuedLiveSessionMessage?.({ conversationId: 'live-1', behavior: 'followUp', index: 0 })).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
+    await expect(controller.compactLiveSession?.({ conversationId: 'live-1', customInstructions: 'be shorter' })).resolves.toEqual({ ok: true, result: { compacted: true } });
+    await expect(controller.reloadLiveSession?.('live-1')).resolves.toEqual({ ok: true });
+    await expect(controller.destroyLiveSession?.('live-1')).resolves.toEqual({ ok: true });
+    await expect(controller.branchLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1' })).resolves.toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
+    await expect(controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true })).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     await expect(controller.abortLiveSession?.('live-1')).resolves.toEqual({ ok: true });
 
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
+    expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
+    expect(readDesktopLiveSession).toHaveBeenCalledWith('live-1');
+    expect(readDesktopLiveSessionContext).toHaveBeenCalledWith('live-1');
+    expect(readDesktopSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
+    expect(readDesktopSessionBlock).toHaveBeenCalledWith({ sessionId: 'live-1', blockId: 'block-1' });
     expect(createDesktopLiveSession).toHaveBeenCalledWith({ cwd: '/repo', model: 'gpt-5.4' });
     expect(resumeDesktopLiveSession).toHaveBeenCalledWith('/tmp/live-1.jsonl');
     expect(takeOverDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', surfaceId: 'surface-1' });
@@ -176,6 +254,13 @@ describe('LocalHostController', () => {
       text: 'hello',
       surfaceId: 'surface-1',
     });
+    expect(restoreDesktopQueuedLiveSessionMessage).toHaveBeenCalledWith({ conversationId: 'live-1', behavior: 'followUp', index: 0 });
+    expect(compactDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', customInstructions: 'be shorter' });
+    expect(reloadDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
+    expect(destroyDesktopLiveSession).toHaveBeenCalledWith('live-1');
+    expect(branchDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1' });
+    expect(forkDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true });
+    expect(summarizeAndForkDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
     expect(abortDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
@@ -187,10 +272,22 @@ describe('LocalHostController', () => {
       invokeDesktopLocalApi: vi.fn(),
       dispatchDesktopLocalApiRequest: vi.fn(),
       readDesktopConversationBootstrap: vi.fn(),
+      renameDesktopConversation: vi.fn(),
+      readDesktopLiveSession: vi.fn(),
+      readDesktopLiveSessionContext: vi.fn(),
+      readDesktopSessionDetail: vi.fn(),
+      readDesktopSessionBlock: vi.fn(),
       createDesktopLiveSession: vi.fn(),
       resumeDesktopLiveSession: vi.fn(),
       submitDesktopLiveSessionPrompt: vi.fn(),
       takeOverDesktopLiveSession: vi.fn(),
+      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
+      compactDesktopLiveSession: vi.fn(),
+      reloadDesktopLiveSession: vi.fn(),
+      destroyDesktopLiveSession: vi.fn(),
+      branchDesktopLiveSession: vi.fn(),
+      forkDesktopLiveSession: vi.fn(),
+      summarizeAndForkDesktopLiveSession: vi.fn(),
       abortDesktopLiveSession: vi.fn(),
       subscribeDesktopLocalApiStream: vi.fn(),
       subscribeDesktopAppEvents,

@@ -21,12 +21,20 @@ import {
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import {
   abortSession as abortLocalSession,
+  branchSession as branchLiveSession,
+  compactSession as compactLiveSession,
   createSession as createLocalSession,
+  destroySession as destroyLiveSession,
+  forkSession as forkLiveSession,
   isLive as isLocalLive,
   queuePromptContext,
   registry as liveRegistry,
+  reloadSessionResources as reloadLiveSessionResources,
+  restoreQueuedMessage as restoreQueuedLiveSessionMessage,
   resumeSession as resumeLocalSession,
   submitPromptSession as submitLocalPromptSession,
+  summarizeAndForkSession as summarizeAndForkLiveSession,
+  takeOverSessionControl,
   type PromptImageAttachment,
 } from './liveSessions.js';
 import { readSessionBlocks } from './sessions.js';
@@ -82,6 +90,46 @@ export interface SubmitLiveSessionPromptCapabilityInput {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   surfaceId?: string;
+}
+
+export interface TakeOverLiveSessionCapabilityInput {
+  conversationId: string;
+  surfaceId: string;
+}
+
+export interface RestoreQueuedLiveSessionMessageCapabilityInput {
+  conversationId: string;
+  behavior: 'steer' | 'followUp';
+  index: number;
+  previewId?: string;
+}
+
+export interface CompactLiveSessionCapabilityInput {
+  conversationId: string;
+  customInstructions?: string;
+}
+
+export interface ReloadLiveSessionCapabilityInput {
+  conversationId: string;
+}
+
+export interface DestroyLiveSessionCapabilityInput {
+  conversationId: string;
+}
+
+export interface BranchLiveSessionCapabilityInput {
+  conversationId: string;
+  entryId: string;
+}
+
+export interface ForkLiveSessionCapabilityInput {
+  conversationId: string;
+  entryId: string;
+  preserveSource?: boolean;
+}
+
+export interface SummarizeAndForkLiveSessionCapabilityInput {
+  conversationId: string;
 }
 
 export class LiveSessionCapabilityInputError extends Error {}
@@ -431,6 +479,128 @@ export async function submitLiveSessionPromptCapability(
     referencedVaultFileIds: referencedVaultFiles.map((file) => file.id),
     referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
   };
+}
+
+export function takeOverLiveSessionCapability(input: TakeOverLiveSessionCapabilityInput) {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  const surfaceId = input.surfaceId.trim();
+  if (!surfaceId) {
+    throw new LiveSessionCapabilityInputError('surfaceId required');
+  }
+
+  return takeOverSessionControl(conversationId, surfaceId);
+}
+
+export async function restoreQueuedLiveSessionMessageCapability(
+  input: RestoreQueuedLiveSessionMessageCapabilityInput,
+): Promise<{ ok: true; text: string; images: PromptImageAttachment[] }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+  if (input.behavior !== 'steer' && input.behavior !== 'followUp') {
+    throw new LiveSessionCapabilityInputError('behavior must be "steer" or "followUp"');
+  }
+  if (!Number.isInteger(input.index) || input.index < 0) {
+    throw new LiveSessionCapabilityInputError('index must be a non-negative integer');
+  }
+
+  const restored = await restoreQueuedLiveSessionMessage(
+    conversationId,
+    input.behavior,
+    input.index,
+    input.previewId,
+  );
+  return { ok: true, ...restored };
+}
+
+export async function compactLiveSessionCapability(
+  input: CompactLiveSessionCapabilityInput,
+): Promise<{ ok: true; result: unknown }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  const result = await compactLiveSession(conversationId, input.customInstructions?.trim() || undefined);
+  return { ok: true, result };
+}
+
+export async function reloadLiveSessionCapability(
+  input: ReloadLiveSessionCapabilityInput,
+): Promise<{ ok: true }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  await reloadLiveSessionResources(conversationId);
+  return { ok: true };
+}
+
+export async function destroyLiveSessionCapability(
+  input: DestroyLiveSessionCapabilityInput,
+): Promise<{ ok: true }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  destroyLiveSession(conversationId);
+  return { ok: true };
+}
+
+export async function branchLiveSessionCapability(
+  input: BranchLiveSessionCapabilityInput,
+  context: LiveSessionCapabilityContext,
+): Promise<{ newSessionId: string; sessionFile: string }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  const entryId = input.entryId.trim();
+  if (!entryId) {
+    throw new LiveSessionCapabilityInputError('entryId required');
+  }
+
+  return branchLiveSession(conversationId, entryId, buildLiveSessionOptions(context));
+}
+
+export async function forkLiveSessionCapability(
+  input: ForkLiveSessionCapabilityInput,
+  context: LiveSessionCapabilityContext,
+): Promise<{ newSessionId: string; sessionFile: string }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  const entryId = input.entryId.trim();
+  if (!entryId) {
+    throw new LiveSessionCapabilityInputError('entryId required');
+  }
+
+  return forkLiveSession(conversationId, entryId, {
+    preserveSource: input.preserveSource,
+    ...buildLiveSessionOptions(context),
+  });
+}
+
+export async function summarizeAndForkLiveSessionCapability(
+  input: SummarizeAndForkLiveSessionCapabilityInput,
+  context: LiveSessionCapabilityContext,
+): Promise<{ newSessionId: string; sessionFile: string }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  return summarizeAndForkLiveSession(conversationId, buildLiveSessionOptions(context));
 }
 
 export async function abortLiveSessionCapability(input: {
