@@ -111,7 +111,37 @@ describe('api desktop transport', () => {
     const readLiveSessionContextUsage = vi.fn().mockResolvedValue({ tokens: 1200, percent: 6 });
     const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
     const readSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
-    const createLiveSession = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
+    const createLiveSession = vi.fn().mockResolvedValue({
+      id: 'live-1',
+      sessionFile: '/tmp/live-1.jsonl',
+      bootstrap: createBootstrapState({
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/tmp/live-1.jsonl',
+            timestamp: '2026-04-11T00:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: '-repo',
+            model: 'gpt-5.4',
+            title: 'New Conversation',
+            messageCount: 0,
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/tmp/live-1.jsonl',
+          title: 'New Conversation',
+          isStreaming: false,
+        },
+      }),
+    });
     const resumeLiveSession = vi.fn().mockResolvedValue({ id: 'live-1' });
     const takeOverLiveSession = vi.fn().mockResolvedValue({
       surfaces: [],
@@ -474,7 +504,37 @@ describe('api desktop transport', () => {
     expect(liveContextUsage).toEqual({ tokens: 1200, percent: 6 });
     expect(sessionDetail).toEqual({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
     expect(sessionBlock).toEqual({ id: 'block-1', type: 'text', text: 'hello' });
-    expect(created).toEqual({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
+    expect(created).toEqual({
+      id: 'live-1',
+      sessionFile: '/tmp/live-1.jsonl',
+      bootstrap: createBootstrapState({
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/tmp/live-1.jsonl',
+            timestamp: '2026-04-11T00:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: '-repo',
+            model: 'gpt-5.4',
+            title: 'New Conversation',
+            messageCount: 0,
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/tmp/live-1.jsonl',
+          title: 'New Conversation',
+          isStreaming: false,
+        },
+      }),
+    });
     expect(resumed).toEqual({ id: 'live-1' });
     expect(takeover).toMatchObject({ controllerSurfaceId: 'surface-1' });
     expect(prompted).toEqual({ ok: true, accepted: true, delivery: 'started' });

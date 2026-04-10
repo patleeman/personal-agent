@@ -638,6 +638,12 @@ export interface LiveSessionMeta {
   hasPendingHiddenTurn?: boolean;
 }
 
+export interface LiveSessionCreateResult {
+  id: string;
+  sessionFile: string;
+  bootstrap?: ConversationBootstrapState;
+}
+
 export interface LiveSessionForkEntry {
   entryId: string;
   text: string;

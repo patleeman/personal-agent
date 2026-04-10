@@ -395,7 +395,7 @@ export interface HostController {
   readLiveSessionContextUsage?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;
   readSessionBlock?(input: DesktopSessionBlockRequest): Promise<unknown>;
-  createLiveSession?(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string }>;
+  createLiveSession?(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }>;
   resumeLiveSession?(sessionFile: string): Promise<{ id: string }>;
   takeOverLiveSession?(input: DesktopLiveSessionTakeoverRequest): Promise<unknown>;
   restoreQueuedLiveSessionMessage?(input: DesktopLiveSessionQueueRestoreRequest): Promise<DesktopLiveSessionQueueRestoreResult>;

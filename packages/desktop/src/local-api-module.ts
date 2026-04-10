@@ -259,7 +259,7 @@ export interface LocalApiModule {
     cwd?: string;
     model?: string | null;
     thinkingLevel?: string | null;
-  }): Promise<{ id: string; sessionFile: string }>;
+  }): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }>;
   resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }>;
   submitDesktopLiveSessionPrompt(input: {
     conversationId: string;

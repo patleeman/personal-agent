@@ -37,6 +37,7 @@ import type {
   DesktopNavigationState,
   DisplayBlock,
   LiveSessionContext,
+  LiveSessionCreateResult,
   LiveSessionExportResult,
   LiveSessionForkEntry,
   LiveSessionMeta,
@@ -255,7 +256,7 @@ export interface PersonalAgentDesktopBridge {
     knownLastBlockId?: string;
   }): Promise<SessionDetailResult>;
   readSessionBlock(input: { sessionId: string; blockId: string }): Promise<DisplayBlock>;
-  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }): Promise<{ id: string; sessionFile: string }>;
+  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }): Promise<LiveSessionCreateResult>;
   resumeLiveSession(sessionFile: string): Promise<{ id: string }>;
   takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
   restoreQueuedLiveSessionMessage(input: {

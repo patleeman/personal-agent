@@ -6,11 +6,11 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
-import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
+import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
@@ -924,6 +924,35 @@ function hasBlockingOverlayOpen(): boolean {
   }
 
   return document.querySelector('.ui-overlay-backdrop') !== null;
+}
+
+function primeCreatedConversationOpenCaches(
+  created: LiveSessionCreateResult,
+  options: {
+    tailBlocks: number;
+    bootstrapVersionKey: string;
+    sessionDetailVersion: number;
+  },
+): void {
+  if (!created.bootstrap) {
+    return;
+  }
+
+  primeConversationBootstrapCache(
+    created.id,
+    created.bootstrap,
+    { tailBlocks: options.tailBlocks },
+    options.bootstrapVersionKey,
+  );
+
+  if (created.bootstrap.sessionDetail) {
+    primeSessionDetailCache(
+      created.id,
+      created.bootstrap.sessionDetail,
+      { tailBlocks: options.tailBlocks },
+      options.sessionDetailVersion,
+    );
+  }
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
@@ -3048,12 +3077,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
       await api.destroySession(id, currentSurfaceId).catch(() => {});
       const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const { id: newId } = await api.createLiveSession(cwd, undefined, {
+      const created = await api.createLiveSession(cwd, undefined, {
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
       });
-      ensureConversationTabOpen(newId);
-      navigate(`/conversations/${newId}`);
+      primeCreatedConversationOpenCaches(created, {
+        tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+        bootstrapVersionKey: conversationVersionKey,
+        sessionDetailVersion: conversationEventVersion,
+      });
+      ensureConversationTabOpen(created.id);
+      navigate(`/conversations/${created.id}`);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -3904,10 +3938,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           hasVisibleSessionDetail: false,
         }));
         try {
-          const { id: newId } = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+          const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           });
+          primeCreatedConversationOpenCaches(created, {
+            tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+            bootstrapVersionKey: conversationVersionKey,
+            sessionDetailVersion: conversationEventVersion,
+          });
+          const newId = created.id;
           const attachmentRefs = await persistPromptDrawings(newId);
           const initialPrompt = {
             text: textToSend,

@@ -993,7 +993,37 @@ describe('LocalHostController', () => {
     const readDesktopLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readDesktopSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
     const readDesktopSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
-    const createDesktopLiveSession = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl' });
+    const createDesktopLiveSession = vi.fn().mockResolvedValue({
+      id: 'live-1',
+      sessionFile: '/tmp/live-1.jsonl',
+      bootstrap: {
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/tmp/live-1.jsonl',
+            timestamp: '2026-04-11T00:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: '-repo',
+            model: 'gpt-5.4',
+            title: 'New Conversation',
+            messageCount: 0,
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/tmp/live-1.jsonl',
+          title: 'New Conversation',
+          isStreaming: false,
+        },
+      },
+    });
     const resumeDesktopLiveSession = vi.fn().mockResolvedValue({ id: 'live-1' });
     const submitDesktopLiveSessionPrompt = vi.fn().mockResolvedValue({
       ok: true,
@@ -1112,6 +1142,33 @@ describe('LocalHostController', () => {
     await expect(controller.createLiveSession?.({ cwd: '/repo', model: 'gpt-5.4' })).resolves.toEqual({
       id: 'live-1',
       sessionFile: '/tmp/live-1.jsonl',
+      bootstrap: {
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/tmp/live-1.jsonl',
+            timestamp: '2026-04-11T00:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: '-repo',
+            model: 'gpt-5.4',
+            title: 'New Conversation',
+            messageCount: 0,
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/tmp/live-1.jsonl',
+          title: 'New Conversation',
+          isStreaming: false,
+        },
+      },
     });
     await expect(controller.resumeLiveSession?.('/tmp/live-1.jsonl')).resolves.toEqual({ id: 'live-1' });
     await expect(controller.takeOverLiveSession?.({ conversationId: 'live-1', surfaceId: 'surface-1' })).resolves.toEqual({

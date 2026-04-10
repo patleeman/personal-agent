@@ -372,7 +372,7 @@ describe('live session routes', () => {
     abortLocalSessionMock.mockResolvedValue(undefined);
     branchSessionMock.mockResolvedValue({ id: 'branch-1' });
     compactSessionMock.mockResolvedValue('compacted');
-    createLocalSessionMock.mockResolvedValue({ id: 'live-new' });
+    createLocalSessionMock.mockResolvedValue({ id: 'live-new', sessionFile: '/sessions/live-new.jsonl' });
     prewarmLiveSessionLoaderMock.mockResolvedValue(undefined);
     existsSyncMock.mockReturnValue(true);
     exportSessionHtmlMock.mockResolvedValue('/tmp/export.html');
@@ -590,6 +590,17 @@ describe('live session routes', () => {
     getHandler('/api/live-sessions/:id')(createRequest({ params: { id: 'live-1' } }), detailRes);
     expect(detailRes.json).toHaveBeenCalledWith({ live: true, id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' });
 
+    liveRegistry.set('live-new', {
+      cwd: '/repo/worktree',
+      title: '',
+      session: {
+        isStreaming: false,
+        model: { id: 'gpt-4o' },
+      },
+      pendingHiddenTurnCustomTypes: [],
+      activeHiddenTurnCustomType: null,
+    });
+
     const createRes = createResponse();
     await postHandler('/api/live-sessions')(createRequest({
       body: { cwd: '/explicit', model: 'gpt-4o', thinkingLevel: 'high' },
@@ -606,7 +617,39 @@ describe('live session routes', () => {
       initialModel: 'gpt-4o',
       initialThinkingLevel: 'high',
     });
-    expect(createRes.json).toHaveBeenCalledWith({ id: 'live-new' });
+    expect(createRes.json).toHaveBeenCalledWith({
+      id: 'live-new',
+      sessionFile: '/sessions/live-new.jsonl',
+      bootstrap: {
+        conversationId: 'live-new',
+        sessionDetail: {
+          meta: expect.objectContaining({
+            id: 'live-new',
+            file: '/sessions/live-new.jsonl',
+            cwd: '/repo/worktree',
+            cwdSlug: '-repo-worktree',
+            model: 'gpt-4o',
+            title: 'New Conversation',
+            messageCount: 0,
+            isRunning: false,
+            isLive: true,
+          }),
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+        },
+        sessionDetailSignature: null,
+        liveSession: {
+          live: true,
+          id: 'live-new',
+          cwd: '/repo/worktree',
+          sessionFile: '/sessions/live-new.jsonl',
+          title: 'New Conversation',
+          isStreaming: false,
+        },
+      },
+    });
 
     expect(prewarmLiveSessionLoaderMock).toHaveBeenCalledWith('/repo/worktree', {
       additionalExtensionPaths: ['extensions'],

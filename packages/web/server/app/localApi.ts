@@ -2329,7 +2329,7 @@ export async function createDesktopLiveSession(input: {
   cwd?: string;
   model?: string | null;
   thinkingLevel?: string | null;
-}): Promise<{ id: string; sessionFile: string }> {
+}): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }> {
   return createLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 

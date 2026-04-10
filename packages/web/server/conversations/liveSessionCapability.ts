@@ -75,6 +75,43 @@ export interface CreateLiveSessionCapabilityInput {
   thinkingLevel?: string | null;
 }
 
+export interface CreateLiveSessionCapabilityResult {
+  id: string;
+  sessionFile: string;
+  bootstrap?: {
+    conversationId: string;
+    sessionDetail: {
+      meta: {
+        id: string;
+        file: string;
+        timestamp: string;
+        cwd: string;
+        cwdSlug: string;
+        model: string;
+        title: string;
+        messageCount: number;
+        isRunning: boolean;
+        isLive: boolean;
+        lastActivityAt: string;
+      };
+      blocks: [];
+      blockOffset: number;
+      totalBlocks: number;
+      contextUsage: null;
+    };
+    sessionDetailSignature: null;
+    liveSession: {
+      live: true;
+      id: string;
+      cwd: string;
+      sessionFile: string;
+      title?: string;
+      isStreaming: boolean;
+      hasPendingHiddenTurn?: boolean;
+    };
+  };
+}
+
 export interface ResumeLiveSessionCapabilityInput {
   sessionFile: string;
 }
@@ -239,6 +276,57 @@ function buildConversationAttachmentsContext(
   ].join('\n');
 }
 
+function buildCreatedLiveSessionBootstrap(
+  conversationId: string,
+  sessionFile: string,
+): CreateLiveSessionCapabilityResult['bootstrap'] | undefined {
+  const liveEntry = liveRegistry.get(conversationId);
+  if (!liveEntry) {
+    return undefined;
+  }
+
+  const now = new Date().toISOString();
+  const title = liveEntry.title.trim() || 'New Conversation';
+  const model = typeof liveEntry.session.model?.id === 'string'
+    ? liveEntry.session.model.id
+    : '';
+  const hasPendingHiddenTurn = liveEntry.pendingHiddenTurnCustomTypes.length > 0
+    || liveEntry.activeHiddenTurnCustomType !== null;
+
+  return {
+    conversationId,
+    sessionDetail: {
+      meta: {
+        id: conversationId,
+        file: sessionFile,
+        timestamp: now,
+        cwd: liveEntry.cwd,
+        cwdSlug: liveEntry.cwd.replace(/\//g, '-'),
+        model,
+        title,
+        messageCount: 0,
+        isRunning: liveEntry.session.isStreaming,
+        isLive: true,
+        lastActivityAt: now,
+      },
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      contextUsage: null,
+    },
+    sessionDetailSignature: null,
+    liveSession: {
+      live: true,
+      id: conversationId,
+      cwd: liveEntry.cwd,
+      sessionFile,
+      ...(title ? { title } : {}),
+      isStreaming: liveEntry.session.isStreaming,
+      ...(hasPendingHiddenTurn ? { hasPendingHiddenTurn: true } : {}),
+    },
+  };
+}
+
 async function ensureConversationPromptTargetLive(
   conversationId: string,
   context: LiveSessionCapabilityContext,
@@ -260,7 +348,7 @@ async function ensureConversationPromptTargetLive(
 export async function createLiveSessionCapability(
   input: CreateLiveSessionCapabilityInput,
   context: LiveSessionCapabilityContext,
-): Promise<{ id: string; sessionFile: string }> {
+): Promise<CreateLiveSessionCapabilityResult> {
   const profile = context.getCurrentProfile();
   const cwd = resolveConversationCwd({
     repoRoot: context.getRepoRoot(),
@@ -269,10 +357,16 @@ export async function createLiveSessionCapability(
     defaultCwd: context.getDefaultWebCwd(),
   });
 
-  return createLocalSession(cwd, buildLiveSessionOptions(context, {
+  const created = await createLocalSession(cwd, buildLiveSessionOptions(context, {
     ...(input.model !== undefined ? { initialModel: input.model } : {}),
     ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
   }));
+  const bootstrap = buildCreatedLiveSessionBootstrap(created.id, created.sessionFile);
+
+  return {
+    ...created,
+    ...(bootstrap ? { bootstrap } : {}),
+  };
 }
 
 export async function resumeLiveSessionCapability(
