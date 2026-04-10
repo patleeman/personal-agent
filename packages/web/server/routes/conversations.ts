@@ -12,11 +12,12 @@ import {
   readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
 import {
-  cancelDeferredResumeForSessionFile,
-  fireDeferredResumeNowForSessionFile,
-  listDeferredResumesForSessionFile,
-  scheduleDeferredResumeForSessionFile,
-} from '../automation/deferredResumes.js';
+  ConversationDeferredResumeCapabilityNotFoundError,
+  cancelConversationDeferredResumeCapability,
+  fireConversationDeferredResumeCapability,
+  readConversationDeferredResumesCapability,
+  scheduleConversationDeferredResumeCapability,
+} from '../conversations/conversationDeferredResumeCapability.js';
 import {
   isLive as isLocalLive,
   updateLiveSessionModelPreferences,
@@ -105,6 +106,18 @@ function parseTrimmedQueryString(rawValue: unknown): string | undefined {
 
   const normalized = candidate.trim();
   return normalized.length > 0 ? normalized : undefined;
+}
+
+function writeConversationDeferredResumeCapabilityError(
+  res: { status(code: number): { json(value: unknown): void } },
+  err: unknown,
+): boolean {
+  if (err instanceof ConversationDeferredResumeCapabilityNotFoundError) {
+    res.status(404).json({ error: err.message });
+    return true;
+  }
+
+  return false;
 }
 
 function writeConversationAssetCapabilityError(
@@ -337,101 +350,60 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/deferred-resumes', (req, res) => {
     try {
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-
-      res.json({
-        conversationId: req.params.id,
-        resumes: listDeferredResumesForSessionFile(sessionFile),
-      });
+      res.json(readConversationDeferredResumesCapability(req.params.id));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error ? err.stack : undefined,
       });
+      if (writeConversationDeferredResumeCapabilityError(res, err)) {
+        return;
+      }
       res.status(500).json({ error: String(err) });
     }
   });
 
   router.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
     try {
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile) {
-        res.status(404).json({ error: 'Conversation not found' });
-        return;
-      }
-
       const { delay, prompt } = req.body as { delay?: string; prompt?: string };
-      if (!delay || delay.trim().length === 0) {
-        res.status(400).json({ error: 'delay is required' });
-        return;
-      }
-
-      const resumeRecord = await scheduleDeferredResumeForSessionFile({
-        sessionFile,
+      res.json(await scheduleConversationDeferredResumeCapability({
+        conversationId: req.params.id,
         delay,
         prompt,
-      });
-
-      publishConversationSessionMetaChanged(req.params.id);
-      res.json({
-        conversationId: req.params.id,
-        resume: resumeRecord,
-        resumes: listDeferredResumesForSessionFile(sessionFile),
-      });
+      }));
     } catch (err) {
+      if (writeConversationDeferredResumeCapabilityError(res, err)) {
+        return;
+      }
       res.status(400).json({ error: (err as Error).message });
     }
   });
 
   router.delete('/api/conversations/:id/deferred-resumes/:resumeId', async (req, res) => {
     try {
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile) {
-        res.status(404).json({ error: 'Conversation not found' });
+      res.json(await cancelConversationDeferredResumeCapability({
+        conversationId: req.params.id,
+        resumeId: req.params.resumeId,
+      }));
+    } catch (err) {
+      if (writeConversationDeferredResumeCapabilityError(res, err)) {
         return;
       }
-
-      await cancelDeferredResumeForSessionFile({
-        sessionFile,
-        id: req.params.resumeId,
-      });
-
-      publishConversationSessionMetaChanged(req.params.id);
-      res.json({
-        conversationId: req.params.id,
-        cancelledId: req.params.resumeId,
-        resumes: listDeferredResumesForSessionFile(sessionFile),
-      });
-    } catch (err) {
       res.status(400).json({ error: (err as Error).message });
     }
   });
 
   router.post('/api/conversations/:id/deferred-resumes/:resumeId/fire', async (req, res) => {
     try {
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile) {
-        res.status(404).json({ error: 'Conversation not found' });
+      res.json(await fireConversationDeferredResumeCapability({
+        conversationId: req.params.id,
+        resumeId: req.params.resumeId,
+        flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+      }));
+    } catch (err) {
+      if (writeConversationDeferredResumeCapabilityError(res, err)) {
         return;
       }
-
-      const resume = await fireDeferredResumeNowForSessionFile({
-        sessionFile,
-        id: req.params.resumeId,
-      });
-
-      await flushLiveDeferredResumesFn();
-      publishConversationSessionMetaChanged(req.params.id);
-      res.json({
-        conversationId: req.params.id,
-        resume,
-        resumes: listDeferredResumesForSessionFile(sessionFile),
-      });
-    } catch (err) {
       res.status(400).json({ error: (err as Error).message });
     }
   });

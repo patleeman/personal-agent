@@ -131,6 +131,17 @@ export interface DesktopConversationModelPreferencesUpdateRequest {
   surfaceId?: string;
 }
 
+export interface DesktopConversationDeferredResumeScheduleRequest {
+  conversationId: string;
+  delay?: string;
+  prompt?: string;
+}
+
+export interface DesktopConversationDeferredResumeMutationRequest {
+  conversationId: string;
+  resumeId: string;
+}
+
 export interface DesktopSessionDetailRequest {
   sessionId: string;
   tailBlocks?: number;
@@ -148,6 +159,11 @@ export interface DesktopSessionBlockRequest {
 export interface DesktopDurableRunLogRequest {
   runId: string;
   tail?: number;
+}
+
+export interface DesktopShellRunRequest {
+  command: string;
+  cwd?: string | null;
 }
 
 export interface DesktopScheduledTaskUpdateRequest {
@@ -251,6 +267,7 @@ export interface HostController {
   readVaultFiles?(): Promise<unknown>;
   updateVaultRoot?(root: string | null): Promise<unknown>;
   pickFolder?(input?: { cwd?: string | null }): Promise<unknown>;
+  runShellCommand?(input: DesktopShellRunRequest): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlanDefaults?(): Promise<unknown>;
@@ -325,6 +342,10 @@ export interface HostController {
   readConversationBootstrap?(input: DesktopConversationBootstrapRequest): Promise<unknown>;
   renameConversation?(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }>;
   changeConversationCwd?(input: DesktopConversationCwdChangeRequest): Promise<unknown>;
+  readConversationDeferredResumes?(conversationId: string): Promise<unknown>;
+  scheduleConversationDeferredResume?(input: DesktopConversationDeferredResumeScheduleRequest): Promise<unknown>;
+  cancelConversationDeferredResume?(input: DesktopConversationDeferredResumeMutationRequest): Promise<unknown>;
+  fireConversationDeferredResume?(input: DesktopConversationDeferredResumeMutationRequest): Promise<unknown>;
   recoverConversation?(conversationId: string): Promise<unknown>;
   readConversationModelPreferences?(input: DesktopConversationModelPreferencesRequest): Promise<unknown>;
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;

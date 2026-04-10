@@ -46,6 +46,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopVaultFiles: vi.fn(),
     updateDesktopVaultRoot: vi.fn(),
     pickDesktopFolder: vi.fn(),
+    runDesktopShellCommand: vi.fn(),
     readDesktopConversationTitleSettings: vi.fn(),
     updateDesktopConversationTitleSettings: vi.fn(),
     readDesktopConversationPlanDefaults: vi.fn(),
@@ -91,6 +92,10 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopConversationBootstrap: vi.fn(),
     renameDesktopConversation: vi.fn(),
     changeDesktopConversationCwd: vi.fn(),
+    readDesktopConversationDeferredResumes: vi.fn(),
+    scheduleDesktopConversationDeferredResume: vi.fn(),
+    cancelDesktopConversationDeferredResume: vi.fn(),
+    fireDesktopConversationDeferredResume: vi.fn(),
     recoverDesktopConversation: vi.fn(),
     readDesktopConversationModelPreferences: vi.fn(),
     updateDesktopConversationModelPreferences: vi.fn(),
@@ -379,6 +384,32 @@ describe('LocalHostController', () => {
     expect(pickDesktopFolder).toHaveBeenCalledWith({ cwd: '/repo' });
     expect(readDesktopConversationTitleSettings).toHaveBeenCalledTimes(1);
     expect(updateDesktopConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
+    expect(backend.ensureStarted).not.toHaveBeenCalled();
+  });
+
+  it('routes desktop shell commands through the local API module without loopback proxying', async () => {
+    const runDesktopShellCommand = vi.fn().mockResolvedValue({
+      output: '/workspace/repo\n',
+      exitCode: 0,
+      cwd: '/workspace/repo',
+    });
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
+      runDesktopShellCommand,
+    }));
+    const backend = createBackendMock();
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+      loadLocalApi,
+    );
+
+    await expect(controller.runShellCommand?.({ command: 'pwd', cwd: '/workspace/repo' })).resolves.toEqual({
+      output: '/workspace/repo\n',
+      exitCode: 0,
+      cwd: '/workspace/repo',
+    });
+
+    expect(runDesktopShellCommand).toHaveBeenCalledWith({ command: 'pwd', cwd: '/workspace/repo' });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
@@ -933,6 +964,25 @@ describe('LocalHostController', () => {
       liveSession: { live: true, id: 'live-1' },
     });
     const renameDesktopConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
+    const readDesktopConversationDeferredResumes = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
+    });
+    const scheduleDesktopConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+    });
+    const cancelDesktopConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      cancelledId: 'resume-2',
+      resumes: [],
+    });
+    const fireDesktopConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+      resumes: [],
+    });
     const recoverDesktopConversation = vi.fn().mockResolvedValue({
       conversationId: 'live-1',
       live: true,
@@ -973,6 +1023,10 @@ describe('LocalHostController', () => {
       cancelDesktopDurableRun,
       readDesktopConversationBootstrap,
       renameDesktopConversation,
+      readDesktopConversationDeferredResumes,
+      scheduleDesktopConversationDeferredResume,
+      cancelDesktopConversationDeferredResume,
+      fireDesktopConversationDeferredResume,
       recoverDesktopConversation,
       readDesktopLiveSession,
       readDesktopLiveSessionForkEntries,
@@ -1013,6 +1067,25 @@ describe('LocalHostController', () => {
     await expect(controller.renameConversation?.({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' })).resolves.toEqual({
       ok: true,
       title: 'Renamed conversation',
+    });
+    await expect(controller.readConversationDeferredResumes?.('conversation-1')).resolves.toEqual({
+      conversationId: 'conversation-1',
+      resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
+    });
+    await expect(controller.scheduleConversationDeferredResume?.({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+    });
+    await expect(controller.cancelConversationDeferredResume?.({ conversationId: 'conversation-1', resumeId: 'resume-2' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      cancelledId: 'resume-2',
+      resumes: [],
+    });
+    await expect(controller.fireConversationDeferredResume?.({ conversationId: 'conversation-1', resumeId: 'resume-1' })).resolves.toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+      resumes: [],
     });
     await expect(controller.recoverConversation?.('conversation-1')).resolves.toEqual({
       conversationId: 'live-1',
@@ -1065,6 +1138,10 @@ describe('LocalHostController', () => {
     expect(cancelDesktopDurableRun).toHaveBeenCalledWith('run-1');
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
     expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
+    expect(readDesktopConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
+    expect(scheduleDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' });
+    expect(cancelDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
+    expect(fireDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
     expect(recoverDesktopConversation).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(readDesktopLiveSessionForkEntries).toHaveBeenCalledWith('live-1');

@@ -6,6 +6,8 @@ import type {
   DesktopAppBridgeEvent,
   DesktopConversationBootstrapRequest,
   DesktopConversationCwdChangeRequest,
+  DesktopConversationDeferredResumeMutationRequest,
+  DesktopConversationDeferredResumeScheduleRequest,
   DesktopConversationModelPreferencesRequest,
   DesktopConversationModelPreferencesUpdateRequest,
   DesktopConversationRenameRequest,
@@ -173,6 +175,11 @@ export class LocalHostController implements HostController {
   async pickFolder(input?: { cwd?: string | null }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.pickDesktopFolder(input);
+  }
+
+  async runShellCommand(input: { command: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }> {
+    const module = await this.loadLocalApi();
+    return module.runDesktopShellCommand(input);
   }
 
   async readConversationTitleSettings(): Promise<unknown> {
@@ -456,6 +463,26 @@ export class LocalHostController implements HostController {
   async changeConversationCwd(input: DesktopConversationCwdChangeRequest): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.changeDesktopConversationCwd(input);
+  }
+
+  async readConversationDeferredResumes(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationDeferredResumes(conversationId);
+  }
+
+  async scheduleConversationDeferredResume(input: DesktopConversationDeferredResumeScheduleRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.scheduleDesktopConversationDeferredResume(input);
+  }
+
+  async cancelConversationDeferredResume(input: DesktopConversationDeferredResumeMutationRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.cancelDesktopConversationDeferredResume(input);
+  }
+
+  async fireConversationDeferredResume(input: DesktopConversationDeferredResumeMutationRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.fireDesktopConversationDeferredResume(input);
   }
 
   async recoverConversation(conversationId: string): Promise<unknown> {

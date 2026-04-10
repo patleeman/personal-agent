@@ -88,6 +88,7 @@ import {
 } from '../conversations/sessions.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
+import { runShellCommandCapability } from '../workspace/shellRunCapability.js';
 import { readVaultFilesCapability, pickFolderCapability } from '../workspace/workspaceDesktopCapability.js';
 import type { ServerRouteContext } from '../routes/context.js';
 import {
@@ -161,6 +162,12 @@ import {
   applyConversationModelPreferencesToSessionManager,
 } from '../conversations/conversationModelPreferences.js';
 import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
+import {
+  cancelConversationDeferredResumeCapability,
+  fireConversationDeferredResumeCapability,
+  readConversationDeferredResumesCapability,
+  scheduleConversationDeferredResumeCapability,
+} from '../conversations/conversationDeferredResumeCapability.js';
 import {
   createConversationAttachmentCapability,
   deleteConversationArtifactCapability,
@@ -1414,6 +1421,14 @@ export async function pickDesktopFolder(input: { cwd?: string | null } = {}) {
   });
 }
 
+export async function runDesktopShellCommand(input: { command?: string; cwd?: string | null }) {
+  const context = await getLocalServerRouteContext();
+  return runShellCommandCapability(input, {
+    getDefaultWebCwd: context.getDefaultWebCwd,
+    resolveRequestedCwd: context.resolveRequestedCwd,
+  });
+}
+
 export async function readDesktopConversationTitleSettings() {
   return readSavedConversationTitlePreferences(DEFAULT_RUNTIME_SETTINGS_FILE);
 }
@@ -2036,6 +2051,36 @@ export async function readDesktopConversationAttachmentAsset(input: {
     mimeType: download.mimeType,
     fileName: download.fileName,
   };
+}
+
+export async function readDesktopConversationDeferredResumes(conversationId: string) {
+  return readConversationDeferredResumesCapability(conversationId);
+}
+
+export async function scheduleDesktopConversationDeferredResume(input: {
+  conversationId: string;
+  delay?: string;
+  prompt?: string;
+}) {
+  return scheduleConversationDeferredResumeCapability(input);
+}
+
+export async function cancelDesktopConversationDeferredResume(input: {
+  conversationId: string;
+  resumeId: string;
+}) {
+  return cancelConversationDeferredResumeCapability(input);
+}
+
+export async function fireDesktopConversationDeferredResume(input: {
+  conversationId: string;
+  resumeId: string;
+}) {
+  const context = await getLocalLiveSessionCapabilityContext();
+  return fireConversationDeferredResumeCapability({
+    ...input,
+    flushLiveDeferredResumes: context.flushLiveDeferredResumes,
+  });
 }
 
 export async function recoverDesktopConversation(conversationId: string) {

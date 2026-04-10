@@ -82,6 +82,7 @@ export interface PersonalAgentDesktopBridge {
   readVaultFiles(): Promise<VaultFileListResult>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
   pickFolder(input?: { cwd?: string | null }): Promise<FolderPickerResult>;
+  runShellCommand(input: { command: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlanDefaults(): Promise<ConversationAutomationPreferencesState>;
@@ -185,6 +186,22 @@ export interface PersonalAgentDesktopBridge {
   }): Promise<ConversationBootstrapState>;
   renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
   changeConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<ConversationCwdChangeResult>;
+  readConversationDeferredResumes(conversationId: string): Promise<{ conversationId: string; resumes: DeferredResumeSummary[] }>;
+  scheduleConversationDeferredResume(input: { conversationId: string; delay: string; prompt?: string }): Promise<{
+    conversationId: string;
+    resume: DeferredResumeSummary;
+    resumes: DeferredResumeSummary[];
+  }>;
+  cancelConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<{
+    conversationId: string;
+    cancelledId: string;
+    resumes: DeferredResumeSummary[];
+  }>;
+  fireConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<{
+    conversationId: string;
+    resume: DeferredResumeSummary;
+    resumes: DeferredResumeSummary[];
+  }>;
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
   readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;

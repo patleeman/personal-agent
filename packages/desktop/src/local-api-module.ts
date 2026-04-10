@@ -56,6 +56,7 @@ export interface LocalApiModule {
   readDesktopVaultFiles(): Promise<unknown>;
   updateDesktopVaultRoot(root: string | null): Promise<unknown>;
   pickDesktopFolder(input?: { cwd?: string | null }): Promise<unknown>;
+  runDesktopShellCommand(input: { command?: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }>;
   readDesktopConversationTitleSettings(): Promise<unknown>;
   updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readDesktopConversationPlanDefaults(): Promise<unknown>;
@@ -172,6 +173,20 @@ export interface LocalApiModule {
     conversationId: string;
     cwd: string;
     surfaceId?: string;
+  }): Promise<unknown>;
+  readDesktopConversationDeferredResumes(conversationId: string): Promise<unknown>;
+  scheduleDesktopConversationDeferredResume(input: {
+    conversationId: string;
+    delay?: string;
+    prompt?: string;
+  }): Promise<unknown>;
+  cancelDesktopConversationDeferredResume(input: {
+    conversationId: string;
+    resumeId: string;
+  }): Promise<unknown>;
+  fireDesktopConversationDeferredResume(input: {
+    conversationId: string;
+    resumeId: string;
   }): Promise<unknown>;
   recoverDesktopConversation(conversationId: string): Promise<unknown>;
   readDesktopConversationModelPreferences(conversationId: string): Promise<unknown>;

@@ -766,8 +766,14 @@ export const api = {
 
     return post<FolderPickerResult>('/folder-picker', { cwd });
   },
-  run: (command: string, cwd?: string) =>
-    post<{ output: string; exitCode: number }>('/run', { command, cwd }),
+  run: async (command: string, cwd?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.runShellCommand({ command, ...(cwd !== undefined ? { cwd } : {}) });
+    }
+
+    return post<{ output: string; exitCode: number; cwd: string }>('/run', { command, cwd });
+  },
 
   // ── Memory browser ────────────────────────────────────────────────────────
   memory:         (options?: { profile?: string }) => getMemoryData(options),
@@ -1117,13 +1123,38 @@ export const api = {
       attachments: ConversationAttachmentSummary[];
     }>('DELETE', `/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`);
   },
-  deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
-  scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
-    requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes`, input),
-  fireDeferredResumeNow: (id: string, resumeId: string) =>
-    requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`),
-  cancelDeferredResume: (id: string, resumeId: string) =>
-    requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`),
+  deferredResumes: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationDeferredResumes(id);
+    }
+
+    return get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`);
+  },
+  scheduleDeferredResume: async (id: string, input: { delay: string; prompt?: string }) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.scheduleConversationDeferredResume({ conversationId: id, ...input });
+    }
+
+    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes`, input);
+  },
+  fireDeferredResumeNow: async (id: string, resumeId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.fireConversationDeferredResume({ conversationId: id, resumeId });
+    }
+
+    return requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`);
+  },
+  cancelDeferredResume: async (id: string, resumeId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.cancelConversationDeferredResume({ conversationId: id, resumeId });
+    }
+
+    return requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`);
+  },
   changeConversationCwd: async (id: string, cwd: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

@@ -339,6 +339,17 @@ export function registerDesktopIpc(options: {
     return controller.pickFolder(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:run-shell-command`, async (event, input: { command: string; cwd?: string | null }) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.runShellCommand) {
+      throw new Error('Dedicated desktop shell commands are only available for the local host.');
+    }
+
+    return controller.runShellCommand(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-title-settings`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -837,6 +848,50 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.changeConversationCwd(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-deferred-resumes`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationDeferredResumes) {
+      throw new Error('Dedicated desktop conversation deferred-resume reads are only available for the local host.');
+    }
+
+    return controller.readConversationDeferredResumes(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:schedule-conversation-deferred-resume`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.scheduleConversationDeferredResume) {
+      throw new Error('Dedicated desktop conversation deferred-resume scheduling is only available for the local host.');
+    }
+
+    return controller.scheduleConversationDeferredResume(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:cancel-conversation-deferred-resume`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.cancelConversationDeferredResume) {
+      throw new Error('Dedicated desktop conversation deferred-resume cancellation is only available for the local host.');
+    }
+
+    return controller.cancelConversationDeferredResume(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:fire-conversation-deferred-resume`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.fireConversationDeferredResume) {
+      throw new Error('Dedicated desktop conversation deferred-resume firing is only available for the local host.');
+    }
+
+    return controller.fireConversationDeferredResume(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:recover-conversation`, async (event, conversationId: string) => {

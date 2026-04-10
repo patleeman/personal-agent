@@ -55,6 +55,7 @@ const desktopBridge = {
   readVaultFiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-vault-files`),
   updateVaultRoot: (root: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-vault-root`, root),
   pickFolder: (input?: { cwd?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:pick-folder`, input),
+  runShellCommand: (input: { command: string; cwd?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:run-shell-command`, input),
   readConversationTitleSettings: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-title-settings`),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
@@ -159,6 +160,14 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:rename-conversation`, input),
   changeConversationCwd: (input: { conversationId: string; cwd: string; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:change-conversation-cwd`, input),
+  readConversationDeferredResumes: (conversationId: string) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-deferred-resumes`, conversationId),
+  scheduleConversationDeferredResume: (input: { conversationId: string; delay: string; prompt?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:schedule-conversation-deferred-resume`, input),
+  cancelConversationDeferredResume: (input: { conversationId: string; resumeId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-conversation-deferred-resume`, input),
+  fireConversationDeferredResume: (input: { conversationId: string; resumeId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:fire-conversation-deferred-resume`, input),
   recoverConversation: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:recover-conversation`, conversationId),
   readConversationModelPreferences: (input: { conversationId: string }) =>

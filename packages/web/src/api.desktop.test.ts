@@ -596,6 +596,77 @@ describe('api desktop transport', () => {
     });
   });
 
+  it('uses dedicated desktop conversation deferred-resume bridges on the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const readConversationDeferredResumes = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
+    });
+    const scheduleConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+    });
+    const fireConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+      resumes: [],
+    });
+    const cancelConversationDeferredResume = vi.fn().mockResolvedValue({
+      conversationId: 'conversation-1',
+      cancelledId: 'resume-2',
+      resumes: [],
+    });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        readConversationDeferredResumes,
+        scheduleConversationDeferredResume,
+        fireConversationDeferredResume,
+        cancelConversationDeferredResume,
+      },
+    });
+
+    const { api } = await import('./api');
+    const resumes = await api.deferredResumes('conversation-1');
+    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.' });
+    const fired = await api.fireDeferredResumeNow('conversation-1', 'resume-1');
+    const cancelled = await api.cancelDeferredResume('conversation-1', 'resume-2');
+
+    expect(readConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
+    expect(scheduleConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' });
+    expect(fireConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
+    expect(cancelConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(resumes).toEqual({
+      conversationId: 'conversation-1',
+      resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
+    });
+    expect(scheduled).toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+    });
+    expect(fired).toEqual({
+      conversationId: 'conversation-1',
+      resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' },
+      resumes: [],
+    });
+    expect(cancelled).toEqual({
+      conversationId: 'conversation-1',
+      cancelledId: 'resume-2',
+      resumes: [],
+    });
+  });
+
   it('uses dedicated desktop operator settings bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -696,6 +767,36 @@ describe('api desktop transport', () => {
       files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
+  });
+
+  it('uses the dedicated desktop shell-command bridge on the local Electron host', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const runShellCommand = vi.fn().mockResolvedValue({
+      output: '/repo\n',
+      exitCode: 0,
+      cwd: '/repo',
+    });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        runShellCommand,
+      },
+    });
+
+    const { api } = await import('./api');
+    const result = await api.run('pwd', '/repo');
+
+    expect(runShellCommand).toHaveBeenCalledWith({ command: 'pwd', cwd: '/repo' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
   });
 
   it('uses dedicated desktop automation preset bridges on the local Electron host', async () => {
@@ -1231,6 +1332,37 @@ describe('api desktop transport', () => {
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
 
+  it('falls back to HTTP for the desktop shell-command bridge on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ output: '/repo\n', exitCode: 0, cwd: '/repo' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const runShellCommand = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        runShellCommand,
+      },
+    });
+
+    const { api } = await import('./api');
+    const result = await api.run('pwd', '/repo');
+
+    expect(runShellCommand).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'pwd', cwd: '/repo' }),
+    });
+    expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
+  });
+
   it('falls back to HTTP for desktop automation preset bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true }))
@@ -1694,6 +1826,66 @@ describe('api desktop transport', () => {
       mimeType: 'image/png',
       fileName: 'preview.png',
     });
+  });
+
+  it('falls back to HTTP for desktop conversation deferred-resume bridges on non-local hosts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }))
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }] }))
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] }))
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readConversationDeferredResumes = vi.fn();
+    const scheduleConversationDeferredResume = vi.fn();
+    const fireConversationDeferredResume = vi.fn();
+    const cancelConversationDeferredResume = vi.fn();
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostLabel: 'Tailnet',
+          activeHostKind: 'web',
+          activeHostSummary: 'Remote host reachable.',
+          canManageConnections: true,
+        }),
+        readConversationDeferredResumes,
+        scheduleConversationDeferredResume,
+        fireConversationDeferredResume,
+        cancelConversationDeferredResume,
+      },
+    });
+
+    const { api } = await import('./api');
+    const resumes = await api.deferredResumes('conversation-1');
+    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.' });
+    const fired = await api.fireDeferredResumeNow('conversation-1', 'resume-1');
+    const cancelled = await api.cancelDeferredResume('conversation-1', 'resume-2');
+
+    expect(readConversationDeferredResumes).not.toHaveBeenCalled();
+    expect(scheduleConversationDeferredResume).not.toHaveBeenCalled();
+    expect(fireConversationDeferredResume).not.toHaveBeenCalled();
+    expect(cancelConversationDeferredResume).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/deferred-resumes', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/deferred-resumes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ delay: '10m', prompt: 'Resume later.' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/deferred-resumes/resume-1/fire', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: undefined,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversations/conversation-1/deferred-resumes/resume-2', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: undefined,
+    });
+    expect(resumes).toEqual({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] });
+    expect(scheduled).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }] });
+    expect(fired).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] });
+    expect(cancelled).toEqual({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] });
   });
 
   it('falls back to HTTP for desktop session list, meta, and search-index reads on non-local hosts', async () => {
