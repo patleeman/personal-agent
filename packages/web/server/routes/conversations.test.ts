@@ -13,7 +13,6 @@ const {
   getAvailableModelObjectsMock,
   getConversationArtifactMock,
   getConversationAttachmentMock,
-  handleCompanionConversationListRequestMock,
   invalidateAppTopicsMock,
   isLocalLiveMock,
   listConversationArtifactsMock,
@@ -54,7 +53,6 @@ const {
   getAvailableModelObjectsMock: vi.fn(),
   getConversationArtifactMock: vi.fn(),
   getConversationAttachmentMock: vi.fn(),
-  handleCompanionConversationListRequestMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   isLocalLiveMock: vi.fn(),
   listConversationArtifactsMock: vi.fn(),
@@ -154,7 +152,6 @@ vi.mock('../shared/appEvents.js', () => ({
 }));
 
 vi.mock('../conversations/conversationService.js', () => ({
-  handleCompanionConversationListRequest: handleCompanionConversationListRequestMock,
   listConversationSessionsSnapshot: listConversationSessionsSnapshotMock,
   parseTailBlocksQuery: parseTailBlocksQueryMock,
   publishConversationSessionMetaChanged: publishConversationSessionMetaChangedMock,
@@ -167,7 +164,7 @@ vi.mock('../conversations/conversationService.js', () => ({
   toggleConversationAttention: toggleConversationAttentionMock,
 }));
 
-import { registerCompanionConversationRoutes, registerConversationRoutes } from './conversations.js';
+import { registerConversationRoutes } from './conversations.js';
 
 type Handler = (
   req: { body?: unknown; params?: Record<string, string>; query?: Record<string, unknown> },
@@ -247,38 +244,6 @@ function createDesktopHarness(options?: {
   };
 }
 
-function createCompanionHarness(options?: {
-  flushLiveDeferredResumes?: () => Promise<void>;
-}) {
-  const getHandlers = new Map<string, Handler>();
-  const patchHandlers = new Map<string, Handler>();
-  const postHandlers = new Map<string, Handler>();
-  const router = {
-    get: vi.fn((path: string, handler: Handler) => {
-      getHandlers.set(path, handler);
-    }),
-    patch: vi.fn((path: string, handler: Handler) => {
-      patchHandlers.set(path, handler);
-    }),
-    post: vi.fn((path: string, handler: Handler) => {
-      postHandlers.set(path, handler);
-    }),
-  };
-
-  registerCompanionConversationRoutes(router as never, {
-    flushLiveDeferredResumes: options?.flushLiveDeferredResumes ?? (async () => {}),
-    getCurrentProfile: () => 'assistant',
-    getRepoRoot: () => '/repo',
-    getSavedWebUiPreferences: () => ({ compactConversations: false }),
-  });
-
-  return {
-    getHandler: (path: string) => getHandlers.get(path)!,
-    patchHandler: (path: string) => patchHandlers.get(path)!,
-    postHandler: (path: string) => postHandlers.get(path)!,
-  };
-}
-
 describe('conversation routes', () => {
   beforeEach(() => {
     SessionManagerOpenMock.mockReset();
@@ -292,7 +257,6 @@ describe('conversation routes', () => {
     getAvailableModelObjectsMock.mockReset();
     getConversationArtifactMock.mockReset();
     getConversationAttachmentMock.mockReset();
-    handleCompanionConversationListRequestMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     isLocalLiveMock.mockReset();
     listConversationArtifactsMock.mockReset();
@@ -331,12 +295,6 @@ describe('conversation routes', () => {
     getAvailableModelObjectsMock.mockReturnValue([{ id: 'gpt-4o' }]);
     getConversationArtifactMock.mockReturnValue({ id: 'artifact-1', title: 'Artifact 1' });
     getConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
-    handleCompanionConversationListRequestMock.mockImplementation((
-      _req: unknown,
-      res: { json(value: unknown): void },
-    ) => {
-      res.json([{ id: 'conversation-1' }]);
-    });
     isLocalLiveMock.mockReturnValue(false);
     listConversationArtifactsMock.mockReturnValue([{ id: 'artifact-1', title: 'Artifact 1' }]);
     listConversationAttachmentsMock.mockReturnValue([{ id: 'attachment-1', kind: 'excalidraw' }]);
@@ -750,125 +708,6 @@ describe('conversation routes', () => {
 
     const planStatusRes = createResponse();
     postHandler('/api/conversations/:id/plan/items/:itemId/status')(createRequest({ params: { id: 'session-1', itemId: 'item-1' } }), planStatusRes);
-    expect(planStatusRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
-  });
-
-  it('registers companion routes for conversation lists, artifacts, model preferences, and plan state', async () => {
-    const { getHandler, patchHandler, postHandler } = createCompanionHarness();
-
-    const companionListRes = createResponse();
-    getHandler('/api/companion/conversations')(createRequest(), companionListRes);
-    expect(companionListRes.json).toHaveBeenCalledWith([{ id: 'conversation-1' }]);
-
-    const artifactsRes = createResponse();
-    getHandler('/api/conversations/:id/artifacts')(createRequest({ params: { id: 'session-1' } }), artifactsRes);
-    expect(artifactsRes.json).toHaveBeenCalledWith([{ id: 'artifact-1', title: 'Artifact 1' }]);
-
-    getConversationArtifactMock.mockReturnValueOnce(null);
-    const missingArtifactRes = createResponse();
-    getHandler('/api/conversations/:id/artifacts/:artifactId')(createRequest({ params: { id: 'session-1', artifactId: 'missing' } }), missingArtifactRes);
-    expect(missingArtifactRes.status).toHaveBeenCalledWith(404);
-    expect(missingArtifactRes.json).toHaveBeenCalledWith({ error: 'Not found' });
-
-    readConversationModelPreferenceStateByIdMock.mockResolvedValueOnce(null);
-    const missingPreferencesRes = createResponse();
-    await getHandler('/api/conversations/:id/model-preferences')(createRequest({ params: { id: 'missing' } }), missingPreferencesRes);
-    expect(missingPreferencesRes.status).toHaveBeenCalledWith(404);
-    expect(missingPreferencesRes.json).toHaveBeenCalledWith({ error: 'Conversation not found' });
-
-    const preferencesRes = createResponse();
-    await getHandler('/api/conversations/:id/model-preferences')(createRequest({ params: { id: 'session-1' } }), preferencesRes);
-    expect(preferencesRes.json).toHaveBeenCalledWith({ model: 'gpt-4o', thinkingLevel: 'high' });
-
-    const missingInputRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({ params: { id: 'session-1' }, body: {} }), missingInputRes);
-    expect(missingInputRes.status).toHaveBeenCalledWith(400);
-    expect(missingInputRes.json).toHaveBeenCalledWith({ error: 'model or thinkingLevel required' });
-
-    const invalidInputRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'session-1' },
-      body: { model: 42 },
-    }), invalidInputRes);
-    expect(invalidInputRes.status).toHaveBeenCalledWith(400);
-    expect(invalidInputRes.json).toHaveBeenCalledWith({ error: 'model and thinkingLevel must be strings or null' });
-
-    isLocalLiveMock.mockReturnValue(true);
-    const livePatchRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'session-1' },
-      body: { model: 'gpt-4o', surfaceId: 'surface-1' },
-    }), livePatchRes);
-    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('session-1', { model: 'gpt-4o', surfaceId: 'surface-1' });
-    expect(updateLiveSessionModelPreferencesMock).toHaveBeenCalledWith('session-1', { model: 'gpt-4o' }, [{ id: 'gpt-4o' }]);
-    expect(livePatchRes.json).toHaveBeenCalledWith({ model: 'gpt-4o', thinkingLevel: 'high' });
-
-    updateLiveSessionModelPreferencesMock.mockRejectedValueOnce(new LiveSessionControlErrorClass('Busy'));
-    const liveConflictRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'session-1' },
-      body: { model: 'gpt-4o', surfaceId: 'surface-1' },
-    }), liveConflictRes);
-    expect(liveConflictRes.status).toHaveBeenCalledWith(409);
-    expect(liveConflictRes.json).toHaveBeenCalledWith({ error: 'Busy' });
-
-    isLocalLiveMock.mockReturnValue(false);
-    resolveConversationSessionFileMock.mockReturnValueOnce(null);
-    const missingStoredSessionRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'missing' },
-      body: { model: 'gpt-4o' },
-    }), missingStoredSessionRes);
-    expect(missingStoredSessionRes.status).toHaveBeenCalledWith(404);
-    expect(missingStoredSessionRes.json).toHaveBeenCalledWith({ error: 'Conversation not found' });
-
-    const storedPatchRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'session-1' },
-      body: { model: 'gpt-4o', thinkingLevel: null },
-    }), storedPatchRes);
-    expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/session-1.jsonl');
-    expect(applyConversationModelPreferencesToSessionManagerMock).toHaveBeenCalledWith(
-      { sessionFile: '/sessions/session-1.jsonl' },
-      { model: 'gpt-4o', thinkingLevel: null },
-      { currentModel: 'gpt-4o', currentThinkingLevel: 'high' },
-      [{ id: 'gpt-4o' }],
-    );
-    expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('session-1');
-    expect(storedPatchRes.json).toHaveBeenCalledWith({ model: 'gpt-4o', thinkingLevel: 'high' });
-
-    applyConversationModelPreferencesToSessionManagerMock.mockImplementationOnce(() => {
-      throw new Error('Unknown model: missing-model');
-    });
-    const unknownModelRes = createResponse();
-    await patchHandler('/api/conversations/:id/model-preferences')(createRequest({
-      params: { id: 'session-1' },
-      body: { model: 'missing-model' },
-    }), unknownModelRes);
-    expect(unknownModelRes.status).toHaveBeenCalledWith(400);
-    expect(unknownModelRes.json).toHaveBeenCalledWith({ error: 'Unknown model: missing-model' });
-
-    const planRes = createResponse();
-    getHandler('/api/conversations/:id/plan')(createRequest({ params: { id: 'session-1' } }), planRes);
-    expect(planRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
-
-    const planPatchRes = createResponse();
-    patchHandler('/api/conversations/:id/plan')(createRequest({
-      params: { id: 'session-1' },
-      body: { enabled: true, items: [{ id: 'step-1' }] },
-    }), planPatchRes);
-    expect(planPatchRes.json).toHaveBeenCalledWith({
-      conversationId: 'session-1',
-      enabled: true,
-      items: [{ id: 'step-1' }],
-    });
-
-    const planResetRes = createResponse();
-    postHandler('/api/conversations/:id/plan/items/:itemId/reset')(createRequest({ params: { id: 'session-1', itemId: 'step-1' } }), planResetRes);
-    expect(planResetRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
-
-    const planStatusRes = createResponse();
-    postHandler('/api/conversations/:id/plan/items/:itemId/status')(createRequest({ params: { id: 'session-1', itemId: 'step-1' } }), planStatusRes);
     expect(planStatusRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
   });
 });

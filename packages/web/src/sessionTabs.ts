@@ -153,8 +153,8 @@ export async function syncConversationLayoutMerge(): Promise<ConversationLayout>
 /**
  * Like `replaceConversationLayout` but merge-based: reads current server state,
  * computes the union with the intended local change, then pushes merged result to
- * server. Use this for all companion-side tab mutations so neither client can
- * overwrite the other's tabs.
+ * server. Use this for tab mutations that may race with other clients so neither
+ * side can overwrite the other's tabs.
  */
 export async function commitConversationLayoutMerge(
   intended: ConversationLayoutInput,

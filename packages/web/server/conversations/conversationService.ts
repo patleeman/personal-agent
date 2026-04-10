@@ -1,6 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
-import type { Request, Response } from 'express';
 import {
   ensureConversationAttentionBaselines,
   getActivityConversationLink,
@@ -42,13 +41,6 @@ let getCurrentProfileFn: () => string = () => {
 
 let getRepoRootFn: () => string = () => process.cwd();
 
-let getSavedWebUiPreferencesFn: () => SavedWebUiPreferences = () => ({
-  openConversationIds: [],
-  pinnedConversationIds: [],
-  archivedConversationIds: [],
-  nodeBrowserViews: [],
-});
-
 export function getCurrentProfile(): string {
   return getCurrentProfileFn();
 }
@@ -60,7 +52,6 @@ export function setConversationServiceContext(input: {
 }): void {
   getCurrentProfileFn = input.getCurrentProfile;
   getRepoRootFn = input.getRepoRoot;
-  getSavedWebUiPreferencesFn = input.getSavedWebUiPreferences;
 }
 
 function resolveDaemonRoot(): string {
@@ -376,120 +367,6 @@ export function listConversationSessionsSnapshot() {
       };
     }),
   ];
-}
-
-function parseSessionActivityAt(session: { lastActivityAt?: string; timestamp: string }): number {
-  const timestamp = session.lastActivityAt ?? session.timestamp;
-  const parsed = Date.parse(timestamp);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function sortSessionsForCompanionList<T extends {
-  isLive?: boolean;
-  needsAttention?: boolean;
-  isRunning?: boolean;
-  lastActivityAt?: string;
-  timestamp: string;
-}>(sessions: T[]): T[] {
-  return [...sessions].sort((left, right) => {
-    if (Boolean(left.isLive) !== Boolean(right.isLive)) {
-      return left.isLive ? -1 : 1;
-    }
-
-    if (Boolean(left.needsAttention) !== Boolean(right.needsAttention)) {
-      return left.needsAttention ? -1 : 1;
-    }
-
-    if (Boolean(left.isRunning) !== Boolean(right.isRunning)) {
-      return left.isRunning ? -1 : 1;
-    }
-
-    return parseSessionActivityAt(right) - parseSessionActivityAt(left);
-  });
-}
-
-export function parseBoundedIntegerQueryValue(
-  rawValue: unknown,
-  defaultValue: number,
-  { min = 0, max = Number.MAX_SAFE_INTEGER }: { min?: number; max?: number } = {},
-): number {
-  const firstValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-  const parsed = typeof firstValue === 'string'
-    ? Number.parseInt(firstValue, 10)
-    : typeof firstValue === 'number'
-      ? firstValue
-      : Number.NaN;
-
-  if (!Number.isInteger(parsed)) {
-    return defaultValue;
-  }
-
-  return Math.min(max, Math.max(min, parsed));
-}
-
-export function listCompanionConversationSections(options?: { archivedOffset?: number; archivedLimit?: number }) {
-  const saved = getSavedWebUiPreferencesFn();
-  const workspaceSessionIds = [
-    ...saved.openConversationIds,
-    ...saved.pinnedConversationIds,
-  ];
-  const workspaceSessionIdSet = new Set(workspaceSessionIds);
-  const archivedSessionIdSet = new Set(saved.archivedConversationIds);
-  const sessions = sortSessionsForCompanionList(listConversationSessionsSnapshot());
-  const live: typeof sessions = [];
-  const needsReview: typeof sessions = [];
-  const active: typeof sessions = [];
-  const archived: typeof sessions = [];
-
-  for (const session of sessions) {
-    if (archivedSessionIdSet.has(session.id)) {
-      archived.push(session);
-      continue;
-    }
-
-    if (workspaceSessionIdSet.has(session.id)) {
-      active.push(session);
-      continue;
-    }
-
-    if (session.isLive) {
-      live.push(session);
-      continue;
-    }
-
-    if (session.needsAttention) {
-      needsReview.push(session);
-      continue;
-    }
-
-    archived.push(session);
-  }
-
-  const archivedOffset = Math.min(options?.archivedOffset ?? 0, archived.length);
-  const archivedLimit = Math.max(1, options?.archivedLimit ?? 30);
-  const nextArchived = archived.slice(archivedOffset, archivedOffset + archivedLimit);
-
-  return {
-    live,
-    needsReview,
-    active,
-    archived: nextArchived,
-    archivedTotal: archived.length,
-    archivedOffset,
-    archivedLimit,
-    hasMoreArchived: archivedOffset + nextArchived.length < archived.length,
-    workspaceSessionIds,
-  };
-}
-
-export function handleCompanionConversationListRequest(req: Request, res: Response): void {
-  try {
-    const archivedOffset = parseBoundedIntegerQueryValue(req.query.archivedOffset, 0);
-    const archivedLimit = parseBoundedIntegerQueryValue(req.query.archivedLimit, 30, { min: 1, max: 100 });
-    res.json(listCompanionConversationSections({ archivedOffset, archivedLimit }));
-  } catch (err) {
-    throw err;
-  }
 }
 
 export function toggleConversationAttention(input: {

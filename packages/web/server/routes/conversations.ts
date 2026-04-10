@@ -2,14 +2,10 @@ import type { Express } from 'express';
 import type { ServerRouteContext } from './context.js';
 import {
   setConversationServiceContext,
-  handleCompanionConversationListRequest,
   readConversationSessionSignature,
   readSessionDetailForRoute,
-  resolveConversationSessionFile,
-  publishConversationSessionMetaChanged,
   parseTailBlocksQuery,
   toggleConversationAttention,
-  readConversationModelPreferenceStateById,
 } from '../conversations/conversationService.js';
 import {
   ConversationDeferredResumeCapabilityNotFoundError,
@@ -18,23 +14,6 @@ import {
   readConversationDeferredResumesCapability,
   scheduleConversationDeferredResumeCapability,
 } from '../conversations/conversationDeferredResumeCapability.js';
-import {
-  isLive as isLocalLive,
-  updateLiveSessionModelPreferences,
-  LiveSessionControlError,
-  getAvailableModelObjects,
-} from '../conversations/liveSessions.js';
-import {
-  ensureRequestControlsLocalLiveConversation,
-} from './liveSessions.js';
-import { SessionManager } from '@mariozechner/pi-coding-agent';
-import {
-  DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE,
-} from '../ui/settingsPersistence.js';
-import {
-  applyConversationModelPreferencesToSessionManager,
-} from '../conversations/conversationModelPreferences.js';
-import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   buildAppendOnlySessionDetailResponse,
   readSessionBlock,
@@ -653,117 +632,4 @@ export function registerConversationRoutes(
   });
 }
 
-export function registerCompanionConversationRoutes(
-  router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
-): void {
-  initializeConversationRoutesContext(context);
-  router.get('/api/companion/conversations', handleCompanionConversationListRequest);
-  registerConversationReadRoutes(router);
-  router.get('/api/conversations/:id/artifacts', (req, res) => {
-    try {
-      res.json(readConversationArtifactsCapability(getCurrentProfileFn(), req.params.id).artifacts);
-    } catch (err) {
-      logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
-      if (writeConversationAssetCapabilityError(res, err, { notFoundMessage: 'Not found' })) { return; }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-  router.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
-    try {
-      res.json(readConversationArtifactCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        artifactId: req.params.artifactId,
-      }).artifact);
-    } catch (err) {
-      logError('request handler error', { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined });
-      if (writeConversationAssetCapabilityError(res, err, { notFoundMessage: 'Not found' })) { return; }
-      res.status(500).json({ error: String(err) });
-    }
-  });
 
-  // ── Model preferences ────────────────────────────────────────────────────
-  router.get('/api/conversations/:id/model-preferences', async (req, res) => {
-    try {
-      const state = await readConversationModelPreferenceStateById(req.params.id);
-      if (!state) { res.status(404).json({ error: 'Conversation not found' }); return; }
-      res.json(state);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.patch('/api/conversations/:id/model-preferences', async (req, res) => {
-    try {
-      const { model, thinkingLevel } = req.body as {
-        model?: string | null;
-        thinkingLevel?: string | null;
-        surfaceId?: string;
-      };
-      if (model === undefined && thinkingLevel === undefined) {
-        res.status(400).json({ error: 'model or thinkingLevel required' });
-        return;
-      }
-      if ((model !== undefined && model !== null && typeof model !== 'string')
-        || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
-        res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
-        return;
-      }
-      const input: { model?: string | null; thinkingLevel?: string | null } = {
-        ...(model !== undefined ? { model } : {}),
-        ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
-      };
-      if (isLocalLive(req.params.id)) {
-        ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-        const availableModels = getAvailableModelObjects();
-        const state = await updateLiveSessionModelPreferences(req.params.id, input, availableModels);
-        res.json(state);
-        return;
-      }
-      const sessionFile = resolveConversationSessionFile(req.params.id);
-      if (!sessionFile) { res.status(404).json({ error: 'Conversation not found' }); return; }
-      const sessionManager = SessionManager.open(sessionFile);
-      const availableModels = getAvailableModelObjects();
-      const state = applyConversationModelPreferencesToSessionManager(
-        sessionManager,
-        input,
-        readSavedModelPreferences(SETTINGS_FILE, availableModels),
-        availableModels,
-      );
-      publishConversationSessionMetaChanged(req.params.id);
-      res.json(state);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (err instanceof LiveSessionControlError) { res.status(409).json({ error: message }); return; }
-      if (message === 'surfaceId is required for local live conversation control.') { res.status(400).json({ error: message }); return; }
-      const status = message === 'model required' || message.startsWith('Unknown model:') ? 400 : 500;
-      res.status(status).json({ error: message });
-    }
-  });
-
-  const readConversationPlanState = (conversationId: string, body?: { enabled?: boolean; items?: unknown }) => ({
-    conversationId,
-    enabled: body?.enabled === true,
-    items: Array.isArray(body?.items) ? body.items : [],
-  });
-
-  router.get('/api/conversations/:id/plan', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
-
-  router.patch('/api/conversations/:id/plan', (req, res) => {
-    res.json(readConversationPlanState(req.params.id, req.body as { enabled?: boolean; items?: unknown }));
-  });
-
-  router.post('/api/conversations/:id/plan/items/:itemId/reset', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
-
-  router.post('/api/conversations/:id/plan/items/:itemId/status', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
-}

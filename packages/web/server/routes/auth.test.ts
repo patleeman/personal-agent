@@ -1,40 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  createCompanionPairingCodeMock,
+  createRemoteAccessPairingCodeMock,
   createInMemoryRateLimitMock,
-  exchangeCompanionPairingCodeMock,
+  exchangeRemoteAccessPairingCodeMock,
   rateLimitMiddlewareMock,
-  readCompanionAuthAdminStateMock,
-  readCompanionSessionMock,
+  readRemoteAccessAdminStateMock,
+  readRemoteAccessSessionMock,
   resolveRequestOriginMock,
-  revokeCompanionSessionByTokenMock,
-  revokeCompanionSessionMock,
+  revokeRemoteAccessSessionByTokenMock,
+  revokeRemoteAccessSessionMock,
 } = vi.hoisted(() => {
   const rateLimitMiddlewareMock = vi.fn((_req: unknown, _res: unknown, next: () => void) => {
     next();
   });
 
   return {
-    createCompanionPairingCodeMock: vi.fn(),
+    createRemoteAccessPairingCodeMock: vi.fn(),
     createInMemoryRateLimitMock: vi.fn(() => rateLimitMiddlewareMock),
-    exchangeCompanionPairingCodeMock: vi.fn(),
+    exchangeRemoteAccessPairingCodeMock: vi.fn(),
     rateLimitMiddlewareMock,
-    readCompanionAuthAdminStateMock: vi.fn(),
-    readCompanionSessionMock: vi.fn(),
+    readRemoteAccessAdminStateMock: vi.fn(),
+    readRemoteAccessSessionMock: vi.fn(),
     resolveRequestOriginMock: vi.fn(),
-    revokeCompanionSessionByTokenMock: vi.fn(),
-    revokeCompanionSessionMock: vi.fn(),
+    revokeRemoteAccessSessionByTokenMock: vi.fn(),
+    revokeRemoteAccessSessionMock: vi.fn(),
   };
 });
 
-vi.mock('../ui/companionAuth.js', () => ({
-  createCompanionPairingCode: createCompanionPairingCodeMock,
-  exchangeCompanionPairingCode: exchangeCompanionPairingCodeMock,
-  readCompanionAuthAdminState: readCompanionAuthAdminStateMock,
-  readCompanionSession: readCompanionSessionMock,
-  revokeCompanionSession: revokeCompanionSessionMock,
-  revokeCompanionSessionByToken: revokeCompanionSessionByTokenMock,
+vi.mock('../ui/remoteAccessAuth.js', () => ({
+  createRemoteAccessPairingCode: createRemoteAccessPairingCodeMock,
+  exchangeRemoteAccessPairingCode: exchangeRemoteAccessPairingCodeMock,
+  readRemoteAccessAdminState: readRemoteAccessAdminStateMock,
+  readRemoteAccessSession: readRemoteAccessSessionMock,
+  revokeRemoteAccessSession: revokeRemoteAccessSessionMock,
+  revokeRemoteAccessSessionByToken: revokeRemoteAccessSessionByTokenMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -110,15 +110,15 @@ function createHarness() {
 
 describe('auth routes', () => {
   beforeEach(() => {
-    createCompanionPairingCodeMock.mockReset();
+    createRemoteAccessPairingCodeMock.mockReset();
     createInMemoryRateLimitMock.mockClear();
-    exchangeCompanionPairingCodeMock.mockReset();
+    exchangeRemoteAccessPairingCodeMock.mockReset();
     rateLimitMiddlewareMock.mockClear();
     rateLimitMiddlewareMock.mockImplementation((_req: unknown, _res: unknown, next: () => void) => {
       next();
     });
-    readCompanionAuthAdminStateMock.mockReset();
-    readCompanionSessionMock.mockReset();
+    readRemoteAccessAdminStateMock.mockReset();
+    readRemoteAccessSessionMock.mockReset();
     resolveRequestOriginMock.mockReset();
     resolveRequestOriginMock.mockImplementation(({ forwardedHost, host, forwardedProto, protocol }) => {
       const resolvedHost = forwardedHost ?? host;
@@ -127,8 +127,8 @@ describe('auth routes', () => {
       }
       return `${forwardedProto ?? protocol ?? 'http'}://${resolvedHost}`;
     });
-    revokeCompanionSessionByTokenMock.mockReset();
-    revokeCompanionSessionMock.mockReset();
+    revokeRemoteAccessSessionByTokenMock.mockReset();
+    revokeRemoteAccessSessionMock.mockReset();
   });
 
   it('handles desktop session lookups for public requests, expired tailnet sessions, and valid desktop sessions', () => {
@@ -138,9 +138,9 @@ describe('auth routes', () => {
     const publicRes = createResponse();
     sessionHandler(createRequest({ headers: { host: 'localhost:3000' } }), publicRes);
     expect(publicRes.json).toHaveBeenCalledWith({ required: false, session: null });
-    expect(readCompanionSessionMock).not.toHaveBeenCalled();
+    expect(readRemoteAccessSessionMock).not.toHaveBeenCalled();
 
-    readCompanionSessionMock.mockReturnValueOnce(null);
+    readRemoteAccessSessionMock.mockReturnValueOnce(null);
     const expiredRes = createResponse();
     sessionHandler(createRequest({
       headers: {
@@ -150,12 +150,12 @@ describe('auth routes', () => {
         'x-forwarded-proto': 'https',
       },
     }), expiredRes);
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
+    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
     expect(expiredRes.clearCookie).toHaveBeenCalledWith('pa_web', expect.objectContaining({ secure: true, path: '/' }));
     expect(expiredRes.json).toHaveBeenCalledWith({ required: true, session: null });
 
     const session = { id: 'desktop-session' };
-    readCompanionSessionMock.mockReturnValueOnce(session);
+    readRemoteAccessSessionMock.mockReturnValueOnce(session);
     const validRes = createResponse();
     sessionHandler(createRequest({
       headers: {
@@ -191,19 +191,19 @@ describe('auth routes', () => {
     expect(missingCodeRes.json).toHaveBeenCalledWith({ error: 'Pairing code required.' });
 
     const session = { id: 'desktop-session' };
-    exchangeCompanionPairingCodeMock.mockReturnValueOnce({ sessionToken: 'desktop=token', session });
+    exchangeRemoteAccessPairingCodeMock.mockReturnValueOnce({ sessionToken: 'desktop=token', session });
     const successRes = createResponse();
     desktopExchangeHandlers[1]!(createRequest({
       body: { code: 'PAIR-1234', deviceLabel: 'Mac mini' },
       headers: { host: 'device.ts.net' },
       protocol: 'https',
     }), successRes);
-    expect(exchangeCompanionPairingCodeMock).toHaveBeenCalledWith('PAIR-1234', { deviceLabel: 'Mac mini', surface: 'desktop' });
+    expect(exchangeRemoteAccessPairingCodeMock).toHaveBeenCalledWith('PAIR-1234', { deviceLabel: 'Mac mini', surface: 'desktop' });
     expect(successRes.cookie).toHaveBeenCalledWith('pa_web', 'desktop=token', expect.objectContaining({ secure: true }));
     expect(successRes.status).toHaveBeenCalledWith(201);
     expect(successRes.json).toHaveBeenCalledWith({ required: true, session });
 
-    exchangeCompanionPairingCodeMock.mockImplementationOnce(() => {
+    exchangeRemoteAccessPairingCodeMock.mockImplementationOnce(() => {
       throw new Error('Pairing code is invalid or expired.');
     });
     const expiredRes = createResponse();
@@ -211,7 +211,7 @@ describe('auth routes', () => {
     expect(expiredRes.status).toHaveBeenCalledWith(400);
     expect(expiredRes.json).toHaveBeenCalledWith({ error: 'Pairing code is invalid or expired.' });
 
-    exchangeCompanionPairingCodeMock.mockImplementationOnce(() => {
+    exchangeRemoteAccessPairingCodeMock.mockImplementationOnce(() => {
       throw new Error('desktop exchange failed');
     });
     const failingExchangeRes = createResponse();
@@ -221,30 +221,30 @@ describe('auth routes', () => {
 
     const logoutRes = createResponse();
     desktopLogoutHandlers[0]!(createRequest({ headers: { cookie: 'pa_web=desktop%3Dtoken', host: 'localhost:3000' } }), logoutRes);
-    expect(revokeCompanionSessionByTokenMock).toHaveBeenCalledWith('desktop=token');
+    expect(revokeRemoteAccessSessionByTokenMock).toHaveBeenCalledWith('desktop=token');
     expect(logoutRes.clearCookie).toHaveBeenCalledWith('pa_web', expect.objectContaining({ secure: false, path: '/' }));
     expect(logoutRes.json).toHaveBeenCalledWith({ ok: true });
 
     const adminState = { sessions: [{ id: 'session-1' }], pendingPairings: [] };
-    readCompanionAuthAdminStateMock.mockReturnValueOnce(adminState);
+    readRemoteAccessAdminStateMock.mockReturnValueOnce(adminState);
     const adminStateRes = createResponse();
     adminStateHandler(createRequest(), adminStateRes);
     expect(adminStateRes.json).toHaveBeenCalledWith(adminState);
 
     const pairingCode = { id: 'pair-1', code: 'ABCD-EFGH-JKLM' };
-    createCompanionPairingCodeMock.mockReturnValueOnce(pairingCode);
+    createRemoteAccessPairingCodeMock.mockReturnValueOnce(pairingCode);
     const pairingCodeRes = createResponse();
     pairingCodeHandler(createRequest(), pairingCodeRes);
     expect(pairingCodeRes.status).toHaveBeenCalledWith(201);
     expect(pairingCodeRes.json).toHaveBeenCalledWith(pairingCode);
 
-    readCompanionAuthAdminStateMock.mockReturnValueOnce({ sessions: [], pendingPairings: [] });
+    readRemoteAccessAdminStateMock.mockReturnValueOnce({ sessions: [], pendingPairings: [] });
     const revokeRes = createResponse();
     revokeSessionHandler(createRequest({ params: { sessionId: 'session-1' } }), revokeRes);
-    expect(revokeCompanionSessionMock).toHaveBeenCalledWith('session-1');
+    expect(revokeRemoteAccessSessionMock).toHaveBeenCalledWith('session-1');
     expect(revokeRes.json).toHaveBeenCalledWith({ ok: true, state: { sessions: [], pendingPairings: [] } });
 
-    readCompanionAuthAdminStateMock.mockImplementationOnce(() => {
+    readRemoteAccessAdminStateMock.mockImplementationOnce(() => {
       throw new Error('state failed');
     });
     const failingAdminStateRes = createResponse();
@@ -252,7 +252,7 @@ describe('auth routes', () => {
     expect(failingAdminStateRes.status).toHaveBeenCalledWith(500);
     expect(failingAdminStateRes.json).toHaveBeenCalledWith({ error: 'Error: state failed' });
 
-    createCompanionPairingCodeMock.mockImplementationOnce(() => {
+    createRemoteAccessPairingCodeMock.mockImplementationOnce(() => {
       throw new Error('pairing failed');
     });
     const failingPairingRes = createResponse();
@@ -260,7 +260,7 @@ describe('auth routes', () => {
     expect(failingPairingRes.status).toHaveBeenCalledWith(500);
     expect(failingPairingRes.json).toHaveBeenCalledWith({ error: 'Error: pairing failed' });
 
-    revokeCompanionSessionMock.mockImplementationOnce(() => {
+    revokeRemoteAccessSessionMock.mockImplementationOnce(() => {
       throw new Error('revoke failed');
     });
     const failingRevokeRes = createResponse();
@@ -281,7 +281,7 @@ describe('auth routes', () => {
     desktopGate(createRequest({ path: '/tasks', headers: { host: 'localhost:3000' } }), createResponse(), publicNext);
     expect(publicNext).toHaveBeenCalledTimes(1);
 
-    readCompanionSessionMock.mockReturnValueOnce(null);
+    readRemoteAccessSessionMock.mockReturnValueOnce(null);
     const blockedRes = createResponse();
     const blockedNext = vi.fn();
     desktopGate(createRequest({
@@ -292,13 +292,13 @@ describe('auth routes', () => {
         'tailscale-user-login': 'patrick',
       },
     }), blockedRes, blockedNext);
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
+    expect(readRemoteAccessSessionMock).toHaveBeenCalledWith('desktop=token', { surface: 'desktop' });
     expect(blockedRes.status).toHaveBeenCalledWith(401);
     expect(blockedRes.json).toHaveBeenCalledWith({ error: 'Desktop sign-in required.' });
     expect(blockedRes.clearCookie).toHaveBeenCalledWith('pa_web', expect.objectContaining({ secure: false, path: '/' }));
     expect(blockedNext).not.toHaveBeenCalled();
 
-    readCompanionSessionMock.mockReturnValueOnce({ id: 'desktop-session' });
+    readRemoteAccessSessionMock.mockReturnValueOnce({ id: 'desktop-session' });
     const allowedRes = createResponse();
     const allowedNext = vi.fn();
     desktopGate(createRequest({

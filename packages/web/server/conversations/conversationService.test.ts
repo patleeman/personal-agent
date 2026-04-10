@@ -37,7 +37,7 @@ const {
   listDeferredResumeRecordsMock: vi.fn(),
   listProfileActivityEntriesMock: vi.fn(),
   listSessionsMock: vi.fn(),
-  liveSessionRegistry: new Map<string, any>(),
+  liveSessionRegistry: new Map<string, unknown>(),
   loadDaemonConfigMock: vi.fn(),
   loadDeferredResumeStateMock: vi.fn(),
   loadProfileActivityReadStateMock: vi.fn(),
@@ -119,9 +119,7 @@ vi.mock('../models/modelPreferences.js', () => ({
 import {
   getCurrentProfile,
   listAllLiveSessions,
-  listCompanionConversationSections,
   listConversationSessionsSnapshot,
-  parseBoundedIntegerQueryValue,
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
   readConversationModelPreferenceStateById,
@@ -245,9 +243,6 @@ describe('conversationService', () => {
     });
 
     expect(getCurrentProfile()).toBe('reviewer');
-    expect(parseBoundedIntegerQueryValue('5', 0, { min: 1, max: 4 })).toBe(4);
-    expect(parseBoundedIntegerQueryValue(['2'], 0)).toBe(2);
-    expect(parseBoundedIntegerQueryValue('oops', 7)).toBe(7);
     expect(parseTailBlocksQuery('8')).toBe(8);
     expect(parseTailBlocksQuery(['3'])).toBe(3);
     expect(parseTailBlocksQuery('0')).toBeUndefined();
@@ -329,7 +324,7 @@ describe('conversationService', () => {
     expect(readConversationSessionSignature('conversation-1')).toBeNull();
   });
 
-  it('builds conversation snapshots and companion sections from saved workspace state', () => {
+  it('builds conversation snapshots from saved workspace state', () => {
     setConversationServiceContext({
       getCurrentProfile: () => 'assistant',
       getRepoRoot: () => '/repo',
@@ -353,7 +348,7 @@ describe('conversationService', () => {
         kind: 'manual',
         title: 'Review follow-up',
         delivery: { type: 'inbox' },
-      } as any,
+      },
     ]);
     listSessionsMock.mockReturnValue([
       {
@@ -444,14 +439,6 @@ describe('conversationService', () => {
       }),
     ]));
 
-    const sections = listCompanionConversationSections({ archivedOffset: 0, archivedLimit: 1 });
-    expect(sections.live.map((session) => session.id)).toEqual(['live-1']);
-    expect(sections.active.map((session) => session.id)).toEqual(['workspace-1', 'pinned-1']);
-    expect(sections.needsReview.map((session) => session.id)).toEqual(['review-1']);
-    expect(sections.archived.map((session) => session.id)).toEqual(['archived-1']);
-    expect(sections.archivedTotal).toBe(1);
-    expect(sections.hasMoreArchived).toBe(false);
-    expect(sections.workspaceSessionIds).toEqual(['workspace-1', 'pinned-1']);
 
     expect(toggleConversationAttention({ profile: 'assistant', conversationId: 'review-1', read: false })).toBe(true);
     expect(markConversationAttentionUnreadMock).toHaveBeenCalledWith({

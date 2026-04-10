@@ -59,7 +59,7 @@ Current SSH defaults:
 
 - remote repo root: `~/workingdir/personal-agent`
 - remote web UI port: `3741`
-- remote companion: disabled during bootstrap
+- separate remote browser surface: disabled during bootstrap
 
 ## Windows and shell behavior
 

@@ -30,7 +30,6 @@ import {
   takeOverLiveSessionCapability,
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
-import { readCompanionSession } from '../ui/companionAuth.js';
 import {
   logError,
   logSlowConversationPerf,
@@ -90,51 +89,6 @@ let listMemoryDocsFn: () => {
   path: string;
   updated?: string;
 }[] = () => [];
-
-const COMPANION_SESSION_COOKIE = 'pa_companion';
-
-function readCookieValue(req: Request, cookieName: string): string {
-  const cookieHeader = req.headers.cookie;
-  if (typeof cookieHeader !== 'string' || cookieHeader.trim().length === 0) {
-    return '';
-  }
-
-  const pairs = cookieHeader.split(';');
-  for (const pair of pairs) {
-    const [rawName, ...valueParts] = pair.split('=');
-    if (rawName?.trim() !== cookieName) {
-      continue;
-    }
-
-    return decodeURIComponent(valueParts.join('=').trim());
-  }
-
-  return '';
-}
-
-function isValidCompanionSession(req: Request): boolean {
-  const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
-  return Boolean(readCompanionSession(sessionToken, { touch: false, surface: 'companion' }));
-}
-
-export function shouldRequireCompanionSessionForLiveSessionSse(req: Pick<Request, 'url'> & { originalUrl?: string }): boolean {
-  const requestUrl = typeof req.originalUrl === 'string' && req.originalUrl.trim().length > 0
-    ? req.originalUrl.trim()
-    : typeof req.url === 'string'
-      ? req.url.trim()
-      : '';
-
-  return requestUrl === '/app/api/live-sessions'
-    || requestUrl.startsWith('/app/api/live-sessions/');
-}
-
-function writeSseHeaders(res: Response): void {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-}
 
 function initializeLiveSessionRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
@@ -688,155 +642,7 @@ export function registerLiveSessionRoutes(
   });
 }
 
-export function registerCompanionLiveSessionRoutes(
-  router: Pick<Express, 'get' | 'post' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
-): void {
-  initializeLiveSessionRoutesContext(context);
-  router.get('/api/live-sessions', (_req, res) => {
-    res.json(listAllLiveSessions());
-  });
 
-  router.post('/api/live-sessions', async (req, res) => {
-    try {
-      const result = await createLiveSessionCapability({}, getLiveSessionCapabilityContext());
-      res.json(result);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (err instanceof LiveSessionCapabilityInputError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/live-sessions/resume', async (req, res) => {
-    try {
-      const result = await resumeLiveSessionCapability({
-        sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
-      }, getLiveSessionCapabilityContext());
-      res.json(result);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (err instanceof LiveSessionCapabilityInputError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.get('/api/live-sessions/:id', (req, res) => {
-    const live = isLiveSession(req.params.id);
-    if (!live) {
-      res.status(404).json({ live: false });
-      return;
-    }
-
-    const entry = listAllLiveSessions().find((session) => session.id === req.params.id);
-    res.json({ live: true, ...entry });
-  });
-
-  router.post('/api/live-sessions/:id/takeover', (req, res) => {
-    try {
-      const { id } = req.params;
-      const surfaceId = typeof req.body?.surfaceId === 'string' ? req.body.surfaceId.trim() : '';
-      if (!surfaceId) {
-        res.status(400).json({ error: 'surfaceId is required' });
-        return;
-      }
-      if (!isLocalLive(id)) {
-        res.status(400).json({ error: 'Takeover is only available for local live conversations right now.' });
-        return;
-      }
-
-      res.json(takeOverLiveSessionCapability({ conversationId: id, surfaceId }));
-    } catch (error) {
-      if (error instanceof LiveSessionControlError) {
-        res.status(409).json({ error: error.message });
-        return;
-      }
-
-      res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  router.get('/api/live-sessions/:id/events', (req, res) => {
-    const { id } = req.params;
-    if (!isLiveSession(id)) {
-      res.status(404).json({ error: 'Not a live session' });
-      return;
-    }
-
-    const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
-    const parsedTailBlocks = typeof rawTailBlocks === 'string'
-      ? Number.parseInt(rawTailBlocks, 10)
-      : typeof rawTailBlocks === 'number'
-        ? rawTailBlocks
-        : undefined;
-    const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
-      ? parsedTailBlocks as number
-      : undefined;
-    const rawSurfaceId = Array.isArray(req.query.surfaceId) ? req.query.surfaceId[0] : req.query.surfaceId;
-    const surfaceId = typeof rawSurfaceId === 'string' ? rawSurfaceId.trim() : '';
-    const rawSurfaceType = Array.isArray(req.query.surfaceType) ? req.query.surfaceType[0] : req.query.surfaceType;
-    const surfaceType = rawSurfaceType === 'mobile_web' ? 'mobile_web' : 'desktop_web';
-
-    writeSseHeaders(res);
-
-    const heartbeat = setInterval(() => {
-      if (shouldRequireCompanionSessionForLiveSessionSse(req) && !isValidCompanionSession(req)) {
-        clearInterval(heartbeat);
-        unsubscribe?.();
-        res.end();
-        return;
-      }
-
-      res.write(': heartbeat\n\n');
-    }, 15_000);
-
-    const unsubscribe = subscribeLiveSession(id, (event) => {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    }, {
-      ...(tailBlocks ? { tailBlocks } : {}),
-      ...(surfaceId ? { surface: { surfaceId, surfaceType } } : {}),
-    });
-
-    req.on('close', () => {
-      clearInterval(heartbeat);
-      unsubscribe?.();
-    });
-  });
-
-  router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
-
-  router.post('/api/live-sessions/:id/abort', async (req, res) => {
-    try {
-      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      res.json(await abortLiveSessionCapability({ conversationId: req.params.id }));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (err instanceof LiveSessionCapabilityInputError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      if (writeLiveConversationControlError(res, err)) {
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-}
 
 export function registerLiveSessionStatsRoutes(
   router: Pick<Express, 'get'>,

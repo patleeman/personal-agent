@@ -83,7 +83,6 @@ export function readCookieValue(req: Request, cookieName: string): string {
   return '';
 }
 
-export const COMPANION_SESSION_COOKIE = 'pa_companion';
 
 // Session middleware
 export {

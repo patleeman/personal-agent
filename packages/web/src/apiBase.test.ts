@@ -7,7 +7,7 @@ describe('resolveApiPrefix', () => {
     expect(resolveApiPrefix('/conversations/conv-123')).toBe(DESKTOP_API_PREFIX);
   });
 
-  it('ignores legacy companion paths and still uses the desktop api prefix', () => {
+  it('ignores legacy /app paths and still uses the desktop api prefix', () => {
     expect(resolveApiPrefix('/app')).toBe(DESKTOP_API_PREFIX);
     expect(resolveApiPrefix('/app/conversations/conv-123')).toBe(DESKTOP_API_PREFIX);
   });

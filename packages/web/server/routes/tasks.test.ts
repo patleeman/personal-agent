@@ -49,7 +49,7 @@ vi.mock('../automation/scheduledTasks.js', () => ({
   toScheduledTaskMetadata: toScheduledTaskMetadataMock,
 }));
 
-import { registerCompanionTaskRunRoutes, registerTaskRoutes } from './tasks.js';
+import { registerTaskRoutes } from './tasks.js';
 
 type TestTask = {
   id: string;
@@ -124,15 +124,15 @@ describe('registerTaskRoutes', () => {
   });
 
   function createHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`POST ${path}`] = next;
       }),
-      patch: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      patch: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`PATCH ${path}`] = next;
       }),
     };
@@ -145,21 +145,6 @@ describe('registerTaskRoutes', () => {
       patchHandler: handlers['PATCH /api/tasks/:id']!,
       logHandler: handlers['GET /api/tasks/:id/log']!,
       detailHandler: handlers['GET /api/tasks/:id']!,
-      runHandler: handlers['POST /api/tasks/:id/run']!,
-    };
-  }
-
-  function createCompanionHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
-    const router = {
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
-        handlers[`POST ${path}`] = next;
-      }),
-    };
-
-    registerCompanionTaskRunRoutes(router as never, { getCurrentProfile: () => 'assistant' });
-
-    return {
       runHandler: handlers['POST /api/tasks/:id/run']!,
     };
   }
@@ -500,39 +485,5 @@ describe('registerTaskRoutes', () => {
     await runHandler({ params: { id: 'task-1' } }, failingRes);
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: run failed' });
-  });
-
-  it('runs tasks from companion routes, handling missing, blank, rejected, success, and error cases', async () => {
-    const { runHandler } = createCompanionHarness();
-
-    findTaskForProfileMock.mockReturnValueOnce(undefined);
-    const missingRes = createResponse();
-    await runHandler({ params: { id: 'task-1' } }, missingRes);
-    expect(missingRes.status).toHaveBeenCalledWith(404);
-
-    findTaskForProfileMock.mockReturnValueOnce({ task: createTask({ prompt: '   ' }), runtime: createRuntime() });
-    const blankRes = createResponse();
-    await runHandler({ params: { id: 'task-1' } }, blankRes);
-    expect(blankRes.status).toHaveBeenCalledWith(400);
-
-    findTaskForProfileMock.mockReturnValueOnce({ task: createTask(), runtime: createRuntime() });
-    startScheduledTaskRunMock.mockResolvedValueOnce({ accepted: false, reason: 'not ready' });
-    const rejectedRes = createResponse();
-    await runHandler({ params: { id: 'task-1' } }, rejectedRes);
-    expect(rejectedRes.status).toHaveBeenCalledWith(503);
-    expect(rejectedRes.json).toHaveBeenCalledWith({ error: 'not ready' });
-
-    findTaskForProfileMock.mockReturnValueOnce({ task: createTask(), runtime: createRuntime() });
-    startScheduledTaskRunMock.mockResolvedValueOnce({ accepted: true, runId: 'run-2' });
-    const successRes = createResponse();
-    await runHandler({ params: { id: 'task-1' } }, successRes);
-    expect(successRes.json).toHaveBeenCalledWith({ ok: true, accepted: true, runId: 'run-2' });
-
-    startScheduledTaskRunMock.mockRejectedValueOnce(new Error('companion run failed'));
-    findTaskForProfileMock.mockReturnValueOnce({ task: createTask(), runtime: createRuntime() });
-    const failingRes = createResponse();
-    await runHandler({ params: { id: 'task-1' } }, failingRes);
-    expect(failingRes.status).toHaveBeenCalledWith(500);
-    expect(failingRes.json).toHaveBeenCalledWith({ error: 'companion run failed' });
   });
 });

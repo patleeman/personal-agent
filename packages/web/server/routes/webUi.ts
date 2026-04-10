@@ -376,14 +376,3 @@ export function registerWebUiRoutes(
   router.post('/api/activity/:id/start', handleActivityStart);
 }
 
-export function registerCompanionWebUiRoutes(
-  router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
-): void {
-  initializeWebUiRoutesContext(context);
-  router.get('/api/web-ui/state', handleWebUiStateRequest);
-  router.post('/api/web-ui/service/restart', handleWebUiServiceRestart);
-  router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
-  router.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
-  router.post('/api/activity/:id/start', handleActivityStart);
-}

@@ -60,11 +60,11 @@ A conversation often creates or receives other durable async surfaces:
 - **scheduled task** — future or recurring automation
 - **activity / alert** — later attention in inbox/notifications
 
-## Web and companion behavior
+## Web and remote-browser behavior
 
 The desktop web UI can keep multiple saved conversations open at once.
 
-The companion surface can watch and reply to live conversations too, but it is intentionally narrower than the full desktop UI.
+Remote browser sessions can still watch and reply to live conversations, but they now use the same main web surface rather than a separate companion app.
 
 ## Practical rule
 

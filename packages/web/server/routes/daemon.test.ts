@@ -41,7 +41,7 @@ vi.mock('../shared/internalAttention.js', () => ({
   suppressMonitoredServiceAttention: suppressMonitoredServiceAttentionMock,
 }));
 
-import { registerCompanionDaemonRoutes, registerDaemonRoutes } from './daemon.js';
+import { registerDaemonRoutes } from './daemon.js';
 
 type TestRequest = Record<string, never>;
 type TestResponse = {
@@ -86,25 +86,6 @@ describe('registerDaemonRoutes', () => {
     };
   }
 
-  function createCompanionHarness() {
-    const handlers: Record<string, TestHandler> = {};
-    const router = {
-      get: vi.fn((path: string, next: TestHandler) => {
-        handlers[`GET ${path}`] = next;
-      }),
-      post: vi.fn((path: string, next: TestHandler) => {
-        handlers[`POST ${path}`] = next;
-      }),
-    };
-
-    registerCompanionDaemonRoutes(router as never);
-
-    return {
-      stateHandler: handlers['GET /api/daemon']!,
-      restartHandler: handlers['POST /api/daemon/service/restart']!,
-    };
-  }
-
   function createResponse() {
     return {
       status: vi.fn().mockReturnThis(),
@@ -114,7 +95,6 @@ describe('registerDaemonRoutes', () => {
 
   it('reads daemon state and performs each lifecycle action', async () => {
     const { stateHandler, installHandler, startHandler, restartHandler, stopHandler, uninstallHandler } = createHarness();
-    const { stateHandler: companionStateHandler, restartHandler: companionRestartHandler } = createCompanionHarness();
 
     readDaemonStateMock.mockResolvedValue({ installed: true, running: true });
     installDaemonServiceAndReadStateMock.mockResolvedValue({ action: 'install' });
@@ -147,23 +127,14 @@ describe('registerDaemonRoutes', () => {
     await uninstallHandler({}, uninstallRes);
     expect(uninstallRes.json).toHaveBeenCalledWith({ action: 'uninstall' });
 
-    const companionStateRes = createResponse();
-    await companionStateHandler({}, companionStateRes);
-    expect(companionStateRes.json).toHaveBeenCalledWith({ installed: true, running: true });
-
-    const companionRestartRes = createResponse();
-    await companionRestartHandler({}, companionRestartRes);
-    expect(companionRestartRes.json).toHaveBeenCalledWith({ action: 'restart' });
-
-    expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledTimes(6);
+    expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledTimes(5);
     expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledWith('daemon');
-    expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(6);
+    expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(5);
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('daemon');
   });
 
   it('returns 400 for desktop-runtime daemon lifecycle errors', async () => {
     const { installHandler, startHandler, restartHandler, stopHandler, uninstallHandler } = createHarness();
-    const { restartHandler: companionRestartHandler } = createCompanionHarness();
     const desktopError = new Error('Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.');
 
     installDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
@@ -192,15 +163,10 @@ describe('registerDaemonRoutes', () => {
     await uninstallHandler({}, uninstallRes);
     expect(uninstallRes.status).toHaveBeenCalledWith(400);
 
-    restartDaemonServiceAndReadStateMock.mockRejectedValueOnce(desktopError);
-    const companionRestartRes = createResponse();
-    await companionRestartHandler({}, companionRestartRes);
-    expect(companionRestartRes.status).toHaveBeenCalledWith(400);
   });
 
   it('logs and returns 500 when daemon state or lifecycle handlers fail', async () => {
     const { stateHandler, installHandler, startHandler, restartHandler, stopHandler, uninstallHandler } = createHarness();
-    const { stateHandler: companionStateHandler, restartHandler: companionRestartHandler } = createCompanionHarness();
 
     readDaemonStateMock.mockRejectedValueOnce(new Error('state failed'));
     const stateRes = createResponse();
@@ -233,15 +199,6 @@ describe('registerDaemonRoutes', () => {
     await uninstallHandler({}, uninstallRes);
     expect(uninstallRes.status).toHaveBeenCalledWith(500);
 
-    readDaemonStateMock.mockRejectedValueOnce(new Error('companion state failed'));
-    const companionStateRes = createResponse();
-    await companionStateHandler({}, companionStateRes);
-    expect(companionStateRes.status).toHaveBeenCalledWith(500);
-
-    restartDaemonServiceAndReadStateMock.mockRejectedValueOnce(new Error('companion restart failed'));
-    const companionRestartRes = createResponse();
-    await companionRestartHandler({}, companionRestartRes);
-    expect(companionRestartRes.status).toHaveBeenCalledWith(500);
 
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
       message: 'state failed',
@@ -260,12 +217,6 @@ describe('registerDaemonRoutes', () => {
     }));
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
       message: 'uninstall failed',
-    }));
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'companion state failed',
-    }));
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'companion restart failed',
     }));
   });
 });

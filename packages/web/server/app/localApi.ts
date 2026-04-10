@@ -181,10 +181,10 @@ import {
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
 import {
-  createCompanionPairingCode,
-  readCompanionAuthAdminState,
-  revokeCompanionSession,
-} from '../ui/companionAuth.js';
+  createRemoteAccessPairingCode,
+  readRemoteAccessAdminState,
+  revokeRemoteAccessSession,
+} from '../ui/remoteAccessAuth.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -1249,18 +1249,18 @@ export async function updateDesktopWebUiConfig(input: {
 }
 
 export async function readDesktopRemoteAccessState() {
-  return readCompanionAuthAdminState();
+  return readRemoteAccessAdminState();
 }
 
 export async function createDesktopRemoteAccessPairingCode() {
-  return createCompanionPairingCode();
+  return createRemoteAccessPairingCode();
 }
 
 export async function revokeDesktopRemoteAccessSession(sessionId: string) {
-  revokeCompanionSession(sessionId);
+  revokeRemoteAccessSession(sessionId);
   return {
     ok: true as const,
-    state: readCompanionAuthAdminState(),
+    state: readRemoteAccessAdminState(),
   };
 }
 

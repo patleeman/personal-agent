@@ -7,7 +7,6 @@ const {
   listDurableRunsMock,
   logErrorMock,
   logWarnMock,
-  readCompanionSessionMock,
   readDaemonStateMock,
   readWebUiStateMock,
   requestApplicationRestartMock,
@@ -21,7 +20,6 @@ const {
   listDurableRunsMock: vi.fn(),
   logErrorMock: vi.fn(),
   logWarnMock: vi.fn(),
-  readCompanionSessionMock: vi.fn(),
   readDaemonStateMock: vi.fn(),
   readWebUiStateMock: vi.fn(),
   requestApplicationRestartMock: vi.fn(),
@@ -40,9 +38,6 @@ vi.mock('../ui/webUi.js', () => ({
   readWebUiState: readWebUiStateMock,
 }));
 
-vi.mock('../ui/companionAuth.js', () => ({
-  readCompanionSession: readCompanionSessionMock,
-}));
 
 vi.mock('../automation/daemon.js', () => ({
   readDaemonState: readDaemonStateMock,
@@ -77,7 +72,7 @@ vi.mock('../automation/durableRuns.js', () => ({
   listDurableRuns: listDurableRunsMock,
 }));
 
-import { registerCompanionSystemRoutes, registerSystemRoutes } from './system.js';
+import { registerSystemRoutes } from './system.js';
 
 const flushAsyncWork = async () => {
   for (let index = 0; index < 50; index += 1) {
@@ -96,7 +91,6 @@ describe('system routes', () => {
     listDurableRunsMock.mockReset();
     logErrorMock.mockReset();
     logWarnMock.mockReset();
-    readCompanionSessionMock.mockReset();
     readDaemonStateMock.mockReset();
     readWebUiStateMock.mockReset();
     requestApplicationRestartMock.mockReset();
@@ -111,7 +105,7 @@ describe('system routes', () => {
     readDaemonStateMock.mockResolvedValue({ running: true });
     readWebUiStateMock.mockReturnValue({ installed: true });
     streamSnapshotEventsMock.mockImplementation(async (topics: string[], { buildEvents, writeEvent }: {
-      buildEvents: (topic: any) => Promise<unknown[]>;
+      buildEvents: (topic: string) => Promise<unknown[]>;
       writeEvent: (event: unknown) => void;
     }) => {
       for (const topic of topics) {
@@ -128,12 +122,12 @@ describe('system routes', () => {
     listActivityForCurrentProfile?: () => Array<{ read?: boolean }>;
     listTasksForCurrentProfile?: () => unknown[];
   }) {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`POST ${path}`] = next;
       }),
     };
@@ -148,36 +142,6 @@ describe('system routes', () => {
     return {
       eventsHandler: handlers['GET /api/events']!,
       statusHandler: handlers['GET /api/status']!,
-      restartHandler: handlers['POST /api/application/restart']!,
-      updateHandler: handlers['POST /api/application/update']!,
-    };
-  }
-
-  function createCompanionHarness(options?: {
-    getCurrentProfile?: () => string;
-    getRepoRoot?: () => string;
-    listActivityForCurrentProfile?: () => Array<{ read?: boolean }>;
-    listTasksForCurrentProfile?: () => unknown[];
-  }) {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
-    const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
-        handlers[`GET ${path}`] = next;
-      }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
-        handlers[`POST ${path}`] = next;
-      }),
-    };
-
-    registerCompanionSystemRoutes(router as never, {
-      getCurrentProfile: options?.getCurrentProfile ?? (() => 'assistant'),
-      getRepoRoot: options?.getRepoRoot ?? (() => '/repo'),
-      listActivityForCurrentProfile: options?.listActivityForCurrentProfile ?? (() => [{ read: false }, { read: true }]),
-      listTasksForCurrentProfile: options?.listTasksForCurrentProfile ?? (() => [{ id: 'task-1' }]),
-    });
-
-    return {
-      eventsHandler: handlers['GET /api/events']!,
       restartHandler: handlers['POST /api/application/restart']!,
       updateHandler: handlers['POST /api/application/update']!,
     };
@@ -279,13 +243,13 @@ describe('system routes', () => {
     vi.useFakeTimers();
     const { eventsHandler } = createDesktopHarness();
     const unsubscribe = vi.fn();
-    let appEventHandler: ((event: any) => void) | undefined;
-    subscribeAppEventsMock.mockImplementation((handler: (event: any) => void) => {
+    let appEventHandler: ((event: unknown) => void) | undefined;
+    subscribeAppEventsMock.mockImplementation((handler: (event: unknown) => void) => {
       appEventHandler = handler;
       return unsubscribe;
     });
     streamSnapshotEventsMock.mockImplementation(async (topics: string[], { buildEvents, writeEvent }: {
-      buildEvents: (topic: any) => Promise<unknown[]>;
+      buildEvents: (topic: string) => Promise<unknown[]>;
       writeEvent: (event: unknown) => void;
     }) => {
       for (const topic of topics) {
@@ -345,71 +309,5 @@ describe('system routes', () => {
     const writeCountBeforeClose = res.write.mock.calls.length;
     await vi.advanceTimersByTimeAsync(15_000);
     expect(res.write.mock.calls).toHaveLength(writeCountBeforeClose);
-  });
-
-  it('streams companion events, filters unsupported topics, checks the session cookie, and ends when auth expires', async () => {
-    vi.useFakeTimers();
-    const { eventsHandler } = createCompanionHarness();
-    const unsubscribe = vi.fn();
-    let appEventHandler: ((event: any) => void) | undefined;
-    subscribeAppEventsMock.mockImplementation((handler: (event: any) => void) => {
-      appEventHandler = handler;
-      return unsubscribe;
-    });
-    readCompanionSessionMock.mockReturnValueOnce(true).mockReturnValueOnce(false);
-
-    const req = Object.assign(new EventEmitter(), {
-      headers: { cookie: 'foo=bar; pa_companion=session%3Dtoken' },
-    });
-    const res = createStreamResponse();
-
-    await eventsHandler(req, res);
-    await flushAsyncWork();
-
-    appEventHandler?.({ type: 'invalidate', topics: ['runs'] });
-    await flushAsyncWork();
-
-    appEventHandler?.({ type: 'invalidate', topics: ['daemon', 'runs'] });
-    await flushAsyncWork();
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'invalidate', topics: ['daemon'] })}\n\n`);
-
-    appEventHandler?.({ type: 'live_title', sessionId: 'session-1', title: 'New title' });
-    appEventHandler?.({ type: 'session_meta_changed', sessionId: 'session-1' });
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'live_title', sessionId: 'session-1', title: 'New title' })}\n\n`);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'session_meta_changed', sessionId: 'session-1' })}\n\n`);
-
-    streamSnapshotEventsMock.mockImplementationOnce(async () => {
-      throw new Error('companion snapshot failed');
-    });
-    appEventHandler?.({ type: 'invalidate', topics: ['alerts'] });
-    await flushAsyncWork();
-    expect(logWarnMock).toHaveBeenCalledWith('companion event stream write failed', expect.objectContaining({
-      message: 'companion snapshot failed',
-    }));
-
-    await vi.advanceTimersByTimeAsync(15_000);
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('session=token', { surface: 'companion', touch: false });
-    expect(res.write).toHaveBeenCalledWith(': heartbeat\n\n');
-
-    await vi.advanceTimersByTimeAsync(15_000);
-    expect(res.end).toHaveBeenCalledTimes(1);
-    expect(unsubscribe).toHaveBeenCalledTimes(1);
-  });
-
-  it('treats a missing companion cookie as an empty session token', async () => {
-    vi.useFakeTimers();
-    const { eventsHandler } = createCompanionHarness();
-    subscribeAppEventsMock.mockReturnValue(vi.fn());
-    readCompanionSessionMock.mockReturnValue(false);
-
-    const req = Object.assign(new EventEmitter(), { headers: {} });
-    const res = createStreamResponse();
-
-    await eventsHandler(req, res);
-    await flushAsyncWork();
-    await vi.advanceTimersByTimeAsync(15_000);
-
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('', { surface: 'companion', touch: false });
-    expect(res.end).toHaveBeenCalledTimes(1);
   });
 });

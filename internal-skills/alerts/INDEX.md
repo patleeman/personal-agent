@@ -71,7 +71,7 @@ Acknowledging or dismissing a notification does **not** delete the durable histo
 
 ## Web UI
 
-The current web and companion UI do not surface reminder/callback alerts directly.
+The current web UI does not surface reminder/callback alerts directly.
 
 If async work should remain visible, route it through:
 

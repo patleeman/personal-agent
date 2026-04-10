@@ -32,35 +32,6 @@ function initializeTaskRoutesContext(context: Pick<ServerRouteContext, 'getCurre
   getCurrentProfileFn = context.getCurrentProfile;
 }
 
-export function registerCompanionTaskRunRoutes(
-  router: Pick<Express, 'post'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile'>,
-): void {
-  initializeTaskRoutesContext(context);
-  router.post('/api/tasks/:id/run', async (req, res) => {
-    try {
-      const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
-      if (!resolvedTask) {
-        res.status(404).json({ error: 'Task not found' });
-        return;
-      }
-      if (!resolvedTask.task.prompt.trim()) {
-        res.status(400).json({ error: 'Task has no prompt body' });
-        return;
-      }
-      const result = await startScheduledTaskRun(resolvedTask.task.id);
-      if (!result.accepted) {
-        res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
-        return;
-      }
-      res.json({ ok: true, accepted: result.accepted, runId: result.runId });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      res.status(500).json({ error: message });
-    }
-  });
-}
-
 function buildTaskDetailResponse(
   task: StoredAutomation,
   runtime?: TaskRuntimeEntry,

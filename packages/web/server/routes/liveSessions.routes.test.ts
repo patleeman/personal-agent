@@ -27,7 +27,6 @@ const {
   parseTailBlocksQueryMock,
   pickPromptReferencesInOrderMock,
   queuePromptContextMock,
-  readCompanionSessionMock,
   readGitStatusSummaryWithTelemetryMock,
   readSessionBlocksMock,
   readSessionMetaMock,
@@ -70,7 +69,7 @@ const {
   invalidateAppTopicsMock: vi.fn(),
   isLiveMock: vi.fn(),
   listPendingBackgroundRunResultsMock: vi.fn(),
-  liveRegistry: new Map<string, any>(),
+  liveRegistry: new Map<string, unknown>(),
   loadDaemonConfigMock: vi.fn(),
   logErrorMock: vi.fn(),
   logSlowConversationPerfMock: vi.fn(),
@@ -79,7 +78,6 @@ const {
   parseTailBlocksQueryMock: vi.fn(),
   pickPromptReferencesInOrderMock: vi.fn(),
   queuePromptContextMock: vi.fn(),
-  readCompanionSessionMock: vi.fn(),
   readGitStatusSummaryWithTelemetryMock: vi.fn(),
   readSessionBlocksMock: vi.fn(),
   readSessionMetaMock: vi.fn(),
@@ -147,9 +145,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   takeOverSessionControl: takeOverSessionControlMock,
 }));
 
-vi.mock('../ui/companionAuth.js', () => ({
-  readCompanionSession: readCompanionSessionMock,
-}));
 
 vi.mock('../middleware/index.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
@@ -195,13 +190,12 @@ vi.mock('../workspace/gitStatus.js', () => ({
 
 import {
   handleLiveSessionPrompt,
-  registerCompanionLiveSessionRoutes,
   registerLiveSessionRoutes,
   registerLiveSessionStatsRoutes,
   writeLiveConversationControlError,
 } from './liveSessions.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (req: unknown, res: unknown) => Promise<void> | void;
 
 function createRequest(overrides: Record<string, unknown> = {}) {
   const listeners = new Map<string, Array<() => void>>();
@@ -295,42 +289,6 @@ function createDesktopHarness(options?: {
   };
 }
 
-function createCompanionHarness(options?: {
-  flushLiveDeferredResumes?: () => Promise<void>;
-}) {
-  const deleteHandlers = new Map<string, Handler>();
-  const getHandlers = new Map<string, Handler>();
-  const postHandlers = new Map<string, Handler>();
-  const router = {
-    delete: vi.fn((path: string, handler: Handler) => {
-      deleteHandlers.set(path, handler);
-    }),
-    get: vi.fn((path: string, handler: Handler) => {
-      getHandlers.set(path, handler);
-    }),
-    post: vi.fn((path: string, handler: Handler) => {
-      postHandlers.set(path, handler);
-    }),
-  };
-
-  registerCompanionLiveSessionRoutes(router as never, {
-    buildLiveSessionExtensionFactories: () => ['factory'],
-    buildLiveSessionResourceOptions: () => ({ additionalExtensionPaths: ['extensions'] }),
-    flushLiveDeferredResumes: options?.flushLiveDeferredResumes ?? (async () => {}),
-    getCurrentProfile: () => 'assistant',
-    getDefaultWebCwd: () => '/default-cwd',
-    getRepoRoot: () => '/repo',
-    listMemoryDocs: () => [],
-    listTasksForCurrentProfile: () => [],
-  });
-
-  return {
-    deleteHandler: (path: string) => deleteHandlers.get(path)!,
-    getHandler: (path: string) => getHandlers.get(path)!,
-    postHandler: (path: string) => postHandlers.get(path)!,
-  };
-}
-
 function createStatsHarness() {
   const getHandlers = new Map<string, Handler>();
   const router = {
@@ -382,7 +340,6 @@ describe('live session routes', () => {
     parseTailBlocksQueryMock.mockReset();
     pickPromptReferencesInOrderMock.mockReset();
     queuePromptContextMock.mockReset();
-    readCompanionSessionMock.mockReset();
     readGitStatusSummaryWithTelemetryMock.mockReset();
     readSessionBlocksMock.mockReset();
     readSessionMetaMock.mockReset();
@@ -426,7 +383,6 @@ describe('live session routes', () => {
     markBackgroundRunResultsDeliveredMock.mockReturnValue([]);
     parseTailBlocksQueryMock.mockReturnValue(undefined);
     pickPromptReferencesInOrderMock.mockImplementation((ids: string[], entries: Array<{ id?: string }>) => entries.filter((entry) => entry.id && ids.includes(entry.id)));
-    readCompanionSessionMock.mockReturnValue({ token: 'good-token' });
     readGitStatusSummaryWithTelemetryMock.mockReturnValue({
       summary: {
         branch: 'main',
@@ -841,80 +797,6 @@ describe('live session routes', () => {
     await deleteHandler('/api/live-sessions/:id')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), deleteRes);
     expect(destroySessionMock).toHaveBeenCalledWith('live-1');
     expect(deleteRes.json).toHaveBeenCalledWith({ ok: true });
-  });
-
-  it('registers companion live-session routes and enforces companion auth for SSE heartbeats', async () => {
-    vi.useFakeTimers();
-    const flushLiveDeferredResumes = vi.fn(async () => {});
-    const { getHandler, postHandler } = createCompanionHarness({ flushLiveDeferredResumes });
-
-    const listRes = createResponse();
-    getHandler('/api/live-sessions')(createRequest(), listRes);
-    expect(listRes.json).toHaveBeenCalledWith([{ id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' }]);
-
-    const createRes = createResponse();
-    await postHandler('/api/live-sessions')(createRequest({ body: {} }), createRes);
-    expect(resolveConversationCwdMock).toHaveBeenCalledWith({
-      defaultCwd: '/default-cwd',
-      explicitCwd: undefined,
-      profile: 'assistant',
-      repoRoot: '/repo',
-    });
-    expect(createRes.json).toHaveBeenCalledWith({ id: 'live-new' });
-
-    expect(prewarmLiveSessionLoaderMock).toHaveBeenCalledWith('/repo/worktree', {
-      additionalExtensionPaths: ['extensions'],
-      extensionFactories: ['factory'],
-    });
-
-    const badResumeRes = createResponse();
-    await postHandler('/api/live-sessions/resume')(createRequest({ body: {} }), badResumeRes);
-    expect(badResumeRes.status).toHaveBeenCalledWith(400);
-    expect(badResumeRes.json).toHaveBeenCalledWith({ error: 'sessionFile required' });
-
-    const resumeRes = createResponse();
-    await postHandler('/api/live-sessions/resume')(createRequest({ body: { sessionFile: '/sessions/companion.jsonl' } }), resumeRes);
-    expect(flushLiveDeferredResumes).toHaveBeenCalled();
-    expect(resumeRes.json).toHaveBeenCalledWith({ id: 'live-resumed' });
-
-    const missingDetailRes = createResponse();
-    getHandler('/api/live-sessions/:id')(createRequest({ params: { id: 'missing' } }), missingDetailRes);
-    expect(missingDetailRes.status).toHaveBeenCalledWith(404);
-    expect(missingDetailRes.json).toHaveBeenCalledWith({ live: false });
-
-    isLiveMock.mockReturnValue(true);
-    const detailRes = createResponse();
-    getHandler('/api/live-sessions/:id')(createRequest({ params: { id: 'live-1' } }), detailRes);
-    expect(detailRes.json).toHaveBeenCalledWith({ live: true, id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' });
-
-    const missingSurfaceRes = createResponse();
-    postHandler('/api/live-sessions/:id/takeover')(createRequest({ params: { id: 'live-1' }, body: {} }), missingSurfaceRes);
-    expect(missingSurfaceRes.status).toHaveBeenCalledWith(400);
-    expect(missingSurfaceRes.json).toHaveBeenCalledWith({ error: 'surfaceId is required' });
-
-    let unsubscribe: ReturnType<typeof vi.fn> | undefined;
-    subscribeLocalMock.mockImplementationOnce(() => {
-      unsubscribe = vi.fn();
-      return unsubscribe;
-    });
-    readCompanionSessionMock.mockReturnValue(undefined);
-    const eventsReq = createRequest({
-      headers: { cookie: 'pa_companion=bad%20token' },
-      originalUrl: '/app/api/live-sessions/live-1/events',
-      params: { id: 'live-1' },
-      query: { tailBlocks: '7' },
-      url: '/api/live-sessions/live-1/events',
-    });
-    const eventsRes = createResponse();
-    getHandler('/api/live-sessions/:id/events')(eventsReq, eventsRes);
-    expect(eventsRes.setHeader).toHaveBeenCalledWith('X-Accel-Buffering', 'no');
-    vi.advanceTimersByTime(15_000);
-    expect(unsubscribe).toHaveBeenCalled();
-    expect(eventsRes.end).toHaveBeenCalled();
-
-    const abortRes = createResponse();
-    await postHandler('/api/live-sessions/:id/abort')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), abortRes);
-    expect(abortRes.json).toHaveBeenCalledWith({ ok: true });
   });
 
   it('registers stats routes and maps live-session control errors through the exported helper', () => {

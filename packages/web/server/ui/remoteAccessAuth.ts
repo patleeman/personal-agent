@@ -15,12 +15,12 @@ interface StoredPairingCode {
   expiresAt: string;
 }
 
-export type PairedSurface = 'companion' | 'desktop';
+export type RemoteAccessSurface = 'legacy' | 'desktop';
 
 interface StoredSession {
   id: string;
   deviceLabel: string;
-  surface: PairedSurface;
+  surface: RemoteAccessSurface;
   tokenHash: string;
   createdAt: string;
   lastUsedAt: string;
@@ -28,35 +28,35 @@ interface StoredSession {
   revokedAt?: string;
 }
 
-interface CompanionAuthStore {
+interface RemoteAccessStore {
   pairingCodes: StoredPairingCode[];
   sessions: StoredSession[];
 }
 
-export interface CompanionPairingCode {
+export interface RemoteAccessPairingCode {
   id: string;
   code: string;
   createdAt: string;
   expiresAt: string;
 }
 
-export interface CompanionAuthSessionSummary {
+export interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
-  surface: PairedSurface;
+  surface: RemoteAccessSurface;
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
   revokedAt?: string;
 }
 
-export interface CompanionAuthAdminState {
+export interface RemoteAccessAdminState {
   pendingPairings: Array<{
     id: string;
     createdAt: string;
     expiresAt: string;
   }>;
-  sessions: CompanionAuthSessionSummary[];
+  sessions: RemoteAccessSessionSummary[];
 }
 
 function resolveNow(input?: Date): Date {
@@ -73,11 +73,11 @@ function hashSecret(value: string): string {
 
 function normalizeDeviceLabel(input: string | undefined): string {
   if (typeof input !== 'string') {
-    return 'Paired companion';
+    return 'Paired device';
   }
 
   const normalized = input.replace(/\s+/g, ' ').trim();
-  return normalized.length > 0 ? normalized.slice(0, 80) : 'Paired companion';
+  return normalized.length > 0 ? normalized.slice(0, 80) : 'Paired device';
 }
 
 function normalizePairingCodeInput(input: string): string {
@@ -97,9 +97,9 @@ function generateSessionToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
-function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
+function normalizeStore(value: unknown, now: Date): RemoteAccessStore {
   const nowMs = now.getTime();
-  const raw = value as Partial<CompanionAuthStore> | null | undefined;
+  const raw = value as Partial<RemoteAccessStore> | null | undefined;
   const pairingCodes = Array.isArray(raw?.pairingCodes)
     ? raw.pairingCodes.flatMap((entry): StoredPairingCode[] => {
       if (!entry || typeof entry !== 'object') {
@@ -155,7 +155,7 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
       return [{
         id: candidate.id,
         deviceLabel: candidate.deviceLabel,
-        surface: candidate.surface === 'desktop' ? 'desktop' : 'companion',
+        surface: candidate.surface === 'desktop' ? 'desktop' : 'legacy',
         tokenHash: candidate.tokenHash,
         createdAt: candidate.createdAt,
         lastUsedAt: candidate.lastUsedAt,
@@ -171,12 +171,18 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
   };
 }
 
-function resolveCompanionAuthStateFile(): string {
+function resolveRemoteAccessStateFile(): string {
+  return join(getStateRoot(), 'web', 'remote-access-auth.json');
+}
+
+function resolveLegacyRemoteAccessStateFile(): string {
   return join(getStateRoot(), 'web', 'companion-auth.json');
 }
 
-function readStore(now: Date): CompanionAuthStore {
-  const stateFile = resolveCompanionAuthStateFile();
+function readStore(now: Date): RemoteAccessStore {
+  const stateFile = existsSync(resolveRemoteAccessStateFile())
+    ? resolveRemoteAccessStateFile()
+    : resolveLegacyRemoteAccessStateFile();
   if (!existsSync(stateFile)) {
     return { pairingCodes: [], sessions: [] };
   }
@@ -188,14 +194,14 @@ function readStore(now: Date): CompanionAuthStore {
   }
 }
 
-function writeStore(store: CompanionAuthStore): void {
-  const stateFile = resolveCompanionAuthStateFile();
+function writeStore(store: RemoteAccessStore): void {
+  const stateFile = resolveRemoteAccessStateFile();
   mkdirSync(dirname(stateFile), { recursive: true });
   writeFileSync(stateFile, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
 }
 
 function updateStore<T>(
-  mutator: (store: CompanionAuthStore, now: Date) => T,
+  mutator: (store: RemoteAccessStore, now: Date) => T,
   nowInput?: Date,
 ): T {
   const now = resolveNow(nowInput);
@@ -205,7 +211,7 @@ function updateStore<T>(
   return result;
 }
 
-function toSessionSummary(session: StoredSession): CompanionAuthSessionSummary {
+function toSessionSummary(session: StoredSession): RemoteAccessSessionSummary {
   return {
     id: session.id,
     deviceLabel: session.deviceLabel,
@@ -217,7 +223,7 @@ function toSessionSummary(session: StoredSession): CompanionAuthSessionSummary {
   };
 }
 
-export function readCompanionAuthAdminState(options?: { now?: Date }): CompanionAuthAdminState {
+export function readRemoteAccessAdminState(options?: { now?: Date }): RemoteAccessAdminState {
   const now = resolveNow(options?.now);
   const store = readStore(now);
 
@@ -235,7 +241,7 @@ export function readCompanionAuthAdminState(options?: { now?: Date }): Companion
   };
 }
 
-export function createCompanionPairingCode(options?: { now?: Date }): CompanionPairingCode {
+export function createRemoteAccessPairingCode(options?: { now?: Date }): RemoteAccessPairingCode {
   return updateStore((store, now) => {
     const createdAt = toIso(now);
     const expiresAt = toIso(new Date(now.getTime() + PAIRING_CODE_TTL_MS));
@@ -252,14 +258,14 @@ export function createCompanionPairingCode(options?: { now?: Date }): CompanionP
       code,
       createdAt,
       expiresAt,
-    } satisfies CompanionPairingCode;
+    } satisfies RemoteAccessPairingCode;
   }, options?.now);
 }
 
-export function exchangeCompanionPairingCode(
+export function exchangeRemoteAccessPairingCode(
   codeInput: string,
-  options?: { deviceLabel?: string; surface?: PairedSurface; now?: Date },
-): { sessionToken: string; session: CompanionAuthSessionSummary } {
+  options?: { deviceLabel?: string; surface?: RemoteAccessSurface; now?: Date },
+): { sessionToken: string; session: RemoteAccessSessionSummary } {
   return updateStore((store, now) => {
     const normalizedCode = normalizePairingCodeInput(codeInput);
     if (!normalizedCode) {
@@ -280,7 +286,7 @@ export function exchangeCompanionPairingCode(
     const session: StoredSession = {
       id: generateId('session'),
       deviceLabel: normalizeDeviceLabel(options?.deviceLabel),
-      surface: options?.surface === 'desktop' ? 'desktop' : 'companion',
+      surface: options?.surface === 'legacy' ? 'legacy' : 'desktop',
       tokenHash: hashSecret(sessionToken),
       createdAt,
       lastUsedAt: createdAt,
@@ -295,10 +301,10 @@ export function exchangeCompanionPairingCode(
   }, options?.now);
 }
 
-export function readCompanionSession(
+export function readRemoteAccessSession(
   tokenInput: string,
-  options?: { now?: Date; touch?: boolean; surface?: PairedSurface },
-): CompanionAuthSessionSummary | null {
+  options?: { now?: Date; touch?: boolean; surface?: RemoteAccessSurface },
+): RemoteAccessSessionSummary | null {
   const normalizedToken = tokenInput.trim();
   if (!normalizedToken) {
     return null;
@@ -323,7 +329,7 @@ export function readCompanionSession(
   }, options?.now);
 }
 
-export function revokeCompanionSession(sessionId: string, options?: { now?: Date }): CompanionAuthSessionSummary | null {
+export function revokeRemoteAccessSession(sessionId: string, options?: { now?: Date }): RemoteAccessSessionSummary | null {
   return updateStore((store, now) => {
     const session = store.sessions.find((entry) => entry.id === sessionId && !entry.revokedAt);
     if (!session) {
@@ -335,7 +341,7 @@ export function revokeCompanionSession(sessionId: string, options?: { now?: Date
   }, options?.now);
 }
 
-export function revokeCompanionSessionByToken(tokenInput: string, options?: { now?: Date }): CompanionAuthSessionSummary | null {
+export function revokeRemoteAccessSessionByToken(tokenInput: string, options?: { now?: Date }): RemoteAccessSessionSummary | null {
   const normalizedToken = tokenInput.trim();
   if (!normalizedToken) {
     return null;

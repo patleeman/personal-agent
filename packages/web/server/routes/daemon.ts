@@ -121,32 +121,3 @@ export function registerDaemonRoutes(router: Pick<Express, 'get' | 'post'>): voi
   });
 }
 
-export function registerCompanionDaemonRoutes(router: Pick<Express, 'get' | 'post'>): void {
-  router.get('/api/daemon', async (_req, res) => {
-    try {
-      res.json(await readDaemonState());
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/daemon/service/restart', async (_req, res) => {
-    try {
-      suppressMonitoredServiceAttention('daemon');
-      const state = await restartDaemonServiceAndReadState();
-      invalidateAppTopics('daemon');
-      res.json(state);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logError('request handler error', {
-        message,
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(mapDaemonServiceLifecycleErrorStatus(message)).json({ error: message });
-    }
-  });
-}

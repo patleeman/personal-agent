@@ -2,7 +2,6 @@ import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { requestApplicationRestart, requestApplicationUpdate } from '../ui/applicationRestart.js';
 import { readWebUiState } from '../ui/webUi.js';
-import { readCompanionSession } from '../ui/companionAuth.js';
 import { readDaemonState } from '../automation/daemon.js';
 import { getAlertSnapshotForProfile } from '../automation/alerts.js';
 import { subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
@@ -84,7 +83,6 @@ async function emitSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: u
   });
 }
 
-const COMPANION_SESSION_COOKIE = 'pa_companion';
 export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
   'sessions',
   'activity',
@@ -93,33 +91,12 @@ export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
   'daemon',
   'webUi',
 ];
-const COMPANION_EVENT_TOPICS = new Set<AppEventTopic>(INITIAL_APP_EVENT_TOPICS);
-
 function writeSseHeaders(res: Response): void {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
-}
-
-function readCookieValue(req: Request, cookieName: string): string {
-  const cookieHeader = req.headers.cookie;
-  if (typeof cookieHeader !== 'string' || cookieHeader.trim().length === 0) {
-    return '';
-  }
-
-  const pairs = cookieHeader.split(';');
-  for (const pair of pairs) {
-    const [rawName, ...valueParts] = pair.split('=');
-    if (rawName?.trim() !== cookieName) {
-      continue;
-    }
-
-    return decodeURIComponent(valueParts.join('=').trim());
-  }
-
-  return '';
 }
 
 function handleStatus(_req: Request, res: Response): void {
@@ -244,100 +221,6 @@ export function registerSystemRoutes(
   });
 
   router.get('/api/status', handleStatus);
-  router.post('/api/application/restart', handleApplicationRestart);
-  router.post('/api/application/update', handleApplicationUpdate);
-}
-
-export function registerCompanionSystemRoutes(
-  router: Pick<Express, 'get' | 'post'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
-): void {
-  initializeSystemRoutesContext(context);
-  router.get('/api/events', (req, res) => {
-    writeSseHeaders(res);
-
-    let closed = false;
-    let writeQueue = Promise.resolve();
-
-    const writeEvent = (event: unknown) => {
-      if (closed) {
-        return;
-      }
-
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
-    };
-
-    const enqueueWrite = (task: () => Promise<void> | void) => {
-      writeQueue = writeQueue
-        .then(async () => {
-          if (closed) {
-            return;
-          }
-
-          await task();
-        })
-        .catch((error) => {
-          logWarn('companion event stream write failed', {
-            message: error instanceof Error ? error.message : String(error),
-          });
-        });
-    };
-
-    const writeSnapshotEvents = async (topics: AppEventTopic[]) => {
-      await emitSnapshotEvents(topics, writeEvent);
-    };
-
-    writeEvent({ type: 'connected' });
-    enqueueWrite(async () => {
-      await writeSnapshotEvents(INITIAL_APP_EVENT_TOPICS);
-    });
-
-    const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
-    const heartbeat = setInterval(() => {
-      if (closed) {
-        return;
-      }
-
-      if (!readCompanionSession(sessionToken, { surface: 'companion', touch: false })) {
-        closed = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        res.end();
-        return;
-      }
-
-      res.write(': heartbeat\n\n');
-    }, 15_000);
-
-    const unsubscribe = subscribeAppEvents((event) => {
-      if (event.type === 'invalidate') {
-        const topics = event.topics.filter((topic) => COMPANION_EVENT_TOPICS.has(topic));
-        if (topics.length === 0) {
-          return;
-        }
-
-        const snapshotTopics = topics.filter((topic) => topic !== 'runs');
-        enqueueWrite(async () => {
-          if (snapshotTopics.length > 0) {
-            await writeSnapshotEvents(snapshotTopics);
-          }
-          writeEvent({ type: 'invalidate', topics });
-        });
-        return;
-      }
-
-      if (event.type === 'live_title' || event.type === 'session_meta_changed') {
-        writeEvent(event);
-      }
-    });
-
-    req.on('close', () => {
-      closed = true;
-      clearInterval(heartbeat);
-      unsubscribe();
-    });
-  });
-
   router.post('/api/application/restart', handleApplicationRestart);
   router.post('/api/application/update', handleApplicationUpdate);
 }

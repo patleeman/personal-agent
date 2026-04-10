@@ -678,20 +678,3 @@ export function registerModelRoutes(
   });
 }
 
-export function registerCompanionModelRoutes(
-  router: Pick<Express, 'get'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
-): void {
-  initializeModelRoutesContext(context);
-  router.get('/api/models', (_req, res) => {
-    try {
-      res.json(readModelState(SETTINGS_FILE));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-}

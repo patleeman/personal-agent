@@ -1,12 +1,12 @@
 import type { Express, NextFunction, Request, Response } from 'express';
 import {
-  createCompanionPairingCode,
-  exchangeCompanionPairingCode,
-  readCompanionAuthAdminState,
-  readCompanionSession,
-  revokeCompanionSession,
-  revokeCompanionSessionByToken,
-} from '../ui/companionAuth.js';
+  createRemoteAccessPairingCode,
+  exchangeRemoteAccessPairingCode,
+  readRemoteAccessAdminState,
+  readRemoteAccessSession,
+  revokeRemoteAccessSession,
+  revokeRemoteAccessSessionByToken,
+} from '../ui/remoteAccessAuth.js';
 import { createInMemoryRateLimit, resolveRequestOrigin } from '../middleware/index.js';
 
 const DESKTOP_SESSION_COOKIE = 'pa_web';
@@ -86,9 +86,9 @@ function clearDesktopSessionCookie(req: Request, res: Response): void {
   });
 }
 
-function readDesktopSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
+function readDesktopSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
   const sessionToken = readCookieValue(req, DESKTOP_SESSION_COOKIE);
-  const session = readCompanionSession(sessionToken, { surface: 'desktop' });
+  const session = readRemoteAccessSession(sessionToken, { surface: 'desktop' });
   if (!session) {
     clearDesktopSessionCookie(req, res);
     return null;
@@ -98,7 +98,7 @@ function readDesktopSession(req: Request, res: Response): ReturnType<typeof read
   return session;
 }
 
-function ensureDesktopSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
+function ensureDesktopSession(req: Request, res: Response): ReturnType<typeof readRemoteAccessSession> {
   const session = readDesktopSession(req, res);
   if (!session) {
     res.status(401).json({ error: 'Desktop sign-in required.' });
@@ -131,7 +131,7 @@ function handleDesktopAuthExchangeRequest(req: Request, res: Response): void {
       return;
     }
 
-    const exchanged = exchangeCompanionPairingCode(code, {
+    const exchanged = exchangeRemoteAccessPairingCode(code, {
       ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
       surface: 'desktop',
     });
@@ -144,14 +144,14 @@ function handleDesktopAuthExchangeRequest(req: Request, res: Response): void {
 }
 
 function handleDesktopAuthLogoutRequest(req: Request, res: Response): void {
-  revokeCompanionSessionByToken(readCookieValue(req, DESKTOP_SESSION_COOKIE));
+  revokeRemoteAccessSessionByToken(readCookieValue(req, DESKTOP_SESSION_COOKIE));
   clearDesktopSessionCookie(req, res);
   res.json({ ok: true });
 }
 
 function handleRemoteAccessStateRequest(_req: Request, res: Response): void {
   try {
-    res.json(readCompanionAuthAdminState());
+    res.json(readRemoteAccessAdminState());
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -159,7 +159,7 @@ function handleRemoteAccessStateRequest(_req: Request, res: Response): void {
 
 function handleRemoteAccessCreatePairingCodeRequest(_req: Request, res: Response): void {
   try {
-    res.status(201).json(createCompanionPairingCode());
+    res.status(201).json(createRemoteAccessPairingCode());
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -167,8 +167,8 @@ function handleRemoteAccessCreatePairingCodeRequest(_req: Request, res: Response
 
 function handleRemoteAccessRevokeSessionRequest(req: Request, res: Response): void {
   try {
-    revokeCompanionSession(req.params.sessionId);
-    res.json({ ok: true, state: readCompanionAuthAdminState() });
+    revokeRemoteAccessSession(req.params.sessionId);
+    res.json({ ok: true, state: readRemoteAccessAdminState() });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

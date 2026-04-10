@@ -118,9 +118,9 @@ vi.mock('../middleware/index.js', () => ({
   refreshAllLiveSessionModelRegistries: refreshAllLiveSessionModelRegistriesMock,
 }));
 
-import { registerCompanionModelRoutes, registerModelRoutes } from './models.js';
+import { registerModelRoutes } from './models.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (req: unknown, res: unknown) => Promise<void> | void;
 
 type RouteFiles = {
   root: string;
@@ -230,28 +230,6 @@ function createDesktopHarness(files = createRouteFiles()) {
   };
 }
 
-function createCompanionHarness(files = createRouteFiles()) {
-  const getHandlers = new Map<string, Handler>();
-  const router = {
-    get: vi.fn((path: string, handler: Handler) => {
-      getHandlers.set(path, handler);
-    }),
-  };
-
-  registerCompanionModelRoutes(router as never, {
-    getAuthFile: () => files.authFile,
-    getCurrentProfile: () => 'assistant',
-    getCurrentProfileSettingsFile: () => files.profileSettingsFile,
-    getSettingsFile: () => files.settingsFile,
-    materializeWebProfile: vi.fn(),
-  });
-
-  return {
-    files,
-    getHandler: (path: string) => getHandlers.get(path)!,
-  };
-}
-
 describe('model routes', () => {
   const allocatedFiles: RouteFiles[] = [];
   let machineConfig: Record<string, unknown>;
@@ -334,9 +312,8 @@ describe('model routes', () => {
     return files;
   }
 
-  it('serves model state for desktop and companion routes, including the built-in fallback path', () => {
+  it('serves model state, including the built-in fallback path', () => {
     const desktop = createDesktopHarness(allocateFiles());
-    const companion = createCompanionHarness(allocateFiles());
 
     const desktopRes = createResponse();
     desktop.getHandler('/api/models')(createRequest(), desktopRes);
@@ -355,10 +332,10 @@ describe('model routes', () => {
       currentThinkingLevel: 'medium',
     });
 
-    const companionRes = createResponse();
-    companion.getHandler('/api/models')(createRequest(), companionRes);
+    const fallbackRes = createResponse();
+    desktop.getHandler('/api/models')(createRequest(), fallbackRes);
 
-    expect(companionRes.json).toHaveBeenCalledWith(expect.objectContaining({
+    expect(fallbackRes.json).toHaveBeenCalledWith(expect.objectContaining({
       currentModel: 'claude-opus-4-6',
       currentThinkingLevel: 'medium',
     }));

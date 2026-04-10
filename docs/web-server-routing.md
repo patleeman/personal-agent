@@ -16,17 +16,14 @@ Current source layout:
 - `models/` — model registry, preferences, providers, auth, usage
 - `routes/` — Express route registration modules
 - `shared/` — app events, SSE snapshots, logging, security helpers
-- `ui/` — SPA serving, companion auth, settings persistence, profile defaults
+- `ui/` — SPA serving, remote-access auth, settings persistence, profile defaults
 - `workspace/` — folder picker and repo-status helpers
 
-## Two app surfaces
+## App surface
 
-The server mounts routes for two related HTTP surfaces:
+The server now mounts one browser surface: the main web UI.
 
-- the full desktop web UI
-- the narrower companion surface used under `/app`
-
-That is why many route files have both desktop and companion registration helpers.
+Remote browser pairing/admin state still exists, but the old `/app` companion surface and its duplicated route helpers are gone.
 
 ## Route registration pattern
 
@@ -47,18 +44,18 @@ Current route groups include:
 - tasks
 - models
 - tools
-- auth and companion auth
+- auth and remote-access auth
 - system / web UI state
 - conversations / live sessions
 - activity and alerts
 - runs
-- memory notes / companion memory
+- memory notes
 - folder picker
 - shell helpers
 
 ## Live updates
 
-The `/api/events` SSE stream carries snapshot-style updates used by the desktop UI and the companion.
+The `/api/events` SSE stream carries snapshot-style updates used by the desktop UI and remote browser sessions.
 
 Those topics include at least:
 
@@ -70,7 +67,7 @@ Those topics include at least:
 - daemon
 - web UI state
 
-The companion depends on those operational snapshots too, not just inbox-style invalidation.
+Remote browser sessions depend on those operational snapshots too, not just inbox-style invalidation.
 
 ## Related docs
 

@@ -29,7 +29,7 @@ vi.mock('../middleware/index.js', () => ({
   logError: logErrorMock,
 }));
 
-import { registerCompanionRunRoutes, registerRunRoutes } from './runs.js';
+import { registerRunRoutes } from './runs.js';
 
 describe('registerRunRoutes', () => {
   afterEach(() => {
@@ -46,15 +46,15 @@ describe('registerRunRoutes', () => {
   });
 
   function createHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`POST ${path}`] = next;
       }),
-      patch: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      patch: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`PATCH ${path}`] = next;
       }),
     };
@@ -68,23 +68,6 @@ describe('registerRunRoutes', () => {
       eventsHandler: handlers['GET /api/runs/:id/events']!,
       logHandler: handlers['GET /api/runs/:id/log']!,
       cancelHandler: handlers['POST /api/runs/:id/cancel']!,
-    };
-  }
-
-  function createCompanionHarness() {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
-    const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
-        handlers[`GET ${path}`] = next;
-      }),
-    };
-
-    registerCompanionRunRoutes(router as never);
-
-    return {
-      listHandler: handlers['GET /api/runs']!,
-      detailHandler: handlers['GET /api/runs/:id']!,
-      logHandler: handlers['GET /api/runs/:id/log']!,
     };
   }
 
@@ -256,35 +239,5 @@ describe('registerRunRoutes', () => {
     await cancelHandler({ params: { id: 'run-1' } }, failingRes);
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: cancel failed' });
-  });
-
-  it('registers companion run routes for listing, details, and logs', async () => {
-    const { listHandler, detailHandler, logHandler } = createCompanionHarness();
-
-    listDurableRunsMock.mockResolvedValue({ runs: [{ runId: 'run-2' }] });
-    const listRes = createJsonResponse();
-    await listHandler({}, listRes);
-    expect(listRes.json).toHaveBeenCalledWith({ runs: [{ runId: 'run-2' }] });
-
-    getDurableRunMock.mockResolvedValueOnce({ run: { runId: 'run-2' } });
-    const detailRes = createJsonResponse();
-    await detailHandler({ params: { id: 'run-2' } }, detailRes);
-    expect(detailRes.json).toHaveBeenCalledWith({ run: { runId: 'run-2' } });
-
-    getDurableRunMock.mockResolvedValueOnce(undefined);
-    const missingDetailRes = createJsonResponse();
-    await detailHandler({ params: { id: 'missing' } }, missingDetailRes);
-    expect(missingDetailRes.status).toHaveBeenCalledWith(404);
-
-    getDurableRunLogMock.mockResolvedValueOnce({ path: '/tmp/run.log', log: 'tail' });
-    const logRes = createJsonResponse();
-    await logHandler({ params: { id: 'run-2' }, query: { tail: '10' } }, logRes);
-    expect(logRes.json).toHaveBeenCalledWith({ path: '/tmp/run.log', log: 'tail' });
-
-    getDurableRunLogMock.mockRejectedValueOnce(new Error('companion log failed'));
-    const failingLogRes = createJsonResponse();
-    await logHandler({ params: { id: 'run-2' }, query: {} }, failingLogRes);
-    expect(failingLogRes.status).toHaveBeenCalledWith(500);
-    expect(failingLogRes.json).toHaveBeenCalledWith({ error: 'Error: companion log failed' });
   });
 });

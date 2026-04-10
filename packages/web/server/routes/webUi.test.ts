@@ -88,9 +88,9 @@ vi.mock('@personal-agent/core', () => ({
   setActivityConversationLinks: setActivityConversationLinksMock,
 }));
 
-import { registerCompanionWebUiRoutes, registerWebUiRoutes } from './webUi.js';
+import { registerWebUiRoutes } from './webUi.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (req: unknown, res: unknown) => Promise<void> | void;
 
 function createResponse() {
   return {
@@ -138,41 +138,6 @@ function createDesktopHarness(options?: {
   };
 }
 
-function createCompanionHarness(options?: {
-  getCurrentProfile?: () => string;
-  getRepoRoot?: () => string;
-}) {
-  const getHandlers = new Map<string, Handler>();
-  const patchHandlers = new Map<string, Handler>();
-  const postHandlers = new Map<string, Handler>();
-  const router = {
-    get: vi.fn((path: string, handler: Handler) => {
-      getHandlers.set(path, handler);
-    }),
-    patch: vi.fn((path: string, handler: Handler) => {
-      patchHandlers.set(path, handler);
-    }),
-    post: vi.fn((path: string, handler: Handler) => {
-      postHandlers.set(path, handler);
-    }),
-  };
-
-  registerCompanionWebUiRoutes(router as never, {
-    getCurrentProfile: options?.getCurrentProfile ?? (() => 'assistant'),
-    getRepoRoot: options?.getRepoRoot ?? (() => '/repo'),
-    getSettingsFile: () => '/runtime/settings.json',
-    getDefaultWebCwd: () => '/default-cwd',
-    buildLiveSessionResourceOptions: () => ({ additionalExtensionPaths: [] }),
-    buildLiveSessionExtensionFactories: () => [],
-  });
-
-  return {
-    getHandler: (path: string) => getHandlers.get(path)!,
-    patchHandler: (path: string) => patchHandlers.get(path)!,
-    postHandler: (path: string) => postHandlers.get(path)!,
-  };
-}
-
 describe('web UI routes', () => {
   beforeEach(() => {
     createLocalSessionMock.mockReset();
@@ -206,8 +171,6 @@ describe('web UI routes', () => {
       service: {
         running: true,
         url: 'http://127.0.0.1:3000',
-        companionPort: 4242,
-        companionUrl: 'http://127.0.0.1:4242',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the conversation.',
       },
@@ -224,7 +187,6 @@ describe('web UI routes', () => {
       archivedConversationIds: ['conversation-6'],
     });
     writeWebUiConfigMock.mockReturnValue({
-      companionPort: 4242,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Resume later.',
     });
@@ -241,8 +203,6 @@ describe('web UI routes', () => {
       service: {
         running: true,
         url: 'http://127.0.0.1:3000',
-        companionPort: 4242,
-        companionUrl: 'http://127.0.0.1:4242',
         tailscaleServe: false,
         resumeFallbackPrompt: 'Resume the conversation.',
       },
@@ -322,7 +282,7 @@ describe('web UI routes', () => {
     expect(uninstallRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
   });
 
-  it('maps restart responses for desktop and companion routes', () => {
+  it('maps restart responses for desktop routes', () => {
     const desktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
 
     const desktopRes = createResponse();
@@ -331,12 +291,11 @@ describe('web UI routes', () => {
     expect(desktopRes.status).toHaveBeenCalledWith(202);
     expect(desktopRes.json).toHaveBeenCalledWith({ ok: true, action: 'restart' });
 
-    const companion = createCompanionHarness({ getRepoRoot: () => '/companion-repo' });
     requestWebUiServiceRestartMock.mockImplementationOnce(() => {
       throw new Error('Managed web UI restart already in progress');
     });
     const conflictRes = createResponse();
-    companion.postHandler('/api/web-ui/service/restart')({}, conflictRes);
+    desktop.postHandler('/api/web-ui/service/restart')({}, conflictRes);
     expect(conflictRes.status).toHaveBeenCalledWith(409);
     expect(conflictRes.json).toHaveBeenCalledWith({ error: 'Managed web UI restart already in progress' });
 
@@ -435,12 +394,7 @@ describe('web UI routes', () => {
     const missingRes = createResponse();
     handler({ body: {} }, missingRes);
     expect(missingRes.status).toHaveBeenCalledWith(400);
-    expect(missingRes.json).toHaveBeenCalledWith({ error: 'Provide companionPort, useTailscaleServe, and/or resumeFallbackPrompt.' });
-
-    const invalidPortRes = createResponse();
-    handler({ body: { companionPort: 70000 } }, invalidPortRes);
-    expect(invalidPortRes.status).toHaveBeenCalledWith(400);
-    expect(invalidPortRes.json).toHaveBeenCalledWith({ error: 'companionPort must be a valid port when provided.' });
+    expect(missingRes.json).toHaveBeenCalledWith({ error: 'Provide useTailscaleServe and/or resumeFallbackPrompt.' });
 
     const invalidTailscaleRes = createResponse();
     handler({ body: { useTailscaleServe: 'yes' } }, invalidTailscaleRes);
@@ -455,13 +409,11 @@ describe('web UI routes', () => {
     const successRes = createResponse();
     handler({
       body: {
-        companionPort: 4242,
         useTailscaleServe: true,
         resumeFallbackPrompt: 'Resume later.',
       },
     }, successRes);
     expect(writeWebUiConfigMock).toHaveBeenCalledWith({
-      companionPort: 4242,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Resume later.',
     });
@@ -473,8 +425,6 @@ describe('web UI routes', () => {
       service: {
         running: true,
         url: 'http://127.0.0.1:3000',
-        companionPort: 4242,
-        companionUrl: 'http://127.0.0.1:4242',
         tailscaleServe: true,
         resumeFallbackPrompt: 'Resume later.',
       },
@@ -484,7 +434,7 @@ describe('web UI routes', () => {
       throw new Error('config write failed');
     });
     const failureRes = createResponse();
-    handler({ body: { companionPort: 3001 } }, failureRes);
+    handler({ body: { useTailscaleServe: false } }, failureRes);
     expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
       message: 'config write failed',
     }));

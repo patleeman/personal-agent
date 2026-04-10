@@ -651,7 +651,7 @@ export interface LiveSessionExportResult {
 export interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
-  surface: 'companion' | 'desktop';
+  surface: 'legacy' | 'desktop';
   createdAt: string;
   lastUsedAt: string;
   expiresAt: string;
