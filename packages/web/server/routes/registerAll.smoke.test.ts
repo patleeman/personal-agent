@@ -143,7 +143,7 @@ describe('registerServerRoutes smoke test', () => {
   });
 
   it('serves remote pairing admin routes through the main app surface', async () => {
-    const pairingCodeResponse = await fetch(`${appBaseUrl}/api/companion-auth/pairing-code`, {
+    const pairingCodeResponse = await fetch(`${appBaseUrl}/api/remote-access/pairing-code`, {
       method: 'POST',
     });
 

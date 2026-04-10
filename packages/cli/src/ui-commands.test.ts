@@ -49,7 +49,7 @@ describe('ui command help', () => {
     const exitCode = await runCli(['ui', 'pairing-code', '--port', '4810']);
 
     expect(exitCode).toBe(0);
-    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:4810/api/companion-auth/pairing-code', {
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:4810/api/remote-access/pairing-code', {
       method: 'POST',
       headers: {
         Origin: 'http://127.0.0.1:4810',

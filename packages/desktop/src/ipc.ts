@@ -164,37 +164,37 @@ export function registerDesktopIpc(options: {
     return controller.updateWebUiConfig(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-companion-auth-state`, async (event) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-remote-access-state`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readCompanionAuthState) {
-      throw new Error('Dedicated desktop companion-auth reads are only available for the local host.');
+    if (!controller.readRemoteAccessState) {
+      throw new Error('Dedicated desktop remote-access reads are only available for the local host.');
     }
 
-    return controller.readCompanionAuthState();
+    return controller.readRemoteAccessState();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:create-companion-pairing-code`, async (event) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:create-remote-access-pairing-code`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);
-    if (!controller.createCompanionPairingCode) {
-      throw new Error('Dedicated desktop companion-auth writes are only available for the local host.');
+    if (!controller.createRemoteAccessPairingCode) {
+      throw new Error('Dedicated desktop remote-access writes are only available for the local host.');
     }
 
-    return controller.createCompanionPairingCode();
+    return controller.createRemoteAccessPairingCode();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:revoke-companion-session`, async (event, sessionId: string) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:revoke-remote-access-session`, async (event, sessionId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);
-    if (!controller.revokeCompanionSession) {
-      throw new Error('Dedicated desktop companion session revokes are only available for the local host.');
+    if (!controller.revokeRemoteAccessSession) {
+      throw new Error('Dedicated desktop remote-access session revokes are only available for the local host.');
     }
 
-    return controller.revokeCompanionSession(sessionId);
+    return controller.revokeRemoteAccessSession(sessionId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-sessions`, async (event) => {

@@ -19,6 +19,6 @@ describe('buildApiPath', () => {
   });
 
   it('always builds standard api urls', () => {
-    expect(buildApiPath('/companion-auth/session', '/app/conversations')).toBe('/api/companion-auth/session');
+    expect(buildApiPath('/remote-access', '/app/conversations')).toBe('/api/remote-access');
   });
 });

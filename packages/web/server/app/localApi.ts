@@ -1248,15 +1248,15 @@ export async function updateDesktopWebUiConfig(input: {
   };
 }
 
-export async function readDesktopCompanionAuthState() {
+export async function readDesktopRemoteAccessState() {
   return readCompanionAuthAdminState();
 }
 
-export async function createDesktopCompanionPairingCode() {
+export async function createDesktopRemoteAccessPairingCode() {
   return createCompanionPairingCode();
 }
 
-export async function revokeDesktopCompanionSession(sessionId: string) {
+export async function revokeDesktopRemoteAccessSession(sessionId: string) {
   revokeCompanionSession(sessionId);
   return {
     ok: true as const,

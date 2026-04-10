@@ -36,9 +36,9 @@ export interface LocalApiModule {
     useTailscaleServe?: boolean;
     resumeFallbackPrompt?: string;
   }): Promise<unknown>;
-  readDesktopCompanionAuthState(): Promise<unknown>;
-  createDesktopCompanionPairingCode(): Promise<unknown>;
-  revokeDesktopCompanionSession(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
+  readDesktopRemoteAccessState(): Promise<unknown>;
+  createDesktopRemoteAccessPairingCode(): Promise<unknown>;
+  revokeDesktopRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readDesktopSessions(): Promise<unknown>;
   readDesktopSessionMeta(sessionId: string): Promise<unknown>;
   readDesktopSessionSearchIndex(sessionIds: string[]): Promise<unknown>;

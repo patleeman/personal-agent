@@ -86,7 +86,6 @@ beforeEach(() => {
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PI_SESSION_DIR: createTempDir('pi-session-'),
   };
-  delete process.env.PA_WEB_COMPANION_PORT;
   delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
   delete process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
 
@@ -177,8 +176,6 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
     const port = await allocateUnusedPort();
-    const companionPort = await allocateUnusedPort();
-    process.env.PA_WEB_COMPANION_PORT = String(companionPort);
 
     serviceMocks.getWebUiServiceStatus.mockImplementation(() => ({
       identifier: 'mock-web-ui',
@@ -206,40 +203,10 @@ describe('ui foreground launch', () => {
         stdio: 'inherit',
         env: expect.objectContaining({
           PA_WEB_PORT: String(port),
-          PA_WEB_COMPANION_PORT: String(companionPort),
           PERSONAL_AGENT_REPO_ROOT: repoRoot,
         }),
       }),
     );
-
-    logSpy.mockRestore();
-  });
-
-  it('uses a temporary foreground companion port when the configured one is already occupied', async () => {
-    const repoRoot = createFakeWebRepo();
-    const stateRoot = createTempDir('pa-ui-foreground-state-');
-    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-
-    const occupiedCompanion = await listenOnRandomPort();
-    process.env.PA_WEB_COMPANION_PORT = String(occupiedCompanion.port);
-
-    const logs: string[] = [];
-    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
-      logs.push(String(message ?? ''));
-    });
-
-    const exitCode = await runCli(['ui', '--port', '4010']);
-
-    expect(exitCode).toBe(0);
-    expect(logs.some((line) => line.includes(`Configured companion port ${occupiedCompanion.port} is unavailable`))).toBe(true);
-
-    const foregroundEnv = childProcessMocks.spawnSync.mock.calls[0]?.[2]?.env as Record<string, string> | undefined;
-    expect(foregroundEnv?.PA_WEB_PORT).toBe('4010');
-    expect(foregroundEnv?.PERSONAL_AGENT_REPO_ROOT).toBe(repoRoot);
-    expect(foregroundEnv?.PA_WEB_COMPANION_PORT).not.toBe(String(occupiedCompanion.port));
-    expect(foregroundEnv?.PA_WEB_COMPANION_PORT).not.toBe('4010');
-    expect(Number.parseInt(String(foregroundEnv?.PA_WEB_COMPANION_PORT ?? ''), 10)).toBeGreaterThan(0);
 
     logSpy.mockRestore();
   });
@@ -253,11 +220,8 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = configPath;
 
-    const companionPort = await allocateUnusedPort();
-
     writeFileSync(configPath, JSON.stringify({
       port: 3741,
-      companionPort,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
     }, null, 2));
@@ -278,7 +242,6 @@ describe('ui foreground launch', () => {
     expect(serviceMocks.syncWebUiTailscaleServe).toHaveBeenCalledWith(expect.objectContaining({
       enabled: false,
       port: 4810,
-      companionPort,
     }));
     expect(childProcessMocks.spawnSync).toHaveBeenCalledWith(
       process.execPath,
@@ -287,7 +250,6 @@ describe('ui foreground launch', () => {
         stdio: 'inherit',
         env: expect.objectContaining({
           PA_WEB_PORT: '4810',
-          PA_WEB_COMPANION_PORT: String(companionPort),
           PERSONAL_AGENT_WEB_TAILSCALE_SERVE: 'false',
         }),
       }),
@@ -305,11 +267,8 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = configPath;
 
-    const companionPort = await allocateUnusedPort();
-
     writeFileSync(configPath, JSON.stringify({
       port: 3741,
-      companionPort,
       useTailscaleServe: true,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
       webOnlySetting: {
@@ -324,7 +283,6 @@ describe('ui foreground launch', () => {
     expect(exitCode).toBe(0);
     expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({
       port: 4810,
-      companionPort,
       useTailscaleServe: false,
       resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
       webOnlySetting: {

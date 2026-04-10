@@ -4,8 +4,8 @@ import type {
   AlertSnapshot,
   AppStatus,
   CodexPlanUsageState,
-  CompanionAuthAdminState,
-  CompanionPairingCodeResult,
+  RemoteAccessAdminState,
+  RemoteAccessPairingCodeResult,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
   ConversationAttachmentAssetData,
@@ -68,9 +68,9 @@ export interface PersonalAgentDesktopBridge {
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;
   updateWebUiConfig(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<WebUiState>;
-  readCompanionAuthState(): Promise<CompanionAuthAdminState>;
-  createCompanionPairingCode(): Promise<CompanionPairingCodeResult>;
-  revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: CompanionAuthAdminState }>;
+  readRemoteAccessState(): Promise<RemoteAccessAdminState>;
+  createRemoteAccessPairingCode(): Promise<RemoteAccessPairingCodeResult>;
+  revokeRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: RemoteAccessAdminState }>;
   readSessions(): Promise<SessionMeta[]>;
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;

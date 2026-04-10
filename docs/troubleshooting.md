@@ -101,7 +101,7 @@ If appropriate:
 - `pa runs follow-up <id> --prompt "..."`
 - `pa runs cancel <id>`
 
-## Pairing code or companion access fails
+## Pairing code or remote browser access fails
 
 Remember the current rules:
 

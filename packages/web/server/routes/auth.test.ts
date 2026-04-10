@@ -42,9 +42,9 @@ vi.mock('../middleware/index.js', () => ({
   resolveRequestOrigin: resolveRequestOriginMock,
 }));
 
-import { registerAuthRoutes, registerCompanionAuthRoutes } from './auth.js';
+import { registerAuthRoutes } from './auth.js';
 
-type Handler = (req: any, res: any, next?: () => void) => Promise<void> | void;
+type Handler = (req: unknown, res: unknown, next?: () => void) => Promise<void> | void;
 
 function createRequest(options: {
   body?: Record<string, unknown>;
@@ -78,7 +78,7 @@ function createResponse() {
   };
 }
 
-function createDesktopHarness() {
+function createHarness() {
   const getHandlers = new Map<string, Handler[]>();
   const postHandlers = new Map<string, Handler[]>();
   const deleteHandlers = new Map<string, Handler[]>();
@@ -102,31 +102,6 @@ function createDesktopHarness() {
 
   return {
     deleteHandler: (path: string) => deleteHandlers.get(path) ?? [],
-    getHandler: (path: string) => getHandlers.get(path) ?? [],
-    postHandler: (path: string) => postHandlers.get(path) ?? [],
-    useHandler: (path: string) => useHandlers.get(path) ?? [],
-  };
-}
-
-function createCompanionHarness() {
-  const getHandlers = new Map<string, Handler[]>();
-  const postHandlers = new Map<string, Handler[]>();
-  const useHandlers = new Map<string, Handler[]>();
-  const app = {
-    get: vi.fn((path: string, ...handlers: Handler[]) => {
-      getHandlers.set(path, handlers);
-    }),
-    post: vi.fn((path: string, ...handlers: Handler[]) => {
-      postHandlers.set(path, handlers);
-    }),
-    use: vi.fn((path: string, ...handlers: Handler[]) => {
-      useHandlers.set(path, handlers);
-    }),
-  };
-
-  registerCompanionAuthRoutes(app as never);
-
-  return {
     getHandler: (path: string) => getHandlers.get(path) ?? [],
     postHandler: (path: string) => postHandlers.get(path) ?? [],
     useHandler: (path: string) => useHandlers.get(path) ?? [],
@@ -157,7 +132,7 @@ describe('auth routes', () => {
   });
 
   it('handles desktop session lookups for public requests, expired tailnet sessions, and valid desktop sessions', () => {
-    const harness = createDesktopHarness();
+    const harness = createHarness();
     const [sessionHandler] = harness.getHandler('/api/desktop-auth/session');
 
     const publicRes = createResponse();
@@ -199,13 +174,13 @@ describe('auth routes', () => {
     expect(validRes.json).toHaveBeenCalledWith({ required: true, session });
   });
 
-  it('handles desktop auth exchange, logout, and companion admin routes', () => {
-    const harness = createDesktopHarness();
+  it('handles desktop auth exchange, logout, and remote access admin routes', () => {
+    const harness = createHarness();
     const desktopExchangeHandlers = harness.postHandler('/api/desktop-auth/exchange');
     const desktopLogoutHandlers = harness.postHandler('/api/desktop-auth/logout');
-    const [adminStateHandler] = harness.getHandler('/api/companion-auth');
-    const [pairingCodeHandler] = harness.postHandler('/api/companion-auth/pairing-code');
-    const [revokeSessionHandler] = harness.deleteHandler('/api/companion-auth/sessions/:sessionId');
+    const [adminStateHandler] = harness.getHandler('/api/remote-access');
+    const [pairingCodeHandler] = harness.postHandler('/api/remote-access/pairing-code');
+    const [revokeSessionHandler] = harness.deleteHandler('/api/remote-access/sessions/:sessionId');
 
     expect(desktopExchangeHandlers).toHaveLength(2);
     expect(desktopExchangeHandlers[0]).toBe(rateLimitMiddlewareMock);
@@ -295,7 +270,7 @@ describe('auth routes', () => {
   });
 
   it('applies the desktop auth gate for auth endpoints, public requests, blocked tailnet requests, and valid desktop sessions', () => {
-    const harness = createDesktopHarness();
+    const harness = createHarness();
     const [desktopGate] = harness.useHandler('/api');
 
     const authPathNext = vi.fn();
@@ -335,105 +310,6 @@ describe('auth routes', () => {
       protocol: 'https',
     }), allowedRes, allowedNext);
     expect(allowedRes.cookie).toHaveBeenCalledWith('pa_web', 'desktop=token', expect.objectContaining({ secure: true }));
-    expect(allowedNext).toHaveBeenCalledTimes(1);
-  });
-
-  it('handles companion auth exchange, session lookups, and logout', () => {
-    const harness = createCompanionHarness();
-    const companionExchangeHandlers = harness.postHandler('/api/companion-auth/exchange');
-    const [companionSessionHandler] = harness.getHandler('/api/companion-auth/session');
-    const [companionLogoutHandler] = harness.postHandler('/api/companion-auth/logout');
-
-    expect(companionExchangeHandlers).toHaveLength(2);
-    expect(companionExchangeHandlers[0]).toBe(rateLimitMiddlewareMock);
-
-    const missingCodeRes = createResponse();
-    companionExchangeHandlers[1]!(createRequest({ body: {} }), missingCodeRes);
-    expect(missingCodeRes.status).toHaveBeenCalledWith(400);
-    expect(missingCodeRes.json).toHaveBeenCalledWith({ error: 'Pairing code required.' });
-
-    const companionSession = { id: 'companion-session' };
-    exchangeCompanionPairingCodeMock.mockReturnValueOnce({ sessionToken: 'companion=token', session: companionSession });
-    const exchangeRes = createResponse();
-    companionExchangeHandlers[1]!(createRequest({
-      body: { code: 'PAIR-5678', deviceLabel: 'iPhone' },
-      headers: { host: 'localhost:3000' },
-    }), exchangeRes);
-    expect(exchangeCompanionPairingCodeMock).toHaveBeenCalledWith('PAIR-5678', { deviceLabel: 'iPhone', surface: 'companion' });
-    expect(exchangeRes.cookie).toHaveBeenCalledWith('pa_companion', 'companion=token', expect.objectContaining({ secure: false }));
-    expect(exchangeRes.status).toHaveBeenCalledWith(201);
-    expect(exchangeRes.json).toHaveBeenCalledWith({ session: companionSession });
-
-    exchangeCompanionPairingCodeMock.mockImplementationOnce(() => {
-      throw new Error('Pairing code is invalid or expired.');
-    });
-    const invalidExchangeRes = createResponse();
-    companionExchangeHandlers[1]!(createRequest({ body: { code: 'expired' } }), invalidExchangeRes);
-    expect(invalidExchangeRes.status).toHaveBeenCalledWith(400);
-    expect(invalidExchangeRes.json).toHaveBeenCalledWith({ error: 'Pairing code is invalid or expired.' });
-
-    readCompanionSessionMock.mockReturnValueOnce(null);
-    const missingSessionRes = createResponse();
-    companionSessionHandler(createRequest({ headers: { host: 'localhost:3000' } }), missingSessionRes);
-    expect(missingSessionRes.status).toHaveBeenCalledWith(401);
-    expect(missingSessionRes.json).toHaveBeenCalledWith({ error: 'Companion sign-in required.' });
-
-    readCompanionSessionMock.mockReturnValueOnce(companionSession);
-    const sessionRes = createResponse();
-    companionSessionHandler(createRequest({
-      headers: {
-        cookie: 'pa_companion=companion%3Dtoken',
-        host: 'device.ts.net',
-      },
-      protocol: 'https',
-    }), sessionRes);
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('companion=token', { surface: 'companion' });
-    expect(sessionRes.cookie).toHaveBeenCalledWith('pa_companion', 'companion=token', expect.objectContaining({ secure: true }));
-    expect(sessionRes.json).toHaveBeenCalledWith({ session: companionSession });
-
-    const logoutRes = createResponse();
-    companionLogoutHandler(createRequest({ headers: { cookie: 'pa_companion=companion%3Dtoken', host: 'localhost:3000' } }), logoutRes);
-    expect(revokeCompanionSessionByTokenMock).toHaveBeenCalledWith('companion=token');
-    expect(logoutRes.clearCookie).toHaveBeenCalledWith('pa_companion', expect.objectContaining({ secure: false, path: '/' }));
-    expect(logoutRes.json).toHaveBeenCalledWith({ ok: true });
-  });
-
-  it('applies the companion auth gate for auth endpoints, blocked requests, and valid sessions', () => {
-    const harness = createCompanionHarness();
-    const [companionGate] = harness.useHandler('/api');
-
-    const authPathNext = vi.fn();
-    companionGate(createRequest({ path: '/companion-auth/exchange' }), createResponse(), authPathNext);
-    expect(authPathNext).toHaveBeenCalledTimes(1);
-
-    readCompanionSessionMock.mockReturnValueOnce(null);
-    const blockedRes = createResponse();
-    const blockedNext = vi.fn();
-    companionGate(createRequest({
-      path: '/tasks',
-      headers: {
-        cookie: 'pa_companion=companion%3Dtoken',
-        host: 'localhost:3000',
-      },
-    }), blockedRes, blockedNext);
-    expect(readCompanionSessionMock).toHaveBeenCalledWith('companion=token', { surface: 'companion' });
-    expect(blockedRes.status).toHaveBeenCalledWith(401);
-    expect(blockedRes.json).toHaveBeenCalledWith({ error: 'Companion sign-in required.' });
-    expect(blockedRes.clearCookie).toHaveBeenCalledWith('pa_companion', expect.objectContaining({ secure: false, path: '/' }));
-    expect(blockedNext).not.toHaveBeenCalled();
-
-    readCompanionSessionMock.mockReturnValueOnce({ id: 'companion-session' });
-    const allowedRes = createResponse();
-    const allowedNext = vi.fn();
-    companionGate(createRequest({
-      path: '/tasks',
-      headers: {
-        cookie: 'pa_companion=companion%3Dtoken',
-        host: 'device.ts.net',
-      },
-      protocol: 'https',
-    }), allowedRes, allowedNext);
-    expect(allowedRes.cookie).toHaveBeenCalledWith('pa_companion', 'companion=token', expect.objectContaining({ secure: true }));
     expect(allowedNext).toHaveBeenCalledTimes(1);
   });
 });

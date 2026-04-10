@@ -914,17 +914,17 @@ describe('api desktop transport', () => {
       },
       log: { lines: [] },
     });
-    const readCompanionAuthState = vi.fn().mockResolvedValue({
+    const readRemoteAccessState = vi.fn().mockResolvedValue({
       pendingPairings: [],
       sessions: [{ id: 'session-1', label: 'iPhone' }],
     });
-    const createCompanionPairingCode = vi.fn().mockResolvedValue({
+    const createRemoteAccessPairingCode = vi.fn().mockResolvedValue({
       id: 'pairing-1',
       code: '123456',
       createdAt: '2026-04-15T10:00:00.000Z',
       expiresAt: '2026-04-15T10:10:00.000Z',
     });
-    const revokeCompanionSession = vi.fn().mockResolvedValue({
+    const revokeRemoteAccessSession = vi.fn().mockResolvedValue({
       ok: true,
       state: { pendingPairings: [], sessions: [] },
     });
@@ -950,9 +950,9 @@ describe('api desktop transport', () => {
           canManageConnections: true,
         }),
         updateWebUiConfig,
-        readCompanionAuthState,
-        createCompanionPairingCode,
-        revokeCompanionSession,
+        readRemoteAccessState,
+        createRemoteAccessPairingCode,
+        revokeRemoteAccessSession,
         readOpenConversationTabs,
         updateOpenConversationTabs,
       },
@@ -960,16 +960,16 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
-    const authState = await api.companionAuthState();
-    const pairing = await api.createCompanionPairingCode();
-    const revoked = await api.revokeCompanionSession('session-1');
+    const authState = await api.remoteAccessState();
+    const pairing = await api.createRemoteAccessPairingCode();
+    const revoked = await api.revokeRemoteAccessSession('session-1');
     const layout = await api.openConversationTabs();
     const savedLayout = await api.setOpenConversationTabs(['conversation-4'], ['conversation-5'], ['conversation-6']);
 
     expect(updateWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
-    expect(readCompanionAuthState).toHaveBeenCalledTimes(1);
-    expect(createCompanionPairingCode).toHaveBeenCalledTimes(1);
-    expect(revokeCompanionSession).toHaveBeenCalledWith('session-1');
+    expect(readRemoteAccessState).toHaveBeenCalledTimes(1);
+    expect(createRemoteAccessPairingCode).toHaveBeenCalledTimes(1);
+    expect(revokeRemoteAccessSession).toHaveBeenCalledWith('session-1');
     expect(readOpenConversationTabs).toHaveBeenCalledTimes(1);
     expect(updateOpenConversationTabs).toHaveBeenCalledWith({
       sessionIds: ['conversation-4'],
@@ -1559,9 +1559,9 @@ describe('api desktop transport', () => {
       }));
     vi.stubGlobal('fetch', fetchMock);
     const updateWebUiConfig = vi.fn();
-    const readCompanionAuthState = vi.fn();
-    const createCompanionPairingCode = vi.fn();
-    const revokeCompanionSession = vi.fn();
+    const readRemoteAccessState = vi.fn();
+    const createRemoteAccessPairingCode = vi.fn();
+    const revokeRemoteAccessSession = vi.fn();
     const readOpenConversationTabs = vi.fn();
     const updateOpenConversationTabs = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -1575,9 +1575,9 @@ describe('api desktop transport', () => {
           canManageConnections: true,
         }),
         updateWebUiConfig,
-        readCompanionAuthState,
-        createCompanionPairingCode,
-        revokeCompanionSession,
+        readRemoteAccessState,
+        createRemoteAccessPairingCode,
+        revokeRemoteAccessSession,
         readOpenConversationTabs,
         updateOpenConversationTabs,
       },
@@ -1585,16 +1585,16 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
-    const authState = await api.companionAuthState();
-    const pairing = await api.createCompanionPairingCode();
-    const revoked = await api.revokeCompanionSession('session-1');
+    const authState = await api.remoteAccessState();
+    const pairing = await api.createRemoteAccessPairingCode();
+    const revoked = await api.revokeRemoteAccessSession('session-1');
     const layout = await api.openConversationTabs();
     const savedLayout = await api.setOpenConversationTabs(['conversation-4'], ['conversation-5'], ['conversation-6']);
 
     expect(updateWebUiConfig).not.toHaveBeenCalled();
-    expect(readCompanionAuthState).not.toHaveBeenCalled();
-    expect(createCompanionPairingCode).not.toHaveBeenCalled();
-    expect(revokeCompanionSession).not.toHaveBeenCalled();
+    expect(readRemoteAccessState).not.toHaveBeenCalled();
+    expect(createRemoteAccessPairingCode).not.toHaveBeenCalled();
+    expect(revokeRemoteAccessSession).not.toHaveBeenCalled();
     expect(readOpenConversationTabs).not.toHaveBeenCalled();
     expect(updateOpenConversationTabs).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/web-ui/config', {
@@ -1602,13 +1602,13 @@ describe('api desktop transport', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resumeFallbackPrompt: 'Resume the task.' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/companion-auth', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/companion-auth/pairing-code', {
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/remote-access', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/remote-access/pairing-code', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: undefined,
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/companion-auth/sessions/session-1', {
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/remote-access/sessions/session-1', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: undefined,

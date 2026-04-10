@@ -30,9 +30,9 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopDaemonState: vi.fn(),
     readDesktopWebUiState: vi.fn(),
     updateDesktopWebUiConfig: vi.fn(),
-    readDesktopCompanionAuthState: vi.fn(),
-    createDesktopCompanionPairingCode: vi.fn(),
-    revokeDesktopCompanionSession: vi.fn(),
+    readDesktopRemoteAccessState: vi.fn(),
+    createDesktopRemoteAccessPairingCode: vi.fn(),
+    revokeDesktopRemoteAccessSession: vi.fn(),
     readDesktopSessions: vi.fn(),
     readDesktopSessionMeta: vi.fn(),
     readDesktopSessionSearchIndex: vi.fn(),
@@ -214,17 +214,17 @@ describe('LocalHostController', () => {
       },
       log: { lines: [] },
     });
-    const readDesktopCompanionAuthState = vi.fn().mockResolvedValue({
+    const readDesktopRemoteAccessState = vi.fn().mockResolvedValue({
       pendingPairings: [],
       sessions: [{ id: 'session-1', label: 'iPhone' }],
     });
-    const createDesktopCompanionPairingCode = vi.fn().mockResolvedValue({
+    const createDesktopRemoteAccessPairingCode = vi.fn().mockResolvedValue({
       id: 'pairing-1',
       code: '123456',
       createdAt: '2026-04-15T10:00:00.000Z',
       expiresAt: '2026-04-15T10:10:00.000Z',
     });
-    const revokeDesktopCompanionSession = vi.fn().mockResolvedValue({
+    const revokeDesktopRemoteAccessSession = vi.fn().mockResolvedValue({
       ok: true,
       state: { pendingPairings: [], sessions: [] },
     });
@@ -241,9 +241,9 @@ describe('LocalHostController', () => {
     });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       updateDesktopWebUiConfig,
-      readDesktopCompanionAuthState,
-      createDesktopCompanionPairingCode,
-      revokeDesktopCompanionSession,
+      readDesktopRemoteAccessState,
+      createDesktopRemoteAccessPairingCode,
+      revokeDesktopRemoteAccessSession,
       readDesktopOpenConversationTabs,
       updateDesktopOpenConversationTabs,
     }));
@@ -265,17 +265,17 @@ describe('LocalHostController', () => {
       },
       log: { lines: [] },
     });
-    await expect(controller.readCompanionAuthState?.()).resolves.toEqual({
+    await expect(controller.readRemoteAccessState?.()).resolves.toEqual({
       pendingPairings: [],
       sessions: [{ id: 'session-1', label: 'iPhone' }],
     });
-    await expect(controller.createCompanionPairingCode?.()).resolves.toEqual({
+    await expect(controller.createRemoteAccessPairingCode?.()).resolves.toEqual({
       id: 'pairing-1',
       code: '123456',
       createdAt: '2026-04-15T10:00:00.000Z',
       expiresAt: '2026-04-15T10:10:00.000Z',
     });
-    await expect(controller.revokeCompanionSession?.('session-1')).resolves.toEqual({
+    await expect(controller.revokeRemoteAccessSession?.('session-1')).resolves.toEqual({
       ok: true,
       state: { pendingPairings: [], sessions: [] },
     });
@@ -292,9 +292,9 @@ describe('LocalHostController', () => {
     });
 
     expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
-    expect(readDesktopCompanionAuthState).toHaveBeenCalledTimes(1);
-    expect(createDesktopCompanionPairingCode).toHaveBeenCalledTimes(1);
-    expect(revokeDesktopCompanionSession).toHaveBeenCalledWith('session-1');
+    expect(readDesktopRemoteAccessState).toHaveBeenCalledTimes(1);
+    expect(createDesktopRemoteAccessPairingCode).toHaveBeenCalledTimes(1);
+    expect(revokeDesktopRemoteAccessSession).toHaveBeenCalledWith('session-1');
     expect(readDesktopOpenConversationTabs).toHaveBeenCalledTimes(1);
     expect(updateDesktopOpenConversationTabs).toHaveBeenCalledWith({
       sessionIds: ['conversation-4'],

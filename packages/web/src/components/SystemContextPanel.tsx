@@ -104,7 +104,7 @@ function buildPanel(selected: SystemPanelData) {
 
 function RemotePairingSection({ data }: { data: WebUiState }) {
   const remoteAccess = buildWebUiRemoteAccessSummary(data.service);
-  const { data: authState, loading, error, refetch } = useApi(api.companionAuthState, 'system-remote-auth');
+  const { data: authState, loading, error, refetch } = useApi(api.remoteAccessState, 'system-remote-auth');
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
   const [pairingBusy, setPairingBusy] = useState(false);
@@ -119,7 +119,7 @@ function RemotePairingSection({ data }: { data: WebUiState }) {
     setPairingBusy(true);
     setActionError(null);
     try {
-      const created = await api.createCompanionPairingCode();
+      const created = await api.createRemoteAccessPairingCode();
       setPairingCode(created.code);
       setPairingExpiresAt(created.expiresAt);
       await refetch({ resetLoading: false });
@@ -138,7 +138,7 @@ function RemotePairingSection({ data }: { data: WebUiState }) {
     setRevokeBusyId(sessionId);
     setActionError(null);
     try {
-      await api.revokeCompanionSession(sessionId);
+      await api.revokeRemoteAccessSession(sessionId);
       await refetch({ resetLoading: false });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
@@ -183,7 +183,7 @@ function RemotePairingSection({ data }: { data: WebUiState }) {
               <div key={session.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-medium text-primary">{session.deviceLabel}</p>
-                  <p className="mt-1 text-[11px] text-secondary">{session.surface === 'desktop' ? 'Remote browser' : 'Legacy companion'} · Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
+                  <p className="mt-1 text-[11px] text-secondary">{session.surface === 'desktop' ? 'Remote browser' : 'Legacy paired app'} · Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
                 </div>
                 <button
                   type="button"

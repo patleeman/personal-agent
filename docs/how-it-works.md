@@ -53,7 +53,7 @@ Common pieces:
 
 - `config/config.json` — machine config, selected default profile, web UI prefs, vault override
 - `daemon/` — daemon socket, log, runtime DB, durable runs
-- `web/` — companion auth and web runtime state
+- `web/` — remote browser pairing state and web runtime state
 - `desktop/` — Electron desktop config and logs
 - `sync/{_tasks|tasks}/` — scheduled task files
 
@@ -93,7 +93,7 @@ Those layers are materialized into the runtime that Pi actually sees.
 
 ### Web UI
 
-The web UI is the main day-to-day operator surface. It exposes conversations, inbox, automations, tools, instructions, settings, and a narrower companion/mobile surface.
+The web UI is the main day-to-day operator surface. It exposes conversations, inbox, automations, tools, instructions, settings, and optional remote browser access when served over the tailnet.
 
 ### Electron desktop shell
 

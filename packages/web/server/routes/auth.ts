@@ -10,9 +10,8 @@ import {
 import { createInMemoryRateLimit, resolveRequestOrigin } from '../middleware/index.js';
 
 const DESKTOP_SESSION_COOKIE = 'pa_web';
-const COMPANION_SESSION_COOKIE = 'pa_companion';
 
-const companionAuthExchangeRateLimit = createInMemoryRateLimit({
+const remoteAccessExchangeRateLimit = createInMemoryRateLimit({
   windowMs: 60_000,
   maxRequests: 10,
   key: (req) => req.ip || req.socket.remoteAddress || 'unknown',
@@ -113,38 +112,6 @@ function shouldRequireDesktopSession(req: Request): boolean {
   return isTailnetDesktopRequest(req);
 }
 
-function setCompanionSessionCookie(req: Request, res: Response, token: string): void {
-  res.cookie(COMPANION_SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: shouldUseSecureAuthCookie(req),
-    path: '/',
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  });
-}
-
-function clearCompanionSessionCookie(req: Request, res: Response): void {
-  res.clearCookie(COMPANION_SESSION_COOKIE, {
-    httpOnly: true,
-    sameSite: 'strict',
-    secure: shouldUseSecureAuthCookie(req),
-    path: '/',
-  });
-}
-
-function ensureCompanionSession(req: Request, res: Response): ReturnType<typeof readCompanionSession> {
-  const sessionToken = readCookieValue(req, COMPANION_SESSION_COOKIE);
-  const session = readCompanionSession(sessionToken, { surface: 'companion' });
-  if (!session) {
-    clearCompanionSessionCookie(req, res);
-    res.status(401).json({ error: 'Companion sign-in required.' });
-    return null;
-  }
-
-  setCompanionSessionCookie(req, res, sessionToken);
-  return session;
-}
-
 function handleDesktopAuthSessionRequest(req: Request, res: Response): void {
   const required = shouldRequireDesktopSession(req);
   if (!required) {
@@ -182,42 +149,7 @@ function handleDesktopAuthLogoutRequest(req: Request, res: Response): void {
   res.json({ ok: true });
 }
 
-function handleCompanionAuthExchangeRequest(req: Request, res: Response): void {
-  try {
-    const { code, deviceLabel } = req.body as { code?: unknown; deviceLabel?: unknown };
-    if (typeof code !== 'string' || code.trim().length === 0) {
-      res.status(400).json({ error: 'Pairing code required.' });
-      return;
-    }
-
-    const exchanged = exchangeCompanionPairingCode(code, {
-      ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
-      surface: 'companion',
-    });
-    setCompanionSessionCookie(req, res, exchanged.sessionToken);
-    res.status(201).json({ session: exchanged.session });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(message.includes('invalid or expired') ? 400 : 500).json({ error: message });
-  }
-}
-
-function handleCompanionAuthSessionRequest(req: Request, res: Response): void {
-  const session = ensureCompanionSession(req, res);
-  if (!session) {
-    return;
-  }
-
-  res.json({ session });
-}
-
-function handleCompanionAuthLogoutRequest(req: Request, res: Response): void {
-  revokeCompanionSessionByToken(readCookieValue(req, COMPANION_SESSION_COOKIE));
-  clearCompanionSessionCookie(req, res);
-  res.json({ ok: true });
-}
-
-function handleCompanionAuthStateRequest(_req: Request, res: Response): void {
+function handleRemoteAccessStateRequest(_req: Request, res: Response): void {
   try {
     res.json(readCompanionAuthAdminState());
   } catch (err) {
@@ -225,7 +157,7 @@ function handleCompanionAuthStateRequest(_req: Request, res: Response): void {
   }
 }
 
-function handleCompanionAuthCreatePairingCodeRequest(_req: Request, res: Response): void {
+function handleRemoteAccessCreatePairingCodeRequest(_req: Request, res: Response): void {
   try {
     res.status(201).json(createCompanionPairingCode());
   } catch (err) {
@@ -233,7 +165,7 @@ function handleCompanionAuthCreatePairingCodeRequest(_req: Request, res: Respons
   }
 }
 
-function handleCompanionAuthRevokeSessionRequest(req: Request, res: Response): void {
+function handleRemoteAccessRevokeSessionRequest(req: Request, res: Response): void {
   try {
     revokeCompanionSession(req.params.sessionId);
     res.json({ ok: true, state: readCompanionAuthAdminState() });
@@ -260,43 +192,20 @@ function handleDesktopAuthGate(req: Request, res: Response, next: NextFunction):
   next();
 }
 
-function handleCompanionAuthGate(req: Request, res: Response, next: NextFunction): void {
-  if (req.path === '/companion-auth/session' || req.path === '/companion-auth/exchange' || req.path === '/companion-auth/logout') {
-    next();
-    return;
-  }
-
-  if (!ensureCompanionSession(req, res)) {
-    return;
-  }
-
-  next();
-}
-
-function registerCompanionAuthAdminRoutes(app: Express): void {
-  app.get('/api/companion-auth', handleCompanionAuthStateRequest);
-  app.post('/api/companion-auth/pairing-code', handleCompanionAuthCreatePairingCodeRequest);
-  app.delete('/api/companion-auth/sessions/:sessionId', handleCompanionAuthRevokeSessionRequest);
+function registerRemoteAccessAdminRoutes(app: Express): void {
+  app.get('/api/remote-access', handleRemoteAccessStateRequest);
+  app.post('/api/remote-access/pairing-code', handleRemoteAccessCreatePairingCodeRequest);
+  app.delete('/api/remote-access/sessions/:sessionId', handleRemoteAccessRevokeSessionRequest);
 }
 
 export function registerAuthRoutes(app: Express): void {
   app.get('/api/desktop-auth/session', handleDesktopAuthSessionRequest);
-  app.post('/api/desktop-auth/exchange', companionAuthExchangeRateLimit, handleDesktopAuthExchangeRequest);
+  app.post('/api/desktop-auth/exchange', remoteAccessExchangeRateLimit, handleDesktopAuthExchangeRequest);
   app.post('/api/desktop-auth/logout', handleDesktopAuthLogoutRequest);
 
   app.use('/api', (req, res, next) => {
     handleDesktopAuthGate(req, res, next);
   });
 
-  registerCompanionAuthAdminRoutes(app);
-}
-
-export function registerCompanionAuthRoutes(app: Express): void {
-  app.post('/api/companion-auth/exchange', companionAuthExchangeRateLimit, handleCompanionAuthExchangeRequest);
-  app.get('/api/companion-auth/session', handleCompanionAuthSessionRequest);
-  app.post('/api/companion-auth/logout', handleCompanionAuthLogoutRequest);
-
-  app.use('/api', (req, res, next) => {
-    handleCompanionAuthGate(req, res, next);
-  });
+  registerRemoteAccessAdminRoutes(app);
 }

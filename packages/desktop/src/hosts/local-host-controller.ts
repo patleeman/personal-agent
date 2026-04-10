@@ -97,19 +97,19 @@ export class LocalHostController implements HostController {
     return module.updateDesktopWebUiConfig(input);
   }
 
-  async readCompanionAuthState(): Promise<unknown> {
+  async readRemoteAccessState(): Promise<unknown> {
     const module = await this.loadLocalApi();
-    return module.readDesktopCompanionAuthState();
+    return module.readDesktopRemoteAccessState();
   }
 
-  async createCompanionPairingCode(): Promise<unknown> {
+  async createRemoteAccessPairingCode(): Promise<unknown> {
     const module = await this.loadLocalApi();
-    return module.createDesktopCompanionPairingCode();
+    return module.createDesktopRemoteAccessPairingCode();
   }
 
-  async revokeCompanionSession(sessionId: string): Promise<{ ok: boolean; state: unknown }> {
+  async revokeRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: unknown }> {
     const module = await this.loadLocalApi();
-    return module.revokeDesktopCompanionSession(sessionId);
+    return module.revokeDesktopRemoteAccessSession(sessionId);
   }
 
   async readSessions(): Promise<unknown> {

@@ -256,9 +256,9 @@ export interface HostController {
   readDaemonState?(): Promise<unknown>;
   readWebUiState?(): Promise<unknown>;
   updateWebUiConfig?(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<unknown>;
-  readCompanionAuthState?(): Promise<unknown>;
-  createCompanionPairingCode?(): Promise<unknown>;
-  revokeCompanionSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
+  readRemoteAccessState?(): Promise<unknown>;
+  createRemoteAccessPairingCode?(): Promise<unknown>;
+  revokeRemoteAccessSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readSessions?(): Promise<unknown>;
   readSessionMeta?(sessionId: string): Promise<unknown>;
   readSessionSearchIndex?(sessionIds: string[]): Promise<unknown>;

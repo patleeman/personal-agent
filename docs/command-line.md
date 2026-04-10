@@ -90,7 +90,7 @@ Notes:
 - `pa ui` with no subcommand shows status and hints
 - `pa ui foreground --open` is the fastest local launch
 - managed web UI service commands use launchd on macOS and systemd user services on Linux
-- `pa ui pairing-code` creates a short-lived pairing code for remote desktop or companion access
+- `pa ui pairing-code` creates a short-lived pairing code for remote browser access
 
 ## Daemon
 

@@ -133,7 +133,7 @@ Pairing model:
 
 - generate a short-lived pairing code from the local desktop UI or `pa ui pairing-code`
 - codes expire after 10 minutes
-- paired desktop/companion sessions refresh while they are actively used
+- paired remote browser sessions refresh while they are actively used
 - idle paired sessions expire after 30 days unless revoked sooner
 
 ## Live updates

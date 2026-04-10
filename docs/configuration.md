@@ -115,7 +115,7 @@ Important subtrees:
 
 - `daemon/` — socket, logs, `runtime.db`, durable runs
 - `desktop/` — desktop config and logs
-- `web/` — companion auth and web runtime state
+- `web/` — remote browser pairing state and web runtime state
 - `sync/{_tasks|tasks}/` — scheduled task files
 
 ## Desktop config

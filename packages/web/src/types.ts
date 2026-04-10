@@ -648,7 +648,7 @@ export interface LiveSessionExportResult {
   path: string;
 }
 
-export interface CompanionAuthSessionSummary {
+export interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
   surface: 'companion' | 'desktop';
@@ -658,16 +658,16 @@ export interface CompanionAuthSessionSummary {
   revokedAt?: string;
 }
 
-export interface CompanionAuthAdminState {
+export interface RemoteAccessAdminState {
   pendingPairings: Array<{
     id: string;
     createdAt: string;
     expiresAt: string;
   }>;
-  sessions: CompanionAuthSessionSummary[];
+  sessions: RemoteAccessSessionSummary[];
 }
 
-export interface CompanionPairingCodeResult {
+export interface RemoteAccessPairingCodeResult {
   id: string;
   code: string;
   createdAt: string;
@@ -676,7 +676,7 @@ export interface CompanionPairingCodeResult {
 
 export interface DesktopAuthSessionState {
   required: boolean;
-  session: CompanionAuthSessionSummary | null;
+  session: RemoteAccessSessionSummary | null;
 }
 
 export type DesktopHostRecord =

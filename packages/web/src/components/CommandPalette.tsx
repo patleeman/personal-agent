@@ -167,7 +167,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       id: 'nav:web-ui',
       section: 'nav',
       title: 'Web UI',
-      subtitle: 'Inspect release, companion access, and frontend logs',
+      subtitle: 'Inspect release, remote access, and frontend logs',
       keywords: ['system', 'web ui', 'frontend', 'release', 'desktop', 'pairing'],
       order: 14,
       action: { kind: 'navigate', to: '/settings?page=system-web-ui' },

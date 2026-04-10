@@ -73,7 +73,7 @@ The local desktop host:
 - loads the packaged renderer over `personal-agent://app/`
 - resolves local JSON API requests and event streams through the Electron main process instead of a loopback web child
 - keeps that local runtime warm for as long as the menubar app stays open
-- does not expose the companion surface from the packaged desktop shell
+- does not expose any separate companion/mobile surface from the packaged desktop shell
 - refuses to start if another daemon is already running
 
 ### Web remote host
@@ -115,8 +115,8 @@ That means:
 
 ## Current limitations
 
-- the desktop-owned local backend intentionally does not expose the companion surface
-- remote browser or companion access still requires a separately managed web UI
+- the desktop-owned local backend intentionally does not expose any separate companion/mobile surface
+- remote browser access still requires a separately managed web UI
 - the desktop shell does not reuse an already-running external local daemon/web UI pair
 
 ## Related docs

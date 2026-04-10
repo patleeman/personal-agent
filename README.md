@@ -10,7 +10,7 @@ It keeps repo-managed defaults in git, durable knowledge in an external vault, a
 - external durable vault at `~/Documents/personal-agent` for `_profiles`, `_skills`, `notes`, and `projects`
 - daemon-backed runs, scheduled tasks, deferred resumes, reminders, inbox delivery, and wakeups
 - web UI for conversations, notifications, automations, tools, instructions, and settings
-- paired companion/mobile surface under `/app` when the web UI is exposed through Tailscale Serve
+- optional remote browser access over Tailscale Serve when the web UI is exposed on the tailnet
 - Electron desktop shell that owns a local backend and can connect to saved web or SSH hosts
 - MCP inspection/calls plus package-source installs for extending Pi
 
@@ -32,7 +32,7 @@ Start with:
 - `docs/getting-started.md` — install and first-run flow
 - `docs/decision-guide.md` — which surface to use
 - `docs/how-it-works.md` — durable-state mental model
-- `docs/web-ui.md` — desktop web UI, companion, pairing, and live updates
+- `docs/web-ui.md` — desktop web UI, remote browser pairing, and live updates
 - `docs/electron-desktop-app-plan.md` — current desktop-shell overview
 - `docs/command-line.md` — `pa` command guide
 

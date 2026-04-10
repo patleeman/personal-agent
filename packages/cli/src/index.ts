@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
-import { createConnection, createServer } from 'net';
+import { createConnection } from 'net';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -3951,64 +3951,6 @@ async function isLocalPortListening(port: number): Promise<boolean> {
   });
 }
 
-async function isLocalPortAvailable(port: number): Promise<boolean> {
-  return new Promise((resolvePromise) => {
-    let settled = false;
-    const server = createServer();
-    server.unref();
-
-    const finish = (result: boolean) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-
-      if (result) {
-        server.close(() => resolvePromise(true));
-        return;
-      }
-
-      try {
-        server.close(() => resolvePromise(false));
-      } catch {
-        resolvePromise(false);
-      }
-    };
-
-    server.once('error', () => finish(false));
-    server.listen(port, '127.0.0.1', () => finish(true));
-  });
-}
-
-async function resolveForegroundCompanionPort(preferredPort: number, uiPort: number): Promise<{ port: number; adjusted: boolean }> {
-  if (preferredPort !== uiPort && await isLocalPortAvailable(preferredPort)) {
-    return { port: preferredPort, adjusted: false };
-  }
-
-  for (let candidate = uiPort + 1; candidate <= 65535; candidate += 1) {
-    if (candidate === preferredPort) {
-      continue;
-    }
-
-    if (await isLocalPortAvailable(candidate)) {
-      return { port: candidate, adjusted: true };
-    }
-  }
-
-  for (let candidate = uiPort - 1; candidate >= 1; candidate -= 1) {
-    if (candidate === preferredPort) {
-      continue;
-    }
-
-    if (await isLocalPortAvailable(candidate)) {
-      return { port: candidate, adjusted: true };
-    }
-  }
-
-  throw new Error(`Could not find a free companion port for web UI foreground launch (ui port ${uiPort}, preferred companion port ${preferredPort}).`);
-}
-
 async function showWebUiStatus(
   args: string[],
   displayOptions: { showNextStep?: boolean } = {},
@@ -4104,7 +4046,7 @@ function printWebUiHelp(options: { title?: string; includeNextStep?: boolean } =
     { usage: 'pa ui open', description: 'Open the web UI in a browser' },
     { usage: 'pa ui foreground [--open]', description: 'Run the web UI in the foreground' },
     { usage: 'pa ui logs [--tail <count>]', description: 'Show recent managed web UI logs' },
-    { usage: 'pa ui pairing-code', description: 'Create a pairing code for remote desktop or companion access' },
+    { usage: 'pa ui pairing-code', description: 'Create a pairing code for remote browser access' },
     { usage: 'pa ui install', description: 'Install and start managed web UI service' },
     { usage: 'pa ui start', description: 'Start managed web UI service' },
     { usage: 'pa ui stop', description: 'Stop managed web UI service' },
@@ -4202,7 +4144,7 @@ function showWebUiLogs(args: string[]): void {
 }
 
 async function createWebUiPairingCode(port: number): Promise<{ id: string; code: string; createdAt: string; expiresAt: string }> {
-  const url = `http://127.0.0.1:${port}/api/companion-auth/pairing-code`;
+  const url = `http://127.0.0.1:${port}/api/remote-access/pairing-code`;
 
   let response: Response;
   try {
@@ -4246,16 +4188,14 @@ async function showWebUiPairingCode(args: string[]): Promise<void> {
   console.log(keyValue('Expires', new Date(created.expiresAt).toLocaleString()));
   console.log(keyValue('Port', String(parsed.value)));
   if (tailscaleUrl) {
-    console.log(keyValue('Desktop URL', tailscaleUrl));
-    console.log(keyValue('Companion URL', `${tailscaleUrl.replace(/\/+$/, '')}/app`));
+    console.log(keyValue('Browser URL', tailscaleUrl));
   }
-  console.log(dim('Use this one-time code to pair a remote desktop browser or the companion app. Once paired, the browser stays signed in until you revoke it.'));
+  console.log(dim('Use this one-time code to pair a remote browser session. Once paired, the browser stays signed in until you revoke it.'));
 }
 
 function syncWebUiTailscaleServeFromCli(input: {
   enabled: boolean;
   port: number;
-  companionPort: number;
   strict: boolean;
   context: string;
 }): void {
@@ -4263,9 +4203,8 @@ function syncWebUiTailscaleServeFromCli(input: {
     syncWebUiTailscaleServe({
       enabled: input.enabled,
       port: input.port,
-      companionPort: input.companionPort,
     });
-    console.log(keyValue('Tailscale Serve', `${input.enabled ? 'enabled' : 'disabled'} · / → localhost:${input.port}, /app → localhost:${input.companionPort}`));
+    console.log(keyValue('Tailscale Serve', `${input.enabled ? 'enabled' : 'disabled'} · / → localhost:${input.port}`));
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     if (input.strict) {
@@ -4302,7 +4241,6 @@ async function runWebUiServiceAction(action: string, args: string[], commandPref
     syncWebUiTailscaleServeFromCli({
       enabled: parsedTailscaleServe.value,
       port: desiredConfig.port,
-      companionPort: desiredConfig.companionPort,
       strict: true,
       context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
     });
@@ -4318,7 +4256,6 @@ async function runWebUiServiceAction(action: string, args: string[], commandPref
       syncWebUiTailscaleServeFromCli({
         enabled: true,
         port: desiredConfig.port,
-        companionPort: desiredConfig.companionPort,
         strict: false,
         context: 'Could not re-apply configured Tailscale Serve setting',
       });
@@ -4348,7 +4285,6 @@ async function runWebUiServiceAction(action: string, args: string[], commandPref
       syncWebUiTailscaleServeFromCli({
         enabled: true,
         port: desiredConfig.port,
-        companionPort: desiredConfig.companionPort,
         strict: false,
         context: 'Could not re-apply configured Tailscale Serve setting',
       });
@@ -4373,7 +4309,6 @@ async function runWebUiServiceAction(action: string, args: string[], commandPref
         syncWebUiTailscaleServeFromCli({
           enabled: true,
           port: desiredConfig.port,
-          companionPort: desiredConfig.companionPort,
           strict: false,
           context: 'Could not re-apply configured Tailscale Serve setting',
         });
@@ -4426,7 +4361,6 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     syncWebUiTailscaleServeFromCli({
       enabled: parsedTailscaleServe.value,
       port: desiredConfig.port,
-      companionPort: desiredConfig.companionPort,
       strict: parsedTailscaleServe.value,
       context: `Could not ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
     });
@@ -4434,7 +4368,6 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     syncWebUiTailscaleServeFromCli({
       enabled: true,
       port: desiredConfig.port,
-      companionPort: desiredConfig.companionPort,
       strict: false,
       context: 'Could not re-apply configured Tailscale Serve setting',
     });
@@ -4471,22 +4404,6 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     }
   }
 
-  const launchCompanionPort = await resolveForegroundCompanionPort(desiredConfig.companionPort, desiredConfig.port);
-
-  if (launchCompanionPort.adjusted) {
-    console.log(`  ${warning(`Configured companion port ${desiredConfig.companionPort} is unavailable; using ${launchCompanionPort.port} for this foreground session`)}`);
-
-    if (desiredUseTailscaleServe) {
-      syncWebUiTailscaleServeFromCli({
-        enabled: true,
-        port: desiredConfig.port,
-        companionPort: launchCompanionPort.port,
-        strict: parsedTailscaleServe.explicit && parsedTailscaleServe.value,
-        context: 'Could not update Tailscale Serve for the foreground companion port',
-      });
-    }
-  }
-
   if (openBrowser) {
     setTimeout(() => {
       openWebUiInBrowser(url);
@@ -4500,7 +4417,6 @@ async function startForegroundWebUi(args: string[], commandPrefix = 'pa ui foreg
     env: {
       ...process.env,
       PA_WEB_PORT: String(portParse.value),
-      PA_WEB_COMPANION_PORT: String(launchCompanionPort.port),
       PA_WEB_DIST: distPath,
       PERSONAL_AGENT_REPO_ROOT: repoRoot,
       PERSONAL_AGENT_WEB_TAILSCALE_SERVE: String(desiredUseTailscaleServe),
