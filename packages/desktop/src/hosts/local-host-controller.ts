@@ -5,6 +5,9 @@ import type {
   DesktopApiStreamEvent,
   DesktopAppBridgeEvent,
   DesktopConversationBootstrapRequest,
+  DesktopConversationCwdChangeRequest,
+  DesktopConversationModelPreferencesRequest,
+  DesktopConversationModelPreferencesUpdateRequest,
   DesktopConversationRenameRequest,
   DesktopHostRecord,
   DesktopLiveSessionBranchRequest,
@@ -74,6 +77,21 @@ export class LocalHostController implements HostController {
   async renameConversation(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }> {
     const module = await this.loadLocalApi();
     return module.renameDesktopConversation(input);
+  }
+
+  async changeConversationCwd(input: DesktopConversationCwdChangeRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.changeDesktopConversationCwd(input);
+  }
+
+  async readConversationModelPreferences(input: DesktopConversationModelPreferencesRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationModelPreferences(input.conversationId);
+  }
+
+  async updateConversationModelPreferences(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.updateDesktopConversationModelPreferences(input);
   }
 
   async readLiveSession(conversationId: string): Promise<unknown> {

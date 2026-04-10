@@ -41,6 +41,12 @@ const desktopBridge = {
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-bootstrap`, input),
   renameConversation: (input: { conversationId: string; name: string; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:rename-conversation`, input),
+  changeConversationCwd: (input: { conversationId: string; cwd: string; surfaceId?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:change-conversation-cwd`, input),
+  readConversationModelPreferences: (input: { conversationId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, input),
+  updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
   readLiveSessionContext: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-context`, conversationId),
   readSessionDetail: (input: {

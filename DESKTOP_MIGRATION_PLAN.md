@@ -96,14 +96,14 @@ Goal: opening and using a conversation in local desktop mode should not depend o
 - [ ] Create local desktop conversation services in the main process.
 - [x] Reuse shared Node-side conversation logic without going through Express where practical.
 - [x] Replace local SSE conversation updates with IPC push/subscription flows.
-- [ ] Move conversation open, transcript updates, send, abort, rename, cwd change, fork, and branch to IPC-backed capabilities.
+- [x] Move conversation open, transcript updates, send, abort, rename, cwd change, fork, and branch to IPC-backed capabilities.
 - [x] Keep prewarming and transcript caches in the desktop-owned runtime.
 
 Success bar:
 
-- [ ] opening an existing conversation is IPC-only in local desktop mode
-- [ ] starting a new conversation is IPC-only in local desktop mode
-- [ ] sending and streaming replies are IPC-only in local desktop mode
+- [x] opening an existing conversation is IPC-only in local desktop mode
+- [x] starting a new conversation is IPC-only in local desktop mode
+- [x] sending and streaming replies are IPC-only in local desktop mode
 
 ### Phase 3 — Migrate desktop runtime state and background features
 
@@ -258,5 +258,7 @@ Just completed:
 - local desktop app invalidation/activity/session/task/daemon/web-ui updates can now bypass `/api/events` entirely and stream over a dedicated desktop app-events bridge from the main process
 - desktop Settings no longer hides runtime/service diagnostics just because the shell is Electron; local desktop hosts show app-owned runtime messaging while remote hosts still expose their runtime panels
 - local desktop live-session creation, resume, prompt send, takeover, queued prompt restore, compaction, reload, summarize-fork, branch/fork, destroy, and abort now run through dedicated desktop bridge methods instead of the generic local API path
-- local desktop conversation bootstrap, rename, live-session status/context reads, session detail windowing, and block hydrate now also use dedicated bridge methods backed by shared Node-side conversation services, while remote hosts keep the existing HTTP fallback
-- validation for this slice: targeted Vitest coverage for desktop bridge routing, local host controller routing, and live-session routes, `npm run desktop:build`, and agent-browser smoke checks against the built Electron app covering existing conversation open, rename, and local live-session control actions
+- local desktop conversation bootstrap, rename, cwd changes, live-session status/context reads, session detail windowing, and block hydrate now also use dedicated bridge methods backed by shared Node-side conversation services, while remote hosts keep the existing HTTP fallback
+- local desktop conversation model-preference reads and updates now use dedicated bridge methods instead of the generic local API path
+- packaged desktop local-api module loading now resolves the bundled `@personal-agent/web/dist-server/app/localApi.js` path in packaged builds instead of assuming a dev-worktree-relative module path
+- validation for this slice: targeted Vitest coverage for desktop bridge routing, local host controller routing, and packaged local-api module resolution, plus `npm --prefix packages/web run build` and `npm --prefix packages/desktop run build`

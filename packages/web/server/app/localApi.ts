@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -20,15 +20,19 @@ import {
   isMissingConversationBootstrapState,
   readConversationBootstrapState,
 } from '../conversations/conversationBootstrap.js';
+import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   publishConversationSessionMetaChanged,
+  readConversationModelPreferenceStateById,
   readConversationSessionSignature,
   readSessionDetailForRoute,
+  resolveConversationSessionFile,
 } from '../conversations/conversationService.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import {
   buildAppendOnlySessionDetailResponse,
   readSessionBlock,
+  readSessionBlocks,
   readSessionMeta,
   renameStoredSession,
 } from '../conversations/sessions.js';
@@ -41,6 +45,7 @@ import { subscribeAppEvents } from '../shared/appEvents.js';
 import { getProfileConfigFilePath } from '../ui/profilePreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
   branchLiveSessionCapability,
@@ -56,6 +61,15 @@ import {
   takeOverLiveSessionCapability,
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
+import {
+  createSessionFromExisting,
+  destroySession,
+  getAvailableModelObjects,
+  updateLiveSessionModelPreferences,
+} from '../conversations/liveSessions.js';
+import {
+  applyConversationModelPreferencesToSessionManager,
+} from '../conversations/conversationModelPreferences.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -1032,6 +1046,128 @@ export async function renameDesktopConversation(input: {
   const renamed = renameStoredSession(conversationId, nextName);
   publishConversationSessionMetaChanged(conversationId);
   return { ok: true, title: renamed.title };
+}
+
+export async function changeDesktopConversationCwd(input: {
+  conversationId: string;
+  cwd: string;
+  surfaceId?: string;
+}) {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const liveEntry = liveRegistry.get(conversationId);
+  const sessionDetail = readSessionBlocks(conversationId);
+  const currentCwd = liveEntry?.cwd ?? sessionDetail?.meta.cwd;
+  const sourceSessionFile = liveEntry?.session.sessionFile ?? sessionDetail?.meta.file;
+
+  if (!currentCwd || !sourceSessionFile) {
+    throw new Error('Conversation not found.');
+  }
+
+  if (liveEntry?.session.isStreaming) {
+    throw new Error('Stop the current response before changing the working directory.');
+  }
+
+  const nextCwd = resolveRequestedCwd(input.cwd, currentCwd);
+  if (!nextCwd) {
+    throw new Error('cwd required');
+  }
+
+  if (!existsSync(nextCwd)) {
+    throw new Error(`Directory does not exist: ${nextCwd}`);
+  }
+
+  if (!statSync(nextCwd).isDirectory()) {
+    throw new Error(`Not a directory: ${nextCwd}`);
+  }
+
+  if (nextCwd === currentCwd) {
+    return { id: conversationId, sessionFile: sourceSessionFile, cwd: currentCwd, changed: false };
+  }
+
+  const context = await getLocalLiveSessionCapabilityContext();
+  const result = await createSessionFromExisting(sourceSessionFile, nextCwd, {
+    ...context.buildLiveSessionResourceOptions(context.getCurrentProfile()),
+    extensionFactories: context.buildLiveSessionExtensionFactories(),
+  });
+
+  if (liveEntry) {
+    destroySession(conversationId);
+  }
+
+  publishConversationSessionMetaChanged(conversationId, result.id);
+  return { id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true };
+}
+
+export async function readDesktopConversationModelPreferences(conversationId: string) {
+  await getLocalRoutes();
+
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    throw new Error('Conversation not found');
+  }
+
+  const state = await readConversationModelPreferenceStateById(normalizedConversationId);
+  if (!state) {
+    throw new Error('Conversation not found');
+  }
+
+  return state;
+}
+
+export async function updateDesktopConversationModelPreferences(input: {
+  conversationId: string;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  surfaceId?: string;
+}) {
+  await getLocalRoutes();
+
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const { model, thinkingLevel } = input;
+  if (model === undefined && thinkingLevel === undefined) {
+    throw new Error('model or thinkingLevel required');
+  }
+
+  if ((model !== undefined && model !== null && typeof model !== 'string')
+    || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
+    throw new Error('model and thinkingLevel must be strings or null');
+  }
+
+  const nextInput = {
+    ...(model !== undefined ? { model } : {}),
+    ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+  };
+
+  if (isLiveSession(conversationId)) {
+    return updateLiveSessionModelPreferences(conversationId, nextInput, getAvailableModelObjects());
+  }
+
+  const sessionFile = resolveConversationSessionFile(conversationId);
+  if (!sessionFile || !existsSync(sessionFile)) {
+    throw new Error('Conversation not found');
+  }
+
+  const availableModels = getAvailableModelObjects();
+  const sessionManager = SessionManager.open(sessionFile);
+  const state = applyConversationModelPreferencesToSessionManager(
+    sessionManager,
+    nextInput,
+    readSavedModelPreferences(DEFAULT_RUNTIME_SETTINGS_FILE, availableModels),
+    availableModels,
+  );
+
+  publishConversationSessionMetaChanged(conversationId);
+  return state;
 }
 
 export async function readDesktopLiveSession(conversationId: string) {

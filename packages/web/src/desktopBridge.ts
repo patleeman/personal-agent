@@ -1,5 +1,6 @@
 import type {
   ConversationBootstrapState,
+  ConversationCwdChangeResult,
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
@@ -33,6 +34,9 @@ export interface PersonalAgentDesktopBridge {
     knownLastBlockId?: string;
   }): Promise<ConversationBootstrapState>;
   renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
+  changeConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<ConversationCwdChangeResult>;
+  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
+  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
   readSessionDetail(input: {

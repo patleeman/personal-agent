@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { app } from 'electron';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 
 export type DesktopAppBridgeEvent =
@@ -40,6 +41,18 @@ export interface LocalApiModule {
     name: string;
     surfaceId?: string;
   }): Promise<{ ok: true; title: string }>;
+  changeDesktopConversationCwd(input: {
+    conversationId: string;
+    cwd: string;
+    surfaceId?: string;
+  }): Promise<unknown>;
+  readDesktopConversationModelPreferences(conversationId: string): Promise<unknown>;
+  updateDesktopConversationModelPreferences(input: {
+    conversationId: string;
+    model?: string | null;
+    thinkingLevel?: string | null;
+    surfaceId?: string;
+  }): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
   readDesktopLiveSessionContext(conversationId: string): Promise<unknown>;
   readDesktopSessionDetail(input: {
@@ -120,11 +133,24 @@ export type LocalApiModuleLoader = () => Promise<LocalApiModule>;
 
 let localApiModulePromise: Promise<LocalApiModule> | null = null;
 
+export function resolveLocalApiModuleUrl(input: {
+  currentDir?: string;
+  isPackaged?: boolean;
+  appPath?: string;
+} = {}): string {
+  const isPackaged = input.isPackaged ?? app.isPackaged;
+  if (isPackaged) {
+    const appPath = input.appPath ?? app.getAppPath();
+    return pathToFileURL(resolve(appPath, 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href;
+  }
+
+  const currentDir = input.currentDir ?? dirname(fileURLToPath(import.meta.url));
+  return pathToFileURL(resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js')).href;
+}
+
 export function loadLocalApiModule(): Promise<LocalApiModule> {
   if (!localApiModulePromise) {
-    const currentDir = dirname(fileURLToPath(import.meta.url));
-    const moduleUrl = pathToFileURL(resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js')).href;
-    localApiModulePromise = import(moduleUrl) as Promise<LocalApiModule>;
+    localApiModulePromise = import(resolveLocalApiModuleUrl()) as Promise<LocalApiModule>;
   }
 
   return localApiModulePromise;

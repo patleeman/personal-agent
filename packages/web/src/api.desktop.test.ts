@@ -41,6 +41,9 @@ describe('api desktop transport', () => {
       .mockResolvedValueOnce({ ok: true });
     const readConversationBootstrap = vi.fn().mockResolvedValue(createBootstrapState());
     const renameConversation = vi.fn().mockResolvedValue({ ok: true, title: 'Renamed conversation' });
+    const changeConversationCwd = vi.fn().mockResolvedValue({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/next-repo', changed: true });
+    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high' });
+    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
     const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
     const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
@@ -76,6 +79,9 @@ describe('api desktop transport', () => {
         invokeLocalApi,
         readConversationBootstrap,
         renameConversation,
+        changeConversationCwd,
+        readConversationModelPreferences,
+        updateConversationModelPreferences,
         readLiveSession,
         readLiveSessionContext,
         readSessionDetail,
@@ -102,6 +108,9 @@ describe('api desktop transport', () => {
       tailBlocks: 12,
     });
     const renamed = await api.renameConversation('conversation-1', 'Renamed conversation', 'surface-1');
+    const changedCwd = await api.changeConversationCwd('live-1', '/next-repo', 'surface-1');
+    const modelPreferences = await api.conversationModelPreferences('live-1');
+    const updatedModelPreferences = await api.updateConversationModelPreferences('live-1', { thinkingLevel: 'medium' }, 'surface-1');
     const live = await api.liveSession('live-1');
     const liveContext = await api.liveSessionContext('live-1');
     const sessionDetail = await api.sessionDetail('live-1', { tailBlocks: 24 });
@@ -129,6 +138,17 @@ describe('api desktop transport', () => {
     expect(renameConversation).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       name: 'Renamed conversation',
+      surfaceId: 'surface-1',
+    });
+    expect(changeConversationCwd).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      cwd: '/next-repo',
+      surfaceId: 'surface-1',
+    });
+    expect(readConversationModelPreferences).toHaveBeenCalledWith({ conversationId: 'live-1' });
+    expect(updateConversationModelPreferences).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      thinkingLevel: 'medium',
       surfaceId: 'surface-1',
     });
     expect(readLiveSession).toHaveBeenCalledWith('live-1');
@@ -163,6 +183,9 @@ describe('api desktop transport', () => {
     expect(status).toMatchObject({ profile: 'assistant' });
     expect(bootstrap).toEqual(createBootstrapState());
     expect(renamed).toEqual({ ok: true, title: 'Renamed conversation' });
+    expect(changedCwd).toEqual({ id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/next-repo', changed: true });
+    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high' });
+    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
     expect(live).toEqual({ live: true, id: 'live-1' });
     expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });
     expect(sessionDetail).toEqual({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });

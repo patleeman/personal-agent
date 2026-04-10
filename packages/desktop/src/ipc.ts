@@ -139,6 +139,39 @@ export function registerDesktopIpc(options: {
     return controller.renameConversation(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:change-conversation-cwd`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.changeConversationCwd) {
+      throw new Error('Dedicated desktop conversation cwd changes are only available for the local host.');
+    }
+
+    return controller.changeConversationCwd(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationModelPreferences) {
+      throw new Error('Dedicated desktop conversation model preference reads are only available for the local host.');
+    }
+
+    return controller.readConversationModelPreferences(input);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.updateConversationModelPreferences) {
+      throw new Error('Dedicated desktop conversation model preference updates are only available for the local host.');
+    }
+
+    return controller.updateConversationModelPreferences(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session`, async (event, conversationId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

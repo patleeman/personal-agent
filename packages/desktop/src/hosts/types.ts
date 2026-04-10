@@ -74,6 +74,23 @@ export interface DesktopConversationRenameRequest {
   surfaceId?: string;
 }
 
+export interface DesktopConversationCwdChangeRequest {
+  conversationId: string;
+  cwd: string;
+  surfaceId?: string;
+}
+
+export interface DesktopConversationModelPreferencesRequest {
+  conversationId: string;
+}
+
+export interface DesktopConversationModelPreferencesUpdateRequest {
+  conversationId: string;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  surfaceId?: string;
+}
+
 export interface DesktopSessionDetailRequest {
   sessionId: string;
   tailBlocks?: number;
@@ -158,6 +175,9 @@ export interface HostController {
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   readConversationBootstrap?(input: DesktopConversationBootstrapRequest): Promise<unknown>;
   renameConversation?(input: DesktopConversationRenameRequest): Promise<{ ok: true; title: string }>;
+  changeConversationCwd?(input: DesktopConversationCwdChangeRequest): Promise<unknown>;
+  readConversationModelPreferences?(input: DesktopConversationModelPreferencesRequest): Promise<unknown>;
+  updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;

@@ -22,39 +22,53 @@ import type { LocalBackendProcesses } from '../backend/local-backend-processes.j
 import type { LocalApiModule } from '../local-api-module.js';
 import { LocalHostController } from './local-host-controller.js';
 
+function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): LocalApiModule {
+  return {
+    invokeDesktopLocalApi: vi.fn(),
+    dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopConversationBootstrap: vi.fn(),
+    renameDesktopConversation: vi.fn(),
+    changeDesktopConversationCwd: vi.fn(),
+    readDesktopConversationModelPreferences: vi.fn(),
+    updateDesktopConversationModelPreferences: vi.fn(),
+    readDesktopLiveSession: vi.fn(),
+    readDesktopLiveSessionContext: vi.fn(),
+    readDesktopSessionDetail: vi.fn(),
+    readDesktopSessionBlock: vi.fn(),
+    createDesktopLiveSession: vi.fn(),
+    resumeDesktopLiveSession: vi.fn(),
+    submitDesktopLiveSessionPrompt: vi.fn(),
+    takeOverDesktopLiveSession: vi.fn(),
+    restoreDesktopQueuedLiveSessionMessage: vi.fn(),
+    compactDesktopLiveSession: vi.fn(),
+    reloadDesktopLiveSession: vi.fn(),
+    destroyDesktopLiveSession: vi.fn(),
+    branchDesktopLiveSession: vi.fn(),
+    forkDesktopLiveSession: vi.fn(),
+    summarizeAndForkDesktopLiveSession: vi.fn(),
+    abortDesktopLiveSession: vi.fn(),
+    subscribeDesktopLocalApiStream: vi.fn(),
+    subscribeDesktopAppEvents: vi.fn(),
+    ...overrides,
+  };
+}
+
+function createBackendMock(): LocalBackendProcesses {
+  return {
+    ensureStarted: vi.fn(),
+    getStatus: vi.fn(),
+    restart: vi.fn(),
+    stop: vi.fn(),
+  } as unknown as LocalBackendProcesses;
+}
+
 describe('LocalHostController', () => {
   it('routes live-session mutations through the local API module without booting the web child', async () => {
     const invokeDesktopLocalApi = vi.fn().mockResolvedValue({ ok: true, accepted: true });
-    const loadLocalApi = vi.fn().mockResolvedValue({
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       invokeDesktopLocalApi,
-      dispatchDesktopLocalApiRequest: vi.fn(),
-      readDesktopConversationBootstrap: vi.fn(),
-      renameDesktopConversation: vi.fn(),
-      readDesktopLiveSession: vi.fn(),
-      readDesktopLiveSessionContext: vi.fn(),
-      readDesktopSessionDetail: vi.fn(),
-      readDesktopSessionBlock: vi.fn(),
-      createDesktopLiveSession: vi.fn(),
-      resumeDesktopLiveSession: vi.fn(),
-      submitDesktopLiveSessionPrompt: vi.fn(),
-      takeOverDesktopLiveSession: vi.fn(),
-      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
-      compactDesktopLiveSession: vi.fn(),
-      reloadDesktopLiveSession: vi.fn(),
-      destroyDesktopLiveSession: vi.fn(),
-      branchDesktopLiveSession: vi.fn(),
-      forkDesktopLiveSession: vi.fn(),
-      summarizeAndForkDesktopLiveSession: vi.fn(),
-      abortDesktopLiveSession: vi.fn(),
-      subscribeDesktopLocalApiStream: vi.fn(),
-      subscribeDesktopAppEvents: vi.fn(),
-    } satisfies LocalApiModule);
-    const backend = {
-      ensureStarted: vi.fn(),
-      getStatus: vi.fn(),
-      restart: vi.fn(),
-      stop: vi.fn(),
-    } as unknown as LocalBackendProcesses;
+    }));
+    const backend = createBackendMock();
 
     const controller = new LocalHostController(
       { id: 'local', label: 'Local', kind: 'local' },
@@ -82,36 +96,10 @@ describe('LocalHostController', () => {
   it('routes live-session event streams through the local API module without loopback proxying', async () => {
     const unsubscribe = vi.fn();
     const subscribeDesktopLocalApiStream = vi.fn().mockResolvedValue(unsubscribe);
-    const loadLocalApi = vi.fn().mockResolvedValue({
-      invokeDesktopLocalApi: vi.fn(),
-      dispatchDesktopLocalApiRequest: vi.fn(),
-      readDesktopConversationBootstrap: vi.fn(),
-      renameDesktopConversation: vi.fn(),
-      readDesktopLiveSession: vi.fn(),
-      readDesktopLiveSessionContext: vi.fn(),
-      readDesktopSessionDetail: vi.fn(),
-      readDesktopSessionBlock: vi.fn(),
-      createDesktopLiveSession: vi.fn(),
-      resumeDesktopLiveSession: vi.fn(),
-      submitDesktopLiveSessionPrompt: vi.fn(),
-      takeOverDesktopLiveSession: vi.fn(),
-      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
-      compactDesktopLiveSession: vi.fn(),
-      reloadDesktopLiveSession: vi.fn(),
-      destroyDesktopLiveSession: vi.fn(),
-      branchDesktopLiveSession: vi.fn(),
-      forkDesktopLiveSession: vi.fn(),
-      summarizeAndForkDesktopLiveSession: vi.fn(),
-      abortDesktopLiveSession: vi.fn(),
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       subscribeDesktopLocalApiStream,
-      subscribeDesktopAppEvents: vi.fn(),
-    } satisfies LocalApiModule);
-    const backend = {
-      ensureStarted: vi.fn(),
-      getStatus: vi.fn(),
-      restart: vi.fn(),
-      stop: vi.fn(),
-    } as unknown as LocalBackendProcesses;
+    }));
+    const backend = createBackendMock();
 
     const controller = new LocalHostController(
       { id: 'local', label: 'Local', kind: 'local' },
@@ -127,7 +115,7 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
-  it('routes dedicated live-session capabilities through the local API module without loopback proxying', async () => {
+  it('routes dedicated conversation and live-session capabilities through the local API module without loopback proxying', async () => {
     const readDesktopConversationBootstrap = vi.fn().mockResolvedValue({
       conversationId: 'live-1',
       sessionDetail: null,
@@ -158,9 +146,7 @@ describe('LocalHostController', () => {
     const forkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
     const summarizeAndForkDesktopLiveSession = vi.fn().mockResolvedValue({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     const abortDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true });
-    const loadLocalApi = vi.fn().mockResolvedValue({
-      invokeDesktopLocalApi: vi.fn(),
-      dispatchDesktopLocalApiRequest: vi.fn(),
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopConversationBootstrap,
       renameDesktopConversation,
       readDesktopLiveSession,
@@ -179,15 +165,8 @@ describe('LocalHostController', () => {
       forkDesktopLiveSession,
       summarizeAndForkDesktopLiveSession,
       abortDesktopLiveSession,
-      subscribeDesktopLocalApiStream: vi.fn(),
-      subscribeDesktopAppEvents: vi.fn(),
-    } satisfies LocalApiModule);
-    const backend = {
-      ensureStarted: vi.fn(),
-      getStatus: vi.fn(),
-      restart: vi.fn(),
-      stop: vi.fn(),
-    } as unknown as LocalBackendProcesses;
+    }));
+    const backend = createBackendMock();
 
     const controller = new LocalHostController(
       { id: 'local', label: 'Local', kind: 'local' },
@@ -268,36 +247,10 @@ describe('LocalHostController', () => {
   it('routes desktop app events through the local API module without loopback proxying', async () => {
     const unsubscribe = vi.fn();
     const subscribeDesktopAppEvents = vi.fn().mockResolvedValue(unsubscribe);
-    const loadLocalApi = vi.fn().mockResolvedValue({
-      invokeDesktopLocalApi: vi.fn(),
-      dispatchDesktopLocalApiRequest: vi.fn(),
-      readDesktopConversationBootstrap: vi.fn(),
-      renameDesktopConversation: vi.fn(),
-      readDesktopLiveSession: vi.fn(),
-      readDesktopLiveSessionContext: vi.fn(),
-      readDesktopSessionDetail: vi.fn(),
-      readDesktopSessionBlock: vi.fn(),
-      createDesktopLiveSession: vi.fn(),
-      resumeDesktopLiveSession: vi.fn(),
-      submitDesktopLiveSessionPrompt: vi.fn(),
-      takeOverDesktopLiveSession: vi.fn(),
-      restoreDesktopQueuedLiveSessionMessage: vi.fn(),
-      compactDesktopLiveSession: vi.fn(),
-      reloadDesktopLiveSession: vi.fn(),
-      destroyDesktopLiveSession: vi.fn(),
-      branchDesktopLiveSession: vi.fn(),
-      forkDesktopLiveSession: vi.fn(),
-      summarizeAndForkDesktopLiveSession: vi.fn(),
-      abortDesktopLiveSession: vi.fn(),
-      subscribeDesktopLocalApiStream: vi.fn(),
+    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       subscribeDesktopAppEvents,
-    } satisfies LocalApiModule);
-    const backend = {
-      ensureStarted: vi.fn(),
-      getStatus: vi.fn(),
-      restart: vi.fn(),
-      stop: vi.fn(),
-    } as unknown as LocalBackendProcesses;
+    }));
+    const backend = createBackendMock();
 
     const controller = new LocalHostController(
       { id: 'local', label: 'Local', kind: 'local' },

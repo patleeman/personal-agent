@@ -526,8 +526,18 @@ export const api = {
     requestJson<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>('POST', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`),
   cancelDeferredResume: (id: string, resumeId: string) =>
     requestJson<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>('DELETE', `/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`),
-  changeConversationCwd: (id: string, cwd: string, surfaceId?: string) =>
-    requestJson<ConversationCwdChangeResult>('POST', `/conversations/${encodeURIComponent(id)}/cwd`, { cwd, ...(surfaceId ? { surfaceId } : {}) }),
+  changeConversationCwd: async (id: string, cwd: string, surfaceId?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.changeConversationCwd({
+        conversationId: id,
+        cwd,
+        ...(surfaceId ? { surfaceId } : {}),
+      });
+    }
+
+    return requestJson<ConversationCwdChangeResult>('POST', `/conversations/${encodeURIComponent(id)}/cwd`, { cwd, ...(surfaceId ? { surfaceId } : {}) });
+  },
   renameConversation: async (id: string, name: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -540,10 +550,26 @@ export const api = {
 
     return patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) });
   },
-  conversationModelPreferences: (id: string) =>
-    get<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`),
-  updateConversationModelPreferences: (id: string, input: { model?: string | null; thinkingLevel?: string | null }, surfaceId?: string) =>
-    patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) }),
+  conversationModelPreferences: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationModelPreferences({ conversationId: id });
+    }
+
+    return get<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
+  },
+  updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null }, surfaceId?: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.updateConversationModelPreferences({
+        conversationId: id,
+        ...input,
+        ...(surfaceId ? { surfaceId } : {}),
+      });
+    }
+
+    return patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
+  },
   recoverConversation: (id: string) =>
     post<{
       conversationId: string;

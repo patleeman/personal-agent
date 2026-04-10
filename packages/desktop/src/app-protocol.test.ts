@@ -28,6 +28,37 @@ vi.mock('electron', () => ({
 
 import { createDesktopProtocolHandler } from './app-protocol.js';
 
+function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): LocalApiModule {
+  return {
+    invokeDesktopLocalApi: vi.fn(),
+    dispatchDesktopLocalApiRequest: vi.fn(),
+    readDesktopConversationBootstrap: vi.fn(),
+    renameDesktopConversation: vi.fn(),
+    changeDesktopConversationCwd: vi.fn(),
+    readDesktopConversationModelPreferences: vi.fn(),
+    updateDesktopConversationModelPreferences: vi.fn(),
+    readDesktopLiveSession: vi.fn(),
+    readDesktopLiveSessionContext: vi.fn(),
+    readDesktopSessionDetail: vi.fn(),
+    readDesktopSessionBlock: vi.fn(),
+    createDesktopLiveSession: vi.fn(),
+    resumeDesktopLiveSession: vi.fn(),
+    submitDesktopLiveSessionPrompt: vi.fn(),
+    takeOverDesktopLiveSession: vi.fn(),
+    restoreDesktopQueuedLiveSessionMessage: vi.fn(),
+    compactDesktopLiveSession: vi.fn(),
+    reloadDesktopLiveSession: vi.fn(),
+    destroyDesktopLiveSession: vi.fn(),
+    branchDesktopLiveSession: vi.fn(),
+    forkDesktopLiveSession: vi.fn(),
+    summarizeAndForkDesktopLiveSession: vi.fn(),
+    abortDesktopLiveSession: vi.fn(),
+    subscribeDesktopLocalApiStream: vi.fn(),
+    subscribeDesktopAppEvents: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe('createDesktopProtocolHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -43,30 +74,9 @@ describe('createDesktopProtocolHandler', () => {
       body: Uint8Array.from([1, 2, 3, 4]),
     });
     const handler = createDesktopProtocolHandler({
-      loadLocalApiModule: vi.fn().mockResolvedValue({
-        invokeDesktopLocalApi: vi.fn(),
+      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
         dispatchDesktopLocalApiRequest,
-        readDesktopConversationBootstrap: vi.fn(),
-        renameDesktopConversation: vi.fn(),
-        readDesktopLiveSession: vi.fn(),
-        readDesktopLiveSessionContext: vi.fn(),
-        readDesktopSessionDetail: vi.fn(),
-        readDesktopSessionBlock: vi.fn(),
-        createDesktopLiveSession: vi.fn(),
-        resumeDesktopLiveSession: vi.fn(),
-        submitDesktopLiveSessionPrompt: vi.fn(),
-        takeOverDesktopLiveSession: vi.fn(),
-        restoreDesktopQueuedLiveSessionMessage: vi.fn(),
-        compactDesktopLiveSession: vi.fn(),
-        reloadDesktopLiveSession: vi.fn(),
-        destroyDesktopLiveSession: vi.fn(),
-        branchDesktopLiveSession: vi.fn(),
-        forkDesktopLiveSession: vi.fn(),
-        summarizeAndForkDesktopLiveSession: vi.fn(),
-        abortDesktopLiveSession: vi.fn(),
-        subscribeDesktopLocalApiStream: vi.fn(),
-        subscribeDesktopAppEvents: vi.fn(),
-      } satisfies LocalApiModule),
+      })),
     });
 
     const response = await handler(new Request('personal-agent://app/api/sessions/conversation-1/blocks/block-1/image'));
@@ -92,30 +102,9 @@ describe('createDesktopProtocolHandler', () => {
       body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
     });
     const handler = createDesktopProtocolHandler({
-      loadLocalApiModule: vi.fn().mockResolvedValue({
-        invokeDesktopLocalApi: vi.fn(),
+      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
         dispatchDesktopLocalApiRequest,
-        readDesktopConversationBootstrap: vi.fn(),
-        renameDesktopConversation: vi.fn(),
-        readDesktopLiveSession: vi.fn(),
-        readDesktopLiveSessionContext: vi.fn(),
-        readDesktopSessionDetail: vi.fn(),
-        readDesktopSessionBlock: vi.fn(),
-        createDesktopLiveSession: vi.fn(),
-        resumeDesktopLiveSession: vi.fn(),
-        submitDesktopLiveSessionPrompt: vi.fn(),
-        takeOverDesktopLiveSession: vi.fn(),
-        restoreDesktopQueuedLiveSessionMessage: vi.fn(),
-        compactDesktopLiveSession: vi.fn(),
-        reloadDesktopLiveSession: vi.fn(),
-        destroyDesktopLiveSession: vi.fn(),
-        branchDesktopLiveSession: vi.fn(),
-        forkDesktopLiveSession: vi.fn(),
-        summarizeAndForkDesktopLiveSession: vi.fn(),
-        abortDesktopLiveSession: vi.fn(),
-        subscribeDesktopLocalApiStream: vi.fn(),
-        subscribeDesktopAppEvents: vi.fn(),
-      } satisfies LocalApiModule),
+      })),
     });
 
     const response = await handler(new Request('personal-agent://app/api/live-sessions/live-1', {
