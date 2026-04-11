@@ -557,12 +557,6 @@ describe('api desktop transport', () => {
       conversationId: 'conversation-1',
       artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' },
     });
-    const deleteConversationArtifact = vi.fn().mockResolvedValue({
-      conversationId: 'conversation-1',
-      deleted: true,
-      artifactId: 'artifact-1',
-      artifacts: [],
-    });
     const readConversationAttachments = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
@@ -581,12 +575,6 @@ describe('api desktop transport', () => {
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    const deleteConversationAttachment = vi.fn().mockResolvedValue({
-      conversationId: 'conversation-1',
-      deleted: true,
-      attachmentId: 'attachment-1',
-      attachments: [],
-    });
     const readConversationAttachmentAsset = vi.fn().mockResolvedValue({
       dataUrl: 'data:image/png;base64,cHJldmlldw==',
       mimeType: 'image/png',
@@ -604,12 +592,10 @@ describe('api desktop transport', () => {
         }),
         readConversationArtifacts,
         readConversationArtifact,
-        deleteConversationArtifact,
         readConversationAttachments,
         readConversationAttachment,
         createConversationAttachment,
         updateConversationAttachment,
-        deleteConversationAttachment,
         readConversationAttachmentAsset,
       },
     });
@@ -617,27 +603,22 @@ describe('api desktop transport', () => {
     const { api } = await import('./api');
     const artifacts = await api.conversationArtifacts('conversation-1');
     const artifact = await api.conversationArtifact('conversation-1', 'artifact-1');
-    const deletedArtifact = await api.deleteConversationArtifact('conversation-1', 'artifact-1');
     const attachments = await api.conversationAttachments('conversation-1');
     const attachment = await api.conversationAttachment('conversation-1', 'attachment-1');
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
     const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
-    const deletedAttachment = await api.deleteConversationAttachment('conversation-1', 'attachment-1');
     const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).toHaveBeenCalledWith('conversation-1');
     expect(readConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
-    expect(deleteConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
     expect(readConversationAttachments).toHaveBeenCalledWith('conversation-1');
     expect(readConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
     expect(createConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
     expect(updateConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
-    expect(deleteConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
     expect(readConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
     expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
-    expect(deletedArtifact).toEqual({ conversationId: 'conversation-1', deleted: true, artifactId: 'artifact-1', artifacts: [] });
     expect(attachments).toEqual({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
     expect(attachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } });
     expect(createdAttachment).toEqual({
@@ -650,7 +631,6 @@ describe('api desktop transport', () => {
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    expect(deletedAttachment).toEqual({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] });
     expect(attachmentAsset).toEqual({
       dataUrl: 'data:image/png;base64,cHJldmlldw==',
       mimeType: 'image/png',
@@ -1738,12 +1718,10 @@ describe('api desktop transport', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', deleted: true, artifactId: 'artifact-1', artifacts: [] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] }))
       .mockResolvedValueOnce(new Response('preview-bytes', {
         status: 200,
         headers: {
@@ -1754,12 +1732,10 @@ describe('api desktop transport', () => {
     vi.stubGlobal('fetch', fetchMock);
     const readConversationArtifacts = vi.fn();
     const readConversationArtifact = vi.fn();
-    const deleteConversationArtifact = vi.fn();
     const readConversationAttachments = vi.fn();
     const readConversationAttachment = vi.fn();
     const createConversationAttachment = vi.fn();
     const updateConversationAttachment = vi.fn();
-    const deleteConversationAttachment = vi.fn();
     const readConversationAttachmentAsset = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -1773,12 +1749,10 @@ describe('api desktop transport', () => {
         }),
         readConversationArtifacts,
         readConversationArtifact,
-        deleteConversationArtifact,
         readConversationAttachments,
         readConversationAttachment,
         createConversationAttachment,
         updateConversationAttachment,
-        deleteConversationAttachment,
         readConversationAttachmentAsset,
       },
     });
@@ -1786,55 +1760,43 @@ describe('api desktop transport', () => {
     const { api } = await import('./api');
     const artifacts = await api.conversationArtifacts('conversation-1');
     const artifact = await api.conversationArtifact('conversation-1', 'artifact-1');
-    const deletedArtifact = await api.deleteConversationArtifact('conversation-1', 'artifact-1');
     const attachments = await api.conversationAttachments('conversation-1');
     const attachment = await api.conversationAttachment('conversation-1', 'attachment-1');
     const createdAttachment = await api.createConversationAttachment('conversation-1', { sourceData: 'source', previewData: 'preview' });
     const updatedAttachment = await api.updateConversationAttachment('conversation-1', 'attachment-1', { sourceData: 'source', previewData: 'preview' });
-    const deletedAttachment = await api.deleteConversationAttachment('conversation-1', 'attachment-1');
     const attachmentAsset = await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', 2);
 
     expect(readConversationArtifacts).not.toHaveBeenCalled();
     expect(readConversationArtifact).not.toHaveBeenCalled();
-    expect(deleteConversationArtifact).not.toHaveBeenCalled();
     expect(readConversationAttachments).not.toHaveBeenCalled();
     expect(readConversationAttachment).not.toHaveBeenCalled();
     expect(createConversationAttachment).not.toHaveBeenCalled();
     expect(updateConversationAttachment).not.toHaveBeenCalled();
-    expect(deleteConversationAttachment).not.toHaveBeenCalled();
     expect(readConversationAttachmentAsset).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversations/conversation-1/artifacts', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/artifacts/artifact-1', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/artifacts/artifact-1', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: undefined });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversations/conversation-1/attachments', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversations/conversation-1/attachments/attachment-1', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/conversations/conversation-1/attachments', {
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/attachments', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversations/conversation-1/attachments/attachment-1', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversations/conversation-1/attachments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sourceData: 'source', previewData: 'preview' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/conversations/conversation-1/attachments/attachment-1', {
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/conversations/conversation-1/attachments/attachment-1', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sourceData: 'source', previewData: 'preview' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/conversations/conversation-1/attachments/attachment-1', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: undefined,
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(9, '/api/conversations/conversation-1/attachments/attachment-1/download/preview?revision=2', {
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/conversations/conversation-1/attachments/attachment-1/download/preview?revision=2', {
       method: 'GET',
       cache: 'no-store',
     });
     expect(artifacts).toEqual({ conversationId: 'conversation-1', artifacts: [{ id: 'artifact-1', title: 'Artifact 1', kind: 'html' }] });
     expect(artifact).toEqual({ conversationId: 'conversation-1', artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html', content: '<p>Artifact</p>' } });
-    expect(deletedArtifact).toEqual({ conversationId: 'conversation-1', deleted: true, artifactId: 'artifact-1', artifacts: [] });
     expect(attachments).toEqual({ conversationId: 'conversation-1', attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
     expect(attachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } } });
     expect(createdAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
     expect(updatedAttachment).toEqual({ conversationId: 'conversation-1', attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } }, attachments: [{ id: 'attachment-1', kind: 'excalidraw' }] });
-    expect(deletedAttachment).toEqual({ conversationId: 'conversation-1', deleted: true, attachmentId: 'attachment-1', attachments: [] });
     expect(attachmentAsset).toEqual({
       dataUrl: 'data:image/png;base64,cHJldmlldy1ieXRlcw==',
       mimeType: 'image/png',

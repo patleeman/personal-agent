@@ -97,12 +97,10 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     updateDesktopConversationModelPreferences: vi.fn(),
     readDesktopConversationArtifacts: vi.fn(),
     readDesktopConversationArtifact: vi.fn(),
-    deleteDesktopConversationArtifact: vi.fn(),
     readDesktopConversationAttachments: vi.fn(),
     readDesktopConversationAttachment: vi.fn(),
     createDesktopConversationAttachment: vi.fn(),
     updateDesktopConversationAttachment: vi.fn(),
-    deleteDesktopConversationAttachment: vi.fn(),
     readDesktopConversationAttachmentAsset: vi.fn(),
     readDesktopLiveSession: vi.fn(),
     readDesktopLiveSessionForkEntries: vi.fn(),
@@ -441,12 +439,6 @@ describe('LocalHostController', () => {
       conversationId: 'conversation-1',
       artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html' },
     });
-    const deleteDesktopConversationArtifact = vi.fn().mockResolvedValue({
-      conversationId: 'conversation-1',
-      deleted: true,
-      artifactId: 'artifact-1',
-      artifacts: [],
-    });
     const readDesktopConversationAttachments = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
@@ -465,12 +457,6 @@ describe('LocalHostController', () => {
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    const deleteDesktopConversationAttachment = vi.fn().mockResolvedValue({
-      conversationId: 'conversation-1',
-      deleted: true,
-      attachmentId: 'attachment-1',
-      attachments: [],
-    });
     const readDesktopConversationAttachmentAsset = vi.fn().mockResolvedValue({
       dataUrl: 'data:image/png;base64,cHJldmlldw==',
       mimeType: 'image/png',
@@ -479,12 +465,10 @@ describe('LocalHostController', () => {
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopConversationArtifacts,
       readDesktopConversationArtifact,
-      deleteDesktopConversationArtifact,
       readDesktopConversationAttachments,
       readDesktopConversationAttachment,
       createDesktopConversationAttachment,
       updateDesktopConversationAttachment,
-      deleteDesktopConversationAttachment,
       readDesktopConversationAttachmentAsset,
     }));
     const backend = createBackendMock();
@@ -501,12 +485,6 @@ describe('LocalHostController', () => {
     await expect(controller.readConversationArtifact?.({ conversationId: 'conversation-1', artifactId: 'artifact-1' })).resolves.toEqual({
       conversationId: 'conversation-1',
       artifact: { id: 'artifact-1', title: 'Artifact 1', kind: 'html' },
-    });
-    await expect(controller.deleteConversationArtifact?.({ conversationId: 'conversation-1', artifactId: 'artifact-1' })).resolves.toEqual({
-      conversationId: 'conversation-1',
-      deleted: true,
-      artifactId: 'artifact-1',
-      artifacts: [],
     });
     await expect(controller.readConversationAttachments?.('conversation-1')).resolves.toEqual({
       conversationId: 'conversation-1',
@@ -526,12 +504,6 @@ describe('LocalHostController', () => {
       attachment: { id: 'attachment-1', kind: 'excalidraw', currentRevision: 2, latestRevision: { revision: 2 } },
       attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
     });
-    await expect(controller.deleteConversationAttachment?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1' })).resolves.toEqual({
-      conversationId: 'conversation-1',
-      deleted: true,
-      attachmentId: 'attachment-1',
-      attachments: [],
-    });
     await expect(controller.readConversationAttachmentAsset?.({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 })).resolves.toEqual({
       dataUrl: 'data:image/png;base64,cHJldmlldw==',
       mimeType: 'image/png',
@@ -540,12 +512,10 @@ describe('LocalHostController', () => {
 
     expect(readDesktopConversationArtifacts).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
-    expect(deleteDesktopConversationArtifact).toHaveBeenCalledWith({ conversationId: 'conversation-1', artifactId: 'artifact-1' });
     expect(readDesktopConversationAttachments).toHaveBeenCalledWith('conversation-1');
     expect(readDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
     expect(createDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', sourceData: 'source', previewData: 'preview' });
     expect(updateDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', sourceData: 'source', previewData: 'preview' });
-    expect(deleteDesktopConversationAttachment).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1' });
     expect(readDesktopConversationAttachmentAsset).toHaveBeenCalledWith({ conversationId: 'conversation-1', attachmentId: 'attachment-1', asset: 'preview', revision: 2 });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });

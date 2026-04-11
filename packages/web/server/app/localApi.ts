@@ -162,8 +162,6 @@ import {
 } from '../conversations/conversationDeferredResumeCapability.js';
 import {
   createConversationAttachmentCapability,
-  deleteConversationArtifactCapability,
-  deleteConversationAttachmentCapability,
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
@@ -1915,14 +1913,6 @@ export async function readDesktopConversationArtifact(input: {
   return readConversationArtifactCapability(context.getCurrentProfile(), input);
 }
 
-export async function deleteDesktopConversationArtifact(input: {
-  conversationId: string;
-  artifactId: string;
-}) {
-  const context = await getLocalServerRouteContext();
-  return deleteConversationArtifactCapability(context.getCurrentProfile(), input);
-}
-
 export async function readDesktopConversationAttachments(conversationId: string) {
   const context = await getLocalServerRouteContext();
   return readConversationAttachmentsCapability(context.getCurrentProfile(), conversationId);
@@ -1966,14 +1956,6 @@ export async function updateDesktopConversationAttachment(input: {
 }) {
   const context = await getLocalServerRouteContext();
   return updateConversationAttachmentCapability(context.getCurrentProfile(), input);
-}
-
-export async function deleteDesktopConversationAttachment(input: {
-  conversationId: string;
-  attachmentId: string;
-}) {
-  const context = await getLocalServerRouteContext();
-  return deleteConversationAttachmentCapability(context.getCurrentProfile(), input);
 }
 
 export async function readDesktopConversationAttachmentAsset(input: {

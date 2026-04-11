@@ -352,7 +352,6 @@ export interface HostController {
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
   readConversationArtifacts?(conversationId: string): Promise<unknown>;
   readConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
-  deleteConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   readConversationAttachments?(conversationId: string): Promise<unknown>;
   readConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createConversationAttachment?(input: {
@@ -379,7 +378,6 @@ export interface HostController {
     previewMimeType?: string;
     note?: string;
   }): Promise<unknown>;
-  deleteConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   readConversationAttachmentAsset?(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;

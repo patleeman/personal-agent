@@ -202,7 +202,6 @@ export interface PersonalAgentDesktopBridge {
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
-  deleteConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>;
   readConversationAttachments(conversationId: string): Promise<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>;
   readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord }>;
   createConversationAttachment(input: {
@@ -229,7 +228,6 @@ export interface PersonalAgentDesktopBridge {
     previewMimeType?: string;
     note?: string;
   }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
-  deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; deleted: boolean; attachmentId: string; attachments: ConversationAttachmentSummary[] }>;
   readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<ConversationAttachmentAssetData>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;

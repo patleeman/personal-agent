@@ -490,11 +490,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopConversationArtifact(input);
   }
 
-  async deleteConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.deleteDesktopConversationArtifact(input);
-  }
-
   async readConversationAttachments(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationAttachments(conversationId);
@@ -535,11 +530,6 @@ export class LocalHostController implements HostController {
   }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.updateDesktopConversationAttachment(input);
-  }
-
-  async deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.deleteDesktopConversationAttachment(input);
   }
 
   async readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown> {

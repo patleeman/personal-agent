@@ -7,8 +7,6 @@ const {
   buildAppendOnlySessionDetailResponseMock,
   buildContentDispositionHeaderMock,
   cancelDeferredResumeForSessionFileMock,
-  deleteConversationArtifactMock,
-  deleteConversationAttachmentMock,
   fireDeferredResumeNowForSessionFileMock,
   getAvailableModelObjectsMock,
   getConversationArtifactMock,
@@ -47,8 +45,6 @@ const {
   buildAppendOnlySessionDetailResponseMock: vi.fn(),
   buildContentDispositionHeaderMock: vi.fn(),
   cancelDeferredResumeForSessionFileMock: vi.fn(),
-  deleteConversationArtifactMock: vi.fn(),
-  deleteConversationAttachmentMock: vi.fn(),
   fireDeferredResumeNowForSessionFileMock: vi.fn(),
   getAvailableModelObjectsMock: vi.fn(),
   getConversationArtifactMock: vi.fn(),
@@ -89,8 +85,6 @@ vi.mock('@mariozechner/pi-coding-agent', () => ({
 }));
 
 vi.mock('@personal-agent/core', () => ({
-  deleteConversationArtifact: deleteConversationArtifactMock,
-  deleteConversationAttachment: deleteConversationAttachmentMock,
   getConversationArtifact: getConversationArtifactMock,
   getConversationAttachment: getConversationAttachmentMock,
   listConversationArtifacts: listConversationArtifactsMock,
@@ -251,8 +245,6 @@ describe('conversation routes', () => {
     buildAppendOnlySessionDetailResponseMock.mockReset();
     buildContentDispositionHeaderMock.mockReset();
     cancelDeferredResumeForSessionFileMock.mockReset();
-    deleteConversationArtifactMock.mockReset();
-    deleteConversationAttachmentMock.mockReset();
     fireDeferredResumeNowForSessionFileMock.mockReset();
     getAvailableModelObjectsMock.mockReset();
     getConversationArtifactMock.mockReset();
@@ -289,8 +281,6 @@ describe('conversation routes', () => {
     applyConversationModelPreferencesToSessionManagerMock.mockReturnValue({ model: 'gpt-4o', thinkingLevel: 'high' });
     buildAppendOnlySessionDetailResponseMock.mockReturnValue({ appended: true, sessionId: 'session-1' });
     buildContentDispositionHeaderMock.mockReturnValue('inline; filename="image.png"');
-    deleteConversationArtifactMock.mockReturnValue(true);
-    deleteConversationAttachmentMock.mockReturnValue(true);
     fireDeferredResumeNowForSessionFileMock.mockResolvedValue({ id: 'resume-1', fired: true });
     getAvailableModelObjectsMock.mockReturnValue([{ id: 'gpt-4o' }]);
     getConversationArtifactMock.mockReturnValue({ id: 'artifact-1', title: 'Artifact 1' });
@@ -531,21 +521,6 @@ describe('conversation routes', () => {
     expect(missingArtifactRes.status).toHaveBeenCalledWith(404);
     expect(missingArtifactRes.json).toHaveBeenCalledWith({ error: 'Artifact not found' });
 
-    const deleteArtifactRes = createResponse();
-    deleteHandler('/api/conversations/:id/artifacts/:artifactId')(createRequest({
-      params: { id: 'session-1', artifactId: 'artifact-1' },
-    }), deleteArtifactRes);
-    expect(deleteConversationArtifactMock).toHaveBeenCalledWith({
-      artifactId: 'artifact-1',
-      conversationId: 'session-1',
-      profile: 'assistant',
-    });
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('artifacts');
-    expect(deleteArtifactRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      artifactId: 'artifact-1',
-      deleted: true,
-    }));
-
     const attachmentsRes = createResponse();
     getHandler('/api/conversations/:id/attachments')(createRequest({ params: { id: 'session-1' } }), attachmentsRes);
     expect(attachmentsRes.json).toHaveBeenCalledWith({
@@ -615,20 +590,6 @@ describe('conversation routes', () => {
     expect(patchAttachmentRes.json).toHaveBeenCalledWith(expect.objectContaining({
       attachment: { id: 'attachment-1', kind: 'excalidraw' },
       conversationId: 'session-1',
-    }));
-
-    const deleteAttachmentRes = createResponse();
-    deleteHandler('/api/conversations/:id/attachments/:attachmentId')(createRequest({
-      params: { id: 'session-1', attachmentId: 'attachment-1' },
-    }), deleteAttachmentRes);
-    expect(deleteConversationAttachmentMock).toHaveBeenCalledWith({
-      attachmentId: 'attachment-1',
-      conversationId: 'session-1',
-      profile: 'assistant',
-    });
-    expect(deleteAttachmentRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      attachmentId: 'attachment-1',
-      deleted: true,
     }));
 
     const badAssetRes = createResponse();

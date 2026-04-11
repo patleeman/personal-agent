@@ -30,8 +30,6 @@ import {
   ConversationAssetCapabilityInputError,
   ConversationAssetCapabilityNotFoundError,
   createConversationAttachmentCapability,
-  deleteConversationArtifactCapability,
-  deleteConversationAttachmentCapability,
   readConversationArtifactCapability,
   readConversationArtifactsCapability,
   readConversationAttachmentCapability,
@@ -420,24 +418,6 @@ export function registerConversationRoutes(
     }
   });
 
-  router.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
-    try {
-      res.json(deleteConversationArtifactCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        artifactId: req.params.artifactId,
-      }));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (writeConversationAssetCapabilityError(res, err)) {
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
   router.get('/api/conversations/:id/attachments', (req, res) => {
     try {
       res.json(readConversationAttachmentsCapability(getCurrentProfileFn(), req.params.id));
@@ -518,24 +498,6 @@ export function registerConversationRoutes(
         conversationId: req.params.id,
         attachmentId: req.params.attachmentId,
         ...body,
-      }));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (writeConversationAssetCapabilityError(res, err)) {
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.delete('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
-    try {
-      res.json(deleteConversationAttachmentCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        attachmentId: req.params.attachmentId,
       }));
     } catch (err) {
       logError('request handler error', {

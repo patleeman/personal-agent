@@ -171,8 +171,6 @@ const desktopBridge = {
   readConversationArtifacts: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
   readConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifact`, input),
-  deleteConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-conversation-artifact`, input),
   readConversationAttachments: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachments`, conversationId),
   readConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment`, input),
@@ -200,8 +198,6 @@ const desktopBridge = {
     previewMimeType?: string;
     note?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-attachment`, input),
-  deleteConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-conversation-attachment`, input),
   readConversationAttachmentAsset: (input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment-asset`, input),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),

@@ -193,7 +193,6 @@ export interface LocalApiModule {
   }): Promise<unknown>;
   readDesktopConversationArtifacts(conversationId: string): Promise<unknown>;
   readDesktopConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
-  deleteDesktopConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   readDesktopConversationAttachments(conversationId: string): Promise<unknown>;
   readDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createDesktopConversationAttachment(input: {
@@ -220,7 +219,6 @@ export interface LocalApiModule {
     previewMimeType?: string;
     note?: string;
   }): Promise<unknown>;
-  deleteDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   readDesktopConversationAttachmentAsset(input: {
     conversationId: string;
     attachmentId: string;
