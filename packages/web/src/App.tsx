@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
@@ -15,7 +15,6 @@ import {
   readDraftConversationCwd,
 } from './draftConversation';
 import { useConversations } from './hooks/useConversations';
-import { InboxPage } from './pages/InboxPage';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
 import {
   AppDataContext,
@@ -24,6 +23,7 @@ import {
   LiveTitlesContext,
   SseConnectionContext,
   SystemStatusContext,
+  useAppData,
 } from './contexts';
 import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
@@ -49,6 +49,8 @@ import type {
   SessionMeta,
   WebUiState,
 } from './types';
+import { setConversationRunIdInSearch } from './conversationRuns';
+import { getRunPrimaryConnection, type RunPresentationLookups } from './runPresentation';
 
 function LegacyTaskRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();
@@ -75,7 +77,50 @@ function ConversationsRouteRedirect() {
 }
 
 function DeletedStandaloneRunsRedirect() {
-  return <Navigate to="/automations" replace />;
+  const { id } = useParams<{ id?: string }>();
+  const { runs, tasks, sessions } = useAppData();
+  const [target, setTarget] = useState<string | null>(null);
+  const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [sessions, tasks]);
+
+  if (!id) {
+    return <Navigate to="/automations" replace />;
+  }
+
+  useEffect(() => {
+
+    const cached = runs?.runs.find((run) => run.runId === id);
+    if (cached) {
+      const connection = getRunPrimaryConnection(cached, lookups);
+      setTarget(connection?.to
+        ? `${connection.to}${setConversationRunIdInSearch('', cached.runId)}`
+        : '/automations');
+      return;
+    }
+
+    let cancelled = false;
+    void api.durableRun(id)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        const connection = getRunPrimaryConnection(detail.run, lookups);
+        setTarget(connection?.to
+          ? `${connection.to}${setConversationRunIdInSearch('', detail.run.runId)}`
+          : '/automations');
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTarget('/automations');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, lookups, runs?.runs]);
+
+  return target ? <Navigate to={target} replace /> : null;
 }
 
 function DeletedStandaloneAdminRedirect() {
@@ -348,25 +393,6 @@ export function App() {
   }, [bumpConversationVersion, refreshSessionMeta, setActivity, setAlerts, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
 
   const bootstrapSnapshots = useCallback(() => {
-    void api.activity()
-      .then((entries) => {
-        setActivity({
-          entries,
-          unreadCount: entries.filter((entry) => !entry.read).length,
-        });
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-
-    void api.alerts()
-      .then((snapshot) => {
-        setAlerts(snapshot);
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-
     void fetchSessionsSnapshot()
       .then((items) => {
         setSessions(items);
@@ -406,7 +432,7 @@ export function App() {
       .catch(() => {
         // Keep waiting for SSE or a later retry.
       });
-  }, [setActivity, setAlerts, setDaemon, setRuns, setSessions, setTasks, setWebUi]);
+  }, [setDaemon, setRuns, setSessions, setTasks, setWebUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -557,8 +583,8 @@ export function App() {
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
                       <Route path="workspace" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="workspace/*" element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="inbox" element={<InboxPage />} />
-                      <Route path="inbox/:id" element={<InboxPage />} />
+                      <Route path="inbox" element={<Navigate to="/conversations/new" replace />} />
+                      <Route path="inbox/:id" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="runs" element={<DeletedStandaloneRunsRedirect />} />
                       <Route path="runs/:id" element={<DeletedStandaloneRunsRedirect />} />

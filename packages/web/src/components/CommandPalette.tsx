@@ -112,15 +112,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/conversations/new' },
     },
     {
-      id: 'nav:inbox',
-      section: 'nav',
-      title: 'Notifications',
-      subtitle: 'Notification center for activity, reminders, and follow-ups',
-      keywords: ['activity', 'notifications', 'alerts', 'reminders', 'callbacks', 'inbox'],
-      order: 1,
-      action: { kind: 'navigate', to: '/inbox' },
-    },
-    {
       id: 'nav:scheduled',
       section: 'nav',
       title: 'Automations',

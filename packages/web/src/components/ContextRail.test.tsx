@@ -185,8 +185,8 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('← Conversation');
-    expect(html).toContain('Current conversation');
+    expect(html).toContain('ui-toolbar-button">← <!-- -->Conversation');
+    expect(html).toContain('Current view');
     expect(html).not.toContain('href="/conversations/conv-123"');
   });
 

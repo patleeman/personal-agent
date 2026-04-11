@@ -17,7 +17,6 @@ export function getRailPageKey(pathname: string): string {
     case 'scheduled':
     case 'runs':
     case 'conversations':
-    case 'inbox':
     case 'system':
     case 'skills':
     case 'nodes':
@@ -70,7 +69,6 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         initialWidth: 420,
       };
     case 'conversations':
-    case 'inbox':
     case 'memory':
     case 'knowledge':
     case 'system':

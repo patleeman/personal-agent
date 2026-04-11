@@ -194,7 +194,6 @@ class RouteContentBoundary extends Component<{
             <h1 className="mt-2 text-[22px] font-semibold text-primary">{title}</h1>
             <p className="mt-2 text-[13px] leading-6 text-secondary">{body}</p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Link to="/inbox" className="ui-action-button">Open notifications</Link>
               <Link to="/conversations/new" className="ui-action-button">New conversation</Link>
             </div>
           </div>

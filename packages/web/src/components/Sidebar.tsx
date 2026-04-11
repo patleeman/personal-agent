@@ -3,7 +3,6 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
 import { useConversations } from '../hooks/useConversations';
-import { useAppData } from '../contexts';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import {
   buildDraftConversationSessionMeta,
@@ -41,8 +40,6 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 }
 
 const PATH = {
-  alerts: 'M14.857 17.082A23.848 23.848 0 0 0 18 18.75a8.967 8.967 0 0 1-6 2.292A8.967 8.967 0 0 1 6 18.75c1.09-.36 2.14-.92 3.143-1.668M14.857 17.082a23.848 23.848 0 0 1-5.714 0M14.857 17.082A5.98 5.98 0 0 0 18 11.25V9.75a6 6 0 1 0-12 0v1.5a5.98 5.98 0 0 0 3.143 5.832M12 3v1.5',
-  inbox: 'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
   conversations: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
   nodes: 'M6 6.75h4.5v4.5H6v-4.5Zm7.5 0H18v4.5h-4.5v-4.5Zm-3.75 7.5h4.5v4.5h-4.5v-4.5Z',
   notes: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
@@ -66,6 +63,7 @@ const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations', '/sched
 
 type DesktopConversationShortcutAction =
   | 'close-conversation'
+  | 'reopen-closed-conversation'
   | 'previous-conversation'
   | 'next-conversation'
   | 'toggle-conversation-pin'
@@ -233,6 +231,7 @@ function getNewConversationHotkeyLabel(): string {
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
   return value === 'close-conversation'
+    || value === 'reopen-closed-conversation'
     || value === 'previous-conversation'
     || value === 'next-conversation'
     || value === 'toggle-conversation-pin'
@@ -507,17 +506,16 @@ function OpenConversationRow({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity } = useAppData();
   const {
     pinnedSessions,
     tabs,
     archivedSessions,
-    archivedConversationIds,
     closeSession,
     pinSession,
     unpinSession,
     archiveSession,
     restoreSession,
+    reopenMostRecentlyClosedSession,
     moveSession,
     shiftSession,
     loading,
@@ -581,32 +579,6 @@ export function Sidebar() {
     [collapsedConversationGroupKeys],
   );
 
-  const activeAlertCount = 0;
-  const activeAlertActivityIds = useMemo(() => new Set<string>(), []);
-  const activeAlertConversationIds = useMemo(() => new Set<string>(), []);
-  const standaloneUnreadCount = useMemo(() => {
-    const knownConversationIds = new Set([...pinnedSessions, ...tabs, ...archivedSessions].map((session) => session.id));
-    return (activity?.entries ?? []).filter((entry) => {
-      if (entry.read || activeAlertActivityIds.has(entry.id)) {
-        return false;
-      }
-
-      return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
-    }).length;
-  }, [activity?.entries, activeAlertActivityIds, archivedSessions, pinnedSessions, tabs]);
-  const archivedConversationIdSet = useMemo(
-    () => new Set(archivedConversationIds),
-    [archivedConversationIds],
-  );
-  const attentionConversationCount = useMemo(
-    () => archivedSessions.filter((session) => (
-      sessionNeedsAttention(session)
-      && !archivedConversationIdSet.has(session.id)
-      && !activeAlertConversationIds.has(session.id)
-    )).length,
-    [activeAlertConversationIds, archivedConversationIdSet, archivedSessions],
-  );
-  const notificationCount = standaloneUnreadCount + activeAlertCount + attentionConversationCount;
 
   const toggleConversationGroupCollapsed = useCallback((groupKey: string) => {
     const normalizedGroupKey = groupKey.trim();
@@ -750,6 +722,15 @@ export function Sidebar() {
       clearDragState();
     }
   }, [activeConversationId, draggingSessionId, shiftSession]);
+
+  const handleReopenClosedConversation = useCallback(() => {
+    const sessionId = reopenMostRecentlyClosedSession();
+    if (!sessionId) {
+      return;
+    }
+
+    navigate(buildConversationSurfacePath(sessionId));
+  }, [navigate, reopenMostRecentlyClosedSession]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -950,6 +931,11 @@ export function Sidebar() {
         return;
       }
 
+      if (action === 'reopen-closed-conversation') {
+        handleReopenClosedConversation();
+        return;
+      }
+
       if (action === 'toggle-conversation-pin') {
         handleTogglePinnedActiveConversation();
         return;
@@ -970,7 +956,7 @@ export function Sidebar() {
 
     window.addEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_CONVERSATION_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [handleCloseActiveConversation, handleToggleArchivedActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
+  }, [handleCloseActiveConversation, handleReopenClosedConversation, handleToggleArchivedActiveConversation, handleTogglePinnedActiveConversation, navigateConversation]);
 
   function handlePinConversation(sessionId: string) {
     pinSession(sessionId);
@@ -1064,7 +1050,6 @@ export function Sidebar() {
       </div>
 
       <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-        <TopNavItem to="/inbox" icon={PATH.inbox} label="Notifications" badge={notificationCount} />
         <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
       </div>
     </aside>

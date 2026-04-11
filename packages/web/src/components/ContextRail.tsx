@@ -28,12 +28,11 @@ import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
-  ActivityEntry,
   AgentToolInfo,
   DurableRunDetailResult,
   ScheduledTaskSummary,
 } from '../types';
-import { formatDate, kindMeta, timeAgo } from '../utils';
+import { timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { sessionNeedsAttention } from '../sessionIndicators';
@@ -271,7 +270,17 @@ function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefine
   return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
 }
 
-function RunContextPanel({ conversationId, runId, simplified = false }: { conversationId?: string; runId: string; simplified?: boolean }) {
+function RunContextPanel({
+  runId,
+  ownerRoute,
+  closeLabel,
+  simplified = false,
+}: {
+  runId: string;
+  ownerRoute?: string;
+  closeLabel?: string;
+  simplified?: boolean;
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { tasks, sessions, setRuns } = useAppData();
@@ -288,15 +297,11 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   } = useDurableRunStream(runId, simplified ? 240 : 160);
 
   const closeRun = useCallback(() => {
-    if (!conversationId) {
-      return;
-    }
-
     navigate({
       pathname: location.pathname,
       search: setConversationRunIdInSearch(location.search, null),
     });
-  }, [conversationId, location.pathname, location.search, navigate]);
+  }, [location.pathname, location.search, navigate]);
 
   async function handleCancel() {
     if (!detail || cancelling || !canCancelRun(detail.run)) {
@@ -349,16 +354,14 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
   const timeline = getRunTimeline(run);
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
-  const closeSearch = conversationId ? setConversationRunIdInSearch(location.search, null) : '';
-  const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
-  const showConversationChrome = Boolean(conversationId);
+  const showOwnerChrome = Boolean(closeLabel);
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 px-4 py-4 space-y-4">
-        <div className={showConversationChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
-          {showConversationChrome && (
+        <div className={showOwnerChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
+          {showOwnerChrome && (
             <button type="button" onClick={closeRun} className="ui-toolbar-button">
-              ← Conversation
+              ← {closeLabel}
             </button>
           )}
           <div className="flex items-center gap-1.5">
@@ -416,25 +419,21 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
             <p className="ui-section-label mb-2">Connected to</p>
             <div className="space-y-2">
               {connections.map((connection) => {
-                const isCurrentConversationConnection = currentConversationPath !== null
-                  && connection.label.startsWith('Conversation')
-                  && connection.to === currentConversationPath;
-                const detailText = isCurrentConversationConnection
-                  ? ['Current conversation', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
+                const isCurrentOwnerConnection = ownerRoute !== undefined && connection.to === ownerRoute;
+                const detailText = isCurrentOwnerConnection
+                  ? ['Current view', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
                   : connection.detail;
-                const connectionHref = connection.to
-                  ? connection.to + (showConversationChrome && connection.label.startsWith('Conversation') ? closeSearch : '')
-                  : null;
+                const connectionHref = connection.to ?? null;
 
                 return (
                   <div key={connection.key} className="space-y-0.5">
                     <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
-                    {isCurrentConversationConnection ? (
+                    {isCurrentOwnerConnection ? (
                       <button
                         type="button"
                         onClick={closeRun}
                         className="text-left text-[13px] text-accent hover:underline break-all"
-                        title="Return to the current conversation"
+                        title="Return to the current view"
                       >
                         {connection.value}
                       </button>
@@ -1006,176 +1005,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
 // ── Task detail ───────────────────────────────────────────────────────────────
 
-// ── Inbox item detail ─────────────────────────────────────────────────────────
-
-function pickInboxItemConversationId(entry: Pick<ActivityEntry, 'relatedConversationIds'>): string | null {
-  const relatedConversationIds = (entry.relatedConversationIds ?? [])
-    .filter((conversationId): conversationId is string => typeof conversationId === 'string' && conversationId.trim().length > 0);
-
-  return relatedConversationIds.length > 0
-    ? relatedConversationIds[relatedConversationIds.length - 1] ?? null
-    : null;
-}
-
-function InboxItemContext({ id }: { id: string }) {
-  const navigate = useNavigate();
-  const { openSession } = useConversations();
-  const [entry, setEntry] = useState<ActivityEntry | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setLoading(true);
-    setActionBusy(false);
-    setActionError(null);
-
-    api.activityById(id)
-      .then((nextEntry) => {
-        if (cancelled) {
-          return;
-        }
-
-        setEntry(nextEntry);
-        setLoading(false);
-
-        if (!nextEntry.read) {
-          void api.markActivityRead(id).catch(() => {
-            // Ignore optimistic read-state failures; refresh can recover.
-          });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setEntry(null);
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (!entry) return <div className="px-4 py-4 text-[12px] text-dim">Not found.</div>;
-
-  const meta = kindMeta(entry.kind);
-  const primaryConversationId = pickInboxItemConversationId(entry);
-  const relatedConversationIds = [...(entry.relatedConversationIds ?? [])].reverse();
-
-  function openConversation(conversationId: string) {
-    setActionError(null);
-    openSession(conversationId);
-    navigate(`/conversations/${encodeURIComponent(conversationId)}`);
-  }
-
-  async function handlePrimaryAction() {
-    if (actionBusy) {
-      return;
-    }
-
-    if (primaryConversationId) {
-      openConversation(primaryConversationId);
-      return;
-    }
-
-    const currentEntry = entry;
-    if (!currentEntry) {
-      return;
-    }
-
-    setActionBusy(true);
-    setActionError(null);
-
-    try {
-      const result = await api.startActivityConversation(currentEntry.id);
-      openSession(result.id);
-      navigate(`/conversations/${encodeURIComponent(result.id)}`);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-      setActionBusy(false);
-    }
-  }
-
-  return (
-    <div className="px-4 py-4 space-y-4 overflow-y-auto">
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <p className="ui-card-title">{entry.summary}</p>
-          <p className="ui-card-meta">
-            <span className={meta.color}>{meta.label}</span>
-            <span className="opacity-40 mx-1.5">·</span>
-            {formatDate(entry.createdAt)}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => { void handlePrimaryAction(); }}
-            disabled={actionBusy}
-            className="ui-toolbar-button text-accent"
-          >
-            {primaryConversationId ? 'Open conversation' : (actionBusy ? 'Starting…' : 'Start conversation')}
-          </button>
-        </div>
-
-        {actionError && <p className="text-[12px] text-danger">{actionError}</p>}
-      </div>
-
-      {entry.details && (
-        <div className="border-t border-border-subtle pt-3">
-          <p className="ui-section-label mb-1.5">Details</p>
-          <div className="text-[12px] text-secondary whitespace-pre-wrap break-words leading-relaxed">
-            {entry.details}
-          </div>
-        </div>
-      )}
-
-      {relatedConversationIds.length > 0 && (
-        <div className="border-t border-border-subtle pt-3">
-          <p className="ui-section-label mb-2">Related</p>
-          <div className="space-y-3">
-            {relatedConversationIds.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Conversations</p>
-                {relatedConversationIds.map((conversationId) => (
-                  <Link
-                    key={conversationId}
-                    to={`/conversations/${conversationId}`}
-                    onClick={() => openSession(conversationId)}
-                    className="ui-card-meta font-mono text-accent hover:text-accent/80"
-                  >
-                    {conversationId}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="border-t border-border-subtle pt-3">
-        <div className="ui-detail-list">
-          {[
-            { label: 'id', value: entry.id },
-            { label: 'profile', value: entry.profile },
-            ...(entry.notificationState ? [{ label: 'notify', value: entry.notificationState }] : []),
-          ].map(({ label, value }) => (
-            <div key={label} className="ui-detail-row">
-              <span className="ui-detail-label">{label}</span>
-              <span className="ui-detail-value break-all">{value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function RailMetadataRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="ui-detail-row">
@@ -1597,7 +1426,7 @@ export function ContextRail() {
   );
   if (section === 'conversations' && id && selectedRunId) return (
     <div className="flex-1 min-h-0 overflow-hidden">
-      <RunContextPanel conversationId={id} runId={selectedRunId} />
+      <RunContextPanel runId={selectedRunId} ownerRoute={`/conversations/${encodeURIComponent(id)}`} closeLabel="Conversation" />
     </div>
   );
   if (section === 'conversations' && id) return (
@@ -1612,6 +1441,11 @@ export function ContextRail() {
   );
 
   // Automations
+  if (scheduledSection && id && selectedRunId) return (
+    <div className="flex-1 min-h-0 overflow-hidden">
+      <RunContextPanel runId={selectedRunId} ownerRoute={`/automations/${encodeURIComponent(id)}`} closeLabel="Automation" />
+    </div>
+  );
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Automation" sub={id} />
@@ -1622,22 +1456,6 @@ export function ContextRail() {
     <div className="flex-1 flex flex-col">
       <RailHeader label="Scheduled" />
       <EmptyPrompt text="Select an automation or start a new one." />
-    </div>
-  );
-
-  // Inbox
-  if (section === 'inbox' && id) return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Notifications" sub={id} />
-      <div className="flex-1 overflow-y-auto">
-        <InboxItemContext id={id} />
-      </div>
-    </div>
-  );
-  if (section === 'inbox') return (
-    <div className="flex-1 flex flex-col">
-      <RailHeader label="Notifications" />
-      <EmptyPrompt text="Select an item to see details." />
     </div>
   );
 

@@ -82,7 +82,7 @@ describe('Sidebar', () => {
   });
 
   function renderSidebar(
-    pathname = '/inbox',
+    pathname = '/conversations/new',
     options?: {
       sessions?: SessionMeta[];
       liveTitles?: Map<string, string>;
@@ -129,15 +129,15 @@ describe('Sidebar', () => {
   }
 
   it('renders a flat primary nav for core workspaces', () => {
-    const html = renderSidebar('/inbox');
+    const html = renderSidebar('/conversations/new');
 
     expect(html.indexOf('Chat')).toBeLessThan(html.indexOf('Automations'));
     expect(html.indexOf('Automations')).toBeLessThan(html.indexOf('Threads'));
-    expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Notifications'));
-    expect(html.indexOf('Notifications')).toBeLessThan(html.indexOf('Settings'));
+    expect(html.indexOf('Threads')).toBeLessThan(html.indexOf('Settings'));
     expect(html).not.toContain('Open Conversations');
     expect(html).not.toContain('Pinned Conversations');
     expect(html).not.toContain('Alerts');
+    expect(html).not.toContain('Notifications');
     expect(html).toContain('Settings');
     expect(html).not.toContain('Runs');
     expect(html).not.toContain('Vault');
@@ -155,7 +155,7 @@ describe('Sidebar', () => {
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(PINNED_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
 
-    const html = renderSidebar('/inbox');
+    const html = renderSidebar('/conversations/new');
 
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
@@ -165,7 +165,7 @@ describe('Sidebar', () => {
   it('renders compact left-edge indicators for running and review states', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-running', 'conv-review']));
 
-    const html = renderSidebar('/inbox', {
+    const html = renderSidebar('/conversations/new', {
       sessions: [
         createSession({ id: 'conv-running', title: 'Active conversation', isRunning: true }),
         createSession({ id: 'conv-review', title: 'Unread follow-up', file: '/tmp/conv-review.jsonl', needsAttention: true }),
@@ -182,7 +182,7 @@ describe('Sidebar', () => {
   it('keeps live title overrides scoped to the matching conversation id', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'conv-456']));
 
-    const html = renderSidebar('/inbox', {
+    const html = renderSidebar('/conversations/new', {
       sessions: [
         createSession({ id: 'conv-123', title: 'First conversation' }),
         createSession({ id: 'conv-456', title: 'Second conversation' }),
@@ -204,7 +204,7 @@ describe('Sidebar', () => {
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
 
-    const html = renderSidebar('/inbox', {
+    const html = renderSidebar('/conversations/new', {
       sessions: [
         createSession({ id: 'conv-a1', title: 'First alpha conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
         createSession({ id: 'conv-b1', title: 'Only beta conversation', cwd: '/tmp/beta-worktree', cwdSlug: 'beta-worktree', file: '/tmp/conv-b1.jsonl' }),
@@ -231,7 +231,7 @@ describe('Sidebar', () => {
       JSON.stringify(['/Users/patrickc.lee/personal/personal-agent']),
     );
 
-    const html = renderSidebar('/inbox');
+    const html = renderSidebar('/conversations/new');
 
     expect(html).toContain('aria-label="Expand personal-agent"');
     expect(html).toContain('aria-expanded="false"');
@@ -239,7 +239,7 @@ describe('Sidebar', () => {
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {
-    const html = renderSidebar('/inbox');
+    const html = renderSidebar('/conversations/new');
 
     expect(html).toContain('draggable="true"');
     expect(html).toContain('Drag to reorder conversations');
@@ -249,7 +249,7 @@ describe('Sidebar', () => {
   it('keeps child conversations flat in the explicit tab order', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['child-1', 'conv-123']));
 
-    const html = renderSidebar('/inbox', {
+    const html = renderSidebar('/conversations/new', {
       sessions: [
         createSession({ id: 'conv-123', title: 'Parent conversation' }),
         createSession({
@@ -270,7 +270,7 @@ describe('Sidebar', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));
 
-    const html = renderSidebar('/inbox');
+    const html = renderSidebar('/conversations/new');
 
     expect(html).not.toContain('Open Docs');
     expect(html).not.toContain('Draft doc');
