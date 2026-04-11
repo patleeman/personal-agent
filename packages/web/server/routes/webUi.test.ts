@@ -3,54 +3,36 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   createLocalSessionMock,
   findActivityRecordMock,
-  installWebUiServiceAndReadStateMock,
   invalidateAppTopicsMock,
   logErrorMock,
   persistSettingsWriteMock,
   queuePromptContextMock,
   readSavedWebUiPreferencesMock,
   readWebUiStateMock,
-  requestWebUiServiceRestartMock,
   resolveConversationCwdMock,
   setActivityConversationLinksMock,
-  startWebUiServiceAndReadStateMock,
-  stopWebUiServiceAndReadStateMock,
   syncConfiguredWebUiTailscaleServeMock,
-  uninstallWebUiServiceAndReadStateMock,
   writeSavedWebUiPreferencesMock,
   writeWebUiConfigMock,
 } = vi.hoisted(() => ({
   createLocalSessionMock: vi.fn(),
   findActivityRecordMock: vi.fn(),
-  installWebUiServiceAndReadStateMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   logErrorMock: vi.fn(),
   persistSettingsWriteMock: vi.fn(),
   queuePromptContextMock: vi.fn(),
   readSavedWebUiPreferencesMock: vi.fn(),
   readWebUiStateMock: vi.fn(),
-  requestWebUiServiceRestartMock: vi.fn(),
   resolveConversationCwdMock: vi.fn(),
   setActivityConversationLinksMock: vi.fn(),
-  startWebUiServiceAndReadStateMock: vi.fn(),
-  stopWebUiServiceAndReadStateMock: vi.fn(),
   syncConfiguredWebUiTailscaleServeMock: vi.fn(),
-  uninstallWebUiServiceAndReadStateMock: vi.fn(),
   writeSavedWebUiPreferencesMock: vi.fn(),
   writeWebUiConfigMock: vi.fn(),
 }));
 
-vi.mock('../ui/applicationRestart.js', () => ({
-  requestWebUiServiceRestart: requestWebUiServiceRestartMock,
-}));
-
 vi.mock('../ui/webUi.js', () => ({
-  installWebUiServiceAndReadState: installWebUiServiceAndReadStateMock,
   readWebUiState: readWebUiStateMock,
-  startWebUiServiceAndReadState: startWebUiServiceAndReadStateMock,
-  stopWebUiServiceAndReadState: stopWebUiServiceAndReadStateMock,
   syncConfiguredWebUiTailscaleServe: syncConfiguredWebUiTailscaleServeMock,
-  uninstallWebUiServiceAndReadState: uninstallWebUiServiceAndReadStateMock,
   writeWebUiConfig: writeWebUiConfigMock,
 }));
 
@@ -142,24 +124,18 @@ describe('web UI routes', () => {
   beforeEach(() => {
     createLocalSessionMock.mockReset();
     findActivityRecordMock.mockReset();
-    installWebUiServiceAndReadStateMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     logErrorMock.mockReset();
     persistSettingsWriteMock.mockReset();
     queuePromptContextMock.mockReset();
     readSavedWebUiPreferencesMock.mockReset();
     readWebUiStateMock.mockReset();
-    requestWebUiServiceRestartMock.mockReset();
     resolveConversationCwdMock.mockReset();
     setActivityConversationLinksMock.mockReset();
-    startWebUiServiceAndReadStateMock.mockReset();
-    stopWebUiServiceAndReadStateMock.mockReset();
     syncConfiguredWebUiTailscaleServeMock.mockReset();
-    uninstallWebUiServiceAndReadStateMock.mockReset();
     writeSavedWebUiPreferencesMock.mockReset();
     writeWebUiConfigMock.mockReset();
 
-    installWebUiServiceAndReadStateMock.mockReturnValue({ service: { status: 'installed' } });
     persistSettingsWriteMock.mockImplementation((write: (settingsFile: string) => unknown, options: { runtimeSettingsFile: string }) => write(options.runtimeSettingsFile));
     readSavedWebUiPreferencesMock.mockReturnValue({
       openConversationIds: ['conversation-1'],
@@ -176,11 +152,7 @@ describe('web UI routes', () => {
       },
       log: { lines: [] },
     });
-    requestWebUiServiceRestartMock.mockReturnValue({ ok: true, action: 'restart' });
     resolveConversationCwdMock.mockReturnValue('/repo/worktree');
-    startWebUiServiceAndReadStateMock.mockReturnValue({ service: { status: 'running' } });
-    stopWebUiServiceAndReadStateMock.mockReturnValue({ service: { status: 'stopped' } });
-    uninstallWebUiServiceAndReadStateMock.mockReturnValue({ service: { status: 'uninstalled' } });
     writeSavedWebUiPreferencesMock.mockReturnValue({
       openConversationIds: ['conversation-4'],
       pinnedConversationIds: ['conversation-5'],
@@ -219,112 +191,6 @@ describe('web UI routes', () => {
     }));
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'Error: state failed' });
-  });
-
-  it('installs, starts, stops, and uninstalls the managed web UI service', () => {
-    const { postHandler } = createDesktopHarness();
-
-    const installRes = createResponse();
-    postHandler('/api/web-ui/service/install')({}, installRes);
-    expect(installWebUiServiceAndReadStateMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('webUi');
-    expect(installRes.json).toHaveBeenCalledWith({ service: { status: 'installed' } });
-
-    const startRes = createResponse();
-    postHandler('/api/web-ui/service/start')({}, startRes);
-    expect(startWebUiServiceAndReadStateMock).toHaveBeenCalledTimes(1);
-    expect(startRes.json).toHaveBeenCalledWith({ service: { status: 'running' } });
-
-    const stopRes = createResponse();
-    postHandler('/api/web-ui/service/stop')({}, stopRes);
-    expect(stopWebUiServiceAndReadStateMock).toHaveBeenCalledTimes(1);
-    expect(stopRes.json).toHaveBeenCalledWith({ service: { status: 'stopped' } });
-
-    const uninstallRes = createResponse();
-    postHandler('/api/web-ui/service/uninstall')({}, uninstallRes);
-    expect(uninstallWebUiServiceAndReadStateMock).toHaveBeenCalledTimes(1);
-    expect(uninstallRes.json).toHaveBeenCalledWith({ service: { status: 'uninstalled' } });
-  });
-
-  it('maps desktop-runtime lifecycle rejections to bad requests', () => {
-    const { postHandler } = createDesktopHarness();
-    installWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    });
-    startWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    });
-    stopWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    });
-    uninstallWebUiServiceAndReadStateMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    });
-
-    const installRes = createResponse();
-    postHandler('/api/web-ui/service/install')({}, installRes);
-    expect(installRes.status).toHaveBeenCalledWith(400);
-    expect(installRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
-
-    const startRes = createResponse();
-    postHandler('/api/web-ui/service/start')({}, startRes);
-    expect(startRes.status).toHaveBeenCalledWith(400);
-    expect(startRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
-
-    const stopRes = createResponse();
-    postHandler('/api/web-ui/service/stop')({}, stopRes);
-    expect(stopRes.status).toHaveBeenCalledWith(400);
-    expect(stopRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
-
-    const uninstallRes = createResponse();
-    postHandler('/api/web-ui/service/uninstall')({}, uninstallRes);
-    expect(uninstallRes.status).toHaveBeenCalledWith(400);
-    expect(uninstallRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
-  });
-
-  it('maps restart responses for desktop routes', () => {
-    const desktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
-
-    const desktopRes = createResponse();
-    desktop.postHandler('/api/web-ui/service/restart')({}, desktopRes);
-    expect(requestWebUiServiceRestartMock).toHaveBeenCalledWith({ repoRoot: '/desktop-repo' });
-    expect(desktopRes.status).toHaveBeenCalledWith(202);
-    expect(desktopRes.json).toHaveBeenCalledWith({ ok: true, action: 'restart' });
-
-    requestWebUiServiceRestartMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI restart already in progress');
-    });
-    const conflictRes = createResponse();
-    desktop.postHandler('/api/web-ui/service/restart')({}, conflictRes);
-    expect(conflictRes.status).toHaveBeenCalledWith(409);
-    expect(conflictRes.json).toHaveBeenCalledWith({ error: 'Managed web UI restart already in progress' });
-
-    const failingDesktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
-    requestWebUiServiceRestartMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service is not installed');
-    });
-    const missingServiceRes = createResponse();
-    failingDesktop.postHandler('/api/web-ui/service/restart')({}, missingServiceRes);
-    expect(missingServiceRes.status).toHaveBeenCalledWith(400);
-    expect(missingServiceRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service is not installed' });
-
-    const unavailableDesktop = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
-    requestWebUiServiceRestartMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    });
-    const unavailableRes = createResponse();
-    unavailableDesktop.postHandler('/api/web-ui/service/restart')({}, unavailableRes);
-    expect(unavailableRes.status).toHaveBeenCalledWith(400);
-    expect(unavailableRes.json).toHaveBeenCalledWith({ error: 'Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.' });
-
-    const failingDesktopAgain = createDesktopHarness({ getRepoRoot: () => '/desktop-repo' });
-    requestWebUiServiceRestartMock.mockImplementationOnce(() => {
-      throw new Error('restart failed');
-    });
-    const failureRes = createResponse();
-    failingDesktopAgain.postHandler('/api/web-ui/service/restart')({}, failureRes);
-    expect(failureRes.status).toHaveBeenCalledWith(500);
-    expect(failureRes.json).toHaveBeenCalledWith({ error: 'restart failed' });
   });
 
   it('reads and writes open conversation layout with validation and persistence', async () => {

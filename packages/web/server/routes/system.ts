@@ -1,12 +1,10 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { requestApplicationRestart, requestApplicationUpdate } from '../ui/applicationRestart.js';
 import { readWebUiState } from '../ui/webUi.js';
 import { readDaemonState } from '../automation/daemon.js';
 import { getAlertSnapshotForProfile } from '../automation/alerts.js';
 import { subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
 import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
-import { suppressMonitoredServiceAttention } from '../shared/internalAttention.js';
 import {
   logError,
   logWarn,
@@ -119,36 +117,6 @@ function handleStatus(_req: Request, res: Response): void {
   }
 }
 
-function handleApplicationRestart(_req: Request, res: Response): void {
-  try {
-    suppressMonitoredServiceAttention('daemon', 10 * 60_000);
-    res.status(202).json(requestApplicationRestart({ repoRoot: getRepoRootFn(), profile: getCurrentProfileFn() }));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
-      ? 409
-      : message.startsWith('Managed web UI service is not installed')
-        ? 400
-        : 500;
-    res.status(status).json({ error: message });
-  }
-}
-
-function handleApplicationUpdate(_req: Request, res: Response): void {
-  try {
-    suppressMonitoredServiceAttention('daemon', 15 * 60_000);
-    res.status(202).json(requestApplicationUpdate({ repoRoot: getRepoRootFn(), profile: getCurrentProfileFn() }));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
-      ? 409
-      : message.startsWith('Managed web UI service is not installed')
-        ? 400
-        : 500;
-    res.status(status).json({ error: message });
-  }
-}
-
 export function registerSystemRoutes(
   router: Pick<Express, 'get' | 'post'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
@@ -222,6 +190,4 @@ export function registerSystemRoutes(
   });
 
   router.get('/api/status', handleStatus);
-  router.post('/api/application/restart', handleApplicationRestart);
-  router.post('/api/application/update', handleApplicationUpdate);
 }

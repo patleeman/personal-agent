@@ -9,11 +9,8 @@ const {
   logWarnMock,
   readDaemonStateMock,
   readWebUiStateMock,
-  requestApplicationRestartMock,
-  requestApplicationUpdateMock,
   streamSnapshotEventsMock,
   subscribeAppEventsMock,
-  suppressMonitoredServiceAttentionMock,
 } = vi.hoisted(() => ({
   getAlertSnapshotForProfileMock: vi.fn(),
   listConversationSessionsSnapshotMock: vi.fn(),
@@ -22,16 +19,8 @@ const {
   logWarnMock: vi.fn(),
   readDaemonStateMock: vi.fn(),
   readWebUiStateMock: vi.fn(),
-  requestApplicationRestartMock: vi.fn(),
-  requestApplicationUpdateMock: vi.fn(),
   streamSnapshotEventsMock: vi.fn(),
   subscribeAppEventsMock: vi.fn(),
-  suppressMonitoredServiceAttentionMock: vi.fn(),
-}));
-
-vi.mock('../ui/applicationRestart.js', () => ({
-  requestApplicationRestart: requestApplicationRestartMock,
-  requestApplicationUpdate: requestApplicationUpdateMock,
 }));
 
 vi.mock('../ui/webUi.js', () => ({
@@ -53,10 +42,6 @@ vi.mock('../shared/appEvents.js', () => ({
 
 vi.mock('../shared/snapshotEventStreaming.js', () => ({
   streamSnapshotEvents: streamSnapshotEventsMock,
-}));
-
-vi.mock('../shared/internalAttention.js', () => ({
-  suppressMonitoredServiceAttention: suppressMonitoredServiceAttentionMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -93,11 +78,8 @@ describe('system routes', () => {
     logWarnMock.mockReset();
     readDaemonStateMock.mockReset();
     readWebUiStateMock.mockReset();
-    requestApplicationRestartMock.mockReset();
-    requestApplicationUpdateMock.mockReset();
     streamSnapshotEventsMock.mockReset();
     subscribeAppEventsMock.mockReset();
-    suppressMonitoredServiceAttentionMock.mockReset();
 
     getAlertSnapshotForProfileMock.mockReturnValue({ entries: [{ id: 'alert-1' }], activeCount: 1 });
     listConversationSessionsSnapshotMock.mockReturnValue([{ id: 'conversation-1' }]);
@@ -142,8 +124,6 @@ describe('system routes', () => {
     return {
       eventsHandler: handlers['GET /api/events']!,
       statusHandler: handlers['GET /api/status']!,
-      restartHandler: handlers['POST /api/application/restart']!,
-      updateHandler: handlers['POST /api/application/update']!,
     };
   }
 
@@ -193,50 +173,6 @@ describe('system routes', () => {
     }));
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: status failed' });
-  });
-
-  it('restarts and updates the application with mapped error statuses', () => {
-    const { restartHandler, updateHandler } = createDesktopHarness();
-    requestApplicationRestartMock.mockReturnValue({ ok: true, kind: 'restart' });
-    requestApplicationUpdateMock.mockReturnValue({ ok: true, kind: 'update' });
-
-    const restartRes = createJsonResponse();
-    restartHandler({}, restartRes);
-    expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledWith('daemon', 10 * 60_000);
-    expect(requestApplicationRestartMock).toHaveBeenCalledWith({ repoRoot: '/repo', profile: 'assistant' });
-    expect(restartRes.status).toHaveBeenCalledWith(202);
-    expect(restartRes.json).toHaveBeenCalledWith({ ok: true, kind: 'restart' });
-
-    const updateRes = createJsonResponse();
-    updateHandler({}, updateRes);
-    expect(suppressMonitoredServiceAttentionMock).toHaveBeenCalledWith('daemon', 15 * 60_000);
-    expect(requestApplicationUpdateMock).toHaveBeenCalledWith({ repoRoot: '/repo', profile: 'assistant' });
-    expect(updateRes.status).toHaveBeenCalledWith(202);
-    expect(updateRes.json).toHaveBeenCalledWith({ ok: true, kind: 'update' });
-
-    requestApplicationRestartMock.mockImplementationOnce(() => {
-      throw new Error('Application restart already in progress');
-    });
-    const conflictRes = createJsonResponse();
-    restartHandler({}, conflictRes);
-    expect(conflictRes.status).toHaveBeenCalledWith(409);
-    expect(conflictRes.json).toHaveBeenCalledWith({ error: 'Application restart already in progress' });
-
-    requestApplicationUpdateMock.mockImplementationOnce(() => {
-      throw new Error('Managed web UI service is not installed');
-    });
-    const missingServiceRes = createJsonResponse();
-    updateHandler({}, missingServiceRes);
-    expect(missingServiceRes.status).toHaveBeenCalledWith(400);
-    expect(missingServiceRes.json).toHaveBeenCalledWith({ error: 'Managed web UI service is not installed' });
-
-    requestApplicationUpdateMock.mockImplementationOnce(() => {
-      throw new Error('update failed');
-    });
-    const failingRes = createJsonResponse();
-    updateHandler({}, failingRes);
-    expect(failingRes.status).toHaveBeenCalledWith(500);
-    expect(failingRes.json).toHaveBeenCalledWith({ error: 'update failed' });
   });
 
   it('streams desktop events, snapshots, invalidations, warnings, and heartbeats', async () => {

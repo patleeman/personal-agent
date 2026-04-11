@@ -1,7 +1,6 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { requestWebUiServiceRestart } from '../ui/applicationRestart.js';
-import { readWebUiState, installWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig } from '../ui/webUi.js';
+import { readWebUiState, syncConfiguredWebUiTailscaleServe, writeWebUiConfig } from '../ui/webUi.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import { logError } from '../middleware/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
@@ -156,14 +155,6 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
   }
 }
 
-function mapWebUiServiceLifecycleErrorStatus(message: string): number {
-  if (message.startsWith('Managed web UI service lifecycle is unavailable in desktop runtime')) {
-    return 400;
-  }
-
-  return 500;
-}
-
 function handleWebUiStateRequest(_req: Request, res: Response): void {
   try {
     res.json(readWebUiState());
@@ -173,83 +164,6 @@ function handleWebUiStateRequest(_req: Request, res: Response): void {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
-  }
-}
-
-function handleWebUiServiceInstall(_req: Request, res: Response): void {
-  try {
-    const state = installWebUiServiceAndReadState();
-    invalidateAppTopics('webUi');
-    res.json(state);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
-  }
-}
-
-function handleWebUiServiceStart(_req: Request, res: Response): void {
-  try {
-    const state = startWebUiServiceAndReadState();
-    invalidateAppTopics('webUi');
-    res.json(state);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
-  }
-}
-
-function handleWebUiServiceRestart(_req: Request, res: Response): void {
-  try {
-    res.status(202).json(requestWebUiServiceRestart({ repoRoot: getRepoRootFn() }));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Managed web UI restart already in progress')
-      || message.startsWith('Application restart already in progress')
-      || message.startsWith('Application update already in progress')
-      ? 409
-      : message.startsWith('Managed web UI service is not installed')
-        || message.startsWith('Managed web UI restart is unavailable in desktop runtime')
-        ? 400
-        : 500;
-    res.status(status).json({ error: message });
-  }
-}
-
-function handleWebUiServiceStop(_req: Request, res: Response): void {
-  try {
-    const state = stopWebUiServiceAndReadState();
-    invalidateAppTopics('webUi');
-    res.json(state);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
-  }
-}
-
-function handleWebUiServiceUninstall(_req: Request, res: Response): void {
-  try {
-    const state = uninstallWebUiServiceAndReadState();
-    invalidateAppTopics('webUi');
-    res.json(state);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(mapWebUiServiceLifecycleErrorStatus(message)).json({ error: message });
   }
 }
 
@@ -365,11 +279,6 @@ export function registerWebUiRoutes(
 ): void {
   initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);
-  router.post('/api/web-ui/service/install', handleWebUiServiceInstall);
-  router.post('/api/web-ui/service/start', handleWebUiServiceStart);
-  router.post('/api/web-ui/service/restart', handleWebUiServiceRestart);
-  router.post('/api/web-ui/service/stop', handleWebUiServiceStop);
-  router.post('/api/web-ui/service/uninstall', handleWebUiServiceUninstall);
   router.post('/api/web-ui/config', handleWebUiConfigPatch);
   router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
   router.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
