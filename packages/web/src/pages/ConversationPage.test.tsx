@@ -31,6 +31,7 @@ import {
   resolveConversationVisibleScrollBinding,
   buildConversationInitialModelPreferenceState,
   resolveConversationInitialModelPreferenceState,
+  resolveConversationInitialDeferredResumeState,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -97,6 +98,43 @@ describe('conversation autocomplete catalog demand', () => {
       needsMemoryData: false,
       needsVaultFiles: false,
     });
+  });
+});
+
+describe('conversation initial deferred resume state', () => {
+  it('only reuses carried deferred resumes for the matching non-draft conversation route', () => {
+    expect(resolveConversationInitialDeferredResumeState({
+      draft: false,
+      conversationId: 'conv-123',
+      locationState: {
+        initialDeferredResumeState: {
+          conversationId: 'conv-123',
+          resumes: [],
+        },
+      },
+    })).toEqual([]);
+
+    expect(resolveConversationInitialDeferredResumeState({
+      draft: true,
+      conversationId: 'conv-123',
+      locationState: {
+        initialDeferredResumeState: {
+          conversationId: 'conv-123',
+          resumes: [],
+        },
+      },
+    })).toBeNull();
+
+    expect(resolveConversationInitialDeferredResumeState({
+      draft: false,
+      conversationId: 'conv-456',
+      locationState: {
+        initialDeferredResumeState: {
+          conversationId: 'conv-123',
+          resumes: [],
+        },
+      },
+    })).toBeNull();
   });
 });
 

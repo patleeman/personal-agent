@@ -4,7 +4,7 @@
 Finish the desktop-first migration/perf cleanup to a solid foundation, then verify the repo builds, build the mac desktop app, and ship a new desktop release if release prerequisites are available.
 
 ## Current status
-Two small packaged-desktop conversation-open trims are now landed on `master`: freshly created conversations reuse their known model/thinking selection on first open, and saved conversation attachments now load only when the drawings picker opens instead of on every conversation switch. The repo is clean at `f699043f`; the next iteration should go back to packaged first-response / first-visible-update measurement.
+A new packaged-desktop perf trim is green in the worktree: freshly created conversations now carry an initial empty deferred-resume state through navigation, so the first saved-conversation open skips an immediate `readConversationDeferredResumes(...)` desktop read. Cleanup leverage remains very thin, so the next iteration should keep measuring the packaged local first-response / first-visible-update path for another small trim rather than broadening cleanup.
 
 ## Active run
 - run id: none
@@ -15,8 +15,7 @@ Two small packaged-desktop conversation-open trims are now landed on `master`: f
 - `npx vitest run packages/web/src/pages/ConversationPage.test.tsx`
 - `npx eslint packages/web/src/pages/ConversationPage.tsx packages/web/src/pages/ConversationPage.test.tsx`
 - `npm --prefix packages/desktop run build`
-- `npx electron-builder --config electron-builder.json5 --dir`
-- packaged Electron smoke via `agent-browser`: draft-create still landed in the saved conversation shell and `/drawings` still opened the drawings picker modal
+- packaged Electron smoke via `agent-browser`: a draft prompt still opened into the saved conversation shell, got a response, and the measured route transition was about `110ms`
 
 ## Active deferred resume
 - id: `resume_1775878058966_ykxs1mxr`
@@ -24,4 +23,4 @@ Two small packaged-desktop conversation-open trims are now landed on `master`: f
 - when it should wake up: previously scheduled; do not stack another unless timing changes materially
 
 ## Next step
-Re-measure the packaged local first-response / first-visible-update path and land the next small high-confidence trim, or stop cleanly if the next blocker is external.
+Commit and push this green deferred-resume open-path trim, then re-measure the packaged local first-response / first-visible-update path for the next small trim. Keep the later desktop packaging/signing failure (`chrome_crashpad_handler.cstemp` ENOENT) parked as a separate release-path blocker once the perf/migration loop is closer to done.

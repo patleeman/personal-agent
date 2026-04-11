@@ -1001,8 +1001,14 @@ interface ConversationInitialModelPreferenceState {
   currentThinkingLevel: string;
 }
 
+interface ConversationInitialDeferredResumeState {
+  conversationId: string;
+  resumes: DeferredResumeSummary[];
+}
+
 interface ConversationLocationState {
   initialModelPreferenceState?: ConversationInitialModelPreferenceState;
+  initialDeferredResumeState?: ConversationInitialDeferredResumeState;
 }
 
 export function buildConversationInitialModelPreferenceState(input: {
@@ -1042,6 +1048,23 @@ export function resolveConversationInitialModelPreferenceState(input: {
     defaultModel: input.defaultModel,
     defaultThinkingLevel: input.defaultThinkingLevel,
   });
+}
+
+export function resolveConversationInitialDeferredResumeState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  locationState: unknown;
+}): DeferredResumeSummary[] | null {
+  if (input.draft || !input.conversationId || !input.locationState || typeof input.locationState !== 'object') {
+    return null;
+  }
+
+  const candidate = (input.locationState as ConversationLocationState).initialDeferredResumeState;
+  if (!candidate || typeof candidate !== 'object' || candidate.conversationId !== input.conversationId) {
+    return null;
+  }
+
+  return Array.isArray(candidate.resumes) ? candidate.resumes : [];
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
@@ -1601,7 +1624,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     defaultModel,
     defaultThinkingLevel,
   }), [defaultModel, defaultThinkingLevel, draft, id, location.state]);
+  const initialDeferredResumeState = useMemo(() => resolveConversationInitialDeferredResumeState({
+    draft,
+    conversationId: id,
+    locationState: location.state,
+  }), [draft, id, location.state]);
   const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
+  const skippedInitialDeferredResumeLocationKeyRef = useRef<string | null>(null);
   const [draftCwdValue, setDraftCwdValue] = useState('');
   const [draftCwdEditorOpen, setDraftCwdEditorOpen] = useState(false);
   const [draftCwdDraft, setDraftCwdDraft] = useState('');
@@ -2425,8 +2454,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    if (initialDeferredResumeState && skippedInitialDeferredResumeLocationKeyRef.current !== location.key) {
+      skippedInitialDeferredResumeLocationKeyRef.current = location.key;
+      setDeferredResumes(initialDeferredResumeState);
+      return;
+    }
+
     void refetchDeferredResumes().catch(() => {});
-  }, [id, refetchDeferredResumes]);
+  }, [id, initialDeferredResumeState, location.key, refetchDeferredResumes]);
 
   useEffect(() => {
     if (!deferredResumeAutoResumeKey) {
@@ -3298,6 +3333,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             defaultModel,
             defaultThinkingLevel,
           }),
+          initialDeferredResumeState: {
+            conversationId: created.id,
+            resumes: [],
+          },
         },
       });
     } catch (error) {
@@ -4192,6 +4231,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 defaultModel,
                 defaultThinkingLevel,
               }),
+              initialDeferredResumeState: {
+                conversationId: newId,
+                resumes: [],
+              },
             },
           });
 
