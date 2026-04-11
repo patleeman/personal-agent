@@ -535,8 +535,6 @@ export type AppEvent =
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'session_file_changed'; sessionId: string }
-  | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
-  | { type: 'alerts_snapshot'; entries: AlertEntry[]; activeCount: number }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }

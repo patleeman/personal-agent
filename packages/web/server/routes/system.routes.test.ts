@@ -2,7 +2,6 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  getAlertSnapshotForProfileMock,
   listConversationSessionsSnapshotMock,
   listDurableRunsMock,
   logErrorMock,
@@ -12,7 +11,6 @@ const {
   streamSnapshotEventsMock,
   subscribeAppEventsMock,
 } = vi.hoisted(() => ({
-  getAlertSnapshotForProfileMock: vi.fn(),
   listConversationSessionsSnapshotMock: vi.fn(),
   listDurableRunsMock: vi.fn(),
   logErrorMock: vi.fn(),
@@ -32,9 +30,6 @@ vi.mock('../automation/daemon.js', () => ({
   readDaemonState: readDaemonStateMock,
 }));
 
-vi.mock('../automation/alerts.js', () => ({
-  getAlertSnapshotForProfile: getAlertSnapshotForProfileMock,
-}));
 
 vi.mock('../shared/appEvents.js', () => ({
   subscribeAppEvents: subscribeAppEventsMock,
@@ -71,7 +66,6 @@ describe('system routes', () => {
   });
 
   beforeEach(() => {
-    getAlertSnapshotForProfileMock.mockReset();
     listConversationSessionsSnapshotMock.mockReset();
     listDurableRunsMock.mockReset();
     logErrorMock.mockReset();
@@ -81,7 +75,6 @@ describe('system routes', () => {
     streamSnapshotEventsMock.mockReset();
     subscribeAppEventsMock.mockReset();
 
-    getAlertSnapshotForProfileMock.mockReturnValue({ entries: [{ id: 'alert-1' }], activeCount: 1 });
     listConversationSessionsSnapshotMock.mockReturnValue([{ id: 'conversation-1' }]);
     listDurableRunsMock.mockResolvedValue({ runs: [{ runId: 'run-1' }] });
     readDaemonStateMock.mockResolvedValue({ running: true });

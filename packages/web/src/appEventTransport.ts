@@ -4,9 +4,6 @@ export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
   switch (event.type) {
     case 'connected':
       return null;
-    case 'activity_snapshot':
-    case 'alerts_snapshot':
-      return null;
     case 'sessions_snapshot':
       return {
         type: 'sessions',

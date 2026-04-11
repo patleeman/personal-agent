@@ -2,7 +2,6 @@ import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { readWebUiState } from '../ui/webUi.js';
 import { readDaemonState } from '../automation/daemon.js';
-import { getAlertSnapshotForProfile } from '../automation/alerts.js';
 import { subscribeAppEvents, type AppEventTopic } from '../shared/appEvents.js';
 import { streamSnapshotEvents } from '../shared/snapshotEventStreaming.js';
 import {
@@ -12,10 +11,6 @@ import {
 import { listConversationSessionsSnapshot } from '../conversations/conversationService.js';
 import { listDurableRuns } from '../automation/durableRuns.js';
 
-type ActivityListEntryLike = {
-  read?: boolean;
-};
-
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for system routes');
 };
@@ -24,7 +19,7 @@ let getRepoRootFn: () => string = () => {
   throw new Error('getRepoRoot not initialized for system routes');
 };
 
-let listActivityForCurrentProfileFn: () => ActivityListEntryLike[] = () => {
+let listActivityForCurrentProfileFn: () => Array<{ read?: boolean }> = () => {
   throw new Error('listActivityForCurrentProfile not initialized for system routes');
 };
 
@@ -41,24 +36,8 @@ function initializeSystemRoutesContext(
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
 }
 
-function getActivitySnapshotForCurrentProfile(): { entries: ActivityListEntryLike[]; unreadCount: number } {
-  const entries = listActivityForCurrentProfileFn();
-  return {
-    entries,
-    unreadCount: entries.filter((entry) => !entry.read).length,
-  };
-}
-
 export async function buildSnapshotEventsForTopic(topic: AppEventTopic): Promise<unknown[]> {
   switch (topic) {
-    case 'activity': {
-      const snapshot = getActivitySnapshotForCurrentProfile();
-      return [{ type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount }];
-    }
-    case 'alerts': {
-      const snapshot = getAlertSnapshotForProfile(getCurrentProfileFn());
-      return [{ type: 'alerts_snapshot' as const, entries: snapshot.entries, activeCount: snapshot.activeCount }];
-    }
     case 'sessions':
       return [{ type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() }];
     case 'tasks':

@@ -684,9 +684,6 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
 
   const typedEvent = event as {
     type?: string;
-    entries?: unknown;
-    unreadCount?: unknown;
-    activeCount?: unknown;
     sessions?: unknown;
     tasks?: unknown;
     result?: unknown;
@@ -694,9 +691,6 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
   };
 
   switch (typedEvent.type) {
-    case 'activity_snapshot':
-    case 'alerts_snapshot':
-      return null;
     case 'sessions_snapshot':
       return {
         type: 'sessions',
