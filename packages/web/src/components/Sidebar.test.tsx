@@ -198,6 +198,16 @@ describe('Sidebar', () => {
     expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
+  it('renders the conversation timestamp in the trailing inline slot by default', () => {
+    const html = renderSidebar('/conversations/new', {
+      sessions: [createSession({ title: 'Single-line timestamp row' })],
+    });
+
+    expect(html).toContain('Single-line timestamp row');
+    expect(html).toContain('ui-sidebar-session-time');
+    expect(html).toContain('30m ago');
+  });
+
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
 
@@ -275,12 +285,14 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
   });
 
-  it('marks Chat as the active nav on conversation routes and exposes only the overflow actions by default', () => {
+  it('marks Chat as the active nav on conversation routes and keeps row actions hidden until hover', () => {
     const html = renderSidebar('/conversations/conv-123');
 
     expect(html).toContain('Chat');
     expect(html).toContain('ui-sidebar-nav-item-active');
-    expect(html).toContain('aria-label="Conversation actions: Clarify background run link"');
+    expect(html).toContain('ui-sidebar-session-time');
+    expect(html).toContain('30m ago');
+    expect(html).not.toContain('aria-label="Conversation actions: Clarify background run link"');
     expect(html).not.toContain('aria-label="Pin"');
     expect(html).not.toContain('>Conversations<');
   });

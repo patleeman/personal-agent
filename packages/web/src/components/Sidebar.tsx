@@ -429,11 +429,8 @@ function OpenConversationRow({
   const showQuickActions = hovered || menuOpen;
   const showCloseButton = showQuickActions && Boolean(onClose);
   const showMenuButton = Boolean(onPin || onUnpin || onArchive || onDuplicate || onSummarizeAndNew || onCopyId)
-    && (active || hovered || menuOpen);
+    && showQuickActions;
   const showTrailingControls = showCloseButton || showMenuButton;
-  const contentPaddingClass = showCloseButton && showMenuButton
-    ? 'pr-16'
-    : (showCloseButton || showMenuButton ? 'pr-9' : undefined);
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
   const menuItemClass = 'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] text-primary transition-colors hover:bg-elevated disabled:cursor-default disabled:opacity-40';
 
@@ -517,171 +514,171 @@ function OpenConversationRow({
             ].join(' ')}
           />
         </div>
-        <div className={[
-          'min-w-0 flex-1',
-          contentPaddingClass,
-        ].filter(Boolean).join(' ')}>
+        <div className="min-w-0 flex-1 pr-16">
           <p className="ui-row-title truncate">{session.title}</p>
-          <p className="ui-sidebar-session-meta flex items-center min-w-0">
-            <span className="shrink-0">{timeAgo(session.timestamp)}</span>
-          </p>
         </div>
       </Link>
-      {showTrailingControls ? (
-        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-          {showMenuButton ? (
-            <div ref={menuRootRef} className="relative">
+      <div className="pointer-events-none absolute inset-y-0 right-1.5 flex w-14 items-center justify-end">
+        {showTrailingControls ? (
+          <div className="pointer-events-auto flex items-center gap-0.5">
+            {showMenuButton ? (
+              <div ref={menuRootRef} className="relative">
+                <button
+                  type="button"
+                  onPointerDown={stopRowInteraction}
+                  onMouseDown={stopRowInteraction}
+                  onClick={() => {
+                    if (busyAction) {
+                      return;
+                    }
+                    setMenuOpen((current) => !current);
+                  }}
+                  className="ui-icon-button ui-icon-button-compact px-1.5"
+                  title="Conversation actions"
+                  aria-label={`Conversation actions: ${session.title}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menuOpen}
+                  disabled={busyAction !== null}
+                >
+                  <span aria-hidden="true" className="text-[15px] leading-none">⋯</span>
+                </button>
+                {menuOpen ? (
+                  <div
+                    className="ui-menu-shell bottom-auto left-auto right-0 top-full mb-0 mt-1 min-w-[190px] px-2 py-2"
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        setMenuOpen(false);
+                      }
+                    }}
+                    role="menu"
+                    aria-label={`Conversation actions for ${session.title}`}
+                  >
+                    <div className="space-y-0.5">
+                      {pinned && onUnpin ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={async () => {
+                            const succeeded = await onUnpin();
+                            if (succeeded !== false) {
+                              setMenuOpen(false);
+                            }
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          Unpin
+                        </button>
+                      ) : null}
+                      {!pinned && onPin ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={async () => {
+                            const succeeded = await onPin();
+                            if (succeeded !== false) {
+                              setMenuOpen(false);
+                            }
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          Pin
+                        </button>
+                      ) : null}
+                      {onArchive ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={async () => {
+                            const succeeded = await onArchive();
+                            if (succeeded !== false) {
+                              setMenuOpen(false);
+                            }
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          Archive
+                        </button>
+                      ) : null}
+                      {onDuplicate ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={() => {
+                            void runMenuAction('duplicate', onDuplicate);
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
+                        </button>
+                      ) : null}
+                      {onSummarizeAndNew ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={() => {
+                            void runMenuAction('summarize', onSummarizeAndNew);
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
+                        </button>
+                      ) : null}
+                      {onCopyId ? (
+                        <button
+                          type="button"
+                          onPointerDown={stopRowInteraction}
+                          onMouseDown={stopRowInteraction}
+                          onClick={() => {
+                            void handleCopyIdClick();
+                          }}
+                          className={menuItemClass}
+                          disabled={busyAction !== null}
+                          role="menuitem"
+                        >
+                          {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {showCloseButton ? (
               <button
                 type="button"
                 onPointerDown={stopRowInteraction}
                 onMouseDown={stopRowInteraction}
-                onClick={() => {
-                  if (busyAction) {
-                    return;
-                  }
-                  setMenuOpen((current) => !current);
-                }}
-                className="ui-icon-button ui-icon-button-compact px-1.5"
-                title="Conversation actions"
-                aria-label={`Conversation actions: ${session.title}`}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                disabled={busyAction !== null}
+                onClick={() => onClose?.()}
+                className="ui-icon-button ui-icon-button-compact"
+                title="Close"
+                aria-label="Close"
               >
-                <span aria-hidden="true" className="text-[15px] leading-none">⋯</span>
+                <Ico d={PATH.close} size={10} />
               </button>
-              {menuOpen ? (
-                <div
-                  className="ui-menu-shell bottom-auto left-auto right-0 top-full mb-0 mt-1 min-w-[190px] px-2 py-2"
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      setMenuOpen(false);
-                    }
-                  }}
-                  role="menu"
-                  aria-label={`Conversation actions for ${session.title}`}
-                >
-                  <div className="space-y-0.5">
-                    {pinned && onUnpin ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={async () => {
-                          const succeeded = await onUnpin();
-                          if (succeeded !== false) {
-                            setMenuOpen(false);
-                          }
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        Unpin
-                      </button>
-                    ) : null}
-                    {!pinned && onPin ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={async () => {
-                          const succeeded = await onPin();
-                          if (succeeded !== false) {
-                            setMenuOpen(false);
-                          }
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        Pin
-                      </button>
-                    ) : null}
-                    {onArchive ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={async () => {
-                          const succeeded = await onArchive();
-                          if (succeeded !== false) {
-                            setMenuOpen(false);
-                          }
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        Archive
-                      </button>
-                    ) : null}
-                    {onDuplicate ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={() => {
-                          void runMenuAction('duplicate', onDuplicate);
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
-                      </button>
-                    ) : null}
-                    {onSummarizeAndNew ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={() => {
-                          void runMenuAction('summarize', onSummarizeAndNew);
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
-                      </button>
-                    ) : null}
-                    {onCopyId ? (
-                      <button
-                        type="button"
-                        onPointerDown={stopRowInteraction}
-                        onMouseDown={stopRowInteraction}
-                        onClick={() => {
-                          void handleCopyIdClick();
-                        }}
-                        className={menuItemClass}
-                        disabled={busyAction !== null}
-                        role="menuitem"
-                      >
-                        {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          {showCloseButton ? (
-            <button
-              type="button"
-              onPointerDown={stopRowInteraction}
-              onMouseDown={stopRowInteraction}
-              onClick={() => onClose?.()}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Close"
-              aria-label="Close"
-            >
-              <Ico d={PATH.close} size={10} />
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+            ) : null}
+          </div>
+        ) : (
+          <span className="ui-sidebar-session-meta ui-sidebar-session-time shrink-0 whitespace-nowrap">
+            {timeAgo(session.timestamp)}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
