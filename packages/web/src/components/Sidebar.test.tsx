@@ -285,7 +285,7 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
   });
 
-  it('marks Chat as the active nav on conversation routes and keeps row actions hidden until hover', () => {
+  it('marks Chat as the active nav on conversation routes and keeps row actions off the default row chrome', () => {
     const html = renderSidebar('/conversations/conv-123');
 
     expect(html).toContain('Chat');

@@ -1,4 +1,4 @@
-import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
@@ -368,8 +368,10 @@ function OpenConversationRow({
   const menuRootRef = useRef<HTMLDivElement | null>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [busyAction, setBusyAction] = useState<'duplicate' | 'summarize' | null>(null);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const hasContextMenuActions = Boolean(onPin || onUnpin || onArchive || onDuplicate || onSummarizeAndNew || onCopyId);
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -428,9 +430,7 @@ function OpenConversationRow({
 
   const showQuickActions = hovered || menuOpen;
   const showCloseButton = showQuickActions && Boolean(onClose);
-  const showMenuButton = Boolean(onPin || onUnpin || onArchive || onDuplicate || onSummarizeAndNew || onCopyId)
-    && showQuickActions;
-  const showTrailingControls = showCloseButton || showMenuButton;
+  const showTrailingControls = showCloseButton;
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
   const menuItemClass = 'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] text-primary transition-colors hover:bg-elevated disabled:cursor-default disabled:opacity-40';
 
@@ -467,6 +467,25 @@ function OpenConversationRow({
     setCopyState(succeeded === false ? 'failed' : 'copied');
   }
 
+  function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!hasContextMenuActions) {
+      return;
+    }
+
+    stopRowInteraction(event);
+    const menuWidth = 214;
+    const menuHeight = 252;
+    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
+    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+    const edgePadding = 12;
+
+    setMenuPosition({
+      x: Math.max(edgePadding, Math.min(event.clientX, viewportWidth - menuWidth - edgePadding)),
+      y: Math.max(edgePadding, Math.min(event.clientY, viewportHeight - menuHeight - edgePadding)),
+    });
+    setMenuOpen(true);
+  }
+
   return (
     <div
       ref={hoverRef}
@@ -478,6 +497,7 @@ function OpenConversationRow({
       onDragEnd={canDrag ? onDragEnd : undefined}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       {dropPosition ? (
         <span
@@ -514,144 +534,6 @@ function OpenConversationRow({
       <div className="pointer-events-none absolute inset-y-0 right-1.5 flex w-14 items-center justify-end">
         {showTrailingControls ? (
           <div className="pointer-events-auto flex items-center gap-0.5">
-            {showMenuButton ? (
-              <div ref={menuRootRef} className="relative">
-                <button
-                  type="button"
-                  onPointerDown={stopRowInteraction}
-                  onMouseDown={stopRowInteraction}
-                  onClick={() => {
-                    if (busyAction) {
-                      return;
-                    }
-                    setMenuOpen((current) => !current);
-                  }}
-                  className="ui-icon-button ui-icon-button-compact px-1.5"
-                  title="Conversation actions"
-                  aria-label={`Conversation actions: ${session.title}`}
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  disabled={busyAction !== null}
-                >
-                  <span aria-hidden="true" className="text-[15px] leading-none">⋯</span>
-                </button>
-                {menuOpen ? (
-                  <div
-                    className="ui-menu-shell bottom-auto left-auto right-0 top-full mb-0 mt-1 min-w-[190px] px-2 py-2"
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        setMenuOpen(false);
-                      }
-                    }}
-                    role="menu"
-                    aria-label={`Conversation actions for ${session.title}`}
-                  >
-                    <div className="space-y-0.5">
-                      {pinned && onUnpin ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={async () => {
-                            const succeeded = await onUnpin();
-                            if (succeeded !== false) {
-                              setMenuOpen(false);
-                            }
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          Unpin
-                        </button>
-                      ) : null}
-                      {!pinned && onPin ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={async () => {
-                            const succeeded = await onPin();
-                            if (succeeded !== false) {
-                              setMenuOpen(false);
-                            }
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          Pin
-                        </button>
-                      ) : null}
-                      {onArchive ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={async () => {
-                            const succeeded = await onArchive();
-                            if (succeeded !== false) {
-                              setMenuOpen(false);
-                            }
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          Archive
-                        </button>
-                      ) : null}
-                      {onDuplicate ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={() => {
-                            void runMenuAction('duplicate', onDuplicate);
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
-                        </button>
-                      ) : null}
-                      {onSummarizeAndNew ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={() => {
-                            void runMenuAction('summarize', onSummarizeAndNew);
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
-                        </button>
-                      ) : null}
-                      {onCopyId ? (
-                        <button
-                          type="button"
-                          onPointerDown={stopRowInteraction}
-                          onMouseDown={stopRowInteraction}
-                          onClick={() => {
-                            void handleCopyIdClick();
-                          }}
-                          className={menuItemClass}
-                          disabled={busyAction !== null}
-                          role="menuitem"
-                        >
-                          {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
             {showCloseButton ? (
               <button
                 type="button"
@@ -672,6 +554,123 @@ function OpenConversationRow({
           </span>
         )}
       </div>
+      {menuOpen && menuPosition ? (
+        <div
+          ref={menuRootRef}
+          className="ui-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[190px] px-2 py-2"
+          style={{ left: menuPosition.x, top: menuPosition.y }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setMenuOpen(false);
+            }
+          }}
+          role="menu"
+          aria-label={`Conversation actions for ${session.title}`}
+        >
+          <div className="space-y-0.5">
+            {pinned && onUnpin ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={async () => {
+                  const succeeded = await onUnpin();
+                  if (succeeded !== false) {
+                    setMenuOpen(false);
+                  }
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                Unpin
+              </button>
+            ) : null}
+            {!pinned && onPin ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={async () => {
+                  const succeeded = await onPin();
+                  if (succeeded !== false) {
+                    setMenuOpen(false);
+                  }
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                Pin
+              </button>
+            ) : null}
+            {onArchive ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={async () => {
+                  const succeeded = await onArchive();
+                  if (succeeded !== false) {
+                    setMenuOpen(false);
+                  }
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                Archive
+              </button>
+            ) : null}
+            {onDuplicate ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  void runMenuAction('duplicate', onDuplicate);
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
+              </button>
+            ) : null}
+            {onSummarizeAndNew ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  void runMenuAction('summarize', onSummarizeAndNew);
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
+              </button>
+            ) : null}
+            {onCopyId ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  void handleCopyIdClick();
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
