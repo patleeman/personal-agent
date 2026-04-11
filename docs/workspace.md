@@ -11,7 +11,7 @@ Use your normal file tools instead:
 
 ## Why
 
-The in-app workspace tried to be a file browser, editor, diff viewer, and git client inside a product whose main strengths are conversations, durable knowledge, inbox, and automation.
+The in-app workspace tried to be a file browser, editor, diff viewer, and git client inside a product whose main strengths are conversations, durable knowledge, reminders, and automation.
 
 External tools are better for raw file work, so the product no longer tries to duplicate them.
 
@@ -31,7 +31,7 @@ But there is no dedicated day-to-day `/workspace/files` or `/workspace/changes` 
 Use `personal-agent` for:
 
 - conversations
-- inbox and reminders
+- reminders and async attention
 - durable notes, skills, and tracked work
 - runs, scheduled tasks, and other automation
 

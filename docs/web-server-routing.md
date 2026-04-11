@@ -9,7 +9,7 @@ The web server source now lives under `packages/web/server/`.
 Current source layout:
 
 - `app/` — bootstrap and profile/runtime wiring
-- `automation/` — daemon, inbox, alerts, deferred resumes, durable runs, scheduled tasks
+- `automation/` — daemon, deferred resumes, durable runs, scheduled tasks, and remaining attention helpers
 - `conversations/` — live sessions, titles, cwd, recovery, conversation services
 - `extensions/` — web-runtime tool extensions such as reminders, runs, tasks, artifacts, and activity
 - `knowledge/` — memory docs, prompt references, vault file helpers
@@ -47,7 +47,7 @@ Current route groups include:
 - auth and remote-access auth
 - system / web UI state
 - conversations / live sessions
-- activity and alerts
+- internal attention helpers (tool-facing, not a public app surface)
 - runs
 - memory notes
 - folder picker
@@ -59,15 +59,13 @@ The `/api/events` SSE stream carries snapshot-style updates used by the desktop 
 
 Those topics include at least:
 
-- activity
-- alerts
 - sessions
 - tasks
 - runs
 - daemon
 - web UI state
 
-Remote browser sessions depend on those operational snapshots too, not just inbox-style invalidation.
+Remote browser sessions depend on those operational snapshots too, not just session invalidation.
 
 ## Related docs
 

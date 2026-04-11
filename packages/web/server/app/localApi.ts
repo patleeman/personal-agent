@@ -572,7 +572,7 @@ async function getLocalProviderDesktopCapabilityContext(): Promise<ProviderDeskt
 async function getLocalInboxCapabilityContext() {
   await getLocalRoutes();
   if (!localInboxCapabilityContext) {
-    throw new Error('Local inbox capability context is not initialized.');
+    throw new Error('Local activity capability context is not initialized.');
   }
 
   return localInboxCapabilityContext;
