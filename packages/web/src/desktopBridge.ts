@@ -1,7 +1,4 @@
 import type {
-  ActivityEntry,
-  AlertEntry,
-  AlertSnapshot,
   AppStatus,
   CodexPlanUsageState,
   RemoteAccessAdminState,
@@ -128,16 +125,7 @@ export interface PersonalAgentDesktopBridge {
   cancelProviderOAuthLogin(loginId: string): Promise<ProviderOAuthLoginState>;
   subscribeProviderOAuthLogin(loginId: string): Promise<{ subscriptionId: string }>;
   unsubscribeProviderOAuthLogin(subscriptionId: string): Promise<void>;
-  readActivity(): Promise<ActivityEntry[]>;
-  readActivityById(activityId: string): Promise<ActivityEntry>;
-  markActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
-  clearInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
-  startActivityConversation(activityId: string): Promise<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>;
   markConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
-  readAlerts(): Promise<AlertSnapshot>;
-  acknowledgeAlert(alertId: string): Promise<{ ok: true; alert: AlertEntry }>;
-  dismissAlert(alertId: string): Promise<{ ok: true; alert: AlertEntry }>;
-  snoozeAlert(input: { alertId: string; delay?: string; at?: string }): Promise<{ ok: true; alert: AlertEntry; resume: DeferredResumeSummary }>;
   readScheduledTasks(): Promise<ScheduledTaskSummary[]>;
   readScheduledTaskDetail(taskId: string): Promise<ScheduledTaskDetail>;
   readScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;

@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -221,22 +221,8 @@ export const api = {
   exchangeRemoteAccessPairingCode: (code: string, deviceLabel?: string) =>
     post<RemoteAccessSessionState>('/remote-access/exchange', { code, deviceLabel }),
   logoutRemoteAccessSession: () => post<{ ok: boolean }>('/remote-access/logout'),
-  activity: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readActivity();
-    }
 
-    return get<ActivityEntry[]>('/activity');
-  },
-  activityById: async (id: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readActivityById(id);
-    }
 
-    return get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`);
-  },
   sessions:     async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -701,63 +687,6 @@ export const api = {
   // ── Memory browser ────────────────────────────────────────────────────────
   memory:         (options?: { profile?: string }) => getMemoryData(options),
 
-  // ── Alerts + activity ─────────────────────────────────────────────────────
-  alerts: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readAlerts();
-    }
-
-    return get<AlertSnapshot>('/alerts');
-  },
-  acknowledgeAlert: async (id: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.acknowledgeAlert(id);
-    }
-
-    return post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/ack`);
-  },
-  dismissAlert: async (id: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.dismissAlert(id);
-    }
-
-    return post<{ ok: boolean; alert: AlertEntry }>(`/alerts/${encodeURIComponent(id)}/dismiss`);
-  },
-  snoozeAlert: async (id: string, input: { delay?: string; at?: string }) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.snoozeAlert({ alertId: id, ...input });
-    }
-
-    return post<{ ok: boolean; alert: AlertEntry; resume: DeferredResumeSummary }>(`/alerts/${encodeURIComponent(id)}/snooze`, input);
-  },
-  clearInbox: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.clearInbox();
-    }
-
-    return post<{ ok: boolean; deletedActivityIds: string[]; clearedConversationIds: string[] }>('/inbox/clear');
-  },
-  markActivityRead: async (id: string, read = true) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.markActivityRead({ activityId: id, read });
-    }
-
-    return patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read });
-  },
-  startActivityConversation: async (id: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.startActivityConversation(id);
-    }
-
-    return post<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>(`/activity/${encodeURIComponent(id)}/start`);
-  },
   markConversationAttentionRead: async (id: string, read = true) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

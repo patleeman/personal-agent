@@ -5,72 +5,16 @@ import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/web
 import { logError } from '../middleware/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
-import { resolveConversationCwd } from '../conversations/conversationCwd.js';
-import {
-  createSession as createLocalSession,
-  queuePromptContext,
-} from '../conversations/liveSessions.js';
-import { findActivityRecord, type ActivityRecord } from '../automation/inboxService.js';
 
-type LiveSessionCreateOptions = Parameters<typeof createLocalSession>[1];
-type LiveSessionResourceOptions = Omit<NonNullable<LiveSessionCreateOptions>, 'extensionFactories'>;
-type LiveSessionExtensionFactories = NonNullable<LiveSessionCreateOptions>['extensionFactories'];
-import { setActivityConversationLinks } from '@personal-agent/core';
-
-let getCurrentProfileFn: () => string = () => {
-  throw new Error('getCurrentProfile not initialized for web-ui routes');
-};
-
-let getRepoRootFn: () => string = () => {
-  throw new Error('getRepoRoot not initialized for web-ui routes');
-};
-
-let getDefaultWebCwdFn: () => string = () => {
-  throw new Error('getDefaultWebCwd not initialized for web-ui routes');
-};
 
 let getWebUiSettingsFileFn: () => string = () => {
   throw new Error('getWebUiSettingsFile not initialized for web-ui routes');
 };
 
-let buildLiveSessionResourceOptionsFn: () => LiveSessionResourceOptions = () => {
-  throw new Error('buildLiveSessionResourceOptions not initialized for web-ui routes');
-};
-
-let buildLiveSessionExtensionFactoriesFn: () => LiveSessionExtensionFactories = () => {
-  throw new Error('buildLiveSessionExtensionFactories not initialized for web-ui routes');
-};
-
 function initializeWebUiRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+  context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
-  getCurrentProfileFn = context.getCurrentProfile;
-  getRepoRootFn = context.getRepoRoot;
   getWebUiSettingsFileFn = context.getSettingsFile;
-  getDefaultWebCwdFn = context.getDefaultWebCwd;
-  buildLiveSessionResourceOptionsFn = context.buildLiveSessionResourceOptions;
-  buildLiveSessionExtensionFactoriesFn = context.buildLiveSessionExtensionFactories;
-}
-
-function buildInboxActivityConversationContext(entry: ActivityRecord['entry']): string {
-  const lines = [
-    'Inbox activity context for this conversation:',
-    `- activity id: ${entry.id}`,
-    `- kind: ${entry.kind}`,
-    `- created at: ${entry.createdAt}`,
-    `- summary: ${entry.summary}`,
-  ];
-
-  if (entry.notificationState) {
-    lines.push(`- notification state: ${entry.notificationState}`);
-  }
-
-  if (entry.details && entry.details.trim().length > 0) {
-    lines.push('', 'Details:', entry.details.trim());
-  }
-
-  lines.push('', 'Use this inbox item as durable context for follow-up in this conversation.');
-  return lines.join('\n');
 }
 
 function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): void {
@@ -221,67 +165,14 @@ function handleWebUiConfigPatch(req: Request, res: Response): void {
   }
 }
 
-async function handleActivityStart(req: Request, res: Response): Promise<void> {
-  try {
-    const profile = getCurrentProfileFn();
-    const match = findActivityRecord(profile, req.params.id);
-
-    if (!match) {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    const entry = match.entry;
-    const cwd = resolveConversationCwd({
-      repoRoot: getRepoRootFn(),
-      profile,
-      defaultCwd: getDefaultWebCwdFn(),
-    });
-
-    const result = await createLocalSession(cwd, {
-      ...buildLiveSessionResourceOptionsFn(),
-      extensionFactories: buildLiveSessionExtensionFactoriesFn(),
-    });
-
-    const relatedConversationIds = [...new Set([...(entry.relatedConversationIds ?? []), result.id])];
-    setActivityConversationLinks({
-      stateRoot: match.stateRoot,
-      profile,
-      activityId: entry.id,
-      relatedConversationIds,
-    });
-
-    await queuePromptContext(result.id, 'referenced_context', buildInboxActivityConversationContext({
-      ...entry,
-      relatedConversationIds,
-    }));
-
-    invalidateAppTopics('activity', 'sessions');
-    res.json({
-      activityId: entry.id,
-      id: result.id,
-      sessionFile: result.sessionFile,
-      cwd,
-      relatedConversationIds,
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
 export function registerWebUiRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSettingsFile' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories'>,
+  context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
   initializeWebUiRoutesContext(context);
   router.get('/api/web-ui/state', handleWebUiStateRequest);
   router.post('/api/web-ui/config', handleWebUiConfigPatch);
   router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
   router.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
-  router.post('/api/activity/:id/start', handleActivityStart);
 }
 

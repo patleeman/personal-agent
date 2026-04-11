@@ -66,16 +66,7 @@ describe('api desktop transport', () => {
     const readProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
     const submitProviderOAuthLoginInput = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
     const cancelProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
-    const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
-    const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
-    const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
-    const startActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'conv-from-activity', sessionFile: '/tmp/conv.jsonl', cwd: '/repo', relatedConversationIds: ['conv-from-activity'] });
     const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
-    const readAlerts = vi.fn().mockResolvedValue({ entries: [], activeCount: 0 });
-    const acknowledgeAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1' } });
-    const dismissAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1' } });
-    const snoozeAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1' }, resume: { id: 'resume-1' } });
     const readScheduledTasks = vi.fn().mockResolvedValue([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
     const readScheduledTaskDetail = vi.fn().mockResolvedValue({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body' });
     const readScheduledTaskLog = vi.fn().mockResolvedValue({ path: '/tasks/task-1.log', log: 'task tail' });
@@ -184,16 +175,7 @@ describe('api desktop transport', () => {
         readProviderOAuthLogin,
         submitProviderOAuthLoginInput,
         cancelProviderOAuthLogin,
-        readActivity,
-        readActivityById,
-        markActivityRead,
-        clearInbox,
-        startActivityConversation,
         markConversationAttention,
-        readAlerts,
-        acknowledgeAlert,
-        dismissAlert,
-        snoozeAlert,
         readScheduledTasks,
         readScheduledTaskDetail,
         readScheduledTaskLog,
@@ -254,15 +236,6 @@ describe('api desktop transport', () => {
     const providerOAuthLogin = await api.providerOAuthLogin('login-1');
     const submittedProviderOAuthLoginInput = await api.submitProviderOAuthLoginInput('login-1', '123456');
     const cancelledProviderOAuthLogin = await api.cancelProviderOAuthLogin('login-1');
-    const activity = await api.activity();
-    const activityById = await api.activityById('activity-1');
-    const activityMarked = await api.markActivityRead('activity-1', true);
-    const alerts = await api.alerts();
-    const alertAck = await api.acknowledgeAlert('alert-1');
-    const alertDismiss = await api.dismissAlert('alert-1');
-    const alertSnooze = await api.snoozeAlert('alert-1', { delay: '15m' });
-    const inboxCleared = await api.clearInbox();
-    const activityConversation = await api.startActivityConversation('activity-1');
     const attentionMarked = await api.markConversationAttentionRead('conversation-1', true);
     const tasks = await api.tasks();
     const taskDetail = await api.taskDetail('task-1');
@@ -326,15 +299,6 @@ describe('api desktop transport', () => {
     expect(readProviderOAuthLogin).toHaveBeenCalledWith('login-1');
     expect(submitProviderOAuthLoginInput).toHaveBeenCalledWith({ loginId: 'login-1', value: '123456' });
     expect(cancelProviderOAuthLogin).toHaveBeenCalledWith('login-1');
-    expect(readActivity).toHaveBeenCalledTimes(1);
-    expect(readActivityById).toHaveBeenCalledWith('activity-1');
-    expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: true });
-    expect(readAlerts).toHaveBeenCalledTimes(1);
-    expect(acknowledgeAlert).toHaveBeenCalledWith('alert-1');
-    expect(dismissAlert).toHaveBeenCalledWith('alert-1');
-    expect(snoozeAlert).toHaveBeenCalledWith({ alertId: 'alert-1', delay: '15m' });
-    expect(clearInbox).toHaveBeenCalledTimes(1);
-    expect(startActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: true });
     expect(readScheduledTasks).toHaveBeenCalledTimes(1);
     expect(readScheduledTaskDetail).toHaveBeenCalledWith('task-1');
@@ -436,15 +400,6 @@ describe('api desktop transport', () => {
     expect(providerOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
     expect(submittedProviderOAuthLoginInput).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
     expect(cancelledProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
-    expect(activity).toEqual([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
-    expect(activityById).toEqual({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
-    expect(activityMarked).toEqual({ ok: true });
-    expect(alerts).toEqual({ entries: [], activeCount: 0 });
-    expect(alertAck).toEqual({ ok: true, alert: { id: 'alert-1' } });
-    expect(alertDismiss).toEqual({ ok: true, alert: { id: 'alert-1' } });
-    expect(alertSnooze).toEqual({ ok: true, alert: { id: 'alert-1' }, resume: { id: 'resume-1' } });
-    expect(inboxCleared).toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
-    expect(activityConversation).toEqual({ activityId: 'activity-1', id: 'conv-from-activity', sessionFile: '/tmp/conv.jsonl', cwd: '/repo', relatedConversationIds: ['conv-from-activity'] });
     expect(attentionMarked).toEqual({ ok: true });
     expect(tasks).toEqual([{ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt', title: 'Task 1' }]);
     expect(taskDetail).toEqual({ id: 'task-1', scheduleType: 'cron', running: false, enabled: true, prompt: 'Prompt body' });
@@ -992,222 +947,6 @@ describe('api desktop transport', () => {
     });
     expect(exchanged).toEqual({ required: false, session: { id: 'session-1', label: 'Browser' } });
     expect(loggedOut).toEqual({ ok: true });
-  });
-
-  it('uses dedicated desktop inbox and alert bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
-    const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: false });
-    const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
-    const startActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
-    const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
-    const readAlerts = vi.fn().mockResolvedValue({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 });
-    const acknowledgeAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' } });
-    const dismissAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1', status: 'dismissed' } });
-    const snoozeAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' }, resume: { id: 'resume-1' } });
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-          canManageConnections: true,
-        }),
-        readActivity,
-        readActivityById,
-        markActivityRead,
-        clearInbox,
-        startActivityConversation,
-        markConversationAttention,
-        readAlerts,
-        acknowledgeAlert,
-        dismissAlert,
-        snoozeAlert,
-      },
-    });
-
-    const { api } = await import('./api');
-    const activity = await api.activity();
-    const activityDetail = await api.activityById('activity-1');
-    const activityRead = await api.markActivityRead('activity-1', false);
-    const inboxCleared = await api.clearInbox();
-    const startedConversation = await api.startActivityConversation('activity-1');
-    const attention = await api.markConversationAttentionRead('conversation-1', false);
-    const alerts = await api.alerts();
-    const acknowledged = await api.acknowledgeAlert('alert-1');
-    const dismissed = await api.dismissAlert('alert-1');
-    const snoozed = await api.snoozeAlert('alert-1', { delay: '15m' });
-
-    expect(readActivity).toHaveBeenCalledTimes(1);
-    expect(readActivityById).toHaveBeenCalledWith('activity-1');
-    expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(clearInbox).toHaveBeenCalledTimes(1);
-    expect(startActivityConversation).toHaveBeenCalledWith('activity-1');
-    expect(markConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
-    expect(readAlerts).toHaveBeenCalledTimes(1);
-    expect(acknowledgeAlert).toHaveBeenCalledWith('alert-1');
-    expect(dismissAlert).toHaveBeenCalledWith('alert-1');
-    expect(snoozeAlert).toHaveBeenCalledWith({ alertId: 'alert-1', delay: '15m' });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(activity).toEqual([{ id: 'activity-1', read: false }]);
-    expect(activityDetail).toEqual({ id: 'activity-1', read: false });
-    expect(activityRead).toEqual({ ok: true });
-    expect(inboxCleared).toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
-    expect(startedConversation).toEqual({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
-    expect(attention).toEqual({ ok: true });
-    expect(alerts).toEqual({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 });
-    expect(acknowledged).toEqual({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' } });
-    expect(dismissed).toEqual({ ok: true, alert: { id: 'alert-1', status: 'dismissed' } });
-    expect(snoozed).toEqual({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' }, resume: { id: 'resume-1' } });
-  });
-
-  it('uses dedicated desktop notification capabilities on the local Electron host', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
-    const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: true });
-    const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
-    const startActivityConversation = vi.fn().mockResolvedValue({
-      activityId: 'activity-1',
-      id: 'conversation-1',
-      sessionFile: '/tmp/conversation-1.jsonl',
-      cwd: '/repo',
-      relatedConversationIds: ['conversation-1'],
-    });
-    const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
-    const readAlerts = vi.fn().mockResolvedValue({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 });
-    const acknowledgeAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' } });
-    const dismissAlert = vi.fn().mockResolvedValue({ ok: true, alert: { id: 'alert-1', status: 'dismissed' } });
-    const snoozeAlert = vi.fn().mockResolvedValue({
-      ok: true,
-      alert: { id: 'alert-1', status: 'acknowledged' },
-      resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' },
-    });
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-          canManageConnections: true,
-        }),
-        readActivity,
-        readActivityById,
-        markActivityRead,
-        clearInbox,
-        startActivityConversation,
-        markConversationAttention,
-        readAlerts,
-        acknowledgeAlert,
-        dismissAlert,
-        snoozeAlert,
-      },
-    });
-
-    const { api } = await import('./api');
-    const activity = await api.activity();
-    const activityEntry = await api.activityById('activity-1');
-    const marked = await api.markActivityRead('activity-1', false);
-    const cleared = await api.clearInbox();
-    const started = await api.startActivityConversation('activity-1');
-    const conversationAttention = await api.markConversationAttentionRead('conversation-1', false);
-    const alerts = await api.alerts();
-    const acknowledged = await api.acknowledgeAlert('alert-1');
-    const dismissed = await api.dismissAlert('alert-1');
-    const snoozed = await api.snoozeAlert('alert-1', { delay: '15m' });
-
-    expect(readActivity).toHaveBeenCalledTimes(1);
-    expect(readActivityById).toHaveBeenCalledWith('activity-1');
-    expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(clearInbox).toHaveBeenCalledTimes(1);
-    expect(startActivityConversation).toHaveBeenCalledWith('activity-1');
-    expect(markConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
-    expect(readAlerts).toHaveBeenCalledTimes(1);
-    expect(acknowledgeAlert).toHaveBeenCalledWith('alert-1');
-    expect(dismissAlert).toHaveBeenCalledWith('alert-1');
-    expect(snoozeAlert).toHaveBeenCalledWith({ alertId: 'alert-1', delay: '15m' });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(activity).toEqual([{ id: 'activity-1', read: false }]);
-    expect(activityEntry).toEqual({ id: 'activity-1', read: true });
-    expect(marked).toEqual({ ok: true });
-    expect(cleared).toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
-    expect(started).toEqual({
-      activityId: 'activity-1',
-      id: 'conversation-1',
-      sessionFile: '/tmp/conversation-1.jsonl',
-      cwd: '/repo',
-      relatedConversationIds: ['conversation-1'],
-    });
-    expect(conversationAttention).toEqual({ ok: true });
-    expect(alerts).toEqual({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 });
-    expect(acknowledged).toEqual({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' } });
-    expect(dismissed).toEqual({ ok: true, alert: { id: 'alert-1', status: 'dismissed' } });
-    expect(snoozed).toEqual({
-      ok: true,
-      alert: { id: 'alert-1', status: 'acknowledged' },
-      resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' },
-    });
-  });
-
-  it('falls back to HTTP for desktop notification capabilities on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse([{ id: 'activity-1', read: false }]))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true }))
-      .mockResolvedValueOnce(createJsonResponse({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 }))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true, alert: { id: 'alert-1', status: 'acknowledged' }, resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' } }));
-    vi.stubGlobal('fetch', fetchMock);
-    const readActivity = vi.fn();
-    const readAlerts = vi.fn();
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'web-1',
-          activeHostLabel: 'Tailnet',
-          activeHostKind: 'web',
-          activeHostSummary: 'Remote host reachable.',
-          canManageConnections: true,
-        }),
-        readActivity,
-        readAlerts,
-      },
-    });
-
-    const { api } = await import('./api');
-    const activity = await api.activity();
-    const marked = await api.markActivityRead('activity-1', false);
-    const alerts = await api.alerts();
-    const snoozed = await api.snoozeAlert('alert-1', { delay: '15m' });
-
-    expect(readActivity).not.toHaveBeenCalled();
-    expect(readAlerts).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/activity', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/activity/activity-1', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ read: false }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/alerts', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/alerts/alert-1/snooze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delay: '15m' }),
-    });
-    expect(activity).toEqual([{ id: 'activity-1', read: false }]);
-    expect(marked).toEqual({ ok: true });
-    expect(alerts).toEqual({ entries: [{ id: 'alert-1', status: 'active' }], activeCount: 1 });
-    expect(snoozed).toEqual({
-      ok: true,
-      alert: { id: 'alert-1', status: 'acknowledged' },
-      resume: { id: 'resume-1', dueAt: '2026-04-10T12:15:00.000Z' },
-    });
   });
 
   it('falls back to HTTP for remote access session checks on non-local hosts', async () => {

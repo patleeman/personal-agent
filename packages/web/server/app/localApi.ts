@@ -14,20 +14,9 @@ import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
-  clearInboxCapability,
   listActivityCapability,
-  markActivityReadCapability,
   markConversationAttentionCapability,
-  readActivityCapability,
-  readSavedWebUiPreferencesCapability,
-  startActivityConversationCapability,
 } from '../automation/inboxCapability.js';
-import {
-  acknowledgeAlertCapability,
-  dismissAlertCapability,
-  readAlertSnapshotCapability,
-  snoozeAlertCapability,
-} from '../automation/alertCapability.js';
 import {
   createScheduledTaskCapability,
   listScheduledTasksCapability,
@@ -1675,51 +1664,6 @@ export async function runDesktopScheduledTask(taskId: string) {
   return runScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
 }
 
-export async function readDesktopActivity() {
-  const context = await getLocalInboxCapabilityContext();
-  return listActivityCapability(context.getCurrentProfile());
-}
-
-export async function readDesktopActivityById(activityId: string) {
-  const context = await getLocalInboxCapabilityContext();
-  const entry = readActivityCapability(context.getCurrentProfile(), activityId);
-  if (!entry) {
-    throw new Error('Not found');
-  }
-
-  return entry;
-}
-
-export async function markDesktopActivityRead(input: { activityId: string; read?: boolean }) {
-  const context = await getLocalInboxCapabilityContext();
-  const changed = markActivityReadCapability(context.getCurrentProfile(), input.activityId, input.read !== false);
-  if (!changed) {
-    throw new Error('Not found');
-  }
-
-  return { ok: true as const };
-}
-
-export async function clearDesktopInbox() {
-  const context = await getLocalInboxCapabilityContext();
-  const preferences = readSavedWebUiPreferencesCapability(context.getSavedWebUiPreferences);
-  const result = clearInboxCapability({
-    profile: context.getCurrentProfile(),
-    openConversationIds: [...preferences.openConversationIds, ...preferences.pinnedConversationIds],
-  });
-
-  return {
-    ok: true as const,
-    deletedActivityIds: result.deletedActivityIds,
-    clearedConversationIds: result.clearedConversationIds,
-  };
-}
-
-export async function startDesktopActivityConversation(activityId: string) {
-  const context = await getLocalInboxCapabilityContext();
-  return startActivityConversationCapability(activityId, context);
-}
-
 export async function markDesktopConversationAttention(input: { conversationId: string; read?: boolean }) {
   const context = await getLocalInboxCapabilityContext();
   const updated = markConversationAttentionCapability(context.getCurrentProfile(), input.conversationId, input.read !== false);
@@ -1728,41 +1672,6 @@ export async function markDesktopConversationAttention(input: { conversationId: 
   }
 
   return { ok: true as const };
-}
-
-export async function readDesktopAlerts() {
-  const context = await getLocalInboxCapabilityContext();
-  return readAlertSnapshotCapability(context.getCurrentProfile());
-}
-
-export async function acknowledgeDesktopAlert(alertId: string) {
-  const context = await getLocalInboxCapabilityContext();
-  const alert = acknowledgeAlertCapability(context.getCurrentProfile(), alertId);
-  if (!alert) {
-    throw new Error('Not found');
-  }
-
-  return { ok: true as const, alert };
-}
-
-export async function dismissDesktopAlert(alertId: string) {
-  const context = await getLocalInboxCapabilityContext();
-  const alert = dismissAlertCapability(context.getCurrentProfile(), alertId);
-  if (!alert) {
-    throw new Error('Not found');
-  }
-
-  return { ok: true as const, alert };
-}
-
-export async function snoozeDesktopAlert(input: { alertId: string; delay?: string; at?: string }) {
-  const context = await getLocalInboxCapabilityContext();
-  const result = await snoozeAlertCapability(context.getCurrentProfile(), input.alertId, input);
-  if (!result) {
-    throw new Error('Not found');
-  }
-
-  return { ok: true as const, ...result };
 }
 
 export async function readDesktopDurableRuns() {

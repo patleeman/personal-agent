@@ -314,16 +314,7 @@ export interface HostController {
   submitProviderOAuthLoginInput?(input: DesktopProviderOAuthInputRequest): Promise<unknown>;
   cancelProviderOAuthLogin?(loginId: string): Promise<unknown>;
   subscribeProviderOAuthLogin?(loginId: string, onState: (state: unknown) => void): Promise<() => void>;
-  readActivity?(): Promise<unknown>;
-  readActivityById?(activityId: string): Promise<unknown>;
-  markActivityRead?(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
-  clearInbox?(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
-  startActivityConversation?(activityId: string): Promise<unknown>;
   markConversationAttention?(input: DesktopConversationAttentionRequest): Promise<{ ok: true }>;
-  readAlerts?(): Promise<unknown>;
-  acknowledgeAlert?(alertId: string): Promise<unknown>;
-  dismissAlert?(alertId: string): Promise<unknown>;
-  snoozeAlert?(input: DesktopAlertSnoozeRequest): Promise<unknown>;
   readScheduledTasks?(): Promise<unknown>;
   readScheduledTaskDetail?(taskId: string): Promise<unknown>;
   readScheduledTaskLog?(taskId: string): Promise<{ path: string; log: string }>;

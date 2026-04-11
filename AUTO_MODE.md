@@ -1,27 +1,25 @@
 # Auto Mode State
 
 ## Goal
-Finish the desktop-first migration/perf cleanup to a solid foundation, then verify the repo builds, build the mac desktop app, and ship a new desktop release if release prerequisites are available.
+Finish the post-release desktop-first cleanup so the mac app stays the only real product surface and the remaining UI/API concepts keep collapsing toward conversations, runs/tasks, and tools.
 
 ## Current status
-Another packaged-desktop perf trim is green in the worktree: live-session git-context reads now stay deferred during the detached-start dispatch window as well. On a fresh packaged local measurement pass from current `HEAD`, direct `readLiveSessionContext(...)` was still about `1592ms`, making it the strongest remaining obviously non-essential read on the first-response path. The saved conversation page now waits until the carried initial prompt is no longer pending, dispatching, or in flight before it asks for git context.
+The inbox/notifications page and nav were already removed. This slice deletes the now-dead renderer/public activity-and-alert surface behind that UI removal: no `api.activity*` or `api.alert*` methods remain, no dedicated desktop bridge/IPC/local-host methods remain for those routes, and the public `/api/activity*`, `/api/alerts*`, and `/api/inbox/clear` route layer is gone. The lower-level inbox/alert capability code is still intact for internal attention/tooling callers.
 
 ## Active run
 - run id: none
-- task slug: desktop-first-migration-perf-release
-- purpose: direct local iteration on the next smallest desktop-first slice
+- task slug: post-release-tool-first-cleanup
+- purpose: direct local cleanup of dead product surfaces after the desktop release
 
 ## Latest validation
-- `npx vitest run packages/web/src/pages/ConversationPage.test.tsx`
-- `npx eslint packages/web/src/pages/ConversationPage.tsx packages/web/src/pages/ConversationPage.test.tsx`
+- `npx vitest run packages/web/src/api.desktop.test.ts packages/desktop/src/hosts/local-host-controller.test.ts packages/desktop/src/app-protocol.test.ts packages/web/server/routes/webUi.test.ts packages/web/server/routes/registerAll.smoke.test.ts`
+- `npx eslint packages/web/src/api.ts packages/web/src/api.desktop.test.ts packages/web/src/desktopBridge.ts packages/web/server/routes/registerAll.ts packages/web/server/routes/webUi.ts packages/web/server/routes/webUi.test.ts packages/web/server/app/localApi.ts packages/desktop/src/preload.ts packages/desktop/src/preload.cts packages/desktop/src/ipc.ts packages/desktop/src/hosts/types.ts packages/desktop/src/hosts/local-host-controller.ts packages/desktop/src/hosts/local-host-controller.test.ts packages/desktop/src/local-api-module.ts packages/desktop/src/app-protocol.test.ts`
 - `npm --prefix packages/desktop run build`
-- packaged Electron smoke via `agent-browser`: a draft prompt still opened into the saved conversation shell, got an assistant reply, and kept the route transition around `114ms`
+- packaged Electron smoke via `agent-browser`: app booted, `window.personalAgentDesktop.readActivity === 'undefined'`, `readAlerts === 'undefined'`, `/inbox` still redirected to `/conversations/new`, and the sidebar still showed the expected main nav
 
 ## Durable loop state
-- inspected run `run-2752ddbf-b8e2-45c6-92f4-3b768a70642b-2026-04-11T03-15-01-502Z-c2c042a9`
-- status: `cancelled`
-- latest meaningful output: none beyond bootstrap headers; log only showed startup metadata, `__PA_RUN_EXIT_CODE=1`, and cancellation
-- wakeup policy: keep the already-existing deferred wakeup alive; do not stack another unless timing materially changes
+- status: direct continuation in a clean temporary worktree because the main worktree has unrelated dirt
+- wakeup policy: none needed for this slice
 
 ## Next step
-Commit and push this detached-start git-context trim, then re-measure the packaged local first-response / first-visible-update path for the next smallest remaining delay. Keep the later desktop packaging/signing failure (`chrome_crashpad_handler.cstemp` ENOENT) parked as a separate release-path blocker once the perf/migration loop is closer to done.
+Inspect the next thin cleanup lever for the tool-first architecture: either remove now-unused renderer app-state/event handling for activity/alerts, or switch to the next clearly dead public notification/admin surface if one is still left.

@@ -526,61 +526,6 @@ export function registerDesktopIpc(options: {
     return controller.cancelProviderOAuthLogin(loginId);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-activity`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readActivity) {
-      throw new Error('Dedicated desktop activity reads are only available for the local host.');
-    }
-
-    return controller.readActivity();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-activity-by-id`, async (event, activityId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readActivityById) {
-      throw new Error('Dedicated desktop activity detail is only available for the local host.');
-    }
-
-    return controller.readActivityById(activityId);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:mark-activity-read`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.markActivityRead) {
-      throw new Error('Dedicated desktop activity mutations are only available for the local host.');
-    }
-
-    return controller.markActivityRead(input);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:clear-inbox`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.clearInbox) {
-      throw new Error('Dedicated desktop inbox clearing is only available for the local host.');
-    }
-
-    return controller.clearInbox();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:start-activity-conversation`, async (event, activityId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.startActivityConversation) {
-      throw new Error('Dedicated desktop activity conversation start is only available for the local host.');
-    }
-
-    return controller.startActivityConversation(activityId);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:mark-conversation-attention`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -590,50 +535,6 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.markConversationAttention(input);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-alerts`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readAlerts) {
-      throw new Error('Dedicated desktop alert reads are only available for the local host.');
-    }
-
-    return controller.readAlerts();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:acknowledge-alert`, async (event, alertId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.acknowledgeAlert) {
-      throw new Error('Dedicated desktop alert acknowledgement is only available for the local host.');
-    }
-
-    return controller.acknowledgeAlert(alertId);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:dismiss-alert`, async (event, alertId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.dismissAlert) {
-      throw new Error('Dedicated desktop alert dismissal is only available for the local host.');
-    }
-
-    return controller.dismissAlert(alertId);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:snooze-alert`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.snoozeAlert) {
-      throw new Error('Dedicated desktop alert snoozing is only available for the local host.');
-    }
-
-    return controller.snoozeAlert(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-scheduled-tasks`, async (event) => {
