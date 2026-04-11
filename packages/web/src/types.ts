@@ -852,7 +852,6 @@ export interface VaultFileListResult {
 export interface AppStatus {
   profile: string;
   repoRoot: string;
-  activityCount: number;
   projectCount: number;
   webUiRevision?: string;
 }

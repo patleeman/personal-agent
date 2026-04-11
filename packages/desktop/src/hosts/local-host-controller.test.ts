@@ -157,7 +157,7 @@ describe('LocalHostController', () => {
   });
 
   it('routes desktop runtime status reads through the local API module without loopback proxying', async () => {
-    const readDesktopAppStatus = vi.fn().mockResolvedValue({ profile: 'assistant', repoRoot: '/repo', activityCount: 2 });
+    const readDesktopAppStatus = vi.fn().mockResolvedValue({ profile: 'assistant', repoRoot: '/repo' });
     const readDesktopDaemonState = vi.fn().mockResolvedValue({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
     const readDesktopWebUiState = vi.fn().mockResolvedValue({ service: { running: true, platform: 'desktop' }, warnings: [], log: { lines: [] } });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
@@ -172,7 +172,7 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
-    await expect(controller.readAppStatus?.()).resolves.toEqual({ profile: 'assistant', repoRoot: '/repo', activityCount: 2 });
+    await expect(controller.readAppStatus?.()).resolves.toEqual({ profile: 'assistant', repoRoot: '/repo' });
     await expect(controller.readDaemonState?.()).resolves.toEqual({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
     await expect(controller.readWebUiState?.()).resolves.toEqual({ service: { running: true, platform: 'desktop' }, warnings: [], log: { lines: [] } });
 

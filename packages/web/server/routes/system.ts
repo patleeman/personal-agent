@@ -19,20 +19,15 @@ let getRepoRootFn: () => string = () => {
   throw new Error('getRepoRoot not initialized for system routes');
 };
 
-let listActivityForCurrentProfileFn: () => Array<{ read?: boolean }> = () => {
-  throw new Error('listActivityForCurrentProfile not initialized for system routes');
-};
-
 let listTasksForCurrentProfileFn: () => unknown[] = () => {
   throw new Error('listTasksForCurrentProfile not initialized for system routes');
 };
 
 function initializeSystemRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listTasksForCurrentProfile'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
-  listActivityForCurrentProfileFn = context.listActivityForCurrentProfile;
   listTasksForCurrentProfileFn = context.listTasksForCurrentProfile;
 }
 
@@ -78,11 +73,9 @@ function writeSseHeaders(res: Response): void {
 function handleStatus(_req: Request, res: Response): void {
   try {
     const profile = getCurrentProfileFn();
-    const activities = listActivityForCurrentProfileFn();
     res.json({
       profile,
       repoRoot: getRepoRootFn(),
-      activityCount: activities.length,
       webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
     });
   } catch (err) {
@@ -96,7 +89,7 @@ function handleStatus(_req: Request, res: Response): void {
 
 export function registerSystemRoutes(
   router: Pick<Express, 'get' | 'post'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listActivityForCurrentProfile' | 'listTasksForCurrentProfile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'listTasksForCurrentProfile'>,
 ): void {
   initializeSystemRoutesContext(context);
   router.get('/api/events', (req, res) => {

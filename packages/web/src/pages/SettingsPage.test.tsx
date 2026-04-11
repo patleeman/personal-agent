@@ -214,7 +214,6 @@ describe('SettingsPage', () => {
         return buildUseApiResult({
           profile: 'assistant',
           repoRoot: '/Users/patrick/workingdir/personal-agent',
-          activityCount: 3,
           projectCount: 5,
           webUiRevision: 'abc123',
         });

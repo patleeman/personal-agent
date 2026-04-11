@@ -34,7 +34,6 @@ describe('api desktop transport', () => {
     const readAppStatus = vi.fn().mockResolvedValue({
       profile: 'assistant',
       repoRoot: '/repo',
-      activityCount: 0,
       webUiRevision: 'rev-1',
     });
     const readDaemonState = vi.fn().mockResolvedValue({
@@ -368,7 +367,6 @@ describe('api desktop transport', () => {
     expect(status).toEqual({
       profile: 'assistant',
       repoRoot: '/repo',
-      activityCount: 0,
       webUiRevision: 'rev-1',
     });
     expect(daemon).toEqual({

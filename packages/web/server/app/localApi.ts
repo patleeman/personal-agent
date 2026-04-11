@@ -1153,11 +1153,9 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
 
 export async function readDesktopAppStatus() {
   const context = await getLocalServerRouteContext();
-  const activities = context.listActivityForCurrentProfile();
   return {
     profile: context.getCurrentProfile(),
     repoRoot: context.getRepoRoot(),
-    activityCount: activities.length,
     webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
   };
 }
