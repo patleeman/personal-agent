@@ -466,7 +466,7 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
-  it('does not write inbox activity entries for successful task runs', async () => {
+  it('does not write activity entries for successful task runs', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -523,7 +523,7 @@ Write daily report
     await module.stop?.(context);
   });
 
-  it('keeps successful task runs out of both shared and daemon-internal inbox state', async () => {
+  it('keeps successful task runs out of both shared and daemon-internal activity state', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -694,7 +694,7 @@ Recover me after restart
     await module.stop?.(context);
   });
 
-  it('does not create shared inbox activity when a one-time task is missed while the daemon was offline', async () => {
+  it('does not create shared activity entries when a one-time task is missed while the daemon was offline', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -737,7 +737,7 @@ Write daily report
     await module.stop?.(context);
   });
 
-  it('does not create shared inbox activity when cron runs are missed while the daemon is offline', async () => {
+  it('does not create shared activity entries when cron runs are missed while the daemon is offline', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });

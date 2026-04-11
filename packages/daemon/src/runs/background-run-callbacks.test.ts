@@ -70,7 +70,7 @@ describe('background run callbacks', () => {
     const run = await createFinishedBackgroundRun({
       daemonRoot,
       sessionFile,
-      taskSlug: 'wiki-raw-inbox-drain',
+      taskSlug: 'wiki-raw-activity-drain',
       endedAt: '2026-04-04T01:05:00.000Z',
     });
 
@@ -93,7 +93,7 @@ describe('background run callbacks', () => {
       id: delivered.wakeupId,
       sessionFile,
       status: 'ready',
-      title: 'Background run wiki-raw-inbox-drain completed',
+      title: 'Background run wiki-raw-activity-drain completed',
       source: {
         kind: 'background-run',
         id: run.runId,
@@ -105,7 +105,7 @@ describe('background run callbacks', () => {
       }),
     }));
     expect(wakeup?.prompt).toContain(run.runId);
-    expect(wakeup?.prompt).toContain('taskSlug=wiki-raw-inbox-drain');
+    expect(wakeup?.prompt).toContain('taskSlug=wiki-raw-activity-drain');
 
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
     expect(checkpoint?.payload?.backgroundRunCallback).toEqual({

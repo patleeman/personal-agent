@@ -104,12 +104,12 @@ describe('scheduled task agent extension', () => {
       'tool-1',
       {
         action: 'save',
-        taskId: 'inbox-digest',
+        taskId: 'activity-digest',
         at: '2026-04-10T09:00:00.000Z',
         model: 'openai-codex/gpt-5.4',
         cwd: '/tmp/workspace',
         timeoutSeconds: 45,
-        prompt: 'Summarize the inbox.',
+        prompt: 'Summarize recent activity.',
         deliverResultToConversation: true,
         notifyOnSuccess: false,
         notifyOnFailure: true,
@@ -122,7 +122,7 @@ describe('scheduled task agent extension', () => {
     );
 
     expect(saved.isError).not.toBe(true);
-    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'inbox-digest' })).toEqual(expect.objectContaining({
+    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'activity-digest' })).toEqual(expect.objectContaining({
       conversationId: 'conv-123',
       deliverOnSuccess: false,
       deliverOnFailure: true,
@@ -132,7 +132,7 @@ describe('scheduled task agent extension', () => {
 
     const fetched = await taskTool.execute('tool-2', {
       action: 'get',
-      taskId: 'inbox-digest',
+      taskId: 'activity-digest',
     });
 
     expect(fetched.content[0]?.text).toContain('schedule: at 2026-04-10T09:00:00.000Z');
@@ -144,13 +144,13 @@ describe('scheduled task agent extension', () => {
 
     const updated = await taskTool.execute('tool-3', {
       action: 'save',
-      taskId: 'inbox-digest',
-      prompt: 'Summarize the inbox again.',
+      taskId: 'activity-digest',
+      prompt: 'Summarize recent activity again.',
       deliverResultToConversation: false,
     });
 
-    expect(updated.content[0]?.text).toContain('Updated scheduled task @inbox-digest');
-    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'inbox-digest' })).toBeUndefined();
+    expect(updated.content[0]?.text).toContain('Updated scheduled task @activity-digest');
+    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'activity-digest' })).toBeUndefined();
   });
 
   it('lists and validates scheduled task definitions', async () => {

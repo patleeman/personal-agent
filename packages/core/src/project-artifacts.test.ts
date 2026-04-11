@@ -80,7 +80,7 @@ describe('project artifacts', () => {
       },
       status: 'active',
       blockers: ['Need to settle the activity entry shape'],
-      currentFocus: 'Build the CLI inbox surface.',
+      currentFocus: 'Build the CLI activity surface.',
       recentProgress: ['Added project scaffold', 'Added path helpers'],
       planSummary: 'Land the schema first, then wire the CLI surface around it.',
       completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
@@ -89,7 +89,7 @@ describe('project artifacts', () => {
           { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
         ],
         tasks: [
-          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing', milestoneId: 'schema' },
+          { id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' },
         ],
       },
     };
@@ -117,7 +117,7 @@ describe('project artifacts', () => {
           'Agents can recover the state without reading the whole repo.',
         ],
       },
-      currentFocus: 'Build the CLI inbox surface.',
+      currentFocus: 'Build the CLI activity surface.',
       blockers: ['Need to settle the activity entry shape'],
       recentProgress: ['Added project scaffold', 'Added path helpers'],
       planSummary: 'Land the schema first, then wire the CLI surface around it.',
@@ -127,7 +127,7 @@ describe('project artifacts', () => {
           { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
         ],
         tasks: [
-          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'doing', milestoneId: 'schema' },
+          { id: 'wire-activity', title: 'Wire the activity command', status: 'doing', milestoneId: 'schema' },
         ],
       },
     });
@@ -232,25 +232,25 @@ describe('project activity artifacts', () => {
 describe('project task artifacts', () => {
   it('creates the default task document', () => {
     const task = createProjectTask({
-      id: 'wire-inbox',
+      id: 'wire-activity',
       status: 'doing',
-      title: 'Wire the inbox command',
+      title: 'Wire the activity command',
       milestoneId: 'legacy-milestone',
     });
 
     expect(task).toEqual({
-      id: 'wire-inbox',
+      id: 'wire-activity',
       status: 'doing',
-      title: 'Wire the inbox command',
+      title: 'Wire the activity command',
       milestoneId: 'legacy-milestone',
     });
   });
 
   it('formats and parses task yaml as a round trip', () => {
     const document: ProjectTaskDocument = {
-      id: 'wire-inbox',
+      id: 'wire-activity',
       status: 'doing',
-      title: 'Wire the inbox command',
+      title: 'Wire the activity command',
     };
 
     const yaml = formatProjectTask(document);
@@ -261,9 +261,9 @@ describe('project task artifacts', () => {
     const dir = createTempDir();
     const path = join(dir, 'task.yaml');
     const document = createProjectTask({
-      id: 'wire-inbox',
+      id: 'wire-activity',
       status: 'doing',
-      title: 'Wire the inbox command',
+      title: 'Wire the activity command',
     });
 
     writeProjectTask(path, document);
