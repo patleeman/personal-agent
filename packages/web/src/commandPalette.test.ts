@@ -78,4 +78,24 @@ describe('command palette search', () => {
       'tasks',
     ]);
   });
+
+  it('supports overriding empty-query limits for lazy-loaded thread history', () => {
+    const results = searchCommandPaletteItems([
+      ITEMS[2]!,
+      {
+        ...ITEMS[2]!,
+        id: 'archived:gamma',
+        title: 'Gamma cleanup',
+        order: 2,
+      },
+    ], {
+      query: '',
+      scope: 'threads',
+      emptyQueryLimits: { archived: 1 },
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.total).toBe(2);
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['archived:beta']);
+  });
 });

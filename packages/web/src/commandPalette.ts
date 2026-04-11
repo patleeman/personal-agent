@@ -141,7 +141,11 @@ function compareByDefaultOrder<TAction>(left: CommandPaletteItem<TAction>, right
 
 export function searchCommandPaletteItems<TAction>(
   items: CommandPaletteItem<TAction>[],
-  options: { query: string; scope: CommandPaletteScope },
+  options: {
+    query: string;
+    scope: CommandPaletteScope;
+    emptyQueryLimits?: Partial<Record<CommandPaletteSection, number>>;
+  },
 ): CommandPaletteSectionResult<TAction>[] {
   const query = options.query.trim();
   const emptyQuery = query.length === 0;
@@ -164,8 +168,9 @@ export function searchCommandPaletteItems<TAction>(
       return [];
     }
 
+    const emptyQueryLimit = options.emptyQueryLimits?.[section] ?? EMPTY_QUERY_LIMITS[section];
     const limited = emptyQuery
-      ? rankedItems.slice(0, EMPTY_QUERY_LIMITS[section])
+      ? rankedItems.slice(0, Math.max(0, emptyQueryLimit))
       : rankedItems;
 
     return [{

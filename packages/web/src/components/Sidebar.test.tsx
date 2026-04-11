@@ -266,37 +266,6 @@ describe('Sidebar', () => {
     expect(html).not.toContain('padding-left:14px');
   });
 
-  it('shows older saved conversations in a scrollable history section below the open thread list', () => {
-    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-open']));
-
-    const html = renderSidebar('/inbox', {
-      sessions: [
-        createSession({ id: 'conv-open', title: 'Open conversation', cwd: '/tmp/alpha-worktree', cwdSlug: 'alpha-worktree' }),
-        createSession({
-          id: 'conv-recent-history',
-          title: 'Recent archived conversation',
-          cwd: '/tmp/history-worktree',
-          cwdSlug: 'history-worktree',
-          timestamp: '2026-03-16T08:00:00.000Z',
-          lastActivityAt: '2026-03-16T09:45:00.000Z',
-        }),
-        createSession({
-          id: 'conv-older-history',
-          title: 'Older archived conversation',
-          cwd: '/tmp/history-worktree',
-          cwdSlug: 'history-worktree',
-          timestamp: '2026-03-16T07:00:00.000Z',
-          lastActivityAt: '2026-03-16T09:10:00.000Z',
-        }),
-      ],
-    });
-
-    expect(html).toContain('History');
-    expect(html.indexOf('Open conversation')).toBeLessThan(html.indexOf('History'));
-    expect(html.indexOf('Recent archived conversation')).toBeLessThan(html.indexOf('Older archived conversation'));
-    expect(html).not.toContain('No conversations yet.');
-  });
-
   it('keeps the sidebar focused on chat and system surfaces', () => {
     storage.setItem(OPEN_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
     storage.setItem(OPEN_SKILL_IDS_STORAGE_KEY, JSON.stringify(['agent-browser']));

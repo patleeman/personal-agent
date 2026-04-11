@@ -55,7 +55,7 @@ Important behaviors:
 
 - draft conversation state is durable in the browser UI
 - multiple saved conversations can stay open or pinned at once
-- the left sidebar keeps current threads at the top and continues into older saved conversation history as you scroll
+- the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
 - working directory and model preferences stay attached to the conversation

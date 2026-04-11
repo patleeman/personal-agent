@@ -26,6 +26,8 @@ interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
 }
 
+const THREADS_EMPTY_QUERY_PAGE_SIZE = 50;
+
 function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop:not([data-command-palette="true"])') !== null;
 }
@@ -306,6 +308,7 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [archivedVisibleLimit, setArchivedVisibleLimit] = useState(THREADS_EMPTY_QUERY_PAGE_SIZE);
   const [archivedSearchIndex, setArchivedSearchIndex] = useState<Record<string, string>>({});
   const [archivedSearchLoading, setArchivedSearchLoading] = useState(false);
   const [archivedSearchError, setArchivedSearchError] = useState<string | null>(null);
@@ -331,9 +334,15 @@ export function CommandPalette() {
     ],
     [archivedConversationItems, openConversationItems, taskItems],
   );
+  const emptyQueryLimits = useMemo(
+    () => (scope === 'threads' && query.trim().length === 0
+      ? { archived: archivedVisibleLimit }
+      : undefined),
+    [archivedVisibleLimit, query, scope],
+  );
   const groups = useMemo(
-    () => searchCommandPaletteItems(items, { query, scope }),
-    [items, query, scope],
+    () => searchCommandPaletteItems(items, { query, scope, emptyQueryLimits }),
+    [emptyQueryLimits, items, query, scope],
   );
   const visibleItems = useMemo(
     () => groups.flatMap((group) => group.items),
@@ -352,6 +361,7 @@ export function CommandPalette() {
     setCursor(0);
     setBusyItemId(null);
     setActionError(null);
+    setArchivedVisibleLimit(THREADS_EMPTY_QUERY_PAGE_SIZE);
     setOpen(true);
   }, []);
 
@@ -443,6 +453,34 @@ export function CommandPalette() {
   const shouldIndexArchivedSearch = open
     && query.trim().length > 0
     && scope === 'threads';
+  const archivedGroup = useMemo(
+    () => groups.find((group) => group.section === 'archived') ?? null,
+    [groups],
+  );
+  const canLoadMoreArchivedThreads = Boolean(
+    open
+    && scope === 'threads'
+    && query.trim().length === 0
+    && archivedGroup
+    && archivedGroup.total > archivedGroup.items.length,
+  );
+
+  useEffect(() => {
+    if (!canLoadMoreArchivedThreads) {
+      return;
+    }
+
+    const listElement = listRef.current;
+    if (!listElement) {
+      return;
+    }
+
+    if (listElement.scrollHeight > listElement.clientHeight + 8) {
+      return;
+    }
+
+    setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
+  }, [canLoadMoreArchivedThreads, groups]);
 
   useEffect(() => {
     if (!open) {
@@ -545,6 +583,7 @@ export function CommandPalette() {
         setScope(nextScope);
         setCursor(0);
         setActionError(null);
+        setArchivedVisibleLimit(THREADS_EMPTY_QUERY_PAGE_SIZE);
         window.requestAnimationFrame(() => inputRef.current?.focus());
         return;
       }
@@ -664,6 +703,7 @@ export function CommandPalette() {
                     setScope(option.value);
                     setCursor(0);
                     setActionError(null);
+                    setArchivedVisibleLimit(THREADS_EMPTY_QUERY_PAGE_SIZE);
                     window.requestAnimationFrame(() => inputRef.current?.focus());
                   }}
                   className={cx(
@@ -695,6 +735,7 @@ export function CommandPalette() {
                 setQuery(event.target.value);
                 setCursor(0);
                 setActionError(null);
+                setArchivedVisibleLimit(THREADS_EMPTY_QUERY_PAGE_SIZE);
               }}
               placeholder={searchPlaceholder}
               aria-label="Search command palette"
@@ -706,9 +747,32 @@ export function CommandPalette() {
           {actionError && <p className="pt-2 text-[11px] text-danger">{actionError}</p>}
         </div>
 
-        <div ref={listRef} className="flex-1 overflow-y-auto px-2 py-2" style={{ overscrollBehavior: 'contain' }}>
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto px-2 py-2"
+          style={{ overscrollBehavior: 'contain' }}
+          onScroll={(event) => {
+            if (!canLoadMoreArchivedThreads) {
+              return;
+            }
+
+            const element = event.currentTarget;
+            const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+            if (distanceFromBottom > 96) {
+              return;
+            }
+
+            setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
+          }}
+        >
           {groups.map((group) => (
             <section key={group.section} className="pb-2 last:pb-0">
+              {!showSectionHeaders && scope === 'threads' && group.section === 'archived' ? (
+                <div className="px-2.5 pb-1 flex items-center gap-2">
+                  <p className="ui-section-label">{group.label}</p>
+                  <span className="ui-section-count">{group.items.length}{group.total > group.items.length ? `/${group.total}` : ''}</span>
+                </div>
+              ) : null}
               {showSectionHeaders && (
                 <div className="px-2.5 pb-1 flex items-center gap-2">
                   <p className="ui-section-label">{group.label}</p>
@@ -758,6 +822,10 @@ export function CommandPalette() {
                   </button>
                 );
               })}
+
+              {scope === 'threads' && query.trim().length === 0 && group.section === 'archived' && group.total > group.items.length ? (
+                <p className="px-2.5 py-2 text-[11px] text-dim font-mono">Scroll to load older threads…</p>
+              ) : null}
             </section>
           ))}
 
