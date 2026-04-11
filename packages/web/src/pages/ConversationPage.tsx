@@ -773,25 +773,28 @@ function ConversationPreferencesRow({
   );
 }
 
-function renderConversationAutoModeStatus(
-  state: ConversationAutoModeState | null,
-  isLiveSession: boolean,
-): string | null {
-  if (!state) {
-    return null;
+export function resolveConversationComposerShellStateClassName({
+  dragOver,
+  hasInteractiveOverlay,
+  autoModeEnabled,
+}: {
+  dragOver: boolean;
+  hasInteractiveOverlay: boolean;
+  autoModeEnabled: boolean;
+}): string {
+  if (dragOver) {
+    return 'border-accent/50 ring-2 ring-accent/20 bg-accent/5';
   }
 
-  if (state.enabled) {
-    return isLiveSession
-      ? 'Auto on · continues after each turn'
-      : 'Auto on · resumes when this conversation is live again';
+  if (hasInteractiveOverlay) {
+    return 'border-accent/40 ring-1 ring-accent/15';
   }
 
-  if (state.stopReason) {
-    return `Auto stopped · ${state.stopReason}`;
+  if (autoModeEnabled) {
+    return 'border-warning/30 ring-1 ring-warning/15 shadow-[0_0_18px_rgba(245,158,11,0.10)]';
   }
 
-  return null;
+  return 'border-border-subtle';
 }
 
 function ConversationAutoModeToggle({
@@ -1902,10 +1905,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [draft, id]);
+  }, [conversationEventVersion, draft, id]);
 
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
-  const conversationAutoModeStatusText = renderConversationAutoModeStatus(effectiveConversationAutoModeState, isLiveSession);
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
 
   // Current context usage (compaction-aware)
@@ -5285,10 +5287,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
           <div className={cx(
             'ui-input-shell',
-            dragOver ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/5' :
-              showModelPicker || showSlash || showMention
-                ? 'border-accent/40 ring-1 ring-accent/15'
-                : 'border-border-subtle'
+            resolveConversationComposerShellStateClassName({
+              dragOver,
+              hasInteractiveOverlay: showModelPicker || showSlash || showMention,
+              autoModeEnabled: conversationAutoModeEnabled,
+            }),
           )}>
 
             {/* Drag overlay hint */}
@@ -5551,16 +5554,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               />
 
               <div className="flex flex-col gap-0">
-                  {conversationAutoModeStatusText && !draft && id && (
-                    <div className="px-3 pt-1">
-                      <p className={cx(
-                        'text-[11px] leading-relaxed',
-                        conversationAutoModeEnabled ? 'text-accent' : 'text-dim',
-                      )}>
-                        {conversationAutoModeStatusText}
-                      </p>
-                    </div>
-                  )}
                   <div className="px-3 pt-1">
                     <textarea
                       ref={textareaRef}

@@ -33,6 +33,7 @@ import {
   shouldFetchConversationAttachments,
   resolveConversationVisibleScrollBinding,
   buildConversationInitialModelPreferenceState,
+  resolveConversationComposerShellStateClassName,
   resolveConversationInitialModelPreferenceState,
   resolveConversationInitialDeferredResumeState,
 } from './ConversationPage.js';
@@ -806,6 +807,32 @@ describe('conversation live state helpers', () => {
     expect(formatQueuedPromptImageSummary(0)).toBeNull();
     expect(formatQueuedPromptImageSummary(1)).toBe('1 image attached');
     expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
+  });
+});
+
+describe('conversation composer shell state', () => {
+  it('uses a subtle gold glow when auto mode is enabled', () => {
+    expect(resolveConversationComposerShellStateClassName({
+      dragOver: false,
+      hasInteractiveOverlay: false,
+      autoModeEnabled: true,
+    })).toContain('border-warning/30');
+  });
+
+  it('prefers the interactive overlay accent state over the auto mode glow', () => {
+    expect(resolveConversationComposerShellStateClassName({
+      dragOver: false,
+      hasInteractiveOverlay: true,
+      autoModeEnabled: true,
+    })).toBe('border-accent/40 ring-1 ring-accent/15');
+  });
+
+  it('prefers the drag-over state over the auto mode glow', () => {
+    expect(resolveConversationComposerShellStateClassName({
+      dragOver: true,
+      hasInteractiveOverlay: false,
+      autoModeEnabled: true,
+    })).toBe('border-accent/50 ring-2 ring-accent/20 bg-accent/5');
   });
 });
 
