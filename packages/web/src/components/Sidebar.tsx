@@ -498,21 +498,14 @@ function OpenConversationRow({
         ].filter(Boolean).join(' ')}
         title={rowTitle}
       >
-        <div className="flex w-3 shrink-0 flex-col items-center self-stretch">
+        <div className="flex w-3 shrink-0 items-center justify-center self-stretch">
           {(session.isRunning || needsAttention) ? (
             <ConversationStatusText
               isRunning={session.isRunning}
               needsAttention={needsAttention}
-              className="mt-0.5 shrink-0"
+              className="shrink-0"
             />
           ) : null}
-          <span
-            aria-hidden="true"
-            className={[
-              'mt-0.5 w-px flex-1 rounded-full transition-colors',
-              active ? 'bg-accent/80' : 'bg-border-subtle',
-            ].join(' ')}
-          />
         </div>
         <div className="min-w-0 flex-1 pr-16">
           <p className="ui-row-title truncate">{session.title}</p>
