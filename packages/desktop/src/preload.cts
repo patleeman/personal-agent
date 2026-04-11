@@ -109,7 +109,6 @@ const desktopBridge = {
   readActivity: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-activity`),
   readActivityById: (activityId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-activity-by-id`, activityId),
   markActivityRead: (input: { activityId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-activity-read`, input),
-  readActivityCount: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-activity-count`),
   clearInbox: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:clear-inbox`),
   startActivityConversation: (activityId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:start-activity-conversation`, activityId),
   markConversationAttention: (input: { conversationId: string; read?: boolean }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:mark-conversation-attention`, input),

@@ -4,14 +4,12 @@ const {
   clearInboxCapabilityMock,
   logErrorMock,
   markActivityReadCapabilityMock,
-  readActivityCountCapabilityMock,
   readActivityDetailCapabilityMock,
   readActivityEntriesCapabilityMock,
 } = vi.hoisted(() => ({
   clearInboxCapabilityMock: vi.fn(),
   logErrorMock: vi.fn(),
   markActivityReadCapabilityMock: vi.fn(),
-  readActivityCountCapabilityMock: vi.fn(),
   readActivityDetailCapabilityMock: vi.fn(),
   readActivityEntriesCapabilityMock: vi.fn(),
 }));
@@ -19,7 +17,6 @@ const {
 vi.mock('../automation/inboxCapability.js', () => ({
   clearInboxCapability: clearInboxCapabilityMock,
   markActivityReadCapability: markActivityReadCapabilityMock,
-  readActivityCountCapability: readActivityCountCapabilityMock,
   readActivityDetailCapability: readActivityDetailCapabilityMock,
   readActivityEntriesCapability: readActivityEntriesCapabilityMock,
 }));
@@ -35,7 +32,6 @@ describe('registerActivityRoutes', () => {
     clearInboxCapabilityMock.mockReset();
     logErrorMock.mockReset();
     markActivityReadCapabilityMock.mockReset();
-    readActivityCountCapabilityMock.mockReset();
     readActivityDetailCapabilityMock.mockReset();
     readActivityEntriesCapabilityMock.mockReset();
   });
@@ -75,7 +71,6 @@ describe('registerActivityRoutes', () => {
     });
 
     return {
-      countHandler: handlers['GET /api/activity/count']!,
       clearHandler: handlers['POST /api/inbox/clear']!,
       listHandler: handlers['GET /api/activity']!,
       detailHandler: handlers['GET /api/activity/:id']!,
@@ -89,24 +84,6 @@ describe('registerActivityRoutes', () => {
       json: vi.fn(),
     };
   }
-
-  it('counts unread activity entries and falls back to zero on errors', () => {
-    const { countHandler } = createHarness();
-    const res = createResponse();
-    readActivityCountCapabilityMock.mockReturnValue({ count: 2 });
-
-    countHandler({}, res);
-    expect(readActivityCountCapabilityMock).toHaveBeenCalledWith('assistant');
-    expect(res.json).toHaveBeenCalledWith({ count: 2 });
-
-    readActivityCountCapabilityMock.mockImplementation(() => {
-      throw new Error('count failed');
-    });
-    const fallbackRes = createResponse();
-
-    countHandler({}, fallbackRes);
-    expect(fallbackRes.json).toHaveBeenCalledWith({ count: 0 });
-  });
 
   it('clears inbox activity using the saved open conversation ids', () => {
     const { clearHandler } = createHarness();

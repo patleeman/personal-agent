@@ -4,7 +4,6 @@ import type { ServerRouteContext } from './context.js';
 import {
   clearInboxCapability,
   markActivityReadCapability,
-  readActivityCountCapability,
   readActivityDetailCapability,
   readActivityEntriesCapability,
 } from '../automation/inboxCapability.js';
@@ -33,13 +32,6 @@ export function registerActivityRoutes(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getSavedWebUiPreferences'>,
 ): void {
   initializeActivityRoutesContext(context);
-  router.get('/api/activity/count', (_req, res) => {
-    try {
-      res.json(readActivityCountCapability(getCurrentProfileFn()));
-    } catch {
-      res.json({ count: 0 });
-    }
-  });
 
   router.post('/api/inbox/clear', (_req, res) => {
     try {

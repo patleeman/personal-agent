@@ -69,7 +69,6 @@ describe('api desktop transport', () => {
     const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
     const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
     const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
     const startActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'conv-from-activity', sessionFile: '/tmp/conv.jsonl', cwd: '/repo', relatedConversationIds: ['conv-from-activity'] });
     const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
@@ -192,7 +191,6 @@ describe('api desktop transport', () => {
         readActivity,
         readActivityById,
         markActivityRead,
-        readActivityCount,
         clearInbox,
         startActivityConversation,
         markConversationAttention,
@@ -266,7 +264,6 @@ describe('api desktop transport', () => {
     const cancelledProviderOAuthLogin = await api.cancelProviderOAuthLogin('login-1');
     const activity = await api.activity();
     const activityById = await api.activityById('activity-1');
-    const activityCount = await api.activityCount();
     const activityMarked = await api.markActivityRead('activity-1', true);
     const alerts = await api.alerts();
     const alertAck = await api.acknowledgeAlert('alert-1');
@@ -343,7 +340,6 @@ describe('api desktop transport', () => {
     expect(cancelProviderOAuthLogin).toHaveBeenCalledWith('login-1');
     expect(readActivity).toHaveBeenCalledTimes(1);
     expect(readActivityById).toHaveBeenCalledWith('activity-1');
-    expect(readActivityCount).toHaveBeenCalledTimes(1);
     expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: true });
     expect(readAlerts).toHaveBeenCalledTimes(1);
     expect(acknowledgeAlert).toHaveBeenCalledWith('alert-1');
@@ -458,7 +454,6 @@ describe('api desktop transport', () => {
     expect(cancelledProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'cancelled' });
     expect(activity).toEqual([{ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false }]);
     expect(activityById).toEqual({ id: 'activity-1', createdAt: '2026-04-10T11:00:00.000Z', profile: 'assistant', kind: 'note', summary: 'Ping', read: false });
-    expect(activityCount).toEqual({ count: 1 });
     expect(activityMarked).toEqual({ ok: true });
     expect(alerts).toEqual({ entries: [], activeCount: 0 });
     expect(alertAck).toEqual({ ok: true, alert: { id: 'alert-1' } });
@@ -1107,7 +1102,6 @@ describe('api desktop transport', () => {
     const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
     const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: false });
     const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
     const startActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
     const markConversationAttention = vi.fn().mockResolvedValue({ ok: true });
@@ -1128,7 +1122,6 @@ describe('api desktop transport', () => {
         readActivity,
         readActivityById,
         markActivityRead,
-        readActivityCount,
         clearInbox,
         startActivityConversation,
         markConversationAttention,
@@ -1143,7 +1136,6 @@ describe('api desktop transport', () => {
     const activity = await api.activity();
     const activityDetail = await api.activityById('activity-1');
     const activityRead = await api.markActivityRead('activity-1', false);
-    const activityCount = await api.activityCount();
     const inboxCleared = await api.clearInbox();
     const startedConversation = await api.startActivityConversation('activity-1');
     const attention = await api.markConversationAttentionRead('conversation-1', false);
@@ -1155,7 +1147,6 @@ describe('api desktop transport', () => {
     expect(readActivity).toHaveBeenCalledTimes(1);
     expect(readActivityById).toHaveBeenCalledWith('activity-1');
     expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(readActivityCount).toHaveBeenCalledTimes(1);
     expect(clearInbox).toHaveBeenCalledTimes(1);
     expect(startActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
@@ -1167,7 +1158,6 @@ describe('api desktop transport', () => {
     expect(activity).toEqual([{ id: 'activity-1', read: false }]);
     expect(activityDetail).toEqual({ id: 'activity-1', read: false });
     expect(activityRead).toEqual({ ok: true });
-    expect(activityCount).toEqual({ count: 1 });
     expect(inboxCleared).toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
     expect(startedConversation).toEqual({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
     expect(attention).toEqual({ ok: true });
@@ -1183,7 +1173,6 @@ describe('api desktop transport', () => {
     const readActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
     const readActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: true });
     const markActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     const startActivityConversation = vi.fn().mockResolvedValue({
       activityId: 'activity-1',
@@ -1214,7 +1203,6 @@ describe('api desktop transport', () => {
         readActivity,
         readActivityById,
         markActivityRead,
-        readActivityCount,
         clearInbox,
         startActivityConversation,
         markConversationAttention,
@@ -1229,7 +1217,6 @@ describe('api desktop transport', () => {
     const activity = await api.activity();
     const activityEntry = await api.activityById('activity-1');
     const marked = await api.markActivityRead('activity-1', false);
-    const count = await api.activityCount();
     const cleared = await api.clearInbox();
     const started = await api.startActivityConversation('activity-1');
     const conversationAttention = await api.markConversationAttentionRead('conversation-1', false);
@@ -1241,7 +1228,6 @@ describe('api desktop transport', () => {
     expect(readActivity).toHaveBeenCalledTimes(1);
     expect(readActivityById).toHaveBeenCalledWith('activity-1');
     expect(markActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(readActivityCount).toHaveBeenCalledTimes(1);
     expect(clearInbox).toHaveBeenCalledTimes(1);
     expect(startActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
@@ -1253,7 +1239,6 @@ describe('api desktop transport', () => {
     expect(activity).toEqual([{ id: 'activity-1', read: false }]);
     expect(activityEntry).toEqual({ id: 'activity-1', read: true });
     expect(marked).toEqual({ ok: true });
-    expect(count).toEqual({ count: 1 });
     expect(cleared).toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     expect(started).toEqual({
       activityId: 'activity-1',

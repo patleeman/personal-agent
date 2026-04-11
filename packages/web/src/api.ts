@@ -798,14 +798,6 @@ export const api = {
 
     return post<{ ok: boolean; alert: AlertEntry; resume: DeferredResumeSummary }>(`/alerts/${encodeURIComponent(id)}/snooze`, input);
   },
-  activityCount: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readActivityCount();
-    }
-
-    return get<{ count: number }>('/activity/count');
-  },
   clearInbox: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

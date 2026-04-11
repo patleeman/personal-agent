@@ -614,17 +614,6 @@ export function registerDesktopIpc(options: {
     return controller.markActivityRead(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-activity-count`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readActivityCount) {
-      throw new Error('Dedicated desktop activity count reads are only available for the local host.');
-    }
-
-    return controller.readActivityCount();
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:clear-inbox`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

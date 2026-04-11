@@ -140,7 +140,6 @@ export interface PersonalAgentDesktopBridge {
   readActivity(): Promise<ActivityEntry[]>;
   readActivityById(activityId: string): Promise<ActivityEntry>;
   markActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
-  readActivityCount(): Promise<{ count: number }>;
   clearInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
   startActivityConversation(activityId: string): Promise<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>;
   markConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;
