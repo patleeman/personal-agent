@@ -33,13 +33,7 @@ import {
 } from '../models/providerAuth.js';
 import { readCodexPlanUsage } from '../models/codexUsage.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
-import {
-  readConversationPlanDefaults,
-  readConversationPlanLibrary,
-  readConversationPlansWorkspace,
-  writeConversationPlanDefaults,
-  writeConversationPlanLibrary,
-} from '../ui/conversationPlanPreferences.js';
+import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import {
   logError,
   persistSettingsWrite,
@@ -257,60 +251,6 @@ export function registerModelRoutes(
         ? 400
         : 500;
       res.status(status).json({ error: message });
-    }
-  });
-
-  router.get('/api/conversation-plans/defaults', (_req, res) => {
-    try {
-      res.json(readConversationPlanDefaults(SETTINGS_FILE));
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.patch('/api/conversation-plans/defaults', (req, res) => {
-    try {
-      const { defaultEnabled } = req.body as { defaultEnabled?: boolean };
-      if (typeof defaultEnabled !== 'boolean') {
-        res.status(400).json({ error: 'defaultEnabled required' });
-        return;
-      }
-
-      const state = persistSettingsWrite(
-        (settingsFile) => writeConversationPlanDefaults({ defaultEnabled }, settingsFile),
-        {
-          localSettingsFile: getCurrentProfileSettingsFileFn(),
-          runtimeSettingsFile: SETTINGS_FILE,
-        },
-      );
-      materializeWebProfileFn(getCurrentProfileFn());
-      res.json(state);
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.get('/api/conversation-plans/library', (_req, res) => {
-    try {
-      res.json(readConversationPlanLibrary(SETTINGS_FILE));
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.patch('/api/conversation-plans/library', (req, res) => {
-    try {
-      const state = persistSettingsWrite(
-        (settingsFile) => writeConversationPlanLibrary(req.body as { presets?: unknown; defaultPresetIds?: unknown }, settingsFile),
-        {
-          localSettingsFile: getCurrentProfileSettingsFileFn(),
-          runtimeSettingsFile: SETTINGS_FILE,
-        },
-      );
-      materializeWebProfileFn(getCurrentProfileFn());
-      res.json(state);
-    } catch (err) {
-      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

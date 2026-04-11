@@ -120,13 +120,7 @@ import {
   readSavedConversationTitlePreferences,
   writeSavedConversationTitlePreferences,
 } from '../ui/conversationTitlePreferences.js';
-import {
-  readConversationPlanDefaults,
-  readConversationPlanLibrary,
-  readConversationPlansWorkspace,
-  writeConversationPlanDefaults,
-  writeConversationPlanLibrary,
-} from '../ui/conversationPlanPreferences.js';
+import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import {
   readSavedDefaultCwdPreferences,
   writeSavedDefaultCwdPreference,
@@ -1438,51 +1432,6 @@ export async function updateDesktopConversationTitleSettings(input: {
     (settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile),
     { runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE },
   );
-}
-
-export async function readDesktopConversationPlanDefaults() {
-  return readConversationPlanDefaults(DEFAULT_RUNTIME_SETTINGS_FILE);
-}
-
-export async function updateDesktopConversationPlanDefaults(input: {
-  defaultEnabled?: boolean;
-}) {
-  if (typeof input.defaultEnabled !== 'boolean') {
-    throw new Error('defaultEnabled required');
-  }
-
-  const context = await getLocalServerRouteContext();
-  const state = persistSettingsWrite(
-    (settingsFile) => writeConversationPlanDefaults({ defaultEnabled: input.defaultEnabled }, settingsFile),
-    {
-      localSettingsFile: context.getCurrentProfileSettingsFile(),
-      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
-    },
-  );
-
-  context.materializeWebProfile(context.getCurrentProfile());
-  return state;
-}
-
-export async function readDesktopConversationPlanLibrary() {
-  return readConversationPlanLibrary(DEFAULT_RUNTIME_SETTINGS_FILE);
-}
-
-export async function updateDesktopConversationPlanLibrary(input: {
-  presets?: unknown;
-  defaultPresetIds?: unknown;
-}) {
-  const context = await getLocalServerRouteContext();
-  const state = persistSettingsWrite(
-    (settingsFile) => writeConversationPlanLibrary(input, settingsFile),
-    {
-      localSettingsFile: context.getCurrentProfileSettingsFile(),
-      runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
-    },
-  );
-
-  context.materializeWebProfile(context.getCurrentProfile());
-  return state;
 }
 
 export async function readDesktopConversationPlansWorkspace() {

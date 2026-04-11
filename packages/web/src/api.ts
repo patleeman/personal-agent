@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -553,22 +553,6 @@ export const api = {
 
     return patch<ConversationTitleSettingsState>('/conversation-titles/settings', input);
   },
-  conversationPlanDefaults: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readConversationPlanDefaults();
-    }
-
-    return get<ConversationAutomationPreferencesState>('/conversation-plans/defaults');
-  },
-  updateConversationPlanDefaults: async (input: { defaultEnabled: boolean }) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.updateConversationPlanDefaults(input);
-    }
-
-    return patch<ConversationAutomationPreferencesState>('/conversation-plans/defaults', input);
-  },
   openConversationTabs: async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -872,22 +856,6 @@ export const api = {
     }
 
     return get<ConversationAutomationWorkspaceState>('/conversation-plans/workspace');
-  },
-  conversationPlanLibrary: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readConversationPlanLibrary();
-    }
-
-    return get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library');
-  },
-  updateConversationPlanLibrary: async (input: ConversationAutomationWorkflowPresetLibraryState) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.updateConversationPlanLibrary(input);
-    }
-
-    return patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library', input);
   },
   conversationArtifacts: async (id: string) => {
     const desktopBridge = getDesktopBridge();

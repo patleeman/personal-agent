@@ -192,26 +192,6 @@ export class LocalHostController implements HostController {
     return module.updateDesktopConversationTitleSettings(input);
   }
 
-  async readConversationPlanDefaults(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopConversationPlanDefaults();
-  }
-
-  async updateConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.updateDesktopConversationPlanDefaults(input);
-  }
-
-  async readConversationPlanLibrary(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopConversationPlanLibrary();
-  }
-
-  async updateConversationPlanLibrary(input: { presets?: unknown; defaultPresetIds?: unknown }): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.updateDesktopConversationPlanLibrary(input);
-  }
-
   async readConversationPlansWorkspace(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationPlansWorkspace();

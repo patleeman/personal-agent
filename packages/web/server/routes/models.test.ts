@@ -448,78 +448,49 @@ describe('model routes', () => {
     });
   });
 
-  it('persists conversation plan defaults and library state through the settings file helpers', () => {
-    const { files, getHandler, patchHandler } = createDesktopHarness(allocateFiles());
+  it('reads conversation plan workspace state through the shared settings helpers', () => {
+    const { files, getHandler } = createDesktopHarness(allocateFiles());
 
-    writeFileSync(files.settingsFile, '{not-json');
-    const defaultsRes = createResponse();
-    getHandler('/api/conversation-plans/defaults')(createRequest(), defaultsRes);
-    expect(defaultsRes.json).toHaveBeenCalledWith({ defaultEnabled: false });
-
-    const invalidDefaultsRes = createResponse();
-    patchHandler('/api/conversation-plans/defaults')(createRequest({ body: {} }), invalidDefaultsRes);
-    expect(invalidDefaultsRes.status).toHaveBeenCalledWith(400);
-    expect(invalidDefaultsRes.json).toHaveBeenCalledWith({ error: 'defaultEnabled required' });
-
-    const updatedDefaultsRes = createResponse();
-    patchHandler('/api/conversation-plans/defaults')(createRequest({ body: { defaultEnabled: true } }), updatedDefaultsRes);
-    expect(updatedDefaultsRes.json).toHaveBeenCalledWith({ defaultEnabled: true });
-
-    const libraryRes = createResponse();
-    patchHandler('/api/conversation-plans/library')(createRequest({
-      body: {
-        presets: [
-          {
-            id: ' preset-1 ',
-            name: ' Alpha preset ',
-            updatedAt: '2026-04-09T17:00:00.000Z',
-            items: [
-              { kind: 'instruction', label: '  Instruction ', text: '  Follow the plan. ' },
-              { kind: 'skill', label: '  Skill ', skillName: ' backfill-tests ', skillArgs: ' target=models ' },
-              { kind: 'skill', label: 'Broken skill' },
+    writeFileSync(files.settingsFile, JSON.stringify({
+      webUi: {
+        conversationAutomation: {
+          defaultEnabled: true,
+          workflowPresets: {
+            presets: [
+              {
+                id: 'preset-1',
+                name: 'Alpha preset',
+                updatedAt: '2026-04-09T17:00:00.000Z',
+                items: [
+                  { kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
+                  { kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },
+                ],
+              },
             ],
+            defaultPresetIds: ['preset-1'],
           },
-          { name: 'No id preset', items: [{ kind: 'instruction', text: 'Second item' }] },
-          'ignore-me',
-        ],
-        defaultPresetIds: ['preset-1', 'preset-1', 'preset-2', 'missing'],
+        },
       },
-    }), libraryRes);
-
-    expect(libraryRes.json).toHaveBeenCalledWith({
-      presets: [
-        {
-          id: 'preset-1',
-          name: 'Alpha preset',
-          updatedAt: '2026-04-09T17:00:00.000Z',
-          items: [
-            { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
-            { id: 'item-2', kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },
-          ],
-        },
-        {
-          id: 'preset-2',
-          name: 'No id preset',
-          updatedAt: expect.any(String),
-          items: [
-            { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Second item' },
-          ],
-        },
-      ],
-      defaultPresetIds: ['preset-1', 'preset-2'],
-    });
+    }, null, 2));
 
     const workspaceRes = createResponse();
     getHandler('/api/conversation-plans/workspace')(createRequest(), workspaceRes);
     expect(workspaceRes.json).toHaveBeenCalledWith({
       defaultEnabled: true,
-      presetLibrary: expect.objectContaining({
-        defaultPresetIds: ['preset-1', 'preset-2'],
-        presets: expect.arrayContaining([
-          expect.objectContaining({ id: 'preset-1' }),
-          expect.objectContaining({ id: 'preset-2' }),
-        ]),
-      }),
+      presetLibrary: {
+        defaultPresetIds: ['preset-1'],
+        presets: [
+          {
+            id: 'preset-1',
+            name: 'Alpha preset',
+            updatedAt: '2026-04-09T17:00:00.000Z',
+            items: [
+              { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
+              { id: 'item-2', kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },
+            ],
+          },
+        ],
+      },
     });
   });
 

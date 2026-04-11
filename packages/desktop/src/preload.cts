@@ -59,12 +59,6 @@ const desktopBridge = {
   readConversationTitleSettings: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-title-settings`),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
-  readConversationPlanDefaults: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plan-defaults`),
-  updateConversationPlanDefaults: (input: { defaultEnabled?: boolean }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-plan-defaults`, input),
-  readConversationPlanLibrary: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plan-library`),
-  updateConversationPlanLibrary: (input: { presets?: unknown; defaultPresetIds?: unknown }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-plan-library`, input),
   readConversationPlansWorkspace: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`),
   readOpenConversationTabs: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-open-conversation-tabs`),
   updateOpenConversationTabs: (input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }) =>

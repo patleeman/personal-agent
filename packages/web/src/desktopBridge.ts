@@ -11,8 +11,6 @@ import type {
   ConversationAttachmentAssetData,
   ConversationAttachmentRecord,
   ConversationAttachmentSummary,
-  ConversationAutomationPreferencesState,
-  ConversationAutomationWorkflowPresetLibraryState,
   ConversationAutomationWorkspaceState,
   ConversationTitleSettingsState,
   DefaultCwdState,
@@ -86,10 +84,6 @@ export interface PersonalAgentDesktopBridge {
   runShellCommand(input: { command: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
-  readConversationPlanDefaults(): Promise<ConversationAutomationPreferencesState>;
-  updateConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<ConversationAutomationPreferencesState>;
-  readConversationPlanLibrary(): Promise<ConversationAutomationWorkflowPresetLibraryState>;
-  updateConversationPlanLibrary(input: ConversationAutomationWorkflowPresetLibraryState): Promise<ConversationAutomationWorkflowPresetLibraryState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
   readOpenConversationTabs(): Promise<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>;
   updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<{

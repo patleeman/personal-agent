@@ -58,10 +58,6 @@ export interface LocalApiModule {
   runDesktopShellCommand(input: { command?: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }>;
   readDesktopConversationTitleSettings(): Promise<unknown>;
   updateDesktopConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
-  readDesktopConversationPlanDefaults(): Promise<unknown>;
-  updateDesktopConversationPlanDefaults(input: { defaultEnabled?: boolean }): Promise<unknown>;
-  readDesktopConversationPlanLibrary(): Promise<unknown>;
-  updateDesktopConversationPlanLibrary(input: { presets?: unknown; defaultPresetIds?: unknown }): Promise<unknown>;
   readDesktopConversationPlansWorkspace(): Promise<unknown>;
   readDesktopOpenConversationTabs(): Promise<unknown>;
   updateDesktopOpenConversationTabs(input: {

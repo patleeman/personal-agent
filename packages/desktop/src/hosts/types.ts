@@ -275,10 +275,6 @@ export interface HostController {
   runShellCommand?(input: DesktopShellRunRequest): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
-  readConversationPlanDefaults?(): Promise<unknown>;
-  updateConversationPlanDefaults?(input: DesktopConversationPlanDefaultsUpdateRequest): Promise<unknown>;
-  readConversationPlanLibrary?(): Promise<unknown>;
-  updateConversationPlanLibrary?(input: DesktopConversationPlanLibraryUpdateRequest): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;
   readOpenConversationTabs?(): Promise<unknown>;
   updateOpenConversationTabs?(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<unknown>;

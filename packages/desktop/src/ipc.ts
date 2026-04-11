@@ -367,50 +367,6 @@ export function registerDesktopIpc(options: {
     return controller.updateConversationTitleSettings(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plan-defaults`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readConversationPlanDefaults) {
-      throw new Error('Dedicated desktop conversation-plan default reads are only available for the local host.');
-    }
-
-    return controller.readConversationPlanDefaults();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-plan-defaults`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.updateConversationPlanDefaults) {
-      throw new Error('Dedicated desktop conversation-plan default writes are only available for the local host.');
-    }
-
-    return controller.updateConversationPlanDefaults(input);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plan-library`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readConversationPlanLibrary) {
-      throw new Error('Dedicated desktop conversation-plan library reads are only available for the local host.');
-    }
-
-    return controller.readConversationPlanLibrary();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:update-conversation-plan-library`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.updateConversationPlanLibrary) {
-      throw new Error('Dedicated desktop conversation-plan library writes are only available for the local host.');
-    }
-
-    return controller.updateConversationPlanLibrary(input);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

@@ -866,19 +866,9 @@ describe('api desktop transport', () => {
     expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
   });
 
-  it('uses dedicated desktop automation preset bridges on the local Electron host', async () => {
+  it('uses the dedicated desktop automation workspace bridge on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const readConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: true });
-    const updateConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: false });
-    const readConversationPlanLibrary = vi.fn().mockResolvedValue({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: ['preset-1'],
-    });
-    const updateConversationPlanLibrary = vi.fn().mockResolvedValue({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: [],
-    });
     const readConversationPlansWorkspace = vi.fn().mockResolvedValue({
       defaultEnabled: true,
       presetLibrary: {
@@ -896,37 +886,15 @@ describe('api desktop transport', () => {
           activeHostSummary: 'Local backend is healthy.',
           canManageConnections: true,
         }),
-        readConversationPlanDefaults,
-        updateConversationPlanDefaults,
-        readConversationPlanLibrary,
-        updateConversationPlanLibrary,
         readConversationPlansWorkspace,
       },
     });
 
     const { api } = await import('./api');
-    const defaults = await api.conversationPlanDefaults();
-    const savedDefaults = await api.updateConversationPlanDefaults({ defaultEnabled: false });
-    const library = await api.conversationPlanLibrary();
-    const savedLibrary = await api.updateConversationPlanLibrary({ defaultPresetIds: [], presets: [] });
     const workspace = await api.conversationPlansWorkspace();
 
-    expect(readConversationPlanDefaults).toHaveBeenCalledTimes(1);
-    expect(updateConversationPlanDefaults).toHaveBeenCalledWith({ defaultEnabled: false });
-    expect(readConversationPlanLibrary).toHaveBeenCalledTimes(1);
-    expect(updateConversationPlanLibrary).toHaveBeenCalledWith({ defaultPresetIds: [], presets: [] });
     expect(readConversationPlansWorkspace).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(defaults).toEqual({ defaultEnabled: true });
-    expect(savedDefaults).toEqual({ defaultEnabled: false });
-    expect(library).toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: ['preset-1'],
-    });
-    expect(savedLibrary).toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: [],
-    });
     expect(workspace).toEqual({
       defaultEnabled: true,
       presetLibrary: {
@@ -1479,16 +1447,10 @@ describe('api desktop transport', () => {
     expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
   });
 
-  it('falls back to HTTP for desktop automation preset bridges on non-local hosts', async () => {
+  it('falls back to HTTP for the automation workspace bridge on non-local hosts', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true }))
-      .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: false }))
-      .mockResolvedValueOnce(createJsonResponse({ presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: ['preset-1'] }))
-      .mockResolvedValueOnce(createJsonResponse({ presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: [] }))
       .mockResolvedValueOnce(createJsonResponse({ defaultEnabled: true, presetLibrary: { presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }], defaultPresetIds: ['preset-1'] } }));
     vi.stubGlobal('fetch', fetchMock);
-    const readConversationPlanDefaults = vi.fn();
-    const readConversationPlanLibrary = vi.fn();
     const readConversationPlansWorkspace = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -1500,45 +1462,15 @@ describe('api desktop transport', () => {
           activeHostSummary: 'Remote host reachable.',
           canManageConnections: true,
         }),
-        readConversationPlanDefaults,
-        readConversationPlanLibrary,
         readConversationPlansWorkspace,
       },
     });
 
     const { api } = await import('./api');
-    const defaults = await api.conversationPlanDefaults();
-    const savedDefaults = await api.updateConversationPlanDefaults({ defaultEnabled: false });
-    const library = await api.conversationPlanLibrary();
-    const savedLibrary = await api.updateConversationPlanLibrary({ defaultPresetIds: [], presets: [] });
     const workspace = await api.conversationPlansWorkspace();
 
-    expect(readConversationPlanDefaults).not.toHaveBeenCalled();
-    expect(readConversationPlanLibrary).not.toHaveBeenCalled();
     expect(readConversationPlansWorkspace).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversation-plans/defaults', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversation-plans/defaults', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultEnabled: false }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversation-plans/library', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/conversation-plans/library', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ defaultPresetIds: [], presets: [] }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversation-plans/workspace', { method: 'GET', cache: 'no-store' });
-    expect(defaults).toEqual({ defaultEnabled: true });
-    expect(savedDefaults).toEqual({ defaultEnabled: false });
-    expect(library).toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: ['preset-1'],
-    });
-    expect(savedLibrary).toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: [],
-    });
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/conversation-plans/workspace', { method: 'GET', cache: 'no-store' });
     expect(workspace).toEqual({
       defaultEnabled: true,
       presetLibrary: {

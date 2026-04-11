@@ -49,10 +49,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     runDesktopShellCommand: vi.fn(),
     readDesktopConversationTitleSettings: vi.fn(),
     updateDesktopConversationTitleSettings: vi.fn(),
-    readDesktopConversationPlanDefaults: vi.fn(),
-    updateDesktopConversationPlanDefaults: vi.fn(),
-    readDesktopConversationPlanLibrary: vi.fn(),
-    updateDesktopConversationPlanLibrary: vi.fn(),
     readDesktopConversationPlansWorkspace: vi.fn(),
     readDesktopModelProviders: vi.fn(),
     saveDesktopModelProvider: vi.fn(),
@@ -408,16 +404,6 @@ describe('LocalHostController', () => {
   });
 
   it('routes desktop automation preset settings through the local API module without loopback proxying', async () => {
-    const readDesktopConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: true });
-    const updateDesktopConversationPlanDefaults = vi.fn().mockResolvedValue({ defaultEnabled: false });
-    const readDesktopConversationPlanLibrary = vi.fn().mockResolvedValue({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: ['preset-1'],
-    });
-    const updateDesktopConversationPlanLibrary = vi.fn().mockResolvedValue({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: [],
-    });
     const readDesktopConversationPlansWorkspace = vi.fn().mockResolvedValue({
       defaultEnabled: true,
       presetLibrary: {
@@ -426,10 +412,6 @@ describe('LocalHostController', () => {
       },
     });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopConversationPlanDefaults,
-      updateDesktopConversationPlanDefaults,
-      readDesktopConversationPlanLibrary,
-      updateDesktopConversationPlanLibrary,
       readDesktopConversationPlansWorkspace,
     }));
     const backend = createBackendMock();
@@ -439,16 +421,6 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
-    await expect(controller.readConversationPlanDefaults?.()).resolves.toEqual({ defaultEnabled: true });
-    await expect(controller.updateConversationPlanDefaults?.({ defaultEnabled: false })).resolves.toEqual({ defaultEnabled: false });
-    await expect(controller.readConversationPlanLibrary?.()).resolves.toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: ['preset-1'],
-    });
-    await expect(controller.updateConversationPlanLibrary?.({ defaultPresetIds: [] })).resolves.toEqual({
-      presets: [{ id: 'preset-1', name: 'Preset 1', updatedAt: '2026-04-14T12:00:00.000Z', items: [] }],
-      defaultPresetIds: [],
-    });
     await expect(controller.readConversationPlansWorkspace?.()).resolves.toEqual({
       defaultEnabled: true,
       presetLibrary: {
@@ -457,10 +429,6 @@ describe('LocalHostController', () => {
       },
     });
 
-    expect(readDesktopConversationPlanDefaults).toHaveBeenCalledTimes(1);
-    expect(updateDesktopConversationPlanDefaults).toHaveBeenCalledWith({ defaultEnabled: false });
-    expect(readDesktopConversationPlanLibrary).toHaveBeenCalledTimes(1);
-    expect(updateDesktopConversationPlanLibrary).toHaveBeenCalledWith({ defaultPresetIds: [] });
     expect(readDesktopConversationPlansWorkspace).toHaveBeenCalledTimes(1);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
