@@ -20,6 +20,7 @@ import {
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
   shouldFetchConversationLiveSessionGitContext,
+  shouldLoadConversationModels,
   truncateConversationShelfText,
   formatQueuedPromptShelfText,
   formatQueuedPromptImageSummary,
@@ -241,6 +242,38 @@ describe('conversation attachment fetch gating', () => {
       draft: false,
       conversationId: 'conv-123',
       drawingsPickerOpen: true,
+    })).toBe(true);
+  });
+});
+
+describe('conversation model loading', () => {
+  it('keeps draft model data hot even before a session exists', () => {
+    expect(shouldLoadConversationModels({
+      draft: true,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(true);
+  });
+
+  it('defers model reads while the initial prompt is still pending or in flight', () => {
+    expect(shouldLoadConversationModels({
+      draft: false,
+      hasPendingInitialPrompt: true,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(false);
+
+    expect(shouldLoadConversationModels({
+      draft: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: true,
+    })).toBe(false);
+  });
+
+  it('loads model data once the initial prompt work is clear', () => {
+    expect(shouldLoadConversationModels({
+      draft: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
     })).toBe(true);
   });
 });

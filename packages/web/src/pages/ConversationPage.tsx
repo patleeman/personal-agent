@@ -533,12 +533,28 @@ export function resolveConversationVisibleScrollBinding(input: {
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
-function useModels() {
+export function shouldLoadConversationModels(input: {
+  draft: boolean;
+  hasPendingInitialPrompt: boolean;
+  hasPendingInitialPromptInFlight: boolean;
+}): boolean {
+  if (input.draft) {
+    return true;
+  }
+
+  return !input.hasPendingInitialPrompt && !input.hasPendingInitialPromptInFlight;
+}
+
+function useModels(enabled: boolean) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [defaultModel, setDefaultModel] = useState<string>('');
   const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string>('');
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     api.models()
       .then((data) => {
         setModels(data.models);
@@ -546,7 +562,7 @@ function useModels() {
         setDefaultThinkingLevel(data.currentThinkingLevel ?? '');
       })
       .catch(() => {});
-  }, []);
+  }, [enabled]);
 
   return {
     models,
@@ -1629,12 +1645,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, id, pushTitle, sessions, setSessions, stream.title, titles]);
 
+  const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
+  const shouldLoadModels = shouldLoadConversationModels({
+    draft,
+    hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    hasPendingInitialPromptInFlight,
+  });
+
   // Model
   const {
     models,
     defaultModel,
     defaultThinkingLevel,
-  } = useModels();
+  } = useModels(shouldLoadModels);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
@@ -2349,7 +2372,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationRunId, shouldLoadConversationRun, versions.runs]);
 
-  const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
   const displayedPendingAssistantStatusLabel = resolveDisplayedConversationPendingStatusLabel({
     explicitLabel: pendingAssistantStatusLabel,
     draft,
