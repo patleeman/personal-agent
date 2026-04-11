@@ -177,10 +177,10 @@ describe('draftConversation', () => {
 
   it('shows the draft tab while the draft route is active or has saved draft state', () => {
     expect(shouldShowDraftConversationTab(DRAFT_CONVERSATION_ROUTE, '')).toBe(true);
-    expect(shouldShowDraftConversationTab('/inbox', 'Saved draft')).toBe(true);
-    expect(shouldShowDraftConversationTab('/inbox', '', '~/workingdir/personal-agent')).toBe(true);
-    expect(shouldShowDraftConversationTab('/inbox', '', '', true)).toBe(true);
-    expect(shouldShowDraftConversationTab('/inbox', '   ')).toBe(false);
+    expect(shouldShowDraftConversationTab('/conversations/abc', 'Saved draft')).toBe(true);
+    expect(shouldShowDraftConversationTab('/conversations/abc', '', '~/workingdir/personal-agent')).toBe(true);
+    expect(shouldShowDraftConversationTab('/conversations/abc', '', '', true)).toBe(true);
+    expect(shouldShowDraftConversationTab('/conversations/abc', '   ')).toBe(false);
   });
 
   it('builds a synthetic draft session meta entry', () => {

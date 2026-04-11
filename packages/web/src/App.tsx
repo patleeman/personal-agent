@@ -571,8 +571,6 @@ export function App() {
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
                       <Route path="workspace" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="workspace/*" element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="inbox" element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="inbox/:id" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="runs" element={<DeletedStandaloneRunsRedirect />} />
                       <Route path="runs/:id" element={<DeletedStandaloneRunsRedirect />} />

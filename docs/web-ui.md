@@ -62,7 +62,7 @@ Important behaviors:
 
 ## Async attention
 
-There is no standalone Inbox route anymore.
+There is no Inbox route anymore.
 
 Async state now lives on the owning surface:
 
