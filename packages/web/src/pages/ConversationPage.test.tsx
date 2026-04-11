@@ -327,6 +327,7 @@ describe('conversation live-session git context loading', () => {
       sessionLoading: false,
       isStreaming: false,
       hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: false,
     })).toBe(false);
 
@@ -338,6 +339,19 @@ describe('conversation live-session git context loading', () => {
       sessionLoading: false,
       isStreaming: false,
       hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: true,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(false);
+
+    expect(shouldFetchConversationLiveSessionGitContext({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationLiveDecision: true,
+      conversationBootstrapLoading: false,
+      sessionLoading: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: true,
     })).toBe(false);
   });
@@ -351,6 +365,7 @@ describe('conversation live-session git context loading', () => {
       sessionLoading: false,
       isStreaming: false,
       hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: false,
     })).toBe(true);
   });

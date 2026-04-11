@@ -301,6 +301,7 @@ export function shouldFetchConversationLiveSessionGitContext(input: {
   sessionLoading: boolean;
   isStreaming: boolean;
   hasPendingInitialPrompt: boolean;
+  pendingInitialPromptDispatching: boolean;
   hasPendingInitialPromptInFlight: boolean;
 }): boolean {
   return !input.draft
@@ -310,6 +311,7 @@ export function shouldFetchConversationLiveSessionGitContext(input: {
     && !input.sessionLoading
     && !input.isStreaming
     && !input.hasPendingInitialPrompt
+    && !input.pendingInitialPromptDispatching
     && !input.hasPendingInitialPromptInFlight;
 }
 
@@ -2441,6 +2443,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     sessionLoading,
     isStreaming: stream.isStreaming,
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    pendingInitialPromptDispatching,
     hasPendingInitialPromptInFlight,
   });
 
