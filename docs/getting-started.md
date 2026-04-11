@@ -132,11 +132,7 @@ Use [Knowledge Management System](./knowledge-system.md) and [Pages](./pages.md)
 
 ## Validate scheduled tasks
 
-If you already have task files:
-
-```bash
-pa tasks validate --all
-```
+If you already have legacy task files, validate them through the built-in `scheduled_task` tool.
 
 Example task files live under `docs/examples/` and runtime task files live under `~/.local/state/personal-agent/sync/{_tasks|tasks}/`.
 

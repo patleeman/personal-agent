@@ -263,42 +263,16 @@ describe('CLI command flows', () => {
     logSpy.mockRestore();
   });
 
-  it('lists scheduled tasks and shows configured task directory', async () => {
-    const stateRoot = createTempDir('personal-agent-cli-state-');
-    const daemonConfigPath = join(createTempDir('personal-agent-cli-config-'), 'daemon.json');
-    const taskDir = join(createTempDir('personal-agent-cli-tasks-'), 'definitions');
-
-    mkdirSync(taskDir, { recursive: true });
-    writeFileSync(
-      join(taskDir, 'demo.task.md'),
-      `---\nid: demo\nat: "2026-03-02T10:00:00Z"\n---\nRun demo task\n`,
-    );
-
-    writeFileSync(
-      daemonConfigPath,
-      JSON.stringify({
-        modules: {
-          tasks: {
-            taskDir,
-          },
-        },
-      }),
-    );
-
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_DAEMON_CONFIG = daemonConfigPath;
-
-    const logs: string[] = [];
-    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
-      logs.push(String(message ?? ''));
+  it('reports tool-first guidance when the removed tasks CLI is invoked', async () => {
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
+      errors.push(String(message ?? ''));
     });
 
-    expect(await runCli(['tasks', 'list'])).toBe(0);
+    expect(await runCli(['tasks', 'list'])).toBe(1);
+    expect(errors.some((line) => line.includes('pa tasks is no longer a public CLI workflow'))).toBe(true);
 
-    expect(logs.some((line) => line.includes(taskDir))).toBe(true);
-    expect(logs.some((line) => line.includes('demo'))).toBe(true);
-
-    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
 

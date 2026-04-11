@@ -13,12 +13,11 @@ pa daemon status
 pa ui status
 ```
 
-If tasks or runs are involved:
+If automations or runs are involved, start from the owning web UI surface and the daemon:
 
 ```bash
-pa tasks list
-pa tasks validate --all
-pa runs list
+pa daemon status
+pa daemon logs
 ```
 
 ## `pa` cannot find Pi
@@ -72,11 +71,10 @@ Check all of these:
 
 ```bash
 pa daemon status
-pa tasks validate --all
-pa tasks list --status error
-pa tasks show <id>
-pa tasks logs <id>
+pa daemon logs
 ```
+
+Then inspect the automation detail page and its owned run history, or validate legacy task files with the `scheduled_task` tool.
 
 Common causes:
 
@@ -88,18 +86,13 @@ Common causes:
 
 ## Durable run is stuck or failed
 
-Inspect the run directly:
+Inspect the owning conversation or automation detail, then check daemon logs if needed:
 
 ```bash
-pa runs show <id>
-pa runs logs <id> --tail 200
+pa daemon logs
 ```
 
-If appropriate:
-
-- `pa runs rerun <id>`
-- `pa runs follow-up <id> --prompt "..."`
-- `pa runs cancel <id>`
+If you need to act on the run, use the built-in `run` tool rather than a CLI subcommand.
 
 ## Pairing code or remote browser access fails
 

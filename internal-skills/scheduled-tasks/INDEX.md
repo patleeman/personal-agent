@@ -31,7 +31,7 @@ Do not confuse scheduled tasks with:
 
 - **project tasks** in `state.yaml` — those are planning/checklist items
 - **reminders** — those are conversation-bound wakeups with alert delivery
-- **durable background runs** — those are detached jobs launched on demand with `pa runs start`
+- **durable background runs** — those are detached jobs launched on demand with the `run` tool
 
 ## Where automations live
 
@@ -171,41 +171,18 @@ The Automations page lets you:
 
 See [Web UI Guide](../../docs/web-ui.md).
 
-## Managing tasks from the CLI
+## Managing tasks with tools
 
-`pa tasks` now reads from the SQLite automation store.
+Use the `scheduled_task` tool for create/update/get/validate/run flows.
 
-Legacy `*.task.md` files are still supported as import sources, and `pa tasks validate` remains the way to check those files before import.
+Common actions:
 
-### List tasks
+- `save` — create or update a task definition
+- `get` — inspect one task
+- `validate` — validate a legacy task definition or proposed payload
+- `run` — trigger a task immediately
 
-```bash
-pa tasks list
-pa tasks list --status active
-pa tasks list --json --status completed
-```
-
-### Show one task
-
-```bash
-pa tasks show <id>
-pa tasks show <id> --json
-```
-
-### Validate legacy task files
-
-```bash
-pa tasks validate
-pa tasks validate --all
-pa tasks validate /path/to/file.task.md
-```
-
-### Read logs
-
-```bash
-pa tasks logs <id>
-pa tasks logs <id> --tail 120
-```
+Use the web UI when you want to inspect automation detail, status, and owned run history visually.
 
 ## Logs and runtime state
 
@@ -235,15 +212,13 @@ Typical problems:
 
 Quick check:
 
-```bash
-pa tasks validate --all
-```
+Use the `scheduled_task` tool with `action: "validate"`.
 
 ## Recommended workflow
 
 1. create or edit automations in the web UI when possible
-2. use `pa tasks list`, `pa tasks show <id>`, and `pa tasks logs <id>` to inspect SQLite-backed automations from the CLI
-3. if you still manage legacy `*.task.md` files, validate them with `pa tasks validate --all` before expecting them to import cleanly
+2. use the `scheduled_task` tool to inspect, validate, or trigger automations programmatically
+3. if you still manage legacy `*.task.md` files, validate them before expecting them to import cleanly
 4. check daemon status with `pa daemon status`
 5. look for the resulting run/status on the automation and its owning thread if the automation is meant to surface attention
 

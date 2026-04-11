@@ -5,9 +5,9 @@
 It has two jobs:
 
 1. launch Pi with the right layered profile resources
-2. manage the durable surfaces around Pi
+2. manage local system services and machine-level setup around Pi
 
-Inside a live conversation, prefer the built-in runtime tools over shelling out to `pa`. Use the CLI when you are operating the local system directly.
+Inside a live conversation, prefer the built-in runtime tools over shelling out to `pa`. Durable runs and scheduled automations are tool-first now, not public CLI workflows.
 
 ## Command map
 
@@ -22,10 +22,8 @@ pa doctor
 pa restart
 pa update
 pa daemon
-pa tasks
 pa ui
 pa mcp
-pa runs
 ```
 
 ## Launch Pi
@@ -106,33 +104,15 @@ pa daemon service uninstall
 
 Use the daemon if you rely on scheduled tasks, deferred resumes, or durable runs.
 
-## Scheduled tasks
+## Runs and automations
 
-```bash
-pa tasks list
-pa tasks list --status active
-pa tasks show <id>
-pa tasks validate --all
-pa tasks validate ~/.local/state/personal-agent/sync/_tasks/example.task.md
-pa tasks logs <id> --tail 120
-```
+There is no public `pa runs` or `pa tasks` workflow anymore.
 
-`pa tasks` inspects the daemon-backed task registry and still validates legacy markdown task files.
+Use these instead:
 
-## Durable runs
-
-```bash
-pa runs list
-pa runs show <id>
-pa runs logs <id> --tail 120
-pa runs start docs-refresh -- bash -lc 'npm test'
-pa runs start-agent code-review --prompt "review the current diff"
-pa runs rerun <id>
-pa runs follow-up <id> --prompt "continue from the last checkpoint"
-pa runs cancel <id>
-```
-
-Use runs for detached work that starts now.
+- the built-in `run` tool for detached background work
+- the built-in `scheduled_task` tool for automations and legacy task-file validation
+- the web UI for automation detail, status, and owned run history
 
 ## MCP
 
@@ -169,17 +149,11 @@ pa ui foreground --open
 
 ### Run an investigation in the background
 
-```bash
-pa runs start-agent repo-audit --prompt "audit the repo for stale docs and summarize fixes"
-pa runs logs <run-id>
-```
+Use the `run` tool from a conversation, then inspect the owning thread or run detail in the web UI.
 
-### Validate task files after edits
+### Validate legacy task files after edits
 
-```bash
-pa tasks validate --all
-pa tasks list --status error
-```
+Use the `scheduled_task` tool with `action: "validate"`.
 
 ### Inspect configured MCP servers
 

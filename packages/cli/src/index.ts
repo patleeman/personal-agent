@@ -69,7 +69,6 @@ import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { mcpCommand } from './mcp-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
-import { runsCommand } from './runs-command.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
@@ -3328,6 +3327,8 @@ interface CliCommandDefinition {
   run: CommandHandler;
 }
 
+void tasksCommand;
+
 function buildCommandDefinitions(): CliCommandDefinition[] {
   const definitions: CliCommandDefinition[] = [
     {
@@ -3398,14 +3399,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: daemonCommand,
     },
     {
-      name: 'tasks',
-      category: 'automation',
-      usage: 'tasks [list|show|validate|logs|help] [args...]',
-      description: 'Inspect scheduled tasks',
-      disableBuiltInHelp: true,
-      run: tasksCommand,
-    },
-    {
       name: 'ui',
       category: 'system',
       usage: 'ui [status|open|foreground|logs|pairing-code|install|start|stop|restart|uninstall|help] [args...]',
@@ -3420,14 +3413,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect and call MCP servers',
       disableBuiltInHelp: true,
       run: mcpCommand,
-    },
-    {
-      name: 'runs',
-      category: 'automation',
-      usage: 'runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]',
-      description: 'Inspect background runs',
-      disableBuiltInHelp: true,
-      run: runsCommand,
     },
   ];
 
@@ -3563,11 +3548,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     }
 
     const [firstArg, ...restArgs] = parsedFlags.argv;
+    const toolOnlyCommands = new Set(['tasks', 'runs']);
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
 
     if (isHelpRequest) {
       if (firstArg === 'help' && restArgs.length > 0) {
         const targetCommand = restArgs[0] as string;
+
+        if (toolOnlyCommands.has(targetCommand)) {
+          console.error(uiError('CLI error', `pa ${targetCommand} is no longer a public CLI workflow. Use the built-in ${targetCommand === 'runs' ? 'run' : 'scheduled_task'} tool or the owning web UI surface instead.`));
+          return 1;
+        }
 
         if (!knownCommands.has(targetCommand)) {
           console.error(uiError('CLI error', `Unknown top-level command: ${targetCommand}`));
@@ -3580,6 +3571,11 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
       printRootHelp(definitions);
       return 0;
+    }
+
+    if (toolOnlyCommands.has(firstArg)) {
+      console.error(uiError('CLI error', `pa ${firstArg} is no longer a public CLI workflow. Use the built-in ${firstArg === 'runs' ? 'run' : 'scheduled_task'} tool or the owning web UI surface instead.`));
+      return 1;
     }
 
     if (!knownCommands.has(firstArg)) {

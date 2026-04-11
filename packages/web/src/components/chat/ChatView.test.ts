@@ -233,7 +233,7 @@ describe('chat view streaming disclosure', () => {
         ts: '2026-03-11T18:00:00.000Z',
         tool: 'bash',
         input: { command: 'npm --prefix packages/web run start' },
-        output: 'Inspect pa runs show run-continuous-conversations-next-chunk-ui-2026-03-25T00-53-25-347Z-903aa31b',
+        output: 'Inspect runId=run-continuous-conversations-next-chunk-ui-2026-03-25T00-53-25-347Z-903aa31b',
         status: 'running',
       }],
       isStreaming: true,

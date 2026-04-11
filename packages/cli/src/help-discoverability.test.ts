@@ -51,14 +51,6 @@ describe('subcommand help discoverability', () => {
       expected: ['Profile', 'Usage: pa profile [list|show|use|help]', 'list'],
     },
     {
-      argv: ['tasks', '--help'],
-      expected: ['Tasks', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
-    },
-    {
-      argv: ['runs', '--help'],
-      expected: ['Runs', 'Usage: pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
-    },
-    {
       argv: ['daemon', '--help'],
       expected: ['Daemon', 'pa daemon status [--json]', 'pa daemon service [install|status|uninstall|help]'],
     },
@@ -76,6 +68,22 @@ describe('subcommand help discoverability', () => {
     for (const snippet of expected) {
       expect(output).toContain(snippet);
     }
+  });
+
+  it('reports tool-first guidance for removed tasks and runs CLI entrypoints', async () => {
+    const errors: string[] = [];
+
+    vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
+      errors.push(parts.map((part) => String(part ?? '')).join(' '));
+    });
+
+    await expect(runCli(['tasks'])).resolves.toBe(1);
+    await expect(runCli(['help', 'runs'])).resolves.toBe(1);
+
+    expect(errors.join('\n')).toContain('pa tasks is no longer a public CLI workflow');
+    expect(errors.join('\n')).toContain('Use the built-in scheduled_task tool');
+    expect(errors.join('\n')).toContain('pa runs is no longer a public CLI workflow');
+    expect(errors.join('\n')).toContain('Use the built-in run tool');
   });
 
   it('treats `pa help ui` as success without printing a CLI error', async () => {

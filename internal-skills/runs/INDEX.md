@@ -30,37 +30,68 @@ Do not use runs for:
 
 ## Shell run
 
-Start a detached shell command:
+Start a detached shell command with the `run` tool:
 
-```bash
-pa runs start code-review -- npm test
+```json
+{
+  "action": "start",
+  "taskSlug": "code-review",
+  "command": "npm test"
+}
 ```
 
 ## Agent run (with scheduling)
 
 Start a detached background agent prompt:
 
-```bash
-pa runs start-agent code-review --prompt "review this diff"
+```json
+{
+  "action": "start_agent",
+  "taskSlug": "code-review",
+  "prompt": "review this diff"
+}
 ```
 
-Add scheduling with `--defer`, `--cron`, or `--at`:
+Add scheduling with `defer`, `cron`, or `at`:
 
-```bash
-# Run in 1 hour
-pa runs start-agent check-status --prompt "check deployment" --defer 1h
+```json
+{
+  "action": "start_agent",
+  "taskSlug": "check-status",
+  "prompt": "check deployment",
+  "defer": "1h"
+}
+```
 
-# Run weekdays at 9am
-pa runs start-agent morning-report --prompt "summarize" --cron "0 9 * * 1-5"
+```json
+{
+  "action": "start_agent",
+  "taskSlug": "morning-report",
+  "prompt": "summarize",
+  "cron": "0 9 * * 1-5"
+}
+```
 
-# Run at specific time
-pa runs start-agent deploy-watch --prompt "verify" --at "2026-04-01T09:00"
+```json
+{
+  "action": "start_agent",
+  "taskSlug": "deploy-watch",
+  "prompt": "verify",
+  "at": "2026-04-01T09:00"
+}
 ```
 
 For looping agents (self-scheduling):
 
-```bash
-pa runs start-agent monitor --prompt "check X" --loop --loop-delay 1h --loop-max-iterations 10
+```json
+{
+  "action": "start_agent",
+  "taskSlug": "monitor",
+  "prompt": "check X",
+  "loop": true,
+  "loopDelay": "1h",
+  "loopMaxIterations": 10
+}
 ```
 
 ## Trigger options for agent runs
@@ -74,18 +105,17 @@ pa runs start-agent monitor --prompt "check X" --loop --loop-delay 1h --loop-max
 | `--loop-delay` | `1h` | Delay between iterations |
 | `--loop-max-iterations` | `10` | Stop after N iterations |
 
-## Core commands
+## Core actions
 
-```bash
-pa runs list
-pa runs show <id>
-pa runs logs <id> --tail 120
-pa runs start <task-slug> -- <command...>
-pa runs start-agent <task-slug> --prompt "..."
-pa runs rerun <id>
-pa runs follow-up <id> --prompt "continue from the failed step"
-pa runs cancel <id>
-```
+Use the `run` tool with these actions:
+
+- `start`
+- `start_agent`
+- `get`
+- `logs`
+- `rerun`
+- `follow_up`
+- `cancel`
 
 ## Mental model
 

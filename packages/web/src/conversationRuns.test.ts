@@ -20,10 +20,10 @@ describe('conversationRuns helpers', () => {
     expect(createConversationLiveRunId('conv:123 / demo')).toBe('conversation-live-conv-123-demo');
   });
 
-  it('extracts durable run ids from CLI-like text and ignores incidental file names', () => {
+  it('extracts durable run ids from tool-like text and ignores incidental file names', () => {
     const text = [
       'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
-      'Inspect    pa runs show run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
+      'Inspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
       'Log path   /tmp/run-now.task.md',
       '{"runId":"task-nightly-review-2026-03-13T17-45-00-000Z-12345678"}',
       'conversation-live-conv-123',
@@ -41,7 +41,7 @@ describe('conversationRuns helpers', () => {
       type: 'tool_use',
       ts: '2026-03-13T18:00:00.000Z',
       tool: 'bash',
-      input: { command: 'pa runs logs run-code-review-2026-03-13T17-42-11-000Z-abcd1234' },
+      input: { action: 'logs', runId: 'run-code-review-2026-03-13T17-42-11-000Z-abcd1234' },
       output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\n',
     };
 
@@ -56,8 +56,8 @@ describe('conversationRuns helpers', () => {
         type: 'tool_use',
         ts: '2026-03-13T18:00:00.000Z',
         tool: 'bash',
-        input: { command: 'pa runs start code-review -- pa tui -p "review this diff"' },
-        output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\nInspect    pa runs show run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
+        input: { action: 'start_agent', taskSlug: 'code-review', prompt: 'review this diff' },
+        output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\nInspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
       },
       {
         type: 'text',
@@ -68,7 +68,7 @@ describe('conversationRuns helpers', () => {
         type: 'tool_use',
         ts: '2026-03-13T18:02:00.000Z',
         tool: 'bash',
-        input: { command: 'pa runs show task-nightly-review-2026-03-13T17-45-00-000Z-12345678' },
+        input: { action: 'get', runId: 'task-nightly-review-2026-03-13T17-45-00-000Z-12345678' },
         output: '',
       },
     ];
