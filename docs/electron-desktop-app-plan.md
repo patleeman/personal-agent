@@ -12,6 +12,7 @@ On macOS, the desktop shell is the intended local product surface. Background be
 
 - ships as a macOS menu bar app with an always-available menubar icon and no dock icon
 - keeps a tray app alive after the main window closes
+- shows the 10 most recent conversations directly in the tray menu for quick reopen
 - loads the packaged web UI inside Electron windows
 - owns the local daemon for the local host and keeps core local API/event flows inside the Electron process
 - supports saved **web** and **ssh** remote hosts

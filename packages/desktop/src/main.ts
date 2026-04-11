@@ -136,6 +136,15 @@ async function openNewConversation(): Promise<void> {
   });
 }
 
+async function openConversation(conversationId: string): Promise<void> {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  await openMainRoute(`/conversations/${encodeURIComponent(normalizedConversationId)}`);
+}
+
 async function switchRelativeHost(delta: 1 | -1): Promise<void> {
   if (!hostManager || !windowController) {
     return;
@@ -253,6 +262,9 @@ async function bootstrapDesktopApp(): Promise<void> {
   trayController = new DesktopTrayController({
     hostManager,
     onOpen: shellActions.onOpen,
+    onOpenConversation: (conversationId) => {
+      void openConversation(conversationId);
+    },
     onNewConversation: shellActions.onNewConversation,
     onSettings: shellActions.onSettings,
     onCheckForUpdates: shellActions.onCheckForUpdates,

@@ -69,6 +69,7 @@ The desktop shell adds:
 
 - a hidden-titlebar BrowserWindow
 - a tray/menubar-driven lifecycle that runs as a macOS accessory/menu bar app without a dock icon
+- a tray menu that can reopen the 10 most recent conversations on the active host
 - a standard application menu while desktop windows are focused
 - separate browser partitions per host
 - host-aware window titles
