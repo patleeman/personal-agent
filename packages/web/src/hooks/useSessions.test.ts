@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionDetail, SessionMeta } from '../types';
-import { mergeSessionDetailResultWithCachedDetail } from './useSessions';
+import {
+  mergeSessionDetailResultWithCachedDetail,
+  primeSessionDetailCache,
+  resolveSessionDetailSeed,
+} from './useSessions';
 
 function createSessionMeta(id = 'conv-1'): SessionMeta {
   return {
@@ -15,9 +19,9 @@ function createSessionMeta(id = 'conv-1'): SessionMeta {
   };
 }
 
-function createSessionDetail(signature = 'sig-1'): SessionDetail {
+function createSessionDetail(signature = 'sig-1', id = 'conv-1'): SessionDetail {
   return {
-    meta: createSessionMeta(),
+    meta: createSessionMeta(id),
     blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text: 'Cached reply' }],
     blockOffset: 0,
     totalBlocks: 1,
@@ -40,6 +44,33 @@ function createWindowedSessionDetail(signature = 'sig-1'): SessionDetail {
     signature,
   };
 }
+
+describe('resolveSessionDetailSeed', () => {
+  it('returns an idle empty state when there is no session id', () => {
+    expect(resolveSessionDetailSeed(undefined)).toEqual({
+      detail: null,
+      loading: false,
+    });
+  });
+
+  it('reports a loading state when the session detail is not cached yet', () => {
+    expect(resolveSessionDetailSeed('conv-detail-seed-miss', { tailBlocks: 120 })).toEqual({
+      detail: null,
+      loading: true,
+    });
+  });
+
+  it('reuses the in-memory session detail cache synchronously', () => {
+    const sessionId = 'conv-detail-seed-hit';
+    const detail = createSessionDetail('sig-seed', sessionId);
+    primeSessionDetailCache(sessionId, detail, { tailBlocks: 120 }, 9);
+
+    expect(resolveSessionDetailSeed(sessionId, { tailBlocks: 120 })).toEqual({
+      detail,
+      loading: false,
+    });
+  });
+});
 
 describe('mergeSessionDetailResultWithCachedDetail', () => {
   it('reuses the cached transcript when the session detail response is unchanged', () => {

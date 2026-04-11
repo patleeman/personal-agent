@@ -3,6 +3,8 @@ import type { ConversationBootstrapState, SessionDetail, SessionMeta } from '../
 import {
   buildConversationBootstrapVersionKey,
   mergeConversationBootstrapWithCachedSessionDetail,
+  primeConversationBootstrapCache,
+  resolveConversationBootstrapSeed,
 } from './useConversationBootstrap';
 
 function createSessionMeta(id = 'conv-1'): SessionMeta {
@@ -18,9 +20,9 @@ function createSessionMeta(id = 'conv-1'): SessionMeta {
   };
 }
 
-function createSessionDetail(signature = 'sig-1', text = 'Cached reply'): SessionDetail {
+function createSessionDetail(signature = 'sig-1', text = 'Cached reply', id = 'conv-1'): SessionDetail {
   return {
-    meta: createSessionMeta(),
+    meta: createSessionMeta(id),
     blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text }],
     blockOffset: 0,
     totalBlocks: 1,
@@ -56,6 +58,36 @@ function createWindowedBootstrapState(): ConversationBootstrapState {
     liveSession: { live: false },
   };
 }
+
+describe('resolveConversationBootstrapSeed', () => {
+  it('returns an idle empty state when there is no conversation id', () => {
+    expect(resolveConversationBootstrapSeed(undefined)).toEqual({
+      data: null,
+      loading: false,
+    });
+  });
+
+  it('reports a loading state when the conversation is not cached yet', () => {
+    expect(resolveConversationBootstrapSeed('conv-seed-miss', { tailBlocks: 120 })).toEqual({
+      data: null,
+      loading: true,
+    });
+  });
+
+  it('reuses the in-memory bootstrap cache synchronously', () => {
+    const conversationId = 'conv-seed-hit';
+    const bootstrap = createBootstrapState({ conversationId, sessionDetail: createSessionDetail('sig-seed', 'Warm reply', conversationId) });
+    primeConversationBootstrapCache(conversationId, bootstrap, { tailBlocks: 120 }, '7:3');
+
+    expect(resolveConversationBootstrapSeed(conversationId, { tailBlocks: 120 })).toEqual({
+      data: {
+        ...bootstrap,
+        sessionDetailSignature: 'sig-seed',
+      },
+      loading: false,
+    });
+  });
+});
 
 describe('buildConversationBootstrapVersionKey', () => {
   it('tracks both session list and session file invalidations', () => {

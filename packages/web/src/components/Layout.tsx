@@ -14,6 +14,7 @@ import { readDesktopEnvironment } from '../desktopBridge';
 import type { DesktopEnvironmentState } from '../types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
+import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../liveSessionWarmth';
 
@@ -222,9 +223,9 @@ function useViewportWidth() {
 
 const ENABLE_OPEN_CONVERSATION_WARMING = true;
 const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
-const OPEN_TAB_WARM_BOOT_DELAY_MS = 250;
-const OPEN_TAB_WARM_START_DELAY_MS = 75;
-const OPEN_TAB_WARM_INTERLEAVE_MS = 50;
+const OPEN_TAB_WARM_BOOT_DELAY_MS = 0;
+const OPEN_TAB_WARM_START_DELAY_MS = 0;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 25;
 
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
@@ -297,11 +298,15 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
   useEffect(() => {
     const openConversationIdSet = new Set(openConversationIds);
     for (const sessionId of listWarmLiveSessionStateIds()) {
-      if (!ENABLE_OPEN_CONVERSATION_WARMING || !openConversationIdSet.has(sessionId) || sessionsById.get(sessionId)?.isLive !== true) {
+      if (
+        !ENABLE_OPEN_CONVERSATION_WARMING
+        || !openConversationIdSet.has(sessionId)
+        || (sessions !== null && sessionsById.get(sessionId)?.isLive !== true)
+      ) {
         clearWarmLiveSessionState(sessionId);
       }
     }
-  }, [openConversationIds, sessionsById]);
+  }, [openConversationIds, sessions, sessionsById]);
 
   useEffect(() => {
     const idsToWarm = openConversationIds
@@ -315,19 +320,21 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
+        const bootstrapVersionKey = buildConversationBootstrapVersionKey({
+          sessionsVersion: versions.sessions,
+          sessionFilesVersion: versions.sessionFiles,
+        });
+
         for (const conversationId of idsToWarm) {
           if (cancelled) {
             return;
           }
 
-          await Promise.allSettled([
+          const [bootstrapResult] = await Promise.allSettled([
             fetchConversationBootstrapCached(
               conversationId,
               { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-              buildConversationBootstrapVersionKey({
-                sessionsVersion: versions.sessions,
-                sessionFilesVersion: versions.sessionFiles,
-              }),
+              bootstrapVersionKey,
             ),
             prefetchConversationRailData({
               conversationId,
@@ -335,6 +342,15 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
               runsVersion: versions.runs,
             }),
           ]);
+
+          if (bootstrapResult?.status === 'fulfilled' && bootstrapResult.value.sessionDetail) {
+            primeSessionDetailCache(
+              conversationId,
+              bootstrapResult.value.sessionDetail,
+              { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
+              versions.sessionFiles,
+            );
+          }
 
           if (cancelled) {
             return;
@@ -393,7 +409,7 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
   return warmingEnabled
     ? openConversationIds
         .filter((conversationId) => conversationId !== activeConversationId)
-        .filter((conversationId) => sessionsById.get(conversationId)?.isLive === true)
+        .filter((conversationId) => sessions === null || sessionsById.get(conversationId)?.isLive === true)
     : [];
 }
 

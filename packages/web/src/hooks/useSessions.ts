@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../api';
 import { useAppEvents } from '../contexts';
 import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../types';
@@ -154,29 +154,53 @@ export function fetchSessionDetailCached(
   return request;
 }
 
+export function resolveSessionDetailSeed(
+  sessionId: string | undefined,
+  options?: { tailBlocks?: number },
+): {
+  detail: SessionDetail | null;
+  loading: boolean;
+} {
+  if (!sessionId) {
+    return {
+      detail: null,
+      loading: false,
+    };
+  }
+
+  const cached = readCachedSessionDetailEntry(sessionId, options);
+  return {
+    detail: cached?.detail ?? null,
+    loading: !cached,
+  };
+}
+
+const useCacheSeedEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export function useSessionDetail(sessionId: string | undefined, options?: { tailBlocks?: number; version?: number }) {
   const { versions } = useAppEvents();
   const detailVersion = options?.version ?? versions.sessionFiles;
   const cacheOptions = options ? { tailBlocks: options.tailBlocks } : undefined;
-  const [detail, setDetail] = useState<SessionDetail | null>(null);
-  const [loading, setLoading] = useState(false);
+  const initialSeed = resolveSessionDetailSeed(sessionId, cacheOptions);
+  const [detail, setDetail] = useState<SessionDetail | null>(initialSeed.detail);
+  const [loading, setLoading] = useState(initialSeed.loading);
   const [error, setError] = useState<string | null>(null);
+
+  useCacheSeedEffect(() => {
+    const seed = resolveSessionDetailSeed(sessionId, cacheOptions);
+    setDetail(seed.detail);
+    setLoading(seed.loading);
+    setError(null);
+  }, [cacheOptions?.tailBlocks, sessionId]);
 
   useEffect(() => {
     if (!sessionId) {
-      setDetail(null);
-      setLoading(false);
-      setError(null);
       return;
     }
 
     let cancelled = false;
     const cached = readCachedSessionDetailEntry(sessionId, cacheOptions);
     const hasFreshCache = cached?.version === detailVersion;
-
-    setDetail(cached?.detail ?? null);
-    setLoading(!cached);
-    setError(null);
 
     if (hasFreshCache) {
       return;

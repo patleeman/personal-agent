@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../api';
 import {
   readPersistedConversationBootstrapEntry,
@@ -91,11 +91,9 @@ function stripConversationBootstrapTransientFlags(
   data: ConversationBootstrapState,
 ): ConversationBootstrapState {
   const normalized = normalizeConversationBootstrapState(data);
-  const {
-    sessionDetailUnchanged: _sessionDetailUnchanged,
-    sessionDetailAppendOnly: _sessionDetailAppendOnly,
-    ...rest
-  } = normalized;
+  const rest = { ...normalized };
+  delete rest.sessionDetailUnchanged;
+  delete rest.sessionDetailAppendOnly;
   return rest;
 }
 
@@ -128,11 +126,9 @@ export function mergeConversationBootstrapWithCachedSessionDetail(
     return normalized;
   }
 
-  const {
-    sessionDetailUnchanged: _sessionDetailUnchanged,
-    sessionDetailAppendOnly: _sessionDetailAppendOnly,
-    ...rest
-  } = normalized;
+  const rest = { ...normalized };
+  delete rest.sessionDetailUnchanged;
+  delete rest.sessionDetailAppendOnly;
   return {
     ...rest,
     sessionDetail: mergedDetail,
@@ -281,6 +277,29 @@ export function buildConversationBootstrapVersionKey(input: {
   return `${input.sessionsVersion}:${input.sessionFilesVersion}`;
 }
 
+export function resolveConversationBootstrapSeed(
+  conversationId: string | undefined,
+  options?: { tailBlocks?: number },
+): {
+  data: ConversationBootstrapState | null;
+  loading: boolean;
+} {
+  if (!conversationId) {
+    return {
+      data: null,
+      loading: false,
+    };
+  }
+
+  const cached = readCachedConversationBootstrapEntry(conversationId, options);
+  return {
+    data: cached?.data ?? null,
+    loading: !cached,
+  };
+}
+
+const useCacheSeedEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
 export function useConversationBootstrap(
   conversationId: string | undefined,
   options?: { tailBlocks?: number; versionKey?: string },
@@ -290,27 +309,27 @@ export function useConversationBootstrap(
     sessionsVersion: versions.sessions,
     sessionFilesVersion: versions.sessionFiles,
   });
-  const [data, setData] = useState<ConversationBootstrapState | null>(null);
-  const [loading, setLoading] = useState(false);
+  const initialSeed = resolveConversationBootstrapSeed(conversationId, options);
+  const [data, setData] = useState<ConversationBootstrapState | null>(initialSeed.data);
+  const [loading, setLoading] = useState(initialSeed.loading);
   const [error, setError] = useState<string | null>(null);
+
+  useCacheSeedEffect(() => {
+    const seed = resolveConversationBootstrapSeed(conversationId, options);
+    setData(seed.data);
+    setLoading(seed.loading);
+    setError(null);
+  }, [conversationId, options?.tailBlocks]);
 
   useEffect(() => {
     if (!conversationId) {
-      setData(null);
-      setLoading(false);
-      setError(null);
       return;
     }
 
     let cancelled = false;
-    const memoryCached = readCachedConversationBootstrapEntry(conversationId, options);
-
-    setData(memoryCached?.data ?? null);
-    setLoading(!memoryCached);
-    setError(null);
 
     void (async () => {
-      let cached = memoryCached;
+      let cached = readCachedConversationBootstrapEntry(conversationId, options);
       if (!cached) {
         cached = await readConversationBootstrapEntry(conversationId, options);
         if (cancelled) {
