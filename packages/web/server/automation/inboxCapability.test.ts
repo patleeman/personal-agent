@@ -60,7 +60,7 @@ vi.mock('../shared/appEvents.js', () => ({
 }));
 
 import {
-  clearInboxCapability,
+  clearActivityAttentionCapability,
   markActivityReadCapability,
   markConversationAttentionCapability,
   readActivityDetailCapability,
@@ -68,7 +68,7 @@ import {
   startActivityConversationCapability,
 } from './inboxCapability.js';
 
-describe('inboxCapability', () => {
+describe('activityAttentionCapability', () => {
   beforeEach(() => {
     clearInboxForCurrentProfileMock.mockReset();
     createLiveSessionMock.mockReset();
@@ -123,7 +123,7 @@ describe('inboxCapability', () => {
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
   });
 
-  it('clears inbox state and invalidates when entries change', () => {
+  it('clears activity attention state and invalidates when entries change', () => {
     listConversationSessionsSnapshotMock.mockReturnValue([{ id: 'conversation-1', messageCount: 3 }]);
     clearInboxForCurrentProfileMock
       .mockReturnValueOnce({
@@ -135,7 +135,7 @@ describe('inboxCapability', () => {
         clearedConversationIds: [],
       });
 
-    expect(clearInboxCapability({
+    expect(clearActivityAttentionCapability({
       profile: 'assistant',
       openConversationIds: ['open-1', 'pinned-1'],
     })).toEqual({
@@ -143,7 +143,7 @@ describe('inboxCapability', () => {
       clearedConversationIds: ['conversation-1'],
     });
 
-    expect(clearInboxCapability('assistant', {
+    expect(clearActivityAttentionCapability('assistant', {
       openConversationIds: [],
       pinnedConversationIds: ['pinned-2'],
       archivedConversationIds: [],

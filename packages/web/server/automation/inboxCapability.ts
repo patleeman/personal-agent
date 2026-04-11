@@ -18,7 +18,7 @@ type LiveSessionCreateOptions = Parameters<typeof createLiveSession>[1];
 type LiveSessionCreateResourceOptions = Omit<NonNullable<LiveSessionCreateOptions>, 'extensionFactories'>;
 type LiveSessionExtensionFactories = NonNullable<LiveSessionCreateOptions>['extensionFactories'];
 
-export interface InboxCapabilityContext {
+export interface ActivityCapabilityContext {
   getCurrentProfile: () => string;
   getRepoRoot: () => string;
   getDefaultWebCwd: () => string;
@@ -27,13 +27,13 @@ export interface InboxCapabilityContext {
   getSavedWebUiPreferences: () => SavedWebUiPreferences;
 }
 
-export class InboxCapabilityInputError extends Error {}
+export class ActivityCapabilityInputError extends Error {}
 
 function normalizeId(value: string): string {
   return value.trim();
 }
 
-function buildInboxActivityConversationContext(entry: {
+function buildActivityConversationContext(entry: {
   id: string;
   kind: string;
   createdAt: string;
@@ -110,7 +110,7 @@ function resolveOpenConversationIds(input: {
   return [...preferences.openConversationIds, ...preferences.pinnedConversationIds];
 }
 
-export function clearInboxCapability(
+export function clearActivityAttentionCapability(
   input: { profile: string; openConversationIds: Iterable<string> } | string,
   preferences?: SavedWebUiPreferences,
 ) {
@@ -133,11 +133,11 @@ export function clearInboxCapability(
   return result;
 }
 
-export async function startActivityConversationCapability(activityId: string, context: InboxCapabilityContext) {
+export async function startActivityConversationCapability(activityId: string, context: ActivityCapabilityContext) {
   const profile = context.getCurrentProfile();
   const normalizedActivityId = normalizeId(activityId);
   if (!normalizedActivityId) {
-    throw new InboxCapabilityInputError('activityId required');
+    throw new ActivityCapabilityInputError('activityId required');
   }
 
   const match = findActivityRecord(profile, normalizedActivityId);
@@ -164,7 +164,7 @@ export async function startActivityConversationCapability(activityId: string, co
     relatedConversationIds,
   });
 
-  await queuePromptContext(result.id, 'referenced_context', buildInboxActivityConversationContext({
+  await queuePromptContext(result.id, 'referenced_context', buildActivityConversationContext({
     ...match.entry,
     relatedConversationIds,
   }));

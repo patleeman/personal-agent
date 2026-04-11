@@ -311,7 +311,7 @@ let localRoutesPromise: Promise<RegisteredRoute[]> | null = null;
 let localServerRouteContext: ServerRouteContext | null = null;
 let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
 let localProviderDesktopCapabilityContext: ProviderDesktopCapabilityContext | null = null;
-let localInboxCapabilityContext: {
+let localActivityCapabilityContext: {
   getCurrentProfile: () => string;
   getRepoRoot: () => string;
   getDefaultWebCwd: () => string;
@@ -515,7 +515,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getAuthFile: context.getAuthFile,
   };
 
-  localInboxCapabilityContext = {
+  localActivityCapabilityContext = {
     getCurrentProfile: context.getCurrentProfile,
     getRepoRoot: context.getRepoRoot,
     getDefaultWebCwd: context.getDefaultWebCwd,
@@ -569,13 +569,13 @@ async function getLocalProviderDesktopCapabilityContext(): Promise<ProviderDeskt
   return localProviderDesktopCapabilityContext;
 }
 
-async function getLocalInboxCapabilityContext() {
+async function getLocalActivityCapabilityContext() {
   await getLocalRoutes();
-  if (!localInboxCapabilityContext) {
+  if (!localActivityCapabilityContext) {
     throw new Error('Local activity capability context is not initialized.');
   }
 
-  return localInboxCapabilityContext;
+  return localActivityCapabilityContext;
 }
 
 function expandHomePath(value: string): string {
@@ -1643,7 +1643,7 @@ export async function runDesktopScheduledTask(taskId: string) {
 }
 
 export async function markDesktopConversationAttention(input: { conversationId: string; read?: boolean }) {
-  const context = await getLocalInboxCapabilityContext();
+  const context = await getLocalActivityCapabilityContext();
   const updated = markConversationAttentionCapability(context.getCurrentProfile(), input.conversationId, input.read !== false);
   if (!updated) {
     throw new Error('Conversation not found');
