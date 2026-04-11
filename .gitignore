@@ -28,3 +28,5 @@ tools/*/.build/
 
 # Legacy in-repo conversation-maintenance state
 profiles/*/agent/state/conversation-maintenance/processed-conversations.json
+
+.env
