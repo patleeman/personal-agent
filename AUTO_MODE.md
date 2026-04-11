@@ -4,7 +4,7 @@
 Finish the desktop-first migration/perf cleanup to a solid foundation, then verify the repo builds, build the mac desktop app, and ship a new desktop release if release prerequisites are available.
 
 ## Current status
-A second packaged-desktop perf trim is green in the worktree: saved conversation attachments now load only when the drawings picker opens, instead of on every conversation open. This keeps the draft-create/open path and normal conversation switches from paying an attachment-list read for a hidden modal path.
+Two small packaged-desktop conversation-open trims are now landed on `master`: freshly created conversations reuse their known model/thinking selection on first open, and saved conversation attachments now load only when the drawings picker opens instead of on every conversation switch. The repo is clean at `f699043f`; the next iteration should go back to packaged first-response / first-visible-update measurement.
 
 ## Active run
 - run id: none
@@ -24,4 +24,4 @@ A second packaged-desktop perf trim is green in the worktree: saved conversation
 - when it should wake up: previously scheduled; do not stack another unless timing changes materially
 
 ## Next step
-Commit and push this green slice, then re-measure the packaged local first-response / first-visible-update path for the next small trim.
+Re-measure the packaged local first-response / first-visible-update path and land the next small high-confidence trim, or stop cleanly if the next blocker is external.
