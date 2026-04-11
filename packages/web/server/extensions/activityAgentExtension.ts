@@ -173,12 +173,12 @@ export function createActivityAgentExtension(options: {
     pi.registerTool({
       name: 'activity',
       label: 'Activity',
-      description: 'Inspect and manage durable inbox/activity items for the active profile.',
-      promptSnippet: 'Use the activity tool for durable inbox items and explicit attention management.',
+      description: 'Inspect and manage durable activity items for the active profile.',
+      promptSnippet: 'Use the activity tool for durable activity items and explicit attention management.',
       promptGuidelines: [
-        'Use this tool when you need to create, inspect, or manage durable inbox/activity items for the active profile.',
+        'Use this tool when you need to create, inspect, or manage durable activity items for the active profile.',
         'Prefer activity for explicit asynchronous outcomes or reminders, not as a second transcript.',
-        'Use create for high-signal durable attention items; use mark_read/mark_unread when triaging inbox state.',
+        'Use create for high-signal durable attention items; use mark_read/mark_unread when triaging activity state.',
       ],
       parameters: ActivityToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {

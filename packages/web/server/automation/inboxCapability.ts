@@ -43,7 +43,7 @@ function buildInboxActivityConversationContext(entry: {
   relatedConversationIds?: string[];
 }): string {
   const lines = [
-    'Inbox activity context for this conversation:',
+    'Activity context for this conversation:',
     `- activity id: ${entry.id}`,
     `- kind: ${entry.kind}`,
     `- created at: ${entry.createdAt}`,
@@ -58,7 +58,7 @@ function buildInboxActivityConversationContext(entry: {
     lines.push('', 'Details:', entry.details.trim());
   }
 
-  lines.push('', 'Use this inbox item as durable context for follow-up in this conversation.');
+  lines.push('', 'Use this activity item as durable context for follow-up in this conversation.');
   return lines.join('\n');
 }
 

@@ -215,7 +215,7 @@ describe('inboxCapability', () => {
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conversation-1',
       'referenced_context',
-      expect.stringContaining('Inbox activity context for this conversation:'),
+      expect.stringContaining('Activity context for this conversation:'),
     );
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conversation-1',

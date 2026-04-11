@@ -58,7 +58,7 @@ A conversation often creates or receives other durable async surfaces:
 - **deferred resume** — wake this conversation later
 - **run** — detached work started now
 - **scheduled task** — future or recurring automation
-- **activity / alert** — later attention in inbox/notifications
+- **activity / alert** — later attention outside the active conversation
 
 ## Web and remote-browser behavior
 
