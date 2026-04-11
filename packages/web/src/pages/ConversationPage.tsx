@@ -987,6 +987,55 @@ function primeCreatedConversationOpenCaches(
   }
 }
 
+interface ConversationInitialModelPreferenceState {
+  conversationId: string;
+  currentModel: string;
+  currentThinkingLevel: string;
+}
+
+interface ConversationLocationState {
+  initialModelPreferenceState?: ConversationInitialModelPreferenceState;
+}
+
+export function buildConversationInitialModelPreferenceState(input: {
+  conversationId: string;
+  currentModel: string;
+  currentThinkingLevel: string;
+  defaultModel: string;
+  defaultThinkingLevel: string;
+}): ConversationInitialModelPreferenceState {
+  return {
+    conversationId: input.conversationId,
+    currentModel: input.currentModel.trim() || input.defaultModel,
+    currentThinkingLevel: input.currentThinkingLevel.trim() || input.defaultThinkingLevel,
+  };
+}
+
+export function resolveConversationInitialModelPreferenceState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  locationState: unknown;
+  defaultModel: string;
+  defaultThinkingLevel: string;
+}): ConversationInitialModelPreferenceState | null {
+  if (input.draft || !input.conversationId || !input.locationState || typeof input.locationState !== 'object') {
+    return null;
+  }
+
+  const candidate = (input.locationState as ConversationLocationState).initialModelPreferenceState;
+  if (!candidate || typeof candidate !== 'object' || candidate.conversationId !== input.conversationId) {
+    return null;
+  }
+
+  return buildConversationInitialModelPreferenceState({
+    conversationId: candidate.conversationId,
+    currentModel: typeof candidate.currentModel === 'string' ? candidate.currentModel : '',
+    currentThinkingLevel: typeof candidate.currentThinkingLevel === 'string' ? candidate.currentThinkingLevel : '',
+    defaultModel: input.defaultModel,
+    defaultThinkingLevel: input.defaultThinkingLevel,
+  });
+}
+
 // ── ConversationPage ──────────────────────────────────────────────────────────
 
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
@@ -1537,6 +1586,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   } = useModels();
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+  const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
+    draft,
+    conversationId: id,
+    locationState: location.state,
+    defaultModel,
+    defaultThinkingLevel,
+  }), [defaultModel, defaultThinkingLevel, draft, id, location.state]);
+  const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
   const [draftCwdValue, setDraftCwdValue] = useState('');
   const [draftCwdEditorOpen, setDraftCwdEditorOpen] = useState(false);
   const [draftCwdDraft, setDraftCwdDraft] = useState('');
@@ -1593,6 +1650,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    if (initialModelPreferenceState && appliedInitialModelPreferenceLocationKeyRef.current !== location.key) {
+      appliedInitialModelPreferenceLocationKeyRef.current = location.key;
+      setCurrentModel(initialModelPreferenceState.currentModel);
+      setCurrentThinkingLevel(initialModelPreferenceState.currentThinkingLevel);
+      return;
+    }
+
     let cancelled = false;
     api.conversationModelPreferences(id)
       .then((data) => {
@@ -1615,7 +1679,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [conversationEventVersion, defaultModel, defaultThinkingLevel, draft, id]);
+  }, [conversationEventVersion, defaultModel, defaultThinkingLevel, draft, id, initialModelPreferenceState, location.key]);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {
@@ -3209,7 +3273,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         sessionDetailVersion: conversationEventVersion,
       });
       ensureConversationTabOpen(created.id);
-      navigate(`/conversations/${created.id}`);
+      navigate(`/conversations/${created.id}`, {
+        state: {
+          initialModelPreferenceState: buildConversationInitialModelPreferenceState({
+            conversationId: created.id,
+            currentModel,
+            currentThinkingLevel,
+            defaultModel,
+            defaultThinkingLevel,
+          }),
+        },
+      });
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -4092,7 +4166,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationThinkingLevel();
 
           ensureConversationTabOpen(newId);
-          navigate(`/conversations/${newId}`, { replace: true });
+          navigate(`/conversations/${newId}`, {
+            replace: true,
+            state: {
+              initialModelPreferenceState: buildConversationInitialModelPreferenceState({
+                conversationId: newId,
+                currentModel,
+                currentThinkingLevel,
+                defaultModel,
+                defaultThinkingLevel,
+              }),
+            },
+          });
 
           // Kick off the first turn immediately, but do not hold route
           // navigation open on the prompt-start roundtrip. The pending prompt

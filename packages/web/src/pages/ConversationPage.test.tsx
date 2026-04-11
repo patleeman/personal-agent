@@ -28,6 +28,8 @@ import {
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInlineLoadingState,
   resolveConversationVisibleScrollBinding,
+  buildConversationInitialModelPreferenceState,
+  resolveConversationInitialModelPreferenceState,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -94,6 +96,84 @@ describe('conversation autocomplete catalog demand', () => {
       needsMemoryData: false,
       needsVaultFiles: false,
     });
+  });
+});
+
+describe('conversation initial model preference state', () => {
+  it('carries the current draft model preferences forward for a just-created conversation', () => {
+    expect(buildConversationInitialModelPreferenceState({
+      conversationId: 'conv-123',
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      currentThinkingLevel: 'medium',
+      defaultModel: 'openai/gpt-5.4',
+      defaultThinkingLevel: 'high',
+    })).toEqual({
+      conversationId: 'conv-123',
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      currentThinkingLevel: 'medium',
+    });
+  });
+
+  it('falls back to defaults when the carried state is blank', () => {
+    expect(buildConversationInitialModelPreferenceState({
+      conversationId: 'conv-123',
+      currentModel: '   ',
+      currentThinkingLevel: '',
+      defaultModel: 'openai/gpt-5.4',
+      defaultThinkingLevel: 'high',
+    })).toEqual({
+      conversationId: 'conv-123',
+      currentModel: 'openai/gpt-5.4',
+      currentThinkingLevel: 'high',
+    });
+  });
+
+  it('only reuses carried state for the matching non-draft conversation route', () => {
+    expect(resolveConversationInitialModelPreferenceState({
+      draft: false,
+      conversationId: 'conv-123',
+      locationState: {
+        initialModelPreferenceState: {
+          conversationId: 'conv-123',
+          currentModel: 'anthropic/claude-sonnet-4-6',
+          currentThinkingLevel: 'medium',
+        },
+      },
+      defaultModel: 'openai/gpt-5.4',
+      defaultThinkingLevel: 'high',
+    })).toEqual({
+      conversationId: 'conv-123',
+      currentModel: 'anthropic/claude-sonnet-4-6',
+      currentThinkingLevel: 'medium',
+    });
+
+    expect(resolveConversationInitialModelPreferenceState({
+      draft: true,
+      conversationId: 'conv-123',
+      locationState: {
+        initialModelPreferenceState: {
+          conversationId: 'conv-123',
+          currentModel: 'anthropic/claude-sonnet-4-6',
+          currentThinkingLevel: 'medium',
+        },
+      },
+      defaultModel: 'openai/gpt-5.4',
+      defaultThinkingLevel: 'high',
+    })).toBeNull();
+
+    expect(resolveConversationInitialModelPreferenceState({
+      draft: false,
+      conversationId: 'conv-456',
+      locationState: {
+        initialModelPreferenceState: {
+          conversationId: 'conv-123',
+          currentModel: 'anthropic/claude-sonnet-4-6',
+          currentThinkingLevel: 'medium',
+        },
+      },
+      defaultModel: 'openai/gpt-5.4',
+      defaultThinkingLevel: 'high',
+    })).toBeNull();
   });
 });
 
