@@ -239,7 +239,7 @@
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-center gap-2 px-2.5 py-2 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
@@ -247,7 +247,7 @@
   }
 
   .ui-sidebar-session-meta {
-    @apply text-[11px] text-dim truncate;
+    @apply text-[10px] leading-none text-dim truncate;
   }
 
   .ui-sidebar-shelf-row {
