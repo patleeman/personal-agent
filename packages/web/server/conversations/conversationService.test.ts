@@ -345,9 +345,13 @@ describe('conversationService', () => {
         attempts: 0,
         status: 'ready',
         readyAt: '2026-04-09T12:30:00.000Z',
-        kind: 'manual',
+        kind: 'continue',
         title: 'Review follow-up',
-        delivery: { type: 'inbox' },
+        delivery: {
+          alertLevel: 'none',
+          autoResumeIfOpen: true,
+          requireAck: false,
+        },
       },
     ]);
     listSessionsMock.mockReturnValue([

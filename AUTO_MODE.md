@@ -4,19 +4,21 @@
 Finish the post-release desktop-first cleanup so the mac app stays the only real product surface and the remaining UI/API concepts keep collapsing toward conversations, runs/tasks, and tools.
 
 ## Current status
-This slice trims the remaining inbox-era helper names parked in `packages/web/server/index.ts`. The retention loop and related helper names now use activity-attention wording instead of inbox wording, and the last index-local conversation-context helper now matches the current activity naming. Behavior is unchanged; this is a surgical internal-name cleanup in a file with broader historical lint debt.
+This slice cleans up one stale deferred-resume test fixture that was still modeling the old inbox-style delivery shape. `conversationService.test.ts` now uses the current deferred-resume kind and delivery fields (`kind: 'continue'` plus alert-level/ack/auto-resume delivery metadata), which matches the real runtime contract after the inbox removal work.
 
 ## Active run
 - run id: none
 - task slug: post-release-tool-first-cleanup
-- purpose: direct local cleanup of stale inbox naming in the legacy server bootstrap file
+- purpose: direct local cleanup of stale deferred-resume fixture data
 
 ## Latest validation
+- `npx vitest run packages/web/server/conversations/conversationService.test.ts`
+- `npx eslint packages/web/server/conversations/conversationService.test.ts`
 - `npm --prefix packages/desktop run build`
 
 ## Durable loop state
-- status: direct continuation in a clean temporary worktree because the main worktree has unrelated dirt and `origin/master` kept moving during the loop
+- status: direct continuation in a clean temporary worktree because the main worktree briefly picked up unrelated build-state movement while `origin/master` advanced
 - wakeup policy: none needed for this slice
 
 ## Next step
-Keep trimming remaining inbox-era internal names, especially in the legacy server bootstrap and any shared attention helpers that still describe activity cleanup as inbox behavior.
+Keep trimming stale inbox/notification-era fixtures and wording where they no longer match the real post-inbox runtime contract, unless a better leverage slice appears.
