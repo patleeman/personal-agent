@@ -266,6 +266,32 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('role="button"');
   });
 
+  it('shows a clean preview for collapsed thinking steps inside an open internal-work cluster', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'thinking',
+          ts: '2026-03-11T18:00:00.000Z',
+          text: '**Investigate the render path first.**\nThen patch the collapsed header.',
+        },
+        {
+          type: 'tool_use',
+          ts: '2026-03-11T18:00:01.000Z',
+          tool: 'bash',
+          input: { command: 'echo done' },
+          output: '',
+          status: 'running',
+        },
+      ],
+      isStreaming: true,
+    }));
+
+    expect(html).toContain('Investigate the render path first.');
+    expect(html).not.toContain('**Investigate the render path first.**');
+    expect(html).not.toContain('Then patch the collapsed header.');
+    expect(html).toContain('echo done');
+  });
+
   it('shows only the latest 5 internal-work steps by default and summarizes older ones above', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: Array.from({ length: 7 }, (_, index) => ({

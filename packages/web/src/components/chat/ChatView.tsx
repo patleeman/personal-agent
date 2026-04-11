@@ -382,16 +382,30 @@ function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, 
   };
 }
 
-function formatSummaryPreviewLine(line: string) {
-  if (/^#{1,6}\s+/.test(line)) {
-    return line.replace(/^#{1,6}\s+/, '');
+function stripPreviewMarkdownWrappers(line: string) {
+  if ((line.startsWith('**') && line.endsWith('**')) || (line.startsWith('__') && line.endsWith('__'))) {
+    return line.slice(2, -2).trim();
   }
 
-  if (/^[-*+]\s+/.test(line)) {
-    return `• ${line.replace(/^[-*+]\s+/, '')}`;
+  if ((line.startsWith('*') && line.endsWith('*')) || (line.startsWith('_') && line.endsWith('_')) || (line.startsWith('`') && line.endsWith('`'))) {
+    return line.slice(1, -1).trim();
   }
 
   return line;
+}
+
+function formatSummaryPreviewLine(line: string) {
+  let normalized = line;
+
+  if (/^#{1,6}\s+/.test(normalized)) {
+    normalized = normalized.replace(/^#{1,6}\s+/, '');
+  }
+
+  if (/^[-*+]\s+/.test(normalized)) {
+    return `• ${stripPreviewMarkdownWrappers(normalized.replace(/^[-*+]\s+/, ''))}`;
+  }
+
+  return stripPreviewMarkdownWrappers(normalized);
 }
 
 function buildSummaryPreview(text: string, maxLines: number) {
@@ -1390,6 +1404,7 @@ function ToolBlock({
 function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'thinking' }>; autoOpen: boolean }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
+  const preview = useMemo(() => buildSummaryPreview(block.text, 1), [block.text]);
 
   return (
     <SurfacePanel muted className="overflow-hidden border-transparent bg-elevated/35 text-[12px] shadow-none">
@@ -1399,7 +1414,11 @@ function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { typ
       >
         <span className="text-dim select-none">💭</span>
         <Pill tone="muted">Thinking</Pill>
-        <span className="flex-1" />
+        {!open && preview ? (
+          <span className="min-w-0 flex-1 truncate text-secondary italic">{preview}</span>
+        ) : (
+          <span className="flex-1" />
+        )}
         {autoOpen && <span className="text-[10px] uppercase tracking-[0.14em] text-dim/55">live</span>}
         <span className="text-dim text-[10px]">{open ? '▲ hide' : '▼ show'}</span>
       </button>
