@@ -19,6 +19,7 @@ import {
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
+  shouldDeferConversationFileRefresh,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
   truncateConversationShelfText,
@@ -275,6 +276,33 @@ describe('conversation model loading', () => {
       hasPendingInitialPrompt: false,
       hasPendingInitialPromptInFlight: false,
     })).toBe(true);
+  });
+});
+
+describe('conversation file refresh deferral', () => {
+  it('defers file-backed refreshes while the initial prompt is still pending or in flight', () => {
+    expect(shouldDeferConversationFileRefresh({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: true,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(true);
+
+    expect(shouldDeferConversationFileRefresh({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: true,
+    })).toBe(true);
+  });
+
+  it('keeps normal file refreshes enabled once the carried prompt work is clear', () => {
+    expect(shouldDeferConversationFileRefresh({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(false);
   });
 });
 

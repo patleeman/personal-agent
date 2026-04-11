@@ -281,6 +281,17 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
     && input.hasStreamSnapshot;
 }
 
+export function shouldDeferConversationFileRefresh(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  hasPendingInitialPrompt: boolean;
+  hasPendingInitialPromptInFlight: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight);
+}
+
 export function shouldFetchConversationLiveSessionGitContext(input: {
   draft: boolean;
   conversationId: string | null | undefined;
@@ -1164,10 +1175,29 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
   const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
+  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
+  const [pendingInitialPromptDispatching, setPendingInitialPromptDispatchingState] = useState(false);
+  const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
+  const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
+  const deferredConversationFileVersionRef = useRef<{ conversationId: string; version: number } | null>(null);
+
+  const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
+  const deferConversationFileRefresh = shouldDeferConversationFileRefresh({
+    draft,
+    conversationId: id,
+    hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    hasPendingInitialPromptInFlight,
+  });
+  const effectiveConversationEventVersion = deferConversationFileRefresh
+    && deferredConversationFileVersionRef.current?.conversationId === id
+    ? deferredConversationFileVersionRef.current.version
+    : conversationEventVersion;
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
   const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
-  const conversationVersionKey = `${conversationEventVersion}`;
+  const conversationVersionKey = `${effectiveConversationEventVersion}`;
   const {
     data: conversationBootstrap,
     loading: conversationBootstrapLoading,
@@ -1182,6 +1212,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ? visibleConversationBootstrap.sessionDetail
     : null;
   const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);
+
+  useEffect(() => {
+    if (draft || !id || deferConversationFileRefresh) {
+      return;
+    }
+
+    deferredConversationFileVersionRef.current = {
+      conversationId: id,
+      version: conversationEventVersion,
+    };
+  }, [conversationEventVersion, deferConversationFileRefresh, draft, id]);
 
   // ── Pi SDK stream — stay subscribed until we know the conversation is not live ─
   const stream = useSessionStream(id ?? null, {
@@ -1288,8 +1329,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, conversationEventVersion);
-  }, [bootstrapSessionDetail, conversationEventVersion, historicalTailBlocks, id]);
+    primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, effectiveConversationEventVersion);
+  }, [bootstrapSessionDetail, effectiveConversationEventVersion, historicalTailBlocks, id]);
 
   const bootstrapPendingInitialSessionDetail = Boolean(id)
     && conversationBootstrapLoading
@@ -1298,7 +1339,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     bootstrapPendingInitialSessionDetail ? undefined : id,
     {
       tailBlocks: historicalTailBlocks,
-      version: conversationEventVersion,
+      version: effectiveConversationEventVersion,
     },
   );
   const visibleSessionDetail = sessionDetail?.meta.id === id
@@ -1383,13 +1424,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       })),
     ];
   }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
-
-  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
-  const [pendingInitialPromptDispatching, setPendingInitialPromptDispatchingState] = useState(false);
-  const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
-  const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
-  const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
-  const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
@@ -1645,7 +1679,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [draft, id, pushTitle, sessions, setSessions, stream.title, titles]);
 
-  const hasPendingInitialPromptInFlight = Boolean(id) && pendingInitialPromptSessionIdRef.current === id;
   const shouldLoadModels = shouldLoadConversationModels({
     draft,
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
