@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from 'express';
-import { installPackageSource, listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
-import { inspectCliBinary, inspectMcpServer, inspectMcpTool, readMcpConfig } from '@personal-agent/core';
+import { listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
+import { inspectCliBinary, readMcpConfig } from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
@@ -135,140 +135,10 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
   }
 }
 
-function handleToolsInstallRequest(req: Request, res: Response): void {
-  try {
-    const { source, target, profileName } = req.body as {
-      source?: string;
-      target?: 'profile' | 'local';
-      profileName?: string;
-    };
-
-    if (typeof source !== 'string' || source.trim().length === 0) {
-      res.status(400).json({ error: 'source required' });
-      return;
-    }
-
-    if (target !== 'profile' && target !== 'local') {
-      res.status(400).json({ error: 'target must be profile or local' });
-      return;
-    }
-
-    if (target === 'profile' && typeof profileName !== 'string') {
-      res.status(400).json({ error: 'profileName required for profile installs' });
-      return;
-    }
-
-    const currentProfile = getCurrentProfileFn();
-    const result = installPackageSource({
-      repoRoot: getRepoRootFn(),
-      profilesRoot: getProfilesRootFn(),
-      profileName: target === 'profile' ? profileName : undefined,
-      source,
-      target,
-      sourceBaseDir: getRepoRootFn(),
-    });
-
-    res.json({
-      ...result,
-      packageInstall: buildPackageInstallState(currentProfile),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-async function handleToolsMcpServerRequest(req: Request, res: Response): Promise<void> {
-  try {
-    const server = req.params.server;
-    if (!server) {
-      res.status(400).json({ error: 'server required' });
-      return;
-    }
-
-    const config = readMcpConfig({ cwd: getRepoRootFn() });
-    const result = await inspectMcpServer(server, {
-      cwd: getRepoRootFn(),
-      configPath: config.path,
-    });
-
-    if (result.exitCode !== 0 || !result.data) {
-      res.status(500).json({
-        error: (result.error ?? result.stderr) || `Failed to inspect MCP server ${server}`,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-      });
-      return;
-    }
-
-    res.json({
-      server,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      ...result.data,
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-async function handleToolsMcpToolRequest(req: Request, res: Response): Promise<void> {
-  try {
-    const { server, tool } = req.params as { server?: string; tool?: string };
-    if (!server || !tool) {
-      res.status(400).json({ error: 'server and tool required' });
-      return;
-    }
-
-    const config = readMcpConfig({ cwd: getRepoRootFn() });
-    const result = await inspectMcpTool(server, tool, {
-      cwd: getRepoRootFn(),
-      configPath: config.path,
-    });
-
-    if (result.exitCode !== 0 || !result.data) {
-      res.status(500).json({
-        error: (result.error ?? result.stderr) || `Failed to inspect MCP tool ${server}/${tool}`,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exitCode: result.exitCode,
-      });
-      return;
-    }
-
-    res.json({
-      server,
-      tool,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      exitCode: result.exitCode,
-      ...result.data,
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
 export function registerToolsRoutes(
-  app: Express,
+  app: Pick<Express, 'get'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getProfilesRoot' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'withTemporaryProfileAgentDir'>,
 ): void {
   initializeToolsRoutesContext(context);
   app.get('/api/tools', handleToolsRequest);
-  app.post('/api/tools/packages/install', handleToolsInstallRequest);
-  app.get('/api/tools/mcp/servers/:server', handleToolsMcpServerRequest);
-  app.get('/api/tools/mcp/servers/:server/tools/:tool', handleToolsMcpToolRequest);
 }

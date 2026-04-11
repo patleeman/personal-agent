@@ -3,9 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   inspectAvailableToolsMock,
   inspectCliBinaryMock,
-  inspectMcpServerMock,
-  inspectMcpToolMock,
-  installPackageSourceMock,
   listProfilesMock,
   logErrorMock,
   readMcpConfigMock,
@@ -13,9 +10,6 @@ const {
 } = vi.hoisted(() => ({
   inspectAvailableToolsMock: vi.fn(),
   inspectCliBinaryMock: vi.fn(),
-  inspectMcpServerMock: vi.fn(),
-  inspectMcpToolMock: vi.fn(),
-  installPackageSourceMock: vi.fn(),
   listProfilesMock: vi.fn(),
   logErrorMock: vi.fn(),
   readMcpConfigMock: vi.fn(),
@@ -23,15 +17,12 @@ const {
 }));
 
 vi.mock('@personal-agent/resources', () => ({
-  installPackageSource: installPackageSourceMock,
   listProfiles: listProfilesMock,
   readPackageSourceTargetState: readPackageSourceTargetStateMock,
 }));
 
 vi.mock('@personal-agent/core', () => ({
   inspectCliBinary: inspectCliBinaryMock,
-  inspectMcpServer: inspectMcpServerMock,
-  inspectMcpTool: inspectMcpToolMock,
   readMcpConfig: readMcpConfigMock,
 }));
 
@@ -45,7 +36,7 @@ vi.mock('../middleware/index.js', () => ({
 
 import { registerToolsRoutes } from './tools.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (req: unknown, res: ReturnType<typeof createResponse>) => Promise<void> | void;
 
 function createResponse() {
   return {
@@ -60,13 +51,9 @@ function createHarness(options?: {
   profilesRoot?: string;
 }) {
   const getHandlers = new Map<string, Handler>();
-  const postHandlers = new Map<string, Handler>();
   const app = {
     get: vi.fn((path: string, handler: Handler) => {
       getHandlers.set(path, handler);
-    }),
-    post: vi.fn((path: string, handler: Handler) => {
-      postHandlers.set(path, handler);
     }),
   };
 
@@ -83,7 +70,6 @@ function createHarness(options?: {
 
   return {
     getHandler: (path: string) => getHandlers.get(path)!,
-    postHandler: (path: string) => postHandlers.get(path)!,
   };
 }
 
@@ -96,9 +82,6 @@ describe('registerToolsRoutes', () => {
     };
     inspectAvailableToolsMock.mockReset();
     inspectCliBinaryMock.mockReset();
-    inspectMcpServerMock.mockReset();
-    inspectMcpToolMock.mockReset();
-    installPackageSourceMock.mockReset();
     listProfilesMock.mockReset();
     logErrorMock.mockReset();
     readMcpConfigMock.mockReset();
@@ -221,172 +204,4 @@ describe('registerToolsRoutes', () => {
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'inspect failed' });
   });
 
-  it('validates install requests, returns updated package state, and reports install failures', () => {
-    const { postHandler } = createHarness({ currentProfile: 'assistant' });
-    const handler = postHandler('/api/tools/packages/install');
-
-    const missingSourceRes = createResponse();
-    handler({ body: {} }, missingSourceRes);
-    expect(missingSourceRes.status).toHaveBeenCalledWith(400);
-    expect(missingSourceRes.json).toHaveBeenCalledWith({ error: 'source required' });
-
-    const invalidTargetRes = createResponse();
-    handler({ body: { source: './pkg', target: 'workspace' } }, invalidTargetRes);
-    expect(invalidTargetRes.status).toHaveBeenCalledWith(400);
-    expect(invalidTargetRes.json).toHaveBeenCalledWith({ error: 'target must be profile or local' });
-
-    const missingProfileRes = createResponse();
-    handler({ body: { source: './pkg', target: 'profile' } }, missingProfileRes);
-    expect(missingProfileRes.status).toHaveBeenCalledWith(400);
-    expect(missingProfileRes.json).toHaveBeenCalledWith({ error: 'profileName required for profile installs' });
-
-    listProfilesMock.mockReturnValueOnce(['assistant', 'other']);
-    readPackageSourceTargetStateMock.mockImplementation((target: string, arg1: unknown) => {
-      if (target === 'profile') {
-        return { installedSources: [`profile:${String(arg1)}`] };
-      }
-      return { installedSources: ['local:pkg'] };
-    });
-    installPackageSourceMock.mockReturnValueOnce({
-      source: './pkg',
-      target: 'profile',
-      installed: true,
-    });
-
-    const successRes = createResponse();
-    handler({ body: { source: './pkg', target: 'profile', profileName: 'other' } }, successRes);
-    expect(installPackageSourceMock).toHaveBeenCalledWith({
-      repoRoot: '/repo',
-      profilesRoot: '/profiles',
-      profileName: 'other',
-      source: './pkg',
-      target: 'profile',
-      sourceBaseDir: '/repo',
-    });
-    expect(successRes.json).toHaveBeenCalledWith({
-      source: './pkg',
-      target: 'profile',
-      installed: true,
-      packageInstall: {
-        currentProfile: 'assistant',
-        profileTargets: [
-          {
-            installedSources: ['profile:assistant'],
-            profileName: 'assistant',
-            current: true,
-          },
-          {
-            installedSources: ['profile:other'],
-            profileName: 'other',
-            current: false,
-          },
-        ],
-        localTarget: { installedSources: ['local:pkg'] },
-      },
-    });
-
-    installPackageSourceMock.mockImplementationOnce(() => {
-      throw new Error('install failed');
-    });
-    const failureRes = createResponse();
-    handler({ body: { source: './pkg', target: 'local' } }, failureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'install failed',
-    }));
-    expect(failureRes.status).toHaveBeenCalledWith(500);
-    expect(failureRes.json).toHaveBeenCalledWith({ error: 'Error: install failed' });
-  });
-
-  it('handles MCP server and tool inspection success, validation, and failure responses', async () => {
-    const { getHandler } = createHarness({ repoRoot: '/repo' });
-    const serverHandler = getHandler('/api/tools/mcp/servers/:server');
-    const toolHandler = getHandler('/api/tools/mcp/servers/:server/tools/:tool');
-
-    readMcpConfigMock.mockReturnValue({ path: '/repo/.mcp.json' });
-
-    const missingServerRes = createResponse();
-    await serverHandler({ params: {} }, missingServerRes);
-    expect(missingServerRes.status).toHaveBeenCalledWith(400);
-    expect(missingServerRes.json).toHaveBeenCalledWith({ error: 'server required' });
-
-    inspectMcpServerMock.mockResolvedValueOnce({
-      exitCode: 1,
-      stdout: 'out',
-      stderr: 'bad server',
-      data: null,
-      error: undefined,
-    });
-    const failingServerRes = createResponse();
-    await serverHandler({ params: { server: 'github' } }, failingServerRes);
-    expect(inspectMcpServerMock).toHaveBeenCalledWith('github', {
-      cwd: '/repo',
-      configPath: '/repo/.mcp.json',
-    });
-    expect(failingServerRes.status).toHaveBeenCalledWith(500);
-    expect(failingServerRes.json).toHaveBeenCalledWith({
-      error: 'bad server',
-      stdout: 'out',
-      stderr: 'bad server',
-      exitCode: 1,
-    });
-
-    inspectMcpServerMock.mockResolvedValueOnce({
-      exitCode: 0,
-      stdout: 'server ok',
-      stderr: '',
-      data: { tools: [{ name: 'search' }] },
-    });
-    const serverSuccessRes = createResponse();
-    await serverHandler({ params: { server: 'github' } }, serverSuccessRes);
-    expect(serverSuccessRes.json).toHaveBeenCalledWith({
-      server: 'github',
-      stdout: 'server ok',
-      stderr: '',
-      exitCode: 0,
-      tools: [{ name: 'search' }],
-    });
-
-    const missingToolRes = createResponse();
-    await toolHandler({ params: { server: 'github' } }, missingToolRes);
-    expect(missingToolRes.status).toHaveBeenCalledWith(400);
-    expect(missingToolRes.json).toHaveBeenCalledWith({ error: 'server and tool required' });
-
-    inspectMcpToolMock.mockResolvedValueOnce({
-      exitCode: 1,
-      stdout: '',
-      stderr: 'bad tool',
-      data: null,
-      error: 'inspection failed',
-    });
-    const failingToolRes = createResponse();
-    await toolHandler({ params: { server: 'github', tool: 'search' } }, failingToolRes);
-    expect(inspectMcpToolMock).toHaveBeenCalledWith('github', 'search', {
-      cwd: '/repo',
-      configPath: '/repo/.mcp.json',
-    });
-    expect(failingToolRes.status).toHaveBeenCalledWith(500);
-    expect(failingToolRes.json).toHaveBeenCalledWith({
-      error: 'inspection failed',
-      stdout: '',
-      stderr: 'bad tool',
-      exitCode: 1,
-    });
-
-    inspectMcpToolMock.mockResolvedValueOnce({
-      exitCode: 0,
-      stdout: 'tool ok',
-      stderr: '',
-      data: { description: 'Search docs' },
-    });
-    const toolSuccessRes = createResponse();
-    await toolHandler({ params: { server: 'github', tool: 'search' } }, toolSuccessRes);
-    expect(toolSuccessRes.json).toHaveBeenCalledWith({
-      server: 'github',
-      tool: 'search',
-      stdout: 'tool ok',
-      stderr: '',
-      exitCode: 0,
-      description: 'Search docs',
-    });
-  });
 });

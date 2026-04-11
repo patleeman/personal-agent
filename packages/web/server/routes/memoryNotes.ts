@@ -4,13 +4,11 @@
 
 import type { Express, Request } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { getProfilesRoot } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
 import {
   buildRecentReadUsage,
-  clearMemoryBrowserCaches,
-  isEditableMemoryFilePath,
   listMemoryDocs,
   listSkillsForProfile,
   normalizeMemoryPath,
@@ -58,7 +56,7 @@ function inferAgentSource(filePath: string, profile: string): string {
 }
 
 export function registerMemoryNotesRoutes(
-  router: Pick<Express, 'get' | 'post'>,
+  router: Pick<Express, 'get'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot'>,
 ): void {
   initializeMemoryRoutesContext(context);
@@ -116,56 +114,6 @@ export function registerMemoryNotesRoutes(
       const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', { message, stack: err instanceof Error ? err.stack : undefined });
       res.status(500).json({ error: message });
-    }
-  });
-
-  router.get('/api/memory/file', (req, res) => {
-    try {
-      const filePath = req.query.path as string;
-      if (!filePath) {
-        res.status(400).json({ error: 'path required' });
-        return;
-      }
-      if (!isEditableMemoryFilePath(filePath, _getCurrentProfile())) {
-        res.status(403).json({ error: 'Access denied' });
-        return;
-      }
-      if (!existsSync(filePath)) {
-        res.status(404).json({ error: 'File not found' });
-        return;
-      }
-
-      res.json({ content: readFileSync(filePath, 'utf-8'), path: filePath });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.post('/api/memory/file', (req, res) => {
-    try {
-      const { path: filePath, content } = req.body as { path: string; content: string };
-      if (!filePath || content === undefined) {
-        res.status(400).json({ error: 'path and content required' });
-        return;
-      }
-      if (!isEditableMemoryFilePath(filePath, _getCurrentProfile())) {
-        res.status(403).json({ error: 'Access denied' });
-        return;
-      }
-
-      writeFileSync(filePath, content, 'utf-8');
-      clearMemoryBrowserCaches();
-      res.json({ ok: true });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
     }
   });
 }

@@ -2,11 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   buildRecentReadUsageMock,
-  clearMemoryBrowserCachesMock,
   existsSyncMock,
   getProfilesRootMock,
   getVaultRootMock,
-  isEditableMemoryFilePathMock,
   listMemoryDocsMock,
   listProfilesMock,
   listSkillsForProfileMock,
@@ -15,14 +13,11 @@ const {
   normalizeMemoryPathMock,
   readFileSyncMock,
   resolveResourceProfileMock,
-  writeFileSyncMock,
 } = vi.hoisted(() => ({
   buildRecentReadUsageMock: vi.fn(),
-  clearMemoryBrowserCachesMock: vi.fn(),
   existsSyncMock: vi.fn(),
   getProfilesRootMock: vi.fn(() => '/profiles'),
   getVaultRootMock: vi.fn(() => '/vault'),
-  isEditableMemoryFilePathMock: vi.fn(),
   listMemoryDocsMock: vi.fn(),
   listProfilesMock: vi.fn(),
   listSkillsForProfileMock: vi.fn(),
@@ -31,7 +26,6 @@ const {
   normalizeMemoryPathMock: vi.fn((path: string) => path),
   readFileSyncMock: vi.fn(),
   resolveResourceProfileMock: vi.fn(),
-  writeFileSyncMock: vi.fn(),
 }));
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -40,7 +34,6 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     existsSync: existsSyncMock,
     readFileSync: readFileSyncMock,
-    writeFileSync: writeFileSyncMock,
   };
 });
 
@@ -56,8 +49,6 @@ vi.mock('@personal-agent/resources', () => ({
 
 vi.mock('../knowledge/memoryDocs.js', () => ({
   buildRecentReadUsage: buildRecentReadUsageMock,
-  clearMemoryBrowserCaches: clearMemoryBrowserCachesMock,
-  isEditableMemoryFilePath: isEditableMemoryFilePathMock,
   listMemoryDocs: listMemoryDocsMock,
   listSkillsForProfile: listSkillsForProfileMock,
   normalizeMemoryPath: normalizeMemoryPathMock,
@@ -90,13 +81,9 @@ function createHarness(options?: {
   repoRoot?: string;
 }) {
   const getHandlers = new Map<string, Handler>();
-  const postHandlers = new Map<string, Handler>();
   const router = {
     get: vi.fn((path: string, handler: Handler) => {
       getHandlers.set(path, handler);
-    }),
-    post: vi.fn((path: string, handler: Handler) => {
-      postHandlers.set(path, handler);
     }),
   };
 
@@ -107,18 +94,15 @@ function createHarness(options?: {
 
   return {
     getHandler: (path: string) => getHandlers.get(path)!,
-    postHandler: (path: string) => postHandlers.get(path)!,
   };
 }
 
 describe('registerMemoryNotesRoutes', () => {
   beforeEach(() => {
     buildRecentReadUsageMock.mockReset();
-    clearMemoryBrowserCachesMock.mockReset();
     existsSyncMock.mockReset();
     getProfilesRootMock.mockClear();
     getVaultRootMock.mockClear();
-    isEditableMemoryFilePathMock.mockReset();
     listMemoryDocsMock.mockReset();
     listProfilesMock.mockReset();
     listSkillsForProfileMock.mockReset();
@@ -127,7 +111,6 @@ describe('registerMemoryNotesRoutes', () => {
     normalizeMemoryPathMock.mockClear();
     readFileSyncMock.mockReset();
     resolveResourceProfileMock.mockReset();
-    writeFileSyncMock.mockReset();
   });
 
   it('lists memory data for the requested profile and applies recent usage metadata', () => {
@@ -281,84 +264,4 @@ describe('registerMemoryNotesRoutes', () => {
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'vault failed' });
   });
 
-  it('validates readable memory file requests and returns file contents', () => {
-    const { getHandler } = createHarness({ profile: 'datadog' });
-    const handler = getHandler('/api/memory/file');
-
-    const missingPathRes = createResponse();
-    handler({ query: {} }, missingPathRes);
-    expect(missingPathRes.status).toHaveBeenCalledWith(400);
-    expect(missingPathRes.json).toHaveBeenCalledWith({ error: 'path required' });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(false);
-    const deniedRes = createResponse();
-    handler({ query: { path: '/tmp/private.md' } }, deniedRes);
-    expect(isEditableMemoryFilePathMock).toHaveBeenCalledWith('/tmp/private.md', 'datadog');
-    expect(deniedRes.status).toHaveBeenCalledWith(403);
-    expect(deniedRes.json).toHaveBeenCalledWith({ error: 'Access denied' });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(true);
-    existsSyncMock.mockReturnValueOnce(false);
-    const missingFileRes = createResponse();
-    handler({ query: { path: '/tmp/missing.md' } }, missingFileRes);
-    expect(missingFileRes.status).toHaveBeenCalledWith(404);
-    expect(missingFileRes.json).toHaveBeenCalledWith({ error: 'File not found' });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(true);
-    existsSyncMock.mockReturnValueOnce(true);
-    readFileSyncMock.mockReturnValueOnce('# durable memory');
-    const successRes = createResponse();
-    handler({ query: { path: '/tmp/memory.md' } }, successRes);
-    expect(readFileSyncMock).toHaveBeenCalledWith('/tmp/memory.md', 'utf-8');
-    expect(successRes.json).toHaveBeenCalledWith({
-      content: '# durable memory',
-      path: '/tmp/memory.md',
-    });
-  });
-
-  it('logs unexpected memory file read failures and write failures', () => {
-    const harness = createHarness();
-    const readHandler = harness.getHandler('/api/memory/file');
-    const writeHandler = harness.postHandler('/api/memory/file');
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(true);
-    existsSyncMock.mockReturnValueOnce(true);
-    readFileSyncMock.mockImplementationOnce(() => {
-      throw new Error('read failed');
-    });
-    const readFailureRes = createResponse();
-    readHandler({ query: { path: '/tmp/memory.md' } }, readFailureRes);
-    expect(readFailureRes.status).toHaveBeenCalledWith(500);
-    expect(readFailureRes.json).toHaveBeenCalledWith({ error: 'Error: read failed' });
-
-    const missingBodyRes = createResponse();
-    writeHandler({ body: {} }, missingBodyRes);
-    expect(missingBodyRes.status).toHaveBeenCalledWith(400);
-    expect(missingBodyRes.json).toHaveBeenCalledWith({ error: 'path and content required' });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(false);
-    const deniedWriteRes = createResponse();
-    writeHandler({ body: { path: '/tmp/private.md', content: 'x' } }, deniedWriteRes);
-    expect(deniedWriteRes.status).toHaveBeenCalledWith(403);
-    expect(deniedWriteRes.json).toHaveBeenCalledWith({ error: 'Access denied' });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(true);
-    const successRes = createResponse();
-    writeHandler({ body: { path: '/tmp/memory.md', content: '# updated' } }, successRes);
-    expect(writeFileSyncMock).toHaveBeenCalledWith('/tmp/memory.md', '# updated', 'utf-8');
-    expect(clearMemoryBrowserCachesMock).toHaveBeenCalledTimes(1);
-    expect(successRes.json).toHaveBeenCalledWith({ ok: true });
-
-    isEditableMemoryFilePathMock.mockReturnValueOnce(true);
-    writeFileSyncMock.mockImplementationOnce(() => {
-      throw new Error('write failed');
-    });
-    const writeFailureRes = createResponse();
-    writeHandler({ body: { path: '/tmp/memory.md', content: '# bad' } }, writeFailureRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({
-      message: 'write failed',
-    }));
-    expect(writeFailureRes.status).toHaveBeenCalledWith(500);
-    expect(writeFailureRes.json).toHaveBeenCalledWith({ error: 'Error: write failed' });
-  });
 });
