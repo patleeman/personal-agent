@@ -51,7 +51,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopActivity: vi.fn(),
     readDesktopActivityById: vi.fn(),
     markDesktopActivityRead: vi.fn(),
-    readDesktopActivityCount: vi.fn(),
     clearDesktopInbox: vi.fn(),
     startDesktopActivityConversation: vi.fn(),
     markDesktopConversationAttention: vi.fn(),

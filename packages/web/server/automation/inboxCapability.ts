@@ -68,15 +68,6 @@ export function readActivityEntriesCapability(profile: string) {
 
 export const listActivityCapability = readActivityEntriesCapability;
 
-export function readActivityCountCapability(profile: string) {
-  const entries = readActivityEntriesCapability(profile);
-  return {
-    count: entries.filter((entry) => !entry.read).length,
-  };
-}
-
-export const activityCountCapability = readActivityCountCapability;
-
 export function readActivityDetailCapability(profile: string, activityId: string) {
   const normalizedActivityId = normalizeId(activityId);
   if (!normalizedActivityId) {

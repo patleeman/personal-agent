@@ -116,7 +116,6 @@ export interface LocalApiModule {
   readDesktopActivity(): Promise<unknown>;
   readDesktopActivityById(activityId: string): Promise<unknown>;
   markDesktopActivityRead(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
-  readDesktopActivityCount(): Promise<{ count: number }>;
   clearDesktopInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
   startDesktopActivityConversation(activityId: string): Promise<unknown>;
   markDesktopConversationAttention(input: { conversationId: string; read?: boolean }): Promise<{ ok: true }>;

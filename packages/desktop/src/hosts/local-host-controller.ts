@@ -339,11 +339,6 @@ export class LocalHostController implements HostController {
     return module.markDesktopActivityRead(input);
   }
 
-  async readActivityCount(): Promise<{ count: number }> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopActivityCount();
-  }
-
   async clearInbox(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }> {
     const module = await this.loadLocalApi();
     return module.clearDesktopInbox();

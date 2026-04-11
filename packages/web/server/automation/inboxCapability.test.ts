@@ -63,7 +63,6 @@ import {
   clearInboxCapability,
   markActivityReadCapability,
   markConversationAttentionCapability,
-  readActivityCountCapability,
   readActivityDetailCapability,
   readActivityEntriesCapability,
   startActivityConversationCapability,
@@ -84,7 +83,7 @@ describe('inboxCapability', () => {
     toggleConversationAttentionMock.mockReset();
   });
 
-  it('reads activity entries, counts unread items, and merges read state into details', () => {
+  it('reads activity entries and merges read state into details', () => {
     listActivityForCurrentProfileMock.mockReturnValue([
       { id: 'activity-1', read: false },
       { id: 'activity-2', read: true },
@@ -100,7 +99,6 @@ describe('inboxCapability', () => {
       { id: 'activity-2', read: true },
       { id: 'activity-3' },
     ]);
-    expect(readActivityCountCapability('assistant')).toEqual({ count: 2 });
     expect(readActivityDetailCapability('assistant', ' activity-1 ')).toEqual({
       id: 'activity-1',
       summary: 'Watch deploys',

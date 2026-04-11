@@ -326,7 +326,6 @@ export interface HostController {
   readActivity?(): Promise<unknown>;
   readActivityById?(activityId: string): Promise<unknown>;
   markActivityRead?(input: { activityId: string; read?: boolean }): Promise<{ ok: true }>;
-  readActivityCount?(): Promise<{ count: number }>;
   clearInbox?(): Promise<{ ok: true; deletedActivityIds: string[]; clearedConversationIds: string[] }>;
   startActivityConversation?(activityId: string): Promise<unknown>;
   markConversationAttention?(input: DesktopConversationAttentionRequest): Promise<{ ok: true }>;

@@ -71,7 +71,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopActivity: vi.fn(),
     readDesktopActivityById: vi.fn(),
     markDesktopActivityRead: vi.fn(),
-    readDesktopActivityCount: vi.fn(),
     clearDesktopInbox: vi.fn(),
     startDesktopActivityConversation: vi.fn(),
     markDesktopConversationAttention: vi.fn(),
@@ -701,7 +700,6 @@ describe('LocalHostController', () => {
       readDesktopActivity: vi.fn().mockResolvedValue([{ id: 'activity-1' }]),
       readDesktopActivityById: vi.fn().mockResolvedValue({ id: 'activity-1' }),
       markDesktopActivityRead: vi.fn().mockResolvedValue({ ok: true }),
-      readDesktopActivityCount: vi.fn().mockResolvedValue({ count: 1 }),
       clearDesktopInbox: vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: [], clearedConversationIds: [] }),
       startDesktopActivityConversation: vi.fn().mockResolvedValue({ id: 'conversation-1' }),
       markDesktopConversationAttention: vi.fn().mockResolvedValue({ ok: true }),
@@ -720,7 +718,6 @@ describe('LocalHostController', () => {
     await expect(controller.readActivity?.()).resolves.toEqual([{ id: 'activity-1' }]);
     await expect(controller.readActivityById?.('activity-1')).resolves.toEqual({ id: 'activity-1' });
     await expect(controller.markActivityRead?.({ activityId: 'activity-1', read: true })).resolves.toEqual({ ok: true });
-    await expect(controller.readActivityCount?.()).resolves.toEqual({ count: 1 });
     await expect(controller.clearInbox?.()).resolves.toEqual({ ok: true, deletedActivityIds: [], clearedConversationIds: [] });
     await expect(controller.startActivityConversation?.('activity-1')).resolves.toEqual({ id: 'conversation-1' });
     await expect(controller.markConversationAttention?.({ conversationId: 'conversation-1', read: true })).resolves.toEqual({ ok: true });
@@ -757,7 +754,6 @@ describe('LocalHostController', () => {
     const readDesktopActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
     const readDesktopActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: false });
     const markDesktopActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readDesktopActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearDesktopInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
     const startDesktopActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
     const markDesktopConversationAttention = vi.fn().mockResolvedValue({ ok: true });
@@ -769,7 +765,6 @@ describe('LocalHostController', () => {
       readDesktopActivity,
       readDesktopActivityById,
       markDesktopActivityRead,
-      readDesktopActivityCount,
       clearDesktopInbox,
       startDesktopActivityConversation,
       markDesktopConversationAttention,
@@ -789,7 +784,6 @@ describe('LocalHostController', () => {
     await expect(controller.readActivity?.()).resolves.toEqual([{ id: 'activity-1', read: false }]);
     await expect(controller.readActivityById?.('activity-1')).resolves.toEqual({ id: 'activity-1', read: false });
     await expect(controller.markActivityRead?.({ activityId: 'activity-1', read: false })).resolves.toEqual({ ok: true });
-    await expect(controller.readActivityCount?.()).resolves.toEqual({ count: 1 });
     await expect(controller.clearInbox?.()).resolves.toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: [] });
     await expect(controller.startActivityConversation?.('activity-1')).resolves.toEqual({ activityId: 'activity-1', id: 'conversation-1', sessionFile: '/tmp/conversation-1.jsonl', cwd: '/repo', relatedConversationIds: ['conversation-1'] });
     await expect(controller.markConversationAttention?.({ conversationId: 'conversation-1', read: false })).resolves.toEqual({ ok: true });
@@ -801,7 +795,6 @@ describe('LocalHostController', () => {
     expect(readDesktopActivity).toHaveBeenCalledTimes(1);
     expect(readDesktopActivityById).toHaveBeenCalledWith('activity-1');
     expect(markDesktopActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(readDesktopActivityCount).toHaveBeenCalledTimes(1);
     expect(clearDesktopInbox).toHaveBeenCalledTimes(1);
     expect(startDesktopActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markDesktopConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
@@ -816,7 +809,6 @@ describe('LocalHostController', () => {
     const readDesktopActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
     const readDesktopActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: false });
     const markDesktopActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readDesktopActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearDesktopInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     const startDesktopActivityConversation = vi.fn().mockResolvedValue({ activityId: 'activity-1', id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/repo', relatedConversationIds: ['live-1'] });
     const markDesktopConversationAttention = vi.fn().mockResolvedValue({ ok: true });
@@ -828,7 +820,6 @@ describe('LocalHostController', () => {
       readDesktopActivity,
       readDesktopActivityById,
       markDesktopActivityRead,
-      readDesktopActivityCount,
       clearDesktopInbox,
       startDesktopActivityConversation,
       markDesktopConversationAttention,
@@ -848,7 +839,6 @@ describe('LocalHostController', () => {
     await expect(controller.readActivity?.()).resolves.toEqual([{ id: 'activity-1', read: false }]);
     await expect(controller.readActivityById?.('activity-1')).resolves.toEqual({ id: 'activity-1', read: false });
     await expect(controller.markActivityRead?.({ activityId: 'activity-1', read: true })).resolves.toEqual({ ok: true });
-    await expect(controller.readActivityCount?.()).resolves.toEqual({ count: 1 });
     await expect(controller.clearInbox?.()).resolves.toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     await expect(controller.startActivityConversation?.('activity-1')).resolves.toEqual({ activityId: 'activity-1', id: 'live-1', sessionFile: '/tmp/live-1.jsonl', cwd: '/repo', relatedConversationIds: ['live-1'] });
     await expect(controller.markConversationAttention?.({ conversationId: 'conversation-1', read: false })).resolves.toEqual({ ok: true });
@@ -860,7 +850,6 @@ describe('LocalHostController', () => {
     expect(readDesktopActivity).toHaveBeenCalledTimes(1);
     expect(readDesktopActivityById).toHaveBeenCalledWith('activity-1');
     expect(markDesktopActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: true });
-    expect(readDesktopActivityCount).toHaveBeenCalledTimes(1);
     expect(clearDesktopInbox).toHaveBeenCalledTimes(1);
     expect(startDesktopActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markDesktopConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });
@@ -875,7 +864,6 @@ describe('LocalHostController', () => {
     const readDesktopActivity = vi.fn().mockResolvedValue([{ id: 'activity-1', read: false }]);
     const readDesktopActivityById = vi.fn().mockResolvedValue({ id: 'activity-1', read: true });
     const markDesktopActivityRead = vi.fn().mockResolvedValue({ ok: true });
-    const readDesktopActivityCount = vi.fn().mockResolvedValue({ count: 1 });
     const clearDesktopInbox = vi.fn().mockResolvedValue({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     const startDesktopActivityConversation = vi.fn().mockResolvedValue({
       activityId: 'activity-1',
@@ -897,7 +885,6 @@ describe('LocalHostController', () => {
       readDesktopActivity,
       readDesktopActivityById,
       markDesktopActivityRead,
-      readDesktopActivityCount,
       clearDesktopInbox,
       startDesktopActivityConversation,
       markDesktopConversationAttention,
@@ -917,7 +904,6 @@ describe('LocalHostController', () => {
     await expect(controller.readActivity?.()).resolves.toEqual([{ id: 'activity-1', read: false }]);
     await expect(controller.readActivityById?.('activity-1')).resolves.toEqual({ id: 'activity-1', read: true });
     await expect(controller.markActivityRead?.({ activityId: 'activity-1', read: false })).resolves.toEqual({ ok: true });
-    await expect(controller.readActivityCount?.()).resolves.toEqual({ count: 1 });
     await expect(controller.clearInbox?.()).resolves.toEqual({ ok: true, deletedActivityIds: ['activity-1'], clearedConversationIds: ['conversation-1'] });
     await expect(controller.startActivityConversation?.('activity-1')).resolves.toEqual({
       activityId: 'activity-1',
@@ -939,7 +925,6 @@ describe('LocalHostController', () => {
     expect(readDesktopActivity).toHaveBeenCalledTimes(1);
     expect(readDesktopActivityById).toHaveBeenCalledWith('activity-1');
     expect(markDesktopActivityRead).toHaveBeenCalledWith({ activityId: 'activity-1', read: false });
-    expect(readDesktopActivityCount).toHaveBeenCalledTimes(1);
     expect(clearDesktopInbox).toHaveBeenCalledTimes(1);
     expect(startDesktopActivityConversation).toHaveBeenCalledWith('activity-1');
     expect(markDesktopConversationAttention).toHaveBeenCalledWith({ conversationId: 'conversation-1', read: false });

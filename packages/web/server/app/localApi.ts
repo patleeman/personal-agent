@@ -14,7 +14,6 @@ import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
-  activityCountCapability,
   clearInboxCapability,
   listActivityCapability,
   markActivityReadCapability,
@@ -1763,11 +1762,6 @@ export async function markDesktopActivityRead(input: { activityId: string; read?
   }
 
   return { ok: true as const };
-}
-
-export async function readDesktopActivityCount() {
-  const context = await getLocalInboxCapabilityContext();
-  return activityCountCapability(context.getCurrentProfile());
 }
 
 export async function clearDesktopInbox() {
