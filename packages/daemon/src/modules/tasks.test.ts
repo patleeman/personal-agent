@@ -466,7 +466,7 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
-  it('writes durable activity entries for successful task runs', async () => {
+  it('does not write inbox activity entries for successful task runs', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -513,22 +513,17 @@ Write daily report
     currentTime = new Date('2026-03-02T10:00:10.000Z');
     await module.handleEvent(createTimerEvent(), context);
 
-    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
-
-    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry).toMatchObject({
-      kind: 'scheduled-task',
-      summary: 'Scheduled task daily-report completed.',
-      profile: 'datadog',
-      notificationState: 'none',
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { successfulRuns?: number };
+      return (status.successfulRuns ?? 0) === 1;
     });
-    expect(entries[0]?.entry.details).toContain('Daily report generated successfully.');
+
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
 
     await module.stop?.(context);
   });
 
-  it('writes task activity to the shared state root instead of daemon-internal state', async () => {
+  it('keeps successful task runs out of both shared and daemon-internal inbox state', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -582,12 +577,12 @@ Maintain durable memory
     currentTime = new Date('2026-03-02T10:00:10.000Z');
     await module.handleEvent(createTimerEvent(), context);
 
-    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { successfulRuns?: number };
+      return (status.successfulRuns ?? 0) === 1;
+    });
 
-    const visibleEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(visibleEntries).toHaveLength(1);
-    expect(visibleEntries[0]?.entry.summary).toBe('Scheduled task datadog-memory-maintenance completed.');
-    expect(visibleEntries[0]?.entry.details).toContain('Files updated');
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
     expect(listProfileActivityEntries({ stateRoot: daemonRoot, profile: 'datadog' })).toHaveLength(0);
 
     await module.stop?.(context);
@@ -916,13 +911,12 @@ Run hourly task
 
     await waitForCondition(() => {
       const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-      const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-      return Object.keys(state.resumes).length === 1
-        && activityEntries.some(({ entry }) => entry.summary?.includes('Scheduled task watch-prod completed.') ?? false);
+      return Object.keys(state.resumes).length === 1;
     });
 
     const activityEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(activityEntries.some(({ entry }) => entry.summary?.includes('Scheduled task watch-prod completed.') ?? false)).toBe(true);
+    expect(activityEntries).toHaveLength(1);
+    expect(activityEntries[0]?.entry.summary).toContain('Scheduled task @watch-prod completed');
 
     const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
     const callback = Object.values(deferredState.resumes)[0];

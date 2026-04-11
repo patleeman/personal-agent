@@ -1,10 +1,9 @@
 import { randomUUID } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
   createReadyDeferredResume,
-  getDurableSessionsDir,
   getTaskCallbackBinding,
   loadDeferredResumeState,
   resolveDeferredResumeStateFile,
@@ -83,55 +82,9 @@ interface TasksModuleState {
   lastError?: string;
 }
 
-function normalizeTaskOutput(outputText?: string): string | undefined {
-  if (!outputText) {
-    return undefined;
-  }
-
-  const normalized = outputText.split('\0').join('').trim();
-  return normalized.length > 0 ? normalized : undefined;
-}
-
 export interface TasksModuleDependencies {
   now?: () => Date;
   runTask?: (request: TaskRunRequest) => Promise<TaskRunResult>;
-}
-
-/**
- * Find Pi session IDs that were created within a ±5 minute window of a task run.
- * Sessions live at <stateRoot>/sync/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl.
- */
-function findRelatedSessionIds(stateRoot: string, startedAt: string, endedAt: string): string[] {
-  try {
-    const sessionsBase = getDurableSessionsDir(stateRoot);
-    if (!existsSync(sessionsBase)) return [];
-
-    const startMs = new Date(startedAt).getTime() - 60_000;   // 1 min before
-    const endMs   = new Date(endedAt).getTime()   + 60_000;   // 1 min after
-
-    const ids: string[] = [];
-    const cwdDirs = readdirSync(sessionsBase, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => join(sessionsBase, d.name));
-
-    for (const dir of cwdDirs) {
-      const files = readdirSync(dir).filter(f => f.endsWith('.jsonl'));
-      for (const file of files) {
-        // filename: 2026-03-10T19-41-53-445Z_UUID.jsonl
-        // Format: 2026-03-10T19-41-53-445Z — last segment is ms before Z
-        const normalized = file.slice(0, 24)
-          .replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, 'T$1:$2:$3.$4Z');
-        const fileMs = new Date(normalized).getTime();
-        if (!isNaN(fileMs) && fileMs >= startMs && fileMs <= endMs) {
-          const uuid = file.slice(25, file.length - 5); // strip timestamp_ and .jsonl
-          if (uuid) ids.push(uuid);
-        }
-      }
-    }
-    return ids;
-  } catch {
-    return [];
-  }
 }
 
 function sanitizeActivityIdSegment(value: string): string {
@@ -304,37 +257,6 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
 
   taskState.tasks[task.key] = created;
   return created;
-}
-
-function toTaskActivitySummary(taskId: string, status: TaskRunOutcomeStatus): string {
-  if (status === 'success') {
-    return `Scheduled task ${taskId} completed.`;
-  }
-
-  return `Scheduled task ${taskId} failed.`;
-}
-
-function toTaskActivityDetails(input: {
-  outputText?: string;
-  error?: string;
-  logPath?: string;
-}): string | undefined {
-  const sections: string[] = [];
-
-  const outputText = normalizeTaskOutput(input.outputText);
-  if (outputText) {
-    sections.push(`Output:\n${outputText}`);
-  }
-
-  if (input.error) {
-    sections.push(`Error:\n${input.error}`);
-  }
-
-  if (input.logPath) {
-    sections.push(`Log:\n${input.logPath}`);
-  }
-
-  return sections.length > 0 ? sections.join('\n\n') : undefined;
 }
 
 export function createTasksModule(
@@ -525,46 +447,6 @@ export function createTasksModule(
     });
 
     return [binding.conversationId];
-  };
-
-  const writeTaskActivity = (
-    task: ParsedTaskDefinition,
-    status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
-    details: {
-      startedAt?: string;
-      finishedAt: string;
-      outputText?: string;
-      error?: string;
-      logPath?: string;
-      relatedConversationIdsOverride?: string[];
-    },
-  ): void => {
-    try {
-      const activityId = [
-        'task',
-        sanitizeActivityIdSegment(task.id),
-        sanitizeActivityIdSegment(details.finishedAt.replace(/[.:]/g, '-')),
-        status,
-      ].join('-');
-
-      // Find Pi sessions created during this task run for local attention linking.
-      const relatedConversationIds = details.relatedConversationIdsOverride
-        ?? (details.startedAt
-          ? findRelatedSessionIds(context.paths.stateRoot, details.startedAt, details.finishedAt)
-          : []);
-
-      writeScheduledTaskActivityEntry(task, context, {
-        activityId,
-        createdAt: details.finishedAt,
-        summary: toTaskActivitySummary(task.id, status),
-        details: toTaskActivityDetails(details),
-        notificationState: 'none',
-        relatedConversationIds,
-      });
-    } catch (error) {
-      context.logger.warn(`failed to write task activity id=${task.id}: ${(error as Error).message}`);
-    }
   };
 
   const writeMissedTaskActivity = (
@@ -825,18 +707,10 @@ export function createTasksModule(
       });
       context.logger.info(`task completed id=${task.id} run=${durableRun.runId} log=${finalResult.logPath}`);
 
-      const callbackConversationIds = await deliverTaskCallbackWakeup(task, 'success', context, {
+      await deliverTaskCallbackWakeup(task, 'success', context, {
         finishedAt,
         outputText: finalResult.outputText,
         logPath: finalResult.logPath,
-      });
-
-      writeTaskActivity(task, 'success', context, {
-        startedAt: finalResult.startedAt,
-        finishedAt,
-        outputText: finalResult.outputText,
-        logPath: finalResult.logPath,
-        relatedConversationIdsOverride: callbackConversationIds,
       });
     } else if (finalResult?.cancelled) {
       record.lastStatus = 'skipped';
@@ -897,20 +771,11 @@ export function createTasksModule(
       });
       context.logger.warn(`task failed id=${task.id} run=${durableRun.runId} error=${record.lastError}`);
 
-      const callbackConversationIds = await deliverTaskCallbackWakeup(task, 'failed', context, {
+      await deliverTaskCallbackWakeup(task, 'failed', context, {
         finishedAt,
         outputText: finalResult?.outputText,
         error: record.lastError,
         logPath: finalResult?.logPath,
-      });
-
-      writeTaskActivity(task, 'failed', context, {
-        startedAt: finalResult?.startedAt,
-        finishedAt,
-        outputText: finalResult?.outputText,
-        error: record.lastError,
-        logPath: finalResult?.logPath,
-        relatedConversationIdsOverride: callbackConversationIds,
       });
     }
 

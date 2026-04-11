@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
+import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversationRuns';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { useAppData, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
+import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../runPresentation';
 import { formatTaskSchedule } from '../taskSchedule';
-import type { ScheduledTaskSummary } from '../types';
+import type { DurableRunRecord, ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
 
 function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
@@ -58,6 +60,43 @@ function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary
 
     return formatTaskName(left).localeCompare(formatTaskName(right));
   });
+}
+
+function sortAutomationRuns(runs: DurableRunRecord[]): DurableRunRecord[] {
+  return [...runs].sort((left, right) => {
+    const leftAttention = runNeedsAttention(left) ? 1 : 0;
+    const rightAttention = runNeedsAttention(right) ? 1 : 0;
+    if (leftAttention !== rightAttention) {
+      return rightAttention - leftAttention;
+    }
+
+    const leftActive = isRunInProgress(left) ? 1 : 0;
+    const rightActive = isRunInProgress(right) ? 1 : 0;
+    if (leftActive !== rightActive) {
+      return rightActive - leftActive;
+    }
+
+    const leftAt = getRunMoment(left).at ?? '';
+    const rightAt = getRunMoment(right).at ?? '';
+    return rightAt.localeCompare(leftAt) || right.runId.localeCompare(left.runId);
+  });
+}
+
+function automationRunStatus(run: DurableRunRecord): { text: string; cls: string } {
+  const status = run.status?.status;
+  if (status === 'running' || status === 'recovering' || status === 'queued' || status === 'waiting') {
+    return { text: 'Running', cls: 'text-accent' };
+  }
+  if (status === 'completed') {
+    return { text: runNeedsAttention(run) ? 'Needs review' : 'Completed', cls: runNeedsAttention(run) ? 'text-warning' : 'text-success' };
+  }
+  if (status === 'failed' || status === 'interrupted') {
+    return { text: 'Failed', cls: 'text-danger' };
+  }
+  if (status === 'cancelled') {
+    return { text: 'Cancelled', cls: 'text-dim' };
+  }
+  return { text: status ?? 'Unknown', cls: 'text-dim' };
 }
 
 function CreateTaskModal({ onClose }: { onClose: () => void }) {
@@ -208,7 +247,10 @@ function AutomationDetailView({
   onOpenEdit: () => void;
   onRefreshTasks: () => void;
 }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
+  const { runs, sessions } = useAppData();
   const { data, loading, error, refetch } = useApi(async () => {
     if (!id) {
       throw new Error('Task not found.');
@@ -241,6 +283,19 @@ function AutomationDetailView({
   const scheduleLabel = detail ? formatTaskSchedule(detail) : effectiveSummary ? formatTaskSchedule(effectiveSummary) : 'Manual';
   const lastRunLabel = effectiveSummary?.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : null;
   const lastSuccessLabel = effectiveSummary?.lastSuccessAt ? timeAgo(effectiveSummary.lastSuccessAt) : null;
+  const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks: effectiveSummary ? [effectiveSummary] : [], sessions }), [effectiveSummary, sessions]);
+  const taskRuns = useMemo(
+    () => sortAutomationRuns((runs?.runs ?? []).filter((run) => getRunTaskId(run) === effectiveSummary?.id)),
+    [effectiveSummary?.id, runs?.runs],
+  );
+
+  const setSelectedRun = useCallback((runId: string | null) => {
+    navigate({
+      pathname: location.pathname,
+      search: setConversationRunIdInSearch(location.search, runId),
+    });
+  }, [location.pathname, location.search, navigate]);
 
   async function handleRunNow() {
     if (!id || runningNow || effectiveSummary?.running) {
@@ -249,13 +304,15 @@ function AutomationDetailView({
 
     setRunningNow(true);
     try {
-      await api.runTaskNow(id);
+      const result = await api.runTaskNow(id);
       await Promise.all([
         refetch({ resetLoading: false }),
         onRefreshTasks(),
       ]);
+      setSelectedRun(result.runId);
     } catch (nextError) {
       console.error(nextError);
+    } finally {
       setRunningNow(false);
     }
   }
@@ -350,6 +407,58 @@ function AutomationDetailView({
               </div>
               {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
             </div>
+
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-4 border-b border-border-subtle pb-3">
+                <div>
+                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Runs</h2>
+                  <p className="mt-1 text-[13px] text-secondary">This automation owns its run history.</p>
+                </div>
+                {selectedRunId && (
+                  <ToolbarButton onClick={() => setSelectedRun(null)}>
+                    Hide run details
+                  </ToolbarButton>
+                )}
+              </div>
+
+              {taskRuns.length === 0 ? (
+                <p className="text-[14px] text-secondary">{selectedRunId ? 'Opening run details…' : 'No runs yet.'}</p>
+              ) : (
+                <div className="space-y-2">
+                  {taskRuns.slice(0, 8).map((run) => {
+                    const headline = getRunHeadline(run, runLookups);
+                    const runStatus = automationRunStatus(run);
+                    const activityAt = getRunMoment(run).at;
+                    const selected = selectedRunId === run.runId;
+
+                    return (
+                      <button
+                        key={run.runId}
+                        type="button"
+                        onClick={() => setSelectedRun(selected ? null : run.runId)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left transition ${selected ? 'border-accent bg-surface' : 'border-border-subtle/80 hover:border-border-default hover:bg-surface/70'}`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-[14px] font-medium text-primary">{headline.title}</p>
+                              <span className={`text-[12px] ${runStatus.cls}`}>{runStatus.text}</span>
+                            </div>
+                            <p className="mt-1 text-[12px] text-secondary">{headline.summary}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
+                              <span>{run.runId}</span>
+                              {activityAt && <><span>·</span><span>{timeAgo(activityAt)}</span></>}
+                              {runNeedsAttention(run) && <><span>·</span><span className="text-warning">needs review</span></>}
+                            </div>
+                          </div>
+                          <span className="text-[12px] text-accent">{selected ? 'Hide' : 'Inspect'}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
           </div>
         </div>
 
@@ -362,6 +471,7 @@ function AutomationDetailView({
                 <DetailMetaRow label="Schedule" value={scheduleLabel} />
                 <DetailMetaRow label="Last ran" value={lastRunLabel ?? '—'} />
                 <DetailMetaRow label="Last success" value={lastSuccessLabel ?? '—'} />
+                <DetailMetaRow label="Run history" value={taskRuns.length === 0 ? (selectedRunId ? 'Opening run details…' : 'No runs yet') : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`} />
               </div>
             </section>
 

@@ -106,6 +106,92 @@ describe('TasksPage', () => {
     expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');
   });
 
+  it('shows recent runs on the automation detail page', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations/daily-report?run=task-daily-report-2026-03-18']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            activity: null,
+            alerts: null,
+            projects: null,
+            sessions: [],
+            runs: {
+              scannedAt: '2026-03-18T00:05:00.000Z',
+              runsRoot: '/tmp/runs',
+              summary: { total: 1, recoveryActions: {}, statuses: { completed: 1 } },
+              runs: [{
+                runId: 'task-daily-report-2026-03-18',
+                paths: {
+                  root: '/tmp/runs/task-daily-report-2026-03-18',
+                  manifestPath: '/tmp/runs/task-daily-report-2026-03-18/manifest.json',
+                  statusPath: '/tmp/runs/task-daily-report-2026-03-18/status.json',
+                  checkpointPath: '/tmp/runs/task-daily-report-2026-03-18/checkpoint.json',
+                  eventsPath: '/tmp/runs/task-daily-report-2026-03-18/events.jsonl',
+                  outputLogPath: '/tmp/runs/task-daily-report-2026-03-18/output.log',
+                  resultPath: '/tmp/runs/task-daily-report-2026-03-18/result.json',
+                },
+                manifest: {
+                  version: 1,
+                  id: 'task-daily-report-2026-03-18',
+                  kind: 'scheduled-task',
+                  resumePolicy: 'rerun',
+                  createdAt: '2026-03-18T00:00:00.000Z',
+                  spec: { taskId: 'daily-report' },
+                  source: { type: 'scheduled-task', id: 'daily-report' },
+                },
+                status: {
+                  version: 1,
+                  runId: 'task-daily-report-2026-03-18',
+                  status: 'completed',
+                  createdAt: '2026-03-18T00:00:00.000Z',
+                  updatedAt: '2026-03-18T00:05:00.000Z',
+                  activeAttempt: 1,
+                  startedAt: '2026-03-18T00:00:00.000Z',
+                  completedAt: '2026-03-18T00:05:00.000Z',
+                },
+                checkpoint: {
+                  version: 1,
+                  runId: 'task-daily-report-2026-03-18',
+                  updatedAt: '2026-03-18T00:05:00.000Z',
+                  step: 'completed',
+                  payload: { taskId: 'daily-report' },
+                },
+                problems: [],
+                recoveryAction: 'none',
+              }],
+            },
+            tasks: [{
+              id: 'daily-report',
+              title: 'Daily report',
+              scheduleType: 'cron',
+              running: false,
+              enabled: true,
+              cron: '0 9 * * 1-5',
+              prompt: 'Send the daily report.',
+              model: 'openai/gpt-5.4',
+              lastStatus: 'success',
+              lastRunAt: '2026-03-18T00:05:00.000Z',
+            }],
+            setActivity: vi.fn(),
+            setAlerts: vi.fn(),
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations/:id" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('This automation owns its run history.');
+    expect(html).toContain('task-daily-report-2026-03-18');
+    expect(html).toContain('Hide run details');
+  });
+
   it('renders the create automation form in a modal when requested', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations?new=1']}>

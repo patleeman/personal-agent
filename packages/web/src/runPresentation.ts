@@ -310,6 +310,14 @@ function excerptShellCommand(command: string | undefined, maxLength = 88): strin
   return excerpt(stripLeadingShellEnvironment(command), maxLength);
 }
 
+export function getRunTaskId(run: DurableRunRecord): string | undefined {
+  return run.manifest?.source?.type === 'scheduled-task'
+    ? run.manifest.source.id ?? readSpec(run, 'taskId')
+    : run.manifest?.kind === 'scheduled-task'
+      ? run.manifest?.source?.id ?? readSpec(run, 'taskId')
+      : undefined;
+}
+
 function taskById(lookups: RunPresentationLookups, taskId: string | undefined): ScheduledTaskSummary | undefined {
   if (!taskId || !lookups.tasks) {
     return undefined;
@@ -447,7 +455,7 @@ function sourceKindLabel(run: DurableRunRecord): string {
 
 export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLookups = {}): RunHeadline {
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
-    const taskId = run.manifest?.source?.id ?? readSpec(run, 'taskId');
+    const taskId = getRunTaskId(run);
     const task = taskById(lookups, taskId);
     const title = task?.title ?? excerpt(task?.prompt) ?? taskId ?? run.runId;
     const summary = task?.title && taskId && task.title !== taskId
@@ -518,7 +526,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
   }
 
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
-    const taskId = run.manifest?.source?.id ?? readSpec(run, 'taskId');
+    const taskId = getRunTaskId(run);
     const task = taskById(lookups, taskId);
     if (taskId) {
       connections.push({

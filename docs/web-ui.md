@@ -82,6 +82,7 @@ Current capabilities:
 - edit existing task definitions
 - enable / disable tasks
 - run a task immediately and watch the automation state refresh in place
+- inspect recent automation-owned run history directly from the automation detail view
 
 ## Settings
 
