@@ -552,6 +552,7 @@ export type DesktopAppEvent =
   | { type: 'alerts'; snapshot: AlertSnapshot }
   | { type: 'sessions'; sessions: SessionMeta[] }
   | { type: 'tasks'; tasks: ScheduledTaskSummary[] }
+  | { type: 'runs'; result: DurableRunListResult }
   | { type: 'daemon'; state: DaemonState }
   | { type: 'webUi'; state: WebUiState };
 

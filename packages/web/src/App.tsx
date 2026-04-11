@@ -300,6 +300,9 @@ export function App() {
       case 'tasks':
         setTasks(payload.tasks);
         return;
+      case 'runs':
+        setRuns(payload.result);
+        return;
       case 'daemon':
         setDaemon(payload.state);
         return;
@@ -351,6 +354,14 @@ export function App() {
     void api.tasks()
       .then((items) => {
         setTasks(items);
+      })
+      .catch(() => {
+        // Keep waiting for SSE or a later retry.
+      });
+
+    void api.runs()
+      .then((result) => {
+        setRuns(result);
       })
       .catch(() => {
         // Keep waiting for SSE or a later retry.
@@ -429,10 +440,6 @@ export function App() {
         const normalized = normalizeAppEvent(payload);
         if (normalized) {
           handleDesktopAppEvent(normalized);
-        }
-
-        if (payload.type === 'runs_snapshot') {
-          setRuns(payload.result);
         }
       };
 

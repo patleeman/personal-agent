@@ -30,6 +30,11 @@ export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
         type: 'tasks',
         tasks: event.tasks,
       };
+    case 'runs_snapshot':
+      return {
+        type: 'runs',
+        result: event.result,
+      };
     case 'daemon_snapshot':
       return {
         type: 'daemon',
@@ -40,8 +45,6 @@ export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
         type: 'webUi',
         state: event.state,
       };
-    case 'runs_snapshot':
-      return null;
     default:
       return event;
   }

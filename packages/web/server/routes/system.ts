@@ -88,6 +88,7 @@ export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
   'activity',
   'alerts',
   'tasks',
+  'runs',
   'daemon',
   'webUi',
 ];

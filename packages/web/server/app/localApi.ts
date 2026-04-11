@@ -712,6 +712,7 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
     activeCount?: unknown;
     sessions?: unknown;
     tasks?: unknown;
+    result?: unknown;
     state?: unknown;
   };
 
@@ -742,6 +743,11 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
         type: 'tasks',
         tasks: Array.isArray(typedEvent.tasks) ? typedEvent.tasks : [],
       };
+    case 'runs_snapshot':
+      return {
+        type: 'runs',
+        result: typedEvent.result ?? null,
+      };
     case 'daemon_snapshot':
       return {
         type: 'daemon',
@@ -762,7 +768,7 @@ async function buildDesktopAppEventsForTopics(topics: readonly string[]): Promis
   const seen = new Set<string>();
 
   for (const topic of topics) {
-    if (seen.has(topic) || topic === 'runs') {
+    if (seen.has(topic)) {
       continue;
     }
 
@@ -827,9 +833,8 @@ async function subscribeDesktopAppEventStream(
 
   const unsubscribe = subscribeAppEvents((event) => {
     if (event.type === 'invalidate') {
-      const snapshotTopics = event.topics.filter((topic) => topic !== 'runs');
       enqueueWrite(async () => {
-        const mappedEvents = await buildDesktopAppEventsForTopics(snapshotTopics);
+        const mappedEvents = await buildDesktopAppEventsForTopics(event.topics);
         for (const mappedEvent of mappedEvents) {
           writeEvent(mappedEvent);
         }
@@ -899,9 +904,8 @@ export async function subscribeDesktopAppEvents(
 
   const unsubscribe = subscribeAppEvents((event) => {
     if (event.type === 'invalidate') {
-      const snapshotTopics = event.topics.filter((topic) => topic !== 'runs');
       enqueueWrite(async () => {
-        const mappedEvents = await buildDesktopAppEventsForTopics(snapshotTopics);
+        const mappedEvents = await buildDesktopAppEventsForTopics(event.topics);
         for (const mappedEvent of mappedEvents) {
           emitEvent(mappedEvent);
         }
