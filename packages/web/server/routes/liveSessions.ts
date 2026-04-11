@@ -184,10 +184,6 @@ function isLiveSession(sessionId: string): boolean {
   return isLocalLive(sessionId);
 }
 
-function listAllLiveSessions() {
-  return getLocalLiveSessions();
-}
-
 function subscribeLiveSession(
   sessionId: string,
   listener: (event: unknown) => void,
@@ -229,15 +225,12 @@ export function registerLiveSessionRoutes(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
 ): void {
   initializeLiveSessionRoutesContext(context);
-  router.get('/api/live-sessions', (_req, res) => {
-    res.json(listAllLiveSessions());
-  });
 
   router.get('/api/live-sessions/:id', (req, res) => {
     try {
       const live = isLiveSession(req.params.id);
       if (!live) { res.status(404).json({ live: false }); return; }
-      const entry = listAllLiveSessions().find((session) => session.id === req.params.id);
+      const entry = getLocalLiveSessions().find((session) => session.id === req.params.id);
       res.json({ live: true, ...entry });
     } catch (err) {
       logError('request handler error', {

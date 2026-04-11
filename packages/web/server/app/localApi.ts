@@ -2099,11 +2099,6 @@ export async function updateDesktopConversationModelPreferences(input: {
   return state;
 }
 
-export async function readDesktopLiveSessions() {
-  await getLocalRoutes();
-  return getLocalLiveSessions();
-}
-
 export async function readDesktopLiveSession(conversationId: string) {
   await getLocalRoutes();
 

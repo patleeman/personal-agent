@@ -231,7 +231,6 @@ export interface PersonalAgentDesktopBridge {
   }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord; attachments: ConversationAttachmentSummary[] }>;
   deleteConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; deleted: boolean; attachmentId: string; attachments: ConversationAttachmentSummary[] }>;
   readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<ConversationAttachmentAssetData>;
-  readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;

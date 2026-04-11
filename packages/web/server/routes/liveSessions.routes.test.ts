@@ -536,14 +536,10 @@ describe('live session routes', () => {
     expect(conflictRes.json).toHaveBeenCalledWith({ error: 'Session busy' });
   });
 
-  it('registers desktop live-session routes for listing, creation, resume, SSE, and takeover flows', async () => {
+  it('registers desktop live-session routes for detail, creation, resume, SSE, and takeover flows', async () => {
     vi.useFakeTimers();
     const flushLiveDeferredResumes = vi.fn(async () => {});
     const { getHandler, postHandler } = createDesktopHarness({ flushLiveDeferredResumes });
-
-    const listRes = createResponse();
-    getHandler('/api/live-sessions')(createRequest(), listRes);
-    expect(listRes.json).toHaveBeenCalledWith([{ id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' }]);
 
     const missingRes = createResponse();
     getHandler('/api/live-sessions/:id')(createRequest({ params: { id: 'missing' } }), missingRes);

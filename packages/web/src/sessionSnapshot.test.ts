@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./api', () => ({
   api: {
     sessions: vi.fn(),
-    liveSessions: vi.fn(),
   },
 }));
 
@@ -13,7 +12,6 @@ import { fetchSessionsSnapshot } from './sessionSnapshot';
 describe('fetchSessionsSnapshot', () => {
   beforeEach(() => {
     vi.mocked(api.sessions).mockReset();
-    vi.mocked(api.liveSessions).mockReset();
   });
 
   it('uses the server-authoritative sessions snapshot directly', async () => {
@@ -22,6 +20,5 @@ describe('fetchSessionsSnapshot', () => {
 
     await expect(fetchSessionsSnapshot()).resolves.toBe(sessions);
     expect(api.sessions).toHaveBeenCalledTimes(1);
-    expect(api.liveSessions).not.toHaveBeenCalled();
   });
 });

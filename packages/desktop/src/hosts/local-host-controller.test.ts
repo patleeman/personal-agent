@@ -104,7 +104,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     updateDesktopConversationAttachment: vi.fn(),
     deleteDesktopConversationAttachment: vi.fn(),
     readDesktopConversationAttachmentAsset: vi.fn(),
-    readDesktopLiveSessions: vi.fn(),
     readDesktopLiveSession: vi.fn(),
     readDesktopLiveSessionForkEntries: vi.fn(),
     readDesktopLiveSessionContext: vi.fn(),
@@ -430,24 +429,6 @@ describe('LocalHostController', () => {
     });
 
     expect(readDesktopConversationPlansWorkspace).toHaveBeenCalledTimes(1);
-    expect(backend.ensureStarted).not.toHaveBeenCalled();
-  });
-
-  it('routes desktop live-session list reads through the local API module without loopback proxying', async () => {
-    const readDesktopLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo' }]);
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopLiveSessions,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
-
-    await expect(controller.readLiveSessions?.()).resolves.toEqual([{ id: 'live-1', cwd: '/repo' }]);
-
-    expect(readDesktopLiveSessions).toHaveBeenCalledTimes(1);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

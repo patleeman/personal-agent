@@ -227,7 +227,6 @@ export interface LocalApiModule {
     asset: 'source' | 'preview';
     revision?: number;
   }): Promise<unknown>;
-  readDesktopLiveSessions(): Promise<unknown>;
   readDesktopLiveSession(conversationId: string): Promise<unknown>;
   readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readDesktopLiveSessionContext(conversationId: string): Promise<unknown>;

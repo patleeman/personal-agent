@@ -776,14 +776,6 @@ export const api = {
   },
 
   // ── Live sessions ─────────────────────────────────────────────────────────
-  liveSessions: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readLiveSessions();
-    }
-
-    return get<LiveSessionMeta[]>('/live-sessions');
-  },
   liveSession: async (id: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

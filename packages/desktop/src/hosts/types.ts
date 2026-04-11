@@ -382,7 +382,6 @@ export interface HostController {
   deleteConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   readConversationAttachmentAsset?(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<unknown>;
   readLiveSession?(conversationId: string): Promise<unknown>;
-  readLiveSessions?(): Promise<unknown>;
   readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;

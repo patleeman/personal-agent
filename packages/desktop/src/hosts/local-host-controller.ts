@@ -547,11 +547,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopConversationAttachmentAsset(input);
   }
 
-  async readLiveSessions(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopLiveSessions();
-  }
-
   async readLiveSession(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSession(conversationId);
