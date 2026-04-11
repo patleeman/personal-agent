@@ -21,7 +21,9 @@ import {
   patchSessionManagerPersistence,
   promptSession,
   queuePromptContext,
+  readLiveSessionAutoModeState,
   registry,
+  requestConversationAutoModeTurn,
   refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
   reloadSessionResources,
@@ -32,6 +34,7 @@ import {
   resolveStableSessionTitle,
   restoreQueuedMessage,
   resumeSession,
+  setLiveSessionAutoModeState,
   subscribe,
   submitPromptSession,
   takeOverSessionControl,
@@ -2286,6 +2289,89 @@ describe('queuePromptContext', () => {
     await queuePromptContext('session-blank-context', 'referenced_context', '   ');
 
     expect(sendCustomMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('conversation auto mode', () => {
+  it('persists live auto mode state and can request a hidden review turn when idle', async () => {
+    const entries: unknown[] = [];
+    const appendCustomEntry = vi.fn((customType: string, data: unknown) => {
+      entries.push({ type: 'custom', customType, data });
+      return 'entry-1';
+    });
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-auto-mode', {
+      sessionId: 'session-auto-mode',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Auto mode',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => entries,
+          appendCustomEntry,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    const state = await setLiveSessionAutoModeState('session-auto-mode', { enabled: true, updatedAt: '2026-04-12T15:00:00.000Z' });
+
+    expect(state).toEqual({
+      enabled: true,
+      stopReason: null,
+      updatedAt: '2026-04-12T15:00:00.000Z',
+    });
+    expect(readLiveSessionAutoModeState('session-auto-mode')).toEqual(state);
+    expect(appendCustomEntry).toHaveBeenCalledWith('conversation-auto-mode', state);
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: 'conversation_automation_post_turn_review',
+      display: false,
+    }), {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+  });
+
+  it('does not queue another hidden review turn while work is already streaming', async () => {
+    setLiveEntry('session-auto-mode-busy', {
+      sessionId: 'session-auto-mode-busy',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Auto mode busy',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [{
+            type: 'custom',
+            customType: 'conversation-auto-mode',
+            data: {
+              enabled: true,
+              updatedAt: '2026-04-12T15:10:00.000Z',
+            },
+          }],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+        sendCustomMessage: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(requestConversationAutoModeTurn('session-auto-mode-busy')).resolves.toBe(false);
   });
 });
 

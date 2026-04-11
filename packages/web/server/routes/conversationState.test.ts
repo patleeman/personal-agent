@@ -16,6 +16,9 @@ const {
   listAllLiveSessionsMock,
   liveRegistry,
   logErrorMock,
+  publishAppEventMock,
+  readConversationAutoModeStateFromSessionManagerMock,
+  readLiveSessionAutoModeStateMock,
   logSlowConversationPerfMock,
   parsePendingOperationMock,
   parseTailBlocksQueryMock,
@@ -35,9 +38,11 @@ const {
   resumeLocalSessionMock,
   setServerTimingHeadersMock,
   statSyncMock,
+  setLiveSessionAutoModeStateMock,
   syncWebLiveConversationRunMock,
   toPublicLiveSessionMetaMock,
   updateLiveSessionModelPreferencesMock,
+  writeConversationAutoModeStateMock,
   writeLiveConversationControlErrorMock,
 } = vi.hoisted(() => ({
   SessionManagerOpenMock: vi.fn(),
@@ -53,9 +58,12 @@ const {
   getDurableRunMock: vi.fn(),
   isLocalLiveMock: vi.fn(),
   listAllLiveSessionsMock: vi.fn(),
-  liveRegistry: new Map<string, any>(),
+  liveRegistry: new Map<string, unknown>(),
   logErrorMock: vi.fn(),
   logSlowConversationPerfMock: vi.fn(),
+  publishAppEventMock: vi.fn(),
+  readConversationAutoModeStateFromSessionManagerMock: vi.fn(),
+  readLiveSessionAutoModeStateMock: vi.fn(),
   parsePendingOperationMock: vi.fn(),
   parseTailBlocksQueryMock: vi.fn(),
   promptLocalSessionMock: vi.fn(),
@@ -74,9 +82,11 @@ const {
   resumeLocalSessionMock: vi.fn(),
   setServerTimingHeadersMock: vi.fn(),
   statSyncMock: vi.fn(),
+  setLiveSessionAutoModeStateMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
   toPublicLiveSessionMetaMock: vi.fn(),
   updateLiveSessionModelPreferencesMock: vi.fn(),
+  writeConversationAutoModeStateMock: vi.fn(),
   writeLiveConversationControlErrorMock: vi.fn(),
 }));
 
@@ -127,9 +137,11 @@ vi.mock('../conversations/liveSessions.js', () => ({
   isLive: isLocalLiveMock,
   promptSession: promptLocalSessionMock,
   queuePromptContext: queuePromptContextMock,
+  readLiveSessionAutoModeState: readLiveSessionAutoModeStateMock,
   registry: liveRegistry,
   renameSession: renameSessionMock,
   resumeSession: resumeLocalSessionMock,
+  setLiveSessionAutoModeState: setLiveSessionAutoModeStateMock,
   updateLiveSessionModelPreferences: updateLiveSessionModelPreferencesMock,
 }));
 
@@ -166,9 +178,18 @@ vi.mock('./liveSessions.js', () => ({
   writeLiveConversationControlError: writeLiveConversationControlErrorMock,
 }));
 
+vi.mock('../conversations/conversationAutoMode.js', () => ({
+  readConversationAutoModeStateFromSessionManager: readConversationAutoModeStateFromSessionManagerMock,
+  writeConversationAutoModeState: writeConversationAutoModeStateMock,
+}));
+
+vi.mock('../shared/appEvents.js', () => ({
+  publishAppEvent: publishAppEventMock,
+}));
+
 import { registerConversationStateRoutes } from './conversationState.js';
 
-type Handler = (req: any, res: any) => Promise<void> | void;
+type Handler = (req: Record<string, unknown>, res: Record<string, unknown>) => Promise<void> | void;
 
 function createResponse() {
   return {
@@ -230,6 +251,9 @@ describe('registerConversationStateRoutes', () => {
     liveRegistry.clear();
     logErrorMock.mockReset();
     logSlowConversationPerfMock.mockReset();
+    publishAppEventMock.mockReset();
+    readConversationAutoModeStateFromSessionManagerMock.mockReset();
+    readLiveSessionAutoModeStateMock.mockReset();
     parsePendingOperationMock.mockReset();
     parseTailBlocksQueryMock.mockReset();
     promptLocalSessionMock.mockReset();
@@ -248,9 +272,11 @@ describe('registerConversationStateRoutes', () => {
     resumeLocalSessionMock.mockReset();
     setServerTimingHeadersMock.mockReset();
     statSyncMock.mockReset();
+    setLiveSessionAutoModeStateMock.mockReset();
     syncWebLiveConversationRunMock.mockReset();
     toPublicLiveSessionMetaMock.mockReset();
     updateLiveSessionModelPreferencesMock.mockReset();
+    writeConversationAutoModeStateMock.mockReset();
     writeLiveConversationControlErrorMock.mockReset();
 
     canInjectResumeFallbackPromptMock.mockReturnValue(false);
@@ -435,6 +461,56 @@ describe('registerConversationStateRoutes', () => {
     }));
     expect(failureRes.status).toHaveBeenCalledWith(500);
     expect(failureRes.json).toHaveBeenCalledWith({ error: 'model read failed' });
+  });
+
+  it('reads conversation auto mode state for live and stored sessions', async () => {
+    const { getHandler } = createHarness();
+    const handler = getHandler('/api/conversations/:id/auto-mode');
+
+    isLocalLiveMock.mockReturnValueOnce(true);
+    readLiveSessionAutoModeStateMock.mockReturnValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:00:00.000Z' });
+    const liveRes = createResponse();
+    await handler({ params: { id: 'conversation-1' } }, liveRes);
+    expect(readLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1');
+    expect(liveRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:00:00.000Z' });
+
+    resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
+    existsSyncMock.mockReturnValueOnce(true);
+    SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
+    readConversationAutoModeStateFromSessionManagerMock.mockReturnValueOnce({ enabled: false, stopReason: 'done', updatedAt: '2026-04-12T15:05:00.000Z' });
+    const storedRes = createResponse();
+    await handler({ params: { id: 'conversation-1' } }, storedRes);
+    expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/conversation-1.json');
+    expect(readConversationAutoModeStateFromSessionManagerMock).toHaveBeenCalledWith({ id: 'session-manager' });
+    expect(storedRes.json).toHaveBeenCalledWith({ enabled: false, stopReason: 'done', updatedAt: '2026-04-12T15:05:00.000Z' });
+  });
+
+  it('validates and updates conversation auto mode state', async () => {
+    const { patchHandler } = createHarness();
+    const handler = patchHandler('/api/conversations/:id/auto-mode');
+
+    const invalidRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: {} }, invalidRes);
+    expect(invalidRes.status).toHaveBeenCalledWith(400);
+    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'enabled must be boolean' });
+
+    isLocalLiveMock.mockReturnValueOnce(true);
+    setLiveSessionAutoModeStateMock.mockResolvedValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });
+    const liveRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: { enabled: true, surfaceId: 'surface-1' } }, liveRes);
+    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', { enabled: true, surfaceId: 'surface-1' });
+    expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', { enabled: true });
+    expect(liveRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });
+
+    resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
+    existsSyncMock.mockReturnValueOnce(true);
+    SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
+    writeConversationAutoModeStateMock.mockReturnValueOnce({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
+    const storedRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: { enabled: false } }, storedRes);
+    expect(writeConversationAutoModeStateMock).toHaveBeenCalledWith({ id: 'session-manager' }, { enabled: false });
+    expect(publishAppEventMock).toHaveBeenCalledWith({ type: 'session_file_changed', sessionId: 'conversation-1' });
+    expect(storedRes.json).toHaveBeenCalledWith({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
   });
 
   it('validates model preference patch input', async () => {

@@ -11,6 +11,7 @@ const {
   createArtifactAgentExtensionMock,
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
+  createConversationAutoModeAgentExtensionMock,
   createDeferredResumeAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
@@ -32,6 +33,7 @@ const {
   createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
   createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
   createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
+  createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
   createDeferredResumeAgentExtensionMock: vi.fn(() => 'deferred-resume-extension'),
   createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
@@ -67,6 +69,10 @@ vi.mock('../extensions/askUserQuestionAgentExtension.js', () => ({
 
 vi.mock('../extensions/changeWorkingDirectoryAgentExtension.js', () => ({
   createChangeWorkingDirectoryAgentExtension: createChangeWorkingDirectoryAgentExtensionMock,
+}));
+
+vi.mock('../extensions/conversationAutoModeAgentExtension.js', () => ({
+  createConversationAutoModeAgentExtension: createConversationAutoModeAgentExtensionMock,
 }));
 
 vi.mock('../extensions/deferredResumeAgentExtension.js', () => ({
@@ -145,6 +151,7 @@ describe('createProfileState', () => {
     createArtifactAgentExtensionMock.mockClear();
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
+    createConversationAutoModeAgentExtensionMock.mockClear();
     createDeferredResumeAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
@@ -208,6 +215,7 @@ describe('createProfileState', () => {
       'change-working-directory-extension',
       'run-extension',
       'artifact-extension',
+      'conversation-auto-mode-extension',
       'deferred-resume-extension',
       'reminder-extension',
     ]);
@@ -247,6 +255,7 @@ describe('createProfileState', () => {
         'change-working-directory-extension',
         'run-extension',
         'artifact-extension',
+        'conversation-auto-mode-extension',
         'deferred-resume-extension',
         'reminder-extension',
       ],

@@ -605,6 +605,12 @@ export interface DeferredResumeSummary {
   };
 }
 
+export interface ConversationAutoModeState {
+  enabled: boolean;
+  stopReason: string | null;
+  updatedAt: string | null;
+}
+
 export interface ConversationCwdChangeResult {
   id: string;
   sessionFile: string;
@@ -757,6 +763,7 @@ export type SseEvent =
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }
+  | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, unknown> }

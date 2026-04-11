@@ -47,6 +47,7 @@ A conversation can carry:
 - attachments
 - conversation artifacts
 - links to tracked work
+- an optional auto mode toggle in the composer controls for hands-off follow-up
 
 This is useful execution context, but it still should not replace durable vault pages.
 

@@ -24,9 +24,11 @@ import {
   isLive as isLocalLive,
   promptSession as promptLocalSession,
   queuePromptContext,
+  readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
   resumeSession as resumeLocalSession,
+  setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
 import {
@@ -53,6 +55,11 @@ import {
   isMissingConversationBootstrapState,
   readConversationBootstrapState,
 } from '../conversations/conversationBootstrap.js';
+import {
+  readConversationAutoModeStateFromSessionManager,
+  writeConversationAutoModeState,
+} from '../conversations/conversationAutoMode.js';
+import { publishAppEvent } from '../shared/appEvents.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation state routes');
@@ -183,6 +190,72 @@ export function registerConversationStateRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.get('/api/conversations/:id/auto-mode', async (req, res) => {
+    try {
+      if (isLocalLive(req.params.id)) {
+        res.json(readLiveSessionAutoModeState(req.params.id));
+        return;
+      }
+
+      const sessionFile = resolveConversationSessionFile(req.params.id);
+      if (!sessionFile || !existsSync(sessionFile)) {
+        res.status(404).json({ error: 'Conversation not found' });
+        return;
+      }
+
+      const sessionManager = SessionManager.open(sessionFile);
+      res.json(readConversationAutoModeStateFromSessionManager(sessionManager));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
+  router.patch('/api/conversations/:id/auto-mode', async (req, res) => {
+    try {
+      const { enabled } = req.body as {
+        enabled?: unknown;
+        surfaceId?: string;
+      };
+
+      if (typeof enabled !== 'boolean') {
+        res.status(400).json({ error: 'enabled must be boolean' });
+        return;
+      }
+
+      if (isLocalLive(req.params.id)) {
+        ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+        const state = await setLiveSessionAutoModeState(req.params.id, { enabled });
+        res.json(state);
+        return;
+      }
+
+      const sessionFile = resolveConversationSessionFile(req.params.id);
+      if (!sessionFile || !existsSync(sessionFile)) {
+        res.status(404).json({ error: 'Conversation not found' });
+        return;
+      }
+
+      const sessionManager = SessionManager.open(sessionFile);
+      const state = writeConversationAutoModeState(sessionManager, { enabled });
+      publishAppEvent({ type: 'session_file_changed', sessionId: req.params.id });
+      res.json(state);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', {
+        message,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeLiveConversationControlError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: message });
     }
   });
 

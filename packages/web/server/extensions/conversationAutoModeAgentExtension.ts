@@ -1,0 +1,135 @@
+import { Type } from '@sinclair/typebox';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import {
+  CONVERSATION_AUTO_MODE_CONTROL_TOOL,
+  CONVERSATION_AUTO_MODE_CONTINUE_PROMPT,
+  CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
+  readConversationAutoModeStateFromSessionManager,
+} from '../conversations/conversationAutoMode.js';
+import {
+  promptSession,
+  requestConversationAutoModeTurn,
+  setLiveSessionAutoModeState,
+} from '../conversations/liveSessions.js';
+
+const ConversationAutoControlParams = Type.Object({
+  action: Type.Union([
+    Type.Literal('continue'),
+    Type.Literal('stop'),
+  ], {
+    description: 'Use "continue" to queue the next visible follow-up turn, or "stop" to disable auto mode for this conversation.',
+  }),
+  reason: Type.Optional(Type.String({
+    description: 'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
+  })),
+});
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function resolveCurrentTurnSourceCustomType(sessionManager: {
+  getBranch?: () => unknown[];
+}): string | null {
+  const branch = typeof sessionManager.getBranch === 'function'
+    ? sessionManager.getBranch()
+    : [];
+
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    if (entry.type === 'custom_message' && typeof entry.customType === 'string') {
+      return entry.customType;
+    }
+
+    if (entry.type === 'message' && isRecord(entry.message) && entry.message.role === 'user') {
+      return 'user';
+    }
+  }
+
+  return null;
+}
+
+export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
+  return (pi: ExtensionAPI) => {
+    pi.registerTool({
+      name: CONVERSATION_AUTO_MODE_CONTROL_TOOL,
+      label: 'Conversation auto control',
+      description: 'Control conversation auto mode from hidden auto-review turns.',
+      promptSnippet: 'Stop or continue the current conversation auto loop.',
+      promptGuidelines: [
+        'Use this tool only during hidden auto-review turns for conversation auto mode.',
+        'Use action="continue" to queue the next visible follow-up turn.',
+        'Use action="stop" with a short reason when the task is complete, blocked, or needs user input.',
+      ],
+      parameters: ConversationAutoControlParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
+        const state = readConversationAutoModeStateFromSessionManager(ctx.sessionManager);
+
+        if (params.action === 'continue') {
+          if (!sessionId) {
+            throw new Error('Conversation auto mode requires a persisted live session.');
+          }
+          if (!state.enabled) {
+            return {
+              content: [{ type: 'text' as const, text: 'Auto mode is off, so no follow-up was queued.' }],
+              details: { enabled: false, action: 'continue' },
+            };
+          }
+
+          await promptSession(sessionId, CONVERSATION_AUTO_MODE_CONTINUE_PROMPT, 'followUp');
+          return {
+            content: [{ type: 'text' as const, text: 'Queued the next auto-mode follow-up turn.' }],
+            details: { enabled: true, action: 'continue', prompt: CONVERSATION_AUTO_MODE_CONTINUE_PROMPT },
+          };
+        }
+
+        const nextState = sessionId
+          ? await setLiveSessionAutoModeState(sessionId, {
+              enabled: false,
+              stopReason: params.reason,
+            })
+          : state;
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: nextState.stopReason
+              ? `Stopped auto mode: ${nextState.stopReason}.`
+              : 'Stopped auto mode.',
+          }],
+          details: {
+            enabled: nextState.enabled,
+            action: 'stop',
+            stopReason: nextState.stopReason,
+            updatedAt: nextState.updatedAt,
+          },
+        };
+      },
+    });
+
+    pi.on('turn_end', async (_event, ctx) => {
+      const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
+      if (!sessionId) {
+        return;
+      }
+
+      const state = readConversationAutoModeStateFromSessionManager(ctx.sessionManager);
+      if (!state.enabled) {
+        return;
+      }
+
+      if (resolveCurrentTurnSourceCustomType(ctx.sessionManager) === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
+        return;
+      }
+
+      queueMicrotask(() => {
+        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch(() => undefined);
+      });
+    });
+  };
+}

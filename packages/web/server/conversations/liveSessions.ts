@@ -41,6 +41,14 @@ import {
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 import { logWarn } from '../shared/logging.js';
+import {
+  CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
+  CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
+  readConversationAutoModeStateFromSessionManager,
+  writeConversationAutoModeState,
+  type ConversationAutoModeState,
+  type ConversationAutoModeStateInput,
+} from './conversationAutoMode.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -112,6 +120,7 @@ export type SseEvent =
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }
+  | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
@@ -152,6 +161,7 @@ interface LiveEntry {
   autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
+  lastAutoModeStateJson?: string | null;
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
@@ -1224,6 +1234,21 @@ function broadcastQueueState(entry: LiveEntry, force = false): void {
   broadcast(entry, { type: 'queue_state', ...queueState });
 }
 
+function readConversationAutoModeState(entry: Pick<LiveEntry, 'session'>): ConversationAutoModeState {
+  return readConversationAutoModeStateFromSessionManager(entry.session.sessionManager);
+}
+
+function broadcastAutoModeState(entry: LiveEntry, force = false): void {
+  const state = readConversationAutoModeState(entry);
+  const nextJson = JSON.stringify(state);
+  if (!force && entry.lastAutoModeStateJson === nextJson) {
+    return;
+  }
+
+  entry.lastAutoModeStateJson = nextJson;
+  broadcast(entry, { type: 'auto_mode_state', state });
+}
+
 function shouldSuppressLiveEventForHiddenTurn(entry: LiveEntry, event: AgentSessionEvent): boolean {
   ensureHiddenTurnState(entry);
   if (!entry.activeHiddenTurnCustomType) {
@@ -2222,6 +2247,102 @@ export function subscribe(
       broadcastPresenceState(entry);
     }
   };
+}
+
+export function readLiveSessionAutoModeState(sessionId: string): ConversationAutoModeState {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  return readConversationAutoModeState(entry);
+}
+
+export function broadcastConversationAutoModeState(sessionId: string, force = true): void {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    return;
+  }
+
+  broadcastAutoModeState(entry, force);
+}
+
+export async function requestConversationAutoModeTurn(sessionId: string): Promise<boolean> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  if (!readConversationAutoModeState(entry).enabled) {
+    return false;
+  }
+
+  if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
+    return false;
+  }
+
+  const steering = typeof entry.session.getSteeringMessages === 'function'
+    ? entry.session.getSteeringMessages()
+    : [];
+  const followUp = typeof entry.session.getFollowUpMessages === 'function'
+    ? entry.session.getFollowUpMessages()
+    : [];
+  if (steering.length > 0 || followUp.length > 0) {
+    return false;
+  }
+
+  ensureHiddenTurnState(entry);
+  entry.pendingHiddenTurnCustomTypes.push(CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE);
+  publishSessionMetaChanged(sessionId);
+
+  try {
+    await entry.session.sendCustomMessage({
+      customType: CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
+      content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
+      display: false,
+      details: { source: 'conversation-auto-mode' },
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    return true;
+  } catch (error) {
+    const pendingIndex = entry.pendingHiddenTurnCustomTypes.lastIndexOf(CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE);
+    if (pendingIndex >= 0) {
+      entry.pendingHiddenTurnCustomTypes.splice(pendingIndex, 1);
+    }
+    publishSessionMetaChanged(sessionId);
+    throw error;
+  }
+}
+
+export async function setLiveSessionAutoModeState(
+  sessionId: string,
+  input: ConversationAutoModeStateInput,
+): Promise<ConversationAutoModeState> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const nextState = writeConversationAutoModeState(entry.session.sessionManager, input);
+  broadcastAutoModeState(entry, true);
+  publishSessionMetaChanged(sessionId);
+  publishAppEvent({ type: 'session_file_changed', sessionId });
+
+  if (nextState.enabled) {
+    queueMicrotask(() => {
+      void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch((error) => {
+        logWarn('conversation auto mode turn request failed', {
+          sessionId,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      });
+    });
+  }
+
+  return nextState;
 }
 
 /** Append hidden context before the next user-visible prompt in a live session. */

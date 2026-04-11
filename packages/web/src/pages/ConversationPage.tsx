@@ -6,7 +6,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -770,6 +770,80 @@ function ConversationPreferencesRow({
         </svg>
       </label>
     </div>
+  );
+}
+
+function renderConversationAutoModeStatus(
+  state: ConversationAutoModeState | null,
+  isLiveSession: boolean,
+): string | null {
+  if (!state) {
+    return null;
+  }
+
+  if (state.enabled) {
+    return isLiveSession
+      ? 'Auto on · continues after each turn'
+      : 'Auto on · resumes when this conversation is live again';
+  }
+
+  if (state.stopReason) {
+    return `Auto stopped · ${state.stopReason}`;
+  }
+
+  return null;
+}
+
+function ConversationAutoModeToggle({
+  enabled,
+  busy,
+  disabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  busy: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const title = busy
+    ? 'Updating auto mode…'
+    : enabled
+      ? 'Turn off conversation auto mode'
+      : 'Turn on conversation auto mode';
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={title}
+      title={title}
+      onClick={onToggle}
+      disabled={disabled || busy}
+      className={cx(
+        'inline-flex h-8 items-center gap-2 rounded-full px-2.5 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
+        enabled
+          ? 'bg-accent/12 text-primary hover:bg-accent/18'
+          : 'bg-elevated text-secondary hover:bg-elevated/80',
+      )}
+    >
+      <span>Auto</span>
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative h-4 w-7 rounded-full transition-colors',
+          enabled ? 'bg-accent/80' : 'bg-border-default',
+        )}
+      >
+        <span
+          className={cx(
+            'absolute top-[2px] h-3.5 w-3.5 rounded-full bg-white transition-transform',
+            enabled ? 'translate-x-[12px]' : 'translate-x-[2px]',
+            busy && 'animate-pulse',
+          )}
+        />
+      </span>
+    </button>
   );
 }
 
@@ -1697,6 +1771,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   } = useModels(shouldLoadModels);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+  const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
+  const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
   const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
     draft,
     conversationId: id,
@@ -1797,6 +1873,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [conversationEventVersion, defaultModel, defaultThinkingLevel, draft, id, initialModelPreferenceState, location.key]);
+
+  useEffect(() => {
+    if (draft) {
+      setConversationAutoModeState(null);
+      setConversationAutoModeBusy(false);
+      return;
+    }
+
+    if (!id) {
+      setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
+      return;
+    }
+
+    let cancelled = false;
+    api.conversationAutoMode(id)
+      .then((data) => {
+        if (!cancelled) {
+          setConversationAutoModeState(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConversationAutoModeState({ enabled: false, stopReason: null, updatedAt: null });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, id]);
+
+  const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
+  const conversationAutoModeStatusText = renderConversationAutoModeStatus(effectiveConversationAutoModeState, isLiveSession);
+  const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {
@@ -3231,6 +3341,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     return recovered.conversationId;
   }, [id, isLiveSession, streamReconnect, streamTakeover]);
+
+  const toggleConversationAutoMode = useCallback(async () => {
+    if (draft || !id || conversationAutoModeBusy) {
+      return;
+    }
+
+    const nextEnabled = !conversationAutoModeEnabled;
+    setConversationAutoModeBusy(true);
+
+    try {
+      const targetConversationId = nextEnabled
+        ? await ensureConversationIsLive('enable auto mode')
+        : id;
+      const nextState = await api.updateConversationAutoMode(
+        targetConversationId,
+        { enabled: nextEnabled },
+        currentSurfaceId,
+      );
+
+      if (targetConversationId === id) {
+        setConversationAutoModeState(nextState);
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setConversationAutoModeBusy(false);
+    }
+  }, [conversationAutoModeBusy, conversationAutoModeEnabled, currentSurfaceId, draft, ensureConversationIsLive, id, showNotice]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -5413,6 +5551,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               />
 
               <div className="flex flex-col gap-0">
+                  {conversationAutoModeStatusText && !draft && id && (
+                    <div className="px-3 pt-1">
+                      <p className={cx(
+                        'text-[11px] leading-relaxed',
+                        conversationAutoModeEnabled ? 'text-accent' : 'text-dim',
+                      )}>
+                        {conversationAutoModeStatusText}
+                      </p>
+                    </div>
+                  )}
                   <div className="px-3 pt-1">
                     <textarea
                       ref={textareaRef}
@@ -5478,6 +5626,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
                       />
+                      {!draft && id && (
+                        <ConversationAutoModeToggle
+                          enabled={conversationAutoModeEnabled}
+                          busy={conversationAutoModeBusy}
+                          disabled={false}
+                          onToggle={() => { void toggleConversationAutoMode(); }}
+                        />
+                      )}
                     </div>
 
                     <div className="ml-auto flex shrink-0 items-center gap-2">

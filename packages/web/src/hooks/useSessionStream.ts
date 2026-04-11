@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
+  ConversationAutoModeState,
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MessageBlock,
@@ -33,6 +34,7 @@ export interface StreamState {
   contextUsage: SessionContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
   presence: LiveSessionPresenceState;
+  autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
@@ -59,6 +61,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   contextUsage: null,
   pendingQueue: { steering: [], followUp: [] },
   presence: createEmptyLiveSessionPresenceState(),
+  autoModeState: null,
   cwdChange: null,
 };
 
@@ -736,6 +739,10 @@ export function applyEvent(
 
     case 'presence_state': {
       return { ...prev, presence: event.state };
+    }
+
+    case 'auto_mode_state': {
+      return { ...prev, autoModeState: event.state };
     }
 
     case 'text_delta': {
