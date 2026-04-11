@@ -6,8 +6,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta } from '../types';
-import { useApi } from '../hooks';
+import type { ContextUsageSegment, ConversationAttachmentSummary, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -111,6 +110,20 @@ type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-direct
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
   return value === 'focus-composer' || value === 'edit-working-directory' || value === 'rename-conversation';
+}
+
+export function resolveConversationAutocompleteCatalogDemand(input: string): {
+  needsMemoryData: boolean;
+  needsVaultFiles: boolean;
+} {
+  const slashInput = parseSlashInput(input);
+  const showModelPicker = slashInput?.command === '/model' && input.startsWith('/model ');
+  const hasMentionQuery = /(^|.*\s)(@[\w./-]*)$/.test(input);
+
+  return {
+    needsMemoryData: hasMentionQuery || Boolean(slashInput && !showModelPicker),
+    needsVaultFiles: hasMentionQuery,
+  };
 }
 
 export function truncateConversationShelfText(
@@ -1861,8 +1874,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [stream.isStreaming]);
 
   const prevStreamingRef = useRef(false);
-  const { data: memoryData } = useApi(api.memory);
-  const { data: vaultFilesData } = useApi(api.vaultFiles);
+  const autocompleteCatalogDemand = useMemo(
+    () => resolveConversationAutocompleteCatalogDemand(input),
+    [input],
+  );
+  const [shouldLoadMemoryData, setShouldLoadMemoryData] = useState(() => autocompleteCatalogDemand.needsMemoryData);
+  const [shouldLoadVaultFiles, setShouldLoadVaultFiles] = useState(() => autocompleteCatalogDemand.needsVaultFiles);
+  const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
+  const [vaultFilesData, setVaultFilesData] = useState<VaultFileListResult | null>(null);
+  const requestedMemoryDataRef = useRef(false);
+  const requestedVaultFilesRef = useRef(false);
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
@@ -1870,6 +1891,57 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (autocompleteCatalogDemand.needsMemoryData) {
+      setShouldLoadMemoryData(true);
+    }
+    if (autocompleteCatalogDemand.needsVaultFiles) {
+      setShouldLoadVaultFiles(true);
+    }
+  }, [autocompleteCatalogDemand.needsMemoryData, autocompleteCatalogDemand.needsVaultFiles]);
+
+  useEffect(() => {
+    if (!shouldLoadMemoryData || requestedMemoryDataRef.current) {
+      return;
+    }
+
+    requestedMemoryDataRef.current = true;
+    let cancelled = false;
+
+    api.memory()
+      .then((data) => {
+        if (!cancelled) {
+          setMemoryData(data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadMemoryData]);
+
+  useEffect(() => {
+    if (!shouldLoadVaultFiles || requestedVaultFilesRef.current) {
+      return;
+    }
+
+    requestedVaultFilesRef.current = true;
+    let cancelled = false;
+
+    api.vaultFiles()
+      .then((data) => {
+        if (!cancelled) {
+          setVaultFilesData(data);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadVaultFiles]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerSelectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });

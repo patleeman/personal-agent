@@ -14,6 +14,7 @@ import {
   resolveConversationPendingStatusLabel,
   resolveDisplayedConversationPendingStatusLabel,
   resolveConversationStreamTitleSync,
+  resolveConversationAutocompleteCatalogDemand,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
@@ -68,6 +69,33 @@ function hasAncestorWithClass(node: ParsedNode | null | undefined, className: st
   }
   return false;
 }
+
+describe('conversation autocomplete catalog demand', () => {
+  it('skips memory and vault catalog reads for plain prompts', () => {
+    expect(resolveConversationAutocompleteCatalogDemand('Write a git commit message for this diff.')).toEqual({
+      needsMemoryData: false,
+      needsVaultFiles: false,
+    });
+  });
+
+  it('loads memory data for slash command discovery but skips vault files', () => {
+    expect(resolveConversationAutocompleteCatalogDemand('/resume 10m')).toEqual({
+      needsMemoryData: true,
+      needsVaultFiles: false,
+    });
+  });
+
+  it('loads both catalogs for mention discovery but not for the model picker', () => {
+    expect(resolveConversationAutocompleteCatalogDemand('@agent-browser')).toEqual({
+      needsMemoryData: true,
+      needsVaultFiles: true,
+    });
+    expect(resolveConversationAutocompleteCatalogDemand('/model claude')).toEqual({
+      needsMemoryData: false,
+      needsVaultFiles: false,
+    });
+  });
+});
 
 describe('conversation live state helpers', () => {
   it('keeps the live stream enabled until the conversation is confirmed not live', () => {
