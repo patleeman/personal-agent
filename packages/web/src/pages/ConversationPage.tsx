@@ -281,6 +281,26 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
     && input.hasStreamSnapshot;
 }
 
+export function shouldFetchConversationLiveSessionGitContext(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  conversationLiveDecision: boolean | null;
+  conversationBootstrapLoading: boolean;
+  sessionLoading: boolean;
+  isStreaming: boolean;
+  hasPendingInitialPrompt: boolean;
+  hasPendingInitialPromptInFlight: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.conversationLiveDecision === true
+    && !input.conversationBootstrapLoading
+    && !input.sessionLoading
+    && !input.isStreaming
+    && !input.hasPendingInitialPrompt
+    && !input.hasPendingInitialPromptInFlight;
+}
+
 export function resolveConversationPageTitle(input: {
   draft: boolean;
   titleOverride?: string | null;
@@ -2356,12 +2376,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     drawingsPickerOpen,
   });
 
-  const shouldFetchLiveSessionGitContext = !draft
-    && Boolean(id)
-    && conversationLiveDecision === true
-    && !conversationBootstrapLoading
-    && !sessionLoading
-    && !stream.isStreaming;
+  const shouldFetchLiveSessionGitContext = shouldFetchConversationLiveSessionGitContext({
+    draft,
+    conversationId: id,
+    conversationLiveDecision,
+    conversationBootstrapLoading,
+    sessionLoading,
+    isStreaming: stream.isStreaming,
+    hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    hasPendingInitialPromptInFlight,
+  });
 
   const refetchDeferredResumes = useCallback(async () => {
     if (!id) {

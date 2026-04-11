@@ -19,6 +19,7 @@ import {
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
+  shouldFetchConversationLiveSessionGitContext,
   truncateConversationShelfText,
   formatQueuedPromptShelfText,
   formatQueuedPromptImageSummary,
@@ -240,6 +241,45 @@ describe('conversation attachment fetch gating', () => {
       draft: false,
       conversationId: 'conv-123',
       drawingsPickerOpen: true,
+    })).toBe(true);
+  });
+});
+
+describe('conversation live-session git context loading', () => {
+  it('defers git-context reads while the initial prompt is still pending or in flight', () => {
+    expect(shouldFetchConversationLiveSessionGitContext({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationLiveDecision: true,
+      conversationBootstrapLoading: false,
+      sessionLoading: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: true,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(false);
+
+    expect(shouldFetchConversationLiveSessionGitContext({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationLiveDecision: true,
+      conversationBootstrapLoading: false,
+      sessionLoading: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: true,
+    })).toBe(false);
+  });
+
+  it('loads git context once the conversation is live and the initial prompt work is clear', () => {
+    expect(shouldFetchConversationLiveSessionGitContext({
+      draft: false,
+      conversationId: 'conv-123',
+      conversationLiveDecision: true,
+      conversationBootstrapLoading: false,
+      sessionLoading: false,
+      isStreaming: false,
+      hasPendingInitialPrompt: false,
+      hasPendingInitialPromptInFlight: false,
     })).toBe(true);
   });
 });
