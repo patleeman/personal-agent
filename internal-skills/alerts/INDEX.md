@@ -30,12 +30,12 @@ If something does not need stronger delivery, keep it on the owning conversation
 
 ## Relationship to other async features
 
-### Inbox/activity
+### Owning surfaces
 
-- **Inbox** = the in-app attention queue
-- **Alert records** may still exist under the hood for wakeup state
+- there is no shared in-app inbox
+- alert records may still exist under the hood for wakeup state
 
-If something should stay visible to the user, prefer conversation attention on the owning thread.
+If something should stay visible to the user, prefer the owning conversation, automation surface, or conversation attention on the owning thread.
 
 ### Deferred resume
 
@@ -52,8 +52,8 @@ Scheduled tasks stay passive by default.
 When a task is explicitly bound back to a conversation, its completion/failure can create:
 
 - a conversation wakeup
-- a linked activity record
 - conversation attention when appropriate
+- thread-owned follow-up state on that conversation
 
 ## Lifecycle
 

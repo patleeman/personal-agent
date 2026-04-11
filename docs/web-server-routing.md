@@ -9,9 +9,9 @@ The web server source now lives under `packages/web/server/`.
 Current source layout:
 
 - `app/` — bootstrap and profile/runtime wiring
-- `automation/` — daemon, deferred resumes, durable runs, scheduled tasks, and remaining attention helpers
+- `automation/` — daemon, alerts, deferred resumes, durable runs, scheduled tasks
 - `conversations/` — live sessions, titles, cwd, recovery, conversation services
-- `extensions/` — web-runtime tool extensions such as reminders, runs, tasks, artifacts, and activity
+- `extensions/` — web-runtime tool extensions such as reminders, runs, tasks, and artifacts
 - `knowledge/` — memory docs, prompt references, vault file helpers
 - `models/` — model registry, preferences, providers, auth, usage
 - `routes/` — Express route registration modules
@@ -47,7 +47,6 @@ Current route groups include:
 - auth and remote-access auth
 - system / web UI state
 - conversations / live sessions
-- internal attention helpers (tool-facing, not a public app surface)
 - runs
 - memory notes
 - folder picker
@@ -70,5 +69,5 @@ Remote browser sessions depend on those operational snapshots too, not just sess
 ## Related docs
 
 - [Web UI Guide](./web-ui.md)
-- [Electron desktop app](./electron-desktop-app-plan.md)
+- [Electron desktop app](./electron-desktop-app-spec.md)
 - [Daemon and Background Automation](./daemon.md)

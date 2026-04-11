@@ -14,9 +14,6 @@ import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
-  markConversationAttentionCapability,
-} from '../automation/inboxCapability.js';
-import {
   createScheduledTaskCapability,
   listScheduledTasksCapability,
   readScheduledTaskCapability,
@@ -63,6 +60,7 @@ import {
   readConversationSessionSignature,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
+  toggleConversationAttention,
 } from '../conversations/conversationService.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import {
@@ -311,14 +309,6 @@ let localRoutesPromise: Promise<RegisteredRoute[]> | null = null;
 let localServerRouteContext: ServerRouteContext | null = null;
 let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
 let localProviderDesktopCapabilityContext: ProviderDesktopCapabilityContext | null = null;
-let localActivityCapabilityContext: {
-  getCurrentProfile: () => string;
-  getRepoRoot: () => string;
-  getDefaultWebCwd: () => string;
-  buildLiveSessionResourceOptions: LiveSessionCapabilityContext['buildLiveSessionResourceOptions'];
-  buildLiveSessionExtensionFactories: LiveSessionCapabilityContext['buildLiveSessionExtensionFactories'];
-  getSavedWebUiPreferences: () => ReturnType<typeof readSavedWebUiPreferences>;
-} | null = null;
 
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
@@ -515,15 +505,6 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     getAuthFile: context.getAuthFile,
   };
 
-  localActivityCapabilityContext = {
-    getCurrentProfile: context.getCurrentProfile,
-    getRepoRoot: context.getRepoRoot,
-    getDefaultWebCwd: context.getDefaultWebCwd,
-    buildLiveSessionResourceOptions: context.buildLiveSessionResourceOptions,
-    buildLiveSessionExtensionFactories: context.buildLiveSessionExtensionFactories,
-    getSavedWebUiPreferences: context.getSavedWebUiPreferences,
-  };
-
   const routes: RegisteredRoute[] = [];
   const appRouter = createRouteCollector(routes);
   registerServerRoutes({
@@ -567,15 +548,6 @@ async function getLocalProviderDesktopCapabilityContext(): Promise<ProviderDeskt
   }
 
   return localProviderDesktopCapabilityContext;
-}
-
-async function getLocalActivityCapabilityContext() {
-  await getLocalRoutes();
-  if (!localActivityCapabilityContext) {
-    throw new Error('Local activity capability context is not initialized.');
-  }
-
-  return localActivityCapabilityContext;
 }
 
 function expandHomePath(value: string): string {
@@ -1154,7 +1126,6 @@ export async function readDesktopAppStatus() {
   return {
     profile: context.getCurrentProfile(),
     repoRoot: context.getRepoRoot(),
-    activityCount: 0,
     webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
   };
 }
@@ -1643,12 +1614,17 @@ export async function runDesktopScheduledTask(taskId: string) {
 }
 
 export async function markDesktopConversationAttention(input: { conversationId: string; read?: boolean }) {
-  const context = await getLocalActivityCapabilityContext();
-  const updated = markConversationAttentionCapability(context.getCurrentProfile(), input.conversationId, input.read !== false);
+  const context = await getLocalServerRouteContext();
+  const updated = toggleConversationAttention({
+    profile: context.getCurrentProfile(),
+    conversationId: input.conversationId,
+    read: input.read !== false,
+  });
   if (!updated) {
     throw new Error('Conversation not found');
   }
 
+  invalidateAppTopics('sessions');
   return { ok: true as const };
 }
 

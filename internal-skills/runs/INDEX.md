@@ -138,7 +138,7 @@ Use runs when you want to avoid blocking the current thread. Then inspect the ru
 
 If the outcome should eventually drive user attention, pair that behavior with the appropriate surface:
 
-- activity / inbox for passive async follow-up
+- the owning conversation/thread for passive async follow-up
 - reminder / notification delivery for interrupting follow-up
 - conversation wakeup if the result should resume a specific thread
 

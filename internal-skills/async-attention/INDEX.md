@@ -59,23 +59,21 @@ Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
 | --- | --- | --- | --- |
 | Passive async summary tied to owned work | surface the owning conversation or automation | passive | conversation/automation + logs |
 | Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + logs |
-| Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer activity or surfaced conversation attention when visibility matters | wakeup + notification state + activity/state |
+| Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer surfaced conversation attention or OS delivery when visibility matters | wakeup + notification state |
 | Agent should continue this conversation later | deferred resume | usually passive unless paired with notification delivery | wakeup + conversation |
-| Scheduled automation completes later | task activity, optionally callback into a conversation | passive by default | task log + activity + optional conversation wakeup |
-| High-signal blocked or failed background work | activity or surfaced conversation attention, optionally with reminder state under the hood | visible in inbox/conversation attention | conversation or activity plus logs |
+| Scheduled automation completes later | automation-owned run history, optionally callback into a conversation | passive by default | task log + owning thread + optional conversation wakeup |
+| High-signal blocked or failed background work | surfaced conversation attention, optionally with reminder state under the hood | visible on the owning thread | conversation plus logs |
 
-## Inbox / activity
+## Owning surfaces
 
-Use activity when something happened and it is worth noticing later, but does not need to interrupt.
+There is no shared inbox or generic activity queue.
 
-Good fits:
+If something happened and it is worth noticing later, keep it on its owner:
 
-- scheduled task output
-- background failures worth reviewing later
-- daemon/system events worth surfacing
-- async work that finished outside the foreground thread
-
-If the event belongs to a known conversation, keep the durable result with that conversation and surface the conversation in the inbox instead of creating a duplicate visible row by default.
+- scheduled task output → automation detail + owning thread
+- background failures → owning conversation/thread
+- async work that finished outside the foreground thread → owning conversation/thread
+- daemon/system issues → diagnostics or selective OS notification
 
 See [Shared Inbox Removal](../inbox/INDEX.md).
 
@@ -90,7 +88,7 @@ Good fits:
 - blocked or failed background work that needs immediate attention
 - scheduled-task callbacks that should be hard to miss
 
-The current desktop/web UI does not render these notifications as inbox rows and does not trigger popup/browser delivery.
+The current desktop/web UI does not render these notifications as standalone rows and does not trigger popup/browser delivery.
 
 See [Reminders and Notification Delivery](../alerts/INDEX.md).
 
@@ -118,12 +116,11 @@ They:
 
 - run through the daemon
 - write logs and durable run state
-- create activity
+- stay attached to their owning automation/thread
 
 When explicitly bound back to a conversation, they can also create:
 
 - a conversation wakeup
-- linked activity
 - surfaced conversation attention when appropriate
 
 That is the right fit for things like:
@@ -136,9 +133,9 @@ That is the right fit for things like:
 Use these defaults:
 
 - **foreground work** stays in the conversation
-- **standalone async work** becomes activity
+- **standalone async work** should get an owner instead of falling into a shared queue
 - **async work tied to a dormant conversation** surfaces the conversation
-- **user-requested tell-me-later behavior** should usually become activity or surfaced conversation attention unless hidden reminder state is specifically needed
+- **user-requested tell-me-later behavior** should usually become surfaced conversation attention unless hidden reminder state is specifically needed
 - **agent-initiated continue-later behavior** becomes deferred resume
 
 
@@ -146,7 +143,7 @@ Use these defaults:
 
 Do not:
 
-- turn every reply into inbox activity
+- invent a shared inbox substitute for ordinary async work
 - rely on hidden reminder/callback notification delivery for ordinary passive async summaries
 - store the durable record only in the notification layer
 - use reminders when a scheduled task or deferred resume is the real need

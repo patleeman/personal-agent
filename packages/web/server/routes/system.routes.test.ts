@@ -147,7 +147,6 @@ describe('system routes', () => {
     expect(res.json).toHaveBeenCalledWith({
       profile: 'datadog',
       repoRoot: '/worktree',
-      activityCount: 0,
       webUiRevision: undefined,
     });
 

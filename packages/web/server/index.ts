@@ -124,15 +124,6 @@ import {
   resolvePromptReferences,
 } from './knowledge/promptReferences.js';
 import {
-  INBOX_RETENTION_MS,
-  listArchivedAttentionSessions,
-  listExpiredActivityRecords,
-  listExpiredAttentionSessions,
-  listStandaloneActivityRecords,
-} from './automation/inbox.js';
-import {
-  clearActivityConversationLinks,
-  deleteProfileActivityEntries,
   deleteConversationArtifact,
   deleteConversationAttachment,
   ensureConversationAttentionBaselines,
@@ -149,11 +140,10 @@ import {
   listConversationAttachments,
   inspectMcpServer,
   inspectMcpTool,
-  listProfileActivityEntries,
   listDeferredResumeRecords,
+  listProfileActivityEntries,
   loadDeferredResumeState,
   loadProfileActivityReadState,
-  markConversationAttentionRead,
   markConversationAttentionUnread,
   markDurableRunAttentionRead,
   markDurableRunAttentionUnread,
@@ -165,8 +155,6 @@ import {
   readMcpConfig,
   resolveConversationAttachmentPromptFiles,
   saveConversationAttachment,
-  saveProfileActivityReadState,
-  setActivityConversationLinks,
   summarizeConversationAttention,
 } from '@personal-agent/core';
 import {
@@ -283,162 +271,7 @@ const {
 
 void syncDaemonTaskScopeForProfile(getCurrentProfile());
 
-// ── Activity read-state ───────────────────────────────────────────────────────
-// Stored as a simple JSON set alongside activity files.
-function listActivityStateRoots(): Array<string | undefined> {
-  try {
-    return [undefined, resolveDaemonRoot()];
-  } catch {
-    return [undefined];
-  }
-}
-
-function loadReadState(stateRoot: string | undefined, profile = getCurrentProfile()): Set<string> {
-  return loadProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile });
-}
-
-function saveReadState(ids: Set<string>, stateRoot: string | undefined, profile = getCurrentProfile()) {
-  try {
-    saveProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile, ids });
-  } catch { /* ignore */ }
-}
-
 const SETTINGS_FILE = DEFAULT_RUNTIME_SETTINGS_FILE;
-const ACTIVITY_ATTENTION_CULL_INTERVAL_MS = 5 * 60 * 1000;
-let cullingActivityAttention = false;
-
-function readOpenConversationIds(): Set<string> {
-  try {
-    const saved = readSavedWebUiPreferences(SETTINGS_FILE);
-    return new Set([...saved.openConversationIds, ...saved.pinnedConversationIds]);
-  } catch {
-    return new Set();
-  }
-}
-
-function deleteActivityIdsForProfile(profile: string, activityIds: Iterable<string>): string[] {
-  const requestedIds = [...new Set(Array.from(activityIds)
-    .filter((activityId): activityId is string => typeof activityId === 'string')
-    .map((activityId) => activityId.trim())
-    .filter((activityId) => activityId.length > 0))];
-
-  if (requestedIds.length === 0) {
-    return [];
-  }
-
-  const requestedIdSet = new Set(requestedIds);
-  const deletedIds = new Set<string>();
-
-  for (const stateRoot of listActivityStateRoots()) {
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
-    const matchingEntries = entries.filter(({ entry }) => requestedIdSet.has(entry.id));
-    if (matchingEntries.length === 0) {
-      continue;
-    }
-
-    const deletedInStateRoot = deleteProfileActivityEntries({
-      repoRoot: REPO_ROOT,
-      stateRoot,
-      profile,
-      activityIds: matchingEntries.map(({ entry }) => entry.id),
-    });
-
-    for (const activityId of deletedInStateRoot) {
-      clearActivityConversationLinks({ stateRoot, profile, activityId });
-      deletedIds.add(activityId);
-    }
-
-    const readState = loadReadState(stateRoot, profile);
-    let readStateChanged = false;
-    for (const { entry } of matchingEntries) {
-      readStateChanged = readState.delete(entry.id) || readStateChanged;
-    }
-    if (readStateChanged) {
-      saveReadState(readState, stateRoot, profile);
-    }
-  }
-
-  return [...deletedIds];
-}
-
-function markConversationSessionsRead(profile: string, sessions: Array<{ id: string; messageCount: number }>): string[] {
-  const dedupedSessions = [...new Map(sessions.map((session) => [session.id, session])).values()];
-
-  for (const session of dedupedSessions) {
-    markConversationAttentionRead({
-      profile,
-      conversationId: session.id,
-      messageCount: session.messageCount,
-    });
-  }
-
-  return dedupedSessions.map((session) => session.id);
-}
-
-function clearActivityAttentionForCurrentProfile() {
-  const profile = getCurrentProfile();
-  const sessions = listConversationSessionsSnapshot();
-  const activityRecords = listActivityRecordsForProfile(profile);
-  const standaloneActivities = listStandaloneActivityRecords(activityRecords, sessions.map((session) => session.id));
-  const archivedAttentionSessions = listArchivedAttentionSessions(sessions, readOpenConversationIds());
-  const deletedActivityIds = deleteActivityIdsForProfile(profile, standaloneActivities.map((record) => record.entry.id));
-  const clearedConversationIds = markConversationSessionsRead(profile, archivedAttentionSessions);
-
-  if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
-    invalidateAppTopics('sessions');
-  }
-
-  return {
-    deletedActivityIds,
-    clearedConversationIds,
-  };
-}
-
-function cullExpiredActivityAttentionItems() {
-  if (cullingActivityAttention) {
-    return { deletedActivityIds: [], clearedConversationIds: [] };
-  }
-
-  cullingActivityAttention = true;
-
-  try {
-    const profile = getCurrentProfile();
-    const cutoffMs = Date.now() - INBOX_RETENTION_MS;
-    const expiredActivityIds = listExpiredActivityRecords(listActivityRecordsForProfile(profile), cutoffMs)
-      .map((record) => record.entry.id);
-    const deletedActivityIds = deleteActivityIdsForProfile(profile, expiredActivityIds);
-
-    const sessions = listConversationSessionsSnapshot();
-    const archivedAttentionSessions = listArchivedAttentionSessions(sessions, readOpenConversationIds());
-    const clearedConversationIds = markConversationSessionsRead(
-      profile,
-      listExpiredAttentionSessions(archivedAttentionSessions, cutoffMs),
-    );
-
-    if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
-      invalidateAppTopics('sessions');
-    }
-
-    return {
-      deletedActivityIds,
-      clearedConversationIds,
-    };
-  } finally {
-    cullingActivityAttention = false;
-  }
-}
-
-function startActivityAttentionCullLoop(): void {
-  void Promise.resolve().then(() => cullExpiredActivityAttentionItems()).catch((error) => {
-    logWarn(`Activity attention cull failed: ${(error as Error).message}`);
-  });
-
-  setInterval(() => {
-    void Promise.resolve().then(() => cullExpiredActivityAttentionItems()).catch((error) => {
-      logWarn(`Activity attention cull failed: ${(error as Error).message}`);
-    });
-  }, ACTIVITY_ATTENTION_CULL_INTERVAL_MS);
-}
 
 type ActivityEntryWithConversationLinks = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
   relatedConversationIds?: string[];
@@ -450,9 +283,17 @@ type ActivityRecord = {
   read: boolean;
 };
 
-type ActivityListEntry = ActivityEntryWithConversationLinks & {
-  read: boolean;
-};
+function listActivityStateRoots(): Array<string | undefined> {
+  try {
+    return [undefined, resolveDaemonRoot()];
+  } catch {
+    return [undefined];
+  }
+}
+
+function loadActivityReadState(stateRoot: string | undefined, profile = getCurrentProfile()): Set<string> {
+  return loadProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile });
+}
 
 function attachActivityConversationLinks(
   profile: string,
@@ -479,7 +320,7 @@ function listActivityRecordsForProfile(profile = getCurrentProfile()): ActivityR
   const records: ActivityRecord[] = [];
 
   for (const stateRoot of listActivityStateRoots()) {
-    const readState = loadReadState(stateRoot, profile);
+    const readState = loadActivityReadState(stateRoot, profile);
     const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
 
     for (const { entry } of entries) {
@@ -517,68 +358,6 @@ function listActivityRecordsForProfile(profile = getCurrentProfile()): ActivityR
   }
 
   return deduped;
-}
-
-function listActivityForProfile(profile = getCurrentProfile()): ActivityListEntry[] {
-  return listActivityRecordsForProfile(profile).map(({ entry, read }) => ({
-    ...entry,
-    read,
-  }));
-}
-
-function findActivityRecord(profile: string, activityId: string): ActivityRecord | undefined {
-  return listActivityRecordsForProfile(profile).find((record) => record.entry.id === activityId);
-}
-
-function markActivityReadState(profile: string, activityId: string, read: boolean): boolean {
-  let changed = false;
-
-  for (const stateRoot of listActivityStateRoots()) {
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
-    if (!entries.some(({ entry }) => entry.id === activityId)) {
-      continue;
-    }
-
-    const state = loadReadState(stateRoot, profile);
-    if (read) {
-      state.add(activityId);
-    } else {
-      state.delete(activityId);
-    }
-    saveReadState(state, stateRoot, profile);
-    changed = true;
-  }
-
-  return changed;
-}
-
-function listActivityForCurrentProfile() {
-  return listActivityForProfile(getCurrentProfile());
-}
-
-function buildActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {
-  const lines = [
-    'Activity context for this conversation:',
-    `- activity id: ${entry.id}`,
-    `- kind: ${entry.kind}`,
-    `- created at: ${entry.createdAt}`,
-    `- summary: ${entry.summary}`,
-  ];
-
-  if (entry.notificationState) {
-    lines.push(`- notification state: ${entry.notificationState}`);
-  }
-
-  if (entry.relatedProjectIds && entry.relatedProjectIds.length > 0) {
-    lines.push(`- related projects: ${entry.relatedProjectIds.join(', ')}`);
-  }
-
-  if (entry.details && entry.details.trim().length > 0) {
-    lines.push('', 'Details:', entry.details.trim());
-  }
-
-  lines.push('', 'Use this activity item as durable context for follow-up in this conversation.');
-  return lines.join('\n');
 }
 
 function listTasksForCurrentProfile() {
@@ -1108,8 +887,6 @@ startConversationRecovery({
   queuePromptContext,
   promptSession: promptLocalSession,
 });
-startActivityAttentionCullLoop();
-
 const DIST_DIR =
   process.env.PA_WEB_DIST ??
   join(dirname(fileURLToPath(import.meta.url)), '../dist');

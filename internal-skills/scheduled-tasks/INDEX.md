@@ -24,7 +24,7 @@ Good fits:
 - morning reports
 - recurring reviews
 - unattended background prompts
-- automation that should surface attention in the inbox
+- automation that should surface attention on its owning thread
 - task-style work that may optionally callback into a conversation later
 
 Do not confuse scheduled tasks with:
@@ -127,7 +127,7 @@ Important behavior to understand:
 - overlap is prevented; if one run is still active, the next due run is skipped
 - retries happen up to the configured retry limit
 - each run writes a log
-- successful and failed runs create local inbox activity by default when the task file lives under profile resources
+- successful and failed runs stay on the automation and its owning thread by default
 - tasks are still passive by default; they do not become interrupting reminders unless explicitly wired back to a conversation
 
 One-time tasks resolve once and do not run again.
@@ -148,7 +148,7 @@ When enabled, a task completion or failure can create:
 
 - a conversation wakeup
 - an alert
-- the usual activity/log trail
+- the usual run/log trail on the owning thread
 
 This is the right fit for:
 
@@ -245,13 +245,13 @@ pa tasks validate --all
 2. use `pa tasks list`, `pa tasks show <id>`, and `pa tasks logs <id>` to inspect SQLite-backed automations from the CLI
 3. if you still manage legacy `*.task.md` files, validate them with `pa tasks validate --all` before expecting them to import cleanly
 4. check daemon status with `pa daemon status`
-5. look for the resulting activity in the inbox if the automation is meant to surface attention
+5. look for the resulting run/status on the automation and its owning thread if the automation is meant to surface attention
 
 ## Related docs
 
 - [Decision Guide](../../docs/decision-guide.md)
 - [Async Attention and Wakeups](../async-attention/INDEX.md)
 - [Daemon and Background Automation](../../docs/daemon.md)
-- [Inbox and Activity](../inbox/INDEX.md)
+- [Shared Inbox Removal](../inbox/INDEX.md)
 - [Tracked Pages](../../docs/projects.md)
 - [Runs](../runs/INDEX.md)
