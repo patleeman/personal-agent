@@ -517,8 +517,6 @@ export interface SessionDetailAppendOnlyResponse {
 export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse | SessionDetailAppendOnlyResponse;
 
 export type AppEventTopic =
-  | 'activity'
-  | 'alerts'
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'

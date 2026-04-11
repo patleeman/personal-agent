@@ -36,8 +36,6 @@ export function useLiveTitles() {
 export type AppEventVersions = Record<AppEventTopic, number>;
 
 export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
-  activity: 0,
-  alerts: 0,
   sessions: 0,
   sessionFiles: 0,
   artifacts: 0,

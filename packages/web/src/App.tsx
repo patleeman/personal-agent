@@ -38,7 +38,6 @@ import { ThemeProvider } from './theme';
 import { createSessionMetaRefreshScheduler } from './sessionMetaRefreshScheduler';
 import type {
   AppEvent,
-  AppEventTopic,
   DaemonState,
   DesktopAppEvent,
   DurableRunListResult,
@@ -368,7 +367,10 @@ export function App() {
         setEventVersions((prev) => {
           const next = { ...prev };
           for (const topic of payload.topics) {
-            next[topic as AppEventTopic] += 1;
+            if (topic in next) {
+              const trackedTopic = topic as keyof typeof next;
+              next[trackedTopic] += 1;
+            }
           }
           return next;
         });
