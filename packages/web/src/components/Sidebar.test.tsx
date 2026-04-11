@@ -205,7 +205,7 @@ describe('Sidebar', () => {
 
     expect(html).toContain('Single-line timestamp row');
     expect(html).toContain('ui-sidebar-session-time');
-    expect(html).toContain('30m ago');
+    expect(html).toContain('30m');
   });
 
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
@@ -291,7 +291,7 @@ describe('Sidebar', () => {
     expect(html).toContain('Chat');
     expect(html).toContain('ui-sidebar-nav-item-active');
     expect(html).toContain('ui-sidebar-session-time');
-    expect(html).toContain('30m ago');
+    expect(html).toContain('30m');
     expect(html).not.toContain('aria-label="Conversation actions: Clarify background run link"');
     expect(html).not.toContain('aria-label="Pin"');
     expect(html).not.toContain('>Conversations<');

@@ -21,7 +21,7 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
-import { timeAgo } from '../utils';
+import { timeAgoCompact } from '../utils';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
 import { getDesktopBridge } from '../desktopBridge';
@@ -668,7 +668,7 @@ function OpenConversationRow({
           </div>
         ) : (
           <span className="ui-sidebar-session-meta ui-sidebar-session-time shrink-0 whitespace-nowrap">
-            {timeAgo(session.timestamp)}
+            {timeAgoCompact(session.timestamp)}
           </span>
         )}
       </div>
