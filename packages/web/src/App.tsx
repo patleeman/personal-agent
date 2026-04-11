@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { resolveWebRouteRedirect } from './routes';
 import { api } from './api';
@@ -7,6 +7,7 @@ import { normalizeAppEvent } from './appEventTransport';
 import { subscribeDesktopAppEvents } from './desktopAppEvents';
 import { readDesktopEnvironment } from './desktopBridge';
 import { createDesktopAwareEventSource } from './desktopEventSource';
+import { lazyRouteWithRecovery } from './lazyRouteRecovery';
 import { Layout } from './components/Layout';
 import { resolveConversationIndexRedirect } from './conversationRoutes';
 import {
@@ -124,10 +125,10 @@ function DeletedStandaloneAdminRedirect() {
   return <Navigate to="/settings" replace />;
 }
 
-const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
-const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
-const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
+const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
+const SystemPage = lazyRouteWithRecovery('system-page', () => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
+const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (

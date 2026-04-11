@@ -131,6 +131,8 @@ Live updates include:
 
 In browser mode those updates arrive over SSE. In local Electron mode, app bootstrap and hot app-state updates now go through a dedicated desktop bridge capability, while the remaining stream-heavy surfaces bridge through the Electron main process. If live transport is temporarily offline, the UI falls back to snapshot refreshes when it can.
 
+Route-level lazy chunks also self-heal once when the app is holding a stale bundle reference after a local rebuild or desktop asset swap. Instead of leaving the operator on a render-error screen, the UI performs a single reload and then retries with the fresh asset manifest.
+
 ## Electron desktop shell integration
 
 When the UI runs inside the Electron shell it gains desktop-specific chrome and actions:
