@@ -12,7 +12,7 @@ import {
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import {
-  clearInboxForCurrentProfile,
+  clearActivityAttentionForCurrentProfile,
   listActivityForCurrentProfile,
 } from './inboxService.js';
 
@@ -35,7 +35,7 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-describe('inboxService clearInboxForCurrentProfile', () => {
+describe('inboxService clearActivityAttentionForCurrentProfile', () => {
   it('deletes surfaced standalone activity and clears archived conversation attention', () => {
     const stateRoot = createTempStateRoot();
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
@@ -81,7 +81,7 @@ describe('inboxService clearInboxForCurrentProfile', () => {
       ids: ['standalone'],
     });
 
-    const result = clearInboxForCurrentProfile({
+    const result = clearActivityAttentionForCurrentProfile({
       profile: 'assistant',
       sessions: [{ id: 'conv-1', messageCount: 4, needsAttention: true }],
       openConversationIds: [],

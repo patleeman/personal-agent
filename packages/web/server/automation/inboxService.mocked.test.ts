@@ -47,7 +47,7 @@ vi.mock('./inbox.js', () => ({
 }));
 
 import {
-  clearInboxForCurrentProfile,
+  clearActivityAttentionForCurrentProfile,
   findActivityRecord,
   listActivityForCurrentProfile,
   markActivityReadState,
@@ -186,7 +186,7 @@ describe('inboxService', () => {
       throw new Error('disk full');
     });
 
-    expect(clearInboxForCurrentProfile({
+    expect(clearActivityAttentionForCurrentProfile({
       profile: 'assistant',
       sessions: [{ id: 'conversation-1', messageCount: 2, needsAttention: true }],
       openConversationIds: ['conversation-3'],
@@ -233,7 +233,7 @@ describe('inboxService', () => {
     listStandaloneActivityRecordsMock.mockReturnValue([]);
     listArchivedAttentionSessionsMock.mockReturnValue([]);
 
-    expect(clearInboxForCurrentProfile({
+    expect(clearActivityAttentionForCurrentProfile({
       profile: 'assistant',
       sessions: [],
       openConversationIds: [],

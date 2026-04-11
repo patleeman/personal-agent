@@ -44,7 +44,7 @@ function saveReadState(stateRoot: string | undefined, profile: string, ids: Set<
   try {
     saveProfileActivityReadState({ stateRoot, profile, ids });
   } catch {
-    // Ignore read-state write failures for inbox best-effort mutations.
+    // Ignore read-state write failures for activity best-effort mutations.
   }
 }
 
@@ -207,7 +207,7 @@ export function markActivityReadState(profile: string, activityId: string, read:
   return changed;
 }
 
-export function clearInboxForCurrentProfile(input: {
+export function clearActivityAttentionForCurrentProfile(input: {
   profile: string;
   sessions: Array<{ id: string; messageCount: number; needsAttention?: boolean }>;
   openConversationIds: Iterable<string>;

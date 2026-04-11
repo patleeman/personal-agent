@@ -8,7 +8,7 @@ import { createSession as createLiveSession, queuePromptContext } from '../conve
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import {
-  clearInboxForCurrentProfile,
+  clearActivityAttentionForCurrentProfile,
   findActivityRecord,
   listActivityForCurrentProfile,
   markActivityReadState,
@@ -120,7 +120,7 @@ export function clearActivityAttentionCapability(
     preferences,
   });
 
-  const result = clearInboxForCurrentProfile({
+  const result = clearActivityAttentionForCurrentProfile({
     profile,
     sessions: listConversationSessionsSnapshot(),
     openConversationIds,

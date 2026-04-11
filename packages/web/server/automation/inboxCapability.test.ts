@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  clearInboxForCurrentProfileMock,
+  clearActivityAttentionForCurrentProfileMock,
   createLiveSessionMock,
   findActivityRecordMock,
   invalidateAppTopicsMock,
@@ -13,7 +13,7 @@ const {
   setActivityConversationLinksMock,
   toggleConversationAttentionMock,
 } = vi.hoisted(() => ({
-  clearInboxForCurrentProfileMock: vi.fn(),
+  clearActivityAttentionForCurrentProfileMock: vi.fn(),
   createLiveSessionMock: vi.fn(),
   findActivityRecordMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('@personal-agent/core', async (importOriginal) => {
 });
 
 vi.mock('./inboxService.js', () => ({
-  clearInboxForCurrentProfile: clearInboxForCurrentProfileMock,
+  clearActivityAttentionForCurrentProfile: clearActivityAttentionForCurrentProfileMock,
   findActivityRecord: findActivityRecordMock,
   listActivityForCurrentProfile: listActivityForCurrentProfileMock,
   markActivityReadState: markActivityReadStateMock,
@@ -70,7 +70,7 @@ import {
 
 describe('activityAttentionCapability', () => {
   beforeEach(() => {
-    clearInboxForCurrentProfileMock.mockReset();
+    clearActivityAttentionForCurrentProfileMock.mockReset();
     createLiveSessionMock.mockReset();
     findActivityRecordMock.mockReset();
     invalidateAppTopicsMock.mockReset();
@@ -125,7 +125,7 @@ describe('activityAttentionCapability', () => {
 
   it('clears activity attention state and invalidates when entries change', () => {
     listConversationSessionsSnapshotMock.mockReturnValue([{ id: 'conversation-1', messageCount: 3 }]);
-    clearInboxForCurrentProfileMock
+    clearActivityAttentionForCurrentProfileMock
       .mockReturnValueOnce({
         deletedActivityIds: ['activity-1'],
         clearedConversationIds: ['conversation-1'],
@@ -153,12 +153,12 @@ describe('activityAttentionCapability', () => {
       clearedConversationIds: [],
     });
 
-    expect(clearInboxForCurrentProfileMock).toHaveBeenNthCalledWith(1, {
+    expect(clearActivityAttentionForCurrentProfileMock).toHaveBeenNthCalledWith(1, {
       profile: 'assistant',
       sessions: [{ id: 'conversation-1', messageCount: 3 }],
       openConversationIds: ['open-1', 'pinned-1'],
     });
-    expect(clearInboxForCurrentProfileMock).toHaveBeenNthCalledWith(2, {
+    expect(clearActivityAttentionForCurrentProfileMock).toHaveBeenNthCalledWith(2, {
       profile: 'assistant',
       sessions: [{ id: 'conversation-1', messageCount: 3 }],
       openConversationIds: ['pinned-2'],
