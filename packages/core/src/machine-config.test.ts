@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   getMachineConfigFilePath,
   readMachineConfigSection,
+  readMachineInstructionFiles,
   readMachineVaultRoot,
   updateMachineConfigSection,
   writeMachineDefaultProfile,
+  writeMachineInstructionFiles,
   writeMachineVaultRoot,
 } from './machine-config.js';
 
@@ -77,6 +79,32 @@ describe('machine config', () => {
 
     writeMachineVaultRoot('', { configRoot: configDir });
     expect(readMachineVaultRoot({ configRoot: configDir })).toBe('');
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
+  });
+
+  it('reads and writes instruction files in config.json', () => {
+    const configDir = createTempDir('pa-machine-config-');
+
+    writeMachineInstructionFiles([
+      '/Users/patrick/Documents/personal-agent/AGENTS.md',
+      '  /Users/patrick/Documents/personal-agent/skills/checkpoint/SKILL.md  ',
+      '/Users/patrick/Documents/personal-agent/AGENTS.md',
+      '',
+    ], { configRoot: configDir });
+
+    expect(readMachineInstructionFiles({ configRoot: configDir })).toEqual([
+      '/Users/patrick/Documents/personal-agent/AGENTS.md',
+      '/Users/patrick/Documents/personal-agent/skills/checkpoint/SKILL.md',
+    ]);
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({
+      instructionFiles: [
+        '/Users/patrick/Documents/personal-agent/AGENTS.md',
+        '/Users/patrick/Documents/personal-agent/skills/checkpoint/SKILL.md',
+      ],
+    });
+
+    writeMachineInstructionFiles([], { configRoot: configDir });
+    expect(readMachineInstructionFiles({ configRoot: configDir })).toEqual([]);
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
   });
 });

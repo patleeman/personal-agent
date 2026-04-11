@@ -22,7 +22,7 @@ A few workspace-aware pieces still exist:
 - conversations still track a working directory
 - folder picking still exists where cwd matters
 - file mentions and repo-aware context still inform conversation state
-- settings still expose workspace and vault information
+- settings still expose workspace and vault information, with folder pickers for local path fields
 
 But there is no dedicated day-to-day `/workspace/files` or `/workspace/changes` surface anymore.
 

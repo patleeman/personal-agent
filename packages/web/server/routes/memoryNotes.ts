@@ -5,7 +5,7 @@
 import type { Express, Request } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { getProfilesRoot } from '@personal-agent/core';
+import { getDurableAgentFilePath, getProfilesRoot, getVaultRoot } from '@personal-agent/core';
 import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
 import {
   buildRecentReadUsage,
@@ -50,6 +50,8 @@ function resolveRequestedProfileFromQuery(req: Request): string {
 
 function inferAgentSource(filePath: string, profile: string): string {
   const profilesRoot = getProfilesRoot();
+  const baseAgentFile = getDurableAgentFilePath(getVaultRoot());
+  if (filePath === baseAgentFile) return 'shared';
   if (filePath.startsWith(`${profilesRoot}/${profile}/`)) return 'profile';
   if (filePath.includes('/skills/')) return 'global';
   return 'project';

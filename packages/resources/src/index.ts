@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import {
+  getDurableAgentFilePath,
   getDurableModelsDir as getCanonicalLegacyDurableModelsDir,
   getDurableNodesDir as getCanonicalDurableNodesDir,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
@@ -11,6 +12,7 @@ import {
   getLocalProfileDir as getCanonicalLocalProfileDir,
   getVaultRoot,
   listUnifiedSkillNodeDirs,
+  readMachineInstructionFiles,
 } from '@personal-agent/core';
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
@@ -19,12 +21,11 @@ import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
-function buildVaultRootAppendSystemChunk(): string {
-  const vaultRoot = getVaultRoot();
+function buildVaultRootAppendSystemChunk(vaultRoot: string = getVaultRoot()): string {
   return [
     '## Durable knowledge vault',
     `The canonical durable knowledge vault root is: ${vaultRoot}`,
-    'Use this path when you need to read or write durable notes, projects, skills, or profile files.',
+    'Use this path when you need to read or write durable notes, projects, skills, or root instruction files.',
     'Treat the vault as the source of truth for durable knowledge; do not assume those files live under the runtime state subtree.',
   ].join('\n');
 }
@@ -563,6 +564,7 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   if (
     repoDefaultsAgentDir
+    || Boolean(resolveSharedVaultAgentFile(options))
     || rootHasSharedDurableResources(getLegacySettingsRoot(options), ['.json'])
     || rootHasSharedDurableResources(getLegacyModelsRoot(options), ['.json'])
     || existsSync(getNodesRoot(options))
@@ -597,6 +599,13 @@ function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string
     .filter((value): value is string => value !== undefined);
 
   return dedupe(files);
+}
+
+function resolveConfiguredInstructionFiles(): string[] {
+  return dedupe(readMachineInstructionFiles().flatMap((path) => {
+    const file = existingFile(path);
+    return file ? [file] : [];
+  }));
 }
 
 function isScopeAlias(value: string): boolean {
@@ -759,9 +768,29 @@ function validateProfileName(profileName: string): void {
   }
 }
 
-function resolveDurableAgentFile(profileName: string, options: ResolveProfileOptions = {}): string | undefined {
-  return existingFile(resolveProfileAgentFilePath(profileName, options))
-    ?? existingFile(resolveLegacyProfileAgentFilePath(profileName, options));
+function resolveSharedVaultAgentFile(options: ResolveProfileOptions = {}): string | undefined {
+  return existingFile(getDurableAgentFilePath(getSyncRootFromProfilesRoot(getProfilesRoot(options))));
+}
+
+function resolveDurableAgentFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
+  const output: string[] = [];
+  const sharedAgent = resolveSharedVaultAgentFile(options)
+    ?? existingFile(resolveProfileAgentFilePath('shared', options))
+    ?? existingFile(resolveLegacyProfileAgentFilePath('shared', options));
+  const profileAgent = profileName === 'shared'
+    ? undefined
+    : existingFile(resolveProfileAgentFilePath(profileName, options))
+      ?? existingFile(resolveLegacyProfileAgentFilePath(profileName, options));
+
+  if (sharedAgent) {
+    output.push(sharedAgent);
+  }
+
+  if (profileAgent) {
+    output.push(profileAgent);
+  }
+
+  return dedupe(output);
 }
 
 function resolveDurableSettingsFiles(profileName: string, knownProfiles: Set<string>, options: ResolveProfileOptions = {}): string[] {
@@ -835,7 +864,8 @@ export function resolveResourceProfile(
   const localBase = resolveLocalProfileDir(options);
   const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
 
-  const durableAgentFile = resolveDurableAgentFile(profileName, options);
+  const durableAgentFiles = resolveDurableAgentFiles(profileName, options);
+  const configuredInstructionFiles = resolveConfiguredInstructionFiles();
   const durableSettingsFiles = resolveDurableSettingsFiles(profileName, knownProfiles, options);
   const durableModelsFiles = resolveDurableModelsFiles(profileName, knownProfiles, options);
   const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { profilesRoot });
@@ -847,7 +877,7 @@ export function resolveResourceProfile(
   }
 
   if (
-    Boolean(durableAgentFile)
+    durableAgentFiles.length > 0
     || durableSettingsFiles.length > 0
     || durableModelsFiles.length > 0
     || durableSkillDirs.length > 0
@@ -906,7 +936,8 @@ export function resolveResourceProfile(
     themeEntries,
     agentsFiles: dedupe([
       ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'AGENTS.md'),
-      ...(durableAgentFile ? [durableAgentFile] : []),
+      ...durableAgentFiles,
+      ...configuredInstructionFiles,
       ...collectLayerFiles(localLayers, 'AGENTS.md'),
     ]),
     appendSystemFiles: collectLayerFiles(layers.filter((layer) => layer.name !== 'durable'), 'APPEND_SYSTEM.md'),
@@ -1047,7 +1078,7 @@ export function materializeProfileToAgentDir(
     : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
-    buildVaultRootAppendSystemChunk(),
+    buildVaultRootAppendSystemChunk(getSyncRootFromProfilesRoot(profile.profilesRoot)),
     fileAppendContent ?? '',
   ]);
 

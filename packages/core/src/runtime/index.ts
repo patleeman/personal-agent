@@ -24,6 +24,7 @@ export {
   getDurableSessionsDir,
   getDurableConversationAttentionDir,
   getDurableProfilesDir,
+  getDurableAgentFilePath,
   getDurableProfileDir,
   getDurableProfileAgentFilePath,
   getDurableProfileSettingsFilePath,

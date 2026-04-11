@@ -19,6 +19,12 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
+function configureStateEnv(stateRoot: string): void {
+  process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', '_profiles');
+}
+
 function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROOT ?? ''): string {
   const repo = createTempDir('personal-agent-cli-repo-');
 
@@ -33,8 +39,8 @@ function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROO
   );
 
   if (stateRoot) {
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', '_profiles', 'datadog.json'), '{"title":"Datadog"}\n');
+    writeFile(join(stateRoot, 'sync', '_profiles', 'datadog', 'AGENTS.md'), '# Datadog\n');
   }
 
   return repo;
@@ -66,6 +72,7 @@ echo "ok"
 beforeEach(() => {
   const configDir = createTempDir('personal-agent-cli-config-');
   const configPath = join(configDir, 'config.json');
+  const stateRoot = createTempDir('personal-agent-cli-state-');
   writeFileSync(configPath, JSON.stringify({ defaultProfile: 'shared' }));
 
   process.env = {
@@ -74,7 +81,9 @@ beforeEach(() => {
     PERSONAL_AGENT_NO_DAEMON_PROMPT: '1',
     PERSONAL_AGENT_CONFIG_FILE: configPath,
     PERSONAL_AGENT_LOCAL_PROFILE_DIR: createTempDir('personal-agent-cli-local-'),
-    PERSONAL_AGENT_STATE_ROOT: createTempDir('personal-agent-cli-state-'),
+    PERSONAL_AGENT_STATE_ROOT: stateRoot,
+    PERSONAL_AGENT_VAULT_ROOT: join(stateRoot, 'sync'),
+    PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', '_profiles'),
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
 });
@@ -97,7 +106,7 @@ describe('CLI command flows', () => {
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    configureStateEnv(stateRoot);
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
@@ -133,7 +142,7 @@ describe('CLI command flows', () => {
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    configureStateEnv(stateRoot);
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     expect(await runCli(['profile', 'use', 'shared'])).toBe(0);
@@ -204,7 +213,7 @@ describe('CLI command flows', () => {
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    configureStateEnv(stateRoot);
 
     expect(await runCli(['profile', 'use'])).toBe(1);
     expect(await runCli(['doctor', '--profile', 'datadog'])).toBe(1);
@@ -220,7 +229,7 @@ describe('CLI command flows', () => {
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    configureStateEnv(stateRoot);
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
     expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);

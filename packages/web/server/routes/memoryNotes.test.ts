@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   buildRecentReadUsageMock,
   existsSyncMock,
+  getDurableAgentFilePathMock,
   getProfilesRootMock,
   getVaultRootMock,
   listMemoryDocsMock,
@@ -16,6 +17,7 @@ const {
 } = vi.hoisted(() => ({
   buildRecentReadUsageMock: vi.fn(),
   existsSyncMock: vi.fn(),
+  getDurableAgentFilePathMock: vi.fn(() => '/vault/AGENTS.md'),
   getProfilesRootMock: vi.fn(() => '/profiles'),
   getVaultRootMock: vi.fn(() => '/vault'),
   listMemoryDocsMock: vi.fn(),
@@ -38,6 +40,7 @@ vi.mock('node:fs', async (importOriginal) => {
 });
 
 vi.mock('@personal-agent/core', () => ({
+  getDurableAgentFilePath: getDurableAgentFilePathMock,
   getProfilesRoot: getProfilesRootMock,
   getVaultRoot: getVaultRootMock,
 }));
@@ -101,6 +104,7 @@ describe('registerMemoryNotesRoutes', () => {
   beforeEach(() => {
     buildRecentReadUsageMock.mockReset();
     existsSyncMock.mockReset();
+    getDurableAgentFilePathMock.mockClear();
     getProfilesRootMock.mockClear();
     getVaultRootMock.mockClear();
     listMemoryDocsMock.mockReset();
@@ -131,10 +135,10 @@ describe('registerMemoryNotesRoutes', () => {
       agentsFiles: [
         '/profiles/other/AGENTS.md',
         '/shared/skills/agent-browser/SKILL.md',
-        '/repo/AGENTS.md',
+        '/vault/AGENTS.md',
       ],
     });
-    existsSyncMock.mockImplementation((path: string) => path !== '/repo/AGENTS.md');
+    existsSyncMock.mockImplementation((path: string) => path !== '/vault/AGENTS.md');
     readFileSyncMock.mockImplementation((path: string) => `content:${path}`);
     listSkillsForProfileMock.mockReturnValueOnce(skills);
     listMemoryDocsMock.mockReturnValueOnce(memoryDocs);
@@ -183,8 +187,8 @@ describe('registerMemoryNotesRoutes', () => {
           content: 'content:/shared/skills/agent-browser/SKILL.md',
         },
         {
-          source: 'project',
-          path: '/repo/AGENTS.md',
+          source: 'shared',
+          path: '/vault/AGENTS.md',
           exists: false,
           content: undefined,
         },

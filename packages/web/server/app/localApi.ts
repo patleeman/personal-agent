@@ -1334,7 +1334,7 @@ export async function updateDesktopVaultRoot(root: string | null) {
   return readDesktopVaultRoot();
 }
 
-export async function pickDesktopFolder(input: { cwd?: string | null } = {}) {
+export async function pickDesktopFolder(input: { cwd?: string | null; prompt?: string | null } = {}) {
   const context = await getLocalServerRouteContext();
   return pickFolderCapability(input, {
     getDefaultWebCwd: context.getDefaultWebCwd,

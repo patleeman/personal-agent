@@ -135,6 +135,9 @@ export function getVaultRoot(): string {
 
 /**
  * Default mutable profiles root directory.
+ *
+ * Profiles are legacy-only now, but the path helper remains so older callers can
+ * still discover legacy profile-scoped vault content when it exists.
  */
 export function getDefaultProfilesRoot(): string {
   return getDurableProfilesDir();
@@ -189,6 +192,10 @@ export function getDurableProfilesDir(vaultRoot: string = getVaultRoot()): strin
   return resolveDurableDir(vaultRoot, '_profiles', 'profiles');
 }
 
+export function getDurableAgentFilePath(vaultRoot: string = getVaultRoot()): string {
+  return join(vaultRoot, 'AGENTS.md');
+}
+
 export function getDurableProfileDir(profile: string, vaultRoot: string = getVaultRoot()): string {
   return join(getDurableProfilesDir(vaultRoot), profile);
 }
@@ -214,7 +221,7 @@ export function getDurableModelsDir(vaultRoot: string = getVaultRoot()): string 
 }
 
 export function getDurableSkillsDir(vaultRoot: string = getVaultRoot()): string {
-  return resolveDurableDir(vaultRoot, '_skills', 'skills');
+  return resolveDurableDir(vaultRoot, 'skills', '_skills');
 }
 
 export function getDurableNodesDir(vaultRoot: string = getVaultRoot()): string {

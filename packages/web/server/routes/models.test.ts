@@ -7,8 +7,10 @@ const {
   cancelProviderOAuthLoginMock,
   getAvailableModelsMock,
   getDefaultVaultRootMock,
+  getMachineConfigFilePathMock,
   getProviderOAuthLoginStateMock,
   getVaultRootMock,
+  readMachineInstructionFilesMock,
   invalidateAppTopicsMock,
   logErrorMock,
   normalizeSavedModelPreferencesMock,
@@ -30,6 +32,7 @@ const {
   subscribeProviderOAuthLoginMock,
   updateMachineConfigMock,
   upsertModelProviderMock,
+  writeMachineInstructionFilesMock,
   upsertModelProviderModelMock,
   writeSavedDefaultCwdPreferenceMock,
   writeSavedModelPreferencesMock,
@@ -37,8 +40,10 @@ const {
   cancelProviderOAuthLoginMock: vi.fn(),
   getAvailableModelsMock: vi.fn(),
   getDefaultVaultRootMock: vi.fn(),
+  getMachineConfigFilePathMock: vi.fn(),
   getProviderOAuthLoginStateMock: vi.fn(),
   getVaultRootMock: vi.fn(),
+  readMachineInstructionFilesMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   logErrorMock: vi.fn(),
   normalizeSavedModelPreferencesMock: vi.fn(),
@@ -60,6 +65,7 @@ const {
   subscribeProviderOAuthLoginMock: vi.fn(),
   updateMachineConfigMock: vi.fn(),
   upsertModelProviderMock: vi.fn(),
+  writeMachineInstructionFilesMock: vi.fn(),
   upsertModelProviderModelMock: vi.fn(),
   writeSavedDefaultCwdPreferenceMock: vi.fn(),
   writeSavedModelPreferencesMock: vi.fn(),
@@ -67,9 +73,12 @@ const {
 
 vi.mock('@personal-agent/core', () => ({
   getDefaultVaultRoot: getDefaultVaultRootMock,
+  getMachineConfigFilePath: getMachineConfigFilePathMock,
   getVaultRoot: getVaultRootMock,
   readMachineConfig: readMachineConfigMock,
+  readMachineInstructionFiles: readMachineInstructionFilesMock,
   updateMachineConfig: updateMachineConfigMock,
+  writeMachineInstructionFiles: writeMachineInstructionFilesMock,
 }));
 
 vi.mock('../models/modelPreferences.js', () => ({
@@ -240,8 +249,10 @@ describe('model routes', () => {
     cancelProviderOAuthLoginMock.mockReset();
     getAvailableModelsMock.mockReset();
     getDefaultVaultRootMock.mockReset();
+    getMachineConfigFilePathMock.mockReset();
     getProviderOAuthLoginStateMock.mockReset();
     getVaultRootMock.mockReset();
+    readMachineInstructionFilesMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     logErrorMock.mockReset();
     normalizeSavedModelPreferencesMock.mockReset();
@@ -264,13 +275,16 @@ describe('model routes', () => {
     updateMachineConfigMock.mockReset();
     upsertModelProviderMock.mockReset();
     upsertModelProviderModelMock.mockReset();
+    writeMachineInstructionFilesMock.mockReset();
     writeSavedDefaultCwdPreferenceMock.mockReset();
     writeSavedModelPreferencesMock.mockReset();
 
     getAvailableModelsMock.mockReturnValue([{ id: 'model-a', provider: 'provider-a', name: 'Model A' }]);
     getDefaultVaultRootMock.mockReturnValue('/default-vault');
+    getMachineConfigFilePathMock.mockReturnValue('/config/config.json');
     getProviderOAuthLoginStateMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     getVaultRootMock.mockReturnValue('/effective-vault');
+    readMachineInstructionFilesMock.mockImplementation(() => [...((machineConfig.instructionFiles as string[] | undefined) ?? [])]);
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'model-a',
       currentThinkingLevel: 'high',
@@ -288,6 +302,14 @@ describe('model routes', () => {
     subscribeProviderOAuthLoginMock.mockImplementation(() => vi.fn());
     updateMachineConfigMock.mockImplementation((updater: (current: unknown) => unknown) => {
       machineConfig = updater(machineConfig) as Record<string, unknown>;
+    });
+    writeMachineInstructionFilesMock.mockImplementation((instructionFiles: string[]) => {
+      machineConfig = instructionFiles.length > 0 ? { ...machineConfig, instructionFiles: [...instructionFiles] } : (() => {
+        const next = { ...machineConfig };
+        delete next.instructionFiles;
+        return next;
+      })();
+      return machineConfig;
     });
     upsertModelProviderMock.mockReturnValue({ providers: [{ id: 'openrouter' }] });
     upsertModelProviderModelMock.mockReturnValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-b' }] }] });
@@ -445,6 +467,43 @@ describe('model routes', () => {
       effectiveRoot: validDir,
       defaultRoot: '/default-vault',
       source: 'config',
+    });
+  });
+
+  it('reads and writes instruction file state with filesystem validation', () => {
+    const { patchHandler, getHandler, materializeWebProfile } = createDesktopHarness(allocateFiles());
+    const validDir = mkdtempSync(join(tmpdir(), 'pa-instruction-files-'));
+    const instructionA = join(validDir, 'AGENTS.md');
+    const instructionB = join(validDir, 'custom.md');
+    const missingFile = join(validDir, 'missing.md');
+    writeFileSync(instructionA, '# Base\n');
+    writeFileSync(instructionB, '# Custom\n');
+
+    machineConfig.instructionFiles = [instructionA];
+    const readRes = createResponse();
+    getHandler('/api/instructions')(createRequest(), readRes);
+    expect(readRes.json).toHaveBeenCalledWith({
+      configFile: '/config/config.json',
+      instructionFiles: [instructionA],
+    });
+
+    const invalidRes = createResponse();
+    patchHandler('/api/instructions')(createRequest({ body: { instructionFiles: 'bad' } }), invalidRes);
+    expect(invalidRes.status).toHaveBeenCalledWith(400);
+    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'instructionFiles must be an array of strings' });
+
+    const missingRes = createResponse();
+    patchHandler('/api/instructions')(createRequest({ body: { instructionFiles: [missingFile] } }), missingRes);
+    expect(missingRes.status).toHaveBeenCalledWith(400);
+    expect(missingRes.json).toHaveBeenCalledWith({ error: `File does not exist: ${missingFile}` });
+
+    const saveRes = createResponse();
+    patchHandler('/api/instructions')(createRequest({ body: { instructionFiles: [instructionA, instructionB] } }), saveRes);
+    expect(writeMachineInstructionFilesMock).toHaveBeenCalledWith([instructionA, instructionB]);
+    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(saveRes.json).toHaveBeenCalledWith({
+      configFile: '/config/config.json',
+      instructionFiles: [instructionA, instructionB],
     });
   });
 

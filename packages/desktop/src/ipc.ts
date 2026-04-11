@@ -323,7 +323,7 @@ export function registerDesktopIpc(options: {
     return controller.updateVaultRoot(root);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:pick-folder`, async (event, input?: { cwd?: string | null }) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:pick-folder`, async (event, input?: { cwd?: string | null; prompt?: string | null }) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);

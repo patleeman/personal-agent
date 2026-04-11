@@ -16,6 +16,7 @@ import {
   getDurableConversationAttentionDir,
   getVaultRoot,
   getDurableProfilesDir,
+  getDurableAgentFilePath,
   getDurableProfileDir,
   getDurableSettingsDir,
   getDurableModelsDir,
@@ -111,9 +112,10 @@ describe('profile and config path helpers', () => {
     expect(getDurableSessionsDir()).toBe('/runtime/state/sync/pi-agent/sessions');
     expect(getDurableConversationAttentionDir()).toBe('/runtime/state/sync/pi-agent/state/conversation-attention');
     expect(getDurableProfilesDir()).toBe(join(homedir(), 'Documents', 'personal-agent', '_profiles'));
+    expect(getDurableAgentFilePath()).toBe(join(homedir(), 'Documents', 'personal-agent', 'AGENTS.md'));
     expect(getDurableSettingsDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'settings'));
     expect(getDurableModelsDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'models'));
-    expect(getDurableSkillsDir()).toBe(join(homedir(), 'Documents', 'personal-agent', '_skills'));
+    expect(getDurableSkillsDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'skills'));
     expect(getDurableNodesDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'nodes'));
     expect(getDurableNotesDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'notes'));
     expect(getDurableMemoryDir()).toBe(join(homedir(), 'Documents', 'personal-agent', 'notes'));
@@ -132,7 +134,8 @@ describe('profile and config path helpers', () => {
     expect(getVaultRoot()).toBe('/custom/vault');
     expect(getProfilesRoot()).toBe('/custom/profiles');
     expect(getDurableProfilesDir()).toBe('/custom/vault/_profiles');
-    expect(getDurableSkillsDir()).toBe('/custom/vault/_skills');
+    expect(getDurableAgentFilePath()).toBe('/custom/vault/AGENTS.md');
+    expect(getDurableSkillsDir()).toBe('/custom/vault/skills');
     expect(getDurableNotesDir()).toBe('/custom/vault/notes');
     expect(getDurableProjectsDir()).toBe('/custom/vault/projects');
     expect(getLocalProfileDir()).toBe('/custom/local');
@@ -147,6 +150,7 @@ describe('profile and config path helpers', () => {
 
     expect(getVaultRoot()).toBe(join(homedir(), 'Documents', 'custom-agent-vault'));
     expect(getDurableProfilesDir()).toBe(join(homedir(), 'Documents', 'custom-agent-vault', '_profiles'));
+    expect(getDurableAgentFilePath()).toBe(join(homedir(), 'Documents', 'custom-agent-vault', 'AGENTS.md'));
 
     rmSync(configDir, { recursive: true, force: true });
     rmSync(stateRoot, { recursive: true, force: true });
@@ -164,6 +168,7 @@ describe('profile and config path helpers', () => {
     expect(getProfilesRoot()).toBe(join(stateRoot, 'sync', 'profiles'));
     expect(getDurableProfilesDir()).toBe(join(stateRoot, 'sync', 'profiles'));
     expect(getDurableProfileDir('default')).toBe(join(stateRoot, 'sync', 'profiles', 'default'));
+    expect(getDurableAgentFilePath()).toBe(join(stateRoot, 'sync', 'AGENTS.md'));
     expect(getDurableSkillsDir()).toBe(join(stateRoot, 'sync', 'skills'));
     expect(getDurableTasksDir()).toBe(join(stateRoot, 'sync', 'tasks'));
 

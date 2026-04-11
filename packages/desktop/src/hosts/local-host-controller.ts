@@ -172,7 +172,7 @@ export class LocalHostController implements HostController {
     return module.updateDesktopVaultRoot(root);
   }
 
-  async pickFolder(input?: { cwd?: string | null }): Promise<unknown> {
+  async pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.pickDesktopFolder(input);
   }

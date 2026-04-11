@@ -890,11 +890,11 @@ function DesktopConnectionsSettingsPanel() {
 export function SettingsPage() {
   const { theme, themePreference, setThemePreference } = useTheme();
   const {
-    data: profileState,
-    loading: profilesLoading,
-    error: profilesError,
-    refetch: refetchProfiles,
-  } = useApi(api.profiles);
+    data: instructionFilesState,
+    loading: instructionFilesLoading,
+    error: instructionFilesError,
+    refetch: refetchInstructions,
+  } = useApi(api.instructions);
   const {
     data: modelState,
     loading: modelsLoading,
@@ -942,8 +942,9 @@ export function SettingsPage() {
     () => codexUsageEnabled ? api.codexPlanUsage() : Promise.resolve(EMPTY_CODEX_PLAN_USAGE),
     `codex-plan-usage:${codexUsageEnabled ? 'enabled' : 'disabled'}`,
   );
-  const [switchingProfile, setSwitchingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const [instructionFilesDraft, setInstructionFilesDraft] = useState<string[]>([]);
+  const [savingInstructionFiles, setSavingInstructionFiles] = useState(false);
+  const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [vaultRootDraft, setVaultRootDraft] = useState('');
@@ -952,6 +953,7 @@ export function SettingsPage() {
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
+  const [pathPickerTarget, setPathPickerTarget] = useState<'vault-root' | 'default-cwd' | 'instruction-files' | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
@@ -978,10 +980,9 @@ export function SettingsPage() {
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const pageSummary = 'Theme, defaults, providers, desktop connections, and local UI reset tools.';
+  const pageSummary = 'Theme, defaults, providers, instruction files, desktop connections, and local UI reset tools.';
   const pageMeta = [
     `theme ${theme}`,
-    profileState ? `profile ${profileState.currentProfile}` : null,
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,
   ].filter(Boolean).join(' · ');
 
@@ -1058,6 +1059,13 @@ export function SettingsPage() {
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
+  const instructionFilesDirty = instructionFilesState
+    ? instructionFilesDraft.length !== instructionFilesState.instructionFiles.length
+      || instructionFilesDraft.some((value, index) => value !== instructionFilesState.instructionFiles[index])
+    : false;
+  const pickingVaultRoot = pathPickerTarget === 'vault-root';
+  const pickingDefaultCwd = pathPickerTarget === 'default-cwd';
+  const pickingInstructionFiles = pathPickerTarget === 'instruction-files';
 
   useEffect(() => {
     if (vaultRootState) {
@@ -1070,6 +1078,12 @@ export function SettingsPage() {
       setDefaultCwdDraft(defaultCwdState.currentCwd);
     }
   }, [defaultCwdState?.currentCwd]);
+
+  useEffect(() => {
+    if (instructionFilesState) {
+      setInstructionFilesDraft(instructionFilesState.instructionFiles);
+    }
+  }, [instructionFilesState?.configFile, instructionFilesState?.instructionFiles]);
 
   useEffect(() => {
     if (!modelProviderState) {
@@ -1218,20 +1232,72 @@ export function SettingsPage() {
     ? oauthLoginState
     : null;
 
-  async function handleProfileChange(nextProfile: string) {
-    if (!profileState || nextProfile === profileState.currentProfile || switchingProfile) {
+  async function handleAddInstructionFiles() {
+    if (!instructionFilesState || savingInstructionFiles || pickingInstructionFiles) {
       return;
     }
 
-    setProfileError(null);
-    setSwitchingProfile(true);
+    setInstructionFilesSaveError(null);
+    setPathPickerTarget('instruction-files');
 
     try {
-      await api.setCurrentProfile(nextProfile);
-      window.location.reload();
+      const result = await api.pickFiles(defaultCwdState?.effectiveCwd);
+      if (result.cancelled || result.paths.length === 0) {
+        return;
+      }
+
+      setInstructionFilesDraft((current) => {
+        const next = [...current];
+        for (const path of result.paths) {
+          if (!next.includes(path)) {
+            next.push(path);
+          }
+        }
+        return next;
+      });
     } catch (error) {
-      setProfileError(error instanceof Error ? error.message : String(error));
-      setSwitchingProfile(false);
+      setInstructionFilesSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPathPickerTarget((current) => (current === 'instruction-files' ? null : current));
+    }
+  }
+
+  function handleMoveInstructionFile(index: number, direction: -1 | 1) {
+    setInstructionFilesDraft((current) => {
+      const nextIndex = index + direction;
+      if (index < 0 || index >= current.length || nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      const [entry] = next.splice(index, 1);
+      next.splice(nextIndex, 0, entry as string);
+      return next;
+    });
+    setInstructionFilesSaveError(null);
+  }
+
+  function handleRemoveInstructionFile(index: number) {
+    setInstructionFilesDraft((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setInstructionFilesSaveError(null);
+  }
+
+  async function handleSaveInstructionFiles() {
+    if (!instructionFilesState || savingInstructionFiles || !instructionFilesDirty) {
+      return;
+    }
+
+    setInstructionFilesSaveError(null);
+    setSavingInstructionFiles(true);
+
+    try {
+      const saved = await api.updateInstructions(instructionFilesDraft);
+      setInstructionFilesDraft(saved.instructionFiles);
+      await refetchInstructions({ resetLoading: false });
+    } catch (error) {
+      setInstructionFilesSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingInstructionFiles(false);
     }
   }
 
@@ -1307,6 +1373,58 @@ export function SettingsPage() {
       setDefaultCwdSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingDefaultCwd(false);
+    }
+  }
+
+  async function handleVaultRootPick() {
+    if (!vaultRootState || savingVaultRoot || pickingVaultRoot) {
+      return;
+    }
+
+    setVaultRootSaveError(null);
+    setPathPickerTarget('vault-root');
+
+    try {
+      const result = await api.pickFolder({
+        cwd: vaultRootDraft.trim() || vaultRootState.effectiveRoot,
+        prompt: 'Choose knowledge vault root',
+      });
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setVaultRootDraft(result.path);
+      await handleVaultRootSave(result.path);
+    } catch (error) {
+      setVaultRootSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPathPickerTarget((current) => (current === 'vault-root' ? null : current));
+    }
+  }
+
+  async function handleDefaultCwdPick() {
+    if (!defaultCwdState || savingDefaultCwd || pickingDefaultCwd) {
+      return;
+    }
+
+    setDefaultCwdSaveError(null);
+    setPathPickerTarget('default-cwd');
+
+    try {
+      const result = await api.pickFolder({
+        cwd: defaultCwdDraft.trim() || defaultCwdState.effectiveCwd,
+        prompt: 'Choose default working directory',
+      });
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setDefaultCwdDraft(result.path);
+      await handleDefaultCwdSave(result.path);
+    } catch (error) {
+      setDefaultCwdSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setPathPickerTarget((current) => (current === 'default-cwd' ? null : current));
     }
   }
 
@@ -1745,7 +1863,7 @@ export function SettingsPage() {
             className="rounded-full px-4 py-2 text-[13px] text-primary"
             onClick={() => {
               void Promise.all([
-                refetchProfiles({ resetLoading: false }),
+                refetchInstructions({ resetLoading: false }),
                 refetchModels({ resetLoading: false }),
                 refetchModelProviders({ resetLoading: false }),
                 refetchVaultRoot({ resetLoading: false }),
@@ -1776,40 +1894,81 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-general"
             label="General"
-            description="Profile, runtime defaults, knowledge paths, and title behavior for new conversations and runs."
+            description="Runtime defaults, instruction files, knowledge paths, and title behavior for new conversations and runs."
           >
             <div className="space-y-4">
               <SettingsPanel
-                title="Profile"
-                description="Changes the active profile for notes, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
+                title="Instruction files"
+                description="Choose one or more AGENTS.md-style files to append into the runtime system prompt in the saved order."
               >
-                {profilesLoading && !profileState ? (
-                  <p className="ui-card-meta">Loading profiles…</p>
-                ) : profilesError && !profileState ? (
-                  <p className="text-[12px] text-danger">Failed to load profiles: {profilesError}</p>
-                ) : profileState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-profile">Active profile</label>
-                    <select
-                      id="settings-profile"
-                      value={profileState.currentProfile}
-                      onChange={(event) => { void handleProfileChange(event.target.value); }}
-                      disabled={switchingProfile || profileState.profiles.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      {profileState.profiles.map((profile) => (
-                        <option key={profile} value={profile}>{profile}</option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {switchingProfile
-                        ? 'Switching profile and reloading…'
-                        : `${profileState.profiles.length} available ${profileState.profiles.length === 1 ? 'profile' : 'profiles'}.`}
-                    </p>
-                  </>
+                {instructionFilesLoading && !instructionFilesState ? (
+                  <p className="ui-card-meta">Loading instruction files…</p>
+                ) : instructionFilesError && !instructionFilesState ? (
+                  <p className="text-[12px] text-danger">Failed to load instruction files: {instructionFilesError}</p>
+                ) : instructionFilesState ? (
+                  <div className="space-y-3">
+                    <p className="ui-card-meta break-all">Configured in <span className="font-mono text-[11px]">{instructionFilesState.configFile}</span>.</p>
+                    {instructionFilesDraft.length === 0 ? (
+                      <p className="ui-card-meta">No instruction files configured.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {instructionFilesDraft.map((path, index) => (
+                          <div key={`${path}:${index}`} className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1 rounded-xl border border-border-subtle/70 bg-surface/50 px-3 py-2 font-mono text-[12px] text-primary break-all">
+                              {path}
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => { handleMoveInstructionFile(index, -1); }}
+                                disabled={savingInstructionFiles || index === 0}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { handleMoveInstructionFile(index, 1); }}
+                                disabled={savingInstructionFiles || index === instructionFilesDraft.length - 1}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { handleRemoveInstructionFile(index); }}
+                                disabled={savingInstructionFiles}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { void handleAddInstructionFiles(); }}
+                        disabled={savingInstructionFiles || pickingInstructionFiles}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {pickingInstructionFiles ? 'Picking…' : 'Add files'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleSaveInstructionFiles(); }}
+                        disabled={savingInstructionFiles || !instructionFilesDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {savingInstructionFiles ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
                 ) : null}
 
-                {profileError && <p className="text-[12px] text-danger">{profileError}</p>}
+                {instructionFilesSaveError && <p className="text-[12px] text-danger">{instructionFilesSaveError}</p>}
               </SettingsPanel>
 
               <SettingsPanel
@@ -1817,7 +1976,7 @@ export function SettingsPage() {
                 description={(
                   <>
                     Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
-                    Saving an explicit model here clears the active profile&apos;s default preset.
+                    Saving an explicit model here clears the local default preset.
                   </>
                 )}
               >
@@ -1881,7 +2040,7 @@ export function SettingsPage() {
 
               <SettingsPanel
                 title="Knowledge vault root"
-                description="Sets the canonical vault location for notes, skills, and profile files. The agent and supporting vault lookups use this path as the durable knowledge home."
+                description="Sets the canonical vault location for notes, skills, and root instruction files. The agent and supporting vault lookups use this path as the durable knowledge home."
               >
                 {vaultRootLoading && !vaultRootState ? (
                   <p className="ui-card-meta">Loading knowledge vault root…</p>
@@ -1896,21 +2055,33 @@ export function SettingsPage() {
                     }}
                   >
                     <label className="ui-card-meta" htmlFor="settings-vault-root">Path</label>
-                    <input
-                      id="settings-vault-root"
-                      value={vaultRootDraft}
-                      onChange={(event) => {
-                        setVaultRootDraft(event.target.value);
-                        if (vaultRootSaveError) {
-                          setVaultRootSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      placeholder="~/Documents/personal-agent"
-                      autoComplete="off"
-                      spellCheck={false}
-                      disabled={savingVaultRoot}
-                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        id="settings-vault-root"
+                        value={vaultRootDraft}
+                        onChange={(event) => {
+                          setVaultRootDraft(event.target.value);
+                          if (vaultRootSaveError) {
+                            setVaultRootSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                        placeholder="~/Documents/personal-agent"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={savingVaultRoot || pickingVaultRoot}
+                      />
+                      <ToolbarButton
+                        type="button"
+                        onClick={() => { void handleVaultRootPick(); }}
+                        disabled={savingVaultRoot || pickingVaultRoot}
+                        className="shrink-0 text-accent"
+                        title="Choose knowledge vault root"
+                        aria-label="Choose knowledge vault root"
+                      >
+                        {pickingVaultRoot ? 'Choosing…' : 'Choose…'}
+                      </ToolbarButton>
+                    </div>
                     <p className="ui-card-meta break-all">
                       {savingVaultRoot
                         ? 'Saving knowledge vault root…'
@@ -1923,7 +2094,7 @@ export function SettingsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="submit"
-                        disabled={savingVaultRoot || !vaultRootDirty}
+                        disabled={savingVaultRoot || pickingVaultRoot || !vaultRootDirty}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {savingVaultRoot ? 'Saving…' : 'Save vault root'}
@@ -1931,7 +2102,7 @@ export function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => { void handleVaultRootSave(''); }}
-                        disabled={savingVaultRoot || vaultRootState.currentRoot.length === 0}
+                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootState.currentRoot.length === 0}
                         className={ACTION_BUTTON_CLASS}
                       >
                         Use default root
@@ -1963,21 +2134,33 @@ export function SettingsPage() {
                     }}
                   >
                     <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
-                    <input
-                      id="settings-default-cwd"
-                      value={defaultCwdDraft}
-                      onChange={(event) => {
-                        setDefaultCwdDraft(event.target.value);
-                        if (defaultCwdSaveError) {
-                          setDefaultCwdSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      placeholder="~/workingdir/repo"
-                      autoComplete="off"
-                      spellCheck={false}
-                      disabled={savingDefaultCwd}
-                    />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        id="settings-default-cwd"
+                        value={defaultCwdDraft}
+                        onChange={(event) => {
+                          setDefaultCwdDraft(event.target.value);
+                          if (defaultCwdSaveError) {
+                            setDefaultCwdSaveError(null);
+                          }
+                        }}
+                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                        placeholder="~/workingdir/repo"
+                        autoComplete="off"
+                        spellCheck={false}
+                        disabled={savingDefaultCwd || pickingDefaultCwd}
+                      />
+                      <ToolbarButton
+                        type="button"
+                        onClick={() => { void handleDefaultCwdPick(); }}
+                        disabled={savingDefaultCwd || pickingDefaultCwd}
+                        className="shrink-0 text-accent"
+                        title="Choose default working directory"
+                        aria-label="Choose default working directory"
+                      >
+                        {pickingDefaultCwd ? 'Choosing…' : 'Choose…'}
+                      </ToolbarButton>
+                    </div>
                     <p className="ui-card-meta break-all">
                       {savingDefaultCwd
                         ? 'Saving default working directory…'
@@ -1988,7 +2171,7 @@ export function SettingsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="submit"
-                        disabled={savingDefaultCwd || !defaultCwdDirty}
+                        disabled={savingDefaultCwd || pickingDefaultCwd || !defaultCwdDirty}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
@@ -1996,7 +2179,7 @@ export function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => { void handleDefaultCwdSave(''); }}
-                        disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                        disabled={savingDefaultCwd || pickingDefaultCwd || defaultCwdState.currentCwd.length === 0}
                         className={ACTION_BUTTON_CLASS}
                       >
                         Use process cwd
@@ -2115,7 +2298,7 @@ export function SettingsPage() {
                 title="Provider & model definitions"
                 description={(
                   <>
-                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for the active profile. Built-in providers still exist even when they are not listed here. Add a provider to create a custom provider or a built-in override.
+                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for local machine overrides. Built-in providers still exist even when they are not listed here. Add a provider to create a custom provider or a built-in override.
                   </>
                 )}
               >

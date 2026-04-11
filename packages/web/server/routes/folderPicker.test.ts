@@ -17,9 +17,9 @@ describe('registerFolderPickerRoutes', () => {
 
   function createHarness(options?: {
     getDefaultWebCwd?: () => string;
-    resolveRequestedCwd?: (cwd: string | undefined, defaultCwd: string) => string | undefined;
+    resolveRequestedCwd?: (cwd: string | null | undefined, defaultCwd: string) => string | undefined;
   }) {
-    let postHandler: ((req: { body?: { cwd?: string | null } }, res: ReturnType<typeof createResponse>) => void) | undefined;
+    let postHandler: ((req: { body?: { cwd?: string | null; prompt?: string | null } }, res: ReturnType<typeof createResponse>) => void) | undefined;
     const router = {
       post: vi.fn((path: string, next: typeof postHandler) => {
         expect(path).toBe('/api/folder-picker');
@@ -74,5 +74,19 @@ describe('registerFolderPickerRoutes', () => {
       prompt: 'Choose working directory',
     });
     expect(res.json).toHaveBeenCalledWith({ canceled: true, filePaths: [] });
+  });
+
+  it('passes through a custom picker prompt when provided', () => {
+    const { postHandler } = createHarness();
+    const res = createResponse();
+    pickFolderMock.mockReturnValue({ canceled: false, filePaths: ['/workspace/default'] });
+
+    postHandler({ body: { prompt: 'Choose knowledge vault root' } }, res);
+
+    expect(pickFolderMock).toHaveBeenCalledWith({
+      initialDirectory: '/workspace/default',
+      prompt: 'Choose knowledge vault root',
+    });
+    expect(res.json).toHaveBeenCalledWith({ canceled: false, filePaths: ['/workspace/default'] });
   });
 });

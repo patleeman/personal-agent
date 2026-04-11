@@ -8,7 +8,7 @@ import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Express } from 'express';
-import { getDefaultVaultRoot, getVaultRoot, readMachineConfig, updateMachineConfig } from '@personal-agent/core';
+import { getDefaultVaultRoot, getMachineConfigFilePath, getVaultRoot, readMachineConfig, readMachineInstructionFiles, updateMachineConfig, writeMachineInstructionFiles } from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
 import {
   writeSavedModelPreferences,
@@ -77,6 +77,12 @@ function readConfiguredVaultRoot(): string {
   return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
 }
 
+function readInstructionFilesState() {
+  return {
+    configFile: getMachineConfigFilePath(),
+    instructionFiles: readMachineInstructionFiles(),
+  };
+}
 
 function initializeModelRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
@@ -170,6 +176,51 @@ export function registerModelRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/instructions', (_req, res) => {
+    try {
+      res.json(readInstructionFilesState());
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/instructions', (req, res) => {
+    try {
+      const { instructionFiles } = req.body as { instructionFiles?: unknown };
+      if (!Array.isArray(instructionFiles) || !instructionFiles.every((entry) => typeof entry === 'string')) {
+        res.status(400).json({ error: 'instructionFiles must be an array of strings' });
+        return;
+      }
+
+      for (const rawFile of instructionFiles) {
+        const filePath = rawFile.trim();
+        if (!filePath) {
+          continue;
+        }
+        if (!existsSync(filePath)) {
+          res.status(400).json({ error: `File does not exist: ${filePath}` });
+          return;
+        }
+        if (!statSync(filePath).isFile()) {
+          res.status(400).json({ error: `Not a file: ${filePath}` });
+          return;
+        }
+      }
+
+      writeMachineInstructionFiles(instructionFiles);
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(readInstructionFilesState());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('does not exist') || message.includes('Not a file') ? 400 : 500;
+      res.status(status).json({ error: message });
     }
   });
 

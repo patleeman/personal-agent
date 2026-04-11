@@ -267,7 +267,7 @@ export interface HostController {
   readVaultRoot?(): Promise<unknown>;
   readVaultFiles?(): Promise<unknown>;
   updateVaultRoot?(root: string | null): Promise<unknown>;
-  pickFolder?(input?: { cwd?: string | null }): Promise<unknown>;
+  pickFolder?(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;

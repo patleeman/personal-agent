@@ -253,7 +253,7 @@ summary: How built-in rendered outputs behave.
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(context.activeAgentsFile).toBe(join(stateRoot, 'vault', '_profiles', 'datadog', 'AGENTS.md'));
-    expect(context.activeSkillsDir).toBe(join(stateRoot, 'vault', '_skills'));
+    expect(context.activeSkillsDir).toBe(join(stateRoot, 'vault', 'skills'));
     expect(context.activeTasksDir).toBe(join(stateRoot, 'sync', 'tasks'));
     expect(context.activeNotesDir).toBe(join(stateRoot, 'vault', 'notes'));
   });

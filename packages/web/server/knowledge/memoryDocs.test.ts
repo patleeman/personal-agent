@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, normalize } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getDurableSkillsDir, getProfilesRoot } from '@personal-agent/core';
+import { getDurableAgentFilePath, getDurableSkillsDir, getProfilesRoot } from '@personal-agent/core';
 import {
   buildRecentReadUsage,
   buildStructuredNoteMarkdown,
@@ -53,6 +53,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_STATE_ROOT: stateRoot,
+    PERSONAL_AGENT_VAULT_ROOT: join(stateRoot, 'sync'),
     PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', 'profiles'),
   };
   clearMemoryBrowserCaches();
@@ -124,6 +125,7 @@ Top-level note hub.
     expect(isEditableMemoryFilePath(notePath(stateRoot, 'memory-index'), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'profile.md'), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'agent', 'AGENTS.md'), 'assistant')).toBe(true);
+    expect(isEditableMemoryFilePath(getDurableAgentFilePath(join(stateRoot, 'sync')), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(skillPath('browser-helper'), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(join(stateRoot, 'outside.md'), 'assistant')).toBe(false);
     expect(isEditableMemoryFilePath('', 'assistant')).toBe(false);

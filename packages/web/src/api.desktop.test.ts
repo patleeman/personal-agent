@@ -665,8 +665,6 @@ describe('api desktop transport', () => {
   it('uses dedicated desktop operator settings bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const readProfiles = vi.fn().mockResolvedValue({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
-    const setCurrentProfile = vi.fn().mockResolvedValue({ ok: true, currentProfile: 'shared' });
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
@@ -685,8 +683,6 @@ describe('api desktop transport', () => {
           activeHostSummary: 'Local backend is healthy.',
           canManageConnections: true,
         }),
-        readProfiles,
-        setCurrentProfile,
         readDefaultCwd,
         updateDefaultCwd,
         readVaultRoot,
@@ -699,8 +695,6 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const profiles = await api.profiles();
-    const switchedProfile = await api.setCurrentProfile('shared');
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
     const vaultRoot = await api.vaultRoot();
@@ -708,8 +702,6 @@ describe('api desktop transport', () => {
     const conversationTitleSettings = await api.conversationTitleSettings();
     const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
 
-    expect(readProfiles).toHaveBeenCalledTimes(1);
-    expect(setCurrentProfile).toHaveBeenCalledWith('shared');
     expect(readDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDefaultCwd).toHaveBeenCalledWith('./repo');
     expect(readVaultRoot).toHaveBeenCalledTimes(1);
@@ -717,8 +709,6 @@ describe('api desktop transport', () => {
     expect(readConversationTitleSettings).toHaveBeenCalledTimes(1);
     expect(updateConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(profiles).toEqual({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
-    expect(switchedProfile).toEqual({ ok: true, currentProfile: 'shared' });
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     expect(vaultRoot).toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
@@ -762,6 +752,32 @@ describe('api desktop transport', () => {
       files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
+  });
+
+  it('passes custom folder picker prompts through the local desktop bridge', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/vault', cancelled: false });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+        pickFolder,
+      },
+    });
+
+    const { api } = await import('./api');
+    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
+
+    expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(pickedFolder).toEqual({ path: '/picked/vault', cancelled: false });
   });
 
   it('uses the dedicated desktop automation workspace bridge on the local Electron host', async () => {
@@ -976,8 +992,6 @@ describe('api desktop transport', () => {
 
   it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ currentProfile: 'shared', profiles: ['assistant', 'shared'] }))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true, currentProfile: 'assistant' }))
       .mockResolvedValueOnce(createJsonResponse({ currentCwd: '', effectiveCwd: '/repo' }))
       .mockResolvedValueOnce(createJsonResponse({ currentCwd: './repo', effectiveCwd: '/repo' }))
       .mockResolvedValueOnce(createJsonResponse({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' }))
@@ -985,7 +999,6 @@ describe('api desktop transport', () => {
       .mockResolvedValueOnce(createJsonResponse({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' }))
       .mockResolvedValueOnce(createJsonResponse({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' }));
     vi.stubGlobal('fetch', fetchMock);
-    const readProfiles = vi.fn();
     const readDefaultCwd = vi.fn();
     const readVaultRoot = vi.fn();
     const readConversationTitleSettings = vi.fn();
@@ -999,7 +1012,6 @@ describe('api desktop transport', () => {
           activeHostSummary: 'Remote host reachable.',
           canManageConnections: true,
         }),
-        readProfiles,
         readDefaultCwd,
         readVaultRoot,
         readConversationTitleSettings,
@@ -1007,8 +1019,6 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const profiles = await api.profiles();
-    const switchedProfile = await api.setCurrentProfile('assistant');
     const defaultCwd = await api.defaultCwd();
     const savedDefaultCwd = await api.updateDefaultCwd('./repo');
     const vaultRoot = await api.vaultRoot();
@@ -1016,36 +1026,27 @@ describe('api desktop transport', () => {
     const conversationTitleSettings = await api.conversationTitleSettings();
     const savedConversationTitleSettings = await api.updateConversationTitleSettings({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
 
-    expect(readProfiles).not.toHaveBeenCalled();
     expect(readDefaultCwd).not.toHaveBeenCalled();
     expect(readVaultRoot).not.toHaveBeenCalled();
     expect(readConversationTitleSettings).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/profiles', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/profiles/current', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile: 'assistant' }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/default-cwd', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/default-cwd', {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/default-cwd', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/default-cwd', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd: './repo' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/vault-root', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/vault-root', {
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/vault-root', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/vault-root', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: '~/vault' }),
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/conversation-titles/settings', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/conversation-titles/settings', {
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/conversation-titles/settings', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/conversation-titles/settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: false, model: 'anthropic/claude-sonnet-4-6' }),
     });
-    expect(profiles).toEqual({ currentProfile: 'shared', profiles: ['assistant', 'shared'] });
-    expect(switchedProfile).toEqual({ ok: true, currentProfile: 'assistant' });
     expect(defaultCwd).toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     expect(savedDefaultCwd).toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     expect(vaultRoot).toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
@@ -1081,7 +1082,7 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const vaultFiles = await api.vaultFiles();
-    const pickedFolder = await api.pickFolder('/repo');
+    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
 
     expect(readVaultFiles).not.toHaveBeenCalled();
     expect(pickFolder).not.toHaveBeenCalled();
@@ -1089,7 +1090,7 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/folder-picker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/repo' }),
+      body: JSON.stringify({ cwd: '/repo', prompt: 'Choose knowledge vault root' }),
     });
     expect(vaultFiles).toEqual({
       root: '/vault',

@@ -631,6 +631,11 @@ export interface FolderPickerResult {
   cancelled: boolean;
 }
 
+export interface FilePickerResult {
+  paths: string[];
+  cancelled: boolean;
+}
+
 export interface LiveSessionMeta {
   id:                   string;
   cwd:                  string;
@@ -935,6 +940,11 @@ export interface VaultRootState {
   source: 'env' | 'config' | 'default';
 }
 
+export interface InstructionFilesState {
+  configFile: string;
+  instructionFiles: string[];
+}
+
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
 
 export interface ProviderAuthSummary {
@@ -1006,11 +1016,6 @@ export interface ConversationTitleSettingsState {
   enabled: boolean;
   currentModel: string;
   effectiveModel: string;
-}
-
-export interface ProfileState {
-  currentProfile: string;
-  profiles: string[];
 }
 
 export interface ToolParameterSchema {

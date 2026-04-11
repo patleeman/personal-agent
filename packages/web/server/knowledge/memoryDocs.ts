@@ -6,12 +6,14 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { dirname, join, normalize } from 'node:path';
+import { join, normalize } from 'node:path';
 import {
   createUnifiedNode,
+  getDurableAgentFilePath,
   getDurableNotesDir,
   getDurableSkillsDir,
   getProfilesRoot,
+  getVaultRoot,
   loadMemoryPackageReferences,
   loadUnifiedNodes,
 } from '@personal-agent/core';
@@ -34,14 +36,16 @@ export function isEditableMemoryFilePath(filePath: string, profile: string): boo
   const normalized = normalizeMemoryPath(filePath);
   if (!normalized) return false;
 
+  const vaultRoot = getVaultRoot();
   const profilesRoot = getProfilesRoot();
-  const sharedRoot = dirname(profilesRoot);
-  const noteDir = normalizeMemoryPath(getDurableNotesDir(sharedRoot));
+  const noteDir = normalizeMemoryPath(getDurableNotesDir(vaultRoot));
+  const baseAgentFile = normalizeMemoryPath(getDurableAgentFilePath(vaultRoot));
   const profileDir = normalizeMemoryPath(join(profilesRoot, profile));
   const legacyAgentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
-  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(sharedRoot));
+  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));
 
-  return normalized.startsWith(`${noteDir}/`)
+  return normalized === baseAgentFile
+    || normalized.startsWith(`${noteDir}/`)
     || normalized.startsWith(`${profileDir}/`)
     || normalized.startsWith(`${legacyAgentDir}/`)
     || normalized.startsWith(`${sharedSkillsDir}/`);
@@ -116,8 +120,7 @@ function mapLoadedMemoryDoc(doc: ReturnType<typeof loadUnifiedNodes>['nodes'][nu
 }
 
 function resolveMemoryDocsDir(): string {
-  const profilesRoot = getProfilesRoot();
-  return getDurableNotesDir(dirname(profilesRoot));
+  return getDurableNotesDir(getVaultRoot());
 }
 
 export function ensureMemoryDocsDir(): string {
@@ -167,11 +170,11 @@ export function findMemoryDocById(
 
 function inferSkillSource(filePath: string, profile: string): string {
   const profilesRoot = getProfilesRoot();
-  const sharedRoot = dirname(profilesRoot);
+  const vaultRoot = getVaultRoot();
   const profileSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'skills'));
   const profileLegacySkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', 'skills'));
   const profileLegacyHiddenSkillDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent', '.skills'));
-  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(sharedRoot));
+  const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));
   const normalizedFilePath = normalizeMemoryPath(filePath);
 
   if (

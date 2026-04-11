@@ -124,10 +124,10 @@ describe('SettingsPage', () => {
     });
 
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
-      if (fetcher === api.profiles) {
+      if (fetcher === api.instructions) {
         return buildUseApiResult({
-          currentProfile: 'assistant',
-          profiles: ['assistant', 'shared'],
+          configFile: '/tmp/config.json',
+          instructionFiles: ['/Users/patrick/Documents/personal-agent/AGENTS.md'],
         });
       }
 
@@ -286,14 +286,17 @@ describe('SettingsPage', () => {
     expect(html).toContain('>Settings<');
     expect(html).toContain('href="#settings-general"');
     expect(html).toContain('Theme');
-    expect(html).toContain('Profile');
+    expect(html).toContain('Instruction files');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');
     expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
+    expect(html).toContain('Choose one or more AGENTS.md-style files to append into the runtime system prompt in the saved order.');
     expect(html).toContain('Leave it blank to fall back to the active runtime process cwd.');
+    expect(html).toContain('aria-label="Choose knowledge vault root"');
+    expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
   });
 

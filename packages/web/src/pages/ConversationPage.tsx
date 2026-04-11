@@ -812,30 +812,27 @@ function ConversationAutoModeToggle({
       title={title}
       onClick={onToggle}
       disabled={disabled || busy}
-      className={cx(
-        'group inline-flex h-7 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40',
-        enabled ? 'text-warning' : 'text-secondary hover:text-primary',
-      )}
+      className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
     >
-      <span className="leading-none">Auto</span>
       <span
         aria-hidden="true"
         className={cx(
-          'relative inline-flex h-5 w-9 shrink-0 rounded-full border p-0.5 transition-all',
+          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
           enabled
-            ? 'border-warning/50 bg-warning/80 shadow-[0_0_10px_rgba(245,158,11,0.18)]'
-            : 'border-border-default bg-surface/45 group-hover:border-border-default group-hover:bg-surface/70',
+            ? 'border-warning/55 bg-warning/75 shadow-[0_0_8px_rgba(245,158,11,0.16)]'
+            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
           busy && 'opacity-80',
         )}
       >
         <span
           className={cx(
-            'h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
-            enabled ? 'translate-x-4' : 'translate-x-0',
+            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-[14px]' : 'translate-x-0',
             busy && 'animate-pulse',
           )}
         />
       </span>
+      <span className={cx('leading-none', enabled && 'text-primary')}>Auto</span>
     </button>
   );
 }
@@ -5155,8 +5152,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onSaveCwd={() => { void submitConversationCwdChange(); }}
             />
           )}
-        </div>
-      </PageHeader>
+            </div>
+          </PageHeader>
 
       {/* Messages */}
       {transcriptPane}

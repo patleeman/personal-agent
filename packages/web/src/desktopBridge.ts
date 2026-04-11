@@ -14,7 +14,6 @@ import type {
   DaemonState,
   ModelProviderState,
   ModelState,
-  ProfileState,
   ProviderAuthState,
   ProviderOAuthLoginState,
   VaultRootState,
@@ -68,8 +67,6 @@ export interface PersonalAgentDesktopBridge {
   readSessions(): Promise<SessionMeta[]>;
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;
-  readProfiles(): Promise<ProfileState>;
-  setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels(): Promise<ModelState>;
   updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null }): Promise<{ ok: true }>;
   readDefaultCwd(): Promise<DefaultCwdState>;
@@ -77,7 +74,7 @@ export interface PersonalAgentDesktopBridge {
   readVaultRoot(): Promise<VaultRootState>;
   readVaultFiles(): Promise<VaultFileListResult>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
-  pickFolder(input?: { cwd?: string | null }): Promise<FolderPickerResult>;
+  pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;

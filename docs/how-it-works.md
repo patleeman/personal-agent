@@ -33,13 +33,12 @@ By default, durable knowledge lives at:
 
 That vault holds:
 
-- `_profiles/<profile>/AGENTS.md`
-- `_profiles/<profile>/{settings.json,models.json}`
-- `_skills/<skill>/SKILL.md`
+- `AGENTS.md`
+- `skills/<skill>/SKILL.md`
 - `notes/**`
 - `projects/**`
 
-This is the canonical home for durable knowledge, procedures, tracked work, and profile behavior.
+This is the canonical home for durable knowledge, procedures, tracked work, and shared instruction files.
 
 ### 3. Machine-local runtime state
 
@@ -61,10 +60,10 @@ This state is durable on one machine, but it is not the portable vault.
 
 ## How a session starts
 
-When you start Pi through `pa`, `personal-agent` resolves a layered profile:
+When you start Pi through `pa`, `personal-agent` resolves layered runtime resources:
 
 1. repo defaults from `defaults/agent`
-2. vault profile files from `~/Documents/personal-agent/_profiles/<profile>/`
+2. vault root `AGENTS.md` and any machine-selected `instructionFiles`
 3. machine-local overlay from `~/.local/state/personal-agent/config/local`
 4. built-in repo extensions/themes and any discovered package sources
 
@@ -108,7 +107,7 @@ The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable
 - conversations are for execution, not long-term storage
 - durable knowledge belongs in the vault
 - scheduled task files stay machine-local
-- profile behavior belongs in `AGENTS.md` and profile settings, not in random notes
+- durable behavior belongs in `AGENTS.md` and machine-selected instruction files, not in random notes
 - if a feature needs later attention, attach it to the owning conversation, automation, reminder, deferred resume, run, or scheduled task explicitly
 
 ## Related docs

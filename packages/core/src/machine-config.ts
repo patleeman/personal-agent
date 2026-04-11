@@ -11,6 +11,7 @@ export type MachineConfigSectionKey = 'daemon' | 'webUi';
 export interface MachineConfigDocument {
   defaultProfile?: string;
   vaultRoot?: string;
+  instructionFiles?: string[];
   daemon?: Record<string, unknown>;
   webUi?: Record<string, unknown>;
 }
@@ -91,6 +92,19 @@ function readJsonObjectFile(path: string, label: string): Record<string, unknown
   }
 }
 
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = [...new Set(value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0))];
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const document = isRecord(value) ? value : {};
   const defaultProfile = typeof document.defaultProfile === 'string' && document.defaultProfile.trim().length > 0
@@ -99,12 +113,14 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0
     ? document.vaultRoot.trim()
     : undefined;
+  const instructionFiles = normalizeStringArray(document.instructionFiles);
   const daemon = normalizeSection(document.daemon);
   const webUi = normalizeSection(document.webUi);
 
   return {
     ...(defaultProfile ? { defaultProfile } : {}),
     ...(vaultRoot ? { vaultRoot } : {}),
+    ...(instructionFiles ? { instructionFiles } : {}),
     ...(daemon ? { daemon } : {}),
     ...(webUi ? { webUi } : {}),
   };
@@ -306,6 +322,23 @@ export function writeMachineDefaultProfile(profile: string, options: MachineConf
     ...current,
     ...(normalizedProfile.length > 0 ? { defaultProfile: normalizedProfile } : {}),
   }), options);
+}
+
+export function readMachineInstructionFiles(options: MachineConfigOptions = {}): string[] {
+  return [...(readMachineConfig(options).instructionFiles ?? [])];
+}
+
+export function writeMachineInstructionFiles(instructionFiles: string[], options: MachineConfigOptions = {}): MachineConfigDocument {
+  const normalizedInstructionFiles = [...new Set(instructionFiles.map((value) => value.trim()).filter((value) => value.length > 0))];
+  return updateMachineConfig((current) => {
+    const next: MachineConfigDocument = { ...current };
+    if (normalizedInstructionFiles.length > 0) {
+      next.instructionFiles = normalizedInstructionFiles;
+    } else {
+      delete next.instructionFiles;
+    }
+    return next;
+  }, options);
 }
 
 export function readMachineVaultRoot(options: MachineConfigOptions = {}): string {

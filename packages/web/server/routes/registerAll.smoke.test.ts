@@ -102,20 +102,14 @@ describe('registerServerRoutes smoke test', () => {
   });
 
   it('serves core app routes through the shared route registry', async () => {
-    const [profilesResponse, titlesResponse, defaultCwdResponse] = await Promise.all([
-      fetch(`${appBaseUrl}/api/profiles`),
+    const [titlesResponse, defaultCwdResponse] = await Promise.all([
       fetch(`${appBaseUrl}/api/conversation-titles/settings`),
       fetch(`${appBaseUrl}/api/default-cwd`),
     ]);
 
-    expect(profilesResponse.status).toBe(200);
     expect(titlesResponse.status).toBe(200);
     expect(defaultCwdResponse.status).toBe(200);
 
-    expect(await profilesResponse.json()).toMatchObject({
-      currentProfile: 'assistant',
-      profiles: ['assistant', 'other'],
-    });
     expect(await titlesResponse.json()).toEqual(expect.any(Object));
     expect(await defaultCwdResponse.json()).toEqual(expect.objectContaining({
       currentCwd: expect.any(String),

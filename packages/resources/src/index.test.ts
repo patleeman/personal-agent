@@ -63,12 +63,13 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
     writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
+    writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
     writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Durable datadog\n');
     writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ nested: { two: true } }));
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({ datadog: true }));
-    writeFile(join(syncRoot, '_skills', 'shared-skill', 'SKILL.md'), '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n');
-    writeFile(join(syncRoot, '_skills', 'datadog-skill', 'SKILL.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
+    writeFile(join(syncRoot, 'skills', 'shared-skill', 'SKILL.md'), '---\nname: shared-skill\ndescription: Shared\nprofiles:\n  - shared\n---\n');
+    writeFile(join(syncRoot, 'skills', 'datadog-skill', 'SKILL.md'), '---\nname: datadog-skill\ndescription: Datadog\nprofiles:\n  - datadog\n---\n');
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
@@ -81,6 +82,7 @@ describe('resources profile loader', () => {
     expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'durable', 'local']);
     expect(resolved.agentsFiles).toEqual([
       join(repo, 'defaults/agent/AGENTS.md'),
+      join(syncRoot, 'AGENTS.md'),
       join(profilesRoot, 'datadog', 'AGENTS.md'),
       join(local, 'agent', 'AGENTS.md'),
     ]);
@@ -91,8 +93,8 @@ describe('resources profile loader', () => {
       join(local, 'agent', 'settings.json'),
     ]);
     expect(resolved.skillDirs).toEqual([
-      join(syncRoot, '_skills', 'datadog-skill'),
-      join(syncRoot, '_skills', 'shared-skill'),
+      join(syncRoot, 'skills', 'datadog-skill'),
+      join(syncRoot, 'skills', 'shared-skill'),
     ]);
     expect(resolved.extensionEntries).toEqual([join(repo, 'extensions', 'index.ts')]);
   });
@@ -119,6 +121,34 @@ describe('resources profile loader', () => {
     expect(getExtensionDependencyDirs(resolved)).toEqual([join(repo, 'extensions/basic')]);
   });
 
+  it('includes configured machine instruction files in the materialized AGENTS stack', () => {
+    const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
+    const syncRoot = join(profilesRoot, '..');
+    const configRoot = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
+    tempDirs.push(configRoot);
+
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(syncRoot, 'AGENTS.md'), '# Vault Root\n');
+    writeFile(join(repo, 'custom-instructions.md'), '# Custom Instructions\n');
+    writeFile(join(configRoot, 'config.json'), JSON.stringify({
+      instructionFiles: [join(repo, 'custom-instructions.md')],
+    }));
+    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
+
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.agentsFiles).toEqual([
+      join(repo, 'defaults/agent/AGENTS.md'),
+      join(syncRoot, 'AGENTS.md'),
+      join(repo, 'custom-instructions.md'),
+    ]);
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');
@@ -141,15 +171,15 @@ describe('resources profile loader', () => {
     const profilesRoot = createTempProfilesRoot();
     const syncRoot = join(profilesRoot, '..');
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
-    const vaultRoot = mkdtempSync(join(tmpdir(), 'personal-agent-vault-'));
-    tempDirs.push(runtime, vaultRoot);
-    process.env.PERSONAL_AGENT_VAULT_ROOT = vaultRoot;
+    tempDirs.push(runtime);
+    process.env.PERSONAL_AGENT_VAULT_ROOT = syncRoot;
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
+    writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'datadog.json'), '{"title":"Datadog"}\n');
     writeFile(join(profilesRoot, 'datadog', 'AGENTS.md'), '# Datadog\n');
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({
@@ -158,7 +188,7 @@ describe('resources profile loader', () => {
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'high',
     }));
-    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'), `---
 name: checkpoint
 description: Commit and push the agent's current work.
 profiles:
@@ -178,7 +208,8 @@ profiles:
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
     expect(runtimePrompt).toContain('catalog role');
     expect(runtimePrompt).toContain('shared append');
-    expect(runtimePrompt).toContain(`The canonical durable knowledge vault root is: ${vaultRoot}`);
+    expect(runtimePrompt).toContain(`The canonical durable knowledge vault root is: ${syncRoot}`);
+    expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Durable shared');
     expect(readFileSync(join(runtime, 'AGENTS.md'), 'utf-8')).toContain('# Datadog');
     expect(runtimeSettings.defaultModel).toBe('gpt-5.4');
     expect(runtimeSettings.defaultProvider).toBe('openai-codex');
@@ -196,8 +227,9 @@ profiles:
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(repo, 'prompt-catalog/system.md'), 'System source\n');
     writeFile(join(repo, 'prompt-catalog/system', '00-role.md'), 'legacy role\n');
+    writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
     writeFile(join(profilesRoot, 'shared.json'), '{"title":"Shared"}\n');
-    writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
+    writeFile(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'), `---
 name: checkpoint
 description: Commit and push
 profiles:
@@ -262,7 +294,7 @@ profiles:
     const syncRoot = join(profilesRoot, '..');
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(syncRoot, '_skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
+    writeFile(join(syncRoot, 'skills', 'test', 'SKILL.md'), '---\nname: test\ndescription: Skill\n---\n# Test\n');
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'role\n');
     writeFile(join(repo, 'themes/theme.json'), '{}\n');
 
@@ -277,7 +309,7 @@ profiles:
     expect(args).toContain('-e');
     expect(args).toContain(join(repo, 'extensions/basic/index.ts'));
     expect(args).toContain('--skill');
-    expect(args).toContain(join(syncRoot, '_skills', 'test'));
+    expect(args).toContain(join(syncRoot, 'skills', 'test'));
     expect(args).toContain('--theme');
     expect(args).toContain(join(repo, 'themes/theme.json'));
   });

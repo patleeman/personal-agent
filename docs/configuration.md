@@ -65,8 +65,8 @@ That vault holds:
 
 ```text
 ~/Documents/personal-agent/
-├── _profiles/
-├── _skills/
+├── AGENTS.md
+├── skills/
 ├── notes/
 └── projects/
 ```
@@ -78,15 +78,15 @@ You can override it with either:
 
 The environment variable wins.
 
-## Profile files
+## Durable instruction files
 
-Profile-specific durable files live under the vault:
+The canonical shared instruction file now lives at:
 
-- `_profiles/<profile>/AGENTS.md`
-- `_profiles/<profile>/settings.json`
-- `_profiles/<profile>/models.json`
+- `AGENTS.md`
 
-Use them for profile behavior and profile defaults, not for machine-local deployment settings.
+The Settings page can also append extra machine-local instruction files through `config.json` → `instructionFiles`.
+
+Legacy `_profiles/` content may still be read when it exists, but new setups should use the root `AGENTS.md` plus local instruction-file selection instead.
 
 ## Local overlay
 
@@ -141,7 +141,7 @@ The most useful overrides are:
 - `PERSONAL_AGENT_CONFIG_ROOT` — override the config directory
 - `PERSONAL_AGENT_CONFIG_FILE` — override the machine config file path
 - `PERSONAL_AGENT_VAULT_ROOT` — override the durable vault root
-- `PERSONAL_AGENT_PROFILES_ROOT` — override the profiles root directly
+- `PERSONAL_AGENT_PROFILES_ROOT` — override the legacy profiles root directly
 - `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay directory
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — override daemon socket path
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — force Tailscale Serve on/off for the web UI
@@ -159,10 +159,10 @@ Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL
 | Setting type | Best home |
 | --- | --- |
 | shared product defaults | repo files |
-| profile behavior | profile `AGENTS.md` |
-| profile-level runtime defaults | profile `settings.json` |
-| model provider defs | profile `models.json` |
-| portable knowledge | vault `notes/`, `_skills/`, `projects/` |
+| durable behavior | vault `AGENTS.md` + machine `instructionFiles` |
+| runtime defaults | local `settings.json` |
+| model provider defs | local `models.json` |
+| portable knowledge | vault `notes/`, `skills/`, `projects/` |
 | machine-local deployment settings | machine `config.json` |
 | machine-local one-off tweaks | local overlay |
 
