@@ -73,13 +73,18 @@ function ConversationsRouteRedirect() {
   return <Navigate to={redirectPath} replace />;
 }
 
+function DeletedStandaloneRunsRedirect() {
+  return <Navigate to="/automations" replace />;
+}
+
+function DeletedStandaloneAdminRedirect() {
+  return <Navigate to="/settings" replace />;
+}
+
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
-const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
-const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
-const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -536,8 +541,8 @@ export function App() {
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
-                      <Route path="runs" element={suspendRoute(<RunsPage />)} />
-                      <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
+                      <Route path="runs" element={<DeletedStandaloneRunsRedirect />} />
+                      <Route path="runs/:id" element={<DeletedStandaloneRunsRedirect />} />
                       <Route path="knowledge" element={<LegacyWebRouteRedirect />} />
                       <Route path="knowledge/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="notes" element={<LegacyWebRouteRedirect />} />
@@ -554,8 +559,8 @@ export function App() {
                       <Route path="scheduled/:id" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
                       <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="tools" element={suspendRoute(<ToolsPage />)} />
-                      <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
+                      <Route path="tools" element={<DeletedStandaloneAdminRedirect />} />
+                      <Route path="instructions" element={<DeletedStandaloneAdminRedirect />} />
                       <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                     </Route>
                   </Routes>

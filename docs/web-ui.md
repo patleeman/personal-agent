@@ -2,7 +2,7 @@
 
 The web UI is the main day-to-day surface for `personal-agent`.
 
-It exposes the same durable model as the CLI, but with live updates, inbox delivery, conversation management, automations, tools, instructions, and settings in one place.
+It exposes the same durable model as the CLI, but with live updates, inbox delivery, conversation management, automations, and settings in one place.
 
 ## Start the UI
 
@@ -39,15 +39,12 @@ Current desktop routes/operators surfaces are:
 - **Inbox** — notifications, activity, and attention
 - **Conversations** — draft, saved, open, pinned, archived, and live thread work
 - **Automations** — scheduled tasks and task detail/editing
-- **Runs** — durable run history, logs, and follow-through from automations or detached work
-- **Tools** — tool schemas, prompt inspector, MCP config, package sources, dependent CLIs
-- **Instructions** — loaded instruction source editing (`AGENTS.md` layers)
 - **Settings** — appearance, providers, desktop connections, runtime services, workspace info
 
 A few older routes now redirect instead of acting as first-class destinations:
 
-- `/system` redirects to **Settings**
-- `/tasks` and `/scheduled` redirect to **Automations**
+- `/system`, `/tools`, and `/instructions` redirect to **Settings**
+- `/tasks`, `/scheduled`, and `/runs` redirect to **Automations**
 - `/knowledge`, `/notes`, `/skills`, and `/nodes` redirect away from the old knowledge browser concept
 
 ## Conversations
@@ -83,33 +80,13 @@ Current capabilities:
 - create new automations in-app
 - edit existing task definitions
 - enable / disable tasks
-- run a task immediately
-- jump from a task run into the durable runs UI
-
-## Tools
-
-The **Tools** route is the operator surface for runtime capabilities.
-
-It shows:
-
-- active and available tool schemas
-- the fully rendered new-session system prompt
-- extension-injected messages and tool definitions
-- MCP config and discovered servers
-- dependent CLI tools
-- package-source install targets for the active profile and local overlay
-
-## Instructions
-
-The **Instructions** route is the current durable editing surface for loaded instruction files.
-
-Use it to inspect and edit the resolved `AGENTS.md` sources for the current profile stack.
-
-That route is intentionally narrower than a full page browser.
+- run a task immediately and watch the automation state refresh in place
 
 ## Settings
 
 The **Settings** route now carries most of what used to be spread across separate admin pages.
+
+It is also the fallback destination for the removed standalone **Tools** and **Instructions** pages.
 
 It includes sections for:
 
@@ -165,9 +142,9 @@ The application data model is still the same web UI, but local Electron mode now
 
 ## What the web UI does not try to be
 
-The desktop web UI no longer includes a general file browser or tracked-page browser.
+The desktop web UI no longer includes a general file browser, tracked-page browser, or standalone runs/tools/instructions workspace.
 
-Use your editor for repo files and the vault directly for broad note/skill/project work.
+Use your editor for repo files and durable instruction sources, and use the vault directly for broad note/skill/project work.
 
 ## Related docs
 

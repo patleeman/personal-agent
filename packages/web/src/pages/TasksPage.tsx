@@ -208,7 +208,6 @@ function AutomationDetailView({
   onOpenEdit: () => void;
   onRefreshTasks: () => void;
 }) {
-  const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const { data, loading, error, refetch } = useApi(async () => {
     if (!id) {
@@ -250,12 +249,11 @@ function AutomationDetailView({
 
     setRunningNow(true);
     try {
-      const result = await api.runTaskNow(id);
+      await api.runTaskNow(id);
       await Promise.all([
         refetch({ resetLoading: false }),
         onRefreshTasks(),
       ]);
-      navigate(`/runs/${encodeURIComponent(result.runId)}`);
     } catch (nextError) {
       console.error(nextError);
       setRunningNow(false);

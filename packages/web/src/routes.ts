@@ -1,9 +1,6 @@
-import {
-  getKnowledgeInstructionPath,
-  getKnowledgeSection,
-} from './knowledgeSelection';
+import { getKnowledgeSection } from './knowledgeSelection';
 
-export const WEB_INSTRUCTIONS_PATH = '/instructions';
+export const WEB_SETTINGS_PATH = '/settings';
 
 const LEGACY_KNOWLEDGE_PATH = '/knowledge';
 const LEGACY_NOTES_PATH = '/notes';
@@ -30,16 +27,9 @@ function isSupportedDetailPath(normalizedPath: string, basePath: string): boolea
   return routeId.length > 0 && !routeId.includes('/');
 }
 
-function buildInstructionHref(path: string | null): string {
-  if (!path) {
-    return WEB_INSTRUCTIONS_PATH;
-  }
-  return `${WEB_INSTRUCTIONS_PATH}?instruction=${encodeURIComponent(path)}`;
-}
-
 function buildKnowledgeRedirect(search: string): string {
   if (getKnowledgeSection(search) === 'instructions') {
-    return buildInstructionHref(getKnowledgeInstructionPath(search));
+    return WEB_SETTINGS_PATH;
   }
 
   return '/conversations/new';

@@ -261,40 +261,6 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Target conversation');
   });
 
-  it('opens run details in the runs rail without conversation-only chrome', () => {
-    vi.mocked(useDurableRunStream).mockReturnValue({
-      detail: createDetail(),
-      log: { path: '/tmp/runs/conversation-live-conv-123/output.log', log: '' },
-      loading: false,
-      error: null,
-      reconnect: vi.fn(),
-    });
-
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/runs/conversation-live-conv-123']}>
-        <AppDataContext.Provider value={{
-          activity: null,
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setActivity: vi.fn(),
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
-          <ContextRail />
-        </AppDataContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('Fix runs navigation');
-    expect(html).toContain('href="/conversations/conv-123"');
-    expect(html).not.toContain('← Conversation');
-    expect(html).not.toContain('Full page');
-  });
-
   it('shows the working directory controls on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
@@ -435,58 +401,4 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Pinned session');
   });
 
-  it('renders selected instruction details in the rail', () => {
-    vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'instructions-rail-memory') {
-        return {
-          data: {
-            profile: 'shared',
-            memoryDocs: [],
-            skills: [],
-            agentsMd: [{
-              source: 'shared/AGENTS.md',
-              path: '/tmp/shared/AGENTS.md',
-              exists: true,
-              content: '# Shared instructions',
-            }],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-
-      return {
-        data: null,
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
-      };
-    });
-
-    const html = renderToString(
-      <MemoryRouter initialEntries={['/instructions?instruction=%2Ftmp%2Fshared%2FAGENTS.md']}>
-        <AppDataContext.Provider value={{
-          activity: null,
-          projects: null,
-          sessions: [createSession()],
-          tasks: null,
-          runs: null,
-          setActivity: vi.fn(),
-          setProjects: vi.fn(),
-          setSessions: vi.fn(),
-          setTasks: vi.fn(),
-          setRuns: vi.fn(),
-        }}>
-          <ContextRail />
-        </AppDataContext.Provider>
-      </MemoryRouter>,
-    );
-
-    expect(html).toContain('shared/AGENTS.md');
-    expect(html).toContain('/tmp/shared/AGENTS.md');
-    expect(html).toContain('Shared instructions');
-  });
 });

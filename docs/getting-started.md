@@ -115,12 +115,9 @@ The desktop shell owns its own local backend while it is running. If a daemon or
 
 ## Create your first durable instructions
 
-Use one of these paths:
+Edit `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md` directly.
 
-- edit `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md` directly
-- open the web UI and use the [Instructions page](./web-ui.md)
-
-Use `AGENTS.md` for durable behavior and preferences, not for project notes.
+Use `AGENTS.md` for durable behavior and preferences, not for project notes. The web UI no longer has a dedicated Instructions editor.
 
 ## Create durable knowledge
 

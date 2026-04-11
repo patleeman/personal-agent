@@ -286,8 +286,8 @@ describe('Sidebar', () => {
     expect(html).not.toContain('>Conversations<');
   });
 
-  it('treats settings-related routes as part of Settings in the main sidebar', () => {
-    const html = renderSidebar('/runs/conversation-live-conv-123');
+  it('treats settings routes as part of Settings in the main sidebar', () => {
+    const html = renderSidebar('/system');
 
     expect(html).toContain('href="/settings"');
     expect(html).toContain('ui-sidebar-nav-item-active');

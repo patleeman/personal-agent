@@ -62,7 +62,7 @@ const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKe
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
-const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/runs', '/automations', '/scheduled', '/tools', '/instructions'] as const;
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations', '/scheduled'] as const;
 
 type DesktopConversationShortcutAction =
   | 'close-conversation'

@@ -66,4 +66,4 @@ Auth state is machine-local, not part of the shared vault.
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Tools page in the Web UI](./web-ui.md)
+- [Web UI Guide](./web-ui.md)

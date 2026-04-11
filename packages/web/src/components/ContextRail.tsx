@@ -13,7 +13,6 @@ import {
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
-import { getKnowledgeInstructionPath } from '../knowledgeSelection';
 import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
@@ -32,7 +31,6 @@ import type {
   ActivityEntry,
   AgentToolInfo,
   DurableRunDetailResult,
-  MemoryAgentsItem,
   ScheduledTaskSummary,
 } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
@@ -43,7 +41,6 @@ import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
-const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
   return (
@@ -1295,58 +1292,6 @@ function ConversationsWorkspaceContext() {
   );
 }
 
-function KnowledgeInstructionContext({ item }: { item: MemoryAgentsItem }) {
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title break-words">{item.source}</p>
-        <p className="ui-card-meta break-all">{item.path}</p>
-      </div>
-      <div className="space-y-2">
-        <RailMetadataRow label="Source" value={item.source} />
-        <RailMetadataRow label="Path" value={<span className="font-mono break-all">{item.path}</span>} />
-      </div>
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Instructions</p>
-        {item.content ? <RailMarkdownPreview content={item.content} /> : <p className="ui-card-meta">This source exists but no content was loaded.</p>}
-      </div>
-    </div>
-  );
-}
-
-function InstructionsContextPanel() {
-  const location = useLocation();
-  const selectedInstructionPath = getKnowledgeInstructionPath(location.search);
-  const { data, loading, error } = useApi(api.memory, 'instructions-rail-memory');
-  const instructions = (data?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source) || left.path.localeCompare(right.path));
-  const selectedInstruction = instructions.find((item) => item.path === selectedInstructionPath) ?? null;
-
-  if (selectedInstruction) return <KnowledgeInstructionContext item={selectedInstruction} />;
-  if (loading && !data) return <LoadingState label="Loading instructions…" className="px-4 py-4" />;
-  if (error && !data) return <ErrorState message={`Failed to load instructions: ${error}`} className="px-4 py-4" />;
-
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="space-y-1">
-        <p className="ui-card-title">Instructions</p>
-        <p className="ui-card-meta">Select a source on the left to inspect the durable instructions loaded for the active profile.</p>
-      </div>
-      <div className="space-y-2">
-        <RailMetadataRow label="Sources" value={instructions.length} />
-      </div>
-      <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Loaded sources</p>
-        {instructions.length === 0 ? <p className="ui-card-meta">No instruction sources are currently loaded.</p> : instructions.slice(0, 5).map((item) => (
-          <Link key={item.path} to={`/instructions?instruction=${encodeURIComponent(item.path)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
-            <p className="text-[12px] font-medium text-primary">{item.source}</p>
-            <p className="ui-card-meta mt-1 break-all">{item.path}</p>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function CapabilitiesOverviewContext({
   section,
   presets,
@@ -1468,7 +1413,6 @@ function CapabilitiesOverviewContext({
 }
 
 function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
-  const navigate = useNavigate();
   const { data, loading, error, refreshing, refetch } = useApi(() => api.taskDetail(taskId), `capabilities-task-rail:${taskId}`);
   const [runningNow, setRunningNow] = useState(false);
 
@@ -1479,13 +1423,12 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
 
     setRunningNow(true);
     try {
-      const result = await api.runTaskNow(data.id);
+      await api.runTaskNow(data.id);
       await refetch({ resetLoading: false });
-      navigate(`/runs/${encodeURIComponent(result.runId)}`);
     } finally {
       setRunningNow(false);
     }
-  }, [data, navigate, refetch, runningNow]);
+  }, [data, refetch, runningNow]);
 
   if (loading && !data) return <LoadingState label="Loading task…" className="px-4 py-4" />;
   if (error && !data) return <ErrorState message={`Failed to load task: ${error}`} className="px-4 py-4" />;
@@ -1542,9 +1485,6 @@ function CapabilitiesToolContext({ tool }: { tool: AgentToolInfo }) {
       <div className="space-y-2">
         <RailMetadataRow label="Default" value={tool.active ? 'Yes' : 'No'} />
         <RailMetadataRow label="Parameters" value={parameters.length} />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/tools" className="ui-toolbar-button">Open full tools page</Link>
       </div>
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Parameters</p>
@@ -1701,31 +1641,6 @@ export function ContextRail() {
     </div>
   );
 
-  if (section === 'instructions') {
-    const instructionPath = getKnowledgeInstructionPath(location.search);
-    const instructionSub = instructionPath ? instructionPath.split('/').pop() ?? instructionPath : undefined;
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Instructions" sub={instructionSub} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <InstructionsContextPanel />
-        </div>
-      </div>
-    );
-  }
-
-  // Tools
-  if (section === 'tools') {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Tools" />
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {suspendRailPanel(<ToolsContextPanel />, 'Loading tools…')}
-        </div>
-      </div>
-    );
-  }
-
   // Capabilities
   if (section === 'capabilities') {
     const capabilitiesSection = getCapabilitiesSection(location.search);
@@ -1739,17 +1654,6 @@ export function ContextRail() {
         <RailHeader label="Capabilities" sub={capabilitiesSub} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           <CapabilitiesContextPanel />
-        </div>
-      </div>
-    );
-  }
-
-  if (section === 'runs') {
-    return (
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Runs" sub={id ?? 'workspace'} />
-        <div className="min-h-0 flex-1">
-          {id ? <RunContextPanel runId={id} /> : <EmptyPrompt text="Select a run to inspect logs, recovery actions, and linked resources." />}
         </div>
       </div>
     );
