@@ -289,12 +289,12 @@ describe('SettingsPage', () => {
     expect(html).toContain('Profile');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');
-    expect(html).toContain('Runtime services');
+    expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
-    expect(html).toContain('Web UI');
-    expect(html).toContain('Daemon');
+    expect(html).not.toContain('Web UI');
+    expect(html).not.toContain('Daemon');
     expect(html).toContain('Leave it blank to fall back to the active runtime process cwd.');
-    expect(html).toContain('Repo root');
+    expect(html).not.toContain('Repo root');
   });
 
   it('renders the same consolidated settings page for legacy query routes', () => {
@@ -302,7 +302,7 @@ describe('SettingsPage', () => {
 
     expect(html).toContain('ui-page-title');
     expect(html).toContain('>Settings<');
-    expect(html).toContain('Runtime services');
+    expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Restart daemon');
     expect(html).toContain('Provider credentials');

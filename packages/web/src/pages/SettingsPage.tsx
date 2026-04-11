@@ -23,7 +23,6 @@ import type {
   ProviderOAuthLoginStreamEvent,
 } from '../types';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
-import { SystemSettingsContent } from '../components/SystemSettingsContent';
 import { SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
@@ -35,8 +34,6 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-providers', label: 'Providers' },
   { id: 'settings-desktop', label: 'Desktop' },
   { id: 'settings-interface', label: 'Interface' },
-  { id: 'settings-runtime-services', label: 'Runtime' },
-  { id: 'settings-workspace', label: 'Workspace' },
 ] as const;
 
 type ModelOption = ModelState['models'][number];
@@ -930,11 +927,6 @@ export function SettingsPage() {
     refetch: refetchConversationTitleSettings,
   } = useApi(api.conversationTitleSettings);
   const {
-    data: status,
-    error: statusError,
-    refetch: refetchStatus,
-  } = useApi(api.status);
-  const {
     data: providerAuthState,
     loading: providerAuthLoading,
     error: providerAuthError,
@@ -986,7 +978,7 @@ export function SettingsPage() {
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const pageSummary = 'Theme, defaults, providers, desktop connections, workspace, and system controls.';
+  const pageSummary = 'Theme, defaults, providers, desktop connections, and local UI reset tools.';
   const pageMeta = [
     `theme ${theme}`,
     profileState ? `profile ${profileState.currentProfile}` : null,
@@ -1761,7 +1753,6 @@ export function SettingsPage() {
                 refetchConversationTitleSettings({ resetLoading: false }),
                 refetchProviderAuth({ resetLoading: false }),
                 refetchCodexPlanUsage({ resetLoading: false }),
-                refetchStatus({ resetLoading: false }),
                 oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
               ]);
             }}
@@ -2920,25 +2911,6 @@ export function SettingsPage() {
             </SettingsPanel>
           </SettingsSection>
 
-          <section id="settings-runtime-services" className="scroll-mt-24 space-y-5">
-            <SystemSettingsContent desktopEnvironment={desktopEnvironment} />
-          </section>
-
-          <SettingsSection
-            id="settings-workspace"
-            label="Workspace"
-            description="Current repo root and other workspace-scoped runtime context used by the web app."
-          >
-            <SettingsPanel
-              title="Repo root"
-              description="The repository root currently used by the web app for docs, tasks, and profile resources."
-            >
-              <p className="break-all font-mono text-[12px] leading-relaxed text-primary">
-                {status?.repoRoot ?? 'Unavailable'}
-              </p>
-              {statusError && <p className="text-[12px] text-danger">Failed to load workspace details: {statusError}</p>}
-            </SettingsPanel>
-          </SettingsSection>
       </div>
     </div>
   );
