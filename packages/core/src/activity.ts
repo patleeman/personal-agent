@@ -66,6 +66,11 @@ export function validateActivityId(activityId: string): void {
 
 export function resolveProfileActivityStateDir(options: ResolveActivityOptions): string {
   validateProfileName(options.profile);
+  return join(getActivityStateRoot(options.stateRoot), 'pi-agent', 'state', 'activity', options.profile);
+}
+
+function resolveLegacyProfileActivityStateDir(options: ResolveActivityOptions): string {
+  validateProfileName(options.profile);
   return join(getActivityStateRoot(options.stateRoot), 'pi-agent', 'state', 'inbox', options.profile);
 }
 
@@ -150,18 +155,23 @@ function serializeActivityEntry(entry: ProjectActivityEntryDocument): string {
   });
 }
 
-function hasLegacyActivityState(options: ResolveActivityOptions): boolean {
-  if (existsSync(resolveActivityReadStatePath(options))) {
+function hasLegacyMarkdownActivityState(options: ResolveActivityOptions): boolean {
+  const legacyReadStatePath = join(resolveLegacyProfileActivityStateDir(options), 'read-state.json');
+  if (existsSync(legacyReadStatePath)) {
     return true;
   }
 
-  const legacyActivityDir = resolveProfileActivityDir(options);
+  const legacyActivityDir = join(resolveLegacyProfileActivityStateDir(options), 'activities');
   if (!existsSync(legacyActivityDir)) {
     return false;
   }
 
   return readdirSync(legacyActivityDir, { withFileTypes: true })
     .some((entry) => entry.isFile() && entry.name.endsWith('.md'));
+}
+
+function hasLegacyActivityDb(options: ResolveActivityOptions): boolean {
+  return existsSync(join(resolveLegacyProfileActivityStateDir(options), 'runtime.db'));
 }
 
 function openActivityDb(options: ResolveActivityOptions, create = false): SqliteDatabase | null {
@@ -171,7 +181,7 @@ function openActivityDb(options: ResolveActivityOptions, create = false): Sqlite
     return cached;
   }
 
-  const shouldCreate = create || existsSync(dbPath) || hasLegacyActivityState(options);
+  const shouldCreate = create || existsSync(dbPath) || hasLegacyActivityDb(options) || hasLegacyMarkdownActivityState(options);
   if (!shouldCreate) {
     return null;
   }
@@ -204,10 +214,12 @@ function openActivityDb(options: ResolveActivityOptions, create = false): Sqlite
 }
 
 function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivityOptions): void {
-  const legacyActivityDir = resolveProfileActivityDir(options);
-  const legacyReadStatePath = resolveActivityReadStatePath(options);
+  const legacyStateDir = resolveLegacyProfileActivityStateDir(options);
+  const legacyDbPath = join(legacyStateDir, 'runtime.db');
+  const legacyActivityDir = join(legacyStateDir, 'activities');
+  const legacyReadStatePath = join(legacyStateDir, 'read-state.json');
   const insertActivity = db.prepare(`
-    INSERT OR IGNORE INTO activity_entries (id, created_at, entry_json)
+    INSERT OR REPLACE INTO activity_entries (id, created_at, entry_json)
     VALUES (?, ?, ?)
   `);
   const insertReadState = db.prepare(`
@@ -219,6 +231,41 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
   const activityFilesToDelete: string[] = [];
   const readStateIdsToInsert: string[] = [];
   let deleteLegacyReadState = false;
+  let deleteLegacyDb = false;
+
+  if (existsSync(legacyDbPath)) {
+    const legacyDb = openSqliteDatabase(legacyDbPath);
+    try {
+      const legacyRows = legacyDb.prepare(`
+        SELECT id, created_at, entry_json
+        FROM activity_entries
+        ORDER BY created_at DESC, id DESC
+      `).all() as StoredActivityRow[];
+      for (const row of legacyRows) {
+        try {
+          activityEntriesToInsert.push(parseStoredActivityEntry(row.entry_json, row.id));
+        } catch {
+          continue;
+        }
+      }
+    } catch {
+      // Ignore malformed legacy sqlite rows and preserve what we can from markdown state below.
+    }
+
+    try {
+      const rows = legacyDb.prepare(`
+        SELECT activity_id
+        FROM activity_read_state
+        ORDER BY activity_id ASC
+      `).all() as Array<{ activity_id: string }>;
+      readStateIdsToInsert.push(...rows.map((row) => row.activity_id));
+    } catch {
+      // Ignore missing legacy read-state tables.
+    }
+
+    legacyDb.close();
+    deleteLegacyDb = true;
+  }
 
   if (existsSync(legacyActivityDir)) {
     for (const activityFile of readdirSync(legacyActivityDir, { withFileTypes: true })) {
@@ -255,6 +302,14 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
   }
 
   if (activityEntriesToInsert.length > 0 || readStateIdsToInsert.length > 0) {
+    const dedupedEntries = new Map<string, ProjectActivityEntryDocument>();
+    for (const entry of activityEntriesToInsert) {
+      const existing = dedupedEntries.get(entry.id);
+      if (!existing || entry.createdAt >= existing.createdAt) {
+        dedupedEntries.set(entry.id, entry);
+      }
+    }
+
     const tx = db.transaction((entries: ProjectActivityEntryDocument[], readStateIds: string[]) => {
       for (const entry of entries) {
         insertActivity.run(entry.id, entry.createdAt, serializeActivityEntry(entry));
@@ -265,7 +320,7 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
       }
     });
 
-    tx(activityEntriesToInsert, readStateIdsToInsert);
+    tx([...dedupedEntries.values()], readStateIdsToInsert);
   }
 
   for (const path of activityFilesToDelete) {
@@ -274,6 +329,12 @@ function migrateLegacyActivityStorage(db: SqliteDatabase, options: ResolveActivi
 
   if (deleteLegacyReadState) {
     rmSync(legacyReadStatePath, { force: true });
+  }
+
+  if (deleteLegacyDb) {
+    rmSync(legacyDbPath, { force: true });
+    rmSync(`${legacyDbPath}-wal`, { force: true });
+    rmSync(`${legacyDbPath}-shm`, { force: true });
   }
 }
 
