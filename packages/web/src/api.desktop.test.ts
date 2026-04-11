@@ -1354,45 +1354,6 @@ describe('api desktop transport', () => {
     expect(authState).toEqual({ required: true, session: null });
   });
 
-  it('uses desktop shell actions for local app controls and rejects managed service lifecycle actions', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const invokeLocalApi = vi.fn();
-    const restartActiveHost = vi.fn().mockResolvedValue(undefined);
-    const checkForUpdates = vi.fn().mockResolvedValue(undefined);
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-          canManageConnections: true,
-        }),
-        invokeLocalApi,
-        restartActiveHost,
-        checkForUpdates,
-      },
-    });
-
-    const { api } = await import('./api');
-    const restartResult = await api.restartApplication();
-    const updateResult = await api.updateApplication();
-
-    await expect(api.installDaemonService()).rejects.toThrow('Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.');
-    await expect(api.restartDaemonService()).rejects.toThrow('Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.');
-    await expect(api.installWebUiService()).rejects.toThrow('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-    await expect(api.restartWebUiService()).rejects.toThrow('Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.');
-
-    expect(restartActiveHost).toHaveBeenCalledTimes(1);
-    expect(checkForUpdates).toHaveBeenCalledTimes(1);
-    expect(invokeLocalApi).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(restartResult).toEqual(expect.objectContaining({ accepted: true, message: 'Restarting the local desktop runtime.', logFile: 'desktop app' }));
-    expect(updateResult).toEqual(expect.objectContaining({ accepted: true, message: 'Checking for desktop app updates.', logFile: 'desktop app' }));
-  });
-
   it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ currentProfile: 'shared', profiles: ['assistant', 'shared'] }))

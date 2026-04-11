@@ -1,4 +1,4 @@
-import type { ActivityEntry, AlertEntry, AlertSnapshot, ApplicationRestartRequestResult, AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { ActivityEntry, AlertEntry, AlertSnapshot, AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, ModelProviderState, ModelState, PackageInstallResult, ProfileState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -109,8 +109,6 @@ function withViewProfile(path: string, profile?: string): string {
 
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
-const DESKTOP_DAEMON_SERVICE_MESSAGE = 'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.';
-const DESKTOP_WEB_UI_SERVICE_MESSAGE = 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
 
 function buildMemoryRequestKey(options?: { profile?: string }): string {
   return options?.profile?.trim() || '__current__';
@@ -154,15 +152,6 @@ async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
   return environment?.activeHostKind === 'local';
 }
 
-function buildLocalDesktopApplicationResult(message: string): ApplicationRestartRequestResult {
-  return {
-    accepted: true,
-    message,
-    requestedAt: new Date().toISOString(),
-    logFile: 'desktop app',
-  };
-}
-
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => {
@@ -181,46 +170,6 @@ export const api = {
 
     return get<DaemonState>('/daemon');
   },
-  installDaemonService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
-    }
-
-    return post<DaemonState>('/daemon/service/install');
-  },
-  startDaemonService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
-    }
-
-    return post<DaemonState>('/daemon/service/start');
-  },
-  restartDaemonService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
-    }
-
-    return post<DaemonState>('/daemon/service/restart');
-  },
-  stopDaemonService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
-    }
-
-    return post<DaemonState>('/daemon/service/stop');
-  },
-  uninstallDaemonService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_DAEMON_SERVICE_MESSAGE);
-    }
-
-    return post<DaemonState>('/daemon/service/uninstall');
-  },
   webUiState:   async () => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -228,64 +177,6 @@ export const api = {
     }
 
     return get<WebUiState>('/web-ui/state');
-  },
-  restartApplication: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      await desktopBridge.restartActiveHost();
-      return buildLocalDesktopApplicationResult('Restarting the local desktop runtime.');
-    }
-
-    return post<ApplicationRestartRequestResult>('/application/restart');
-  },
-  updateApplication: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      await desktopBridge.checkForUpdates();
-      return buildLocalDesktopApplicationResult('Checking for desktop app updates.');
-    }
-
-    return post<ApplicationRestartRequestResult>('/application/update');
-  },
-  installWebUiService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-    }
-
-    return post<WebUiState>('/web-ui/service/install');
-  },
-  startWebUiService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-    }
-
-    return post<WebUiState>('/web-ui/service/start');
-  },
-  restartWebUiService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-    }
-
-    return post<ApplicationRestartRequestResult>('/web-ui/service/restart');
-  },
-  stopWebUiService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-    }
-
-    return post<WebUiState>('/web-ui/service/stop');
-  },
-  uninstallWebUiService: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-    }
-
-    return post<WebUiState>('/web-ui/service/uninstall');
   },
   setWebUiConfig: async (input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => {
     const desktopBridge = getDesktopBridge();

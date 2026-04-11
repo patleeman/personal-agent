@@ -1353,15 +1353,4 @@ export function registerDesktopIpc(options: {
   ipcMain.handle(`${CHANNEL_PREFIX}:go-forward`, async (event) => {
     return options.windowController.goForwardForWebContents(event.sender.id);
   });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:restart-active-host`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    await options.hostManager.restartHost(hostId);
-    options.onHostStateChanged?.();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:check-for-updates`, async () => {
-    await options.onCheckForUpdates?.();
-  });
 }
