@@ -169,6 +169,7 @@ interface LiveEntry {
   activeHiddenTurnCustomType: string | null;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
+  isCompacting?: boolean;
   presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
   controllerSurfaceId?: string | null;
   controllerAcquiredAt?: string | null;
@@ -180,6 +181,25 @@ export interface LiveSessionLifecycleEvent {
   title: string;
   cwd: string;
   trigger: 'turn_end' | 'auto_compaction_end';
+}
+
+export interface LiveSessionStateSnapshot {
+  blocks: DisplayBlock[];
+  blockOffset: number;
+  totalBlocks: number;
+  hasSnapshot: boolean;
+  isStreaming: boolean;
+  isCompacting: boolean;
+  hasPendingHiddenTurn: boolean;
+  error: string | null;
+  title: string | null;
+  tokens: { input: number; output: number; total: number } | null;
+  cost: number | null;
+  contextUsage: LiveContextUsage | null;
+  pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  presence: LiveSessionPresenceState;
+  autoModeState: ConversationAutoModeState | null;
+  cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
 export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => void | Promise<void>;
@@ -1100,6 +1120,41 @@ function publishSessionMetaChanged(sessionId: string): void {
   publishAppEvent({ type: 'session_meta_changed', sessionId });
 }
 
+export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: number): LiveSessionStateSnapshot {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  let tokens: LiveSessionStateSnapshot['tokens'] = null;
+  let cost: number | null = null;
+  try {
+    const stats = entry.session.getSessionStats();
+    tokens = stats.tokens;
+    cost = stats.cost;
+  } catch {
+    tokens = null;
+    cost = null;
+  }
+
+  return {
+    ...buildLiveSnapshot(entry, tailBlocks),
+    hasSnapshot: true,
+    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
+    isCompacting: entry.isCompacting === true,
+    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
+    error: entry.currentTurnError ?? null,
+    title: resolveEntryTitle(entry),
+    tokens,
+    cost,
+    contextUsage: readContextUsagePayload(entry.session),
+    pendingQueue: readQueueState(entry.session),
+    presence: buildPresenceState(entry),
+    autoModeState: readConversationAutoModeState(entry),
+    cwdChange: null,
+  };
+}
+
 function broadcastTitle(entry: LiveEntry): void {
   const title = resolveEntryTitle(entry);
   if (!title) {
@@ -1461,6 +1516,7 @@ function wireSession(
     activeHiddenTurnCustomType: null,
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
+    isCompacting: false,
     presenceBySurfaceId: new Map(),
     controllerSurfaceId: null,
     controllerAcquiredAt: null,
@@ -1543,10 +1599,12 @@ function wireSession(
     }
 
     if (event.type === 'compaction_start') {
+      entry.isCompacting = true;
       entry.pendingAutoCompactionReason = event.reason === 'manual' ? null : event.reason;
     }
 
     if (event.type === 'compaction_end') {
+      entry.isCompacting = false;
       const compactionReason = event.reason === 'manual' ? null : event.reason;
       entry.pendingAutoCompactionReason = null;
 
@@ -2850,4 +2908,3 @@ export function destroySession(sessionId: string): void {
   registry.delete(sessionId);
   publishSessionMetaChanged(sessionId);
 }
-

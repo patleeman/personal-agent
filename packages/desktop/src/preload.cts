@@ -7,6 +7,8 @@ const NAVIGATE_CHANNEL = `${CHANNEL_PREFIX}:navigate`;
 const NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 const API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
+const CONVERSATION_STATE_CHANNEL = `${CHANNEL_PREFIX}:conversation-state`;
+const CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
 const APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
@@ -236,6 +238,13 @@ const desktopBridge = {
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
   abortLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:abort-live-session`, conversationId),
+  subscribeConversationState: (input: {
+    conversationId: string;
+    tailBlocks?: number;
+    surfaceId?: string;
+    surfaceType?: 'desktop_web' | 'mobile_web';
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-conversation-state`, input),
+  unsubscribeConversationState: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-conversation-state`, subscriptionId),
   subscribeApiStream: (path: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-api-stream`, path),
   unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   subscribeAppEvents: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-app-events`),
@@ -272,6 +281,10 @@ ipcRenderer.on(NAVIGATE_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(API_STREAM_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(API_STREAM_EVENT, payload);
+});
+
+ipcRenderer.on(CONVERSATION_STATE_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(CONVERSATION_STATE_EVENT, payload);
 });
 
 ipcRenderer.on(APP_EVENTS_CHANNEL, (_event, payload: unknown) => {

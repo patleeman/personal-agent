@@ -757,6 +757,31 @@ export interface QueuedPromptPreview {
   pending?: boolean;
 }
 
+export interface DesktopConversationStreamState {
+  blocks: MessageBlock[];
+  blockOffset: number;
+  totalBlocks: number;
+  hasSnapshot: boolean;
+  isStreaming: boolean;
+  isCompacting: boolean;
+  error: string | null;
+  title: string | null;
+  tokens: { input: number; output: number; total: number } | null;
+  cost: number | null;
+  contextUsage: SessionContextUsage | null;
+  pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  presence: LiveSessionPresenceState;
+  autoModeState: ConversationAutoModeState | null;
+  cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
+}
+
+export interface DesktopConversationState {
+  conversationId: string;
+  sessionDetail: SessionDetail | null;
+  liveSession: ConversationBootstrapLiveState;
+  stream: DesktopConversationStreamState;
+}
+
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =

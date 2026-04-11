@@ -4,6 +4,7 @@ import type { DesktopWindowController } from './window.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
+const CONVERSATION_STATE_CHANNEL = `${CHANNEL_PREFIX}:conversation-state`;
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 
@@ -14,6 +15,7 @@ export function registerDesktopIpc(options: {
   onCheckForUpdates?: () => Promise<void> | void;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
+  const conversationStateSubscriptions = new Map<string, () => void>();
   const appEventSubscriptions = new Map<string, () => void>();
   const providerOAuthSubscriptions = new Map<string, () => void>();
 
@@ -1059,6 +1061,29 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, async (_event, subscriptionId: string) => {
     streamSubscriptions.get(subscriptionId)?.();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-conversation-state`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.subscribeConversationState) {
+      throw new Error('Dedicated desktop conversation state is only available for the local host.');
+    }
+
+    const subscriptionId = `${event.sender.id}:conversation:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    await sendBufferedSubscriptionEvent({
+      sender: event.sender,
+      channel: CONVERSATION_STATE_CHANNEL,
+      subscriptionId,
+      store: conversationStateSubscriptions,
+      subscribe: (emit) => controller.subscribeConversationState!(input, emit),
+    });
+    return { subscriptionId };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-conversation-state`, async (_event, subscriptionId: string) => {
+    conversationStateSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-app-events`, async (event) => {

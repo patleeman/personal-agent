@@ -12,6 +12,7 @@ import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
+import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
@@ -279,6 +280,36 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
     && input.hasPendingInitialPrompt
     && !input.pendingInitialPromptDispatching
     && input.hasStreamSnapshot;
+}
+
+export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
+  messages: MessageBlock[] | undefined;
+  prompt: PendingConversationPrompt | null | undefined;
+}): boolean {
+  if (!input.prompt || !input.messages || input.messages.length === 0) {
+    return false;
+  }
+
+  const pendingText = input.prompt.text.trim();
+  const pendingImageCount = input.prompt.images.length;
+
+  return input.messages.some((message) => {
+    if (message.type !== 'user') {
+      return false;
+    }
+
+    const messageText = message.text.trim();
+    const messageImageCount = message.images?.length ?? 0;
+    if (messageImageCount !== pendingImageCount) {
+      return false;
+    }
+
+    if (pendingText.length === 0) {
+      return pendingImageCount > 0;
+    }
+
+    return messageText === pendingText;
+  });
 }
 
 export function shouldDeferConversationFileRefresh(input: {
@@ -1265,21 +1296,46 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
   const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
+  const desktopConversation = useDesktopConversationState(id ?? null, {
+    tailBlocks: historicalTailBlocks,
+    enabled: !draft,
+  });
+  const desktopConversationChecking = !draft && Boolean(id) && desktopConversation.mode === 'checking';
+  const useDesktopConversation = !draft && Boolean(id) && desktopConversation.active;
+  const visibleDesktopConversationState = useDesktopConversation && id && desktopConversation.state?.conversationId === id
+    ? desktopConversation.state
+    : null;
   const conversationVersionKey = `${effectiveConversationEventVersion}`;
   const {
-    data: conversationBootstrap,
-    loading: conversationBootstrapLoading,
-  } = useConversationBootstrap(id, {
+    data: webConversationBootstrap,
+    loading: webConversationBootstrapLoading,
+  } = useConversationBootstrap(draft || useDesktopConversation || desktopConversationChecking ? undefined : id, {
     tailBlocks: historicalTailBlocks,
     versionKey: conversationVersionKey,
   });
-  const visibleConversationBootstrap = id && conversationBootstrap?.conversationId === id
-    ? conversationBootstrap
+  const visibleConversationBootstrap = useDesktopConversation
+    ? (id && visibleDesktopConversationState
+        ? {
+            conversationId: id,
+            sessionDetail: visibleDesktopConversationState.sessionDetail,
+            liveSession: visibleDesktopConversationState.liveSession,
+          }
+        : null)
+    : (id && webConversationBootstrap?.conversationId === id
+        ? webConversationBootstrap
+        : null);
+  const bootstrapSessionDetail = useDesktopConversation
+    ? visibleDesktopConversationState?.sessionDetail ?? null
+    : (id && visibleConversationBootstrap?.sessionDetail?.meta.id === id
+        ? visibleConversationBootstrap.sessionDetail
+        : null);
+  const conversationBootstrapLoading = useDesktopConversation
+    ? desktopConversation.loading
+    : (desktopConversationChecking ? true : webConversationBootstrapLoading);
+  const confirmedLiveValue = useDesktopConversation
+    ? visibleConversationBootstrap?.liveSession.live ?? null
     : null;
-  const bootstrapSessionDetail = id && visibleConversationBootstrap?.sessionDetail?.meta.id === id
-    ? visibleConversationBootstrap.sessionDetail
-    : null;
-  const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);
+  const shouldSubscribeToLiveStream = !useDesktopConversation && !desktopConversationChecking && shouldEnableConversationLiveStream(id, confirmedLive);
 
   useEffect(() => {
     if (draft || !id || deferConversationFileRefresh) {
@@ -1293,10 +1349,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [conversationEventVersion, deferConversationFileRefresh, draft, id]);
 
   // ── Pi SDK stream — stay subscribed until we know the conversation is not live ─
-  const stream = useSessionStream(id ?? null, {
+  const webStream = useSessionStream(id ?? null, {
     tailBlocks: historicalTailBlocks,
     enabled: shouldSubscribeToLiveStream,
   });
+  const stream = useDesktopConversation && visibleDesktopConversationState
+    ? {
+        ...visibleDesktopConversationState.stream,
+        surfaceId: desktopConversation.surfaceId,
+        reconnect: desktopConversation.reconnect,
+        send: desktopConversation.send,
+        abort: desktopConversation.abort,
+        takeover: desktopConversation.takeover,
+      }
+    : webStream;
   const streamSend = stream.send;
   const streamAbort = stream.abort;
   const streamReconnect = stream.reconnect;
@@ -1323,6 +1389,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Confirm live status via bootstrap/session snapshots and probe live-only queue state only when needed.
   useEffect(() => {
+    if (desktopConversationChecking) {
+      return;
+    }
+
+    if (useDesktopConversation) {
+      setConfirmedLive(visibleConversationBootstrap?.liveSession.live ?? false);
+      setLiveSessionHasPendingHiddenTurn(visibleConversationBootstrap?.liveSession.live && visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true);
+      return;
+    }
+
     if (!id) {
       setConfirmedLive(false);
       setLiveSessionHasPendingHiddenTurn(false);
@@ -1368,16 +1444,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [visibleConversationBootstrap?.liveSession, id, sessionSnapshot, sessionsLoaded]);
+  }, [desktopConversationChecking, useDesktopConversation, visibleConversationBootstrap?.liveSession, id, sessionSnapshot, sessionsLoaded]);
 
   const isLiveSession = resolveConversationLiveSession({
     streamBlockCount: stream.blocks.length,
     isStreaming: stream.isStreaming,
-    confirmedLive,
+    confirmedLive: useDesktopConversation ? confirmedLiveValue : confirmedLive,
   });
   const conversationLiveDecision = visibleConversationBootstrap?.liveSession.live
     ?? sessionSnapshot?.isLive
-    ?? confirmedLive;
+    ?? (useDesktopConversation ? confirmedLiveValue : confirmedLive);
   const conversationNeedsTakeover = false;
   const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
   const defaultComposerBehavior = stream.isStreaming
@@ -1393,26 +1469,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
   useEffect(() => {
-    if (!id || !bootstrapSessionDetail) {
+    if (useDesktopConversation || !id || !bootstrapSessionDetail) {
       return;
     }
 
     primeSessionDetailCache(id, bootstrapSessionDetail, { tailBlocks: historicalTailBlocks }, effectiveConversationEventVersion);
-  }, [bootstrapSessionDetail, effectiveConversationEventVersion, historicalTailBlocks, id]);
+  }, [bootstrapSessionDetail, effectiveConversationEventVersion, historicalTailBlocks, id, useDesktopConversation]);
 
-  const bootstrapPendingInitialSessionDetail = Boolean(id)
+  const bootstrapPendingInitialSessionDetail = !useDesktopConversation
+    && Boolean(id)
     && conversationBootstrapLoading
     && !bootstrapSessionDetail;
-  const { detail: sessionDetail, loading: sessionLoading, error: sessionError } = useSessionDetail(
-    bootstrapPendingInitialSessionDetail ? undefined : id,
+  const { detail: webSessionDetail, loading: webSessionLoading, error: webSessionError } = useSessionDetail(
+    bootstrapPendingInitialSessionDetail || useDesktopConversation || desktopConversationChecking ? undefined : id,
     {
       tailBlocks: historicalTailBlocks,
       version: effectiveConversationEventVersion,
     },
   );
-  const visibleSessionDetail = sessionDetail?.meta.id === id
+  const sessionDetail = useDesktopConversation ? visibleDesktopConversationState?.sessionDetail ?? null : webSessionDetail;
+  const sessionLoading = useDesktopConversation
+    ? desktopConversation.loading
+    : (desktopConversationChecking ? true : webSessionLoading);
+  const sessionError = useDesktopConversation ? desktopConversation.error : (desktopConversationChecking ? null : webSessionError);
+  const visibleSessionDetail = useDesktopConversation
     ? sessionDetail
-    : bootstrapSessionDetail;
+    : (sessionDetail?.meta.id === id
+        ? sessionDetail
+        : bootstrapSessionDetail);
   const [hydratedHistoricalBlocks, setHydratedHistoricalBlocks] = useState<Record<string, MessageBlock>>({});
   const [hydratingHistoricalBlockIds, setHydratingHistoricalBlockIds] = useState<string[]>([]);
   const hydratingHistoricalBlockIdSet = useMemo(
@@ -2132,6 +2216,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.removeEventListener(PENDING_CONVERSATION_PROMPT_CHANGED_EVENT, handlePendingPromptChange);
     };
   }, [draft, id]);
+
+  useEffect(() => {
+    if (
+      draft
+      || !id
+      || !pendingInitialPrompt
+      || !pendingInitialPromptDispatching
+      || !hasConversationTranscriptAcceptedPendingInitialPrompt({
+        messages: realMessages,
+        prompt: pendingInitialPrompt,
+      })
+    ) {
+      return;
+    }
+
+    clearPendingConversationPrompt(id);
+    setPendingConversationPromptDispatching(id, false);
+    setPendingInitialPrompt(null);
+    setPendingInitialPromptDispatchingState(false);
+  }, [draft, id, pendingInitialPrompt, pendingInitialPromptDispatching, realMessages]);
 
   useEffect(() => {
     if (!draft) {
@@ -4451,18 +4555,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
           // Kick off the first turn immediately, but do not hold route
           // navigation open on the prompt-start roundtrip. The pending prompt
-          // stays mirrored in storage so the new conversation page can show
-          // optimistic state and retry only if this detached start fails.
+          // stays mirrored in storage until the new conversation page can see
+          // the accepted user turn in its transcript, so the optimistic state
+          // survives the route handoff and can still retry if this detached
+          // start fails before that handoff completes.
           void api.promptSession(
             newId,
             initialPrompt.text,
             initialPrompt.behavior,
             initialPrompt.images,
             initialPrompt.attachmentRefs,
-          ).then(() => {
-            clearPendingConversationPrompt(newId);
-            setPendingConversationPromptDispatching(newId, false);
-          }).catch((error) => {
+          ).catch((error) => {
             setPendingConversationPromptDispatching(newId, false);
             console.error('Initial prompt failed:', error);
           });

@@ -295,7 +295,7 @@ function ConversationCwdGroupHeader({
     : PATH.workspace;
 
   return (
-    <div className="px-4 pt-3 pb-1">
+    <div className="px-4 pt-1 pb-0.5">
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -1263,7 +1263,7 @@ export function Sidebar() {
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
-      <div className="pt-3 pb-2 space-y-0.5">
+      <div className="pt-2 pb-1.5 space-y-0.5">
         <div className="px-1">
           <button
             onClick={() => handleNewConversation()}
@@ -1280,14 +1280,12 @@ export function Sidebar() {
         <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
       </div>
 
-      <div className="mx-3 border-t border-border-subtle my-2" />
-
-      <div className="px-4 pb-1">
+      <div className="px-4 pt-1 pb-0.5">
         <p className="ui-section-label">Threads</p>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
-        <div className="py-1 space-y-0.5">
+        <div className="py-0.5 space-y-0.5">
           {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 ? (
             <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
           ) : null}
@@ -1296,7 +1294,7 @@ export function Sidebar() {
             const collapsed = collapsedConversationGroupKeySet.has(group.key);
 
             return (
-              <div key={`cwd:${group.key}`} className="space-y-0.5 pt-3 first:pt-0">
+              <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
                 <ConversationCwdGroupHeader
                   label={group.label}
                   cwd={group.cwd}

@@ -130,6 +130,12 @@ import {
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
 import {
+  applyDesktopConversationStreamEvent,
+  createDesktopConversationStreamStateFromSnapshot,
+  readDesktopConversationState,
+  type DesktopConversationState,
+} from '../conversations/desktopConversationState.js';
+import {
   createSessionFromExisting,
   destroySession,
   getAvailableModelObjects,
@@ -196,6 +202,12 @@ export interface DesktopLocalApiDispatchResult {
 type DesktopLocalApiStreamEvent =
   | { type: 'open' }
   | { type: 'message'; data: string }
+  | { type: 'error'; message: string }
+  | { type: 'close' };
+
+export type DesktopConversationStateBridgeEvent =
+  | { type: 'open' }
+  | { type: 'state'; state: DesktopConversationState }
   | { type: 'error'; message: string }
   | { type: 'close' };
 
@@ -852,6 +864,155 @@ export async function subscribeDesktopAppEvents(
 
     closed = true;
     unsubscribe();
+    onEvent({ type: 'close' });
+  };
+}
+
+function shouldRefreshDesktopConversationStateForAppEvent(
+  conversationId: string,
+  event: { type?: string; topics?: unknown; sessionId?: unknown },
+): boolean {
+  if (event.type === 'invalidate') {
+    const topics = Array.isArray(event.topics) ? event.topics : [];
+    return topics.includes('sessions') || topics.includes('sessionFiles');
+  }
+
+  if ((event.type === 'live_title' || event.type === 'session_meta_changed' || event.type === 'session_file_changed')
+    && typeof event.sessionId === 'string') {
+    return event.sessionId === conversationId;
+  }
+
+  return false;
+}
+
+export async function subscribeDesktopConversationState(
+  input: {
+    conversationId: string;
+    tailBlocks?: number;
+    surfaceId?: string;
+    surfaceType?: 'desktop_web' | 'mobile_web';
+  },
+  onEvent: (event: DesktopConversationStateBridgeEvent) => void,
+): Promise<() => void> {
+  const capabilityContext = await getLocalLiveSessionCapabilityContext();
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new Error('conversationId required');
+  }
+
+  let closed = false;
+  let liveUnsubscribe: (() => void) | null = null;
+  let appUnsubscribe: (() => void) | null = null;
+  let currentState = await readDesktopConversationState({
+    conversationId,
+    profile: capabilityContext.getCurrentProfile(),
+    tailBlocks: input.tailBlocks,
+  });
+  let lastSerializedState = '';
+
+  const emitState = (state: DesktopConversationState) => {
+    if (closed) {
+      return;
+    }
+
+    const serialized = JSON.stringify(state);
+    if (serialized === lastSerializedState) {
+      return;
+    }
+
+    lastSerializedState = serialized;
+    onEvent({ type: 'state', state });
+  };
+
+  const closeLiveSubscription = () => {
+    liveUnsubscribe?.();
+    liveUnsubscribe = null;
+  };
+
+  const syncLiveSubscription = () => {
+    closeLiveSubscription();
+
+    if (!currentState.liveSession.live) {
+      return;
+    }
+
+    liveUnsubscribe = subscribeLiveSession(conversationId, (event) => {
+      if (closed) {
+        return;
+      }
+
+      currentState = {
+        ...currentState,
+        liveSession: currentState.liveSession.live
+          ? {
+              ...currentState.liveSession,
+              ...(event.type === 'title_update' ? { title: event.title } : {}),
+            }
+          : currentState.liveSession,
+        stream: applyDesktopConversationStreamEvent(currentState.stream, event),
+      };
+
+      if (currentState.liveSession.live) {
+        currentState = {
+          ...currentState,
+          liveSession: {
+            ...currentState.liveSession,
+            isStreaming: currentState.stream.isStreaming,
+          },
+        };
+      }
+
+      emitState(currentState);
+    }, {
+      ...(typeof input.tailBlocks === 'number' && Number.isInteger(input.tailBlocks) && input.tailBlocks > 0
+        ? { tailBlocks: input.tailBlocks }
+        : {}),
+      ...(input.surfaceId && input.surfaceType
+        ? { surface: { surfaceId: input.surfaceId, surfaceType: input.surfaceType } }
+        : {}),
+    });
+  };
+
+  const refreshState = async () => {
+    currentState = await readDesktopConversationState({
+      conversationId,
+      profile: capabilityContext.getCurrentProfile(),
+      tailBlocks: input.tailBlocks,
+    });
+    syncLiveSubscription();
+    emitState(currentState);
+  };
+
+  onEvent({ type: 'open' });
+  emitState(currentState);
+  syncLiveSubscription();
+
+  appUnsubscribe = subscribeAppEvents((event) => {
+    if (!shouldRefreshDesktopConversationStateForAppEvent(conversationId, event as { type?: string; topics?: unknown; sessionId?: unknown })) {
+      return;
+    }
+
+    void refreshState().catch((error) => {
+      if (closed) {
+        return;
+      }
+
+      onEvent({
+        type: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
+
+  return () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    closeLiveSubscription();
+    appUnsubscribe?.();
+    appUnsubscribe = null;
     onEvent({ type: 'close' });
   };
 }

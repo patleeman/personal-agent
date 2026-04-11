@@ -53,6 +53,19 @@ export interface DesktopApiStreamEvent {
   message?: string;
 }
 
+export interface DesktopConversationStateSubscriptionRequest {
+  conversationId: string;
+  tailBlocks?: number;
+  surfaceId?: string;
+  surfaceType?: 'desktop_web' | 'mobile_web';
+}
+
+export interface DesktopConversationStateBridgeEvent {
+  type: 'open' | 'state' | 'error' | 'close';
+  state?: unknown;
+  message?: string;
+}
+
 export interface DesktopAppBridgeEvent {
   type: 'open' | 'event' | 'error' | 'close';
   event?: unknown;
@@ -383,6 +396,10 @@ export interface HostController {
   summarizeAndForkLiveSession?(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt?(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult>;
   abortLiveSession?(conversationId: string): Promise<{ ok: true }>;
+  subscribeConversationState?(
+    input: DesktopConversationStateSubscriptionRequest,
+    onEvent: (event: DesktopConversationStateBridgeEvent) => void,
+  ): Promise<() => void>;
   subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
   subscribeDesktopAppEvents?(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void>;
   restart(): Promise<void>;

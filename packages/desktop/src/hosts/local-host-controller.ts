@@ -8,6 +8,8 @@ import type {
   DesktopConversationCwdChangeRequest,
   DesktopConversationDeferredResumeMutationRequest,
   DesktopConversationDeferredResumeScheduleRequest,
+  DesktopConversationStateBridgeEvent,
+  DesktopConversationStateSubscriptionRequest,
   DesktopDurableRunAttentionRequest,
   DesktopConversationModelPreferencesRequest,
   DesktopConversationModelPreferencesUpdateRequest,
@@ -575,6 +577,14 @@ export class LocalHostController implements HostController {
   async abortLiveSession(conversationId: string): Promise<{ ok: true }> {
     const module = await this.loadLocalApi();
     return module.abortDesktopLiveSession(conversationId);
+  }
+
+  async subscribeConversationState(
+    input: DesktopConversationStateSubscriptionRequest,
+    onEvent: (event: DesktopConversationStateBridgeEvent) => void,
+  ): Promise<() => void> {
+    const module = await this.loadLocalApi();
+    return module.subscribeDesktopConversationState(input, onEvent);
   }
 
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {

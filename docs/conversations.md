@@ -67,6 +67,19 @@ The desktop web UI can keep multiple saved conversations open at once.
 
 Remote browser sessions can still watch and reply to live conversations, but they now use the same main web surface rather than a separate companion app.
 
+## Local desktop conversation state
+
+In the local Electron app, the conversation page should render from a single backend-owned conversation state instead of stitching together many separate frontend fetches.
+
+The local shape now follows this rule:
+
+- the backend owns the authoritative conversation view model
+- the renderer subscribes to that state over desktop IPC
+- prompt, abort, takeover, rename, and other mutations stay as separate commands
+- the browser-style SSE path remains available for non-local surfaces, but it is no longer the primary local mental model
+
+This keeps local conversation startup simpler and makes route handoff less sensitive to timing differences between bootstrap, saved transcript reads, and live stream attachment.
+
 ## Practical rule
 
 Use the conversation for the execution itself.

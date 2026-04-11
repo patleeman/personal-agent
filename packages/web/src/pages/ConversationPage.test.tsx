@@ -19,6 +19,7 @@ import {
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
+  hasConversationTranscriptAcceptedPendingInitialPrompt,
   shouldDeferConversationFileRefresh,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
@@ -545,6 +546,78 @@ describe('conversation live state helpers', () => {
       hasPendingInitialPrompt: true,
       pendingInitialPromptDispatching: false,
       hasStreamSnapshot: false,
+    })).toBe(false);
+  });
+
+  it('keeps a detached-start prompt visible until the accepted user turn shows up in the transcript', () => {
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      messages: undefined,
+      prompt: {
+        text: 'Kick this off',
+        images: [],
+        attachmentRefs: [],
+      },
+    })).toBe(false);
+
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      messages: [{
+        type: 'text',
+        ts: '2026-04-11T12:00:00.000Z',
+        text: 'Working…',
+      }],
+      prompt: {
+        text: 'Kick this off',
+        images: [],
+        attachmentRefs: [],
+      },
+    })).toBe(false);
+
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      messages: [{
+        type: 'user',
+        ts: '2026-04-11T12:00:01.000Z',
+        text: 'Kick this off',
+      }],
+      prompt: {
+        text: 'Kick this off',
+        images: [],
+        attachmentRefs: [],
+      },
+    })).toBe(true);
+  });
+
+  it('matches image-only detached-start prompts by user image count', () => {
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      messages: [{
+        type: 'user',
+        ts: '2026-04-11T12:00:01.000Z',
+        text: '',
+        images: [{ alt: 'Attached image' }],
+      }],
+      prompt: {
+        text: '',
+        images: [{
+          data: 'abc',
+          mimeType: 'image/png',
+        }],
+        attachmentRefs: [],
+      },
+    })).toBe(true);
+
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      messages: [{
+        type: 'user',
+        ts: '2026-04-11T12:00:01.000Z',
+        text: '',
+      }],
+      prompt: {
+        text: '',
+        images: [{
+          data: 'abc',
+          mimeType: 'image/png',
+        }],
+        attachmentRefs: [],
+      },
     })).toBe(false);
   });
 

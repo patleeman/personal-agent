@@ -2,7 +2,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
 import { app } from 'electron';
-import type { DesktopApiStreamEvent } from './hosts/types.js';
+import type {
+  DesktopApiStreamEvent,
+  DesktopConversationStateBridgeEvent,
+  DesktopConversationStateSubscriptionRequest,
+} from './hosts/types.js';
 
 export type DesktopAppBridgeEvent =
   | { type: 'open' }
@@ -288,6 +292,10 @@ export interface LocalApiModule {
     conversationId: string;
   }): Promise<{ newSessionId: string; sessionFile: string }>;
   abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }>;
+  subscribeDesktopConversationState(
+    input: DesktopConversationStateSubscriptionRequest,
+    onEvent: (event: DesktopConversationStateBridgeEvent) => void,
+  ): Promise<() => void>;
   subscribeDesktopLocalApiStream(
     path: string,
     onEvent: (event: DesktopApiStreamEvent) => void,

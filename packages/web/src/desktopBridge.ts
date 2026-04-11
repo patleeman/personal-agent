@@ -46,6 +46,7 @@ import type {
 } from './types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
+export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
@@ -258,6 +259,13 @@ export interface PersonalAgentDesktopBridge {
     referencedAttachmentIds: string[];
   }>;
   abortLiveSession(conversationId: string): Promise<{ ok: true }>;
+  subscribeConversationState(input: {
+    conversationId: string;
+    tailBlocks?: number;
+    surfaceId?: string;
+    surfaceType?: 'desktop_web' | 'mobile_web';
+  }): Promise<{ subscriptionId: string }>;
+  unsubscribeConversationState(subscriptionId: string): Promise<void>;
   subscribeApiStream(path: string): Promise<{ subscriptionId: string }>;
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
   subscribeAppEvents(): Promise<{ subscriptionId: string }>;
