@@ -12,7 +12,7 @@
   }
 
   .ui-desktop-top-bar {
-    @apply relative z-30 flex h-8 shrink-0 items-center gap-2 border-b border-border-subtle bg-base/95 px-2.5 backdrop-blur-md;
+    @apply relative z-30 flex h-10 shrink-0 items-center gap-2 border-b border-border-subtle bg-base/95 px-3 backdrop-blur-md;
     -webkit-app-region: drag;
   }
 
@@ -40,7 +40,7 @@
   }
 
   .ui-toolbar-button.ui-desktop-top-bar__icon-button {
-    @apply h-6 min-h-0 min-w-[24px] rounded-md border-0 bg-transparent px-1.5 text-[11px] text-secondary shadow-none transition-colors hover:border-0 hover:bg-elevated/55 hover:text-primary disabled:border-0 disabled:bg-transparent disabled:text-dim disabled:opacity-100;
+    @apply h-7 min-h-0 min-w-[26px] rounded-md border-0 bg-transparent px-1.5 text-[11px] text-secondary shadow-none transition-colors hover:border-0 hover:bg-elevated/55 hover:text-primary disabled:border-0 disabled:bg-transparent disabled:text-dim disabled:opacity-100;
   }
 
   .ui-desktop-top-bar__center {
@@ -52,7 +52,7 @@
   }
 
   .ui-toolbar-button.ui-desktop-top-bar__action-button {
-    @apply h-6 min-h-0 rounded-md border-0 bg-transparent px-1.5 text-[11px] shadow-none hover:border-0 hover:bg-elevated/55;
+    @apply h-7 min-h-0 rounded-md border-0 bg-transparent px-2 text-[11px] shadow-none hover:border-0 hover:bg-elevated/55;
   }
 
   .ui-page-meta {

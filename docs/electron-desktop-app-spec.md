@@ -11,6 +11,8 @@
 The desktop shell owns:
 
 - native windowing and menus
+- a macOS `hiddenInset` title bar so native traffic lights stay visible and consistent
+- a custom top bar sized to visually align in-app navigation controls with the native macOS traffic lights
 - the packaged renderer entrypoint
 - the preload bridge for trusted local capabilities
 - host switching and local/remote connection state
