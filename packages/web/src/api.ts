@@ -688,7 +688,7 @@ export const api = {
     return post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`);
   },
 
-  // ── Shell run ─────────────────────────────────────────────────────────────
+  // ── Workspace helpers ────────────────────────────────────────────────────
   pickFolder: async (cwd?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -696,14 +696,6 @@ export const api = {
     }
 
     return post<FolderPickerResult>('/folder-picker', { cwd });
-  },
-  run: async (command: string, cwd?: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.runShellCommand({ command, ...(cwd !== undefined ? { cwd } : {}) });
-    }
-
-    return post<{ output: string; exitCode: number; cwd: string }>('/run', { command, cwd });
   },
 
   // ── Memory browser ────────────────────────────────────────────────────────

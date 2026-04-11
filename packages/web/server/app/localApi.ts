@@ -86,7 +86,6 @@ import {
 } from '../conversations/sessions.js';
 import { readGitStatusSummaryWithTelemetry } from '../workspace/gitStatus.js';
 import { listMemoryDocs, listSkillsForProfile } from '../knowledge/memoryDocs.js';
-import { runShellCommandCapability } from '../workspace/shellRunCapability.js';
 import { readVaultFilesCapability, pickFolderCapability } from '../workspace/workspaceDesktopCapability.js';
 import type { ServerRouteContext } from '../routes/context.js';
 import {
@@ -1400,14 +1399,6 @@ export async function updateDesktopVaultRoot(root: string | null) {
 export async function pickDesktopFolder(input: { cwd?: string | null } = {}) {
   const context = await getLocalServerRouteContext();
   return pickFolderCapability(input, {
-    getDefaultWebCwd: context.getDefaultWebCwd,
-    resolveRequestedCwd: context.resolveRequestedCwd,
-  });
-}
-
-export async function runDesktopShellCommand(input: { command?: string; cwd?: string | null }) {
-  const context = await getLocalServerRouteContext();
-  return runShellCommandCapability(input, {
     getDefaultWebCwd: context.getDefaultWebCwd,
     resolveRequestedCwd: context.resolveRequestedCwd,
   });

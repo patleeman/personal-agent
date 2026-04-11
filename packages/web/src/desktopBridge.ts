@@ -81,7 +81,6 @@ export interface PersonalAgentDesktopBridge {
   readVaultFiles(): Promise<VaultFileListResult>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
   pickFolder(input?: { cwd?: string | null }): Promise<FolderPickerResult>;
-  runShellCommand(input: { command: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;

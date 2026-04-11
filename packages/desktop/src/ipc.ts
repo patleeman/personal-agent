@@ -334,17 +334,6 @@ export function registerDesktopIpc(options: {
     return controller.pickFolder(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:run-shell-command`, async (event, input: { command: string; cwd?: string | null }) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.runShellCommand) {
-      throw new Error('Dedicated desktop shell commands are only available for the local host.');
-    }
-
-    return controller.runShellCommand(input);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-title-settings`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

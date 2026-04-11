@@ -167,11 +167,6 @@ export interface DesktopDurableRunAttentionRequest {
   read?: boolean;
 }
 
-export interface DesktopShellRunRequest {
-  command: string;
-  cwd?: string | null;
-}
-
 export interface DesktopScheduledTaskUpdateRequest {
   taskId: string;
   title?: string;
@@ -273,7 +268,6 @@ export interface HostController {
   readVaultFiles?(): Promise<unknown>;
   updateVaultRoot?(root: string | null): Promise<unknown>;
   pickFolder?(input?: { cwd?: string | null }): Promise<unknown>;
-  runShellCommand?(input: DesktopShellRunRequest): Promise<{ output: string; exitCode: number; cwd: string }>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;

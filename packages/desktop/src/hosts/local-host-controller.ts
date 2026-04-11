@@ -177,11 +177,6 @@ export class LocalHostController implements HostController {
     return module.pickDesktopFolder(input);
   }
 
-  async runShellCommand(input: { command: string; cwd?: string | null }): Promise<{ output: string; exitCode: number; cwd: string }> {
-    const module = await this.loadLocalApi();
-    return module.runDesktopShellCommand(input);
-  }
-
   async readConversationTitleSettings(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationTitleSettings();

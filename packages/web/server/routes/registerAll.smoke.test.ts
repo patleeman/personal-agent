@@ -124,24 +124,6 @@ describe('registerServerRoutes smoke test', () => {
     }));
   });
 
-  it('serves command execution through the app surface', async () => {
-    const response = await fetch(`${appBaseUrl}/api/run`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        command: "printf 'smoke-run'",
-        cwd: workspaceDir,
-      }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      output: 'smoke-run',
-      exitCode: 0,
-      cwd: workspaceDir,
-    });
-  });
-
   it('serves remote pairing admin routes through the main app surface', async () => {
     const pairingCodeResponse = await fetch(`${appBaseUrl}/api/remote-access/pairing-code`, {
       method: 'POST',

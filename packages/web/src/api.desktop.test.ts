@@ -811,36 +811,6 @@ describe('api desktop transport', () => {
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
 
-  it('uses the dedicated desktop shell-command bridge on the local Electron host', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const runShellCommand = vi.fn().mockResolvedValue({
-      output: '/repo\n',
-      exitCode: 0,
-      cwd: '/repo',
-    });
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-          canManageConnections: true,
-        }),
-        runShellCommand,
-      },
-    });
-
-    const { api } = await import('./api');
-    const result = await api.run('pwd', '/repo');
-
-    expect(runShellCommand).toHaveBeenCalledWith({ command: 'pwd', cwd: '/repo' });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
-  });
-
   it('uses the dedicated desktop automation workspace bridge on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
@@ -1389,37 +1359,6 @@ describe('api desktop transport', () => {
       files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
-  });
-
-  it('falls back to HTTP for the desktop shell-command bridge on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ output: '/repo\n', exitCode: 0, cwd: '/repo' }));
-    vi.stubGlobal('fetch', fetchMock);
-    const runShellCommand = vi.fn();
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'web-1',
-          activeHostLabel: 'Tailnet',
-          activeHostKind: 'web',
-          activeHostSummary: 'Remote host reachable.',
-          canManageConnections: true,
-        }),
-        runShellCommand,
-      },
-    });
-
-    const { api } = await import('./api');
-    const result = await api.run('pwd', '/repo');
-
-    expect(runShellCommand).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: 'pwd', cwd: '/repo' }),
-    });
-    expect(result).toEqual({ output: '/repo\n', exitCode: 0, cwd: '/repo' });
   });
 
   it('falls back to HTTP for the automation workspace bridge on non-local hosts', async () => {

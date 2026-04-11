@@ -13,7 +13,6 @@ import { registerModelRoutes } from './models.js';
 import { registerProfileRoutes } from './profiles.js';
 import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
-import { registerShellRoutes } from './shell.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
@@ -53,8 +52,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerMemoryNotesRoutes(app, context);
 
   registerFolderPickerRoutes(app, context);
-
-  registerShellRoutes(app, context);
 
   registerRunsOpsRoutes(app);
 }

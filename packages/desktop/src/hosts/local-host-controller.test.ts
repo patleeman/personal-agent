@@ -46,7 +46,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopVaultFiles: vi.fn(),
     updateDesktopVaultRoot: vi.fn(),
     pickDesktopFolder: vi.fn(),
-    runDesktopShellCommand: vi.fn(),
     readDesktopConversationTitleSettings: vi.fn(),
     updateDesktopConversationTitleSettings: vi.fn(),
     readDesktopConversationPlansWorkspace: vi.fn(),
@@ -371,32 +370,6 @@ describe('LocalHostController', () => {
     expect(pickDesktopFolder).toHaveBeenCalledWith({ cwd: '/repo' });
     expect(readDesktopConversationTitleSettings).toHaveBeenCalledTimes(1);
     expect(updateDesktopConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });
-    expect(backend.ensureStarted).not.toHaveBeenCalled();
-  });
-
-  it('routes desktop shell commands through the local API module without loopback proxying', async () => {
-    const runDesktopShellCommand = vi.fn().mockResolvedValue({
-      output: '/workspace/repo\n',
-      exitCode: 0,
-      cwd: '/workspace/repo',
-    });
-    const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      runDesktopShellCommand,
-    }));
-    const backend = createBackendMock();
-    const controller = new LocalHostController(
-      { id: 'local', label: 'Local', kind: 'local' },
-      backend,
-      loadLocalApi,
-    );
-
-    await expect(controller.runShellCommand?.({ command: 'pwd', cwd: '/workspace/repo' })).resolves.toEqual({
-      output: '/workspace/repo\n',
-      exitCode: 0,
-      cwd: '/workspace/repo',
-    });
-
-    expect(runDesktopShellCommand).toHaveBeenCalledWith({ command: 'pwd', cwd: '/workspace/repo' });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
