@@ -660,18 +660,6 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-function SummarizeForkIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M4 7.5h6.25" />
-      <path d="M4 12h6.25" />
-      <path d="M4 16.5h6.25" />
-      <path d="M14 6v5.75a2.25 2.25 0 0 0 2.25 2.25H20.5" />
-      <path d="m17.5 11 3 3-3 3" />
-    </svg>
-  );
-}
-
 function ComposerQueuedSendIcon({ label, className }: { label: 'Steer' | 'Follow up'; className?: string }) {
   if (label === 'Follow up') {
     return (
@@ -4834,12 +4822,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || conversationCwdEditorOpen
     || conversationCwdPickBusy
     || conversationCwdBusy;
-  const summarizeAndForkDisabled = summaryForkBusy;
-  const summarizeAndForkTitle = summaryForkBusy
-    ? 'Creating a summary fork…'
-    : stream.isStreaming
-      ? 'Duplicate the conversation through the latest completed turn, compact the copy, and open it as a new conversation.'
-      : 'Duplicate this thread, compact the copy, and open it as a new conversation.';
   const hasComposerShelfContent = draftMentionItems.length > 0
     || pendingQueue.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
@@ -5078,26 +5060,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     <ConversationWorkspaceShell contextRailEnabled={!draft}>
       {() => (
         <div className="flex h-full flex-col overflow-hidden">
-          <PageHeader
-            className="min-h-[44px] gap-2 py-2"
-            actions={!draft && id ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <div className="flex items-center border-l border-border-subtle pl-3">
-                  <button
-                    type="button"
-                    onClick={() => { void summarizeAndForkConversation(); }}
-                    disabled={summarizeAndForkDisabled}
-                    title={summaryForkBusy ? 'Summarizing and forking this conversation' : summarizeAndForkTitle}
-                    aria-label={summaryForkBusy ? 'Summarizing and forking this conversation' : 'Summarize and fork this conversation'}
-                    className="ui-toolbar-button shrink-0 rounded-xl px-2.5 py-2 text-accent"
-                  >
-                    <SummarizeForkIcon className={cx('h-3.5 w-3.5 shrink-0', summaryForkBusy && 'animate-pulse')} />
-                  </button>
-                </div>
-              </div>
-            ) : undefined}
-          >
-        <div className="flex-1 min-w-0">
+          <PageHeader className="min-h-[44px] gap-2 py-2">
+            <div className="flex-1 min-w-0">
           {isEditingTitle && !draft ? (
             <form
               className="flex min-w-0 items-center gap-2"

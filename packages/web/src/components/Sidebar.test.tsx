@@ -274,11 +274,12 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
   });
 
-  it('marks Chat as the active nav on conversation routes', () => {
+  it('marks Chat as the active nav on conversation routes and exposes row actions for the active thread', () => {
     const html = renderSidebar('/conversations/conv-123');
 
     expect(html).toContain('Chat');
     expect(html).toContain('ui-sidebar-nav-item-active');
+    expect(html).toContain('aria-label="Conversation actions: Clarify background run link"');
     expect(html).not.toContain('>Conversations<');
   });
 

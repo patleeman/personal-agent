@@ -907,7 +907,7 @@ describe('ConversationPage', () => {
     expect(siblings.indexOf(inputShell as ParsedNode)).toBeLessThan(siblings.indexOf(composerMeta as ParsedNode));
   });
 
-  it('keeps the saved conversation composer constrained to the main content column', () => {
+  it('keeps the saved conversation composer constrained to the main content column without the old header fork button', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/test-session']}>
         <Routes>
@@ -917,7 +917,7 @@ describe('ConversationPage', () => {
     );
 
     expect(html).toContain('mx-auto w-full max-w-6xl');
-    expect(html).toContain('aria-label="Summarize and fork this conversation"');
+    expect(html).not.toContain('aria-label="Summarize and fork this conversation"');
     expect(html).not.toContain('summarize + fork');
     expect(html).not.toContain('Show right sidebar');
   });

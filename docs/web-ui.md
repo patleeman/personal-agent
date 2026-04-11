@@ -54,6 +54,7 @@ Important behaviors:
 
 - draft conversation state is durable in the browser UI
 - multiple saved conversations can stay open or pinned at once
+- the Threads sidebar keeps per-conversation actions on the active tab row, including archive, duplicate, summarize and open new, and copy ID, so conversation chrome stays out of the main header
 - the desktop shell keeps open conversation tabs warm by prefetching transcript bootstrap state and keeping background live threads subscribed, so switching tabs can reuse hot cache instead of cold-loading the thread again
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode

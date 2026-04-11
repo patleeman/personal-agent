@@ -20,6 +20,7 @@ import {
   readDraftConversationCwd,
   shouldShowDraftConversationTab,
 } from '../draftConversation';
+import { persistForkPromptDraft } from '../forking';
 import { timeAgo } from '../utils';
 import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import { groupConversationItemsByCwd } from '../conversationCwdGroups';
@@ -30,6 +31,8 @@ import {
   resolveConversationCloseRedirect,
 } from '../conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../localSettings';
+import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
+import type { SessionMeta } from '../types';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (
@@ -343,12 +346,16 @@ function OpenConversationRow({
   onPin,
   onUnpin,
   onClose,
+  onArchive,
+  onDuplicate,
+  onSummarizeAndNew,
+  onCopyId,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
 }: {
-  session: { id: string; title: string; timestamp: string; cwd: string; isRunning?: boolean };
+  session: SessionMeta;
   active: boolean;
   pinned?: boolean;
   canDrag?: boolean;
@@ -357,25 +364,132 @@ function OpenConversationRow({
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
+  onArchive?: () => boolean | Promise<boolean>;
+  onDuplicate?: () => boolean | Promise<boolean>;
+  onSummarizeAndNew?: () => boolean | Promise<boolean>;
+  onCopyId?: () => boolean | Promise<boolean>;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
-  const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLAnchorElement>();
+  const { hoverRef, hovered, onMouseEnter, onMouseLeave } = useSidebarRowHover<HTMLDivElement>();
   const needsAttention = sessionNeedsAttention(session as Parameters<typeof sessionNeedsAttention>[0]);
+  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const copyResetTimeoutRef = useRef<number | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<'duplicate' | 'summarize' | null>(null);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
-  const showTrailingControls = hovered || pinned;
+  useEffect(() => {
+    if (!menuOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node) || !menuRootRef.current || menuRootRef.current.contains(target)) {
+        return;
+      }
+
+      setMenuOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [menuOpen]);
+
+  useEffect(() => () => {
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+        copyResetTimeoutRef.current = null;
+      }
+      setCopyState('idle');
+      return;
+    }
+
+    if (copyState === 'idle') {
+      return;
+    }
+
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setCopyState('idle');
+      copyResetTimeoutRef.current = null;
+    }, 1500);
+
+    return () => {
+      if (copyResetTimeoutRef.current !== null) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+        copyResetTimeoutRef.current = null;
+      }
+    };
+  }, [copyState, menuOpen]);
+
+  const showQuickActions = hovered || menuOpen;
+  const showMenuButton = Boolean(onArchive || onDuplicate || onSummarizeAndNew || onCopyId)
+    && (active || hovered || menuOpen);
+  const showTrailingControls = showQuickActions || showMenuButton || pinned;
+  const contentPaddingClass = showQuickActions
+    ? (!pinned && onClose ? 'pr-20' : 'pr-14')
+    : (showMenuButton || pinned ? 'pr-9' : undefined);
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
+  const menuItemClass = 'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] text-primary transition-colors hover:bg-elevated disabled:cursor-default disabled:opacity-40';
+
+  function stopRowInteraction(event: { preventDefault: () => void; stopPropagation: () => void }) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  async function runMenuAction(
+    action: 'duplicate' | 'summarize',
+    handler: () => boolean | Promise<boolean>,
+  ) {
+    if (busyAction) {
+      return;
+    }
+
+    setBusyAction(action);
+    try {
+      const succeeded = await handler();
+      if (succeeded !== false) {
+        setMenuOpen(false);
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function handleCopyIdClick() {
+    if (!onCopyId || busyAction) {
+      return;
+    }
+
+    const succeeded = await onCopyId();
+    setCopyState(succeeded === false ? 'failed' : 'copied');
+  }
 
   return (
     <div
+      ref={hoverRef}
       className="relative"
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragOver={canDrag ? onDragOver : undefined}
       onDrop={canDrag ? onDrop : undefined}
       onDragEnd={canDrag ? onDragEnd : undefined}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {dropPosition ? (
         <span
@@ -387,7 +501,6 @@ function OpenConversationRow({
         />
       ) : null}
       <Link
-        ref={hoverRef}
         to={`/conversations/${session.id}`}
         draggable={false}
         className={[
@@ -395,8 +508,6 @@ function OpenConversationRow({
           active && 'ui-sidebar-session-row-active',
           canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
         ].filter(Boolean).join(' ')}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
         title={rowTitle}
       >
         <div className="flex w-3 shrink-0 flex-col items-center self-stretch">
@@ -417,88 +528,160 @@ function OpenConversationRow({
         </div>
         <div className={[
           'min-w-0 flex-1',
-          showTrailingControls && 'pr-11',
+          contentPaddingClass,
         ].filter(Boolean).join(' ')}>
           <p className="ui-row-title truncate">{session.title}</p>
           <p className="ui-sidebar-session-meta flex items-center min-w-0">
             <span className="shrink-0">{timeAgo(session.timestamp)}</span>
           </p>
         </div>
-        {showTrailingControls ? (
-          <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-            {!hovered && pinned ? <PinnedIndicator /> : null}
-            {hovered && pinned && onUnpin ? (
-              <button
-                type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onUnpin();
-                }}
-                className="ui-icon-button ui-icon-button-compact"
-                title="Unpin"
-                aria-label="Unpin"
-              >
-                <Ico d={PATH.unpin} size={10} />
-              </button>
-            ) : null}
-            {hovered && !pinned && onPin ? (
-              <button
-                type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onPin();
-                }}
-                className="ui-icon-button ui-icon-button-compact"
-                title="Pin"
-                aria-label="Pin"
-              >
-                <Ico d={PATH.pin} size={10} />
-              </button>
-            ) : null}
-            {hovered && !pinned && onClose ? (
-              <button
-                type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onClose();
-                }}
-                className="ui-icon-button ui-icon-button-compact"
-                title="Close"
-                aria-label="Close"
-              >
-                <Ico d={PATH.close} size={10} />
-              </button>
-            ) : null}
-          </div>
-        ) : null}
       </Link>
+      {showTrailingControls ? (
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
+          {!showQuickActions && pinned && !showMenuButton ? <PinnedIndicator /> : null}
+          {showQuickActions && pinned && onUnpin ? (
+            <button
+              type="button"
+              onPointerDown={stopRowInteraction}
+              onMouseDown={stopRowInteraction}
+              onClick={() => onUnpin()}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Unpin"
+              aria-label="Unpin"
+            >
+              <Ico d={PATH.unpin} size={10} />
+            </button>
+          ) : null}
+          {showQuickActions && !pinned && onPin ? (
+            <button
+              type="button"
+              onPointerDown={stopRowInteraction}
+              onMouseDown={stopRowInteraction}
+              onClick={() => onPin()}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Pin"
+              aria-label="Pin"
+            >
+              <Ico d={PATH.pin} size={10} />
+            </button>
+          ) : null}
+          {showQuickActions && !pinned && onClose ? (
+            <button
+              type="button"
+              onPointerDown={stopRowInteraction}
+              onMouseDown={stopRowInteraction}
+              onClick={() => onClose()}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Close"
+              aria-label="Close"
+            >
+              <Ico d={PATH.close} size={10} />
+            </button>
+          ) : null}
+          {showMenuButton ? (
+            <div ref={menuRootRef} className="relative">
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  if (busyAction) {
+                    return;
+                  }
+                  setMenuOpen((current) => !current);
+                }}
+                className="ui-icon-button ui-icon-button-compact px-1.5"
+                title="Conversation actions"
+                aria-label={`Conversation actions: ${session.title}`}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                disabled={busyAction !== null}
+              >
+                <span aria-hidden="true" className="text-[15px] leading-none">⋯</span>
+              </button>
+              {menuOpen ? (
+                <div
+                  className="ui-menu-shell bottom-auto left-auto right-0 top-full mb-0 mt-1 min-w-[190px] px-2 py-2"
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setMenuOpen(false);
+                    }
+                  }}
+                  role="menu"
+                  aria-label={`Conversation actions for ${session.title}`}
+                >
+                  <div className="space-y-0.5">
+                    {onArchive ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={async () => {
+                          const succeeded = await onArchive();
+                          if (succeeded !== false) {
+                            setMenuOpen(false);
+                          }
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        Archive
+                      </button>
+                    ) : null}
+                    {onDuplicate ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={() => {
+                          void runMenuAction('duplicate', onDuplicate);
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        {busyAction === 'duplicate' ? 'Duplicating…' : 'Duplicate'}
+                      </button>
+                    ) : null}
+                    {onSummarizeAndNew ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={() => {
+                          void runMenuAction('summarize', onSummarizeAndNew);
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
+                      </button>
+                    ) : null}
+                    {onCopyId ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={() => {
+                          void handleCopyIdClick();
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -510,6 +693,7 @@ export function Sidebar() {
     pinnedSessions,
     tabs,
     archivedSessions,
+    openSession,
     closeSession,
     pinSession,
     unpinSession,
@@ -519,6 +703,7 @@ export function Sidebar() {
     moveSession,
     shiftSession,
     loading,
+    refetch,
   } = useConversations();
 
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
@@ -532,6 +717,26 @@ export function Sidebar() {
     sessionId: string | null;
     position: OpenConversationDropPosition;
   } | null>(null);
+  const conversationSurfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
+  const sidebarNoticeTimeoutRef = useRef<number | null>(null);
+  const [sidebarNotice, setSidebarNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
+
+  const showSidebarNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
+    setSidebarNotice({ tone, text });
+    if (sidebarNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(sidebarNoticeTimeoutRef.current);
+    }
+    sidebarNoticeTimeoutRef.current = window.setTimeout(() => {
+      setSidebarNotice(null);
+      sidebarNoticeTimeoutRef.current = null;
+    }, durationMs);
+  }, []);
+
+  useEffect(() => () => {
+    if (sidebarNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(sidebarNoticeTimeoutRef.current);
+    }
+  }, []);
 
   const draftTab = useMemo(() => {
     if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments)) {
@@ -692,6 +897,83 @@ export function Sidebar() {
     navigate('/conversations/new');
   }, [navigate]);
 
+  const resolveLiveConversationIdForAction = useCallback(async (
+    session: Pick<SessionMeta, 'id' | 'isLive'>,
+    actionDescription: string,
+  ) => {
+    if (session.isLive) {
+      return session.id;
+    }
+
+    const recovered = await api.recoverConversation(session.id);
+    if (!recovered.live) {
+      throw new Error(`This conversation could not ${actionDescription}.`);
+    }
+
+    return recovered.conversationId;
+  }, []);
+
+  const openCreatedConversation = useCallback((sessionId: string, initialPromptText?: string) => {
+    if (initialPromptText) {
+      persistForkPromptDraft(sessionId, initialPromptText);
+    }
+
+    openSession(sessionId);
+    void refetch().catch(() => {});
+    navigate(buildConversationSurfacePath(sessionId));
+  }, [navigate, openSession, refetch]);
+
+  const handleDuplicateConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
+    try {
+      const liveConversationId = await resolveLiveConversationIdForAction(session, 'be duplicated');
+      const entries = await api.forkEntries(liveConversationId);
+      const entry = entries[entries.length - 1];
+      if (!entry) {
+        throw new Error('No forkable messages yet.');
+      }
+
+      const { newSessionId } = await retryLiveSessionActionAfterTakeover({
+        attemptAction: () => api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, conversationSurfaceId),
+        takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
+      });
+      openCreatedConversation(newSessionId, entry.text);
+      return true;
+    } catch (error) {
+      showSidebarNotice('danger', `Duplicate failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+      return false;
+    }
+  }, [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice]);
+
+  const handleSummarizeConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
+    try {
+      const liveConversationId = await resolveLiveConversationIdForAction(session, 'be summarized into a new conversation');
+      const { newSessionId } = await retryLiveSessionActionAfterTakeover({
+        attemptAction: () => api.summarizeAndForkSession(liveConversationId, conversationSurfaceId),
+        takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
+      });
+      openCreatedConversation(newSessionId);
+      return true;
+    } catch (error) {
+      showSidebarNotice('danger', `Summarize & New failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+      return false;
+    }
+  }, [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice]);
+
+  const handleCopyConversationId = useCallback(async (conversationId: string) => {
+    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      showSidebarNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(conversationId);
+      return true;
+    } catch {
+      showSidebarNotice('danger', 'Copy to clipboard failed.', 4000);
+      return false;
+    }
+  }, [showSidebarNotice]);
+
   const navigateConversation = useCallback((direction: -1 | 1) => {
     const nextPath = resolveConversationAdjacentPath({
       orderedIds: workspaceConversationTabs.map((session) => session.id),
@@ -814,6 +1096,25 @@ export function Sidebar() {
     closeDraft();
   }
 
+  function handleArchiveConversation(sessionId: string) {
+    const archiveConversation = () => {
+      archiveSession(sessionId);
+    };
+    const archivingActiveConversation = location.pathname === `/conversations/${sessionId}`;
+
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+
+    if (archivingActiveConversation) {
+      navigate(resolveCloseRedirectPath(sessionId));
+      window.setTimeout(archiveConversation, 0);
+      return;
+    }
+
+    archiveConversation();
+  }
+
   function handleCloseConversation(sessionId: string) {
     const closeConversation = () => {
       closeSession(sessionId);
@@ -901,10 +1202,7 @@ export function Sidebar() {
     }
 
     if (activeConversationPinned || activeConversationOpen) {
-      navigate(resolveCloseRedirectPath(activeConversationId));
-      window.setTimeout(() => {
-        archiveSession(activeConversationId);
-      }, 0);
+      handleArchiveConversation(activeConversationId);
       return;
     }
 
@@ -1036,6 +1334,13 @@ export function Sidebar() {
                       onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
                       onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
                       onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
+                      onArchive={!isDraftTab ? () => {
+                        handleArchiveConversation(session.id);
+                        return true;
+                      } : undefined}
+                      onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
+                      onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
+                      onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
                       onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
                       onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
                       onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
@@ -1049,8 +1354,18 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-        <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
+      <div className="shrink-0">
+        {sidebarNotice ? (
+          <div aria-live="polite" className={[
+            'px-4 pb-2 text-[11px]',
+            sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80',
+          ].join(' ')}>
+            {sidebarNotice.text}
+          </div>
+        ) : null}
+        <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
+          <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
+        </div>
       </div>
     </aside>
   );
