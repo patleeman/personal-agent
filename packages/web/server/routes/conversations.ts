@@ -609,27 +609,6 @@ export function registerConversationRoutes(
     }
   });
 
-  const readConversationPlanState = (conversationId: string, body?: { enabled?: boolean; items?: unknown }) => ({
-    conversationId,
-    enabled: body?.enabled === true,
-    items: Array.isArray(body?.items) ? body.items : [],
-  });
-
-  router.get('/api/conversations/:id/plan', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
-
-  router.patch('/api/conversations/:id/plan', (req, res) => {
-    res.json(readConversationPlanState(req.params.id, req.body as { enabled?: boolean; items?: unknown }));
-  });
-
-  router.post('/api/conversations/:id/plan/items/:itemId/reset', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
-
-  router.post('/api/conversations/:id/plan/items/:itemId/status', (req, res) => {
-    res.json(readConversationPlanState(req.params.id));
-  });
 }
 
 

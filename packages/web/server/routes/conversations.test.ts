@@ -687,27 +687,5 @@ describe('conversation routes', () => {
     });
     expect(attentionRes.json).toHaveBeenCalledWith({ ok: true });
 
-    const planRes = createResponse();
-    getHandler('/api/conversations/:id/plan')(createRequest({ params: { id: 'session-1' } }), planRes);
-    expect(planRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
-
-    const planPatchRes = createResponse();
-    patchHandler('/api/conversations/:id/plan')(createRequest({
-      params: { id: 'session-1' },
-      body: { enabled: true, items: [{ id: 'item-1' }] },
-    }), planPatchRes);
-    expect(planPatchRes.json).toHaveBeenCalledWith({
-      conversationId: 'session-1',
-      enabled: true,
-      items: [{ id: 'item-1' }],
-    });
-
-    const planResetRes = createResponse();
-    postHandler('/api/conversations/:id/plan/items/:itemId/reset')(createRequest({ params: { id: 'session-1', itemId: 'item-1' } }), planResetRes);
-    expect(planResetRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
-
-    const planStatusRes = createResponse();
-    postHandler('/api/conversations/:id/plan/items/:itemId/status')(createRequest({ params: { id: 'session-1', itemId: 'item-1' } }), planStatusRes);
-    expect(planStatusRes.json).toHaveBeenCalledWith({ conversationId: 'session-1', enabled: false, items: [] });
   });
 });
