@@ -9,7 +9,6 @@ import {
   resolveProfileSettingsFilePath,
   resolveResourceProfile,
 } from '@personal-agent/resources';
-import { createActivityAgentExtension } from '../extensions/activityAgentExtension.js';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
@@ -100,10 +99,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
     return [
       createScheduledTaskAgentExtension({
-        getCurrentProfile,
-      }),
-      createActivityAgentExtension({
-        stateRoot: getStateRoot(),
         getCurrentProfile,
       }),
       createAskUserQuestionAgentExtension(),

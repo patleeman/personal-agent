@@ -55,10 +55,6 @@ describe('subcommand help discoverability', () => {
       expected: ['Tasks', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
     },
     {
-      argv: ['inbox', '--help'],
-      expected: ['Inbox', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
-    },
-    {
       argv: ['runs', '--help'],
       expected: ['Runs', 'Usage: pa runs [list|show|logs|start|start-agent|rerun|follow-up|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
     },

@@ -23,7 +23,6 @@ pa restart
 pa update
 pa daemon
 pa tasks
-pa inbox
 pa ui
 pa mcp
 pa runs
@@ -106,19 +105,6 @@ pa daemon service uninstall
 ```
 
 Use the daemon if you rely on scheduled tasks, deferred resumes, or durable runs.
-
-## Inbox
-
-```bash
-pa inbox list
-pa inbox show <selector>
-pa inbox read <selector>
-pa inbox unread <selector>
-pa inbox delete <activity-id>
-pa inbox create "Summary" --details "Body"
-```
-
-The inbox mixes activity records and conversation attention.
 
 ## Scheduled tasks
 

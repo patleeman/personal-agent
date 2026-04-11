@@ -2,14 +2,11 @@ import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import {
-  createProjectActivityEntry,
   createReadyDeferredResume,
   getTaskCallbackBinding,
   loadDeferredResumeState,
   resolveDeferredResumeStateFile,
   saveDeferredResumeState,
-  setActivityConversationLinks,
-  writeProfileActivityEntry,
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
 import {
@@ -305,41 +302,6 @@ export function createTasksModule(
     }
   };
 
-  const writeScheduledTaskActivityEntry = (
-    task: ParsedTaskDefinition,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
-    activity: {
-      activityId: string;
-      createdAt: string;
-      summary: string;
-      details?: string;
-      notificationState?: 'none' | 'queued' | 'sent' | 'failed';
-      relatedConversationIds?: string[];
-    },
-  ): void => {
-    writeProfileActivityEntry({
-      stateRoot: context.paths.stateRoot,
-      profile: task.profile,
-      entry: createProjectActivityEntry({
-        id: activity.activityId,
-        createdAt: activity.createdAt,
-        profile: task.profile,
-        kind: 'scheduled-task',
-        summary: activity.summary,
-        details: activity.details,
-        notificationState: activity.notificationState,
-      }),
-    });
-
-    setActivityConversationLinks({
-      stateRoot: context.paths.stateRoot,
-      profile: task.profile,
-      activityId: activity.activityId,
-      relatedConversationIds: activity.relatedConversationIds ?? [],
-      updatedAt: activity.createdAt,
-    });
-  };
-
   const formatTaskCallbackPrompt = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
@@ -457,23 +419,12 @@ export function createTasksModule(
       missedRuns: MissedTaskRunSummary;
     },
   ): void => {
-    try {
-      const activityId = [
-        'task',
-        sanitizeActivityIdSegment(task.id),
-        'missed',
-        sanitizeActivityIdSegment(details.detectedAt.replace(/[.:]/g, '-')),
-      ].join('-');
-
-      writeScheduledTaskActivityEntry(task, context, {
-        activityId,
-        createdAt: details.detectedAt,
-        summary: toMissedTaskActivitySummary(task.id, details.missedRuns.count),
-        details: toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }),
-      });
-    } catch (error) {
-      context.logger.warn(`failed to write missed task activity id=${task.id}: ${(error as Error).message}`);
-    }
+    context.logger.info([
+      toMissedTaskActivitySummary(task.id, details.missedRuns.count),
+      `detectedAt=${details.detectedAt}`,
+      `window=${details.missedRuns.firstScheduledAt}..${details.missedRuns.lastScheduledAt}`,
+      `details=${JSON.stringify(toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }))}`,
+    ].join(' '));
   };
 
   const createDurableTaskRunRecord = async (

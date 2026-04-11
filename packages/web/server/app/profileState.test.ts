@@ -211,7 +211,6 @@ describe('createProfileState', () => {
 
     expect(state.buildLiveSessionExtensionFactories()).toEqual([
       'scheduled-task-extension',
-      'activity-extension',
       'ask-user-question-extension',
       'change-working-directory-extension',
       'run-extension',
@@ -222,10 +221,7 @@ describe('createProfileState', () => {
     expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
     });
-    expect(createActivityAgentExtensionMock).toHaveBeenCalledWith({
-      stateRoot: '/state-root',
-      getCurrentProfile: expect.any(Function),
-    });
+    expect(createActivityAgentExtensionMock).not.toHaveBeenCalled();
     expect(createRunAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
       repoRoot: '/repo-root',
@@ -255,7 +251,6 @@ describe('createProfileState', () => {
       additionalThemePaths: ['/themes/assistant.json'],
       extensionFactories: [
         'scheduled-task-extension',
-        'activity-extension',
         'ask-user-question-extension',
         'change-working-directory-extension',
         'run-extension',

@@ -694,7 +694,7 @@ Recover me after restart
     await module.stop?.(context);
   });
 
-  it('creates inbox activity when a one-time task is missed while the daemon was offline', async () => {
+  it('does not create shared inbox activity when a one-time task is missed while the daemon was offline', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -732,18 +732,12 @@ Write daily report
     await module.start(context);
 
     expect(runTask).not.toHaveBeenCalled();
-    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
-
-    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry.summary).toBe('Scheduled task daily-report was missed while the daemon was offline.');
-    expect(entries[0]?.entry.details).toContain('Missed run:\n2026-03-02T10:00:00.000Z');
-    expect(entries[0]?.entry.details).toContain('Next step:\nRun the task manually if it is still needed.');
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
 
     await module.stop?.(context);
   });
 
-  it('creates one inbox activity when cron runs are missed while the daemon is offline', async () => {
+  it('does not create shared inbox activity when cron runs are missed while the daemon is offline', async () => {
     const repoRoot = createTempDir('tasks-module-repo-');
     const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
     mkdirSync(taskDir, { recursive: true });
@@ -786,18 +780,12 @@ Run hourly task
     await module.start(context);
 
     expect(runTask).not.toHaveBeenCalled();
-    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
-
-    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
-    expect(entries).toHaveLength(1);
-    expect(entries[0]?.entry.summary).toBe('Scheduled task hourly missed 2 runs while the daemon was offline.');
-    expect(entries[0]?.entry.details).toContain('First: 2026-03-02T10:00:00.000Z');
-    expect(entries[0]?.entry.details).toContain('Last: 2026-03-02T11:00:00.000Z');
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
 
     currentTime = new Date('2026-03-02T11:05:30.000Z');
     await module.handleEvent(createTimerEvent(), context);
 
-    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(1);
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
     const persistedState = loadAutomationSchedulerState({ dbPath: resolveRuntimeDbPath(stateRoot) });
     expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
 

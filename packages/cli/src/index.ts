@@ -3850,6 +3850,8 @@ async function inboxCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown inbox subcommand: ${effectiveSubcommand}`);
 }
 
+void inboxCommand;
+
 function parseNumericOption(
   args: string[],
   optionName: string,
@@ -4585,14 +4587,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect scheduled tasks',
       disableBuiltInHelp: true,
       run: tasksCommand,
-    },
-    {
-      name: 'inbox',
-      category: 'data',
-      usage: 'inbox [list|show|create|read|unread|delete|help] [args...]',
-      description: 'Manage inbox items',
-      disableBuiltInHelp: true,
-      run: inboxCommand,
     },
     {
       name: 'ui',

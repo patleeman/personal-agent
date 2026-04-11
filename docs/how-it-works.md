@@ -78,7 +78,7 @@ Those layers are materialized into the runtime that Pi actually sees.
 | Note page | reusable knowledge | vault `notes/` |
 | Skill page | reusable procedure | vault `_skills/` |
 | Tracked page | ongoing work | vault `projects/` |
-| Activity / inbox | passive async attention | machine-local inbox state |
+| Conversation attention | async follow-up on an owned thread | conversation attention state + linked records |
 | Reminder / alert | stronger tell-me-later delivery | machine-local alert/wakeup state |
 | Deferred resume | wake this conversation later | machine-local wakeup state |
 | Run | detached work started now | daemon runtime DB + `daemon/runs/` |
@@ -93,7 +93,7 @@ Those layers are materialized into the runtime that Pi actually sees.
 
 ### Web UI
 
-The web UI is the main day-to-day operator surface. It exposes conversations, inbox, automations, tools, instructions, settings, and optional remote browser access when served over the tailnet.
+The web UI is the main day-to-day operator surface. It exposes conversations, automations, settings, and optional remote browser access when served over the tailnet.
 
 ### Electron desktop shell
 
@@ -109,7 +109,7 @@ The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable
 - durable knowledge belongs in the vault
 - scheduled task files stay machine-local
 - profile behavior belongs in `AGENTS.md` and profile settings, not in random notes
-- if a feature needs later attention, use inbox, reminder, deferred resume, run, or scheduled task explicitly
+- if a feature needs later attention, attach it to the owning conversation, automation, reminder, deferred resume, run, or scheduled task explicitly
 
 ## Related docs
 

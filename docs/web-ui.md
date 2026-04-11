@@ -2,7 +2,7 @@
 
 The web UI is the main day-to-day surface for `personal-agent`.
 
-It exposes the same durable model as the CLI, but with live updates, inbox delivery, conversation management, automations, and settings in one place.
+It exposes the same durable model as the CLI, but with live updates, conversation management, automations, and settings in one place.
 
 ## Start the UI
 
@@ -36,7 +36,6 @@ Useful notes:
 
 Current desktop routes/operators surfaces are:
 
-- **Inbox** — notifications, activity, and attention
 - **Conversations** — draft, saved, open, pinned, archived, and live thread work
 - **Automations** — scheduled tasks and task detail/editing
 - **Settings** — appearance, providers, desktop connections, runtime services, workspace info
@@ -61,16 +60,15 @@ Important behaviors:
 - working directory and model preferences stay attached to the conversation
 - desktop and remote browser sessions can watch the same live conversation
 
-## Inbox and notifications
+## Async attention
 
-The Inbox route is where async attention lands.
+There is no standalone Inbox route anymore.
 
-It shows:
+Async state now lives on the owning surface:
 
-- activity items
-- conversation attention items
-
-The current UI does not surface alert rows or popup/browser notifications.
+- conversation-linked work shows up in the thread and conversation attention state
+- automation-linked work shows up on the automation detail page and its owning thread
+- alert delivery remains separate from durable ownership and can point back into those surfaces
 
 ## Automations
 
@@ -122,7 +120,7 @@ The web UI relies heavily on push updates.
 Live updates include:
 
 - conversation/session changes
-- inbox and alerts
+- alerts
 - tasks
 - durable runs
 - daemon health
