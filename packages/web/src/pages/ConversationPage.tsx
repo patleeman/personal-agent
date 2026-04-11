@@ -285,11 +285,12 @@ export function shouldDeferConversationFileRefresh(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   hasPendingInitialPrompt: boolean;
+  pendingInitialPromptDispatching: boolean;
   hasPendingInitialPromptInFlight: boolean;
 }): boolean {
   return !input.draft
     && Boolean(input.conversationId)
-    && (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight);
+    && (input.hasPendingInitialPrompt || input.pendingInitialPromptDispatching || input.hasPendingInitialPromptInFlight);
 }
 
 export function shouldFetchConversationLiveSessionGitContext(input: {
@@ -1188,6 +1189,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draft,
     conversationId: id,
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    pendingInitialPromptDispatching,
     hasPendingInitialPromptInFlight,
   });
   const effectiveConversationEventVersion = deferConversationFileRefresh

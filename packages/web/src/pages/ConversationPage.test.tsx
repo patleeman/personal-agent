@@ -285,6 +285,7 @@ describe('conversation file refresh deferral', () => {
       draft: false,
       conversationId: 'conv-123',
       hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: false,
     })).toBe(true);
 
@@ -292,6 +293,15 @@ describe('conversation file refresh deferral', () => {
       draft: false,
       conversationId: 'conv-123',
       hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: true,
+      hasPendingInitialPromptInFlight: false,
+    })).toBe(true);
+
+    expect(shouldDeferConversationFileRefresh({
+      draft: false,
+      conversationId: 'conv-123',
+      hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: true,
     })).toBe(true);
   });
@@ -301,6 +311,7 @@ describe('conversation file refresh deferral', () => {
       draft: false,
       conversationId: 'conv-123',
       hasPendingInitialPrompt: false,
+      pendingInitialPromptDispatching: false,
       hasPendingInitialPromptInFlight: false,
     })).toBe(false);
   });
