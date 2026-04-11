@@ -10,7 +10,8 @@ If you are not sure which surface to use, start here.
 - **note page** = reusable knowledge
 - **skill page** = reusable procedure
 - **tracked page** = ongoing work with durable status
-- **activity** = passive async attention
+<<<<<<< HEAD
+- **conversation attention / alert** = async work that should surface later on an owning thread
 - **reminder** = tell me later
 - **deferred resume** = continue this conversation later
 - **run** = detached work started now
@@ -20,12 +21,14 @@ If you are not sure which surface to use, start here.
 
 | If you need to… | Use | Durable home | Do not default to |
 | --- | --- | --- | --- |
-| Work with the agent right now | conversation | session state | activity item or note page |
+<<<<<<< HEAD
+| Work with the agent right now | conversation | session state | note page or detached async state |
 | Save reusable knowledge | note page | `~/Documents/personal-agent/notes/**` | long conversation history |
 | Save reusable workflow instructions | skill page | `~/Documents/personal-agent/_skills/<skill>/SKILL.md` | `AGENTS.md` or ad hoc notes |
 | Keep ongoing work alive across conversations | tracked page | `~/Documents/personal-agent/projects/<id>/project.md` | a top-level note or a giant thread |
 | Save durable behavior or profile defaults | `AGENTS.md`, profile settings, models | `~/Documents/personal-agent/_profiles/<profile>/` | notes or conversations |
-| Surface async results without interrupting much | activity | machine-local activity state | reminders by default |
+<<<<<<< HEAD
+| Surface async results without interrupting much | conversation attention on the owning thread | owning thread state | reminders by default |
 | Tell the user later | reminder | machine-local wakeup + alert state | scheduled task if no automation is needed |
 | Continue the same conversation later | deferred resume | machine-local wakeup state | reminder |
 | Run something detached right now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` | scheduled task |
@@ -47,7 +50,7 @@ Use a **skill page** when the content is a reusable procedure that should be inv
 
 ### Activity vs reminder vs deferred resume
 
-Use **activity** when the result should be visible later but does not need to interrupt.
+Use **conversation attention** when the result should be visible later but does not need to interrupt.
 
 Use a **reminder** when a human-facing nudge matters.
 

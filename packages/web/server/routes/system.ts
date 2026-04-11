@@ -76,6 +76,7 @@ function handleStatus(_req: Request, res: Response): void {
     res.json({
       profile,
       repoRoot: getRepoRootFn(),
+      activityCount: 0,
       webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
     });
   } catch (err) {

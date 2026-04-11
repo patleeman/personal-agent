@@ -8,7 +8,6 @@ const {
   materializeProfileToAgentDirMock,
   resolveProfileSettingsFilePathMock,
   resolveResourceProfileMock,
-  createActivityAgentExtensionMock,
   createArtifactAgentExtensionMock,
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
@@ -30,7 +29,6 @@ const {
   materializeProfileToAgentDirMock: vi.fn(),
   resolveProfileSettingsFilePathMock: vi.fn((profile: string) => `/profiles/${profile}/settings.json`),
   resolveResourceProfileMock: vi.fn(),
-  createActivityAgentExtensionMock: vi.fn(() => 'activity-extension'),
   createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
   createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
   createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
@@ -57,10 +55,6 @@ vi.mock('@personal-agent/resources', () => ({
   materializeProfileToAgentDir: materializeProfileToAgentDirMock,
   resolveProfileSettingsFilePath: resolveProfileSettingsFilePathMock,
   resolveResourceProfile: resolveResourceProfileMock,
-}));
-
-vi.mock('../extensions/activityAgentExtension.js', () => ({
-  createActivityAgentExtension: createActivityAgentExtensionMock,
 }));
 
 vi.mock('../extensions/artifactAgentExtension.js', () => ({
@@ -148,7 +142,6 @@ describe('createProfileState', () => {
       }
       return resolved;
     });
-    createActivityAgentExtensionMock.mockClear();
     createArtifactAgentExtensionMock.mockClear();
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
@@ -221,7 +214,6 @@ describe('createProfileState', () => {
     expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
     });
-    expect(createActivityAgentExtensionMock).not.toHaveBeenCalled();
     expect(createRunAgentExtensionMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
       repoRoot: '/repo-root',

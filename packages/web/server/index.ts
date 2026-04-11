@@ -1143,7 +1143,6 @@ const routeContext = createServerRouteContext({
   buildLiveSessionExtensionFactories,
   flushLiveDeferredResumes,
   getSavedWebUiPreferences: () => readSavedWebUiPreferences(SETTINGS_FILE),
-  listActivityForCurrentProfile,
   listTasksForCurrentProfile,
   listMemoryDocs: () => listMemoryDocs(),
   listSkillsForCurrentProfile: () => listSkillsForProfile(getCurrentProfile()),

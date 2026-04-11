@@ -14,7 +14,6 @@ import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot } from '../automation/durableRuns.js';
 import {
-  listActivityCapability,
   markConversationAttentionCapability,
 } from '../automation/inboxCapability.js';
 import {
@@ -451,7 +450,6 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     buildLiveSessionExtensionFactories: profileState.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes: async () => {},
     getSavedWebUiPreferences: () => readSavedWebUiPreferences(settingsFile),
-    listActivityForCurrentProfile: () => listActivityCapability(profileState.getCurrentProfile()),
     listTasksForCurrentProfile: () => {
       const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());
       const runtimeById = new Map(
@@ -1156,6 +1154,7 @@ export async function readDesktopAppStatus() {
   return {
     profile: context.getCurrentProfile(),
     repoRoot: context.getRepoRoot(),
+    activityCount: 0,
     webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
   };
 }

@@ -79,7 +79,6 @@ describe('registerServerRoutes smoke test', () => {
         archivedConversationIds: [],
         nodeBrowserViews: [],
       }),
-      listActivityForCurrentProfile: () => [],
       listTasksForCurrentProfile: () => [],
       listMemoryDocs: () => [],
       listSkillsForCurrentProfile: () => [],

@@ -26,7 +26,7 @@ Good fits:
 - scheduled-task callbacks that should be easy to notice
 - high-signal blocked or failed background work tied back to a conversation
 
-If something does not need stronger delivery, keep it as ordinary inbox/activity.
+If something does not need stronger delivery, keep it on the owning conversation or automation surface.
 
 ## Relationship to other async features
 
@@ -35,7 +35,7 @@ If something does not need stronger delivery, keep it as ordinary inbox/activity
 - **Inbox** = the in-app attention queue
 - **Alert records** may still exist under the hood for wakeup state
 
-If something should stay visible to the user, prefer inbox activity or conversation attention.
+If something should stay visible to the user, prefer conversation attention on the owning thread.
 
 ### Deferred resume
 
@@ -73,10 +73,7 @@ Acknowledging or dismissing a notification does **not** delete the durable histo
 
 The current web UI does not surface reminder/callback alerts directly.
 
-If async work should remain visible, route it through:
-
-- a standalone inbox activity item, or
-- conversation attention on the relevant thread
+If async work should remain visible, route it through the owning conversation or automation surface.
 
 ## Practical rule of thumb
 
@@ -85,12 +82,12 @@ Use:
 - **reminder** only when you specifically need wakeup/alert state semantics under the hood
 - **deferred resume** when the agent should continue later without the user having to remember
 - **scheduled task** when unattended automation should run later
-- **inbox/activity** for passive async outcomes
-- **inbox/activity** or **conversation attention** when something should remain visible in the current UI
+- **conversation attention** for passive async outcomes on an owning thread
+- **conversation attention** when something should remain visible in the current UI
 
 ## Related docs
 
 - [Async Attention and Wakeups](../async-attention/INDEX.md)
-- [Inbox and Activity](../inbox/INDEX.md)
+- [Shared Inbox Removal](../inbox/INDEX.md)
 - [Conversations](../../docs/conversations.md)
 - [Scheduled Tasks](../scheduled-tasks/INDEX.md)

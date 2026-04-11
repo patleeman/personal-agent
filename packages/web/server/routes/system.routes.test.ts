@@ -94,7 +94,6 @@ describe('system routes', () => {
   function createDesktopHarness(options?: {
     getCurrentProfile?: () => string;
     getRepoRoot?: () => string;
-    listActivityForCurrentProfile?: () => Array<{ read?: boolean }>;
     listTasksForCurrentProfile?: () => unknown[];
   }) {
     const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
@@ -110,7 +109,6 @@ describe('system routes', () => {
     registerSystemRoutes(router as never, {
       getCurrentProfile: options?.getCurrentProfile ?? (() => 'assistant'),
       getRepoRoot: options?.getRepoRoot ?? (() => '/repo'),
-      listActivityForCurrentProfile: options?.listActivityForCurrentProfile ?? (() => [{ read: false }, { read: true }]),
       listTasksForCurrentProfile: options?.listTasksForCurrentProfile ?? (() => [{ id: 'task-1' }]),
     });
 
@@ -142,7 +140,6 @@ describe('system routes', () => {
     const { statusHandler } = createDesktopHarness({
       getCurrentProfile: () => 'datadog',
       getRepoRoot: () => '/worktree',
-      listActivityForCurrentProfile: () => [{ read: false }, { read: true }, {}],
     });
     const res = createJsonResponse();
 
@@ -150,6 +147,7 @@ describe('system routes', () => {
     expect(res.json).toHaveBeenCalledWith({
       profile: 'datadog',
       repoRoot: '/worktree',
+      activityCount: 0,
       webUiRevision: undefined,
     });
 

@@ -24,7 +24,6 @@ interface CreateServerRouteContextOptions {
   buildLiveSessionExtensionFactories: ServerRouteContext['buildLiveSessionExtensionFactories'];
   flushLiveDeferredResumes: () => Promise<void>;
   getSavedWebUiPreferences: ServerRouteContext['getSavedWebUiPreferences'];
-  listActivityForCurrentProfile: () => Array<{ read?: boolean }>;
   listTasksForCurrentProfile: () => CurrentProfileTaskSummary[];
   listMemoryDocs: () => MemoryDocSummary[];
   listSkillsForCurrentProfile: () => SkillSummary[];
@@ -53,7 +52,6 @@ export function createServerRouteContext(options: CreateServerRouteContextOption
     buildLiveSessionExtensionFactories: options.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes: options.flushLiveDeferredResumes,
     getSavedWebUiPreferences: options.getSavedWebUiPreferences,
-    listActivityForCurrentProfile: options.listActivityForCurrentProfile,
     listTasksForCurrentProfile: options.listTasksForCurrentProfile,
     listMemoryDocs: options.listMemoryDocs,
     listSkillsForCurrentProfile: options.listSkillsForCurrentProfile,

@@ -65,7 +65,6 @@ export interface ServerRouteContext {
   buildLiveSessionExtensionFactories: () => ExtensionFactory[];
   flushLiveDeferredResumes: () => Promise<void>;
   getSavedWebUiPreferences: () => SavedWebUiPreferences;
-  listActivityForCurrentProfile: () => Array<{ read?: boolean }>;
   listTasksForCurrentProfile: () => CurrentProfileTaskSummary[];
   listMemoryDocs: () => MemoryDocSummary[];
   listSkillsForCurrentProfile: () => SkillSummary[];

@@ -2,7 +2,7 @@
 id: async-attention
 kind: internal-skill
 title: Async Attention and Wakeups
-summary: Built-in routing guide for deferred resume, reminders, inbox activity, and later attention surfaces.
+summary: Built-in routing guide for deferred resume, reminders, owning surfaces, and later attention.
 tools:
   - deferred_resume
   - reminder
@@ -16,7 +16,7 @@ This page explains how `personal-agent` surfaces work that matters later.
 
 The core distinction is:
 
-- **in-app attention** → inbox/activity plus conversations that need attention
+- **in-app attention** → owning conversations and automations that need attention
 - **stronger delivery** → currently suppressed in the desktop/web UI; do not rely on popup/browser notifications
 - **conversation continuation** → wakeups such as deferred resume
 
@@ -43,7 +43,7 @@ The attention surface answers:
 
 > what should I notice now or later?
 
-That is where inbox/activity live, alongside surfaced conversations that need attention.
+That is where owning conversations, automations, and alerts surface the async state that matters.
 
 ### 3. Wakeup behavior
 
@@ -57,8 +57,8 @@ Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
 
 | Need | Use | Attention style | Durable home |
 | --- | --- | --- | --- |
-| Passive async summary with no conversation | activity / inbox | passive | standalone activity item |
-| Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + linked activity/logs |
+| Passive async summary tied to owned work | surface the owning conversation or automation | passive | conversation/automation + logs |
+| Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + logs |
 | Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer activity or surfaced conversation attention when visibility matters | wakeup + notification state + activity/state |
 | Agent should continue this conversation later | deferred resume | usually passive unless paired with notification delivery | wakeup + conversation |
 | Scheduled automation completes later | task activity, optionally callback into a conversation | passive by default | task log + activity + optional conversation wakeup |
@@ -77,7 +77,7 @@ Good fits:
 
 If the event belongs to a known conversation, keep the durable result with that conversation and surface the conversation in the inbox instead of creating a duplicate visible row by default.
 
-See [Inbox and Activity](../inbox/INDEX.md).
+See [Shared Inbox Removal](../inbox/INDEX.md).
 
 ## Reminders and notification delivery
 
@@ -155,7 +155,7 @@ Do not:
 ## Related docs
 
 - [Decision Guide](../../docs/decision-guide.md)
-- [Inbox and Activity](../inbox/INDEX.md)
+- [Shared Inbox Removal](../inbox/INDEX.md)
 - [Reminders and Notification Delivery](../alerts/INDEX.md)
 - [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - [Conversations](../../docs/conversations.md)

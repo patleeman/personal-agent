@@ -1,8 +1,3 @@
-import { mkdtempSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { closeActivityDbs, listProfileActivityEntries, resolveProfileActivityDbPath } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonStateSnapshot } from '../automation/daemon.js';
 import {
@@ -41,14 +36,6 @@ function createDaemonSnapshot(input: {
   };
 }
 
-const tempDirs: string[] = [];
-
-function createTempStateRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pa-internal-attention-'));
-  tempDirs.push(dir);
-  return dir;
-}
-
 const flushAsyncWork = async () => {
   for (let index = 0; index < 20; index += 1) {
     await Promise.resolve();
@@ -56,41 +43,22 @@ const flushAsyncWork = async () => {
 };
 
 describe('internalAttention', () => {
-  afterEach(async () => {
+  afterEach(() => {
     clearMonitoredServiceAttentionSuppression();
-    closeActivityDbs();
     vi.useRealTimers();
     vi.restoreAllMocks();
-    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
-  it('writes internal attention activity entries with sanitized ids and stored details', () => {
-    const stateRoot = createTempStateRoot();
-    const createdAt = '2026-03-13T12:00:00.000Z';
-
-    const path = writeInternalAttentionEntry({
+  it('does not persist ownerless internal attention entries anymore', () => {
+    expect(writeInternalAttentionEntry({
       repoRoot: '/repo',
-      stateRoot,
+      stateRoot: '/state',
       profile: 'assistant',
       kind: 'service',
       summary: 'Daemon recovered!!!',
       details: 'Recovered after a short restart.',
-      createdAt,
-    });
-
-    expect(path).toBe(`${resolveProfileActivityDbPath({ stateRoot, profile: 'assistant' })}#activity/service-2026-03-13t12-00-00-000z-daemon-recovered`);
-    expect(listProfileActivityEntries({ stateRoot, profile: 'assistant' }).map(({ entry }) => entry)).toEqual([
-      {
-        id: 'service-2026-03-13t12-00-00-000z-daemon-recovered',
-        createdAt,
-        profile: 'assistant',
-        kind: 'service',
-        summary: 'Daemon recovered!!!',
-        details: 'Recovered after a short restart.',
-        relatedProjectIds: undefined,
-        notificationState: 'none',
-      },
-    ]);
+      createdAt: '2026-03-13T12:00:00.000Z',
+    })).toBe('');
   });
 
   it('classifies daemon attention states across healthy, inspection, offline, and inactive cases', () => {

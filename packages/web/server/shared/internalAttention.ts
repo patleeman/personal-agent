@@ -1,6 +1,4 @@
 import {
-  createProjectActivityEntry,
-  writeProfileActivityEntry,
   type ProjectActivityNotificationState,
 } from '@personal-agent/core';
 import type { DaemonStateSnapshot } from '../automation/daemon.js';
@@ -54,25 +52,6 @@ const DEFAULT_ISSUE_GRACE_MS = 60_000;
 const suppressedServiceAttentionUntilMs: Record<MonitoredInternalService, number> = {
   daemon: 0,
 };
-
-function sanitizeActivityIdSegment(value: string): string {
-  const normalized = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-
-  return normalized.length > 0 ? normalized : 'item';
-}
-
-function buildInternalActivityId(prefix: string, createdAt: string, summary: string): string {
-  const timestampKey = createdAt.replace(/[:.]/g, '-');
-  return [
-    prefix,
-    sanitizeActivityIdSegment(timestampKey),
-    sanitizeActivityIdSegment(summary).slice(0, 48),
-  ].join('-');
-}
 
 function buildDetails(lines: Array<string | undefined>): string | undefined {
   const filtered = lines
@@ -139,24 +118,8 @@ function buildRecoveryDetails(
   ]);
 }
 
-export function writeInternalAttentionEntry(input: WriteInternalAttentionEntryInput): string {
-  const createdAt = input.createdAt ?? new Date().toISOString();
-  const idPrefix = input.idPrefix ?? input.kind;
-
-  return writeProfileActivityEntry({
-    stateRoot: input.stateRoot,
-    repoRoot: input.repoRoot,
-    profile: input.profile,
-    entry: createProjectActivityEntry({
-      id: buildInternalActivityId(idPrefix, createdAt, input.summary),
-      createdAt,
-      profile: input.profile,
-      kind: input.kind,
-      summary: input.summary,
-      details: input.details,
-      notificationState: input.notificationState ?? 'none',
-    }),
-  });
+export function writeInternalAttentionEntry(_input: WriteInternalAttentionEntryInput): string {
+  return '';
 }
 
 export function suppressMonitoredServiceAttention(service: MonitoredInternalService, durationMs = DEFAULT_SUPPRESSION_MS): void {
@@ -210,7 +173,13 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
   const now = options.now ?? (() => new Date());
   const logger = options.logger ?? { warn: (message: string, fields?: Record<string, unknown>) => logWarn(message, fields) };
   const writeEntry = options.writeEntry ?? ((input: WriteInternalAttentionEntryInput) => {
-    writeInternalAttentionEntry(input);
+    logger.warn('suppressed ownerless internal attention event', {
+      profile: input.profile,
+      kind: input.kind,
+      summary: input.summary,
+      details: input.details,
+      idPrefix: input.idPrefix,
+    });
   });
   const stateRecords = new Map<MonitoredInternalService, ServiceAttentionStateRecord>();
   const issueGraceMs = Math.max(0, options.issueGraceMs ?? DEFAULT_ISSUE_GRACE_MS);

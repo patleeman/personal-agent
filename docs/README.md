@@ -17,7 +17,7 @@ Use these other places for adjacent concerns:
 
 - repo `AGENTS.md` — repo-specific engineering rules
 - active profile `AGENTS.md` — user/profile behavior and durable preferences
-- `../internal-skills/` — built-in runtime feature guides for runs, tasks, artifacts, inbox, reminders, and async attention
+- `../internal-skills/` — built-in runtime feature guides for runs, tasks, artifacts, reminders, async attention, and inbox removal
 - `~/Documents/personal-agent/_skills/<skill>/SKILL.md` — reusable workflow skills
 - tool schemas / runtime prompt material — exact live tool contracts
 
@@ -61,8 +61,8 @@ Then use this order:
 - [MCP](./mcp.md)
 - [Web server route modules](./web-server-routing.md)
 - [Troubleshooting](./troubleshooting.md)
-- [Notification Center and Activity](../internal-skills/inbox/INDEX.md)
 - [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
+- [Shared Inbox Removal](../internal-skills/inbox/INDEX.md)
 
 ## Built-in internal skills
 
@@ -72,8 +72,8 @@ These pages live under `../internal-skills/` because they describe runtime featu
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Runs](../internal-skills/runs/INDEX.md)
-- [Notification Center and Activity](../internal-skills/inbox/INDEX.md)
 - [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
+- [Shared Inbox Removal](../internal-skills/inbox/INDEX.md)
 - [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
 
 ## One place to go by question
@@ -85,7 +85,7 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | How do notes, skills, projects, and AGENTS fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md) |
 | Where should durable knowledge live? | [Pages](./pages.md) | [Knowledge Management System](./knowledge-system.md) |
 | Where should ongoing work live? | [Tracked Pages](./projects.md) | [Conversations](./conversations.md) |
-| How do async outcomes, reminders, wakeups, and inbox differ? | [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md) | [Notification Center and Activity](../internal-skills/inbox/INDEX.md), [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md) |
+| How do async outcomes, reminders, wakeups, and owning surfaces differ? | [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md) | [Shared Inbox Removal](../internal-skills/inbox/INDEX.md), [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How should I handle local repo files? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
 | How do rendered outputs work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Pages](./projects.md) |
@@ -101,7 +101,8 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | Save reusable procedure | skill page | `~/Documents/personal-agent/_skills/<skill>/SKILL.md` |
 | Track ongoing work | tracked page | `~/Documents/personal-agent/projects/<id>/project.md` + `state.yaml` |
 | Store durable behavior or profile preferences | `AGENTS.md`, profile `settings.json`, profile `models.json` | `~/Documents/personal-agent/_profiles/<profile>/` |
-| Notice async results later | activity / alerts | machine-local activity + wakeup state |
+<<<<<<< HEAD
+| Notice async results later | conversation attention / alerts | owning thread state + wakeup/alert state |
 | Wake the same conversation later | reminder or deferred resume | machine-local wakeup state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` |
 | Run automation later or repeatedly | scheduled task | `~/.local/state/personal-agent/sync/{_tasks|tasks}/**` |

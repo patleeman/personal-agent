@@ -1,83 +1,29 @@
 ---
 id: inbox
 kind: internal-skill
-title: Notification Center and Activity
-summary: Built-in guidance for inbox behavior, activity records, and conversation attention surfacing.
-tools:
-  - activity
+title: Shared Inbox Removal
+summary: The shared inbox model has been removed; async outcomes now live on their owning surfaces.
 ---
 
-# Notification Center and Activity
+# Shared Inbox Removal
 
-The inbox/notification center is personal-agent's **local in-app attention surface** for asynchronous things.
+`personal-agent` no longer has a shared inbox as a product surface.
 
-It is not a second transcript and it is not a copy of every assistant reply. The current web UI focuses on standalone activity and conversations that need attention.
+Use these owners instead:
 
-The inbox exists to answer:
+- conversation-linked async work → the conversation thread and conversation attention state
+- automation-linked work → the automation detail view and its owning thread
+- detached run state → the owning conversation/thread
+- reminders/alerts → wakeup and alert delivery pointing back to the owning thread
 
-> What happened that you may want to notice later?
+Do not design new flows around standalone inbox rows, `pa inbox`, or a shared async triage queue.
 
----
+If you are looking for the old guidance, use these instead:
 
-## Core model
-
-### Conversation
-
-A conversation is the primary home for interactive work.
-
-If you are actively talking to the agent, output should usually stay in the conversation.
-
-### Activity item
-
-An activity item is a durable summary of an event.
-
-Examples:
-
-- a scheduled task completed
-- a verification run failed
-- a deferred resume fired
-- an external event arrived
-
-### Inbox
-
-The inbox is a surfacing layer over:
-
-1. **standalone activity items**, and
-2. **conversations that now need attention**
-
-The inbox is therefore an attention queue, not a storage system of its own.
-
-### Notification delivery
-
-Notifications are not the durable record. The durable record is the conversation, activity item, wakeup state, project, artifact, or log.
-
-Current desktop/web surfaces intentionally avoid popup/browser notification delivery and do not render alert rows.
-
----
-
-## Routing rules
-
-### Foreground conversation
-
-If output belongs to an active foreground conversation, put it in the conversation.
-
-Do **not** also create a separate standalone inbox item just because a reply was produced.
-
-Examples:
-
-- normal back-and-forth chat
-- tool output during an active coding session
-- direct answers to the current prompt
-
-### Asynchronous work tied to a conversation
-
-If work happens later and belongs to an existing conversation, the durable result should still live with that conversation.
-
-If that conversation is no longer the active foreground context, the system should surface the **conversation** in the inbox.
-
-Examples:
-
-- a background job launched from a conversation finishes later
+- [Async Attention and Wakeups](../async-attention/INDEX.md)
+- [Reminders and Notification Delivery](../alerts/INDEX.md)
+- [Runs](../runs/INDEX.md)
+- [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - an archived conversation reaches a decision point
 - an autonomous run attached to a conversation fails
 - a deferred resume wakes a dormant conversation back up
