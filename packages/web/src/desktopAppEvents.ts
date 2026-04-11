@@ -25,14 +25,9 @@ export async function subscribeDesktopAppEvents(listener: DesktopAppEventsListen
 
   let subscriptionId: string | null = null;
   let closed = false;
+  const pendingEvents: DesktopAppEventsEnvelope[] = [];
 
-  const handleEvent = (event: Event) => {
-    const customEvent = event as CustomEvent<DesktopAppEventsEnvelope>;
-    const detail = customEvent.detail;
-    if (!detail || detail.subscriptionId !== subscriptionId) {
-      return;
-    }
-
+  const forwardEvent = (detail: DesktopAppEventsEnvelope) => {
     switch (detail.event.type) {
       case 'open':
         listener.onopen?.();
@@ -49,6 +44,39 @@ export async function subscribeDesktopAppEvents(listener: DesktopAppEventsListen
     }
   };
 
+  const replayPendingEvents = () => {
+    if (!subscriptionId || pendingEvents.length === 0) {
+      pendingEvents.length = 0;
+      return;
+    }
+
+    const queuedEvents = pendingEvents.splice(0, pendingEvents.length);
+    for (const detail of queuedEvents) {
+      if (detail.subscriptionId === subscriptionId) {
+        forwardEvent(detail);
+      }
+    }
+  };
+
+  const handleEvent = (event: Event) => {
+    const customEvent = event as CustomEvent<DesktopAppEventsEnvelope>;
+    const detail = customEvent.detail;
+    if (!detail || closed) {
+      return;
+    }
+
+    if (!subscriptionId) {
+      pendingEvents.push(detail);
+      return;
+    }
+
+    if (detail.subscriptionId !== subscriptionId) {
+      return;
+    }
+
+    forwardEvent(detail);
+  };
+
   window.addEventListener(DESKTOP_APP_EVENTS_EVENT, handleEvent as EventListener);
 
   try {
@@ -61,8 +89,10 @@ export async function subscribeDesktopAppEvents(listener: DesktopAppEventsListen
     }
 
     subscriptionId = result.subscriptionId;
+    replayPendingEvents();
   } catch (error) {
     window.removeEventListener(DESKTOP_APP_EVENTS_EVENT, handleEvent as EventListener);
+    pendingEvents.length = 0;
     throw error;
   }
 
@@ -72,6 +102,7 @@ export async function subscribeDesktopAppEvents(listener: DesktopAppEventsListen
     }
 
     closed = true;
+    pendingEvents.length = 0;
     window.removeEventListener(DESKTOP_APP_EVENTS_EVENT, handleEvent as EventListener);
     if (subscriptionId) {
       void bridge.unsubscribeAppEvents(subscriptionId).catch(() => {

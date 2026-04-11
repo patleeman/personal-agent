@@ -46,13 +46,9 @@ export class DesktopApiEventSource implements EventSourceLike {
   private subscriptionId: string | null = null;
   private nativeSource: EventSource | null = null;
   private closed = false;
-  private readonly handleDesktopStreamEvent = (event: Event) => {
-    const customEvent = event as CustomEvent<DesktopApiStreamEnvelope>;
-    const detail = customEvent.detail;
-    if (!detail || detail.subscriptionId !== this.subscriptionId) {
-      return;
-    }
+  private pendingDesktopEvents: DesktopApiStreamEnvelope[] = [];
 
+  private handleDesktopEnvelope(detail: DesktopApiStreamEnvelope): void {
     switch (detail.event.type) {
       case 'open':
         this.readyState = DesktopApiEventSource.OPEN;
@@ -70,6 +66,40 @@ export class DesktopApiEventSource implements EventSourceLike {
         this.detachDesktopListener();
         return;
     }
+  }
+
+  private replayPendingDesktopEvents(): void {
+    if (!this.subscriptionId || this.pendingDesktopEvents.length === 0) {
+      this.pendingDesktopEvents = [];
+      return;
+    }
+
+    const queuedEvents = this.pendingDesktopEvents;
+    this.pendingDesktopEvents = [];
+    for (const detail of queuedEvents) {
+      if (detail.subscriptionId === this.subscriptionId) {
+        this.handleDesktopEnvelope(detail);
+      }
+    }
+  }
+
+  private readonly handleDesktopStreamEvent = (event: Event) => {
+    const customEvent = event as CustomEvent<DesktopApiStreamEnvelope>;
+    const detail = customEvent.detail;
+    if (!detail || this.closed) {
+      return;
+    }
+
+    if (!this.subscriptionId) {
+      this.pendingDesktopEvents.push(detail);
+      return;
+    }
+
+    if (detail.subscriptionId !== this.subscriptionId) {
+      return;
+    }
+
+    this.handleDesktopEnvelope(detail);
   };
 
   constructor(private readonly path: string) {
@@ -79,6 +109,7 @@ export class DesktopApiEventSource implements EventSourceLike {
   close(): void {
     this.closed = true;
     this.readyState = DesktopApiEventSource.CLOSED;
+    this.pendingDesktopEvents = [];
 
     if (this.nativeSource) {
       this.nativeSource.close();
@@ -116,7 +147,9 @@ export class DesktopApiEventSource implements EventSourceLike {
       }
 
       this.subscriptionId = subscriptionId;
+      this.replayPendingDesktopEvents();
     } catch {
+      this.pendingDesktopEvents = [];
       this.readyState = DesktopApiEventSource.CONNECTING;
       this.onerror?.(new Event('error'));
     }
