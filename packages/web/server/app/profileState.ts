@@ -167,8 +167,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     warmMemoryBrowserCaches(profile);
     await onProfileChanged?.(profile);
     invalidateAppTopics(
-      'activity',
-      'alerts',
       'sessions',
       'tasks',
       'runs',

@@ -68,7 +68,7 @@ describe('alertCapability', () => {
     expect(acknowledgeAlertForProfileMock).toHaveBeenCalledWith('assistant', 'alert-1');
     expect(dismissAlertForProfileMock).toHaveBeenCalledWith('assistant', 'missing');
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('alerts');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions', 'runs');
   });
 
   it('snoozes alerts and invalidates related snapshots when the alert exists', async () => {
@@ -88,6 +88,6 @@ describe('alertCapability', () => {
     expect(snoozeAlertForProfileMock).toHaveBeenNthCalledWith(1, 'assistant', 'alert-1', { delay: '15m' });
     expect(snoozeAlertForProfileMock).toHaveBeenNthCalledWith(2, 'assistant', 'missing', { delay: '15m' });
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('alerts', 'sessions', 'runs');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions', 'runs');
   });
 });

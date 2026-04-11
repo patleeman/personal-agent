@@ -120,7 +120,7 @@ describe('inboxCapability', () => {
     expect(markActivityReadStateMock).toHaveBeenNthCalledWith(1, 'assistant', 'activity-1', false);
     expect(markActivityReadStateMock).toHaveBeenNthCalledWith(2, 'assistant', 'missing', true);
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('activity', 'sessions');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
   });
 
   it('clears inbox state and invalidates when entries change', () => {
@@ -164,7 +164,7 @@ describe('inboxCapability', () => {
       openConversationIds: ['pinned-2'],
     });
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(1);
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('activity', 'sessions');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
   });
 
   it('starts activity conversations, writes durable context, and invalidates snapshots', async () => {
@@ -227,7 +227,7 @@ describe('inboxCapability', () => {
       'referenced_context',
       expect.stringContaining('Look at the staging rollout before merging.'),
     );
-    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('activity', 'sessions');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
     expect(result).toEqual({
       activityId: 'activity-1',
       id: 'conversation-1',

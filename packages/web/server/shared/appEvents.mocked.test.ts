@@ -144,13 +144,15 @@ import {
 
 function markDirectory(path: string): void {
   let current = path;
-  while (true) {
+  let complete = false;
+  while (!complete) {
     directories.add(current);
     existingPaths.add(current);
     if (current === '/') {
-      return;
+      complete = true;
+    } else {
+      current = dirname(current);
     }
-    current = dirname(current);
   }
 }
 
@@ -233,13 +235,13 @@ describe('appEvents mocked behavior', () => {
       events.push(event);
     });
 
-    invalidateAppTopics('runs', 'alerts', 'runs');
+    invalidateAppTopics('runs', 'tasks', 'runs');
     invalidateAppTopics();
     unsubscribe();
     publishAppEvent({ type: 'connected' });
 
     expect(events).toEqual([
-      { type: 'invalidate', topics: ['alerts', 'runs'] },
+      { type: 'invalidate', topics: ['runs', 'tasks'] },
     ]);
   });
 

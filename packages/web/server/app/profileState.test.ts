@@ -307,8 +307,6 @@ describe('createProfileState', () => {
     expect(warmMemoryBrowserCachesMock).toHaveBeenCalledWith('other');
     expect(onProfileChanged).toHaveBeenCalledWith('other');
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith(
-      'activity',
-      'alerts',
       'sessions',
       'tasks',
       'runs',

@@ -5,26 +5,26 @@ describe('streamSnapshotEvents', () => {
   it('deduplicates topics while preserving first-seen order', async () => {
     const writes: string[] = [];
 
-    await streamSnapshotEvents(['sessions', 'activity', 'sessions', 'runs'], {
+    await streamSnapshotEvents(['sessions', 'tasks', 'sessions', 'runs'], {
       buildEvents: (topic) => ({ topic }),
       writeEvent: (event) => {
         writes.push(event.topic);
       },
     });
 
-    expect(writes).toEqual(['sessions', 'activity', 'runs']);
+    expect(writes).toEqual(['sessions', 'tasks', 'runs']);
   });
 
   it('writes each event from array snapshots and skips empty builders', async () => {
     const writes: string[] = [];
 
-    await streamSnapshotEvents(['sessions', 'activity', 'runs'], {
+    await streamSnapshotEvents(['sessions', 'tasks', 'runs'], {
       buildEvents: (topic) => {
         if (topic === 'sessions') {
           return [{ topic: 'sessions-1' }, { topic: 'sessions-2' }];
         }
 
-        if (topic === 'activity') {
+        if (topic === 'tasks') {
           return null;
         }
 

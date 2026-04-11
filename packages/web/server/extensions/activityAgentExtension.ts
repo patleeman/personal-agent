@@ -295,7 +295,7 @@ export function createActivityAgentExtension(options: {
                 });
               }
 
-              invalidateAppTopics('activity');
+              invalidateAppTopics('sessions');
               return {
                 content: [{ type: 'text' as const, text: `Created activity @${activityId}.` }],
                 details: {
@@ -327,7 +327,7 @@ export function createActivityAgentExtension(options: {
                 ids: readState,
               });
 
-              invalidateAppTopics('activity');
+              invalidateAppTopics('sessions');
               return {
                 content: [{
                   type: 'text' as const,
@@ -368,7 +368,7 @@ export function createActivityAgentExtension(options: {
                 ids: readState,
               });
 
-              invalidateAppTopics('activity');
+              invalidateAppTopics('sessions');
               return {
                 content: [{
                   type: 'text' as const,

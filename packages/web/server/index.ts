@@ -385,7 +385,7 @@ function clearInboxForCurrentProfile() {
   const clearedConversationIds = markConversationSessionsRead(profile, archivedAttentionSessions);
 
   if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
-    invalidateAppTopics('activity', 'sessions');
+    invalidateAppTopics('sessions');
   }
 
   return {
@@ -416,7 +416,7 @@ function cullExpiredInboxItems() {
     );
 
     if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
-      invalidateAppTopics('activity', 'sessions');
+      invalidateAppTopics('sessions');
     }
 
     return {

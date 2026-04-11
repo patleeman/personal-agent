@@ -32,7 +32,7 @@ export function acknowledgeAlertCapability(profile: string, alertId: string) {
 
   const alert = acknowledgeAlertForProfile(profile, normalizedAlertId);
   if (alert) {
-    invalidateAppTopics('alerts');
+    invalidateAppTopics('sessions', 'runs');
   }
 
   return alert;
@@ -46,7 +46,7 @@ export function dismissAlertCapability(profile: string, alertId: string) {
 
   const alert = dismissAlertForProfile(profile, normalizedAlertId);
   if (alert) {
-    invalidateAppTopics('alerts');
+    invalidateAppTopics('sessions', 'runs');
   }
 
   return alert;
@@ -64,7 +64,7 @@ export async function snoozeAlertCapability(
 
   const result = await snoozeAlertForProfile(profile, normalizedAlertId, input);
   if (result) {
-    invalidateAppTopics('alerts', 'sessions', 'runs');
+    invalidateAppTopics('sessions', 'runs');
   }
 
   return result;

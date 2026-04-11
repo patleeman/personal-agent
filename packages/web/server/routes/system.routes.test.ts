@@ -214,14 +214,15 @@ describe('system routes', () => {
     appEventHandler?.({ type: 'session_meta_changed', sessionId: 'session-1' });
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'session_meta_changed', sessionId: 'session-1' })}\n\n`);
 
-    appEventHandler?.({ type: 'invalidate', topics: ['activity', 'runs'] });
+    appEventHandler?.({ type: 'invalidate', topics: ['sessions', 'runs'] });
     await flushAsyncWork();
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'invalidate', topics: ['activity', 'runs'] })}\n\n`);
+    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'invalidate', topics: ['sessions', 'runs'] })}\n\n`);
 
     streamSnapshotEventsMock.mockImplementationOnce(async () => {
       throw new Error('snapshot failed');
     });
-    appEventHandler?.({ type: 'invalidate', topics: ['alerts'] });
+    appEventHandler?.({ type: 'invalidate', topics: ['sessions'] });
+    await flushAsyncWork();
     await flushAsyncWork();
     expect(logWarnMock).toHaveBeenCalledWith('app event stream write failed', expect.objectContaining({
       message: 'snapshot failed',

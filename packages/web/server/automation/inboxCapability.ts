@@ -88,7 +88,7 @@ export function markActivityReadCapability(profile: string, activityId: string, 
 
   const changed = markActivityReadState(profile, normalizedActivityId, read);
   if (changed) {
-    invalidateAppTopics('activity', 'sessions');
+    invalidateAppTopics('sessions');
   }
 
   return changed;
@@ -127,7 +127,7 @@ export function clearInboxCapability(
   });
 
   if (result.deletedActivityIds.length > 0 || result.clearedConversationIds.length > 0) {
-    invalidateAppTopics('activity', 'sessions');
+    invalidateAppTopics('sessions');
   }
 
   return result;
@@ -169,7 +169,7 @@ export async function startActivityConversationCapability(activityId: string, co
     relatedConversationIds,
   }));
 
-  invalidateAppTopics('activity', 'sessions');
+  invalidateAppTopics('sessions');
 
   return {
     activityId: match.entry.id,

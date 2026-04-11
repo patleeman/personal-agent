@@ -17,8 +17,6 @@ import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic =
-  | 'activity'
-  | 'alerts'
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
@@ -68,8 +66,6 @@ interface AppEventWatchTarget {
 }
 
 const ALL_TOPICS: AppEventTopic[] = [
-  'activity',
-  'alerts',
   'sessions',
   'sessionFiles',
   'artifacts',
@@ -194,10 +190,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   ];
 
   return {
-    activity: activitySources,
-    alerts: [
-      { path: alertsStateFile, kind: 'file' },
-    ],
     sessions: [
       { path: conversationAttentionStateFile, kind: 'file' },
       { path: deferredResumeStateFile, kind: 'file' },

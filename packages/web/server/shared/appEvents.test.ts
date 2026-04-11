@@ -10,8 +10,6 @@ import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from '.
 const originalEnv = process.env;
 const tempDirs: string[] = [];
 const ALL_TOPICS = [
-  'activity',
-  'alerts',
   'sessions',
   'sessionFiles',
   'artifacts',
