@@ -102,7 +102,6 @@ describe('api desktop transport', () => {
     const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
     const readLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo', sessionFile: '/tmp/live-1.jsonl', title: 'Live 1', isStreaming: false }]);
     const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
-    const readLiveSessionStats = vi.fn().mockResolvedValue({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
     const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
     const readSessionBlock = vi.fn().mockResolvedValue({ id: 'block-1', type: 'text', text: 'hello' });
@@ -215,7 +214,6 @@ describe('api desktop transport', () => {
         updateConversationModelPreferences,
         readLiveSessions,
         readLiveSession,
-        readLiveSessionStats,
         readLiveSessionForkEntries,
         readLiveSessionContext,
         readSessionDetail,
@@ -291,7 +289,6 @@ describe('api desktop transport', () => {
     const updatedModelPreferences = await api.updateConversationModelPreferences('live-1', { thinkingLevel: 'medium' }, 'surface-1');
     const liveSessions = await api.liveSessions();
     const live = await api.liveSession('live-1');
-    const liveStats = await api.liveSessionStats('live-1');
     const forkEntries = await api.forkEntries('live-1');
     const liveContext = await api.liveSessionContext('live-1');
     const sessionDetail = await api.sessionDetail('live-1', { tailBlocks: 24 });
@@ -378,7 +375,6 @@ describe('api desktop transport', () => {
     });
     expect(readLiveSessions).toHaveBeenCalledTimes(1);
     expect(readLiveSession).toHaveBeenCalledWith('live-1');
-    expect(readLiveSessionStats).toHaveBeenCalledWith('live-1');
     expect(readLiveSessionForkEntries).toHaveBeenCalledWith('live-1');
     expect(readLiveSessionContext).toHaveBeenCalledWith('live-1');
     expect(readSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
@@ -480,7 +476,6 @@ describe('api desktop transport', () => {
     expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
     expect(liveSessions).toEqual([{ id: 'live-1', cwd: '/repo', sessionFile: '/tmp/live-1.jsonl', title: 'Live 1', isStreaming: false }]);
     expect(live).toEqual({ live: true, id: 'live-1' });
-    expect(liveStats).toEqual({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
     expect(forkEntries).toEqual([{ entryId: 'entry-1', text: 'fork from here' }]);
     expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });
     expect(sessionDetail).toEqual({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
@@ -1812,15 +1807,13 @@ describe('api desktop transport', () => {
     expect(submitted).toEqual({ id: 'login-1', provider: 'remote-auth', providerName: 'Remote Auth', status: 'running' });
   });
 
-  it('falls back to HTTP for live-session list and stats on non-local desktop hosts', async () => {
+  it('falls back to HTTP for the live-session list on non-local desktop hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse([
         { id: 'remote-live', cwd: '/remote', sessionFile: '/tmp/remote-live.jsonl', title: 'Remote live', isStreaming: false },
-      ]))
-      .mockResolvedValueOnce(createJsonResponse({ tokens: { input: 3, output: 5, total: 8 }, cost: 0.1 }));
+      ]));
     vi.stubGlobal('fetch', fetchMock);
     const readLiveSessions = vi.fn();
-    const readLiveSessionStats = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -1832,22 +1825,17 @@ describe('api desktop transport', () => {
           canManageConnections: true,
         }),
         readLiveSessions,
-        readLiveSessionStats,
       },
     });
 
     const { api } = await import('./api');
     const liveSessions = await api.liveSessions();
-    const stats = await api.liveSessionStats('remote-live');
 
     expect(readLiveSessions).not.toHaveBeenCalled();
-    expect(readLiveSessionStats).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/live-sessions', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/live-sessions/remote-live/stats', { method: 'GET', cache: 'no-store' });
     expect(liveSessions).toEqual([
       { id: 'remote-live', cwd: '/remote', sessionFile: '/tmp/remote-live.jsonl', title: 'Remote live', isStreaming: false },
     ]);
-    expect(stats).toEqual({ tokens: { input: 3, output: 5, total: 8 }, cost: 0.1 });
   });
 
   it('falls back to HTTP for desktop conversation artifact and attachment bridges on non-local hosts', async () => {

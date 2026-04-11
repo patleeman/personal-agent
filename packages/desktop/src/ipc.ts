@@ -1043,17 +1043,6 @@ export function registerDesktopIpc(options: {
     return controller.readLiveSession(conversationId);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-stats`, async (event, conversationId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readLiveSessionStats) {
-      throw new Error('Dedicated desktop live-session stats reads are only available for the local host.');
-    }
-
-    return controller.readLiveSessionStats(conversationId);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, async (event, conversationId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

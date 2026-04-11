@@ -42,7 +42,6 @@ import type {
   LiveSessionForkEntry,
   LiveSessionMeta,
   LiveSessionPresenceState,
-  LiveSessionStats,
   DeferredResumeSummary,
   FolderPickerResult,
   PromptAttachmentRefInput,
@@ -240,7 +239,6 @@ export interface PersonalAgentDesktopBridge {
   readConversationAttachmentAsset(input: { conversationId: string; attachmentId: string; asset: 'source' | 'preview'; revision?: number }): Promise<ConversationAttachmentAssetData>;
   readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
-  readLiveSessionStats(conversationId: string): Promise<LiveSessionStats>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
   readSessionDetail(input: {

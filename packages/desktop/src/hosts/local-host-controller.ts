@@ -577,11 +577,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopLiveSession(conversationId);
   }
 
-  async readLiveSessionStats(conversationId: string): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopLiveSessionStats(conversationId);
-  }
-
   async readLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSessionForkEntries(conversationId);

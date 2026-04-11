@@ -7,10 +7,7 @@ import { registerConversationTitlesRoutes } from './conversationTitles.js';
 import { registerConversationRoutes } from './conversations.js';
 import { registerDaemonRoutes } from './daemon.js';
 import { registerFolderPickerRoutes } from './folderPicker.js';
-import {
-  registerLiveSessionRoutes,
-  registerLiveSessionStatsRoutes,
-} from './liveSessions.js';
+import { registerLiveSessionRoutes } from './liveSessions.js';
 import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerModelRoutes } from './models.js';
 import { registerProfileRoutes } from './profiles.js';
@@ -44,7 +41,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerConversationStateRoutes(app, context);
 
   registerLiveSessionRoutes(app, context);
-  registerLiveSessionStatsRoutes(app, context);
 
   registerActivityRoutes(app, context);
 

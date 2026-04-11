@@ -47,7 +47,6 @@ import {
   exportSessionHtml,
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
-  getSessionStats,
   isLive as isLiveSession,
   registry as liveRegistry,
   renameSession,
@@ -2170,17 +2169,6 @@ export async function readDesktopLiveSession(conversationId: string) {
   }
 
   return { live: true as const, ...entry };
-}
-
-export async function readDesktopLiveSessionStats(conversationId: string) {
-  await getLocalRoutes();
-
-  const stats = getSessionStats(conversationId.trim());
-  if (!stats) {
-    throw new Error('404 Not Found');
-  }
-
-  return stats;
 }
 
 export async function readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {

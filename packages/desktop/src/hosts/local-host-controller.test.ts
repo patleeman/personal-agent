@@ -465,12 +465,10 @@ describe('LocalHostController', () => {
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
-  it('routes desktop live-session workspace reads through the local API module without loopback proxying', async () => {
+  it('routes desktop live-session list reads through the local API module without loopback proxying', async () => {
     const readDesktopLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo' }]);
-    const readDesktopLiveSessionStats = vi.fn().mockResolvedValue({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopLiveSessions,
-      readDesktopLiveSessionStats,
     }));
     const backend = createBackendMock();
     const controller = new LocalHostController(
@@ -480,10 +478,8 @@ describe('LocalHostController', () => {
     );
 
     await expect(controller.readLiveSessions?.()).resolves.toEqual([{ id: 'live-1', cwd: '/repo' }]);
-    await expect(controller.readLiveSessionStats?.('live-1')).resolves.toEqual({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
 
     expect(readDesktopLiveSessions).toHaveBeenCalledTimes(1);
-    expect(readDesktopLiveSessionStats).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

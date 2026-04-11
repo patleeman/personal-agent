@@ -212,7 +212,6 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment-asset`, input),
   readLiveSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-sessions`),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
-  readLiveSessionStats: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-stats`, conversationId),
   readLiveSessionForkEntries: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, conversationId),
   readLiveSessionContext: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-context`, conversationId),

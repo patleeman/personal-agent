@@ -13,7 +13,6 @@ const {
   forkSessionMock,
   getLiveSessionForkEntriesMock,
   getLiveSessionsMock,
-  getSessionStatsMock,
   invalidateAppTopicsMock,
   isLiveMock,
   listPendingBackgroundRunResultsMock,
@@ -64,7 +63,6 @@ const {
   forkSessionMock: vi.fn(),
   getLiveSessionForkEntriesMock: vi.fn(),
   getLiveSessionsMock: vi.fn(),
-  getSessionStatsMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   isLiveMock: vi.fn(),
   listPendingBackgroundRunResultsMock: vi.fn(),
@@ -130,7 +128,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   forkSession: forkSessionMock,
   getLiveSessionForkEntries: getLiveSessionForkEntriesMock,
   getLiveSessions: getLiveSessionsMock,
-  getSessionStats: getSessionStatsMock,
   isLive: isLiveMock,
   queuePromptContext: queuePromptContextMock,
   registry: liveRegistry,
@@ -191,7 +188,6 @@ vi.mock('../workspace/gitStatus.js', () => ({
 import {
   handleLiveSessionPrompt,
   registerLiveSessionRoutes,
-  registerLiveSessionStatsRoutes,
   writeLiveConversationControlError,
 } from './liveSessions.js';
 
@@ -289,30 +285,6 @@ function createDesktopHarness(options?: {
   };
 }
 
-function createStatsHarness() {
-  const getHandlers = new Map<string, Handler>();
-  const router = {
-    get: vi.fn((path: string, handler: Handler) => {
-      getHandlers.set(path, handler);
-    }),
-  };
-
-  registerLiveSessionStatsRoutes(router as never, {
-    buildLiveSessionExtensionFactories: () => [],
-    buildLiveSessionResourceOptions: () => ({}),
-    flushLiveDeferredResumes: async () => {},
-    getCurrentProfile: () => 'assistant',
-    getDefaultWebCwd: () => '/default-cwd',
-    getRepoRoot: () => '/repo',
-    listMemoryDocs: () => [],
-    listTasksForCurrentProfile: () => [],
-  });
-
-  return {
-    getHandler: (path: string) => getHandlers.get(path)!,
-  };
-}
-
 describe('live session routes', () => {
   beforeEach(() => {
     abortLocalSessionMock.mockReset();
@@ -327,7 +299,6 @@ describe('live session routes', () => {
     forkSessionMock.mockReset();
     getLiveSessionForkEntriesMock.mockReset();
     getLiveSessionsMock.mockReset();
-    getSessionStatsMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     isLiveMock.mockReset();
     listPendingBackgroundRunResultsMock.mockReset();
@@ -375,7 +346,6 @@ describe('live session routes', () => {
     forkSessionMock.mockResolvedValue({ id: 'fork-1' });
     getLiveSessionForkEntriesMock.mockReturnValue([{ id: 'fork-entry-1' }]);
     getLiveSessionsMock.mockReturnValue([{ id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' }]);
-    getSessionStatsMock.mockReturnValue({ totalMessages: 12 });
     isLiveMock.mockReturnValue(false);
     listPendingBackgroundRunResultsMock.mockReturnValue([]);
     loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: '/tmp/daemon.sock' } });
@@ -864,27 +834,7 @@ describe('live session routes', () => {
     expect(deleteRes.json).toHaveBeenCalledWith({ ok: true });
   });
 
-  it('registers stats routes and maps live-session control errors through the exported helper', () => {
-    const { getHandler } = createStatsHarness();
-
-    const statsRes = createResponse();
-    getHandler('/api/live-sessions/:id/stats')(createRequest({ params: { id: 'live-1' } }), statsRes);
-    expect(statsRes.json).toHaveBeenCalledWith({ totalMessages: 12 });
-
-    getSessionStatsMock.mockReturnValueOnce(null);
-    const missingStatsRes = createResponse();
-    getHandler('/api/live-sessions/:id/stats')(createRequest({ params: { id: 'missing' } }), missingStatsRes);
-    expect(missingStatsRes.status).toHaveBeenCalledWith(404);
-    expect(missingStatsRes.json).toHaveBeenCalledWith({ error: 'Not found' });
-
-    getSessionStatsMock.mockImplementationOnce(() => {
-      throw new Error('stats exploded');
-    });
-    const statsErrorRes = createResponse();
-    getHandler('/api/live-sessions/:id/stats')(createRequest({ params: { id: 'live-1' } }), statsErrorRes);
-    expect(statsErrorRes.status).toHaveBeenCalledWith(500);
-    expect(statsErrorRes.json).toHaveBeenCalledWith({ error: 'Error: stats exploded' });
-
+  it('maps live-session control errors through the exported helper', () => {
     const errorRes = createResponse();
     expect(writeLiveConversationControlError(errorRes as never, new LiveSessionControlErrorClass('Busy'))).toBe(true);
     expect(errorRes.status).toHaveBeenCalledWith(409);

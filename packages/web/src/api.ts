@@ -856,14 +856,6 @@ export const api = {
 
     return get<LiveSessionContext>(`/live-sessions/${id}/context`);
   },
-  liveSessionStats: async (id: string) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readLiveSessionStats(id);
-    }
-
-    return get<{ tokens: { input: number; output: number; total: number }; cost: number }>(`/live-sessions/${id}/stats`);
-  },
   conversationBootstrap: async (id: string, options?: {
     tailBlocks?: number;
     knownSessionSignature?: string;

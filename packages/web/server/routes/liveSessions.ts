@@ -6,7 +6,6 @@ import {
   exportSessionHtml,
   getLiveSessions as getLocalLiveSessions,
   getLiveSessionForkEntries,
-  getSessionStats,
   isLive as isLocalLive,
   LiveSessionControlError,
   subscribe as subscribeLocal,
@@ -616,28 +615,3 @@ export function registerLiveSessionRoutes(
   });
 }
 
-
-
-export function registerLiveSessionStatsRoutes(
-  router: Pick<Express, 'get'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getDefaultWebCwd' | 'buildLiveSessionResourceOptions' | 'buildLiveSessionExtensionFactories' | 'flushLiveDeferredResumes' | 'listTasksForCurrentProfile' | 'listMemoryDocs'>,
-): void {
-  initializeLiveSessionRoutesContext(context);
-  router.get('/api/live-sessions/:id/stats', (req, res) => {
-    try {
-      const stats = getSessionStats(req.params.id);
-      if (!stats) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-      res.json(stats);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-}
