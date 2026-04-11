@@ -27,6 +27,7 @@ import {
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInlineLoadingState,
+  shouldFetchConversationAttachments,
   resolveConversationVisibleScrollBinding,
   buildConversationInitialModelPreferenceState,
   resolveConversationInitialModelPreferenceState,
@@ -174,6 +175,34 @@ describe('conversation initial model preference state', () => {
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
     })).toBeNull();
+  });
+});
+
+describe('conversation attachment fetch gating', () => {
+  it('only loads saved conversation attachments when the drawings picker is actually open', () => {
+    expect(shouldFetchConversationAttachments({
+      draft: true,
+      conversationId: 'conv-123',
+      drawingsPickerOpen: true,
+    })).toBe(false);
+
+    expect(shouldFetchConversationAttachments({
+      draft: false,
+      conversationId: null,
+      drawingsPickerOpen: true,
+    })).toBe(false);
+
+    expect(shouldFetchConversationAttachments({
+      draft: false,
+      conversationId: 'conv-123',
+      drawingsPickerOpen: false,
+    })).toBe(false);
+
+    expect(shouldFetchConversationAttachments({
+      draft: false,
+      conversationId: 'conv-123',
+      drawingsPickerOpen: true,
+    })).toBe(true);
   });
 });
 

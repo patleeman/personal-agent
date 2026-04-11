@@ -460,6 +460,14 @@ export function shouldShowConversationInlineLoadingState(input: {
   return input.showConversationLoadingState && input.hasVisibleTranscript;
 }
 
+export function shouldFetchConversationAttachments(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  drawingsPickerOpen: boolean;
+}): boolean {
+  return !input.draft && Boolean(input.conversationId) && input.drawingsPickerOpen;
+}
+
 export function resolveConversationVisibleScrollBinding(input: {
   draft: boolean;
   routeConversationId: string | null | undefined;
@@ -2313,6 +2321,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationAttachments(data.attachments);
     return data.attachments;
   }, [id]);
+  const shouldFetchConversationAttachmentsNow = shouldFetchConversationAttachments({
+    draft,
+    conversationId: id,
+    drawingsPickerOpen,
+  });
 
   const shouldFetchLiveSessionGitContext = !draft
     && Boolean(id)
@@ -2373,8 +2386,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [refetchDeferredResumes, savedConversationSessionFile, stream.reconnect]);
 
   useEffect(() => {
-    if (draft || !id) {
-      setConversationAttachments([]);
+    setConversationAttachments([]);
+  }, [draft, id]);
+
+  useEffect(() => {
+    if (!shouldFetchConversationAttachmentsNow) {
       return;
     }
 
@@ -2382,7 +2398,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     void refetchConversationAttachments().catch((error) => {
       setDrawingsError(error instanceof Error ? error.message : String(error));
     });
-  }, [draft, id, refetchConversationAttachments]);
+  }, [refetchConversationAttachments, shouldFetchConversationAttachmentsNow]);
 
   useEffect(() => {
     if (conversationLiveDecision !== true) {
