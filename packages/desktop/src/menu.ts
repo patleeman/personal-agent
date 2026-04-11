@@ -4,6 +4,7 @@ export interface DesktopApplicationMenuActions {
   onOpen: () => void;
   onNewConversation: () => void;
   onCloseConversation: () => void;
+  onReopenClosedConversation: () => void;
   onPreviousConversation: () => void;
   onNextConversation: () => void;
   onPreviousHost: () => void;
@@ -52,6 +53,11 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Close Conversation',
         accelerator: 'CommandOrControl+W',
         click: actions.onCloseConversation,
+      },
+      {
+        label: 'Reopen Closed Conversation',
+        accelerator: 'CommandOrControl+Shift+N',
+        click: actions.onReopenClosedConversation,
       },
       {
         label: 'Previous Conversation',

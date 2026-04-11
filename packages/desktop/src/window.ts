@@ -20,6 +20,7 @@ export interface DesktopNavigationState {
 
 export type DesktopRendererShortcutAction =
   | 'close-conversation'
+  | 'reopen-closed-conversation'
   | 'previous-conversation'
   | 'next-conversation'
   | 'toggle-sidebar'

@@ -206,6 +206,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onCloseConversation: () => {
       windowController?.sendShortcutToFocusedWindow('close-conversation');
     },
+    onReopenClosedConversation: () => {
+      windowController?.sendShortcutToFocusedWindow('reopen-closed-conversation');
+    },
     onPreviousConversation: () => {
       windowController?.sendShortcutToFocusedWindow('previous-conversation');
     },

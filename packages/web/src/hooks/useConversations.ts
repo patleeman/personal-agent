@@ -24,6 +24,7 @@ import {
   readConversationLayout,
   readOpenSessionIds,
   readPinnedSessionIds,
+  reopenMostRecentlyArchivedConversation,
   replaceConversationLayout,
   setConversationArchivedState,
   shiftConversationTab,
@@ -145,6 +146,12 @@ export function useConversations() {
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
+  const reopenMostRecentlyClosedSession = useCallback(() => {
+    const { reopenedSessionId, layout } = reopenMostRecentlyArchivedConversation();
+    applyLayoutState(layout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+    return reopenedSessionId;
+  }, []);
+
   const moveSession = useCallback((
     sessionId: string,
     targetSection: ConversationShelf,
@@ -214,6 +221,7 @@ export function useConversations() {
     unpinSession,
     archiveSession,
     restoreSession,
+    reopenMostRecentlyClosedSession,
     moveSession,
     shiftSession,
     loading,

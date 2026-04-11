@@ -47,6 +47,7 @@ When the UI is running inside Electron, the desktop shell adds a few conversatio
 
 - `Cmd/Ctrl+N` — new conversation
 - `Cmd/Ctrl+W` — close the current conversation surface
+- `Cmd/Ctrl+Shift+N` — reopen the most recently closed conversation
 - `Cmd/Ctrl+[` / `Cmd/Ctrl+]` — previous / next conversation
 - `Cmd/Ctrl+1…9` — jump to conversation slots in sidebar order
 - `Cmd/Ctrl+Alt+[` / `Cmd/Ctrl+Alt+]` — move the current conversation left / right inside its shelf

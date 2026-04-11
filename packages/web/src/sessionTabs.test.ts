@@ -24,6 +24,7 @@ import {
   readConversationLayout,
   readOpenSessionIds,
   readPinnedSessionIds,
+  reopenMostRecentlyArchivedConversation,
   reorderOpenSessionIds,
   replaceConversationLayout,
   replaceOpenConversationTabs,
@@ -318,6 +319,51 @@ describe('sessionTabs', () => {
       archivedSessionIds: ['session-3'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens the most recently archived conversation first', () => {
+    replaceConversationLayout({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: [],
+      archivedSessionIds: ['session-2', 'session-3'],
+    });
+    dispatchEvent.mockReset();
+
+    expect(reopenMostRecentlyArchivedConversation()).toEqual({
+      reopenedSessionId: 'session-3',
+      layout: {
+        sessionIds: ['session-1', 'session-3'],
+        pinnedSessionIds: [],
+        archivedSessionIds: ['session-2'],
+      },
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+
+    dispatchEvent.mockReset();
+    expect(reopenMostRecentlyArchivedConversation()).toEqual({
+      reopenedSessionId: 'session-2',
+      layout: {
+        sessionIds: ['session-1', 'session-3', 'session-2'],
+        pinnedSessionIds: [],
+        archivedSessionIds: [],
+      },
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when there is no archived conversation to reopen', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: [] });
+    dispatchEvent.mockReset();
+
+    expect(reopenMostRecentlyArchivedConversation()).toEqual({
+      reopenedSessionId: null,
+      layout: {
+        sessionIds: ['session-1'],
+        pinnedSessionIds: [],
+        archivedSessionIds: [],
+      },
+    });
+    expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
   describe('syncConversationLayoutMerge', () => {

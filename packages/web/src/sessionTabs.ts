@@ -328,6 +328,22 @@ export function setConversationArchivedState(sessionId: string, archived: boolea
   });
 }
 
+export function reopenMostRecentlyArchivedConversation(): {
+  reopenedSessionId: string | null;
+  layout: ConversationLayout;
+} {
+  const current = readConversationLayout();
+  const reopenedSessionId = current.archivedSessionIds.at(-1) ?? null;
+  if (!reopenedSessionId) {
+    return { reopenedSessionId: null, layout: current };
+  }
+
+  return {
+    reopenedSessionId,
+    layout: setConversationArchivedState(reopenedSessionId, false),
+  };
+}
+
 export function pinConversationTab(sessionId: string): ConversationLayout {
   return moveConversationTab(sessionId, 'pinned');
 }
