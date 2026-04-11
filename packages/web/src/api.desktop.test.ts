@@ -1263,7 +1263,7 @@ describe('api desktop transport', () => {
 
   it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', activityCount: 1, webUiRevision: 'rev-2' }))
+      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' }))
       .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }))
       .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1297,7 +1297,7 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/status', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/daemon', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/web-ui/state', { method: 'GET', cache: 'no-store' });
-    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', activityCount: 1, webUiRevision: 'rev-2' });
+    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' });
     expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
     expect(webUiState).toEqual({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } });
   });

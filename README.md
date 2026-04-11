@@ -8,8 +8,8 @@ It keeps repo-managed defaults in git, durable knowledge in an external vault, a
 
 - profile-aware `pa` CLI for launching Pi and managing local services
 - external durable vault at `~/Documents/personal-agent` for `_profiles`, `_skills`, `notes`, and `projects`
-- daemon-backed runs, scheduled tasks, deferred resumes, reminders, inbox delivery, and wakeups
-- web UI for conversations, notifications, automations, tools, instructions, and settings
+- daemon-backed runs, scheduled tasks, deferred resumes, reminders, and wakeups
+- web UI for conversations, automations, tools, instructions, and settings
 - optional remote browser access over Tailscale Serve when the web UI is exposed on the tailnet
 - Electron desktop shell that owns a local backend and can connect to saved web or SSH hosts
 - MCP inspection/calls plus package-source installs for extending Pi
@@ -91,7 +91,6 @@ pa doctor
 pa profile show
 pa ui
 pa daemon status
-pa inbox list
 pa tasks list
 pa runs list
 pa mcp list --probe
