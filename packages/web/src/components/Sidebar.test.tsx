@@ -146,7 +146,7 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Archived');
   });
 
-  it('keeps pinned conversations in the main conversation list and shows a pinned indicator', () => {
+  it('keeps pinned conversations in the main conversation list without separate pin chrome', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(PINNED_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
@@ -155,7 +155,8 @@ describe('Sidebar', () => {
 
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
-    expect((html.match(/aria-label="Pinned"/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(html).not.toContain('aria-label="Pinned"');
+    expect(html).not.toContain('aria-label="Pin"');
   });
 
   it('renders compact left-edge indicators for running and review states', () => {
@@ -274,12 +275,13 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
   });
 
-  it('marks Chat as the active nav on conversation routes and exposes row actions for the active thread', () => {
+  it('marks Chat as the active nav on conversation routes and exposes only the overflow actions by default', () => {
     const html = renderSidebar('/conversations/conv-123');
 
     expect(html).toContain('Chat');
     expect(html).toContain('ui-sidebar-nav-item-active');
     expect(html).toContain('aria-label="Conversation actions: Clarify background run link"');
+    expect(html).not.toContain('aria-label="Pin"');
     expect(html).not.toContain('>Conversations<');
   });
 

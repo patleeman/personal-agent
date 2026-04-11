@@ -51,8 +51,6 @@ const PATH = {
   automations: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   settings: 'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close: 'M6 18 18 6M6 6l12 12',
-  pin: 'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
-  unpin: 'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
@@ -273,14 +271,6 @@ function TopNavItem({
   );
 }
 
-function PinnedIndicator() {
-  return (
-    <span role="img" aria-label="Pinned" className="inline-flex items-center justify-center rounded-md p-1 text-accent/80">
-      <Ico d={PATH.pin} size={10} />
-    </span>
-  );
-}
-
 function ConversationCwdGroupHeader({
   label,
   cwd,
@@ -437,12 +427,13 @@ function OpenConversationRow({
   }, [copyState, menuOpen]);
 
   const showQuickActions = hovered || menuOpen;
-  const showMenuButton = Boolean(onArchive || onDuplicate || onSummarizeAndNew || onCopyId)
+  const showCloseButton = showQuickActions && Boolean(onClose);
+  const showMenuButton = Boolean(onPin || onUnpin || onArchive || onDuplicate || onSummarizeAndNew || onCopyId)
     && (active || hovered || menuOpen);
-  const showTrailingControls = showQuickActions || showMenuButton || pinned;
-  const contentPaddingClass = showQuickActions
-    ? (!pinned && onClose ? 'pr-20' : 'pr-14')
-    : (showMenuButton || pinned ? 'pr-9' : undefined);
+  const showTrailingControls = showCloseButton || showMenuButton;
+  const contentPaddingClass = showCloseButton && showMenuButton
+    ? 'pr-16'
+    : (showCloseButton || showMenuButton ? 'pr-9' : undefined);
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
   const menuItemClass = 'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] text-primary transition-colors hover:bg-elevated disabled:cursor-default disabled:opacity-40';
 
@@ -538,46 +529,6 @@ function OpenConversationRow({
       </Link>
       {showTrailingControls ? (
         <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-          {!showQuickActions && pinned && !showMenuButton ? <PinnedIndicator /> : null}
-          {showQuickActions && pinned && onUnpin ? (
-            <button
-              type="button"
-              onPointerDown={stopRowInteraction}
-              onMouseDown={stopRowInteraction}
-              onClick={() => onUnpin()}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Unpin"
-              aria-label="Unpin"
-            >
-              <Ico d={PATH.unpin} size={10} />
-            </button>
-          ) : null}
-          {showQuickActions && !pinned && onPin ? (
-            <button
-              type="button"
-              onPointerDown={stopRowInteraction}
-              onMouseDown={stopRowInteraction}
-              onClick={() => onPin()}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Pin"
-              aria-label="Pin"
-            >
-              <Ico d={PATH.pin} size={10} />
-            </button>
-          ) : null}
-          {showQuickActions && !pinned && onClose ? (
-            <button
-              type="button"
-              onPointerDown={stopRowInteraction}
-              onMouseDown={stopRowInteraction}
-              onClick={() => onClose()}
-              className="ui-icon-button ui-icon-button-compact"
-              title="Close"
-              aria-label="Close"
-            >
-              <Ico d={PATH.close} size={10} />
-            </button>
-          ) : null}
           {showMenuButton ? (
             <div ref={menuRootRef} className="relative">
               <button
@@ -612,6 +563,42 @@ function OpenConversationRow({
                   aria-label={`Conversation actions for ${session.title}`}
                 >
                   <div className="space-y-0.5">
+                    {pinned && onUnpin ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={async () => {
+                          const succeeded = await onUnpin();
+                          if (succeeded !== false) {
+                            setMenuOpen(false);
+                          }
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        Unpin
+                      </button>
+                    ) : null}
+                    {!pinned && onPin ? (
+                      <button
+                        type="button"
+                        onPointerDown={stopRowInteraction}
+                        onMouseDown={stopRowInteraction}
+                        onClick={async () => {
+                          const succeeded = await onPin();
+                          if (succeeded !== false) {
+                            setMenuOpen(false);
+                          }
+                        }}
+                        className={menuItemClass}
+                        disabled={busyAction !== null}
+                        role="menuitem"
+                      >
+                        Pin
+                      </button>
+                    ) : null}
                     {onArchive ? (
                       <button
                         type="button"
@@ -679,6 +666,19 @@ function OpenConversationRow({
                 </div>
               ) : null}
             </div>
+          ) : null}
+          {showCloseButton ? (
+            <button
+              type="button"
+              onPointerDown={stopRowInteraction}
+              onMouseDown={stopRowInteraction}
+              onClick={() => onClose?.()}
+              className="ui-icon-button ui-icon-button-compact"
+              title="Close"
+              aria-label="Close"
+            >
+              <Ico d={PATH.close} size={10} />
+            </button>
           ) : null}
         </div>
       ) : null}
