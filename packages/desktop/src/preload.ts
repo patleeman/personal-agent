@@ -263,8 +263,6 @@ const desktopBridge = {
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
   abortLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:abort-live-session`, conversationId),
-  invokeLocalApi: (method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:invoke-local-api`, method, path, body),
   subscribeApiStream: (path: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-api-stream`, path),
   unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   subscribeAppEvents: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-app-events`),

@@ -28,11 +28,9 @@ describe('api desktop transport', () => {
     });
   });
 
-  it('uses the desktop local API bridge on the local Electron host', async () => {
+  it('uses dedicated desktop capability bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const invokeLocalApi = vi.fn()
-      .mockResolvedValueOnce({ index: { 'conversation-1': 'hello world' } });
     const readAppStatus = vi.fn().mockResolvedValue({
       profile: 'assistant',
       repoRoot: '/repo',
@@ -170,7 +168,6 @@ describe('api desktop transport', () => {
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment,
-        invokeLocalApi,
         readAppStatus,
         readDaemonState,
         readWebUiState,
@@ -329,7 +326,6 @@ describe('api desktop transport', () => {
     expect(readSessions).toHaveBeenCalledTimes(1);
     expect(readSessionMeta).toHaveBeenCalledWith('conversation-1');
     expect(readSessionSearchIndex).toHaveBeenCalledWith(['conversation-1']);
-    expect(invokeLocalApi).not.toHaveBeenCalled();
     expect(readModels).toHaveBeenCalledTimes(1);
     expect(updateModelPreferences).toHaveBeenCalledWith({ thinkingLevel: 'medium' });
     expect(readModelProviders).toHaveBeenCalledTimes(1);
@@ -1067,6 +1063,42 @@ describe('api desktop transport', () => {
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
     });
+  });
+
+  it('falls back to HTTP for remote-access exchange/logout even on the local Electron host', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ required: false, session: { id: 'session-1', label: 'Browser' } }))
+      .mockResolvedValueOnce(createJsonResponse({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+          canManageConnections: true,
+        }),
+      },
+    });
+
+    const { api } = await import('./api');
+    const exchanged = await api.exchangeRemoteAccessPairingCode('PAIR-1234', 'Safari');
+    const loggedOut = await api.logoutRemoteAccessSession();
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/remote-access/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'PAIR-1234', deviceLabel: 'Safari' }),
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/remote-access/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: undefined,
+    });
+    expect(exchanged).toEqual({ required: false, session: { id: 'session-1', label: 'Browser' } });
+    expect(loggedOut).toEqual({ ok: true });
   });
 
   it('uses dedicated desktop inbox and alert bridges on the local Electron host', async () => {

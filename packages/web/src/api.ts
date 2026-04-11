@@ -42,11 +42,6 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Pro
 
 async function requestJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const requestPath = buildApiPath(path);
-  const desktopBridge = getDesktopBridge();
-  if (desktopBridge && await shouldUseDesktopLocalApi(method, requestPath)) {
-    return desktopBridge.invokeLocalApi(method, requestPath, body) as Promise<T>;
-  }
-
   const res = await fetchWithRetry(requestPath, {
     method,
     ...(method === 'GET'
@@ -148,15 +143,6 @@ async function readCachedDesktopEnvironment(): Promise<DesktopEnvironmentState |
   }
 
   return desktopEnvironmentPromise;
-}
-
-async function shouldUseDesktopLocalApi(_method: 'GET' | 'POST' | 'PATCH' | 'DELETE', requestPath: string): Promise<boolean> {
-  if (!getDesktopBridge() || !requestPath.startsWith('/api/')) {
-    return false;
-  }
-
-  const environment = await readCachedDesktopEnvironment();
-  return environment?.activeHostKind === 'local';
 }
 
 async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {

@@ -289,7 +289,6 @@ export interface PersonalAgentDesktopBridge {
     referencedAttachmentIds: string[];
   }>;
   abortLiveSession(conversationId: string): Promise<{ ok: true }>;
-  invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   subscribeApiStream(path: string): Promise<{ subscriptionId: string }>;
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
   subscribeAppEvents(): Promise<{ subscriptionId: string }>;

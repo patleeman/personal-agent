@@ -114,12 +114,6 @@ export function registerDesktopIpc(options: {
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:invoke-local-api`, async (event, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    return options.hostManager.getHostController(hostId).invokeLocalApi(method, path, body);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
