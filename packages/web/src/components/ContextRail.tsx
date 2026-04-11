@@ -1490,7 +1490,7 @@ export function ContextRail() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-      <p className="text-[12px] text-dim">Select a conversation, page, or notification to see context.</p>
+      <p className="text-[12px] text-dim">Select a conversation, page, or run to see context.</p>
     </div>
   );
 }

@@ -1790,7 +1790,7 @@ export function SettingsPage() {
             <div className="space-y-4">
               <SettingsPanel
                 title="Profile"
-                description="Changes the active profile for inbox, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
+                description="Changes the active profile for notes, docs, AGENTS/skills context, and new live sessions. The app reloads after switching."
               >
                 {profilesLoading && !profileState ? (
                   <p className="ui-card-meta">Loading profiles…</p>
