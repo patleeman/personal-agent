@@ -344,12 +344,13 @@ function OpenConversationRow({
   onPin,
   onUnpin,
   onClose,
+  onSelect,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
 }: {
-  session: { id: string; title: string; timestamp: string; cwd: string; isRunning?: boolean };
+  session: { id: string; title: string; timestamp: string; cwd: string; isRunning?: boolean; lastActivityAt?: string };
   active: boolean;
   pinned?: boolean;
   canDrag?: boolean;
@@ -358,6 +359,7 @@ function OpenConversationRow({
   onPin?: () => void;
   onUnpin?: () => void;
   onClose?: () => void;
+  onSelect?: () => void;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
@@ -368,6 +370,7 @@ function OpenConversationRow({
 
   const showTrailingControls = hovered || pinned;
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
+  const activityTimestamp = session.lastActivityAt ?? session.timestamp;
 
   return (
     <div
@@ -396,6 +399,7 @@ function OpenConversationRow({
           active && 'ui-sidebar-session-row-active',
           canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
         ].filter(Boolean).join(' ')}
+        onClick={() => onSelect?.()}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
         title={rowTitle}
@@ -422,7 +426,7 @@ function OpenConversationRow({
         ].filter(Boolean).join(' ')}>
           <p className="ui-row-title truncate">{session.title}</p>
           <p className="ui-sidebar-session-meta flex items-center min-w-0">
-            <span className="shrink-0">{timeAgo(session.timestamp)}</span>
+            <span className="shrink-0">{timeAgo(activityTimestamp)}</span>
           </p>
         </div>
         {showTrailingControls ? (
@@ -513,6 +517,7 @@ export function Sidebar() {
     tabs,
     archivedSessions,
     archivedConversationIds,
+    openSession,
     closeSession,
     pinSession,
     unpinSession,
@@ -576,6 +581,14 @@ export function Sidebar() {
     ...pinnedSessions.map((session) => ({ session, section: 'pinned' as const, pinned: true })),
     ...visibleConversationTabs.map((session) => ({ session, section: 'open' as const, pinned: false })),
   ], (item) => item.session.cwd), [pinnedSessions, visibleConversationTabs]);
+  const historySessions = useMemo(
+    () => [...archivedSessions].sort((left, right) => {
+      const leftTimestamp = left.lastActivityAt ?? left.timestamp;
+      const rightTimestamp = right.lastActivityAt ?? right.timestamp;
+      return rightTimestamp.localeCompare(leftTimestamp);
+    }),
+    [archivedSessions],
+  );
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -1015,8 +1028,8 @@ export function Sidebar() {
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
         <div className="py-1 space-y-0.5">
-          {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 ? (
-            <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
+          {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 && historySessions.length === 0 ? (
+            <p className="px-4 py-2 text-[12px] text-dim">No conversations yet.</p>
           ) : null}
 
           {groupedConversationRows.map((group) => {
@@ -1060,6 +1073,25 @@ export function Sidebar() {
               </div>
             );
           })}
+
+          {historySessions.length > 0 ? (
+            <div className="pt-4">
+              <div className="px-4 pb-1">
+                <p className="ui-section-label">History</p>
+              </div>
+              <div className="space-y-0.5">
+                {historySessions.map((session) => (
+                  <OpenConversationRow
+                    key={session.id}
+                    session={session}
+                    active={location.pathname === `/conversations/${session.id}`}
+                    onPin={() => handlePinConversation(session.id)}
+                    onSelect={() => openSession(session.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
