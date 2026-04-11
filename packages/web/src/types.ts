@@ -548,8 +548,6 @@ export type DesktopAppEvent =
   | { type: 'live_title'; sessionId: string; title: string }
   | { type: 'session_meta_changed'; sessionId: string }
   | { type: 'session_file_changed'; sessionId: string }
-  | { type: 'activity'; snapshot: ActivitySnapshot }
-  | { type: 'alerts'; snapshot: AlertSnapshot }
   | { type: 'sessions'; sessions: SessionMeta[] }
   | { type: 'tasks'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs'; result: DurableRunListResult }

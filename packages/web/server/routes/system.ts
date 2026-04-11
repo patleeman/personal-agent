@@ -83,8 +83,6 @@ async function emitSnapshotEvents(topics: AppEventTopic[], writeEvent: (event: u
 
 export const INITIAL_APP_EVENT_TOPICS: AppEventTopic[] = [
   'sessions',
-  'activity',
-  'alerts',
   'tasks',
   'runs',
   'daemon',

@@ -7,8 +7,6 @@ import {
   type ConversationScopedEventVersions,
 } from './conversationEventVersions';
 import type {
-  ActivitySnapshot,
-  AlertSnapshot,
   AppEventTopic,
   DaemonState,
   DurableRunListResult,
@@ -81,14 +79,10 @@ export function useSseConnection() {
 }
 
 export interface AppDataContextValue {
-  activity: ActivitySnapshot | null;
-  alerts?: AlertSnapshot | null;
   projects: ProjectRecord[] | null;
   sessions: SessionMeta[] | null;
   tasks: ScheduledTaskSummary[] | null;
   runs: DurableRunListResult | null;
-  setActivity: (snapshot: ActivitySnapshot) => void;
-  setAlerts?: (snapshot: AlertSnapshot) => void;
   setProjects: (projects: ProjectRecord[]) => void;
   setSessions: (sessions: SessionMeta[]) => void;
   setTasks: (tasks: ScheduledTaskSummary[]) => void;
@@ -96,14 +90,10 @@ export interface AppDataContextValue {
 }
 
 export const AppDataContext = createContext<AppDataContextValue>({
-  activity: null,
-  alerts: null,
   projects: null,
   sessions: null,
   tasks: null,
   runs: null,
-  setActivity: () => {},
-  setAlerts: () => {},
   setProjects: () => {},
   setSessions: () => {},
   setTasks: () => {},

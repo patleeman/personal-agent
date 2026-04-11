@@ -37,8 +37,6 @@ import {
 import { ThemeProvider } from './theme';
 import { createSessionMetaRefreshScheduler } from './sessionMetaRefreshScheduler';
 import type {
-  ActivitySnapshot,
-  AlertSnapshot,
   AppEvent,
   AppEventTopic,
   DaemonState,
@@ -235,8 +233,8 @@ export function App() {
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
   const [conversationVersions, setConversationVersions] = useState(INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS);
   const [sseStatus, setSseStatus] = useState<'connecting' | 'open' | 'reconnecting' | 'offline'>('connecting');
-  const [activity, setActivityState] = useState<ActivitySnapshot | null>(null);
-  const [alerts, setAlertsState] = useState<AlertSnapshot | null>(null);
+
+
   const projects = null;
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
@@ -255,13 +253,6 @@ export function App() {
     });
   }, []);
 
-  const setActivity = useCallback((snapshot: ActivitySnapshot) => {
-    setActivityState(snapshot);
-  }, []);
-
-  const setAlerts = useCallback((snapshot: AlertSnapshot) => {
-    setAlertsState(snapshot);
-  }, []);
 
   const setProjects = useCallback(() => {}, []);
 
@@ -357,12 +348,7 @@ export function App() {
       case 'session_file_changed':
         bumpConversationVersion(payload.sessionId);
         return;
-      case 'activity':
-        setActivity(payload.snapshot);
-        return;
-      case 'alerts':
-        setAlerts(payload.snapshot);
-        return;
+
       case 'sessions':
         setSessions(payload.sessions);
         return;
@@ -390,7 +376,7 @@ export function App() {
       default:
         return;
     }
-  }, [bumpConversationVersion, refreshSessionMeta, setActivity, setAlerts, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
+  }, [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
 
   const bootstrapSnapshots = useCallback(() => {
     void fetchSessionsSnapshot()
@@ -570,7 +556,7 @@ export function App() {
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
-        <AppDataContext.Provider value={{ activity, alerts, projects, sessions, tasks, runs, setActivity, setAlerts, setProjects, setSessions, setTasks, setRuns }}>
+        <AppDataContext.Provider value={{ projects, sessions, tasks, runs, setProjects, setSessions, setTasks, setRuns }}>
           <SystemStatusContext.Provider value={{ daemon, webUi, setDaemon, setWebUi }}>
             <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
               <ThemeProvider>

@@ -5,21 +5,8 @@ export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
     case 'connected':
       return null;
     case 'activity_snapshot':
-      return {
-        type: 'activity',
-        snapshot: {
-          entries: event.entries,
-          unreadCount: event.unreadCount,
-        },
-      };
     case 'alerts_snapshot':
-      return {
-        type: 'alerts',
-        snapshot: {
-          entries: event.entries,
-          activeCount: event.activeCount,
-        },
-      };
+      return null;
     case 'sessions_snapshot':
       return {
         type: 'sessions',

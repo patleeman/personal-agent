@@ -93,8 +93,6 @@ describe('Sidebar', () => {
       <MemoryRouter initialEntries={[pathname]}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
           <AppDataContext.Provider value={{
-            activity: { entries: [], unreadCount: 0 },
-            alerts: { entries: [], activeCount: 0 },
             projects: [{
               id: 'active-project',
               title: 'Active project',
@@ -112,8 +110,6 @@ describe('Sidebar', () => {
             sessions: options?.sessions ?? [createSession()],
             tasks: null,
             runs: options?.runs ?? null,
-            setActivity: () => {},
-            setAlerts: () => {},
             setProjects: () => {},
             setSessions: () => {},
             setTasks: () => {},

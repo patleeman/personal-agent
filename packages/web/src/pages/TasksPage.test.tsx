@@ -31,8 +31,6 @@ describe('TasksPage', () => {
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
-            activity: null,
-            alerts: null,
             projects: null,
             sessions: null,
             runs: null,
@@ -48,8 +46,6 @@ describe('TasksPage', () => {
               lastStatus: 'success',
               lastRunAt: '2026-03-18T00:00:00.000Z',
             }],
-            setActivity: vi.fn(),
-            setAlerts: vi.fn(),
             setProjects: vi.fn(),
             setSessions: vi.fn(),
             setTasks: vi.fn(),
@@ -78,14 +74,10 @@ describe('TasksPage', () => {
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
-            activity: null,
-            alerts: null,
             projects: null,
             sessions: null,
             runs: null,
             tasks: [],
-            setActivity: vi.fn(),
-            setAlerts: vi.fn(),
             setProjects: vi.fn(),
             setSessions: vi.fn(),
             setTasks: vi.fn(),
@@ -111,8 +103,6 @@ describe('TasksPage', () => {
       <MemoryRouter initialEntries={['/automations/daily-report?run=task-daily-report-2026-03-18']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
-            activity: null,
-            alerts: null,
             projects: null,
             sessions: [],
             runs: {
@@ -172,8 +162,6 @@ describe('TasksPage', () => {
               lastStatus: 'success',
               lastRunAt: '2026-03-18T00:05:00.000Z',
             }],
-            setActivity: vi.fn(),
-            setAlerts: vi.fn(),
             setProjects: vi.fn(),
             setSessions: vi.fn(),
             setTasks: vi.fn(),
@@ -197,14 +185,10 @@ describe('TasksPage', () => {
       <MemoryRouter initialEntries={['/automations?new=1']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
-            activity: null,
-            alerts: null,
             projects: null,
             sessions: null,
             runs: null,
             tasks: [],
-            setActivity: vi.fn(),
-            setAlerts: vi.fn(),
             setProjects: vi.fn(),
             setSessions: vi.fn(),
             setTasks: vi.fn(),

@@ -695,21 +695,8 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
 
   switch (typedEvent.type) {
     case 'activity_snapshot':
-      return {
-        type: 'activity',
-        snapshot: {
-          entries: Array.isArray(typedEvent.entries) ? typedEvent.entries : [],
-          unreadCount: typeof typedEvent.unreadCount === 'number' ? typedEvent.unreadCount : 0,
-        },
-      };
     case 'alerts_snapshot':
-      return {
-        type: 'alerts',
-        snapshot: {
-          entries: Array.isArray(typedEvent.entries) ? typedEvent.entries : [],
-          activeCount: typeof typedEvent.activeCount === 'number' ? typedEvent.activeCount : 0,
-        },
-      };
+      return null;
     case 'sessions_snapshot':
       return {
         type: 'sessions',

@@ -213,8 +213,6 @@ describe('system routes', () => {
     expect(res.setHeader).toHaveBeenCalledWith('X-Accel-Buffering', 'no');
     expect(res.flushHeaders).toHaveBeenCalledTimes(1);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'activity_snapshot', entries: [{ read: false }, { read: true }], unreadCount: 1 })}\n\n`);
-    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'alerts_snapshot', entries: [{ id: 'alert-1' }], activeCount: 1 })}\n\n`);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'sessions_snapshot', sessions: [{ id: 'conversation-1' }] })}\n\n`);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'tasks_snapshot', tasks: [{ id: 'task-1' }] })}\n\n`);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'daemon_snapshot', state: { running: true } })}\n\n`);

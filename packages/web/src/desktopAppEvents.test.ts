@@ -45,7 +45,7 @@ describe('subscribeDesktopAppEvents', () => {
       detail: { subscriptionId: 'sub-1', event: { type: 'open' } },
     }));
     fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_APP_EVENTS_EVENT, {
-      detail: { subscriptionId: 'sub-1', event: { type: 'event', event: { type: 'activity', snapshot: { entries: [], unreadCount: 0 } } } },
+      detail: { subscriptionId: 'sub-1', event: { type: 'event', event: { type: 'sessions', sessions: [] } } },
     }));
     fakeWindow.dispatchEvent(new CustomEvent(DESKTOP_APP_EVENTS_EVENT, {
       detail: { subscriptionId: 'sub-1', event: { type: 'error', message: 'boom' } },
@@ -56,7 +56,7 @@ describe('subscribeDesktopAppEvents', () => {
 
     expect(subscribeAppEvents).toHaveBeenCalledTimes(1);
     expect(onopen).toHaveBeenCalledTimes(1);
-    expect(onevent).toHaveBeenCalledWith({ type: 'activity', snapshot: { entries: [], unreadCount: 0 } });
+    expect(onevent).toHaveBeenCalledWith({ type: 'sessions', sessions: [] });
     expect(onerror).toHaveBeenCalledTimes(1);
     expect(onclose).toHaveBeenCalledTimes(1);
 

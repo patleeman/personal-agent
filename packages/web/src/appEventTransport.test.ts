@@ -2,34 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { normalizeAppEvent } from './appEventTransport';
 
 describe('normalizeAppEvent', () => {
-  it('maps snapshot-style activity events onto desktop app events', () => {
-    expect(normalizeAppEvent({
-      type: 'activity_snapshot',
-      entries: [{
-        id: 'activity-1',
-        createdAt: '2026-04-10T10:00:00.000Z',
-        profile: 'assistant',
-        kind: 'message',
-        summary: 'Ping',
-        read: false,
-      }],
-      unreadCount: 1,
-    })).toEqual({
-      type: 'activity',
-      snapshot: {
-        entries: [{
-          id: 'activity-1',
-          createdAt: '2026-04-10T10:00:00.000Z',
-          profile: 'assistant',
-          kind: 'message',
-          summary: 'Ping',
-          read: false,
-        }],
-        unreadCount: 1,
-      },
-    });
-  });
-
   it('drops connected events and maps durable run snapshots onto desktop app events', () => {
     expect(normalizeAppEvent({ type: 'connected' })).toBeNull();
     expect(normalizeAppEvent({
