@@ -819,29 +819,31 @@ function ConversationAutoModeToggle({
       type="button"
       role="switch"
       aria-checked={enabled}
+      aria-busy={busy}
       aria-label={title}
       title={title}
       onClick={onToggle}
       disabled={disabled || busy}
       className={cx(
-        'inline-flex h-8 items-center gap-2 rounded-full px-2.5 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
-        enabled
-          ? 'bg-accent/12 text-primary hover:bg-accent/18'
-          : 'bg-elevated text-secondary hover:bg-elevated/80',
+        'group inline-flex h-7 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40',
+        enabled ? 'text-warning' : 'text-secondary hover:text-primary',
       )}
     >
-      <span>Auto</span>
+      <span className="leading-none">Auto</span>
       <span
         aria-hidden="true"
         className={cx(
-          'relative h-4 w-7 rounded-full transition-colors',
-          enabled ? 'bg-accent/80' : 'bg-border-default',
+          'relative inline-flex h-5 w-9 shrink-0 rounded-full border p-0.5 transition-all',
+          enabled
+            ? 'border-warning/50 bg-warning/80 shadow-[0_0_10px_rgba(245,158,11,0.18)]'
+            : 'border-border-default bg-surface/45 group-hover:border-border-default group-hover:bg-surface/70',
+          busy && 'opacity-80',
         )}
       >
         <span
           className={cx(
-            'absolute top-[2px] h-3.5 w-3.5 rounded-full bg-white transition-transform',
-            enabled ? 'translate-x-[12px]' : 'translate-x-[2px]',
+            'h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-4' : 'translate-x-0',
             busy && 'animate-pulse',
           )}
         />
