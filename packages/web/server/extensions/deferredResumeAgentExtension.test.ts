@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { loadDeferredResumeState } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
 
@@ -59,7 +60,7 @@ describe('deferred resume agent extension', () => {
     const registeredTool = registerDeferredResumeTool();
     const result = await registeredTool.execute(
       'tool-1',
-      { delay: '10m', prompt: 'check the logs and continue' },
+      { delay: '10m', prompt: 'check the logs and continue', behavior: 'followUp' },
       undefined,
       undefined,
       {
@@ -77,6 +78,9 @@ describe('deferred resume agent extension', () => {
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       prompt: 'check the logs and continue',
     }));
+
+    const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+    expect(Object.values(state.resumes)[0]?.behavior).toBe('followUp');
   });
 
   it('requires a persisted session file', async () => {

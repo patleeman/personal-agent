@@ -27,10 +27,22 @@ describe('parseDeferredResumeSlashCommand', () => {
     });
   });
 
+  it('parses the follow-up scheduling flag', () => {
+    expect(parseDeferredResumeSlashCommand('/resume 10m --follow-up keep going')).toEqual({
+      kind: 'command',
+      command: {
+        action: 'schedule',
+        delay: '10m',
+        behavior: 'followUp',
+        prompt: 'keep going',
+      },
+    });
+  });
+
   it('returns usage for invalid resume commands', () => {
     expect(parseDeferredResumeSlashCommand('/resume')).toEqual({
       kind: 'invalid',
-      message: 'Usage: /resume <delay> [prompt]',
+      message: 'Usage: /resume <delay> [--follow-up] [prompt]',
     });
   });
 });

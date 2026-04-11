@@ -13,6 +13,12 @@ const DeferredResumeToolParams = Type.Object({
   title: Type.Optional(Type.String({
     description: 'Optional short label for the wakeup.',
   })),
+  behavior: Type.Optional(Type.Union([
+    Type.Literal('steer'),
+    Type.Literal('followUp'),
+  ], {
+    description: 'Optional delivery behavior when the wakeup fires. Use "followUp" to enqueue it as follow-up work instead of a normal prompt.',
+  })),
   notify: Type.Optional(Type.Union([
     Type.Literal('none'),
     Type.Literal('passive'),
@@ -56,6 +62,7 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
             delay: params.delay,
             prompt: params.prompt,
             title: params.title,
+            behavior: params.behavior,
             notify: params.notify,
             requireAck: params.requireAck,
             autoResumeIfOpen: params.autoResumeIfOpen,

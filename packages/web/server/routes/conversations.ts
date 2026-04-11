@@ -342,11 +342,12 @@ export function registerConversationRoutes(
 
   router.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
     try {
-      const { delay, prompt } = req.body as { delay?: string; prompt?: string };
+      const { delay, prompt, behavior } = req.body as { delay?: string; prompt?: string; behavior?: 'steer' | 'followUp' };
       res.json(await scheduleConversationDeferredResumeCapability({
         conversationId: req.params.id,
         delay,
         prompt,
+        behavior,
       }));
     } catch (err) {
       if (writeConversationDeferredResumeCapabilityError(res, err)) {

@@ -135,6 +135,7 @@ export interface DesktopConversationDeferredResumeScheduleRequest {
   conversationId: string;
   delay?: string;
   prompt?: string;
+  behavior?: 'steer' | 'followUp';
 }
 
 export interface DesktopConversationDeferredResumeMutationRequest {

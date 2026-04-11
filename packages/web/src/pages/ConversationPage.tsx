@@ -3415,7 +3415,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return persisted;
   }
 
-  async function scheduleDeferredResume(delay: string, prompt?: string) {
+  async function scheduleDeferredResume(delay: string, prompt?: string, behavior?: 'steer' | 'followUp') {
     if (!id || draft) {
       showNotice('danger', 'Wakeup requires an existing conversation.', 4000);
       return;
@@ -3423,10 +3423,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setDeferredResumesBusy(true);
     try {
-      const result = await api.scheduleDeferredResume(id, { delay, prompt });
+      const result = await api.scheduleDeferredResume(id, { delay, prompt, behavior });
       setDeferredResumes(result.resumes);
       setInput('');
-      showNotice('accent', `Wakeup scheduled for ${describeDeferredResumeStatus(result.resume)}.`);
+      showNotice(
+        'accent',
+        `Wakeup scheduled${behavior === 'followUp' ? ' as follow-up' : ''} for ${describeDeferredResumeStatus(result.resume)}.`,
+      );
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -3920,6 +3923,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           await scheduleDeferredResume(
             deferredResumeSlash.command.delay,
             deferredResumeSlash.command.prompt,
+            deferredResumeSlash.command.behavior,
           );
         }
         return;
@@ -4961,7 +4965,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                                 <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
                               </div>
                               <div className="mt-0.5 text-[11px] text-dim">
-                                {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
+                                {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'}
+                                {resume.behavior === 'followUp' ? ' · follow-up' : ''} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
                                 {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
                               </div>
                             </div>

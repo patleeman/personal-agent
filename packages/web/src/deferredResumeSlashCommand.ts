@@ -1,12 +1,13 @@
 import { parseSlashInput } from './slashMenu';
 
-export const DEFERRED_RESUME_SLASH_USAGE = 'Usage: /resume <delay> [prompt]';
+export const DEFERRED_RESUME_SLASH_USAGE = 'Usage: /resume <delay> [--follow-up] [prompt]';
 const DEFERRED_RESUME_SLASH_COMMANDS = new Set(['/resume', '/defer']);
 
 export interface DeferredResumeSlashCommand {
   action: 'schedule';
   delay: string;
   prompt?: string;
+  behavior?: 'followUp';
 }
 
 export type DeferredResumeSlashParseResult =
@@ -24,18 +25,24 @@ export function parseDeferredResumeSlashCommand(input: string): DeferredResumeSl
     return { kind: 'invalid', message: DEFERRED_RESUME_SLASH_USAGE };
   }
 
-  const [delayToken, ...promptTokens] = argument.split(/\s+/);
+  const [delayToken, ...restTokens] = argument.split(/\s+/);
   const delay = delayToken?.trim() ?? '';
   if (!delay) {
     return { kind: 'invalid', message: DEFERRED_RESUME_SLASH_USAGE };
   }
 
+  const firstRestToken = restTokens[0]?.trim().toLowerCase();
+  const behavior = firstRestToken === '--follow-up' || firstRestToken === '--followup'
+    ? 'followUp' as const
+    : undefined;
+  const promptTokens = behavior ? restTokens.slice(1) : restTokens;
   const prompt = promptTokens.join(' ').trim();
   return {
     kind: 'command',
     command: {
       action: 'schedule',
       delay,
+      ...(behavior ? { behavior } : {}),
       ...(prompt ? { prompt } : {}),
     },
   };

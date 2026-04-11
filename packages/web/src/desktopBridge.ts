@@ -182,7 +182,7 @@ export interface PersonalAgentDesktopBridge {
   renameConversation(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; title: string }>;
   changeConversationCwd(input: { conversationId: string; cwd: string; surfaceId?: string }): Promise<ConversationCwdChangeResult>;
   readConversationDeferredResumes(conversationId: string): Promise<{ conversationId: string; resumes: DeferredResumeSummary[] }>;
-  scheduleConversationDeferredResume(input: { conversationId: string; delay: string; prompt?: string }): Promise<{
+  scheduleConversationDeferredResume(input: { conversationId: string; delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }): Promise<{
     conversationId: string;
     resume: DeferredResumeSummary;
     resumes: DeferredResumeSummary[];

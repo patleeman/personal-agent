@@ -7,6 +7,7 @@ export const DEFERRED_RESUME_STATE_FILE_NAME = 'deferred-resumes-state.json';
 export type DeferredResumeStatus = 'scheduled' | 'ready';
 export type DeferredResumeKind = 'continue' | 'reminder' | 'task-callback';
 export type DeferredResumeAlertLevel = 'none' | 'passive' | 'disruptive';
+export type DeferredResumeBehavior = 'steer' | 'followUp';
 
 export interface DeferredResumeDelivery {
   alertLevel: DeferredResumeAlertLevel;
@@ -29,6 +30,7 @@ export interface DeferredResumeRecord {
   status: DeferredResumeStatus;
   kind: DeferredResumeKind;
   title?: string;
+  behavior?: DeferredResumeBehavior;
   delivery: DeferredResumeDelivery;
   source?: DeferredResumeSource;
   readyAt?: string;
@@ -91,6 +93,10 @@ function normalizeAlertLevel(value: unknown): DeferredResumeAlertLevel {
   }
 
   return 'none';
+}
+
+function normalizeBehavior(value: unknown): DeferredResumeBehavior | undefined {
+  return value === 'steer' || value === 'followUp' ? value : undefined;
 }
 
 function parseDelivery(value: unknown, kind: DeferredResumeKind): DeferredResumeDelivery {
@@ -221,6 +227,11 @@ function parseRecord(value: unknown): DeferredResumeRecord | undefined {
   const title = toString(value.title);
   if (title) {
     record.title = title;
+  }
+
+  const behavior = normalizeBehavior(value.behavior);
+  if (behavior) {
+    record.behavior = behavior;
   }
 
   const source = parseSource(value.source);

@@ -647,8 +647,8 @@ describe('api desktop transport', () => {
     });
     const scheduleConversationDeferredResume = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
-      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
-      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
     });
     const fireConversationDeferredResume = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
@@ -679,12 +679,12 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const resumes = await api.deferredResumes('conversation-1');
-    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.' });
+    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
     const fired = await api.fireDeferredResumeNow('conversation-1', 'resume-1');
     const cancelled = await api.cancelDeferredResume('conversation-1', 'resume-2');
 
     expect(readConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
-    expect(scheduleConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' });
+    expect(scheduleConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
     expect(fireConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
     expect(cancelConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -694,8 +694,8 @@ describe('api desktop transport', () => {
     });
     expect(scheduled).toEqual({
       conversationId: 'conversation-1',
-      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
-      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
     });
     expect(fired).toEqual({
       conversationId: 'conversation-1',
@@ -1807,7 +1807,7 @@ describe('api desktop transport', () => {
   it('falls back to HTTP for desktop conversation deferred-resume bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }))
-      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }] }))
+      .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] }))
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1834,7 +1834,7 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const resumes = await api.deferredResumes('conversation-1');
-    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.' });
+    const scheduled = await api.scheduleDeferredResume('conversation-1', { delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
     const fired = await api.fireDeferredResumeNow('conversation-1', 'resume-1');
     const cancelled = await api.cancelDeferredResume('conversation-1', 'resume-2');
 
@@ -1846,7 +1846,7 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/conversations/conversation-1/deferred-resumes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ delay: '10m', prompt: 'Resume later.' }),
+      body: JSON.stringify({ delay: '10m', prompt: 'Resume later.', behavior: 'followUp' }),
     });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/conversations/conversation-1/deferred-resumes/resume-1/fire', {
       method: 'POST',
@@ -1859,7 +1859,7 @@ describe('api desktop transport', () => {
       body: undefined,
     });
     expect(resumes).toEqual({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] });
-    expect(scheduled).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }] });
+    expect(scheduled).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }, resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }] });
     expect(fired).toEqual({ conversationId: 'conversation-1', resume: { id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z', prompt: 'Resume now.' }, resumes: [] });
     expect(cancelled).toEqual({ conversationId: 'conversation-1', cancelledId: 'resume-2', resumes: [] });
   });

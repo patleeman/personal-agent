@@ -75,6 +75,7 @@ describe('deferred resume state', () => {
       dueAt: '2026-03-08T12:00:00.000Z',
       createdAt: '2026-03-08T11:50:00.000Z',
       attempts: 0,
+      behavior: 'followUp',
     });
 
     expect(getDueScheduledSessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl', new Date('2026-03-08T11:59:59.000Z'))).toEqual([]);
@@ -87,6 +88,7 @@ describe('deferred resume state', () => {
       id: 'resume-1',
       status: 'ready',
       readyAt: '2026-03-08T11:55:00.000Z',
+      behavior: 'followUp',
     });
     expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toHaveLength(1);
 
@@ -99,6 +101,7 @@ describe('deferred resume state', () => {
       status: 'scheduled',
       dueAt: '2026-03-08T12:05:00.000Z',
       attempts: 1,
+      behavior: 'followUp',
     });
     expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toEqual([]);
 
@@ -111,6 +114,7 @@ describe('deferred resume state', () => {
       id: 'resume-1',
       status: 'ready',
       readyAt: '2026-03-08T12:05:30.000Z',
+      behavior: 'followUp',
     });
     expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toHaveLength(1);
 
@@ -130,16 +134,18 @@ describe('deferred resume state', () => {
       dueAt: '2026-03-08T12:00:00.000Z',
       createdAt: '2026-03-08T11:50:00.000Z',
       attempts: 0,
+      behavior: 'followUp',
     });
 
     saveDeferredResumeState(state, stateFile);
     const persisted = JSON.parse(readFileSync(stateFile, 'utf-8')) as {
       version: number;
-      resumes: Record<string, { status: string }>;
+      resumes: Record<string, { status: string; behavior?: string }>;
     };
 
     expect(persisted.version).toBe(3);
     expect(persisted.resumes['resume-1']?.status).toBe('scheduled');
+    expect(persisted.resumes['resume-1']?.behavior).toBe('followUp');
   });
 
   it('merges deferred resume documents by union and latest retry state', () => {

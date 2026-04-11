@@ -603,6 +603,7 @@ export interface DeferredResumeSummary {
   readyAt?: string;
   kind?: 'continue' | 'reminder' | 'task-callback';
   title?: string;
+  behavior?: 'steer' | 'followUp';
   delivery?: {
     alertLevel: 'none' | 'passive' | 'disruptive';
     autoResumeIfOpen: boolean;

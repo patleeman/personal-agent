@@ -42,18 +42,21 @@ describe('deferredResumes', () => {
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       delay: '10m',
       prompt: 'check the logs and continue',
+      behavior: 'followUp',
       now: new Date('2026-03-12T13:00:00.000Z'),
     });
 
     expect(scheduled.prompt).toBe('check the logs and continue');
     expect(scheduled.status).toBe('scheduled');
     expect(scheduled.dueAt).toBe('2026-03-12T13:10:00.000Z');
+    expect(scheduled.behavior).toBe('followUp');
 
     expect(listDeferredResumesForSessionFile('/tmp/sessions/conv-123.jsonl')).toEqual([
       expect.objectContaining({
         id: scheduled.id,
         prompt: 'check the logs and continue',
         status: 'scheduled',
+        behavior: 'followUp',
       }),
     ]);
   });

@@ -968,7 +968,7 @@ export const api = {
 
     return get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`);
   },
-  scheduleDeferredResume: async (id: string, input: { delay: string; prompt?: string }) => {
+  scheduleDeferredResume: async (id: string, input: { delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       return desktopBridge.scheduleConversationDeferredResume({ conversationId: id, ...input });

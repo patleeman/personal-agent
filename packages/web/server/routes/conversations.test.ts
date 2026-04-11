@@ -463,11 +463,12 @@ describe('conversation routes', () => {
     const createResumeRes = createResponse();
     await postHandler('/api/conversations/:id/deferred-resumes')(createRequest({
       params: { id: 'session-1' },
-      body: { delay: '5m', prompt: 'Check again later' },
+      body: { delay: '5m', prompt: 'Check again later', behavior: 'followUp' },
     }), createResumeRes);
     expect(scheduleDeferredResumeForSessionFileMock).toHaveBeenCalledWith({
       delay: '5m',
       prompt: 'Check again later',
+      behavior: 'followUp',
       sessionFile: '/sessions/session-1.jsonl',
     });
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('session-1');

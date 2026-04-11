@@ -174,6 +174,7 @@ export interface LocalApiModule {
     conversationId: string;
     delay?: string;
     prompt?: string;
+    behavior?: 'steer' | 'followUp';
   }): Promise<unknown>;
   cancelDesktopConversationDeferredResume(input: {
     conversationId: string;

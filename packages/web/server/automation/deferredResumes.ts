@@ -11,6 +11,7 @@ import {
   saveDeferredResumeState,
   scheduleDeferredResume,
   type DeferredResumeAlertLevel,
+  type DeferredResumeBehavior,
   type DeferredResumeKind,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
@@ -74,6 +75,7 @@ export interface DeferredResumeSummary {
   readyAt?: string;
   kind: DeferredResumeKind;
   title?: string;
+  behavior?: DeferredResumeBehavior;
   delivery: {
     alertLevel: DeferredResumeAlertLevel;
     autoResumeIfOpen: boolean;
@@ -97,6 +99,7 @@ export function toDeferredResumeSummary(record: DeferredResumeRecord): DeferredR
     readyAt: record.readyAt,
     kind: record.kind,
     title: record.title,
+    behavior: record.behavior,
     delivery: record.delivery,
   };
 }
@@ -206,6 +209,7 @@ export async function scheduleDeferredResumeForSessionFile(input: {
   prompt?: string;
   title?: string;
   kind?: DeferredResumeKind;
+  behavior?: DeferredResumeBehavior;
   notify?: DeferredResumeAlertLevel;
   requireAck?: boolean;
   autoResumeIfOpen?: boolean;
@@ -225,6 +229,7 @@ export async function scheduleDeferredResumeForSessionFile(input: {
     attempts: 0,
     kind,
     ...(input.title?.trim() ? { title: input.title.trim() } : {}),
+    ...(input.behavior ? { behavior: input.behavior } : {}),
     ...(input.source ? { source: input.source } : {}),
     delivery: {
       alertLevel: input.notify,

@@ -858,8 +858,8 @@ describe('LocalHostController', () => {
     });
     const scheduleDesktopConversationDeferredResume = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
-      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
-      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
     });
     const cancelDesktopConversationDeferredResume = vi.fn().mockResolvedValue({
       conversationId: 'conversation-1',
@@ -992,10 +992,10 @@ describe('LocalHostController', () => {
       conversationId: 'conversation-1',
       resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }],
     });
-    await expect(controller.scheduleConversationDeferredResume?.({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' })).resolves.toEqual({
+    await expect(controller.scheduleConversationDeferredResume?.({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' })).resolves.toEqual({
       conversationId: 'conversation-1',
-      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' },
-      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z' }],
+      resume: { id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' },
+      resumes: [{ id: 'resume-2', dueAt: '2026-04-24T10:10:00.000Z', behavior: 'followUp' }],
     });
     await expect(controller.cancelConversationDeferredResume?.({ conversationId: 'conversation-1', resumeId: 'resume-2' })).resolves.toEqual({
       conversationId: 'conversation-1',
@@ -1087,7 +1087,7 @@ describe('LocalHostController', () => {
     expect(readDesktopConversationBootstrap).toHaveBeenCalledWith({ conversationId: 'live-1', tailBlocks: 12 });
     expect(renameDesktopConversation).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed conversation', surfaceId: 'surface-1' });
     expect(readDesktopConversationDeferredResumes).toHaveBeenCalledWith('conversation-1');
-    expect(scheduleDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.' });
+    expect(scheduleDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', delay: '10m', prompt: 'Resume later.', behavior: 'followUp' });
     expect(cancelDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-2' });
     expect(fireDesktopConversationDeferredResume).toHaveBeenCalledWith({ conversationId: 'conversation-1', resumeId: 'resume-1' });
     expect(recoverDesktopConversation).toHaveBeenCalledWith('conversation-1');

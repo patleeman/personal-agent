@@ -69,11 +69,17 @@ describe('conversationDeferredResumeCapability', () => {
 
   it('schedules deferred resumes and validates the delay input', async () => {
     await expect(scheduleConversationDeferredResumeCapability({ conversationId: 'conversation-1' })).rejects.toThrow('delay is required');
+    await expect(scheduleConversationDeferredResumeCapability({
+      conversationId: 'conversation-1',
+      delay: '5m',
+      behavior: 'later' as 'steer',
+    })).rejects.toThrow('behavior must be "steer" or "followUp"');
 
     await expect(scheduleConversationDeferredResumeCapability({
       conversationId: 'conversation-1',
       delay: ' 5m ',
       prompt: 'Follow up later.',
+      behavior: 'followUp',
     })).resolves.toEqual({
       conversationId: 'conversation-1',
       resume: { id: 'resume-2', delay: '5m' },
@@ -83,6 +89,7 @@ describe('conversationDeferredResumeCapability', () => {
       sessionFile: '/sessions/conversation-1.jsonl',
       delay: '5m',
       prompt: 'Follow up later.',
+      behavior: 'followUp',
     });
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-1');
   });

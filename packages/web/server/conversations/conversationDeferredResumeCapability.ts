@@ -38,6 +38,7 @@ export async function scheduleConversationDeferredResumeCapability(input: {
   conversationId: string;
   delay?: string;
   prompt?: string;
+  behavior?: 'steer' | 'followUp';
 }) {
   const { conversationId, sessionFile } = resolveRequiredConversationSessionFile(input.conversationId);
   const delay = input.delay?.trim();
@@ -45,10 +46,15 @@ export async function scheduleConversationDeferredResumeCapability(input: {
     throw new Error('delay is required');
   }
 
+  if (input.behavior !== undefined && input.behavior !== 'steer' && input.behavior !== 'followUp') {
+    throw new Error('behavior must be "steer" or "followUp"');
+  }
+
   const resume = await scheduleDeferredResumeForSessionFile({
     sessionFile,
     delay,
     prompt: input.prompt,
+    behavior: input.behavior,
   });
 
   publishConversationSessionMetaChanged(conversationId);

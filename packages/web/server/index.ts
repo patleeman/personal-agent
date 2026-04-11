@@ -1001,6 +1001,8 @@ async function flushLiveDeferredResumes(): Promise<void> {
         }
 
         try {
+          const deferredResumeBehavior = readyEntry.behavior
+            ?? (liveEntry.session.isStreaming ? 'followUp' as const : undefined);
           if (liveEntry.session.sessionFile) {
             await syncWebLiveConversationRun({
               conversationId: session.id,
@@ -1012,7 +1014,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
               pendingOperation: {
                 type: 'prompt',
                 text: readyEntry.prompt,
-                ...(liveEntry.session.isStreaming ? { behavior: 'followUp' as const } : {}),
+                ...(deferredResumeBehavior ? { behavior: deferredResumeBehavior } : {}),
                 enqueuedAt: new Date().toISOString(),
               },
             });
@@ -1021,7 +1023,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
           await promptLocalSession(
             session.id,
             readyEntry.prompt,
-            liveEntry.session.isStreaming ? 'followUp' : undefined,
+            deferredResumeBehavior,
           );
 
           const completedEntry = completeDeferredResumeForSessionFile({

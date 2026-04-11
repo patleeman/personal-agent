@@ -1983,6 +1983,7 @@ export async function scheduleDesktopConversationDeferredResume(input: {
   conversationId: string;
   delay?: string;
   prompt?: string;
+  behavior?: 'steer' | 'followUp';
 }) {
   return scheduleConversationDeferredResumeCapability(input);
 }

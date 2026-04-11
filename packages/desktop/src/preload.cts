@@ -156,7 +156,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:change-conversation-cwd`, input),
   readConversationDeferredResumes: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-deferred-resumes`, conversationId),
-  scheduleConversationDeferredResume: (input: { conversationId: string; delay: string; prompt?: string }) =>
+  scheduleConversationDeferredResume: (input: { conversationId: string; delay: string; prompt?: string; behavior?: 'steer' | 'followUp' }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:schedule-conversation-deferred-resume`, input),
   cancelConversationDeferredResume: (input: { conversationId: string; resumeId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:cancel-conversation-deferred-resume`, input),
