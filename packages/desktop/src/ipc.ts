@@ -1054,17 +1054,6 @@ export function registerDesktopIpc(options: {
     return controller.readLiveSessionStats(conversationId);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:rename-live-session`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.renameLiveSession) {
-      throw new Error('Dedicated desktop live-session rename is only available for the local host.');
-    }
-
-    return controller.renameLiveSession(input);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, async (event, conversationId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
@@ -1085,17 +1074,6 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readLiveSessionContext(conversationId);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-live-session-context-usage`, async (event, conversationId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readLiveSessionContextUsage) {
-      throw new Error('Dedicated desktop live-session context-usage reads are only available for the local host.');
-    }
-
-    return controller.readLiveSessionContextUsage(conversationId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-session-detail`, async (event, input) => {

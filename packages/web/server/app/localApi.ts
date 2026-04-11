@@ -47,7 +47,6 @@ import {
   exportSessionHtml,
   getLiveSessionForkEntries,
   getLiveSessions as getLocalLiveSessions,
-  getSessionContextUsage,
   getSessionStats,
   isLive as isLiveSession,
   registry as liveRegistry,
@@ -2184,27 +2183,6 @@ export async function readDesktopLiveSessionStats(conversationId: string) {
   return stats;
 }
 
-export async function renameDesktopLiveSession(input: {
-  conversationId: string;
-  name: string;
-  surfaceId?: string;
-}): Promise<{ ok: true; name: string }> {
-  await getLocalRoutes();
-
-  const conversationId = input.conversationId.trim();
-  if (!conversationId || !isLiveSession(conversationId)) {
-    throw new Error('404 Not Found');
-  }
-
-  const nextName = input.name.trim();
-  if (!nextName) {
-    throw new Error('name required');
-  }
-
-  renameSession(conversationId, nextName);
-  return { ok: true, name: nextName };
-}
-
 export async function readDesktopLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
   await getLocalRoutes();
 
@@ -2252,17 +2230,6 @@ export async function readDesktopLiveSessionContext(conversationId: string) {
         }
       : null,
   };
-}
-
-export async function readDesktopLiveSessionContextUsage(conversationId: string) {
-  await getLocalRoutes();
-
-  const usage = getSessionContextUsage(conversationId.trim());
-  if (!usage) {
-    throw new Error('404 Not Found');
-  }
-
-  return usage;
 }
 
 export async function readDesktopSessionDetail(input: {

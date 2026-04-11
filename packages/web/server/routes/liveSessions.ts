@@ -6,11 +6,9 @@ import {
   exportSessionHtml,
   getLiveSessions as getLocalLiveSessions,
   getLiveSessionForkEntries,
-  getSessionContextUsage,
   getSessionStats,
   isLive as isLocalLive,
   LiveSessionControlError,
-  renameSession,
   subscribe as subscribeLocal,
   registry as liveRegistry,
 } from '../conversations/liveSessions.js';
@@ -465,30 +463,6 @@ export function registerLiveSessionRoutes(
     }
   });
 
-  router.patch('/api/live-sessions/:id/name', async (req, res) => {
-    try {
-      ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      const { name } = req.body as { name?: string; surfaceId?: string };
-      const nextName = name?.trim();
-      if (!nextName) {
-        res.status(400).json({ error: 'name required' });
-        return;
-      }
-
-      renameSession(req.params.id, nextName);
-      res.json({ ok: true, name: nextName });
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (writeLiveConversationControlError(res, err)) {
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
   /** Abort a running agent */
   router.post('/api/live-sessions/:id/abort', async (req, res) => {
     try {
@@ -666,20 +640,4 @@ export function registerLiveSessionStatsRoutes(
     }
   });
 
-  router.get('/api/live-sessions/:id/context-usage', (req, res) => {
-    try {
-      const usage = getSessionContextUsage(req.params.id);
-      if (!usage) {
-        res.status(404).json({ error: 'Not found' });
-        return;
-      }
-      res.json(usage);
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({ error: String(err) });
-    }
-  });
 }

@@ -388,10 +388,8 @@ export interface HostController {
   readLiveSession?(conversationId: string): Promise<unknown>;
   readLiveSessions?(): Promise<unknown>;
   readLiveSessionStats?(conversationId: string): Promise<unknown>;
-  renameLiveSession?(input: DesktopConversationRenameRequest): Promise<{ ok: true; name: string }>;
   readLiveSessionForkEntries?(conversationId: string): Promise<Array<{ entryId: string; text: string }>>;
   readLiveSessionContext?(conversationId: string): Promise<unknown>;
-  readLiveSessionContextUsage?(conversationId: string): Promise<unknown>;
   readSessionDetail?(input: DesktopSessionDetailRequest): Promise<unknown>;
   readSessionBlock?(input: DesktopSessionBlockRequest): Promise<unknown>;
   createLiveSession?(input: DesktopLiveSessionCreateRequest): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }>;

@@ -213,13 +213,9 @@ const desktopBridge = {
   readLiveSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-sessions`),
   readLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session`, conversationId),
   readLiveSessionStats: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-stats`, conversationId),
-  renameLiveSession: (input: { conversationId: string; name: string; surfaceId?: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:rename-live-session`, input),
   readLiveSessionForkEntries: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-fork-entries`, conversationId),
   readLiveSessionContext: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-context`, conversationId),
-  readLiveSessionContextUsage: (conversationId: string) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-live-session-context-usage`, conversationId),
   readSessionDetail: (input: {
     sessionId: string;
     tailBlocks?: number;

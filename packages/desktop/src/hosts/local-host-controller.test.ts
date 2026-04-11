@@ -110,10 +110,8 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopConversationAttachmentAsset: vi.fn(),
     readDesktopLiveSessions: vi.fn(),
     readDesktopLiveSession: vi.fn(),
-    renameDesktopLiveSession: vi.fn(),
     readDesktopLiveSessionForkEntries: vi.fn(),
     readDesktopLiveSessionContext: vi.fn(),
-    readDesktopLiveSessionContextUsage: vi.fn(),
     readDesktopSessionDetail: vi.fn(),
     readDesktopSessionBlock: vi.fn(),
     createDesktopLiveSession: vi.fn(),
@@ -470,13 +468,9 @@ describe('LocalHostController', () => {
   it('routes desktop live-session workspace reads through the local API module without loopback proxying', async () => {
     const readDesktopLiveSessions = vi.fn().mockResolvedValue([{ id: 'live-1', cwd: '/repo' }]);
     const readDesktopLiveSessionStats = vi.fn().mockResolvedValue({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
-    const renameDesktopLiveSession = vi.fn().mockResolvedValue({ ok: true, name: 'Renamed live session' });
-    const readDesktopLiveSessionContextUsage = vi.fn().mockResolvedValue({ recentFiles: [], promptTokens: 123 });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopLiveSessions,
       readDesktopLiveSessionStats,
-      renameDesktopLiveSession,
-      readDesktopLiveSessionContextUsage,
     }));
     const backend = createBackendMock();
     const controller = new LocalHostController(
@@ -487,13 +481,9 @@ describe('LocalHostController', () => {
 
     await expect(controller.readLiveSessions?.()).resolves.toEqual([{ id: 'live-1', cwd: '/repo' }]);
     await expect(controller.readLiveSessionStats?.('live-1')).resolves.toEqual({ tokens: { input: 4, output: 6, total: 10 }, cost: 0.25 });
-    await expect(controller.renameLiveSession?.({ conversationId: 'live-1', name: 'Renamed live session' })).resolves.toEqual({ ok: true, name: 'Renamed live session' });
-    await expect(controller.readLiveSessionContextUsage?.('live-1')).resolves.toEqual({ recentFiles: [], promptTokens: 123 });
 
     expect(readDesktopLiveSessions).toHaveBeenCalledTimes(1);
     expect(readDesktopLiveSessionStats).toHaveBeenCalledWith('live-1');
-    expect(renameDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', name: 'Renamed live session' });
-    expect(readDesktopLiveSessionContextUsage).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 

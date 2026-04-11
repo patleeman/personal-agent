@@ -47,7 +47,6 @@ import type {
   FolderPickerResult,
   PromptAttachmentRefInput,
   PromptImageInput,
-  SessionContextUsage,
   SessionDetailResult,
   SessionMeta,
   VaultFileListResult,
@@ -242,10 +241,8 @@ export interface PersonalAgentDesktopBridge {
   readLiveSessions(): Promise<LiveSessionMeta[]>;
   readLiveSession(conversationId: string): Promise<LiveSessionMeta & { live: boolean }>;
   readLiveSessionStats(conversationId: string): Promise<LiveSessionStats>;
-  renameLiveSession(input: { conversationId: string; name: string; surfaceId?: string }): Promise<{ ok: true; name: string }>;
   readLiveSessionForkEntries(conversationId: string): Promise<LiveSessionForkEntry[]>;
   readLiveSessionContext(conversationId: string): Promise<LiveSessionContext>;
-  readLiveSessionContextUsage(conversationId: string): Promise<SessionContextUsage>;
   readSessionDetail(input: {
     sessionId: string;
     tailBlocks?: number;

@@ -582,11 +582,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopLiveSessionStats(conversationId);
   }
 
-  async renameLiveSession(input: DesktopConversationRenameRequest): Promise<{ ok: true; name: string }> {
-    const module = await this.loadLocalApi();
-    return module.renameDesktopLiveSession(input);
-  }
-
   async readLiveSessionForkEntries(conversationId: string): Promise<Array<{ entryId: string; text: string }>> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSessionForkEntries(conversationId);
@@ -595,11 +590,6 @@ export class LocalHostController implements HostController {
   async readLiveSessionContext(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopLiveSessionContext(conversationId);
-  }
-
-  async readLiveSessionContextUsage(conversationId: string): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopLiveSessionContextUsage(conversationId);
   }
 
   async readSessionDetail(input: DesktopSessionDetailRequest): Promise<unknown> {

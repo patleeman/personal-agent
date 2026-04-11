@@ -13,7 +13,6 @@ const {
   forkSessionMock,
   getLiveSessionForkEntriesMock,
   getLiveSessionsMock,
-  getSessionContextUsageMock,
   getSessionStatsMock,
   invalidateAppTopicsMock,
   isLiveMock,
@@ -65,7 +64,6 @@ const {
   forkSessionMock: vi.fn(),
   getLiveSessionForkEntriesMock: vi.fn(),
   getLiveSessionsMock: vi.fn(),
-  getSessionContextUsageMock: vi.fn(),
   getSessionStatsMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   isLiveMock: vi.fn(),
@@ -132,7 +130,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   forkSession: forkSessionMock,
   getLiveSessionForkEntries: getLiveSessionForkEntriesMock,
   getLiveSessions: getLiveSessionsMock,
-  getSessionContextUsage: getSessionContextUsageMock,
   getSessionStats: getSessionStatsMock,
   isLive: isLiveMock,
   queuePromptContext: queuePromptContextMock,
@@ -330,7 +327,6 @@ describe('live session routes', () => {
     forkSessionMock.mockReset();
     getLiveSessionForkEntriesMock.mockReset();
     getLiveSessionsMock.mockReset();
-    getSessionContextUsageMock.mockReset();
     getSessionStatsMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     isLiveMock.mockReset();
@@ -379,7 +375,6 @@ describe('live session routes', () => {
     forkSessionMock.mockResolvedValue({ id: 'fork-1' });
     getLiveSessionForkEntriesMock.mockReturnValue([{ id: 'fork-entry-1' }]);
     getLiveSessionsMock.mockReturnValue([{ id: 'live-1', cwd: '/repo/worktree', title: 'Live 1' }]);
-    getSessionContextUsageMock.mockReturnValue({ percentUsed: 42 });
     getSessionStatsMock.mockReturnValue({ totalMessages: 12 });
     isLiveMock.mockReturnValue(false);
     listPendingBackgroundRunResultsMock.mockReturnValue([]);
@@ -735,7 +730,7 @@ describe('live session routes', () => {
   });
 
   it('registers desktop action routes for dequeue, conversation actions, context lookup, and deletion', async () => {
-    const { deleteHandler, getHandler, patchHandler, postHandler } = createDesktopHarness();
+    const { deleteHandler, getHandler, postHandler } = createDesktopHarness();
     liveRegistry.set('live-1', {
       cwd: '/repo/worktree',
       session: { sessionFile: '/sessions/live-1.jsonl' },
@@ -792,17 +787,6 @@ describe('live session routes', () => {
     await postHandler('/api/live-sessions/:id/export')(createRequest({ params: { id: 'live-1' }, body: { outputPath: ' /tmp/export.html ' } }), exportRes);
     expect(exportSessionHtmlMock).toHaveBeenCalledWith('live-1', '/tmp/export.html');
     expect(exportRes.json).toHaveBeenCalledWith({ ok: true, path: '/tmp/export.html' });
-
-    const missingNameRes = createResponse();
-    await patchHandler('/api/live-sessions/:id/name')(createRequest({ params: { id: 'live-1' }, body: { name: ' ' } }), missingNameRes);
-    expect(missingNameRes.status).toHaveBeenCalledWith(400);
-    expect(missingNameRes.json).toHaveBeenCalledWith({ error: 'name required' });
-
-    const renameSessionMock = (await import('../conversations/liveSessions.js')).renameSession as unknown as ReturnType<typeof vi.fn>;
-    const renameRes = createResponse();
-    await patchHandler('/api/live-sessions/:id/name')(createRequest({ params: { id: 'live-1' }, body: { name: '  New name  ', surfaceId: 'surface-1' } }), renameRes);
-    expect(renameSessionMock).toHaveBeenCalledWith('live-1', 'New name');
-    expect(renameRes.json).toHaveBeenCalledWith({ ok: true, name: 'New name' });
 
     const abortRes = createResponse();
     await postHandler('/api/live-sessions/:id/abort')(createRequest({ params: { id: 'live-1' }, body: { surfaceId: 'surface-1' } }), abortRes);
@@ -893,17 +877,6 @@ describe('live session routes', () => {
     expect(missingStatsRes.status).toHaveBeenCalledWith(404);
     expect(missingStatsRes.json).toHaveBeenCalledWith({ error: 'Not found' });
 
-    getSessionContextUsageMock.mockReturnValueOnce(null);
-    const missingUsageRes = createResponse();
-    getHandler('/api/live-sessions/:id/context-usage')(createRequest({ params: { id: 'missing' } }), missingUsageRes);
-    expect(missingUsageRes.status).toHaveBeenCalledWith(404);
-    expect(missingUsageRes.json).toHaveBeenCalledWith({ error: 'Not found' });
-
-    getSessionContextUsageMock.mockReturnValueOnce({ percentUsed: 42 });
-    const usageRes = createResponse();
-    getHandler('/api/live-sessions/:id/context-usage')(createRequest({ params: { id: 'live-1' } }), usageRes);
-    expect(usageRes.json).toHaveBeenCalledWith({ percentUsed: 42 });
-
     getSessionStatsMock.mockImplementationOnce(() => {
       throw new Error('stats exploded');
     });
@@ -911,14 +884,6 @@ describe('live session routes', () => {
     getHandler('/api/live-sessions/:id/stats')(createRequest({ params: { id: 'live-1' } }), statsErrorRes);
     expect(statsErrorRes.status).toHaveBeenCalledWith(500);
     expect(statsErrorRes.json).toHaveBeenCalledWith({ error: 'Error: stats exploded' });
-
-    getSessionContextUsageMock.mockImplementationOnce(() => {
-      throw new Error('usage exploded');
-    });
-    const usageErrorRes = createResponse();
-    getHandler('/api/live-sessions/:id/context-usage')(createRequest({ params: { id: 'live-1' } }), usageErrorRes);
-    expect(usageErrorRes.status).toHaveBeenCalledWith(500);
-    expect(usageErrorRes.json).toHaveBeenCalledWith({ error: 'Error: usage exploded' });
 
     const errorRes = createResponse();
     expect(writeLiveConversationControlError(errorRes as never, new LiveSessionControlErrorClass('Busy'))).toBe(true);
