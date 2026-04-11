@@ -304,8 +304,8 @@ function saveReadState(ids: Set<string>, stateRoot: string | undefined, profile 
 }
 
 const SETTINGS_FILE = DEFAULT_RUNTIME_SETTINGS_FILE;
-const INBOX_CULL_INTERVAL_MS = 5 * 60 * 1000;
-let cullingInbox = false;
+const ACTIVITY_ATTENTION_CULL_INTERVAL_MS = 5 * 60 * 1000;
+let cullingActivityAttention = false;
 
 function readOpenConversationIds(): Set<string> {
   try {
@@ -375,7 +375,7 @@ function markConversationSessionsRead(profile: string, sessions: Array<{ id: str
   return dedupedSessions.map((session) => session.id);
 }
 
-function clearInboxForCurrentProfile() {
+function clearActivityAttentionForCurrentProfile() {
   const profile = getCurrentProfile();
   const sessions = listConversationSessionsSnapshot();
   const activityRecords = listActivityRecordsForProfile(profile);
@@ -394,12 +394,12 @@ function clearInboxForCurrentProfile() {
   };
 }
 
-function cullExpiredInboxItems() {
-  if (cullingInbox) {
+function cullExpiredActivityAttentionItems() {
+  if (cullingActivityAttention) {
     return { deletedActivityIds: [], clearedConversationIds: [] };
   }
 
-  cullingInbox = true;
+  cullingActivityAttention = true;
 
   try {
     const profile = getCurrentProfile();
@@ -424,20 +424,20 @@ function cullExpiredInboxItems() {
       clearedConversationIds,
     };
   } finally {
-    cullingInbox = false;
+    cullingActivityAttention = false;
   }
 }
 
-function startInboxCullLoop(): void {
-  void Promise.resolve().then(() => cullExpiredInboxItems()).catch((error) => {
-    logWarn(`Inbox cull failed: ${(error as Error).message}`);
+function startActivityAttentionCullLoop(): void {
+  void Promise.resolve().then(() => cullExpiredActivityAttentionItems()).catch((error) => {
+    logWarn(`Activity attention cull failed: ${(error as Error).message}`);
   });
 
   setInterval(() => {
-    void Promise.resolve().then(() => cullExpiredInboxItems()).catch((error) => {
-      logWarn(`Inbox cull failed: ${(error as Error).message}`);
+    void Promise.resolve().then(() => cullExpiredActivityAttentionItems()).catch((error) => {
+      logWarn(`Activity attention cull failed: ${(error as Error).message}`);
     });
-  }, INBOX_CULL_INTERVAL_MS);
+  }, ACTIVITY_ATTENTION_CULL_INTERVAL_MS);
 }
 
 type ActivityEntryWithConversationLinks = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
@@ -556,7 +556,7 @@ function listActivityForCurrentProfile() {
   return listActivityForProfile(getCurrentProfile());
 }
 
-function buildInboxActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {
+function buildActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {
   const lines = [
     'Activity context for this conversation:',
     `- activity id: ${entry.id}`,
@@ -1108,7 +1108,7 @@ startConversationRecovery({
   queuePromptContext,
   promptSession: promptLocalSession,
 });
-startInboxCullLoop();
+startActivityAttentionCullLoop();
 
 const DIST_DIR =
   process.env.PA_WEB_DIST ??

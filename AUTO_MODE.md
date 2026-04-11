@@ -4,16 +4,14 @@
 Finish the post-release desktop-first cleanup so the mac app stays the only real product surface and the remaining UI/API concepts keep collapsing toward conversations, runs/tasks, and tools.
 
 ## Current status
-This slice trims another inbox-era name from the remaining activity-attention internals. The shared cleanup helper is now `clearActivityAttentionForCurrentProfile`, the capability layer calls that activity-focused name, the read-state save comment no longer talks about inbox mutations, and the matching tests/mocks were updated. Behavior is unchanged; the remaining internals just read more like the current product direction.
+This slice trims the remaining inbox-era helper names parked in `packages/web/server/index.ts`. The retention loop and related helper names now use activity-attention wording instead of inbox wording, and the last index-local conversation-context helper now matches the current activity naming. Behavior is unchanged; this is a surgical internal-name cleanup in a file with broader historical lint debt.
 
 ## Active run
 - run id: none
 - task slug: post-release-tool-first-cleanup
-- purpose: direct local cleanup of stale inbox naming in shared activity-attention helpers
+- purpose: direct local cleanup of stale inbox naming in the legacy server bootstrap file
 
 ## Latest validation
-- `npx vitest run packages/web/server/automation/inboxService.test.ts packages/web/server/automation/inboxService.mocked.test.ts packages/web/server/automation/inboxCapability.test.ts`
-- `npx eslint packages/web/server/automation/inboxService.ts packages/web/server/automation/inboxService.test.ts packages/web/server/automation/inboxService.mocked.test.ts packages/web/server/automation/inboxCapability.ts packages/web/server/automation/inboxCapability.test.ts`
 - `npm --prefix packages/desktop run build`
 
 ## Durable loop state
@@ -21,4 +19,4 @@ This slice trims another inbox-era name from the remaining activity-attention in
 - wakeup policy: none needed for this slice
 
 ## Next step
-Keep trimming the remaining inbox-era names in the internal attention/activity modules, unless the next clearer leverage is deleting or renaming one more dead helper parked in `packages/web/server/index.ts`.
+Keep trimming remaining inbox-era internal names, especially in the legacy server bootstrap and any shared attention helpers that still describe activity cleanup as inbox behavior.
