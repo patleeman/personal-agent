@@ -35,6 +35,7 @@ import {
   replaceSessionMetaPreservingOrder,
 } from './sessionListState';
 import { ThemeProvider } from './theme';
+import { createSessionMetaRefreshScheduler } from './sessionMetaRefreshScheduler';
 import type {
   ActivitySnapshot,
   AlertSnapshot,
@@ -265,6 +266,20 @@ export function App() {
     return request;
   }, [applySessionMetaUpdate]);
 
+  const sessionMetaRefreshSchedulerRef = useRef<ReturnType<typeof createSessionMetaRefreshScheduler> | null>(null);
+
+  useEffect(() => {
+    const scheduler = createSessionMetaRefreshScheduler((sessionId) => refreshSessionMeta(sessionId));
+    sessionMetaRefreshSchedulerRef.current = scheduler;
+
+    return () => {
+      scheduler.dispose();
+      if (sessionMetaRefreshSchedulerRef.current === scheduler) {
+        sessionMetaRefreshSchedulerRef.current = null;
+      }
+    };
+  }, [refreshSessionMeta]);
+
   const setTasks = useCallback((items: ScheduledTaskSummary[]) => {
     setTasksState(items);
   }, []);
@@ -288,7 +303,11 @@ export function App() {
         return;
       case 'session_meta_changed':
         bumpConversationVersion(payload.sessionId);
-        void refreshSessionMeta(payload.sessionId);
+        if (sessionMetaRefreshSchedulerRef.current) {
+          sessionMetaRefreshSchedulerRef.current.schedule(payload.sessionId);
+        } else {
+          void refreshSessionMeta(payload.sessionId);
+        }
         return;
       case 'session_file_changed':
         bumpConversationVersion(payload.sessionId);

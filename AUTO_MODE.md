@@ -4,7 +4,7 @@
 Finish the desktop-first migration/perf cleanup to a solid foundation, then verify the repo builds, build the mac desktop app, and ship a new desktop release if release prerequisites are available.
 
 ## Current status
-Another packaged-desktop perf trim is green in the worktree: fresh create/open no longer kicks off a live-session git-context read while the initial prompt is still pending or in flight. The packaged shell already has cwd from session meta, so branch/git context can wait until the first prompt clears. Cleanup leverage is effectively exhausted, so the next iteration should keep measuring the packaged local first-response / first-visible-update path for one more small trim.
+Another packaged-desktop perf trim is green in the worktree: repeated `session_meta_changed` bursts on the fresh create/send path no longer trigger an immediate full `readSessionMeta(...)` read every time. During measurement, local desktop `readSessionMeta(...)` was about `122ms`, and the packaged shell was receiving multiple metadata-change events for the same conversation during first-turn startup. The app now coalesces those refreshes per conversation with a short trailing debounce.
 
 ## Active run
 - run id: none
@@ -12,15 +12,15 @@ Another packaged-desktop perf trim is green in the worktree: fresh create/open n
 - purpose: direct local iteration on the next smallest desktop-first slice
 
 ## Latest validation
-- `npx vitest run packages/web/src/pages/ConversationPage.test.tsx`
-- `npx eslint packages/web/src/pages/ConversationPage.tsx packages/web/src/pages/ConversationPage.test.tsx`
+- `npx vitest run packages/web/src/sessionMetaRefreshScheduler.test.ts`
+- `npx eslint packages/web/src/App.tsx packages/web/src/sessionMetaRefreshScheduler.ts packages/web/src/sessionMetaRefreshScheduler.test.ts`
 - `npm --prefix packages/desktop run build`
-- packaged Electron smoke via `agent-browser`: a draft prompt still opened into the saved conversation shell, got a response, and kept the route transition around `110ms`
+- packaged Electron smoke via `agent-browser`: a draft prompt still opened into the saved conversation shell, got an assistant reply, and the desktop bridge was present
 
 ## Active deferred resume
-- id: `resume_1775879002684_3t5lxd3l`
+- id: `resume_1775880153224_mp5lpzg8`
 - why it exists: keep the packaged-desktop perf loop alive for the next measurement pass
-- when it should wake up: about 45 minutes after scheduling
+- when it should wake up: previously scheduled
 
 ## Next step
-Commit and push this git-context deferral trim, then re-measure the packaged local first-response / first-visible-update path for the next smallest remaining delay. Keep the later desktop packaging/signing failure (`chrome_crashpad_handler.cstemp` ENOENT) parked as a separate release-path blocker once the perf/migration loop is closer to done.
+Commit and push this coalesced session-meta refresh trim, then re-measure the packaged local first-response / first-visible-update path for the next smallest remaining delay. Keep the later desktop packaging/signing failure (`chrome_crashpad_handler.cstemp` ENOENT) parked as a separate release-path blocker once the perf/migration loop is closer to done.
