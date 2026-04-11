@@ -8,10 +8,10 @@ import {
   createWebLiveConversationRunId,
   listRecoverableWebLiveConversationRuns,
   syncWebLiveConversationRun,
+  type WebLiveConversationPendingOperation,
   type WebLiveConversationPromptImage,
 } from './conversationRuns.js';
 import {
-  canInjectResumeFallbackPrompt,
   isLive as isLiveSession,
   promptSession,
   queuePromptContext,
@@ -80,6 +80,23 @@ function readCheckpointString(payload: Record<string, unknown>, key: string): st
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function isSyntheticResumeFallbackOperation(
+  operation: WebLiveConversationPendingOperation | null | undefined,
+  resumeFallbackPrompt: string,
+): boolean {
+  const normalizedPrompt = resumeFallbackPrompt.trim();
+  if (!operation || operation.type !== 'prompt' || normalizedPrompt.length === 0) {
+    return false;
+  }
+
+  const hasImages = Array.isArray(operation.images) && operation.images.length > 0;
+  const hasContextMessages = Array.isArray(operation.contextMessages) && operation.contextMessages.length > 0;
+  return operation.text.trim() === normalizedPrompt
+    && operation.behavior === undefined
+    && !hasImages
+    && !hasContextMessages;
+}
+
 export async function recoverConversationCapability(
   conversationIdInput: string,
   context: RecoverConversationCapabilityContext,
@@ -89,18 +106,8 @@ export async function recoverConversationCapability(
     throw new Error('conversationId required');
   }
 
-  const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
-
   if (isLiveSession(conversationId)) {
     const liveEntry = liveRegistry.get(conversationId);
-    const shouldInjectFallbackPrompt = canInjectResumeFallbackPrompt(conversationId);
-    const fallbackPendingOperation = shouldInjectFallbackPrompt
-      ? {
-          type: 'prompt' as const,
-          text: resumeFallbackPrompt,
-          enqueuedAt: new Date().toISOString(),
-        }
-      : null;
 
     if (liveEntry?.session.sessionFile) {
       await syncWebLiveConversationRun({
@@ -110,29 +117,7 @@ export async function recoverConversationCapability(
         title: liveEntry.title,
         profile: context.getCurrentProfile(),
         state: 'running',
-        pendingOperation: fallbackPendingOperation,
-      });
-    }
-
-    if (shouldInjectFallbackPrompt) {
-      promptSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
-        if (liveEntry?.session.sessionFile) {
-          await syncWebLiveConversationRun({
-            conversationId,
-            sessionFile: liveEntry.session.sessionFile,
-            cwd: liveEntry.cwd,
-            title: liveEntry.title,
-            profile: context.getCurrentProfile(),
-            state: 'failed',
-            lastError: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        logError('conversation recovery error', {
-          sessionId: conversationId,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
+        pendingOperation: null,
       });
     }
 
@@ -141,7 +126,7 @@ export async function recoverConversationCapability(
       live: true,
       recovered: true,
       replayedPendingOperation: false,
-      usedFallbackPrompt: shouldInjectFallbackPrompt,
+      usedFallbackPrompt: false,
     };
   }
 
@@ -181,17 +166,9 @@ export async function recoverConversationCapability(
     throw new Error('Could not determine the conversation working directory.');
   }
 
-  const shouldInjectFallbackPrompt = !pendingOperation
-    && (!resumedEntry || canInjectResumeFallbackPrompt(resumed.id));
-  const recoveryOperation = pendingOperation ?? (shouldInjectFallbackPrompt
-    ? {
-        type: 'prompt' as const,
-        text: resumeFallbackPrompt,
-        enqueuedAt: new Date().toISOString(),
-      }
-    : null);
+  const recoveryOperation = pendingOperation ?? null;
   const replayedPendingOperation = Boolean(pendingOperation);
-  const usedFallbackPrompt = shouldInjectFallbackPrompt;
+  const usedFallbackPrompt = false;
 
   await syncWebLiveConversationRun({
     conversationId: resumed.id,
@@ -246,6 +223,7 @@ export async function recoverDurableLiveConversations(
 ): Promise<RecoverDurableLiveConversationsResult> {
   const recovered: RecoverDurableLiveConversationsResult['recovered'] = [];
   const runs = await listRecoverableWebLiveConversationRuns();
+  const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
 
   for (const run of runs) {
     if (dependencies.isLive(run.conversationId)) {
@@ -254,37 +232,40 @@ export async function recoverDurableLiveConversations(
 
     try {
       const resumed = await dependencies.resumeSession(run.sessionFile, dependencies.loaderOptions);
+      const pendingOperation = isSyntheticResumeFallbackOperation(run.pendingOperation, resumeFallbackPrompt)
+        ? null
+        : run.pendingOperation;
 
-      if (run.pendingOperation) {
-        await syncWebLiveConversationRun({
-          conversationId: resumed.id,
-          sessionFile: run.sessionFile,
-          cwd: run.cwd,
-          title: run.title,
-          profile: run.profile,
-          state: 'running',
-          pendingOperation: run.pendingOperation,
-        });
+      await syncWebLiveConversationRun({
+        conversationId: resumed.id,
+        sessionFile: run.sessionFile,
+        cwd: run.cwd,
+        title: run.title,
+        profile: run.profile,
+        state: 'running',
+        pendingOperation,
+      });
 
-        for (const message of run.pendingOperation.contextMessages ?? []) {
+      if (pendingOperation) {
+        for (const message of pendingOperation.contextMessages ?? []) {
           await dependencies.queuePromptContext(resumed.id, message.customType, message.content);
         }
 
         await dependencies.promptSession(
           resumed.id,
-          run.pendingOperation.text,
-          run.pendingOperation.behavior,
-          run.pendingOperation.images,
+          pendingOperation.text,
+          pendingOperation.behavior,
+          pendingOperation.images,
         );
       }
 
       recovered.push({
         runId: run.runId,
         conversationId: resumed.id,
-        replayedPendingOperation: Boolean(run.pendingOperation),
+        replayedPendingOperation: Boolean(pendingOperation),
       });
       dependencies.logger?.info(
-        `recovered conversation run=${run.runId} conversation=${resumed.id} replayed=${String(Boolean(run.pendingOperation))}`,
+        `recovered conversation run=${run.runId} conversation=${resumed.id} replayed=${String(Boolean(pendingOperation))}`,
       );
     } catch (error) {
       dependencies.logger?.warn(

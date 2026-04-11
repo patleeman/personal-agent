@@ -4,7 +4,6 @@ const {
   SessionManagerOpenMock,
   applyConversationModelPreferencesToSessionManagerMock,
   buildAppendOnlySessionDetailResponseMock,
-  canInjectResumeFallbackPromptMock,
   createSessionFromExistingMock,
   createWebLiveConversationRunIdMock,
   destroySessionMock,
@@ -30,7 +29,6 @@ const {
   readSavedModelPreferencesMock,
   readSessionBlocksMock,
   readSessionDetailForRouteMock,
-  readWebUiConfigMock,
   renameSessionMock,
   renameStoredSessionMock,
   resolveConversationSessionFileMock,
@@ -48,7 +46,6 @@ const {
   SessionManagerOpenMock: vi.fn(),
   applyConversationModelPreferencesToSessionManagerMock: vi.fn(),
   buildAppendOnlySessionDetailResponseMock: vi.fn(),
-  canInjectResumeFallbackPromptMock: vi.fn(),
   createSessionFromExistingMock: vi.fn(),
   createWebLiveConversationRunIdMock: vi.fn(),
   destroySessionMock: vi.fn(),
@@ -74,7 +71,6 @@ const {
   readSavedModelPreferencesMock: vi.fn(),
   readSessionBlocksMock: vi.fn(),
   readSessionDetailForRouteMock: vi.fn(),
-  readWebUiConfigMock: vi.fn(),
   renameSessionMock: vi.fn(),
   renameStoredSessionMock: vi.fn(),
   resolveConversationSessionFileMock: vi.fn(),
@@ -130,7 +126,6 @@ vi.mock('../conversations/conversationService.js', () => ({
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
-  canInjectResumeFallbackPrompt: canInjectResumeFallbackPromptMock,
   createSessionFromExisting: createSessionFromExistingMock,
   destroySession: destroySessionMock,
   getAvailableModelObjects: getAvailableModelObjectsMock,
@@ -167,10 +162,6 @@ vi.mock('../middleware/index.js', () => ({
 
 vi.mock('../conversations/conversationCwd.js', () => ({
   resolveRequestedCwd: resolveRequestedCwdMock,
-}));
-
-vi.mock('../ui/webUi.js', () => ({
-  readWebUiConfig: readWebUiConfigMock,
 }));
 
 vi.mock('./liveSessions.js', () => ({
@@ -238,7 +229,6 @@ describe('registerConversationStateRoutes', () => {
     SessionManagerOpenMock.mockReset();
     applyConversationModelPreferencesToSessionManagerMock.mockReset();
     buildAppendOnlySessionDetailResponseMock.mockReset();
-    canInjectResumeFallbackPromptMock.mockReset();
     createSessionFromExistingMock.mockReset();
     createWebLiveConversationRunIdMock.mockReset();
     destroySessionMock.mockReset();
@@ -264,7 +254,6 @@ describe('registerConversationStateRoutes', () => {
     readSavedModelPreferencesMock.mockReset();
     readSessionBlocksMock.mockReset();
     readSessionDetailForRouteMock.mockReset();
-    readWebUiConfigMock.mockReset();
     renameSessionMock.mockReset();
     renameStoredSessionMock.mockReset();
     resolveConversationSessionFileMock.mockReset();
@@ -279,7 +268,6 @@ describe('registerConversationStateRoutes', () => {
     writeConversationAutoModeStateMock.mockReset();
     writeLiveConversationControlErrorMock.mockReset();
 
-    canInjectResumeFallbackPromptMock.mockReturnValue(false);
     createWebLiveConversationRunIdMock.mockImplementation((conversationId: string) => `web-run:${conversationId}`);
     existsSyncMock.mockReturnValue(true);
     getAvailableModelObjectsMock.mockReturnValue([{ id: 'model-1' }]);
@@ -295,7 +283,6 @@ describe('registerConversationStateRoutes', () => {
     promptLocalSessionMock.mockResolvedValue(undefined);
     readConversationSessionSignatureMock.mockReturnValue(undefined);
     readSavedModelPreferencesMock.mockReturnValue({ defaultModel: 'openai/gpt-5' });
-    readWebUiConfigMock.mockReturnValue({ resumeFallbackPrompt: 'Resume the conversation.' });
     resolveRequestedCwdMock.mockImplementation((requested: string | undefined, current: string) => requested?.trim() || current);
     resumeLocalSessionMock.mockResolvedValue({ id: 'resumed-conversation' });
     statSyncMock.mockReturnValue({ isDirectory: () => true });
@@ -618,13 +605,12 @@ describe('registerConversationStateRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'conversation id required' });
   });
 
-  it('recovers live conversations and injects the configured fallback prompt', async () => {
+  it('recovers live conversations without injecting a synthetic follow-up prompt', async () => {
     const { postHandler } = createHarness({ getCurrentProfile: () => 'assistant' });
     const handler = postHandler('/api/conversations/:id/recover');
     const res = createResponse();
 
     isLocalLiveMock.mockReturnValueOnce(true);
-    canInjectResumeFallbackPromptMock.mockReturnValueOnce(true);
     liveRegistry.set('conversation-1', {
       cwd: '/repo/live',
       title: 'Live title',
@@ -640,18 +626,15 @@ describe('registerConversationStateRoutes', () => {
       title: 'Live title',
       profile: 'assistant',
       state: 'running',
-      pendingOperation: expect.objectContaining({
-        type: 'prompt',
-        text: 'Resume the conversation.',
-      }),
     }));
-    expect(promptLocalSessionMock).toHaveBeenCalledWith('conversation-1', 'Resume the conversation.');
+    expect(syncWebLiveConversationRunMock.mock.calls[0]?.[0]?.pendingOperation).toBeNull();
+    expect(promptLocalSessionMock).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-1',
       live: true,
       recovered: true,
       replayedPendingOperation: false,
-      usedFallbackPrompt: true,
+      usedFallbackPrompt: false,
     });
   });
 
@@ -740,7 +723,7 @@ describe('registerConversationStateRoutes', () => {
     });
   });
 
-  it('falls back to the configured resume prompt for stored conversations without a pending operation', async () => {
+  it('recovers stored conversations without fabricating a resume prompt', async () => {
     const { postHandler } = createHarness({ getCurrentProfile: () => 'assistant' });
     const handler = postHandler('/api/conversations/:id/recover');
     const res = createResponse();
@@ -778,23 +761,15 @@ describe('registerConversationStateRoutes', () => {
       title: 'Checkpoint title',
       profile: 'analyst',
       state: 'running',
-      pendingOperation: expect.objectContaining({
-        type: 'prompt',
-        text: 'Resume the conversation.',
-      }),
     }));
-    expect(promptLocalSessionMock).toHaveBeenCalledWith(
-      'conversation-2-live',
-      'Resume the conversation.',
-      undefined,
-      undefined,
-    );
+    expect(syncWebLiveConversationRunMock.mock.calls[0]?.[0]?.pendingOperation).toBeNull();
+    expect(promptLocalSessionMock).not.toHaveBeenCalled();
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-2-live',
       live: true,
       recovered: true,
       replayedPendingOperation: false,
-      usedFallbackPrompt: true,
+      usedFallbackPrompt: false,
     });
   });
 

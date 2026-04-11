@@ -17,7 +17,6 @@ import {
   resolveConversationSessionFile,
 } from '../conversations/conversationService.js';
 import {
-  canInjectResumeFallbackPrompt,
   createSessionFromExisting,
   destroySession,
   getAvailableModelObjects,
@@ -46,7 +45,6 @@ import {
 } from '../middleware/index.js';
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE as SETTINGS_FILE } from '../ui/settingsPersistence.js';
-import { readWebUiConfig } from '../ui/webUi.js';
 import {
   ensureRequestControlsLocalLiveConversation,
   writeLiveConversationControlError,
@@ -336,18 +334,8 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
-
       if (isLocalLive(conversationId)) {
         const liveEntry = liveRegistry.get(conversationId);
-        const shouldInjectFallbackPrompt = canInjectResumeFallbackPrompt(conversationId);
-        const fallbackPendingOperation = shouldInjectFallbackPrompt
-          ? {
-              type: 'prompt' as const,
-              text: resumeFallbackPrompt,
-              enqueuedAt: new Date().toISOString(),
-            }
-          : null;
 
         if (liveEntry?.session.sessionFile) {
           await syncWebLiveConversationRun({
@@ -357,29 +345,7 @@ export function registerConversationStateRoutes(
             title: liveEntry.title,
             profile: getCurrentProfileFn(),
             state: 'running',
-            pendingOperation: fallbackPendingOperation,
-          });
-        }
-
-        if (shouldInjectFallbackPrompt) {
-          promptLocalSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
-            if (liveEntry?.session.sessionFile) {
-              await syncWebLiveConversationRun({
-                conversationId,
-                sessionFile: liveEntry.session.sessionFile,
-                cwd: liveEntry.cwd,
-                title: liveEntry.title,
-                profile: getCurrentProfileFn(),
-                state: 'failed',
-                lastError: error instanceof Error ? error.message : String(error),
-              });
-            }
-
-            logError('conversation recovery error', {
-              sessionId: conversationId,
-              message: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            });
+            pendingOperation: null,
           });
         }
 
@@ -388,7 +354,7 @@ export function registerConversationStateRoutes(
           live: true,
           recovered: true,
           replayedPendingOperation: false,
-          usedFallbackPrompt: shouldInjectFallbackPrompt,
+          usedFallbackPrompt: false,
         });
         return;
       }
@@ -438,17 +404,9 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const shouldInjectFallbackPrompt = !pendingOperation
-        && (!resumedEntry || canInjectResumeFallbackPrompt(resumed.id));
-      const recoveryOperation = pendingOperation ?? (shouldInjectFallbackPrompt
-        ? {
-            type: 'prompt' as const,
-            text: resumeFallbackPrompt,
-            enqueuedAt: new Date().toISOString(),
-          }
-        : null);
+      const recoveryOperation = pendingOperation ?? null;
       const replayedPendingOperation = Boolean(pendingOperation);
-      const usedFallbackPrompt = shouldInjectFallbackPrompt;
+      const usedFallbackPrompt = false;
 
       await syncWebLiveConversationRun({
         conversationId: resumed.id,
