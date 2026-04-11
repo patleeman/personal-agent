@@ -293,8 +293,8 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
-    expect(html).toContain('Choose one or more AGENTS.md-style files to append into the runtime system prompt in the saved order.');
-    expect(html).toContain('Leave it blank to fall back to the active runtime process cwd.');
+    expect(html).toContain('Append AGENTS-style files to the runtime prompt.');
+    expect(html).toContain('Leave blank to use the runtime process cwd.');
     expect(html).toContain('aria-label="Choose knowledge vault root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');

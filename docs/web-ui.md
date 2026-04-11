@@ -91,6 +91,8 @@ The **Settings** route now carries most of what used to be spread across separat
 
 It is also the fallback destination for the removed standalone **Tools** and **Instructions** pages.
 
+The page is intentionally compact: terse section copy, tight two-column settings rows, and shared dividers instead of roomy card stacks.
+
 It includes sections for:
 
 - general defaults

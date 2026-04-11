@@ -25,8 +25,8 @@ import type {
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
 import { SectionLabel, ToolbarButton, cx } from '../components/ui';
 
-const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
-const ACTION_BUTTON_CLASS = 'ui-toolbar-button';
+const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
+const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-general', label: 'General' },
@@ -57,7 +57,7 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
-const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[112px] font-mono text-[12px] leading-5`;
+const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] font-mono text-[11px] leading-5`;
 
 interface ProviderEditorDraft {
   id: string;
@@ -309,10 +309,10 @@ function SettingsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-5', className)}>
-      <div className="space-y-1.5 border-b border-border-subtle/70 pb-3">
+    <section id={id} className={cx('scroll-mt-20 space-y-2', className)}>
+      <div className="space-y-0.5">
         <SectionLabel label={label} />
-        {description ? <p className="max-w-3xl text-[12px] leading-6 text-secondary">{description}</p> : null}
+        {description ? <p className="max-w-2xl text-[11px] leading-5 text-secondary">{description}</p> : null}
       </div>
       {children}
     </section>
@@ -333,15 +333,15 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-5 border-t border-border-subtle/70 pt-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:gap-8', className)}>
-      <div className="min-w-0 space-y-2">
+    <section className={cx('grid gap-2.5 border-t border-border-subtle/60 pt-3 lg:grid-cols-[minmax(0,10.5rem)_minmax(0,1fr)] lg:gap-4', className)}>
+      <div className="min-w-0 space-y-1.5">
         <div className="space-y-1">
-          <h2 className="text-[17px] font-medium tracking-tight text-primary">{title}</h2>
-          {description ? <p className="max-w-sm text-[12px] leading-6 text-secondary">{description}</p> : null}
+          <h2 className="text-[15px] font-medium tracking-tight text-primary">{title}</h2>
+          {description ? <p className="max-w-xs text-[11px] leading-5 text-secondary">{description}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2 pt-1">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
       </div>
-      <div className="min-w-0 space-y-4">{children}</div>
+      <div className="min-w-0 space-y-3">{children}</div>
     </section>
   );
 }
@@ -631,12 +631,12 @@ function DesktopConnectionsSettingsPanel() {
     <SettingsSection
       id="settings-desktop"
       label="Desktop"
-      description="Machine-local host management for the Electron desktop app. Add or switch local, web, and SSH-backed hosts without leaving Settings."
+      description="Manage local and remote desktop hosts."
       className="scroll-mt-24"
     >
       <SettingsPanel
         title="Connections"
-        description="Manage the desktop app's local and remote hosts. Web hosts work for direct Tailscale or HTTPS access, and SSH hosts connect through a desktop-managed tunnel."
+        description="Switch hosts for the Electron app. Web uses direct URLs; SSH uses the desktop tunnel."
         actions={(
           <button
             type="button"
@@ -980,10 +980,9 @@ export function SettingsPage() {
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
-  const pageSummary = 'Theme, defaults, providers, instruction files, desktop connections, and local UI reset tools.';
   const pageMeta = [
-    `theme ${theme}`,
-    modelState?.currentModel ? `model ${modelState.currentModel}` : null,
+    theme,
+    modelState?.currentModel ?? null,
   ].filter(Boolean).join(' · ');
 
   useEffect(() => {
@@ -1851,16 +1850,15 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-8">
-      <div className="mx-auto w-full max-w-[76rem] space-y-10 pb-8">
-        <div className="flex items-start justify-between gap-6">
-          <div className="max-w-3xl space-y-2">
-            <h1 className="ui-page-title text-[40px] font-semibold tracking-[-0.04em] text-primary">Settings</h1>
-            <p className="text-[15px] leading-6 text-secondary">{pageSummary}</p>
-            <p className="ui-page-meta text-[13px]">{pageMeta}</p>
+    <div className="h-full overflow-y-auto px-4 py-4">
+      <div className="mx-auto w-full max-w-[68rem] space-y-4 pb-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="max-w-2xl space-y-1">
+            <h1 className="ui-page-title text-[30px] font-semibold tracking-[-0.035em] text-primary">Settings</h1>
+            <p className="ui-page-meta text-[12px]">{pageMeta}</p>
           </div>
           <ToolbarButton
-            className="rounded-full px-4 py-2 text-[13px] text-primary"
+            className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
             onClick={() => {
               void Promise.all([
                 refetchInstructions({ resetLoading: false }),
@@ -1879,12 +1877,12 @@ export function SettingsPage() {
           </ToolbarButton>
         </div>
 
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border-subtle/70 pb-3 text-[12px]">
+        <nav className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border-subtle/70 bg-surface/55 p-1 text-[11px]">
             {SETTINGS_QUICK_LINKS.map((item) => (
               <a
                 key={item.id}
                 href={`#${item.id}`}
-                className="text-secondary transition-colors hover:text-primary"
+                className="rounded-md px-2.5 py-1 text-secondary transition-colors hover:bg-elevated/70 hover:text-primary"
               >
                 {item.label}
               </a>
@@ -1894,12 +1892,11 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-general"
             label="General"
-            description="Runtime defaults, instruction files, knowledge paths, and title behavior for new conversations and runs."
           >
-            <div className="space-y-4">
+            <div className="space-y-0">
               <SettingsPanel
                 title="Instruction files"
-                description="Choose one or more AGENTS.md-style files to append into the runtime system prompt in the saved order."
+                description="Append AGENTS-style files to the runtime prompt."
               >
                 {instructionFilesLoading && !instructionFilesState ? (
                   <p className="ui-card-meta">Loading instruction files…</p>
@@ -1973,12 +1970,7 @@ export function SettingsPage() {
 
               <SettingsPanel
                 title="Default model"
-                description={(
-                  <>
-                    Updates the saved runtime defaults for newly created live sessions and other runs that do not explicitly pick a model.
-                    Saving an explicit model here clears the local default preset.
-                  </>
-                )}
+                description="Used for new chats and runs unless a model is picked explicitly."
               >
                 {modelsLoading && !modelState ? (
                   <p className="ui-card-meta">Loading models…</p>
@@ -2039,8 +2031,8 @@ export function SettingsPage() {
               </SettingsPanel>
 
               <SettingsPanel
-                title="Knowledge vault root"
-                description="Sets the canonical vault location for notes, skills, and root instruction files. The agent and supporting vault lookups use this path as the durable knowledge home."
+                title="Vault root"
+                description="Base path for notes, skills, and root instructions."
               >
                 {vaultRootLoading && !vaultRootState ? (
                   <p className="ui-card-meta">Loading knowledge vault root…</p>
@@ -2086,10 +2078,10 @@ export function SettingsPage() {
                       {savingVaultRoot
                         ? 'Saving knowledge vault root…'
                         : vaultRootState.source === 'env'
-                          ? `Environment override active. Effective root: ${vaultRootState.effectiveRoot}`
+                          ? `Env override active · ${vaultRootState.effectiveRoot}`
                           : vaultRootState.currentRoot
-                            ? `Effective root: ${vaultRootState.effectiveRoot}`
-                            : `Using default root: ${vaultRootState.defaultRoot}`}
+                            ? `Effective root · ${vaultRootState.effectiveRoot}`
+                            : `Default root · ${vaultRootState.defaultRoot}`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
@@ -2109,7 +2101,7 @@ export function SettingsPage() {
                       </button>
                     </div>
                     <p className="ui-card-meta">
-                      Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. Environment variable <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still overrides this setting when present.
+                      Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.
                     </p>
                   </form>
                 ) : null}
@@ -2118,8 +2110,8 @@ export function SettingsPage() {
               </SettingsPanel>
 
               <SettingsPanel
-                title="Default working directory"
-                description="Used when a new live session or other web action starts without an explicit cwd. A single referenced tracked-doc repo root still takes priority."
+                title="Working directory"
+                description="Fallback cwd for new chats and web actions."
               >
                 {defaultCwdLoading && !defaultCwdState ? (
                   <p className="ui-card-meta">Loading default working directory…</p>
@@ -2165,8 +2157,8 @@ export function SettingsPage() {
                       {savingDefaultCwd
                         ? 'Saving default working directory…'
                         : defaultCwdState.currentCwd
-                          ? `Effective default: ${defaultCwdState.effectiveCwd}`
-                          : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
+                          ? `Default cwd · ${defaultCwdState.effectiveCwd}`
+                          : `Process cwd · ${defaultCwdState.effectiveCwd}`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
@@ -2186,7 +2178,7 @@ export function SettingsPage() {
                       </button>
                     </div>
                     <p className="ui-card-meta">
-                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the active runtime process cwd.
+                      Absolute, <span className="font-mono text-[11px]">~/…</span>, or relative. Leave blank to use the runtime process cwd.
                     </p>
                   </form>
                 ) : null}
@@ -2196,7 +2188,7 @@ export function SettingsPage() {
 
               <SettingsPanel
                 title="Conversation titles"
-                description="Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model."
+                description="Auto-title chats after the first assistant reply."
               >
                 {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
                   <p className="ui-card-meta">Loading conversation title settings…</p>
@@ -2266,12 +2258,11 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-appearance"
             label="Appearance"
-            description="Theme stays browser-local. Use Auto to follow the OS without reloading."
           >
-            <div className="space-y-4">
+            <div className="space-y-0">
               <SettingsPanel
                 title="Theme"
-                description="Theme is stored in this browser only. Choose Auto to follow the OS appearance without reloading."
+                description="Choose Auto to follow the OS."
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="ui-segmented-control" role="group" aria-label="Theme selection">
@@ -2290,19 +2281,18 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-providers"
             label="Providers & models"
-            description="Manage profile-local model definitions, auth, and Codex plan usage in one place."
-            className="space-y-8"
+            className="space-y-4"
           >
-            <div className="space-y-4">
+            <div className="space-y-0">
               <SettingsPanel
                 title="Provider & model definitions"
                 description={(
                   <>
-                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for local machine overrides. Built-in providers still exist even when they are not listed here. Add a provider to create a custom provider or a built-in override.
+                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for local overrides.
                   </>
                 )}
               >
-                <div className="space-y-8">
+                <div className="space-y-5">
                 <div className="space-y-3 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-[13px] font-medium text-primary">Configured providers</h3>
@@ -2838,7 +2828,7 @@ export function SettingsPage() {
                 title="Provider credentials"
                 description={(
                   <>
-                    Manage API-key and OAuth credentials per provider. Stored credentials are written to <span className="font-mono text-[11px]">{providerAuthState?.authFile ?? 'auth.json'}</span>.
+                    Manage API keys and OAuth in <span className="font-mono text-[11px]">{providerAuthState?.authFile ?? 'auth.json'}</span>.
                   </>
                 )}
               >
@@ -3052,11 +3042,10 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-interface"
             label="Interface"
-            description="Machine-local reset tools for stored layout and conversation UI state."
           >
             <SettingsPanel
               title="Reset saved UI preferences"
-              description="These actions clear saved UI state. They do not delete conversations, docs, or agent data."
+              description="Clears saved UI state only. Conversations and data stay intact."
             >
               {resetError && <p className="text-[12px] text-danger">Failed to reset UI state: {resetError}</p>}
 
