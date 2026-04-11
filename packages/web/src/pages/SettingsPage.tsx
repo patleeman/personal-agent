@@ -24,7 +24,7 @@ import type {
 } from '../types';
 import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
 import { SystemSettingsContent } from '../components/SystemSettingsContent';
-import { PageHeader, SectionLabel, ToolbarButton, cx } from '../components/ui';
+import { SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button';
@@ -1741,31 +1741,36 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <PageHeader actions={<ToolbarButton onClick={() => {
-        void Promise.all([
-          refetchProfiles({ resetLoading: false }),
-          refetchModels({ resetLoading: false }),
-          refetchModelProviders({ resetLoading: false }),
-          refetchVaultRoot({ resetLoading: false }),
-          refetchDefaultCwd({ resetLoading: false }),
-          refetchConversationTitleSettings({ resetLoading: false }),
-          refetchProviderAuth({ resetLoading: false }),
-          refetchCodexPlanUsage({ resetLoading: false }),
-          refetchStatus({ resetLoading: false }),
-          oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-        ]);
-      }}>↻ Refresh</ToolbarButton>}>
-        <div className="space-y-1">
-          <h1 className="ui-page-title text-[26px] leading-none tracking-tight">Settings</h1>
-          <p className="text-[13px] leading-6 text-secondary">{pageSummary}</p>
-          <p className="ui-page-meta">{pageMeta}</p>
+    <div className="h-full overflow-y-auto px-8 py-8">
+      <div className="mx-auto w-full max-w-[76rem] space-y-10 pb-8">
+        <div className="flex items-start justify-between gap-6">
+          <div className="max-w-3xl space-y-2">
+            <h1 className="ui-page-title text-[40px] font-semibold tracking-[-0.04em] text-primary">Settings</h1>
+            <p className="text-[15px] leading-6 text-secondary">{pageSummary}</p>
+            <p className="ui-page-meta text-[13px]">{pageMeta}</p>
+          </div>
+          <ToolbarButton
+            className="rounded-full px-4 py-2 text-[13px] text-primary"
+            onClick={() => {
+              void Promise.all([
+                refetchProfiles({ resetLoading: false }),
+                refetchModels({ resetLoading: false }),
+                refetchModelProviders({ resetLoading: false }),
+                refetchVaultRoot({ resetLoading: false }),
+                refetchDefaultCwd({ resetLoading: false }),
+                refetchConversationTitleSettings({ resetLoading: false }),
+                refetchProviderAuth({ resetLoading: false }),
+                refetchCodexPlanUsage({ resetLoading: false }),
+                refetchStatus({ resetLoading: false }),
+                oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
+              ]);
+            }}
+          >
+            ↻ Refresh
+          </ToolbarButton>
         </div>
-      </PageHeader>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="mx-auto w-full max-w-[76rem] space-y-10 pb-8">
-          <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border-subtle/70 pb-3 text-[12px]">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border-subtle/70 pb-3 text-[12px]">
             {SETTINGS_QUICK_LINKS.map((item) => (
               <a
                 key={item.id}
@@ -2934,7 +2939,6 @@ export function SettingsPage() {
               {statusError && <p className="text-[12px] text-danger">Failed to load workspace details: {statusError}</p>}
             </SettingsPanel>
           </SettingsSection>
-        </div>
       </div>
     </div>
   );
