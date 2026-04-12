@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { app, protocol, session } from 'electron';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
+import type { DesktopApiStreamEvent } from './hosts/types.js';
 import type { HostManager } from './hosts/host-manager.js';
 
 export const DESKTOP_APP_SCHEME = 'personal-agent';
@@ -118,8 +119,79 @@ function buildDesktopProtocolErrorResponse(error: unknown): Response {
   });
 }
 
+function isEventStreamRequest(request: Request): boolean {
+  return request.method === 'GET'
+    && (request.headers.get('accept') ?? '').toLowerCase().includes('text/event-stream');
+}
+
+function createSseProtocolResponse(subscribe: (onEvent: (event: DesktopApiStreamEvent) => void) => Promise<() => void>, request: Request): Response {
+  const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
+  let closed = false;
+
+  const close = () => {
+    if (closed) {
+      return;
+    }
+
+    closed = true;
+    if (unsubscribe) {
+      const teardown = unsubscribe;
+      unsubscribe = null;
+      teardown();
+    }
+  };
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      request.signal.addEventListener('abort', close, { once: true });
+
+      try {
+        unsubscribe = await subscribe((event) => {
+          if (closed) {
+            return;
+          }
+
+          switch (event.type) {
+            case 'open':
+              return;
+            case 'message':
+              controller.enqueue(encoder.encode(`data: ${event.data ?? ''}\n\n`));
+              return;
+            case 'error':
+              close();
+              controller.error(new Error(event.message ?? 'Desktop API stream failed.'));
+              return;
+            case 'close':
+              close();
+              controller.close();
+              return;
+          }
+        });
+      } catch (error) {
+        close();
+        controller.error(error instanceof Error ? error : new Error(String(error)));
+      }
+    },
+    cancel() {
+      close();
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
+}
+
 export function createDesktopProtocolHandler(options?: {
   loadLocalApiModule?: LocalApiModuleLoader;
+  hostManager?: HostManager;
+  hostId?: string;
 }) {
   const loadLocalApi = options?.loadLocalApiModule ?? loadLocalApiModule;
 
@@ -135,6 +207,37 @@ export function createDesktopProtocolHandler(options?: {
       }
 
       try {
+        if (isEventStreamRequest(request)) {
+          if (options?.hostManager) {
+            const controller = options.hostManager.getHostController(options.hostId ?? 'local');
+            return createSseProtocolResponse(
+              (onEvent) => controller.subscribeApiStream(`${url.pathname}${url.search}`, onEvent),
+              request,
+            );
+          }
+
+          const module = await loadLocalApi();
+          return createSseProtocolResponse(
+            (onEvent) => module.subscribeDesktopLocalApiStream(`${url.pathname}${url.search}`, onEvent),
+            request,
+          );
+        }
+
+        if (options?.hostManager) {
+          const controller = options.hostManager.getHostController(options.hostId ?? 'local');
+          const response = await controller.dispatchApiRequest({
+            method: request.method,
+            path: `${url.pathname}${url.search}`,
+            body: await readDesktopProtocolRequestBody(request),
+            headers: Object.fromEntries(request.headers.entries()),
+          });
+
+          return new Response(response.body, {
+            status: response.statusCode,
+            headers: response.headers,
+          });
+        }
+
         const module = await loadLocalApi();
         const response = await module.dispatchDesktopLocalApiRequest({
           method: request.method,
@@ -172,8 +275,26 @@ export function createDesktopProtocolHandler(options?: {
   };
 }
 
-export function registerDesktopAppProtocol(_hostManager: HostManager): void {
-  const handler = createDesktopProtocolHandler();
-  protocol.handle(DESKTOP_APP_SCHEME, handler);
-  session.fromPartition(getHostBrowserPartition('local')).protocol.handle(DESKTOP_APP_SCHEME, handler);
+const registeredDesktopProtocolPartitions = new Set<string>();
+
+export function ensureDesktopAppProtocolForHost(hostManager: HostManager, hostId: string): void {
+  const partition = getHostBrowserPartition(hostId);
+  if (registeredDesktopProtocolPartitions.has(partition)) {
+    return;
+  }
+
+  const partitionSession = session.fromPartition(partition);
+  partitionSession.protocol.handle(DESKTOP_APP_SCHEME, createDesktopProtocolHandler({
+    hostManager,
+    hostId,
+  }));
+  registeredDesktopProtocolPartitions.add(partition);
+}
+
+export function registerDesktopAppProtocol(hostManager: HostManager): void {
+  protocol.handle(DESKTOP_APP_SCHEME, createDesktopProtocolHandler({
+    hostManager,
+    hostId: 'local',
+  }));
+  ensureDesktopAppProtocolForHost(hostManager, 'local');
 }

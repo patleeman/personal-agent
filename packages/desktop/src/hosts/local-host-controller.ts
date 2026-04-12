@@ -1,6 +1,7 @@
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
+import { parseApiDispatchResult } from './api-dispatch.js';
 import type {
   DesktopApiStreamEvent,
   DesktopAppBridgeEvent,
@@ -71,9 +72,19 @@ export class LocalHostController implements HostController {
     return new URL('/conversations/new', baseUrl).toString();
   }
 
-  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+  async dispatchApiRequest(input: {
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    path: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }) {
     const module = await this.loadLocalApi();
-    return module.invokeDesktopLocalApi({ method, path, body });
+    return module.dispatchDesktopLocalApiRequest(input);
+  }
+
+  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+    const response = await this.dispatchApiRequest({ method, path, body });
+    return parseApiDispatchResult(response);
   }
 
   async readAppStatus(): Promise<unknown> {

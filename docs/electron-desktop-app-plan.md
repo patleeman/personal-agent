@@ -84,9 +84,9 @@ The local desktop host:
 
 ### Web remote host
 
-A web remote host is just a reachable personal-agent web UI base URL.
+A web remote host is a reachable personal-agent instance that exposes the app-server WebSocket surface from its managed web UI.
 
-The desktop shell probes `/api/status` and then opens that remote UI directly.
+The desktop shell still probes `/api/status`, but it now keeps rendering the local packaged UI over `personal-agent://app/` and forwards `/api/*` work to the remote instance over app-server.
 
 ### SSH remote host
 
@@ -95,6 +95,7 @@ An SSH remote host:
 - opens an SSH tunnel to a local forwarded port
 - probes the remote web UI through the tunnel
 - can bootstrap the remote daemon and web UI if needed
+- forwards remote `/api/*` requests and streams over app-server once the tunnel is up
 
 ## Machine-local desktop state
 
@@ -123,6 +124,7 @@ That means:
 
 - the desktop-owned local backend intentionally does not expose any separate companion/mobile surface
 - remote browser access still requires a separately managed web UI
+- direct remote hosts still rely on the remote web UI being up so they can expose the app-server WebSocket surface
 - the desktop shell does not reuse an already-running external local daemon/web UI pair
 
 ## Related docs

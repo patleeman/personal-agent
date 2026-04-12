@@ -1,4 +1,4 @@
-import { isDesktopShell, isLocalDesktopHostShell } from '../desktopBridge';
+import { isDesktopShell } from '../desktopBridge';
 import type { SystemComponentId } from '../systemSelection';
 import type { DesktopEnvironmentState } from '../types';
 import { SystemServiceSection } from './SystemContextPanel';
@@ -12,7 +12,7 @@ export function SystemSettingsContent({
   desktopEnvironment?: DesktopEnvironmentState | null;
 }) {
   const desktopShell = isDesktopShell() || desktopEnvironment?.isElectron === true;
-  const localDesktopHost = isLocalDesktopHostShell() || desktopEnvironment?.activeHostKind === 'local';
+  const localDesktopHost = desktopEnvironment?.activeHostKind === 'local';
 
   if (localDesktopHost) {
     return (

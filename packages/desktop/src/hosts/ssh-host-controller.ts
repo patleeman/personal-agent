@@ -1,8 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { getAvailableTcpPort } from '../backend/ports.js';
-import { proxyApiStream } from './api-stream.js';
+import { parseApiDispatchResult } from './api-dispatch.js';
+import { RemoteAppServerClient } from './remote-app-server-client.js';
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
@@ -44,6 +46,7 @@ export class SshHostController implements HostController {
 
   private tunnelProcess?: ChildProcess;
   private forwardedPort?: number;
+  private appServerClient?: RemoteAppServerClient;
 
   constructor(private readonly record: Extract<DesktopHostRecord, { kind: 'ssh' }>) {
     this.id = record.id;
@@ -51,36 +54,37 @@ export class SshHostController implements HostController {
   }
 
   async ensureRunning(): Promise<void> {
+    let baseUrl: string | null = null;
+
     if (this.forwardedPort) {
-      const healthy = await probeRemoteWebUi(getRemoteBaseUrl(this.forwardedPort));
+      const currentBaseUrl = getRemoteBaseUrl(this.forwardedPort);
+      const healthy = await probeRemoteWebUi(currentBaseUrl);
       if (healthy) {
-        return;
+        baseUrl = currentBaseUrl;
       }
     }
 
-    await this.disposeTunnel();
+    if (!baseUrl) {
+      await this.disposeTunnel();
 
-    const forwardedPort = await getAvailableTcpPort();
-    const remotePort = this.record.remotePort ?? 3741;
-    await this.startTunnel(forwardedPort, remotePort);
-    this.forwardedPort = forwardedPort;
+      const forwardedPort = await getAvailableTcpPort();
+      const remotePort = this.record.remotePort ?? 3741;
+      await this.startTunnel(forwardedPort, remotePort);
+      this.forwardedPort = forwardedPort;
 
-    const baseUrl = getRemoteBaseUrl(forwardedPort);
-    if (await probeRemoteWebUi(baseUrl)) {
-      return;
+      baseUrl = getRemoteBaseUrl(forwardedPort);
+      if (!(await probeRemoteWebUi(baseUrl))) {
+        await this.bootstrapRemoteHost(remotePort);
+        await waitForRemoteWebUi(baseUrl);
+      }
     }
 
-    await this.bootstrapRemoteHost(remotePort);
-    await waitForRemoteWebUi(baseUrl);
+    await this.getAppServerClient().ensureConnected();
   }
 
   async getBaseUrl(): Promise<string> {
     await this.ensureRunning();
-    if (!this.forwardedPort) {
-      throw new Error('SSH tunnel did not start correctly.');
-    }
-
-    return getRemoteBaseUrl(this.forwardedPort);
+    return getDesktopAppBaseUrl();
   }
 
   async getStatus(): Promise<HostStatus> {
@@ -100,17 +104,28 @@ export class SshHostController implements HostController {
   }
 
   async openNewConversation(): Promise<string> {
-    const baseUrl = await this.getBaseUrl();
-    return new URL('/conversations/new', baseUrl).toString();
+    await this.ensureRunning();
+    return new URL('/conversations/new', getDesktopAppBaseUrl()).toString();
   }
 
-  async invokeLocalApi(_method: 'GET' | 'POST' | 'PATCH' | 'DELETE', _path: string, _body?: unknown): Promise<never> {
-    throw new Error('Desktop local API IPC is only available for the local host.');
+  async dispatchApiRequest(input: {
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    path: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }) {
+    await this.ensureRunning();
+    return this.getAppServerClient().dispatchApiRequest(input);
+  }
+
+  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+    const response = await this.dispatchApiRequest({ method, path, body });
+    return parseApiDispatchResult(response);
   }
 
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
-    const baseUrl = await this.getBaseUrl();
-    return proxyApiStream(baseUrl, path, onEvent);
+    await this.ensureRunning();
+    return this.getAppServerClient().subscribeApiStream(path, onEvent);
   }
 
   async restart(): Promise<void> {
@@ -192,7 +207,24 @@ export class SshHostController implements HostController {
     });
   }
 
+  private getAppServerClient(): RemoteAppServerClient {
+    if (!this.forwardedPort) {
+      throw new Error('SSH tunnel did not start correctly.');
+    }
+
+    if (!this.appServerClient) {
+      this.appServerClient = new RemoteAppServerClient({
+        baseUrl: getRemoteBaseUrl(this.forwardedPort),
+      });
+    }
+
+    return this.appServerClient;
+  }
+
   private async disposeTunnel(): Promise<void> {
+    this.appServerClient?.dispose();
+    this.appServerClient = undefined;
+
     const tunnel = this.tunnelProcess;
     this.tunnelProcess = undefined;
     this.forwardedPort = undefined;

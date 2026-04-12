@@ -40,6 +40,11 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' 
       summary: `${label} ready`,
     }),
     openNewConversation: vi.fn().mockResolvedValue(`http://${id}.example.test/conversations/new`),
+    dispatchApiRequest: vi.fn().mockResolvedValue({
+      statusCode: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
+    }),
     invokeLocalApi: vi.fn().mockResolvedValue({ ok: true }),
     restart: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),

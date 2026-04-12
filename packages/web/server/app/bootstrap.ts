@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import type { IncomingMessage } from 'node:http';
+import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import express, { type Express } from 'express';
 import type { RecoverDurableLiveConversationsDependencies } from '../conversations/conversationRecovery.js';
@@ -149,8 +151,9 @@ export function startServerListeners(options: {
   getDefaultWebCwd: () => string;
   repoRoot: string;
   distDir: string;
+  handleUpgrade?: (request: IncomingMessage, socket: Socket, head: Buffer) => void;
 }): void {
-  options.app.listen(options.port, options.loopbackHost, () => {
+  const server = options.app.listen(options.port, options.loopbackHost, () => {
     logInfo('web ui started', {
       url: `http://${options.loopbackHost}:${options.port}`,
       profile: options.getCurrentProfile(),
@@ -159,4 +162,8 @@ export function startServerListeners(options: {
       dist: options.distDir,
     });
   });
+
+  if (options.handleUpgrade) {
+    server.on('upgrade', options.handleUpgrade);
+  }
 }

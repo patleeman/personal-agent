@@ -150,7 +150,7 @@ When the UI runs inside the Electron shell it gains desktop-specific chrome and 
 - host switching
 - opening saved remote hosts in dedicated windows
 
-The application data model is still the same web UI, but local Electron mode now loads the packaged renderer over `personal-agent://app/` and resolves hot local API/event flows through the Electron main process instead of a loopback web server.
+The application data model is still the same web UI. Electron windows now always load the packaged renderer over `personal-agent://app/`: local hosts resolve hot local API/event flows through the Electron main process, while remote hosts forward `/api/*` requests and streams through an app-server WebSocket owned by Electron main.
 
 ## What the web UI does not try to be
 

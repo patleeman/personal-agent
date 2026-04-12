@@ -53,7 +53,13 @@ Otherwise, prefer the shared server route/API surface.
 
 ## Remote mode
 
-Remote hosts still use the web/server API surface. The desktop shell should not invent a second remote protocol.
+Remote hosts still use the web/server API surface, but the transport is now an app-server WebSocket owned by Electron main instead of loading a remote browser origin directly.
+
+That means:
+
+- Electron windows still render the packaged `personal-agent://app/` UI for remote hosts
+- remote `/api/*` requests and SSE-style streams are forwarded through the main process over app-server
+- the preload bridge remains the renderer boundary; app-server replaces the old remote transport, not desktop IPC
 
 ## UI shape
 

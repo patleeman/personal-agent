@@ -53,6 +53,12 @@ export interface DesktopApiStreamEvent {
   message?: string;
 }
 
+export interface HostApiDispatchResult {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: Uint8Array;
+}
+
 export interface DesktopConversationStateSubscriptionRequest {
   conversationId: string;
   tailBlocks?: number;
@@ -260,6 +266,12 @@ export interface HostController {
   getBaseUrl(): Promise<string>;
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
+  dispatchApiRequest(input: {
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    path: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }): Promise<HostApiDispatchResult>;
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   readAppStatus?(): Promise<unknown>;
   readDaemonState?(): Promise<unknown>;

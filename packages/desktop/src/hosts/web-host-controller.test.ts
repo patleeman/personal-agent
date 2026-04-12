@@ -1,9 +1,49 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  ensureConnected: vi.fn().mockResolvedValue(undefined),
+  dispatchApiRequest: vi.fn(),
+  subscribeApiStream: vi.fn(),
+  dispose: vi.fn(),
+  registerSchemesAsPrivileged: vi.fn(),
+  protocolHandle: vi.fn(),
+  partitionProtocolHandle: vi.fn(),
+  fromPartition: vi.fn(() => ({
+    protocol: {
+      handle: mocks.partitionProtocolHandle,
+    },
+  })),
+}));
+
+vi.mock('electron', () => ({
+  app: {
+    isPackaged: false,
+    getAppPath: vi.fn(),
+  },
+  protocol: {
+    registerSchemesAsPrivileged: mocks.registerSchemesAsPrivileged,
+    handle: mocks.protocolHandle,
+  },
+  session: {
+    fromPartition: mocks.fromPartition,
+  },
+}));
+
+vi.mock('./remote-app-server-client.js', () => ({
+  RemoteAppServerClient: class RemoteAppServerClient {
+    ensureConnected = mocks.ensureConnected;
+    dispatchApiRequest = mocks.dispatchApiRequest;
+    subscribeApiStream = mocks.subscribeApiStream;
+    dispose = mocks.dispose;
+  },
+}));
+
 import { WebHostController } from './web-host-controller.js';
 
 describe('WebHostController', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   it('reports reachable when the remote status endpoint is healthy', async () => {
@@ -16,8 +56,8 @@ describe('WebHostController', () => {
       baseUrl: 'https://desktop.example.ts.net',
     });
 
-    await expect(controller.getBaseUrl()).resolves.toBe('https://desktop.example.ts.net');
-    await expect(controller.openNewConversation()).resolves.toBe('https://desktop.example.ts.net/conversations/new');
+    await expect(controller.getBaseUrl()).resolves.toBe('personal-agent://app/');
+    await expect(controller.openNewConversation()).resolves.toBe('personal-agent://app/conversations/new');
 
     const status = await controller.getStatus();
     expect(status.reachable).toBe(true);
@@ -35,7 +75,7 @@ describe('WebHostController', () => {
     });
 
     await expect(controller.ensureRunning()).resolves.toBeUndefined();
-    await expect(controller.getBaseUrl()).resolves.toBe('https://protected.example.ts.net');
+    await expect(controller.getBaseUrl()).resolves.toBe('personal-agent://app/');
   });
 
   it('fails cleanly when the remote host is unreachable', async () => {

@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { ensureDesktopAppProtocolForHost } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
@@ -294,6 +295,8 @@ export class DesktopWindowController {
   }
 
   private createWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {
+    ensureDesktopAppProtocolForHost(this.hostManager, host.id);
+
     const config = loadDesktopConfig();
     const savedWindowState = config.windowState ?? { width: 1440, height: 960 };
     const runtime = resolveDesktopRuntimePaths();
